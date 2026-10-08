@@ -1,0 +1,38 @@
+[gd_resource type="Resource" script_class="Tuning" format=3]
+
+[ext_resource type="Script" path="res://src/Core/Tuning.cs" id="1_a31y0"]
+
+[resource]
+script = ExtResource("1_a31y0")
+VentThrust = 821.0
+VentThrustRampTime = 0.9
+VentThrustFlutter = 0.3
+VentMaxSpin = 28.0
+VentFlameScale = 1.3
+VentLightEnergy = 6.5
+TankMass = 30.0
+BlastMassInfluence = 0.75
+BlastSpin = 15.0
+ChainFuseMin = 0.1
+ChainFuseMax = 0.41
+FireballScale = 0.95
+FlashDuration = 0.54
+CameraShakeDistance = 47.0
+HitstopDuration = 0.065
+AirControl = 0.2
+JumpVelocity = 9.9
+StaggerRadius = 25.0
+PlayerKnockback = 1.05
+RagdollMinTime = 1.2
+RagdollMaxTime = 5.8
+FieldOfView = 90.0
+CameraDistance = 2.0
+ShoulderOffset = 0.8
+CameraHeight = 1.57
+FireRate = 13.0
+ShotBloomDegrees = 0.65
+BloomRecovery = 7.5
+RecoilKickDegrees = 2.0
+BulletImpulse = 29.0
+TankCount = 40
+ClearCelebrationTime = 2.5

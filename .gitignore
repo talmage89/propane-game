@@ -1,0 +1,7 @@
+.godot/
+/android/
+bin/
+obj/
+*.user
+.DS_Store
+build/

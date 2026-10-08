@@ -1,0 +1,95 @@
+# Every push to main builds the macOS (Apple Silicon) and Linux (x86_64) games and publishes them as the release for
+# the version in project.godot. Pushing again without bumping config/version replaces that release's builds.
+name: Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  GODOT_VERSION: 4.7.2
+  RCODESIGN_VERSION: 0.29.0
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Cache Godot, templates and rcodesign
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/propane-ci
+          key: tools-godot-${{ env.GODOT_VERSION }}-rcodesign-${{ env.RCODESIGN_VERSION }}
+
+      - name: Install Godot, export templates and rcodesign
+        run: |
+          set -euo pipefail
+          cache="$HOME/.cache/propane-ci"
+          mkdir -p "$cache"
+          editor="Godot_v${GODOT_VERSION}-stable_mono_linux_x86_64"
+          if [[ ! -d "$cache/$editor" ]]; then
+            curl -fsSL --retry 3 -o "$cache/editor.zip" \
+              "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/$editor.zip"
+            unzip -q "$cache/editor.zip" -d "$cache"
+            rm "$cache/editor.zip"
+          fi
+          echo "GODOT=$cache/$editor/Godot_v${GODOT_VERSION}-stable_mono_linux.x86_64" >> "$GITHUB_ENV"
+
+          signer="apple-codesign-${RCODESIGN_VERSION}-x86_64-unknown-linux-musl"
+          if [[ ! -x "$cache/$signer/rcodesign" ]]; then
+            base="https://github.com/indygreg/apple-platform-rs/releases/download/apple-codesign%2F${RCODESIGN_VERSION}"
+            curl -fsSL --retry 3 -o "$cache/$signer.tar.gz" "$base/$signer.tar.gz"
+            curl -fsSL --retry 3 -o "$cache/$signer.tar.gz.sha256" "$base/$signer.tar.gz.sha256"
+            echo "$(cat "$cache/$signer.tar.gz.sha256")  $cache/$signer.tar.gz" | sha256sum -c -
+            tar -xzf "$cache/$signer.tar.gz" -C "$cache"
+            rm "$cache/$signer.tar.gz"
+          fi
+          echo "RCODESIGN=$cache/$signer/rcodesign" >> "$GITHUB_ENV"
+
+          if ! command -v llvm-lipo >/dev/null && ! ls /usr/bin/llvm-lipo-* >/dev/null 2>&1; then
+            sudo apt-get update -q && sudo apt-get install -yq llvm
+          fi
+          TEMPLATE_CACHE="$cache" tools/release/install_templates.sh "$GODOT_VERSION"
+
+      - name: Generator tests
+        run: |
+          set -euo pipefail
+          "$GODOT" --headless --path . --import >/dev/null 2>&1 || true
+          dotnet build Propane.sln -c Debug -nologo -v quiet
+          "$GODOT" --headless --path . res://scenes/dev/generator_tests.tscn -- --seeds=100
+
+      - name: Build
+        run: tools/release/build.sh "$GODOT"
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/^config\/version="\(.*\)"$/\1/p' project.godot)"
+          tag="v$version"
+          {
+            echo "Built from ${GITHUB_SHA::7}."
+            echo
+            echo "**macOS (Apple Silicon):** unzip, then open Propane.app. The first time, macOS blocks it because it is"
+            echo "not notarized: open System Settings > Privacy & Security and click Open Anyway."
+            echo
+            echo "**Linux (x86_64):** extract the archive and run \`./Propane.x86_64\`. Needs Vulkan drivers."
+          } > build/notes.md
+          gh release delete "$tag" --cleanup-tag --yes 2>/dev/null || true
+          gh release create "$tag" build/dist/* --target "$GITHUB_SHA" --title "Propane $version" \
+            --notes-file build/notes.md --latest

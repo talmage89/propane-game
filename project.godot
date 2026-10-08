@@ -1,0 +1,76 @@
+; Engine configuration file.
+; It's best edited using the editor UI and not directly,
+; since the parameters that go here are not all obvious.
+;
+; Format:
+;   [section] ; section goes between []
+;   param=value ; assign values to parameters
+
+config_version=5
+
+[application]
+
+config/name="Propane"
+config/version="0.1.0"
+config/description="Run around a procedural suburb and shoot propane tanks."
+run/main_scene="res://scenes/main.tscn"
+config/features=PackedStringArray("4.7", "C#", "Forward Plus")
+config/icon="res://icon.svg"
+
+[display]
+
+window/size/viewport_width=1920
+window/size/viewport_height=1080
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+
+[dotnet]
+
+project/assembly_name="Propane"
+
+[layer_names]
+
+3d_physics/layer_1="World"
+3d_physics/layer_2="Props"
+3d_physics/layer_3="Tanks"
+3d_physics/layer_4="Debris"
+3d_physics/layer_5="Player"
+3d_physics/layer_6="Ragdoll"
+3d_physics/layer_7="Floor"
+
+[physics]
+
+common/physics_ticks_per_second=120
+common/max_physics_steps_per_frame=12
+3d/physics_engine="Jolt Physics"
+jolt_physics_3d/limits/temporary_memory_buffer_size=128
+jolt_physics_3d/limits/world_boundary_shape_size=8000.0
+jolt_physics_3d/limits/max_bodies=20480
+jolt_physics_3d/limits/max_contact_constraints=32768
+3d/default_gravity=9.81
+
+[rendering]
+
+rendering_device/driver.windows="d3d12"
+lights_and_shadows/directional_shadow/size=8192
+lights_and_shadows/directional_shadow/soft_shadow_filter_quality=3
+textures/vram_compression/import_etc2_astc=true
+textures/default_filters/anisotropic_filtering_level=3
+environment/ssil/quality=1
+anti_aliasing/quality/msaa_3d=2
+anti_aliasing/quality/use_debanding=true
+
+[shader_globals]
+
+reveal_center={
+"type": "vec3",
+"value": Vector3(0, 0, 0)
+}
+reveal_radius={
+"type": "float",
+"value": 100000.0
+}
+reveal_glow={
+"type": "color",
+"value": Color(0.35, 0.75, 1, 1)
+}
