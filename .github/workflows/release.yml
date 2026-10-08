@@ -16,7 +16,8 @@ concurrency:
 
 env:
   GODOT_VERSION: 4.7.2
-  RCODESIGN_VERSION: 0.29.0
+  # Not RCODESIGN_*: rcodesign reads every variable with that prefix as its own configuration.
+  APPLE_CODESIGN_VERSION: 0.29.0
 
 jobs:
   release:
@@ -33,7 +34,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/propane-ci
-          key: tools-godot-${{ env.GODOT_VERSION }}-rcodesign-${{ env.RCODESIGN_VERSION }}
+          key: tools-godot-${{ env.GODOT_VERSION }}-rcodesign-${{ env.APPLE_CODESIGN_VERSION }}
 
       - name: Install Godot, export templates and rcodesign
         run: |
@@ -49,9 +50,9 @@ jobs:
           fi
           echo "GODOT=$cache/$editor/Godot_v${GODOT_VERSION}-stable_mono_linux.x86_64" >> "$GITHUB_ENV"
 
-          signer="apple-codesign-${RCODESIGN_VERSION}-x86_64-unknown-linux-musl"
+          signer="apple-codesign-${APPLE_CODESIGN_VERSION}-x86_64-unknown-linux-musl"
           if [[ ! -x "$cache/$signer/rcodesign" ]]; then
-            base="https://github.com/indygreg/apple-platform-rs/releases/download/apple-codesign%2F${RCODESIGN_VERSION}"
+            base="https://github.com/indygreg/apple-platform-rs/releases/download/apple-codesign%2F${APPLE_CODESIGN_VERSION}"
             curl -fsSL --retry 3 -o "$cache/$signer.tar.gz" "$base/$signer.tar.gz"
             curl -fsSL --retry 3 -o "$cache/$signer.tar.gz.sha256" "$base/$signer.tar.gz.sha256"
             echo "$(cat "$cache/$signer.tar.gz.sha256")  $cache/$signer.tar.gz" | sha256sum -c -
