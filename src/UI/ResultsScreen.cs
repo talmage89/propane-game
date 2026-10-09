@@ -25,19 +25,19 @@ public partial class ResultsScreen : CanvasLayer
         var panel = new PanelContainer();
         panel.AddThemeStyleboxOverride("panel", UiStyle.Panel(0.96f));
         center.AddChild(panel);
-        var layout = new VBoxContainer { CustomMinimumSize = new Vector2(520, 0) };
+        var layout = new VBoxContainer { CustomMinimumSize = new Vector2(720, 0) };
         layout.AddThemeConstantOverride("separation", 10);
         panel.AddChild(layout);
-        title = UiStyle.Text("", 44, UiStyle.Ink, HorizontalAlignment.Center);
+        title = UiStyle.Text("", 64, UiStyle.Ink, HorizontalAlignment.Center);
         title.AddThemeFontOverride("font", UiStyle.BoldFont);
         layout.AddChild(title);
-        layout.AddChild(UiStyle.Text("Tanks banked", 18, UiStyle.SoftInk, HorizontalAlignment.Center));
+        layout.AddChild(UiStyle.Text("Tanks banked", 22, UiStyle.SoftInk, HorizontalAlignment.Center));
         layout.AddChild(new HSeparator());
         rows = new VBoxContainer();
-        rows.AddThemeConstantOverride("separation", 6);
+        rows.AddThemeConstantOverride("separation", 10);
         layout.AddChild(rows);
         layout.AddChild(new HSeparator());
-        footer = UiStyle.Text("", 16, UiStyle.SoftInk, HorizontalAlignment.Center);
+        footer = UiStyle.Text("", 19, UiStyle.SoftInk, HorizontalAlignment.Center);
         layout.AddChild(footer);
     }
 
@@ -78,18 +78,18 @@ public partial class ResultsScreen : CanvasLayer
             }
             var row = new HBoxContainer();
             row.AddThemeConstantOverride("separation", 12);
-            var place = UiStyle.Text($"{rank}", 24, UiStyle.SoftInk);
-            place.CustomMinimumSize = new Vector2(32, 0);
+            var place = UiStyle.Text($"{rank}", 32, UiStyle.SoftInk);
+            place.CustomMinimumSize = new Vector2(40, 0);
             row.AddChild(place);
-            row.AddChild(new ColorRect { Color = Protocol.PlayerColor(s.Color), CustomMinimumSize = new Vector2(18, 18), SizeFlagsVertical = Control.SizeFlags.ShrinkCenter });
-            var name = UiStyle.Text(s.Name + (s.Id == me ? "  (you)" : "") + (s.Present ? "" : "  (left)"), 24, s.Present ? UiStyle.Ink : UiStyle.SoftInk);
+            row.AddChild(new ColorRect { Color = Protocol.PlayerColor(s.Color), CustomMinimumSize = new Vector2(26, 26), SizeFlagsVertical = Control.SizeFlags.ShrinkCenter });
+            var name = UiStyle.Text(s.Name + (s.Id == me ? "  (you)" : "") + (s.Present ? "" : "  (left)"), 32, s.Present ? UiStyle.Ink : UiStyle.SoftInk);
             name.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
             if (s.Score == best)
             {
                 name.AddThemeFontOverride("font", UiStyle.BoldFont);
             }
             row.AddChild(name);
-            var points = UiStyle.Text(s.Score.ToString(), 28, UiStyle.Ink, HorizontalAlignment.Right);
+            var points = UiStyle.Text(s.Score.ToString(), 38, UiStyle.Ink, HorizontalAlignment.Right);
             points.AddThemeFontOverride("font", UiStyle.BoldFont);
             row.AddChild(points);
             rows.AddChild(row);

@@ -5,3 +5,4 @@ obj/
 *.user
 .DS_Store
 build/
+build_id.txt

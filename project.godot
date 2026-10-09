@@ -11,11 +11,12 @@ config_version=5
 [application]
 
 config/name="Propane"
-config/version="0.1.0"
 config/description="Run around a procedural suburb and shoot propane tanks."
+config/version="0.1.0"
 run/main_scene="res://scenes/main.tscn"
 config/features=PackedStringArray("4.7", "C#", "Forward Plus")
 config/icon="res://icon.svg"
+run/flush_stdout_on_print=true
 
 [display]
 
@@ -52,9 +53,9 @@ jolt_physics_3d/limits/max_contact_constraints=32768
 [rendering]
 
 rendering_device/driver.windows="d3d12"
+textures/vram_compression/import_etc2_astc=true
 lights_and_shadows/directional_shadow/size=8192
 lights_and_shadows/directional_shadow/soft_shadow_filter_quality=3
-textures/vram_compression/import_etc2_astc=true
 textures/default_filters/anisotropic_filtering_level=3
 environment/ssil/quality=1
 anti_aliasing/quality/msaa_3d=2

@@ -19,6 +19,10 @@ fi
 rm -rf build
 mkdir -p build/macos build/linux build/dist build/notices
 
+# The build id lets the multiplayer server turn away clients from a different commit.
+git rev-parse --short HEAD >build_id.txt 2>/dev/null || echo "unknown" >build_id.txt
+trap 'rm -f "$project/build_id.txt"' EXIT
+
 run() {
   local log="build/$1.log"
   shift
