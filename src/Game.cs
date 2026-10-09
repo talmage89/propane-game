@@ -49,6 +49,9 @@ public partial class Game : Node3D
 
     public bool InTransition => phase is Phase.Dissolving or Phase.Materialising;
 
+    /// <summary>Leave single player for the main menu (from the pause menu). Subscribe before adding to the tree.</summary>
+    public event System.Action? ExitRequested;
+
     /// <summary>Pause when the window loses focus. Scripted dev runs turn this off, since they run unfocused.</summary>
     public bool PauseOnFocusLoss { get; set; } = true;
 
@@ -87,6 +90,10 @@ public partial class Game : Node3D
         AddChild(tuningPanel);
         pauseMenu = new PauseMenu { Name = "Pause" };
         pauseMenu.ResumeRequested += Resume;
+        if (ExitRequested != null)
+        {
+            pauseMenu.MainMenuRequested += () => ExitRequested?.Invoke();
+        }
         AddChild(pauseMenu);
 
         // The first suburb materialises around the player, like every later one.

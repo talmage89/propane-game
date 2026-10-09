@@ -45,7 +45,7 @@ public partial class NetClient : Node
 
     public int MyId { get; private set; }
 
-    public string Name { get; private set; } = "Player";
+    public string PlayerName { get; private set; } = "Player";
 
     public int Color { get; private set; }
 
@@ -86,7 +86,7 @@ public partial class NetClient : Node
         {
             if (id == NetTransport.ServerId)
             {
-                Send(new NetWriter(Msg.Hello).Int(Protocol.Version).String(BuildInfo.GameVersion).String(BuildInfo.Build).String(Name).Int(Color));
+                Send(new NetWriter(Msg.Hello).Int(Protocol.Version).String(BuildInfo.GameVersion).String(BuildInfo.Build).String(PlayerName).Int(Color));
             }
         };
         transport.PeerDisconnected += id =>
@@ -108,7 +108,7 @@ public partial class NetClient : Node
     public void Connect(string address, int port, string name, int color)
     {
         Disconnect();
-        Name = Protocol.CleanName(name);
+        PlayerName = Protocol.CleanName(name);
         Color = color;
         lastError = null;
         var error = transport.Connect(address, port);
@@ -167,11 +167,11 @@ public partial class NetClient : Node
 
     public void SetProfile(string name, int color)
     {
-        Name = Protocol.CleanName(name);
+        PlayerName = Protocol.CleanName(name);
         Color = color;
         if (State == Status.Connected)
         {
-            Send(new NetWriter(Msg.SetProfile).String(Name).Int(Color));
+            Send(new NetWriter(Msg.SetProfile).String(PlayerName).Int(Color));
         }
     }
 
@@ -236,7 +236,7 @@ public partial class NetClient : Node
                     {
                         // The server may have changed the colour if someone else had it.
                         Color = me.Color;
-                        Name = me.Name;
+                        PlayerName = me.Name;
                     }
                     Lobby = me != null ? new LobbyInfo(id, creator, length, phase, members) : null;
                     LobbyChanged?.Invoke();
