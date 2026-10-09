@@ -4,6 +4,8 @@ A third-person sandbox: run around a procedurally generated suburb, find the pro
 
 Status: **approved 2026-10-07**, built and validated (see section 6). No audio in the MVP.
 
+Multiplayer (tank bank, 2–5 players) is designed and built separately: see [MULTIPLAYER.md](MULTIPLAYER.md). The game now opens on a main menu that leads to this sandbox or to multiplayer.
+
 ## 1. Decided
 
 | Area | Decision |

@@ -3,7 +3,8 @@
 Tank bank: a free-for-all for 2–5 players in one suburb. Detonating tanks scores points, and being shot spills them
 back out as tanks for anyone to take. Most points when the timer runs out wins.
 
-Status: **draft, 2026-10-08**. Not built. The single-player sandbox in [DESIGN.md](DESIGN.md) is unchanged.
+Status: **built, 2026-10-09** (see section 7 for how it is built and tested). The single-player sandbox in
+[DESIGN.md](DESIGN.md) is unchanged, apart from the main menu in front of it.
 
 ## 1. Decided
 
@@ -55,7 +56,7 @@ Every client simulates the whole suburb, so the game responds instantly. Each mo
 
 **The server** runs no physics. It hosts the lobbies, relays messages within each match, keeps the score and the match clock, and settles ties: when two claims for the same thing arrive, the first one wins. It can run headless on the `games` home server, or inside a player's game during development.
 
-**The world.** The generator builds the same suburb from the same seed, so the server only sends one number. Houses and other static parts never need syncing.
+**The world.** The server generates the match's suburb and sends the whole plan (about 10 KB compressed) rather than just its seed. The generator's trigonometry can differ in the last bit between an Apple Silicon Mac and an x86 Linux machine, and a single flipped comparison would give the players different suburbs. Houses and other static parts never need syncing.
 
 **Tanks:**
 - *Puncture:* the shooter's client punctures the tank at once. It then sends the cause to everyone: the hole position and normal, the jet's lean, and the bullet's push. Every client starts the same vent from the same starting point.
@@ -146,3 +147,60 @@ These tuners are added to `Tuning`, alongside the existing ones, under new panel
 ## 6. Open questions
 
 None at the moment.
+
+## 7. How it is built
+
+### Playing
+
+- **Main menu:** Single player, Multiplayer, Quit. Single player is the sandbox as before; its pause menu gains a Main menu button.
+- **Multiplayer:** type a name and the server's address (`host` or `host:port`; the port defaults to 24680, UDP). **Host on this computer** runs a server inside the game and joins it, for playing without the home server; the lobby screens then show the addresses others can connect to.
+- **Lobbies:** create one or join one from the list (lobbies in a match can't be joined). In the lobby, everyone picks a name and a colour (a colour someone else has is greyed out), and the creator sets the match length and presses Start. A release build needs two players to start; a debug build may start alone, for testing.
+- **In a match:** the clock and the tanks you have banked are at the top, ammo at the bottom right. R reloads (an empty magazine also reloads on the next trigger pull). Walking over an ammo can takes it, unless the reserve is full. Esc opens the controls with Resume, Leave match and Quit; the match keeps running behind it. Leaving a match also leaves the lobby.
+- **After a match:** the results show for `ResultsTime`, then everyone is back in the lobby, ready for another.
+
+### Hosting the server
+
+The server is the game itself started with `-- --server` (and `--headless`). It runs no physics and uses little CPU.
+
+- **Home server:** `tools/server/deploy.sh` exports the Linux build and runs it in Docker on the `games` machine
+  (`~/games/propane/server-1`, container `propane-server`, `restart: unless-stopped`, UDP 24680). Run it again after
+  changing the game: clients from a different commit are turned away. Logs: `docker compose logs -f` in that folder.
+- **Reaching it:** on the home network, `192.168.0.53`. Over Tailscale, the machine's tailnet address (share the
+  machine with friends in the Tailscale admin console). From the internet, forward UDP 24680 on the router to
+  192.168.0.53 and give friends the public address.
+- **From source:** `godot --headless --path . -- --server [--port=24680]`.
+
+### Code
+
+| Path | Contents |
+| --- | --- |
+| `src/Main.cs` | The root scene: menus over a backdrop, single player, the match, or server mode. |
+| `src/Net/LobbyServer.cs` | The server: lobbies, match flow and clock, relaying, scores, first-claim ties, pickups. |
+| `src/Net/NetClient.cs`, `NetTransport.cs`, `Protocol.cs` | The client connection, the ENet transport (with simulated lag for tests), the message types and the version check. |
+| `src/Net/Match.cs` | A match on one player's machine: everything this player sends, and playing what the others send. |
+| `src/Net/BodySync.cs` | Ownership and corrections for tanks and cars. |
+| `src/Net/SnapshotBuffer.cs` | Smooth playback of other players, `InterpolationDelay` behind. |
+| `src/Net/PlanCodec.cs` | Packs a suburb plan for sending. |
+| `src/Net/AmmoPickup.cs` | The ammo can and its build-up reveal. |
+| `src/UI/Menus.cs`, `MatchHud.cs`, `MatchMenu.cs`, `ResultsScreen.cs` | Front end, match HUD, Esc menu, results. |
+
+Details settled while building, within the decisions above:
+
+- **Remote players** are full copies of the character (animation, rifle, ragdoll) driven by the states their own game sends. A thrown player's ragdoll falls on its own on every screen, steered after the real one; it gets up where the real one got up. Shots hit other players' bodies and limbs. Players pass through each other.
+- **Ownership** goes to whoever last disturbed a body (a shot, a puncture, a blast, a push, a drop); the match's creator owns everything nobody has touched, and a player's bodies pass to the creator (or the next player) if they leave. Claims go through the server, which echoes them to everyone in one order, so all players agree on each owner.
+- **Dropped tanks** glow in the dropper's colour while they ignore bullets and chain reactions.
+- **Tuning in a match:** everyone plays on the creator's values: the baked ones in a release build, the creator's live ones in a debug build. In a debug build, F1 opens the panel, and a change applies to every player in the match. The player's own values come back after the match.
+- **Starting values** (all tuners): 40 tanks in piles of 5–12 within about 40 m of the centre; a 30-round magazine, 60 in reserve, at most 150, a 1.6 s reload; 8 ammo cans of 30 rounds that come back after 20 s; a 2:30 match after a 4 s countdown; results for 10 s.
+
+### Testing
+
+| Command | Checks |
+| --- | --- |
+| `godot --headless res://scenes/dev/generator_tests.tscn -- --seeds=100` | Match suburbs too: a start per player, spread apart and clear; ammo spots; tanks nearer the centre; the plan unchanged through `PlanCodec`. |
+| `tools/dev/net_bots.sh -n 3 -l 60 -- --net-lag=120 --net-jitter=30 --net-loss=3` | A local server and bot players (`scenes/dev/net_test.tscn`) that run to tanks, shoot them and each other, and fetch ammo, under simulated lag and loss. `-w N` shows N of them in windows; `-S host:port` uses an existing server. |
+| `tools/dev/compare_tanks.py out/bot*.log` | Where each bot had every tank at the same match times: counts, states and drift. |
+| `net_bots.sh -n 2 -w 2 -s "--start-score=8" -- --scenario=duel --capture-dir=DIR` | Scripted close-up: hits with the grace period, dropped tanks, a blast that throws the victim, from both sides. |
+| `net_bots.sh -n 1 -w 1 -- --scenario=pickup --capture-dir=DIR` | Taking an ammo can and its return. |
+| `godot res://scenes/dev/menu_test.tscn -- --capture-dir=DIR` | Clicks through every menu, a solo match, leaving it, and single player and back. |
+
+Results, 2026-10-09: with three bots under 120 ms round trip, 30 ms jitter and 3% loss, every bot agreed on which tanks existed and their states throughout; resting tanks matched exactly and venting tanks to within about half a metre. The same held through the Docker server on `games`, over the LAN and over Tailscale. When the match's creator left mid-match, the others played on in step. A client with a different protocol was turned away with a message.

@@ -1,3 +1,4 @@
+using System.Linq;
 using Godot;
 using Propane.Core;
 using Propane.Dev;
@@ -173,6 +174,9 @@ public partial class Main : Node
                 return;
             }
         }
+        var addresses = IP.GetLocalAddresses().Where(a => a.Contains('.') && !a.StartsWith("127.") && !a.StartsWith("169.254.")).ToList();
+        menus.HostingNote = $"Hosting here. Others connect to {(addresses.Count > 0 ? string.Join(" or ", addresses.Select(a => $"{a}:{port}")) : $"this computer's address, port {port}")}" +
+                            " (UDP; from outside your network, forward the port).";
         var color = PlayerSettings.Color;
         net.Connect("127.0.0.1", port, PlayerSettings.Name, color >= 0 ? color : 0);
     }

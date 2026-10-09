@@ -35,6 +35,9 @@ public partial class Menus : CanvasLayer
 
     public Screen Current { get; private set; } = Screen.None;
 
+    /// <summary>When this game is hosting, where others can reach it (shown in the lobby screens).</summary>
+    public string HostingNote { get; set; } = "";
+
     public event Action? SinglePlayerRequested;
 
     /// <summary>Run a server in this game and join it, on the given port.</summary>
@@ -243,6 +246,7 @@ public partial class Menus : CanvasLayer
         layout.AddChild(UiStyle.Title("LOBBIES", 40));
         layout.AddChild(UiStyle.Text($"Playing as {Net.PlayerName}" + (Net.PingMs > 0 ? $"   ·   {Net.PingMs:0} ms to the server" : ""), 16, UiStyle.SoftInk,
             HorizontalAlignment.Center));
+        AddHostingNote();
         layout.AddChild(new HSeparator());
         if (Net.Lobbies.Count == 0)
         {
@@ -295,6 +299,7 @@ public partial class Menus : CanvasLayer
         layout.AddChild(UiStyle.Title($"{(creator?.Name ?? "?").ToUpperInvariant()}'S LOBBY", 34));
         layout.AddChild(UiStyle.Text(lobby.Phase == LobbyServer.LobbyPhase.Waiting ? $"{lobby.Members.Count} of {Net.LobbyCapacity} players" : "A match is on",
             16, UiStyle.SoftInk, HorizontalAlignment.Center));
+        AddHostingNote();
         layout.AddChild(new HSeparator());
         foreach (var member in lobby.Members)
         {
@@ -421,6 +426,14 @@ public partial class Menus : CanvasLayer
     }
 
     // ------------------------------------------------------------------ Helpers
+
+    private void AddHostingNote()
+    {
+        if (HostingNote.Length > 0)
+        {
+            layout.AddChild(Wrap(UiStyle.Text(HostingNote, 15, UiStyle.SoftInk, HorizontalAlignment.Center)));
+        }
+    }
 
     private void AddMessage()
     {
