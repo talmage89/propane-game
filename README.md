@@ -44,11 +44,14 @@ create a lobby or join one. Everyone picks a name and colour in the lobby, and w
 length and starts. **Host on this computer** runs a server inside your game instead; the lobby then shows the
 addresses friends can use. Builds must match: the server turns away a different version.
 
-On macOS, the first time you host, allow incoming connections if the system asks.
+Starting the game with `-- --connect=host[:port]` skips straight to that server's lobbies. On macOS, the first time
+you host, allow incoming connections if the system asks.
 
 The dedicated server is the same game run headless: `./Propane.x86_64 --headless -- --server [--port=24680]`.
 `tools/server/deploy.sh` exports it and runs it in Docker on a remote machine (by default the `games` home server);
-see [MULTIPLAYER.md](MULTIPLAYER.md) for hosting and reaching it.
+see [MULTIPLAYER.md](MULTIPLAYER.md) for hosting and reaching it. A downloaded build only joins a server built from the
+same commit, so deploy the server from the commit the release was built from. Games run from source can join any
+server with the same version.
 
 ## Controls
 

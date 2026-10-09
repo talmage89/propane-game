@@ -153,7 +153,7 @@ None at the moment.
 ### Playing
 
 - **Main menu:** Single player, Multiplayer, Quit. Single player is the sandbox as before; its pause menu gains a Main menu button.
-- **Multiplayer:** type a name and the server's address (`host` or `host:port`; the port defaults to 24680, UDP). **Host on this computer** runs a server inside the game and joins it, for playing without the home server; the lobby screens then show the addresses others can connect to.
+- **Multiplayer:** (or start the game with `-- --connect=host[:port]`) type a name and the server's address (`host` or `host:port`; the port defaults to 24680, UDP). **Host on this computer** runs a server inside the game and joins it, for playing without the home server; the lobby screens then show the addresses others can connect to.
 - **Lobbies:** create one or join one from the list (lobbies in a match can't be joined). In the lobby, everyone picks a name and a colour (a colour someone else has is greyed out), and the creator sets the match length and presses Start. A release build needs two players to start; a debug build may start alone, for testing.
 - **In a match:** the clock and the tanks you have banked are at the top, ammo at the bottom right. R reloads (an empty magazine also reloads on the next trigger pull). Walking over an ammo can takes it, unless the reserve is full. Esc opens the controls with Resume, Leave match and Quit; the match keeps running behind it. Leaving a match also leaves the lobby.
 - **After a match:** the results show for `ResultsTime`, then everyone is back in the lobby, ready for another.
@@ -163,8 +163,9 @@ None at the moment.
 The server is the game itself started with `-- --server` (and `--headless`). It runs no physics and uses little CPU.
 
 - **Home server:** `tools/server/deploy.sh` exports the Linux build and runs it in Docker on the `games` machine
-  (`~/games/propane/server-1`, container `propane-server`, `restart: unless-stopped`, UDP 24680). Run it again after
-  changing the game: clients from a different commit are turned away. Logs: `docker compose logs -f` in that folder.
+  (`~/games/propane/server-1`, container `propane-server`, `restart: unless-stopped`, UDP 24680). Run it from the
+  commit a release was built from: a downloaded build only joins a server from the same commit (games run from source
+  join any server with the same version and protocol). Logs: `docker compose logs -f` in that folder.
 - **Reaching it:** on the home network, `192.168.0.53`. Over Tailscale, the machine's tailnet address (share the
   machine with friends in the Tailscale admin console). From the internet, forward UDP 24680 on the router to
   192.168.0.53 and give friends the public address.
