@@ -158,6 +158,29 @@ None at the moment.
 - **In a match:** the clock and the tanks you have banked are at the top, ammo at the bottom right. R reloads (an empty magazine also reloads on the next trigger pull). Walking over an ammo can takes it, unless the reserve is full. Esc opens the controls with Resume, Leave match and Quit; the match keeps running behind it. Leaving a match also leaves the lobby.
 - **After a match:** the results show for `ResultsTime`, then everyone is back in the lobby, ready for another.
 
+### Playing against bots
+
+`tools/dev/add_bots.sh` starts bot players (4 by default) on a server, from a source checkout. Create a lobby
+first: they join the first open lobby and play every match it starts. `-S host:port` picks another server, `-k 0.5`
+makes them easier (slower to turn, looser aim, slower to react), `-b simple` gives them the first, easy brain, and
+`-x` stops them. Each uses about 7% of a core and 0.6 GB while it waits.
+
+The bot (`src/Dev/Bot.cs`) plays to win:
+- it sets tanks off from outside the throw radius, wider for a pile, puncturing and detonating in one burst, from a
+  spot with a clear view that it finds and walks to;
+- it runs from venting tanks that come close;
+- it shoots players only when it pays: those holding a few tanks, those close by holding any, or whoever just shot it;
+- holding more than the player shooting it, it breaks their line of sight instead of trading hits;
+- holding 4 or more while leading, or late in the match, it stays out of everyone's sight and only goes for tanks
+  with nobody near them;
+- its aim is a person's, not perfect: it reacts after a moment, and its aim wanders and tightens while it tracks;
+- it taps tanks, fires short bursts at players, and fetches ammo when low or close.
+
+Measured over two-minute matches of four bots each, before and after (the server logs each player's tanks gained,
+lost to hits and lost to throws at the end of a match): the first bot often threw itself with its own blasts and
+ended with almost nothing; the current bots never throw themselves on purpose, and the leader usually ends with 8–17
+banked. Against the first bot, two current bots ended 15 and 14 to 1 and 0, and 8 and 6 to 3 and 1.
+
 ### Hosting the server
 
 The server is the game itself started with `-- --server` (and `--headless`). It runs no physics and uses little CPU.
@@ -201,6 +224,7 @@ Details settled while building, within the decisions above:
 | `tools/dev/compare_tanks.py out/bot*.log` | Where each bot had every tank at the same match times: counts, states and drift. |
 | `net_bots.sh -n 2 -w 2 -s "--start-score=8" -- --scenario=duel --capture-dir=DIR` | Scripted close-up: hits with the grace period, dropped tanks, a blast that throws the victim, from both sides. |
 | `net_bots.sh -n 1 -w 1 -- --scenario=pickup --capture-dir=DIR` | Taking an ammo can and its return. |
+| `net_bots.sh -n 4 -l 120 -b smart,simple,smart,simple` | Bot brains against each other; the server log ends each match with tanks gained / lost to hits / lost to throws. Add `--bot-log` to log what each bot is doing. |
 | `godot res://scenes/dev/menu_test.tscn -- --capture-dir=DIR` | Clicks through every menu, a solo match, leaving it, and single player and back. |
 
 Results, 2026-10-09: with three bots under 120 ms round trip, 30 ms jitter and 3% loss, every bot agreed on which tanks existed and their states throughout; resting tanks matched exactly and venting tanks to within about half a metre. The same held through the Docker server on another machine, over the LAN and over a VPN. When the match's creator left mid-match, the others played on in step. A client with a different protocol was turned away with a message.

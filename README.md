@@ -44,6 +44,7 @@ create a lobby or join one. Everyone picks a name and colour in the lobby, and w
 length and starts. **Host on this computer** runs a server inside your game instead; the lobby then shows the
 addresses friends can use. Builds must match: the server turns away a different version.
 
+To play against bots, create a lobby and run `tools/dev/add_bots.sh` (from source; `-x` stops them).
 Starting the game with `-- --connect=host[:port]` skips straight to that server's lobbies. On macOS, the first time
 you host, allow incoming connections if the system asks.
 

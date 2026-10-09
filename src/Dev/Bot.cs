@@ -45,6 +45,7 @@ public sealed class Bot : IBotBrain
     private float fightTime;
     private float tapCooldown;
     private bool protecting;
+    private PropaneTank? fleeing;
     private float burstClock;
     private float coverTimer;
     private float vantageTimer;
@@ -86,9 +87,16 @@ public sealed class Bot : IBotBrain
         var ammo = player.Ammo;
 
         // 1. Get away from a venting tank that comes close: it may go up any moment, and it hits like a car.
-        var danger = match.LiveTanks.Where(t => t.State == PropaneTank.TankState.Venting)
+        // Once running, keep going until well clear, so it does not hover at the edge.
+        if (fleeing != null && (!GodotObject.IsInstanceValid(fleeing) || fleeing.State == PropaneTank.TankState.Exploded ||
+                                fleeing.GlobalPosition.DistanceTo(here) > tuning.RagdollRadius + 4f))
+        {
+            fleeing = null;
+        }
+        var danger = fleeing ?? match.LiveTanks.Where(t => t.State == PropaneTank.TankState.Venting)
             .Where(t => t.GlobalPosition.DistanceTo(here) < tuning.RagdollRadius + 1f)
             .OrderBy(t => t.GlobalPosition.DistanceTo(here)).FirstOrDefault();
+        fleeing = danger;
         if (danger != null)
         {
             var away = here - danger.GlobalPosition;
