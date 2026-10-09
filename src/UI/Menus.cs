@@ -29,6 +29,7 @@ public partial class Menus : CanvasLayer
     private string message = "";
     private bool connecting;
     private LineEdit? nameField;
+    private bool rebuilding;
 
     /// <summary>The connection the multiplayer screens use. Set before adding to the tree.</summary>
     public NetClient Net { get; set; } = null!;
@@ -131,11 +132,13 @@ public partial class Menus : CanvasLayer
             typing = nameField.Text;
             caret = nameField.CaretColumn;
         }
+        rebuilding = true;
         foreach (var child in layout.GetChildren())
         {
             layout.RemoveChild(child);
             child.QueueFree();
         }
+        rebuilding = false;
         status = null;
         nameField = null;
         version.Visible = Current == Screen.Main;
@@ -340,7 +343,7 @@ public partial class Menus : CanvasLayer
         name.TextSubmitted += text => SetProfile(text, Net.Color);
         name.FocusExited += () =>
         {
-            if (IsInstanceValid(name) && Protocol.CleanName(name.Text) != Net.PlayerName)
+            if (!rebuilding && IsInstanceValid(name) && Protocol.CleanName(name.Text) != Net.PlayerName)
             {
                 SetProfile(name.Text, Net.Color);
             }
