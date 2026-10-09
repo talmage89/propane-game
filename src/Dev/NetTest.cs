@@ -138,6 +138,10 @@ public partial class NetTest : Node
         {
             PickupScenario(match, dt);
         }
+        else if (DevArgs.Get("scenario") == "watch" && role == "host")
+        {
+            Watch(match, dt);
+        }
         else
         {
             bot.Think(match, dt);
@@ -315,6 +319,35 @@ public partial class NetTest : Node
             {
                 director.Screenshot($"pickup_2_reveal_{f:0.00}");
             }
+        }
+    }
+
+    /// <summary>The host follows another (playing) bot at a few metres and films it: running, aiming, shooting, thrown.</summary>
+    private void Watch(Match match, float dt)
+    {
+        var player = match.Player;
+        var other = match.RemoteBodies.FirstOrDefault();
+        if (!match.IsPlaying || other == null)
+        {
+            return;
+        }
+        if (duelTime < 0)
+        {
+            duelTime = 0;
+            player.InputOverride = duelInput;
+        }
+        duelTime += dt;
+        var target = other.IsRagdolled ? other.PelvisPosition : other.GlobalPosition + Vector3.Up;
+        if (player.GlobalPosition.DistanceTo(other.GlobalPosition) > 9f)
+        {
+            // Keep up: drop in a few metres behind and to the side of them.
+            var back = other.GlobalPosition + new Vector3(Mathf.Sin(other.FacingYaw), 0, Mathf.Cos(other.FacingYaw)) * 5f + new Vector3(1.5f, 0.3f, 0);
+            player.Teleport(back, player.FacingYaw);
+        }
+        AimAt(player, target);
+        if (Mathf.PosMod(duelTime, 1.5f) < dt)
+        {
+            director.Screenshot($"watch_{duelTime:000.0}");
         }
     }
 
