@@ -233,6 +233,9 @@ public partial class Menus : CanvasLayer
         AddMessage();
     }
 
+    /// <summary>Connects as if typed on the connect screen.</summary>
+    public void ConnectTo(string address, string name) => Connect(address, name.Length > 0 ? name : DefaultName());
+
     private void Connect(string address, string name)
     {
         var text = address.Trim();
