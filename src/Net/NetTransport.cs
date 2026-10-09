@@ -170,7 +170,7 @@ public sealed class NetTransport
     private void Put(int to, byte[] data, bool reliable)
     {
         // A peer that has gone (or is going) cannot take packets.
-        if (!open || !peers.Contains(to) || peer.GetPeer(to) is not { } target || !target.IsActive())
+        if (!open || !peers.Contains(to) || peer.GetPeer(to) is not { } target || target.GetState() != ENetPacketPeer.PeerState.Connected)
         {
             return;
         }

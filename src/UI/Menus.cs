@@ -123,6 +123,14 @@ public partial class Menus : CanvasLayer
 
     private void Rebuild()
     {
+        // Someone joining or a server update rebuilds the screen: keep a name being typed, and its focus.
+        string? typing = null;
+        var caret = 0;
+        if (nameField != null && IsInstanceValid(nameField) && nameField.HasFocus())
+        {
+            typing = nameField.Text;
+            caret = nameField.CaretColumn;
+        }
         foreach (var child in layout.GetChildren())
         {
             layout.RemoveChild(child);
@@ -149,6 +157,12 @@ public partial class Menus : CanvasLayer
                 layout.AddChild(UiStyle.Title("PROPANE", 46));
                 layout.AddChild(UiStyle.Text(message.Length > 0 ? message : "Building the suburb...", 20, UiStyle.SoftInk, HorizontalAlignment.Center));
                 break;
+        }
+        if (typing != null && nameField != null)
+        {
+            nameField.Text = typing;
+            nameField.CallDeferred(Control.MethodName.GrabFocus);
+            nameField.CaretColumn = caret;
         }
     }
 
