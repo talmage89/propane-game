@@ -134,6 +134,10 @@ public partial class NetTest : Node
         {
             Duel(match, dt);
         }
+        else if (DevArgs.Get("scenario") == "pickup")
+        {
+            PickupScenario(match, dt);
+        }
         else
         {
             bot.Think(match, dt);
@@ -251,6 +255,65 @@ public partial class NetTest : Node
             if (Once(t, dt))
             {
                 director.Screenshot($"shooter_{t:00.0}");
+            }
+        }
+    }
+
+    /// <summary>Walks into the nearest ammo pickup and films it vanishing and building back up.</summary>
+    private void PickupScenario(Match match, float dt)
+    {
+        var player = match.Player;
+        if (!match.IsPlaying || match.Pickups.Count == 0)
+        {
+            return;
+        }
+        if (duelTime < 0)
+        {
+            duelTime = 0;
+            player.InputOverride = duelInput;
+        }
+        duelTime += dt;
+        duelInput.Advance(dt);
+        var pickup = match.Pickups[0];
+        if (Once(0.2f, dt))
+        {
+            // Spend some rounds first so the pickup has room to add them.
+            player.Ammo!.Reserve = 10;
+            var at = pickup.GlobalPosition;
+            var start = at + new Vector3(3.5f, 0.05f, 0);
+            player.Teleport(start, Mathf.Atan2(-(at - start).X, -(at - start).Z));
+            AimAt(player, at + Vector3.Up * 0.3f);
+        }
+        if (Once(0.6f, dt))
+        {
+            AimAt(player, pickup.GlobalPosition + Vector3.Up * 0.3f);
+            director.Screenshot("pickup_0_before");
+            duelInput.Hold(duelInput.Now, duelInput.Now + 0.55f, new PlayerIntent { Move = new Vector2(0, 1f) });
+        }
+        if (Once(1.2f, dt))
+        {
+            player.Teleport(player.GlobalPosition + new Vector3(3f, 0, 0), player.FacingYaw);
+        }
+        if (Once(1.4f, dt))
+        {
+            AimAt(player, pickup.GlobalPosition + Vector3.Up * 0.3f);
+        }
+        foreach (var t in new[] { 1.5f, 2.5f })
+        {
+            if (Once(t, dt))
+            {
+                director.Screenshot($"pickup_1_taken_{t:0.0}");
+                Log($"pickup available {pickup.Available}, ammo {player.Ammo!.Magazine}/{player.Ammo.Reserve}");
+            }
+        }
+        var respawn = Tuning.Current.PickupRespawnTime;
+        var reveal = Tuning.Current.PickupRevealTime;
+        foreach (var f in new[] { 0.15f, 0.4f, 0.65f, 0.9f, 1.2f })
+        {
+            var t = 1.0f + respawn + reveal * f;
+            if (Once(t, dt))
+            {
+                director.Screenshot($"pickup_2_reveal_{f:0.00}");
             }
         }
     }

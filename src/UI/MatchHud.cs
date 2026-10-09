@@ -72,7 +72,7 @@ public partial class MatchHud : CanvasLayer
         ammo.Size = new Vector2(270, 150);
         ammo.AddThemeConstantOverride("separation", -6);
         root.AddChild(ammo);
-        ammoPopup = HudLabel(24, new Color(0.25f, 0.55f, 0.2f), 6);
+        ammoPopup = HudLabel(30, new Color(0.2f, 0.5f, 0.15f), 7);
         ammoPopup.HorizontalAlignment = HorizontalAlignment.Right;
         ammo.AddChild(ammoPopup);
         ammoNote = HudLabel(19, Dark, 6);

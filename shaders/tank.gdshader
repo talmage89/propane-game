@@ -32,5 +32,5 @@ void fragment() {
 	NORMAL_MAP = vec3(n.r, 1.0 - n.g, n.b);
 	NORMAL_MAP_DEPTH = normal_strength;
 	float rim = pow(1.0 - clamp(dot(NORMAL, VIEW), 0.0, 1.0), 2.0);
-	EMISSION = reveal_glow.rgb * glow * 6.0 + shield_color.rgb * shield_color.a * (0.35 + rim * 3.0);
+	EMISSION = reveal_glow.rgb * glow * 6.0 + shield_color.rgb * shield_color.a * (0.8 + rim * 6.0);
 }
