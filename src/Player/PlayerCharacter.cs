@@ -101,6 +101,12 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
 
     public float AimAmount => aimAmount;
 
+    /// <summary>Which way the body faces (radians about up; 0 faces -Z).</summary>
+    public float FacingYaw => facingYaw;
+
+    /// <summary>The ragdoll's hips, for spawning things where a thrown player is.</summary>
+    public Vector3 PelvisPosition => ragdoll.Pelvis.GlobalPosition;
+
     public bool IsRagdolled => state != State.Active;
 
     /// <summary>Another player's body in a match, driven by their game. Set before adding to the tree.</summary>

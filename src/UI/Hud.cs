@@ -89,6 +89,13 @@ public partial class Hud : CanvasLayer
         arrows.QueueRedraw();
     }
 
+    /// <summary>Shows or hides the tanks-left count (a match shows the banked score instead).</summary>
+    public void ShowTankCount(bool visible)
+    {
+        count.Visible = visible;
+        caption.Visible = visible;
+    }
+
     public void ShowHud(bool visible)
     {
         Visible = visible;
