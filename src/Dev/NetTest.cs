@@ -123,6 +123,16 @@ public partial class NetTest : Node
         }
         var dt = (float)delta;
         clock += dt;
+        // --send-tune=Name=value: the host changes a value as the debug panel would, a few seconds in.
+        if (role == "host" && DevArgs.Get("send-tune") is { } tune && clock >= 3f && clock - dt < 3f)
+        {
+            var split = tune.IndexOf('=');
+            var name = tune[..split];
+            var value = float.Parse(tune[(split + 1)..], System.Globalization.CultureInfo.InvariantCulture);
+            Tuning.Current.Set(name, value);
+            net.Send(new NetWriter(Msg.TuningSet).String(name).Bytes(GD.VarToBytes(value)));
+            Log($"sent tuning {name} = {value}");
+        }
         var leaveAt = DevArgs.GetFloat("leave-at", -1);
         if (leaveAt > 0 && clock >= leaveAt)
         {
@@ -384,6 +394,7 @@ public partial class NetTest : Node
             }
         }
         var self = match.Player;
+        Log($"tuning BlastRadius {Tuning.Current.BlastRadius} PickupRespawnTime {Tuning.Current.PickupRespawnTime}");
         Log($"perf fps {Engine.GetFramesPerSecond():0} process {Performance.GetMonitor(Performance.Monitor.TimeProcess) * 1000:0.0} ms physics {Performance.GetMonitor(Performance.Monitor.TimePhysicsProcess) * 1000:0.0} ms bodies {Performance.GetMonitor(Performance.Monitor.Physics3DActiveObjects)}");
         Log($"digest clock {match.TimeLeft:0.0} me {self.GlobalPosition.X:0.0},{self.GlobalPosition.Z:0.0}{(self.IsRagdolled ? "R" : "")} ammo {self.Ammo?.Magazine}/{self.Ammo?.Reserve} scores {ScoreLine()} remotes {remotes}");
         Log($"tanks clock {match.TimeLeft:0.0} n {match.LiveTanks.Count()}{tanks}");
