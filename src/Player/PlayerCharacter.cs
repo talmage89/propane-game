@@ -92,6 +92,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
     private bool hasRemoteState;
     private PlayerNetState remoteState;
     private Vector3? pendingRoot;
+    private float remoteUpTimer;
     private float pendingYaw;
 
     public CameraRig CameraRig { get; private set; } = null!;
@@ -923,6 +924,14 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
             case State.Ragdoll:
             {
                 stateTimer += dt;
+                // Their game has them standing again without a get-up here (a respawn, say): stand this copy up too.
+                remoteUpTimer = hasRemoteState && remoteState.State == PlayerNetState.Mode.Active ? remoteUpTimer + dt : 0;
+                if (remoteUpTimer > 1f)
+                {
+                    remoteUpTimer = 0;
+                    ResetToActive();
+                    break;
+                }
                 if (hasRemoteState && remoteState.State == PlayerNetState.Mode.Ragdoll)
                 {
                     // Steer this copy's ragdoll after the real one: the limbs fall their own way, the body follows.
