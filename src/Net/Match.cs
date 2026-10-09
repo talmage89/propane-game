@@ -127,6 +127,11 @@ public partial class Match : Node3D
 
     public BodySync Bodies => bodies;
 
+    /// <summary>When (on <see cref="NetTransport.Now"/>) another player's shot last hit this player, and whose it was.</summary>
+    public double LastHitTime { get; private set; } = -100;
+
+    public int LastHitBy { get; private set; }
+
     public override void _Ready()
     {
         Tuning.UseForMatch(Tuning.FromSnapshot(Setup.Tuning));
@@ -877,6 +882,8 @@ public partial class Match : Node3D
                 }
                 if (victim == me && remote != null)
                 {
+                    LastHitTime = NetTransport.Now;
+                    LastHitBy = sender;
                     OnHitByShot(remote.Body.GlobalPosition + Vector3.Up * 1.4f);
                 }
                 break;

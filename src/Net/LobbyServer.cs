@@ -54,6 +54,7 @@ public partial class LobbyServer : Node
         public readonly Dictionary<int, int> Scores = new();
         public readonly Dictionary<int, (string Name, int Color)> Profiles = new();
         public readonly HashSet<uint> Detonated = new();
+        public readonly Dictionary<int, (int Gained, int LostToHits, int LostToThrows)> Stats = new();
         public readonly HashSet<int> Loaded = new();
         public int HostId;
         public double PhaseEnds;
@@ -494,6 +495,11 @@ public partial class LobbyServer : Node
                     }
                     Broadcast(match, w);
                     Log($"lobby {lobby.Id}: match over, " + string.Join(", ", match.Scores.OrderByDescending(s => s.Value).Select(s => $"{match.Profiles[s.Key].Name} {s.Value}")));
+                    Log($"lobby {lobby.Id}: tanks gained / lost to hits / lost to throws: " + string.Join(", ", match.Profiles.Keys.Select(id =>
+                    {
+                        var st = match.Stats.GetValueOrDefault(id);
+                        return $"{match.Profiles[id].Name} {st.Gained}/{st.LostToHits}/{st.LostToThrows}";
+                    })));
                 }
                 break;
             case LobbyPhase.Results:
@@ -546,17 +552,21 @@ public partial class LobbyServer : Node
                 if (lobby.Phase == LobbyPhase.Playing)
                 {
                     ChangeScore(match, client.Id, 1);
+                    var stats = match.Stats.GetValueOrDefault(client.Id);
+                    match.Stats[client.Id] = stats with { Gained = stats.Gained + 1 };
                 }
                 break;
             }
             case Msg.Drop:
             {
                 var r = new NetReader(data);
-                r.Byte();
+                var thrown = r.Byte() == 1;
                 var count = r.Int();
                 if (lobby.Phase == LobbyPhase.Playing)
                 {
                     ChangeScore(match, client.Id, -count);
+                    var stats = match.Stats.GetValueOrDefault(client.Id);
+                    match.Stats[client.Id] = thrown ? stats with { LostToThrows = stats.LostToThrows + count } : stats with { LostToHits = stats.LostToHits + count };
                 }
                 break;
             }

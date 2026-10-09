@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Runs a local multiplayer test: a headless server and N bot clients (scenes/dev/net_test.tscn) playing one match.
 # Logs go to the output directory; compare the clients' views of the tanks with tools/dev/compare_tanks.py.
-# Usage: tools/dev/net_bots.sh [-n bots] [-l match seconds] [-o out dir] [-g godot] [-w windowed bots] [-s "server args"] [-S host:port of an existing server] [-- extra bot args]
+# Usage: tools/dev/net_bots.sh [-n bots] [-l match seconds] [-o out dir] [-g godot] [-w windowed bots] [-s "server args"] [-S host:port of an existing server]
+#   [-b brain per bot, e.g. smart,simple,simple] [-- extra bot args]
 # Extra bot args (after --) go to every bot, e.g. --net-lag=120 --net-jitter=30 --net-loss=5 --capture-dir=... --shot-every=5
 set -euo pipefail
 
@@ -13,7 +14,8 @@ windowed=0
 port=$((24700 + RANDOM % 200))
 server_args=""
 remote=""
-while getopts "n:l:o:g:w:p:s:S:" opt; do
+brains=""
+while getopts "n:l:o:g:w:p:s:S:b:" opt; do
   case "$opt" in
     n) bots="$OPTARG" ;;
     l) length="$OPTARG" ;;
@@ -23,6 +25,7 @@ while getopts "n:l:o:g:w:p:s:S:" opt; do
     p) port="$OPTARG" ;;
     s) server_args="$OPTARG" ;;
     S) remote="$OPTARG" ;;
+    b) brains="$OPTARG" ;;
     *) exit 2 ;;
   esac
 done
@@ -48,12 +51,13 @@ pids=()
 for i in $(seq 1 "$bots"); do
   role=join
   [[ $i == 1 ]] && role=host
+  brain="$(echo "$brains" | cut -d, -f"$i")"
   display=(--headless)
   if (( i <= windowed )); then
     display=(--resolution 960x540 --position $(( (i - 1) * 970 )),40)
   fi
   timeout "$budget" "$godot" "${display[@]}" --path "$project" res://scenes/dev/net_test.tscn -- --server="$address" --port="$port" \
-    --role="$role" --players="$bots" --length="$length" --name="Bot$i" --color=$((i - 1)) --windowed "$@" >"$out/bot$i.log" 2>&1 &
+    --role="$role" --players="$bots" --length="$length" --name="Bot$i" --color=$((i - 1)) --brain="${brain:-smart}" --windowed "$@" >"$out/bot$i.log" 2>&1 &
   pids+=($!)
   sleep 0.4
 done
