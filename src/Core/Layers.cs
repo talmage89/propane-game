@@ -14,6 +14,9 @@ public static class Layers
     /// <summary>Everything a bullet can hit.</summary>
     public const uint Shootable = World | Props | Tanks | Debris | Floor;
 
+    /// <summary>What a shot can hit: the world, plus other players' bodies (a player's own are excluded from its shots).</summary>
+    public const uint ShotMask = Shootable | Player | Ragdoll;
+
     /// <summary>Everything a blast pushes.</summary>
     public const uint Pushable = Props | Tanks | Debris;
 

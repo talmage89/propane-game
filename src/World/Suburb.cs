@@ -88,7 +88,11 @@ public partial class Suburb : Node3D
     /// <summary>Raised when a tank in this suburb explodes, with the number left.</summary>
     public event Action<int>? TankDestroyed;
 
-    public static Suburb Build(SuburbPlan plan, SuburbSettings settings)
+    /// <summary>
+    /// Builds the suburb. In a match (<paramref name="networked"/>), each tank takes its network id from its index in
+    /// the plan before it enters the tree.
+    /// </summary>
+    public static Suburb Build(SuburbPlan plan, SuburbSettings settings, bool networked = false)
     {
         var suburb = new Suburb { Name = $"Suburb_{plan.Seed}" };
         suburb.plan = plan;
@@ -103,7 +107,7 @@ public partial class Suburb : Node3D
         suburb.BuildHouses();
         suburb.BuildFences();
         suburb.BuildProps();
-        suburb.BuildTanks();
+        suburb.BuildTanks(networked);
         // Debris, scorch marks and bullet holes spawned mid-transition take the suburb's current reveal tag.
         suburb.DynamicRoot.ChildEnteredTree += node => suburb.TagForReveal(node);
         return suburb;
@@ -662,11 +666,16 @@ public partial class Suburb : Node3D
 
     // ------------------------------------------------------------------ Tanks
 
-    private void BuildTanks()
+    private void BuildTanks(bool networked)
     {
-        foreach (var placement in plan.Tanks)
+        for (var index = 0; index < plan.Tanks.Count; index++)
         {
+            var placement = plan.Tanks[index];
             var tank = PropaneTank.Create();
+            if (networked)
+            {
+                tank.NetId = Net.BodySync.MapTankId(index);
+            }
             DynamicRoot.AddChild(tank);
             tank.Position = ToWorld(placement.Position, placement.Elevation + 0.01f);
             tank.Rotation = new Vector3(0, placement.Yaw, 0);
@@ -677,6 +686,17 @@ public partial class Suburb : Node3D
     }
 
     private void OnTankDetonated(PropaneTank tank) => TankDestroyed?.Invoke(TanksRemaining);
+
+    /// <summary>The tanks in the plan, in plan order (freed ones included, so indices stay put).</summary>
+    public IReadOnlyList<PropaneTank> MapTanks => tanks.GetRange(0, plan.Tanks.Count);
+
+    /// <summary>Adds a tank that was not in the plan (one a player dropped in a match).</summary>
+    public void AddTank(PropaneTank tank)
+    {
+        DynamicRoot.AddChild(tank);
+        tank.Detonated += OnTankDetonated;
+        tanks.Add(tank);
+    }
 
     // ------------------------------------------------------------------ Helpers
 

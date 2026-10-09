@@ -15,6 +15,7 @@ public struct PlayerIntent
 
     /// <summary>The fire button is down (for automatic fire).</summary>
     public bool FireHeld;
+    public bool ReloadPressed;
     public Vector2 Look;
 }
 
@@ -29,6 +30,7 @@ public sealed class DeviceInput : IPlayerInputSource
     private Vector2 look;
     private bool jump;
     private bool fire;
+    private bool reload;
 
     public void Accumulate(InputEvent @event)
     {
@@ -47,6 +49,9 @@ public sealed class DeviceInput : IPlayerInputSource
             case InputEventKey { Pressed: true, Echo: false } key when key.IsAction(InputSetup.Jump):
                 jump = true;
                 break;
+            case InputEventKey { Pressed: true, Echo: false } key when key.IsAction(InputSetup.Reload):
+                reload = true;
+                break;
         }
     }
 
@@ -61,11 +66,13 @@ public sealed class DeviceInput : IPlayerInputSource
             JumpPressed = jump,
             FirePressed = fire,
             FireHeld = captured && Input.IsActionPressed(InputSetup.Fire),
+            ReloadPressed = reload,
             Look = look,
         };
         look = Vector2.Zero;
         jump = false;
         fire = false;
+        reload = false;
         return intent;
     }
 }

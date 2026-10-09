@@ -14,6 +14,8 @@ public static class InputSetup
     public const string Fire = "fire";
     public const string Aim = "aim";
     public const string NewSuburb = "new_suburb";
+    /// <summary>Reload in a match, where R does not make a new suburb.</summary>
+    public const string Reload = "reload";
     public const string Pause = "pause";
     public const string ToggleTuning = "toggle_tuning";
     public const string ToggleFullscreen = "toggle_fullscreen";
@@ -27,6 +29,7 @@ public static class InputSetup
         Bind(Sprint, Key(Godot.Key.Shift));
         Bind(Jump, Key(Godot.Key.Space));
         Bind(NewSuburb, Key(Godot.Key.R));
+        Bind(Reload, Key(Godot.Key.R));
         Bind(Pause, Key(Godot.Key.Escape));
         // Function keys need fn on a Mac (and F11 is Show Desktop there), so each has a plain alternative.
         Bind(ToggleTuning, Key(Godot.Key.F1), Key(Godot.Key.Quoteleft));

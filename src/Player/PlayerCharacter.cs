@@ -1,3 +1,4 @@
+using System;
 using System.Linq;
 using Godot;
 using Propane.Core;
@@ -9,6 +10,8 @@ namespace Propane.Player;
 /// <summary>
 /// The player: a capsule character controller with the animated mannequin, the rifle, the orbit camera and the
 /// ragdoll. Close blasts throw it as a ragdoll; once it settles it gets back up. There is no health.
+/// In a match, other players appear as remote copies (<see cref="IsRemote"/>): no camera or input, just the body
+/// following the states and events their own game sends.
 /// </summary>
 public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
 {
@@ -81,6 +84,15 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
     private float settleTimer;
     private Vector3 aimTarget;
     private Godot.Collections.Array<Rid> shotExclude = new();
+    private Color bodyColor = new(0.92f, 0.44f, 0.16f);
+    private StandardMaterial3D? bodyMaterial;
+    private byte staggers;
+    private byte remoteStaggers;
+    private bool remoteGrounded = true;
+    private bool hasRemoteState;
+    private PlayerNetState remoteState;
+    private Vector3? pendingRoot;
+    private float pendingYaw;
 
     public CameraRig CameraRig { get; private set; } = null!;
 
@@ -90,6 +102,49 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
     public float AimAmount => aimAmount;
 
     public bool IsRagdolled => state != State.Active;
+
+    /// <summary>Another player's body in a match, driven by their game. Set before adding to the tree.</summary>
+    public bool IsRemote { get; init; }
+
+    /// <summary>The player's id in a match (0 in single player).</summary>
+    public int PeerId { get; set; }
+
+    /// <summary>Rounds in the magazine and reserve, in a match. Null means unlimited (single player).</summary>
+    public AmmoState? Ammo { get; set; }
+
+    /// <summary>Only looking around is allowed (the countdown before a match, and after it ends).</summary>
+    public bool InputLocked { get; set; }
+
+    /// <summary>The body colour: the player's colour in a match.</summary>
+    public Color BodyColor
+    {
+        get => bodyColor;
+        set
+        {
+            bodyColor = value;
+            if (bodyMaterial != null)
+            {
+                bodyMaterial.AlbedoColor = value;
+            }
+        }
+    }
+
+    /// <summary>Where a score tag or name floats: over the head, or over the body while it is down.</summary>
+    public Vector3 TagPosition => state is State.Ragdoll or State.Capturing
+        ? ragdoll.Pelvis.GlobalPosition + Vector3.Up * 0.9f
+        : GlobalPosition + Vector3.Up * 2.15f;
+
+    /// <summary>The player fired (this game's player only).</summary>
+    public event Action<ShotReport>? Fired;
+
+    /// <summary>A blast threw the player: where they stood, and the launch velocity and spin of the ragdoll.</summary>
+    public event Action<Vector3, Vector3, Vector3>? Ragdolled;
+
+    /// <summary>The ragdoll settled and the get-up began: the standing position and facing it gets up to.</summary>
+    public event Action<Vector3, float>? GotUp;
+
+    /// <summary>The player walked into a loose body and pushed it.</summary>
+    public event Action<RigidBody3D>? PushedBody;
 
     /// <summary>Replaces keyboard and mouse, for scripted tests.</summary>
     public IPlayerInputSource? InputOverride
@@ -104,7 +159,8 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
     {
         AddToGroup(IBlastReceiver.Group);
         CollisionLayer = Layers.Player;
-        CollisionMask = Layers.PlayerMask;
+        // A remote player only stands where its own game puts it; it is here to be seen and shot.
+        CollisionMask = IsRemote ? 0 : Layers.PlayerMask;
         FloorMaxAngle = Mathf.DegToRad(50);
         FloorSnapLength = 0.35f;
         FloorStopOnSlope = true;
@@ -144,56 +200,101 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         animator = new CharacterAnimator(player, model, model.GetPathTo(skeleton));
         animator.Initialize();
 
-        CameraRig = new CameraRig { Name = "CameraRig" };
-        AddChild(CameraRig);
-        CameraRig.Exclude.Add(GetRid());
+        if (!IsRemote)
+        {
+            CameraRig = new CameraRig { Name = "CameraRig" };
+            AddChild(CameraRig);
+            CameraRig.Exclude.Add(GetRid());
+        }
         shotExclude.Add(GetRid());
         foreach (var bone in ragdoll.Bones)
         {
-            CameraRig.Exclude.Add(bone.GetRid());
+            if (!IsRemote)
+            {
+                CameraRig.Exclude.Add(bone.GetRid());
+            }
             shotExclude.Add(bone.GetRid());
             bone.AddCollisionExceptionWith(this);
         }
 
         facingYaw = Rotation.Y;
-        CameraRig.SetOrientation(Mathf.RadToDeg(facingYaw), -10f);
-        CameraRig.Target = GlobalPosition + Vector3.Up * Tuning.Current.CameraHeight;
+        if (!IsRemote)
+        {
+            CameraRig.SetOrientation(Mathf.RadToDeg(facingYaw), -10f);
+            CameraRig.Target = GlobalPosition + Vector3.Up * Tuning.Current.CameraHeight;
+        }
         aimTarget = GlobalPosition + Forward(facingYaw) * 20f;
         Rotation = Vector3.Zero;
         visual.Rotation = new Vector3(0, facingYaw, 0);
     }
 
-    public override void _UnhandledInput(InputEvent @event) => deviceInput.Accumulate(@event);
+    public override void _UnhandledInput(InputEvent @event)
+    {
+        if (!IsRemote)
+        {
+            deviceInput.Accumulate(@event);
+        }
+    }
 
     /// <summary>Moves the player (and camera) to a spawn point, clearing any motion.</summary>
     public void Teleport(Vector3 position, float yaw)
     {
-        if (state != State.Active)
-        {
-            // Abandon any ragdoll or get-up in progress, including its captured pose.
-            ragdoll.End();
-            poseBlend.Cancel();
-            animator.StopGetUp();
-            state = State.Active;
-            capsule.Disabled = false;
-            rig.Weight = 1f;
-            animator.SetHoldWeight(1f);
-        }
+        ResetToActive();
         GlobalPosition = position;
         Velocity = Vector3.Zero;
         knockback = Vector3.Zero;
         facingYaw = yaw;
         visual.Rotation = new Vector3(0, yaw, 0);
+        aimTarget = position + Vector3.Up * 1.4f + Forward(yaw) * 20f;
+        if (IsRemote)
+        {
+            hasRemoteState = false;
+            return;
+        }
         CameraRig.SetOrientation(Mathf.RadToDeg(yaw), -10f);
         CameraRig.Target = position + Vector3.Up * Tuning.Current.CameraHeight;
         CameraRig.Snap();
     }
 
+    /// <summary>Abandons any ragdoll or get-up in progress, including its captured pose.</summary>
+    private void ResetToActive()
+    {
+        if (state == State.Active)
+        {
+            return;
+        }
+        ragdoll.End();
+        poseBlend.Cancel();
+        animator.StopGetUp();
+        state = State.Active;
+        capsule.Disabled = false;
+        rig.Weight = 1f;
+        animator.SetHoldWeight(1f);
+    }
+
     public override void _PhysicsProcess(double delta)
     {
         var dt = (float)delta;
+        if (IsRemote)
+        {
+            UpdateRemote(dt);
+            return;
+        }
         intent = (inputOverride ?? deviceInput).Read();
+        if (InputLocked)
+        {
+            intent = new PlayerIntent { Look = intent.Look };
+        }
         CameraRig.Look(intent.Look);
+        if (Ammo != null)
+        {
+            Ammo.Update(dt);
+            if (state != State.Active)
+            {
+                // Thrown mid-reload: the reload is lost.
+                Ammo.CancelReload();
+            }
+        }
 
         switch (state)
         {
@@ -223,8 +324,9 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         var tuning = Tuning.Current;
         var planar = new Vector3(Velocity.X, 0, Velocity.Z);
         var forward = Forward(facingYaw);
+        var grounded = IsRemote ? remoteGrounded : IsOnFloor() || coyoteTimer > 0;
         animator.UpdateLocomotion(state == State.Active ? planar.Dot(forward) : 0f, state == State.Active ? planar.Length() : 0f,
-            state != State.Active || IsOnFloor() || coyoteTimer > 0, dt);
+            state != State.Active || grounded, dt);
 
         visual.Rotation = new Vector3(0, facingYaw, 0);
         rig.AimTarget = aimTarget;
@@ -232,7 +334,12 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         rig.SprintAmount = sprintAmount;
         rig.ReadyAmount = readyAmount;
         rig.Recoil = recoil;
+        rig.Reload = IsRemote ? remoteState.Reload : Ammo?.ReloadProgress ?? 0f;
         recoil = Mathf.MoveToward(recoil, 0, dt * 9f);
+        if (IsRemote)
+        {
+            return;
+        }
 
         var cameraTarget = state switch
         {
@@ -393,6 +500,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
             }
             var push = -new Vector3(normal.X, 0, normal.Z).Normalized() * into * Mathf.Min(body.Mass, 30f) * PushStrength * dt;
             body.ApplyImpulse(push, collision.GetPosition() - body.GlobalPosition);
+            PushedBody?.Invoke(body);
         }
     }
 
@@ -404,7 +512,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         var origin = camera.GlobalPosition;
         var forward = -camera.GlobalBasis.Z;
         var start = origin + forward * Mathf.Max(0, (GlobalPosition + Vector3.Up * 1.4f - origin).Dot(forward));
-        var query = PhysicsRayQueryParameters3D.Create(start, start + forward * ShotRange, Layers.Shootable, shotExclude);
+        var query = PhysicsRayQueryParameters3D.Create(start, start + forward * ShotRange, Layers.ShotMask, shotExclude);
         var hit = GetWorld3D().DirectSpaceState.IntersectRay(query);
         aimTarget = hit.Count > 0 ? hit["position"].AsVector3() : start + forward * ShotRange;
         // Never aim at something right behind or inside the character.
@@ -434,9 +542,33 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
             combatTimer = Mathf.Max(combatTimer, 0.2f);
         }
         var trigger = intent.FirePressed || (tuning.FullAuto && intent.FireHeld);
+        if (Ammo != null)
+        {
+            if (intent.ReloadPressed)
+            {
+                Ammo.StartReload();
+            }
+            if (Ammo.Reloading)
+            {
+                return;
+            }
+            if (Ammo.Magazine <= 0)
+            {
+                // An empty magazine reloads on the next pull of the trigger, if there is anything to load.
+                if (intent.FirePressed)
+                {
+                    Ammo.StartReload();
+                }
+                return;
+            }
+        }
         if (!trigger || fireCooldown > 0)
         {
             return;
+        }
+        if (Ammo != null)
+        {
+            Ammo.Magazine--;
         }
         fireCooldown = 1f / Mathf.Max(tuning.FireRate, 0.1f);
         combatTimer = CombatHoldTime;
@@ -457,7 +589,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         var start = origin + forward * Mathf.Max(0, (GlobalPosition + Vector3.Up * 1.4f - origin).Dot(forward));
         var space = GetWorld3D().DirectSpaceState;
 
-        var hit = space.IntersectRay(PhysicsRayQueryParameters3D.Create(start, start + direction * ShotRange, Layers.Shootable, shotExclude));
+        var hit = space.IntersectRay(PhysicsRayQueryParameters3D.Create(start, start + direction * ShotRange, Layers.ShotMask, shotExclude));
         var end = hit.Count > 0 ? hit["position"].AsVector3() : start + direction * ShotRange;
 
         // The bullet really leaves the muzzle: something between the muzzle and the target blocks it first.
@@ -465,7 +597,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         var toEnd = end - muzzle;
         if (toEnd.LengthSquared() > 0.01f)
         {
-            var blocked = space.IntersectRay(PhysicsRayQueryParameters3D.Create(muzzle, end - toEnd.Normalized() * 0.02f, Layers.Shootable, shotExclude));
+            var blocked = space.IntersectRay(PhysicsRayQueryParameters3D.Create(muzzle, end - toEnd.Normalized() * 0.02f, Layers.ShotMask, shotExclude));
             if (blocked.Count > 0)
             {
                 hit = blocked;
@@ -484,6 +616,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         }
         if (hit.Count == 0)
         {
+            Fired?.Invoke(new ShotReport(muzzle, end, Vector3.Zero, direction, null, false));
             return;
         }
         var normal = hit["normal"].AsVector3();
@@ -495,6 +628,10 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
                 tank.TakeShot(end, normal, shotDir);
                 ImpactEffect.Spawn(end, normal, metal: true, leaveDecal: false);
                 break;
+            case PlayerCharacter or PhysicalBone3D:
+                // Another player: no decal on a person.
+                ImpactEffect.Spawn(end, normal, metal: false, leaveDecal: false);
+                break;
             case RigidBody3D { Freeze: false } body:
                 body.ApplyImpulse(shotDir * tuning.BulletImpulse, end - body.GlobalPosition);
                 ImpactEffect.Spawn(end, normal, metal: body is DebrisBody, leaveDecal: false);
@@ -503,6 +640,22 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
                 ImpactEffect.Spawn(end, normal, metal: false, leaveDecal: true);
                 break;
         }
+        Fired?.Invoke(new ShotReport(muzzle, end, normal, shotDir, collider, true));
+    }
+
+    /// <summary>The player a collider belongs to (its capsule or one of its ragdoll bones), if any.</summary>
+    public static PlayerCharacter? Owning(GodotObject? collider)
+    {
+        var node = collider as Node;
+        while (node != null)
+        {
+            if (node is PlayerCharacter player)
+            {
+                return player;
+            }
+            node = node.GetParent();
+        }
+        return null;
     }
 
     private static Vector3 RandomInCone(Vector3 axis, float halfAngle)
@@ -535,6 +688,11 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
             case State.GettingUp:
                 return;
         }
+        if (IsRemote)
+        {
+            // That player's own game decides whether the blast throws them.
+            return;
+        }
         if (blast.Distance < tuning.RagdollRadius && tuning.PlayerKnockback > 0)
         {
             var speed = Mathf.Max(push, MinRagdollLaunch * tuning.PlayerKnockback);
@@ -542,7 +700,10 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
             flat = flat.LengthSquared() > 0.0001f ? flat.Normalized() : Vector3.Zero;
             // Mostly outward with a modest hop, so the flight is short and the landing is the show.
             var launch = flat * speed * 0.8f + Vector3.Up * Mathf.Min(speed * 0.45f, MaxRagdollLift);
-            BeginRagdoll(Velocity + launch, flat);
+            // Feet are swept out from under the body: it pitches backward away from the blast.
+            var tumbleAxis = flat.LengthSquared() > 0.0001f ? Vector3.Up.Cross(flat).Normalized() : Vector3.Right;
+            var spin = tumbleAxis * (float)GD.RandRange(2.5, 4.5) + Vector3.Up * (float)GD.RandRange(-2.0, 2.0);
+            BeginRagdoll(Velocity + launch, spin);
         }
         else if (blast.Distance < tuning.StaggerRadius)
         {
@@ -551,10 +712,11 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
             Velocity += Vector3.Up * Mathf.Min(push * 0.25f, 3f);
             staggerTimer = StaggerControlTime;
             animator.PlayHit();
+            staggers++;
         }
     }
 
-    private void BeginRagdoll(Vector3 velocity, Vector3 pushDirection)
+    private void BeginRagdoll(Vector3 velocity, Vector3 spin)
     {
         state = State.Ragdoll;
         stateTimer = 0;
@@ -563,10 +725,11 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         rig.Weight = 0f;
         animator.SetHoldWeight(0f);
         capsule.Disabled = true;
-        // Feet are swept out from under the body: it pitches backward away from the blast.
-        var tumbleAxis = pushDirection.LengthSquared() > 0.0001f ? Vector3.Up.Cross(pushDirection).Normalized() : Vector3.Right;
-        var spin = tumbleAxis * (float)GD.RandRange(2.5, 4.5) + Vector3.Up * (float)GD.RandRange(-2.0, 2.0);
         ragdoll.Begin(velocity, spin);
+        if (!IsRemote)
+        {
+            Ragdolled?.Invoke(GlobalPosition, velocity, spin);
+        }
         Velocity = Vector3.Zero;
         knockback = Vector3.Zero;
     }
@@ -618,6 +781,17 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         var groundQuery = PhysicsRayQueryParameters3D.Create(root + Vector3.Up * 1.5f, root + Vector3.Down * 3f, Layers.PlayerMask, shotExclude);
         var ground = GetWorld3D().DirectSpaceState.IntersectRay(groundQuery);
         root.Y = ground.Count > 0 ? ground["position"].AsVector3().Y : Mathf.Max(0, root.Y - 0.1f);
+        if (IsRemote && pendingRoot is { } given)
+        {
+            // Get up exactly where that player's own game got up.
+            root = given;
+            yaw = pendingYaw;
+            pendingRoot = null;
+        }
+        else if (!IsRemote)
+        {
+            GotUp?.Invoke(root, yaw);
+        }
 
         GlobalPosition = root;
         facingYaw = yaw;
@@ -638,13 +812,144 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         var rigIn = Mathf.Clamp((stateTimer - (duration - RigReturnTime)) / RigReturnTime, 0, 1);
         rig.Weight = rigIn;
         animator.SetHoldWeight(rigIn);
-        Velocity = new Vector3(0, Velocity.Y - Tuning.Current.PlayerGravity * dt, 0);
-        MoveAndSlide();
+        if (!IsRemote)
+        {
+            Velocity = new Vector3(0, Velocity.Y - Tuning.Current.PlayerGravity * dt, 0);
+            MoveAndSlide();
+        }
         if (stateTimer >= duration)
         {
             rig.Weight = 1f;
             animator.SetHoldWeight(1f);
             state = State.Active;
+        }
+    }
+
+    // ------------------------------------------------------------------ Network
+
+    /// <summary>This player's body and animation inputs, to send to the other players.</summary>
+    public PlayerNetState CaptureNetState() => new()
+    {
+        Position = GlobalPosition,
+        Velocity = Velocity,
+        Yaw = facingYaw,
+        AimTarget = aimTarget,
+        Aim = aimAmount,
+        Sprint = sprintAmount,
+        Ready = readyAmount,
+        Reload = Ammo?.ReloadProgress ?? 0f,
+        Grounded = IsOnFloor() || coyoteTimer > 0,
+        State = state switch
+        {
+            State.Active => PlayerNetState.Mode.Active,
+            State.GettingUp => PlayerNetState.Mode.GettingUp,
+            _ => PlayerNetState.Mode.Ragdoll,
+        },
+        PelvisPosition = ragdoll.Pelvis.GlobalPosition,
+        PelvisVelocity = ragdoll.Pelvis.LinearVelocity,
+        Staggers = staggers,
+    };
+
+    /// <summary>The state a remote player should show now (already interpolated).</summary>
+    public void SetRemoteState(PlayerNetState remote)
+    {
+        if (!hasRemoteState)
+        {
+            remoteStaggers = remote.Staggers;
+        }
+        remoteState = remote;
+        hasRemoteState = true;
+    }
+
+    /// <summary>That player's game threw them: throw this copy the same way from where they stood.</summary>
+    public void RemoteRagdoll(Vector3 at, Vector3 velocity, Vector3 spin)
+    {
+        ResetToActive();
+        GlobalPosition = at;
+        BeginRagdoll(velocity, spin);
+    }
+
+    /// <summary>That player's game got them up: settle this copy's ragdoll and get up at the same spot.</summary>
+    public void RemoteGetUp(Vector3 root, float yaw)
+    {
+        pendingRoot = root;
+        pendingYaw = yaw;
+        if (state == State.Ragdoll)
+        {
+            poseBlend.RequestCapture();
+            state = State.Capturing;
+        }
+    }
+
+    /// <summary>Plays the muzzle flash and tracer of another player's shot.</summary>
+    public void RemoteShot(Vector3 end)
+    {
+        rifle.Flash();
+        Spawn.Effect(Tracer.Create(rifle.MuzzlePosition, end));
+        recoil = 1f;
+        readyAmount = 1f;
+    }
+
+    private void UpdateRemote(float dt)
+    {
+        var tuning = Tuning.Current;
+        switch (state)
+        {
+            case State.Active:
+                if (!hasRemoteState)
+                {
+                    return;
+                }
+                GlobalPosition = remoteState.Position;
+                Velocity = remoteState.Velocity;
+                facingYaw = remoteState.Yaw;
+                aimTarget = remoteState.AimTarget;
+                aimAmount = remoteState.Aim;
+                sprintAmount = remoteState.Sprint;
+                readyAmount = Mathf.Max(remoteState.Ready, readyAmount - dt * ReadyLowerSpeed);
+                remoteGrounded = remoteState.Grounded;
+                if (remoteState.Staggers != remoteStaggers)
+                {
+                    remoteStaggers = remoteState.Staggers;
+                    animator.PlayHit();
+                }
+                break;
+            case State.Ragdoll:
+            {
+                stateTimer += dt;
+                if (hasRemoteState && remoteState.State == PlayerNetState.Mode.Ragdoll)
+                {
+                    // Steer this copy's ragdoll after the real one: the limbs fall their own way, the body follows.
+                    var error = remoteState.PelvisPosition - ragdoll.Pelvis.GlobalPosition;
+                    if (error.Length() > tuning.SnapDistance)
+                    {
+                        foreach (var bone in ragdoll.Bones)
+                        {
+                            bone.GlobalPosition += error;
+                        }
+                    }
+                    else
+                    {
+                        var desired = remoteState.PelvisVelocity + error / Mathf.Max(tuning.CorrectionBlendTime, 0.02f);
+                        var change = (desired - ragdoll.Pelvis.LinearVelocity) * Mathf.Min(1f, dt * 8f);
+                        foreach (var bone in ragdoll.Bones)
+                        {
+                            bone.LinearVelocity += change;
+                        }
+                    }
+                }
+                GlobalPosition = new Vector3(ragdoll.Pelvis.GlobalPosition.X, GlobalPosition.Y, ragdoll.Pelvis.GlobalPosition.Z);
+                break;
+            }
+            case State.Capturing:
+                if (poseBlend.HasCapture)
+                {
+                    BeginGetUp();
+                }
+                break;
+            case State.GettingUp:
+                UpdateGettingUp(dt);
+                break;
         }
     }
 
@@ -654,7 +959,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
 
     private void StyleMannequin()
     {
-        var body = new StandardMaterial3D { AlbedoColor = new Color(0.92f, 0.44f, 0.16f), Roughness = 0.5f, Metallic = 0.0f };
+        var body = bodyMaterial = new StandardMaterial3D { AlbedoColor = bodyColor, Roughness = 0.5f, Metallic = 0.0f };
         var joints = new StandardMaterial3D { AlbedoColor = new Color(0.13f, 0.13f, 0.14f), Roughness = 0.6f, Metallic = 0.2f };
         foreach (var mesh in GameAssets.MeshInstances(model))
         {
