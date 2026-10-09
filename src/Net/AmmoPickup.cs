@@ -13,7 +13,7 @@ public partial class AmmoPickup : Node3D
     /// <summary>How close (metres, across the ground) a player must come to take it.</summary>
     public const float TakeRadius = 1.1f;
 
-    private const float Height = 0.75f;
+    private const float Height = 0.85f;
     private const float SpinSpeed = 1.1f;
 
     private static Shader? shader;
@@ -37,7 +37,8 @@ public partial class AmmoPickup : Node3D
     public override void _Ready()
     {
         shader ??= GD.Load<Shader>("res://shaders/pickup.gdshader");
-        can = new Node3D { Name = "Can", Position = new Vector3(0, 0.32f, 0) };
+        // A little larger than life, so it reads from down the street.
+        can = new Node3D { Name = "Can", Position = new Vector3(0, 0.32f, 0), Scale = Vector3.One * 1.35f };
         AddChild(can);
         var body = Material(new Color(0.24f, 0.29f, 0.17f), 0.55f, 0.35f);
         var band = Material(new Color(0.98f, 0.76f, 0.12f), 0.5f, 0.1f, new Color(0.35f, 0.25f, 0.02f));
@@ -69,7 +70,7 @@ public partial class AmmoPickup : Node3D
         var dt = (float)delta;
         time += dt;
         can.Rotation = new Vector3(0, time * SpinSpeed, 0);
-        can.Position = new Vector3(0, 0.32f + Mathf.Sin(time * 2.2f) * 0.05f, 0);
+        can.Position = new Vector3(0, 0.36f + Mathf.Sin(time * 2.2f) * 0.05f, 0);
         if (buildSpeed > 0 && build < 1f)
         {
             build = Mathf.Min(1f, build + dt * buildSpeed);

@@ -57,6 +57,7 @@ public partial class GeneratorTests : Node
         GD.Print($"[tests] tank groups: {groupSizes.Count / (float)count:0.0} per map, sizes " +
                  string.Join(" ", groupSizes.GroupBy(g => g).OrderBy(g => g.Key).Select(g => $"{g.Key}:{g.Count()}")));
         GD.Print("[tests] tank spots: " + string.Join(", ", reasons.OrderByDescending(r => r.Value).Select(r => $"{r.Key} {r.Value} (seed {firstSeedFor[r.Key]})")));
+        TestMatchSuburbs(count, settings, catalog);
         foreach (var (kind, n) in failureKinds.OrderByDescending(k => k.Value))
         {
             GD.Print($"[tests] FAIL {kind}: {n}");
@@ -77,6 +78,81 @@ public partial class GeneratorTests : Node
         {
             GD.Print($"[tests] seed {seed}: {what} {detail}");
         }
+    }
+
+    /// <summary>
+    /// Match suburbs: the same checks, plus a start for every player and the ammo spots, tank piles pulled toward the
+    /// centre, and the plan surviving the trip through <see cref="Net.PlanCodec"/> unchanged.
+    /// </summary>
+    private void TestMatchSuburbs(int count, SuburbSettings single, GameCatalog catalog)
+    {
+        var tuning = Core.Tuning.Current;
+        var settings = SuburbPlans.Match(tuning, tuning.MaxPlayers);
+        var timer = System.Diagnostics.Stopwatch.StartNew();
+        var spRadius = new List<float>();
+        var mpRadius = new List<float>();
+        var spawnGaps = new List<float>();
+        var ammoCounts = new List<int>();
+        var planBytes = new List<int>();
+        for (var seed = 1; seed <= count; seed++)
+        {
+            var plan = new SuburbGenerator(settings, catalog, seed).Generate();
+            var again = new SuburbGenerator(settings, catalog, seed).Generate();
+            Check(seed, "match: deterministic", Fingerprint(plan) == Fingerprint(again) &&
+                                                plan.Spawns.SequenceEqual(again.Spawns) && plan.AmmoSpots.SequenceEqual(again.AmmoSpots));
+            CheckLots(seed, plan, settings);
+            CheckTanks(seed, plan, settings);
+            CheckSpawn(seed, plan, settings);
+            CheckReachability(seed, plan, settings);
+
+            Check(seed, "match: a start per player", plan.Spawns.Count == settings.PlayerSpawns, $"{plan.Spawns.Count}");
+            var cars = plan.Props.Where(p => p.Model.StartsWith("car:")).Select(p => p.Position).ToList();
+            foreach (var spawn in plan.Spawns)
+            {
+                Check(seed, "match: start on a road", plan.Roads.Any(r => r.RightOfWay(settings.CarriagewayHalfWidth).Contains(spawn.Position)));
+                Check(seed, "match: start clear of cars", cars.All(c => c.DistanceTo(spawn.Position) > 4f));
+                Check(seed, "match: start clear of tanks", plan.Tanks.All(t => t.Position.DistanceTo(spawn.Position) > 6f));
+            }
+            var gap = float.MaxValue;
+            for (var i = 0; i < plan.Spawns.Count; i++)
+            {
+                for (var j = i + 1; j < plan.Spawns.Count; j++)
+                {
+                    gap = Mathf.Min(gap, plan.Spawns[i].Position.DistanceTo(plan.Spawns[j].Position));
+                }
+            }
+            spawnGaps.Add(gap);
+            Check(seed, "match: starts spread apart", gap > 10f, $"{gap:0.0} m");
+
+            ammoCounts.Add(plan.AmmoSpots.Count);
+            Check(seed, "match: enough ammo spots", plan.AmmoSpots.Count >= settings.AmmoSpots - 2, $"{plan.AmmoSpots.Count}");
+            foreach (var spot in plan.AmmoSpots)
+            {
+                Check(seed, "match: ammo inside map", plan.Bounds.HasPoint(spot));
+                Check(seed, "match: ammo clear of tanks", plan.Tanks.All(t => t.Position.DistanceTo(spot) > 2.5f));
+                Check(seed, "match: ammo outside houses", !plan.Lots.Any(l => l.HouseModel >= 0 && l.House.Grown(0.5f).Contains(spot)));
+                var nearestFence = plan.Fences.Select(f => DistanceToSegment(spot, f.A, f.B)).DefaultIfEmpty(99).Min();
+                Check(seed, "match: ammo clear of fences", nearestFence > 0.6f, $"{nearestFence:0.00}");
+            }
+
+            var bytes = Net.PlanCodec.Encode(plan);
+            planBytes.Add(bytes.Length);
+            var decoded = Net.PlanCodec.Decode(bytes);
+            Check(seed, "match: plan survives encoding", Fingerprint(decoded) == Fingerprint(plan) && decoded.Seed == plan.Seed &&
+                                                         decoded.Spawns.SequenceEqual(plan.Spawns) && decoded.AmmoSpots.SequenceEqual(plan.AmmoSpots) &&
+                                                         decoded.Pavings.Count == plan.Pavings.Count && decoded.Bounds == plan.Bounds &&
+                                                         decoded.Props.SequenceEqual(plan.Props) && decoded.Tanks.SequenceEqual(plan.Tanks));
+
+            // The same seed in single player, for comparing how central the tanks are.
+            var sp = new SuburbGenerator(single, catalog, seed).Generate();
+            spRadius.Add(sp.Tanks.Average(t => t.Position.DistanceTo(sp.Bounds.GetCenter())));
+            mpRadius.Add(plan.Tanks.Average(t => t.Position.DistanceTo(plan.Bounds.GetCenter())));
+        }
+        Check(0, "match: tanks nearer the centre than in single player", mpRadius.Average() < spRadius.Average() * 0.85f,
+            $"{mpRadius.Average():0.0} vs {spRadius.Average():0.0} m");
+        GD.Print($"[tests] match suburbs: {count} seeds in {timer.ElapsedMilliseconds} ms; tanks average {mpRadius.Average():0.0} m from the centre " +
+                 $"(single player {spRadius.Average():0.0} m); closest starts {spawnGaps.Min():0.0}..{spawnGaps.Max():0.0} m apart; " +
+                 $"ammo spots {ammoCounts.Min()}..{ammoCounts.Max()}; plan {planBytes.Average() / 1024f:0.0} KB encoded (max {planBytes.Max() / 1024f:0.0})");
     }
 
     private void CheckLots(int seed, SuburbPlan plan, SuburbSettings settings)
