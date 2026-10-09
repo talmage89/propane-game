@@ -1,3 +1,4 @@
+using System.Linq;
 using Godot;
 
 namespace Propane.UI;
@@ -44,7 +45,7 @@ public partial class MatchMenu : CanvasLayer
                  {
                      ("W A S D", "Move"), ("Shift", "Sprint"), ("Space", "Jump"), ("Mouse", "Look"), ("Left click", "Fire"),
                      ("Right click", "Aim (tighter spread)"), ("R", "Reload"), ("F11  or  Alt+Enter", "Fullscreen"),
-                 })
+                 }.Concat(OS.IsDebugBuild() ? new[] { ("F1  or  `", "Tuning (debug: changes everyone's)") } : System.Array.Empty<(string, string)>()))
         {
             var row = new HBoxContainer();
             var key = UiStyle.Text(keys, 19);

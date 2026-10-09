@@ -123,6 +123,13 @@ public partial class NetTest : Node
         }
         var dt = (float)delta;
         clock += dt;
+        var leaveAt = DevArgs.GetFloat("leave-at", -1);
+        if (leaveAt > 0 && clock >= leaveAt)
+        {
+            Log("leaving the match on purpose");
+            GetTree().Quit();
+            return;
+        }
         if (DevArgs.Get("scenario") == "duel")
         {
             Duel(match, dt);
@@ -271,6 +278,15 @@ public partial class NetTest : Node
             tanks.Append($" {tank.NetId:x}:{(tank.State == PropaneTank.TankState.Venting ? "V" : "I")}:{p.X:0.00},{p.Y:0.00},{p.Z:0.00}");
         }
         var remotes = string.Join(" ", match.RemoteBodies.Select(b => $"{b.PeerId}@{b.GlobalPosition.X:0.0},{b.GlobalPosition.Z:0.0}{(b.IsRagdolled ? "R" : "")}"));
+        foreach (var body in match.RemoteBodies)
+        {
+            var bones = body.FindChildren("Physical_*", "PhysicalBone3D", owned: false).OfType<PhysicalBone3D>().ToList();
+            if (bones.Count > 0)
+            {
+                var far = bones.Max(b => b.GlobalPosition.DistanceTo(body.GlobalPosition));
+                Log($"bones of {body.PeerId}: farthest {far:0.00} m from the body, ragdolled {body.IsRagdolled}, layer {bones[0].CollisionLayer}");
+            }
+        }
         var self = match.Player;
         Log($"digest clock {match.TimeLeft:0.0} me {self.GlobalPosition.X:0.0},{self.GlobalPosition.Z:0.0}{(self.IsRagdolled ? "R" : "")} ammo {self.Ammo?.Magazine}/{self.Ammo?.Reserve} scores {ScoreLine()} remotes {remotes}");
         Log($"tanks clock {match.TimeLeft:0.0} n {match.LiveTanks.Count()}{tanks}");

@@ -86,7 +86,7 @@ public partial class NetClient : Node
         {
             if (id == NetTransport.ServerId)
             {
-                Send(new NetWriter(Msg.Hello).Int(Protocol.Version).String(BuildInfo.GameVersion).String(BuildInfo.Build).String(PlayerName).Int(Color));
+                Send(new NetWriter(Msg.Hello).Int((int)Dev.DevArgs.GetFloat("fake-protocol", Protocol.Version)).String(BuildInfo.GameVersion).String(BuildInfo.Build).String(PlayerName).Int(Color));
             }
         };
         transport.PeerDisconnected += id =>

@@ -82,7 +82,7 @@ public partial class Main : Node
     {
         if (backdrop == null)
         {
-            backdrop = BuildBackdrop();
+            backdrop = new Backdrop { Name = "Backdrop" };
             AddChild(backdrop);
         }
         RenderingServer.GlobalShaderParameterSet("reveal_radius", 100000f);
@@ -97,12 +97,6 @@ public partial class Main : Node
     }
 
     /// <summary>The hero shot behind the menus: one venting tank on the white floor, the camera circling it.</summary>
-    private static Node3D BuildBackdrop()
-    {
-        var root = new Backdrop { Name = "Backdrop" };
-        return root;
-    }
-
     private partial class Backdrop : Node3D
     {
         private Camera3D camera = null!;
@@ -135,8 +129,11 @@ public partial class Main : Node
 
         private void Place()
         {
+            // The tank sits left of centre, clear of the menu panel.
             var focus = new Vector3(0, 0.32f, 0);
-            camera.LookAtFromPosition(focus + new Vector3(Mathf.Sin(angle) * 2.3f, 0.75f, Mathf.Cos(angle) * 2.3f), focus + new Vector3(0, 0.08f, 0));
+            var position = focus + new Vector3(Mathf.Sin(angle) * 2.3f, 0.75f, Mathf.Cos(angle) * 2.3f);
+            var right = (focus - position).Normalized().Cross(Vector3.Up).Normalized();
+            camera.LookAtFromPosition(position, focus + right * 1.05f + Vector3.Up * 0.12f);
         }
     }
 
