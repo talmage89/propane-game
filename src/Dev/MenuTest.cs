@@ -16,6 +16,9 @@ public partial class MenuTest : Node
     public override void _Ready()
     {
         DevArgs.Setup();
+        // A fresh settings file, so the run neither reads nor changes the player's name, colour and server.
+        DirAccess.RemoveAbsolute(ProjectSettings.GlobalizePath("user://menu_test_settings.cfg"));
+        Core.PlayerSettings.UseFile("user://menu_test_settings.cfg");
         DisplayServer.WindowSetVsyncMode(DisplayServer.VSyncMode.Disabled);
         main = new Main { Name = "Main" };
         AddChild(main);

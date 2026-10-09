@@ -5,7 +5,7 @@ namespace Propane.Core;
 /// <summary>What the player last typed or picked in the menus (name, colour, server), kept between runs.</summary>
 public static class PlayerSettings
 {
-    private const string Path = "user://settings.cfg";
+    private static string path = "user://settings.cfg";
 
     private static ConfigFile? file;
 
@@ -16,10 +16,17 @@ public static class PlayerSettings
             if (file == null)
             {
                 file = new ConfigFile();
-                file.Load(Path);
+                file.Load(path);
             }
             return file;
         }
+    }
+
+    /// <summary>Keeps test runs from overwriting the player's own settings.</summary>
+    public static void UseFile(string settingsPath)
+    {
+        path = settingsPath;
+        file = null;
     }
 
     public static string Name
@@ -44,6 +51,6 @@ public static class PlayerSettings
     private static void Set(string section, string key, Variant value)
     {
         File.SetValue(section, key, value);
-        File.Save(Path);
+        File.Save(path);
     }
 }
