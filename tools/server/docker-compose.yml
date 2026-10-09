@@ -1,0 +1,11 @@
+# Propane multiplayer server. Players connect to this machine on UDP 24680.
+services:
+  propane-server:
+    build: .
+    image: propane-server:latest
+    container_name: propane-server
+    ports:
+      - "24680:24680/udp"
+    restart: unless-stopped
+    environment:
+      - TZ=UTC
