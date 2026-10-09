@@ -15,6 +15,12 @@ public partial class TuningPanel : CanvasLayer
     private readonly List<(string Property, CheckButton Toggle)> toggles = new();
     private Label status = null!;
 
+    /// <summary>A value was changed from the panel (a match shares it with every player).</summary>
+    public event System.Action<string, Variant>? ValueChanged;
+
+    /// <summary>Shown in the header: in a match, changes apply to everyone.</summary>
+    public string Note { get; set; } = "";
+
     public override void _Ready()
     {
         Layer = 20;
@@ -37,7 +43,7 @@ public partial class TuningPanel : CanvasLayer
         var header = new HBoxContainer();
         header.AddChild(UiStyle.Text("Tuning", 26));
         header.AddChild(new Control { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill });
-        header.AddChild(UiStyle.Text("F1 or ` to close", 15, UiStyle.SoftInk));
+        header.AddChild(UiStyle.Text(Note.Length > 0 ? Note : "F1 or ` to close", 15, UiStyle.SoftInk));
         layout.AddChild(header);
 
         var scroll = new ScrollContainer { SizeFlagsVertical = Control.SizeFlags.ExpandFill, HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled };
@@ -129,8 +135,10 @@ public partial class TuningPanel : CanvasLayer
             var property = name;
             slider.ValueChanged += v =>
             {
-                Tuning.Current.Set(property, isInt ? Variant.From((int)v) : Variant.From((float)v));
+                var set = isInt ? Variant.From((int)v) : Variant.From((float)v);
+                Tuning.Current.Set(property, set);
                 value.Text = Format(v, isInt);
+                ValueChanged?.Invoke(property, set);
             };
             row.AddChild(label);
             row.AddChild(slider);
@@ -147,14 +155,19 @@ public partial class TuningPanel : CanvasLayer
         var label = UiStyle.Text(Pretty(property), 16);
         label.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
         var toggle = new CheckButton { FocusMode = Control.FocusModeEnum.None };
-        toggle.Toggled += on => Tuning.Current.Set(property, on);
+        toggle.Toggled += on =>
+        {
+            Tuning.Current.Set(property, on);
+            ValueChanged?.Invoke(property, on);
+        };
         row.AddChild(label);
         row.AddChild(toggle);
         toggles.Add((property, toggle));
         return row;
     }
 
-    private void Refresh()
+    /// <summary>Re-reads every value, after a change from elsewhere.</summary>
+    public void Refresh()
     {
         foreach (var (property, toggle) in toggles)
         {
@@ -180,6 +193,7 @@ public partial class TuningPanel : CanvasLayer
         foreach (var property in rows.Select(r => r.Property).Concat(toggles.Select(t => t.Property)))
         {
             Tuning.Current.Set(property, defaults.Get(property));
+            ValueChanged?.Invoke(property, defaults.Get(property));
         }
         Refresh();
         status.Text = "Defaults restored (not saved yet)";
