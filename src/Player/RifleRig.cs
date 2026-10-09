@@ -47,6 +47,9 @@ public partial class RifleRig : SkeletonModifier3D
     /// <summary>0..1, decays after each shot.</summary>
     public float Recoil { get; set; }
 
+    /// <summary>Reload progress 0..1: the rifle cants in and the left hand drops to the magazine. 0 when not reloading.</summary>
+    public float Reload { get; set; }
+
     /// <summary>Weight of the whole rig; 0 while ragdolling or getting up.</summary>
     public float Weight { get; set; } = 1f;
 
@@ -137,6 +140,17 @@ public partial class RifleRig : SkeletonModifier3D
         var stance = hip.InterpolateWith(aimed, Mathf.SmoothStep(0, 1, AimAmount));
         stance = stance.InterpolateWith(port, Mathf.SmoothStep(0, 1, SprintAmount));
 
+        // Reload: the rifle comes in front of the chest, canted over, while the left hand swaps the magazine.
+        var reloadWeight = Reload > 0 ? Mathf.SmoothStep(0, 0.18f, Reload) * (1f - Mathf.SmoothStep(0.82f, 1f, Reload)) : 0f;
+        if (reloadWeight > 0)
+        {
+            var reloadDir = (chestForward * 0.9f - Vector3.Up * 0.2f - chestRight * 0.22f).Normalized();
+            var reloadBasis = Basis.LookingAt(reloadDir, Vector3.Up).Rotated(reloadDir, Mathf.DegToRad(-38f));
+            var reloadPocket = shoulder - chestUp * 0.2f + chestForward * 0.12f - chestRight * 0.06f;
+            var reloadPose = new Transform3D(reloadBasis, reloadPocket - reloadBasis * Rifle.ButtLocal.Origin);
+            stance = stance.InterpolateWith(reloadPose, reloadWeight);
+        }
+
         // Recoil: straight back, and the muzzle climbs.
         var kick = Recoil * Recoil;
         var lift = new Basis(stance.Basis.Column0.Normalized(), Mathf.DegToRad(RecoilLiftDegrees) * kick);
@@ -153,7 +167,14 @@ public partial class RifleRig : SkeletonModifier3D
 
         // 3. Hands onto the grips.
         var rightHand = handNow.InterpolateWith(RightHandTransform(stance), Weight);
-        var leftHand = leftNow.InterpolateWith(LeftHandTransform(stance, Rifle.ForegripLocal), Weight);
+        // Mid-reload the left hand leaves the foregrip for the magazine well, just ahead of the pistol grip.
+        var toMagazine = Reload > 0 ? Mathf.SmoothStep(0.2f, 0.42f, Reload) * (1f - Mathf.SmoothStep(0.6f, 0.82f, Reload)) : 0f;
+        var grip = Rifle.ForegripLocal;
+        if (toMagazine > 0)
+        {
+            grip = new Transform3D(grip.Basis, grip.Origin.Lerp(new Vector3(0, -0.16f, -0.12f), toMagazine));
+        }
+        var leftHand = leftNow.InterpolateWith(LeftHandTransform(stance, grip), Weight);
 
         var upperRWorld = fromSkeleton * skeleton.GetBoneGlobalPose(upperR).Origin;
         var upperLWorld = fromSkeleton * skeleton.GetBoneGlobalPose(upperL).Origin;

@@ -11,7 +11,16 @@ public static class Blast
     private const float ReferenceMass = 17f;
     private const int MaxQueryResults = 512;
 
-    public static void Detonate(Node3D context, Vector3 center, PropaneTank? source)
+    /// <summary>
+    /// Raised after a blast this game set off (not another player's, which arrives with <c>chain</c> off), with the
+    /// rigid bodies it pushed, so a match can take charge of them.
+    /// </summary>
+    public static event System.Action<Vector3, IReadOnlyList<RigidBody3D>>? LocalBlast;
+
+    /// <summary>
+    /// Pushes bodies, throws blast receivers and, when <paramref name="chain"/> is on, sets off tanks in chain range.
+    /// </summary>
+    public static void Detonate(Node3D context, Vector3 center, PropaneTank? source, bool chain = true)
     {
         var tuning = Tuning.Current;
         var radius = tuning.BlastRadius;
@@ -33,13 +42,17 @@ public static class Blast
             Exclude = exclude,
         };
         var seen = new HashSet<ulong>();
+        var pushed = new List<RigidBody3D>();
         foreach (var hit in space.IntersectShape(query, MaxQueryResults))
         {
             if (hit["collider"].As<GodotObject>() is not RigidBody3D body || !seen.Add(body.GetInstanceId()))
             {
                 continue;
             }
-            Push(space, body, center, radius, tuning, rng);
+            if (Push(space, body, center, radius, tuning, rng, chain))
+            {
+                pushed.Add(body);
+            }
         }
 
         foreach (var node in context.GetTree().GetNodesInGroup(IBlastReceiver.Group))
@@ -64,20 +77,25 @@ public static class Blast
         }
 
         GameEvents.RaiseExplosion(center);
+        if (chain)
+        {
+            LocalBlast?.Invoke(center, pushed);
+        }
     }
 
-    private static void Push(PhysicsDirectSpaceState3D space, RigidBody3D body, Vector3 center, float radius,
-        Tuning tuning, RandomNumberGenerator rng)
+    /// <summary>Pushes one body; returns whether it moved it.</summary>
+    private static bool Push(PhysicsDirectSpaceState3D space, RigidBody3D body, Vector3 center, float radius,
+        Tuning tuning, RandomNumberGenerator rng, bool chain)
     {
         var state = PhysicsServer3D.BodyGetDirectState(body.GetRid());
         var massCenter = state != null ? body.GlobalPosition + state.CenterOfMass : body.GlobalPosition;
         var distance = center.DistanceTo(massCenter);
         if (distance > radius)
         {
-            return;
+            return false;
         }
 
-        if (body is PropaneTank tank && distance <= tuning.ChainRadius)
+        if (chain && body is PropaneTank tank && distance <= tuning.ChainRadius)
         {
             tank.ChainHit(center, distance);
         }
@@ -94,7 +112,7 @@ public static class Blast
         {
             if (deltaV < tuning.BreakawaySpeed)
             {
-                return;
+                return false;
             }
             breakaway.Release();
         }
@@ -103,6 +121,7 @@ public static class Blast
         body.ApplyCentralImpulse(PushDirection(center, massCenter, tuning, rng) * deltaV * body.Mass);
         var spin = new Vector3(rng.RandfRange(-1, 1), rng.RandfRange(-1, 1), rng.RandfRange(-1, 1));
         body.AngularVelocity += spin * tuning.BlastSpin * falloff * Mathf.Min(massFactor, 1.5f);
+        return true;
     }
 
     private static Vector3 PushDirection(Vector3 center, Vector3 target, Tuning tuning, RandomNumberGenerator rng)

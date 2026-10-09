@@ -26,17 +26,41 @@ public partial class PropaneTank : RigidBody3D
     private const float PunctureKick = 6f;
 
     private VentJet? vent;
+    private MeshInstance3D mesh = null!;
     private Vector3 holeLocal;
     private Vector3 holeNormalLocal;
     private Vector3 jetDirectionLocal;
+    private float swirlSign = 1f;
     private float ventAge;
     private bool fuseLit;
     private float flutterPhase;
+    private double invulnerableUntil;
+    private Color shieldColor = Colors.White;
 
     public TankState State { get; private set; } = TankState.Intact;
 
+    /// <summary>The tank's id in a match (0 in single player), shared by every player's copy.</summary>
+    public uint NetId { get; set; }
+
+    /// <summary>Where the hole is, in the tank's own frame, once punctured.</summary>
+    public Vector3 HoleLocal => holeLocal;
+
+    public Vector3 HoleNormalLocal => holeNormalLocal;
+
+    /// <summary>Which way the jet leans around the tank's axis (+1 or -1).</summary>
+    public float SwirlSign => swirlSign;
+
+    /// <summary>A freshly dropped tank ignores bullets and chain reactions for a moment.</summary>
+    public bool Invulnerable => Now < invulnerableUntil;
+
+    /// <summary>Whether the last detonation was another player's, played here from the network.</summary>
+    public bool DetonatedRemotely { get; private set; }
+
     /// <summary>Raised once, the moment the tank explodes.</summary>
     public event Action<PropaneTank>? Detonated;
+
+    /// <summary>Raised when this game punctures the tank (a shot or a chain reaction), not for another player's puncture.</summary>
+    public event Action<PropaneTank>? Punctured;
 
     /// <summary>Instantiates a ready-to-place tank.</summary>
     public static PropaneTank Create() => new() { Name = "PropaneTank" };
@@ -54,38 +78,85 @@ public partial class PropaneTank : RigidBody3D
         LinearDamp = 0.05f;
 
         AddChild(new CollisionShape3D { Shape = GameAssets.TankShape });
-        var mesh = new MeshInstance3D { Mesh = GameAssets.TankMesh, Layers = RenderLayers.Actors, Name = "Mesh" };
+        mesh = new MeshInstance3D { Mesh = GameAssets.TankMesh, Layers = RenderLayers.Actors, Name = "Mesh" };
         AddChild(mesh);
         GameAssets.ApplyTankMaterials(mesh);
-        flutterPhase = GD.Randf() * 100f;
+        // In a match every copy of a tank flutters alike, so the copies drift apart less.
+        flutterPhase = NetId != 0 ? NetId % 997 * 0.1f : GD.Randf() * 100f;
+        SetProcess(false);
     }
 
-    /// <summary>A bullet hit at a world point with the surface normal there.</summary>
-    public void TakeShot(Vector3 point, Vector3 normal, Vector3 shotDirection)
+    /// <summary>Makes a dropped tank ignore bullets and chain reactions for a while, glowing in the dropper's colour.</summary>
+    public void MakeInvulnerable(float seconds, Color color)
     {
+        invulnerableUntil = Now + seconds;
+        shieldColor = color;
+        SetProcess(true);
+    }
+
+    public override void _Process(double delta)
+    {
+        // The shield pulses while it lasts, then fades out over its last moments.
+        var left = (float)(invulnerableUntil - Now);
+        if (left <= 0)
+        {
+            mesh.SetInstanceShaderParameter("shield_color", new Color(shieldColor, 0f));
+            SetProcess(false);
+            return;
+        }
+        var pulse = 0.65f + 0.35f * Mathf.Sin((float)Now * 18f);
+        mesh.SetInstanceShaderParameter("shield_color", new Color(shieldColor, Mathf.Clamp(left / 0.25f, 0, 1) * pulse));
+    }
+
+    /// <summary>
+    /// A bullet hit at a world point with the surface normal there. Returns false if the tank ignored it (it is
+    /// shielded or already gone).
+    /// </summary>
+    public bool TakeShot(Vector3 point, Vector3 normal, Vector3 shotDirection)
+    {
+        if (Invulnerable)
+        {
+            return false;
+        }
         switch (State)
         {
             case TankState.Intact:
-                Puncture(point, normal);
+                Puncture(point, normal, GD.Randf() < 0.5f ? -1f : 1f);
                 ApplyImpulse(shotDirection * PunctureKick, point - GlobalPosition);
-                break;
+                Punctured?.Invoke(this);
+                return true;
             case TankState.Venting:
                 Detonate();
-                break;
+                return true;
         }
+        return false;
+    }
+
+    /// <summary>
+    /// Another player punctured this tank: start the same vent from the same hole, after the caller has put the tank
+    /// where that player had it.
+    /// </summary>
+    public void PunctureRemote(Vector3 holeLocalPoint, Vector3 holeNormal, float swirl)
+    {
+        if (State != TankState.Intact)
+        {
+            return;
+        }
+        Puncture(ToGlobal(holeLocalPoint), GlobalBasis * holeNormal, swirl);
     }
 
     /// <summary>A blast went off within chain range: punctures an intact tank, or detonates a venting one after a fuse.</summary>
     public void ChainHit(Vector3 blastCenter, float distance)
     {
-        if (State == TankState.Exploded || fuseLit)
+        if (State == TankState.Exploded || fuseLit || Invulnerable)
         {
             return;
         }
         if (State == TankState.Intact)
         {
             var (point, normal) = SurfaceFacing(blastCenter);
-            Puncture(point, normal);
+            Puncture(point, normal, GD.Randf() < 0.5f ? -1f : 1f);
+            Punctured?.Invoke(this);
             return;
         }
         fuseLit = true;
@@ -120,27 +191,45 @@ public partial class PropaneTank : RigidBody3D
         }
     }
 
-    /// <summary>Blows the tank apart: effects, debris, scorch, and the blast itself.</summary>
-    public void Detonate()
+    /// <summary>Blows the tank apart: effects, debris, scorch, and the blast itself, which can set off other tanks.</summary>
+    public void Detonate() => Explode(GlobalTransform * LocalCenter, chain: true);
+
+    /// <summary>
+    /// Another player's detonation of this tank, at the centre they had it at. It throws things here as everywhere,
+    /// but sets off no tanks: that player runs the chain and sends each explosion.
+    /// </summary>
+    public void DetonateRemote(Vector3 center)
+    {
+        if (State == TankState.Exploded)
+        {
+            return;
+        }
+        GlobalPosition += center - GlobalTransform * LocalCenter;
+        DetonatedRemotely = true;
+        Explode(center, chain: false);
+    }
+
+    private void Explode(Vector3 center, bool chain)
     {
         if (State == TankState.Exploded)
         {
             return;
         }
         State = TankState.Exploded;
-        var center = GlobalTransform * LocalCenter;
         var groundY = GroundHeightBelow(center);
 
         vent?.Extinguish();
         ExplosionEffect.Create(center, groundY);
         SpawnDebris(center);
         SpawnScorch(new Vector3(center.X, groundY, center.Z));
-        Blast.Detonate(this, center, this);
+        Blast.Detonate(this, center, this, chain);
         Detonated?.Invoke(this);
         QueueFree();
     }
 
-    private void Puncture(Vector3 point, Vector3 normal)
+    private static double Now => Time.GetTicksUsec() / 1_000_000.0;
+
+    private void Puncture(Vector3 point, Vector3 normal, float swirl)
     {
         State = TankState.Venting;
         CanSleep = false;
@@ -149,8 +238,8 @@ public partial class PropaneTank : RigidBody3D
         holeNormalLocal = (GlobalBasis.Inverse() * normal).Normalized();
         // A torn hole rarely vents straight out: lean the jet around the tank's axis so its thrust has a
         // tangential part. Upright, that spins the tank; lying down, it rolls and pinwheels across the ground.
-        var swirl = Mathf.DegToRad(Tuning.Current.VentSwirlDegrees) * (GD.Randf() < 0.5f ? -1f : 1f);
-        jetDirectionLocal = holeNormalLocal.Rotated(Vector3.Up, swirl).Normalized();
+        swirlSign = swirl < 0 ? -1f : 1f;
+        jetDirectionLocal = holeNormalLocal.Rotated(Vector3.Up, Mathf.DegToRad(Tuning.Current.VentSwirlDegrees) * swirlSign).Normalized();
 
         var holeBasis = BasisFacing(jetDirectionLocal);
         vent = new VentJet { Name = "VentJet", Transform = new Transform3D(holeBasis, holeLocal) };
