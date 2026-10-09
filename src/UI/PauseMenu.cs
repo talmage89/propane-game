@@ -7,6 +7,9 @@ public partial class PauseMenu : CanvasLayer
 {
     public event System.Action? ResumeRequested;
 
+    /// <summary>Back to the main menu. The button only shows when something listens.</summary>
+    public event System.Action? MainMenuRequested;
+
     public override void _Ready()
     {
         Layer = 30;
@@ -62,6 +65,12 @@ public partial class PauseMenu : CanvasLayer
         var quit = UiStyle.Button("Quit");
         quit.Pressed += () => GetTree().Quit();
         buttons.AddChild(resume);
+        if (MainMenuRequested != null)
+        {
+            var menu = UiStyle.Button("Main menu");
+            menu.Pressed += () => MainMenuRequested?.Invoke();
+            buttons.AddChild(menu);
+        }
         buttons.AddChild(quit);
         layout.AddChild(buttons);
     }

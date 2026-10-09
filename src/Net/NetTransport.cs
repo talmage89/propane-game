@@ -18,6 +18,7 @@ public sealed class NetTransport
     private readonly List<Pending> incoming = new();
     private readonly List<Pending> outgoing = new();
     private readonly Random random = new();
+    private readonly HashSet<int> peers = new();
     private double lastReliableIn;
     private double lastReliableOut;
     private bool open;
@@ -48,8 +49,16 @@ public sealed class NetTransport
 
     public NetTransport()
     {
-        peer.PeerConnected += id => PeerConnected?.Invoke((int)id);
-        peer.PeerDisconnected += id => PeerDisconnected?.Invoke((int)id);
+        peer.PeerConnected += id =>
+        {
+            peers.Add((int)id);
+            PeerConnected?.Invoke((int)id);
+        };
+        peer.PeerDisconnected += id =>
+        {
+            peers.Remove((int)id);
+            PeerDisconnected?.Invoke((int)id);
+        };
     }
 
     public Error Host(int port, int maxClients)
@@ -82,6 +91,7 @@ public sealed class NetTransport
         }
         incoming.Clear();
         outgoing.Clear();
+        peers.Clear();
     }
 
     /// <summary>Drops one client (server only).</summary>
@@ -159,6 +169,11 @@ public sealed class NetTransport
 
     private void Put(int to, byte[] data, bool reliable)
     {
+        // A peer that has gone (or is going) cannot take packets.
+        if (!open || !peers.Contains(to) || peer.GetPeer(to) is not { } target || !target.IsActive())
+        {
+            return;
+        }
         peer.SetTargetPeer(to);
         // Channel 0 picks ENet's own reliable or unreliable channel for the mode.
         peer.TransferChannel = 0;

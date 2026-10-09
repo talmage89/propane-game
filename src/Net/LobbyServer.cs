@@ -81,6 +81,9 @@ public partial class LobbyServer : Node
 
     public bool Running { get; private set; }
 
+    /// <summary>Tanks every player starts a match with. 0 normally; tests set it to have something to lose.</summary>
+    public int StartScore { get; set; }
+
     public Error Start()
     {
         transport.PeerConnected += OnConnected;
@@ -403,7 +406,7 @@ public partial class LobbyServer : Node
         foreach (var id in lobby.Members)
         {
             match.Players.Add(id);
-            match.Scores[id] = 0;
+            match.Scores[id] = StartScore;
             match.Profiles[id] = (clients[id].Name, clients[id].Color);
         }
 
@@ -459,6 +462,10 @@ public partial class LobbyServer : Node
                     match.PhaseEnds = now + match.Length;
                     match.NextClock = now + 1;
                     Broadcast(match, new NetWriter(Msg.MatchGo).Float(match.Length));
+                    foreach (var (id, score) in match.Scores.Where(s => s.Value != 0))
+                    {
+                        Broadcast(match, new NetWriter(Msg.Score).Int(id).Int(score).Int(0));
+                    }
                     Log($"lobby {lobby.Id}: match on");
                 }
                 break;

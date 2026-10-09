@@ -45,7 +45,7 @@ public partial class CaptureDirector : Node
     public void Screenshot(string name)
     {
         var dir = DevArgs.Get("capture-dir");
-        if (dir == null)
+        if (dir == null || DisplayServer.GetName() == "headless")
         {
             return;
         }

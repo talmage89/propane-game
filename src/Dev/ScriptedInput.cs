@@ -24,6 +24,9 @@ public sealed class ScriptedInput : IPlayerInputSource
 
     public void Advance(float delta) => time += delta;
 
+    /// <summary>The script's clock, for scheduling relative to now.</summary>
+    public float Now => time;
+
     public PlayerIntent Read()
     {
         var intent = new PlayerIntent();
