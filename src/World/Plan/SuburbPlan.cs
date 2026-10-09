@@ -141,6 +141,9 @@ public enum PavingKind
 
 public sealed record Paving(OrientedRect Area, PavingKind Kind);
 
+/// <summary>A player start: map position and facing (as <see cref="SuburbGenerator.YawFacing"/>).</summary>
+public sealed record SpawnPoint(Vector2 Position, float Yaw);
+
 /// <summary>Where a tank goes and why (for debugging the generator).</summary>
 public sealed record TankPlacement(Vector2 Position, float Yaw, float Elevation, string Reason);
 
@@ -168,4 +171,10 @@ public sealed class SuburbPlan
     public Vector2 Spawn { get; set; }
 
     public float SpawnYaw { get; set; }
+
+    /// <summary>Separate starts for each player in a match (empty in single player).</summary>
+    public List<SpawnPoint> Spawns { get; } = new();
+
+    /// <summary>Ammo pickup positions for a match (empty in single player).</summary>
+    public List<Vector2> AmmoSpots { get; } = new();
 }

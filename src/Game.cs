@@ -26,7 +26,6 @@ public partial class Game : Node3D
 
     private const float RevealMaxRadius = 320f;
     private const float DissolveShare = 0.42f;
-    private const int MinimumLots = 18;
 
     private VoidEnvironment environment = null!;
     private PlayerCharacter player = null!;
@@ -228,25 +227,10 @@ public partial class Game : Node3D
     private void LoadSuburb()
     {
         var tuning = Tuning.Current;
-        var settings = new SuburbSettings
-        {
-            TankCount = tuning.TankCount,
-            ClusterSizeMin = tuning.ClusterSizeMin,
-            ClusterSizeMax = Mathf.Max(tuning.ClusterSizeMin, tuning.ClusterSizeMax),
-        };
-        var catalog = new GameCatalog();
+        var settings = SuburbPlans.SinglePlayer(tuning);
         var seed = tuning.FixedSeed != 0 ? tuning.FixedSeed : (int)seeds.Randi();
-        var plan = new SuburbGenerator(settings, catalog, seed).Generate();
         // Occasionally a layout comes out sparse; a few rerolls keep every suburb worth exploring.
-        for (var attempt = 0; attempt < 6 && tuning.FixedSeed == 0 && plan.Lots.Count < MinimumLots; attempt++)
-        {
-            seed = (int)seeds.Randi();
-            var candidate = new SuburbGenerator(settings, catalog, seed).Generate();
-            if (candidate.Lots.Count > plan.Lots.Count)
-            {
-                plan = candidate;
-            }
-        }
+        var plan = SuburbPlans.Generate(settings, seed, tuning.FixedSeed == 0 ? () => (int)seeds.Randi() : null);
         current = Suburb.Build(plan, settings);
         current.ProcessMode = ProcessModeEnum.Pausable;
         AddChild(current);
