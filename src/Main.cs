@@ -41,6 +41,12 @@ public partial class Main : Node
         menus.HostRequested += Host;
         AddChild(menus);
         ShowMenus(Menus.Screen.Main);
+        // --connect=host[:port] goes straight to that server's lobbies.
+        if (DevArgs.Get("connect") is { } server)
+        {
+            menus.Show(Menus.Screen.Connect);
+            menus.ConnectTo(server, DevArgs.Get("name") ?? PlayerSettings.Name);
+        }
         if (DisplayServer.WindowGetMode() == DisplayServer.WindowMode.Windowed && DevArgs.Get("windowed") == null)
         {
             Callable.From(() => DisplayServer.WindowSetMode(DisplayServer.WindowMode.Maximized)).CallDeferred();
