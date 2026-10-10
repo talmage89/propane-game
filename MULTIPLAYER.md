@@ -73,7 +73,7 @@ Every client simulates the whole suburb, so the game responds instantly. Each mo
 
 **Left to each client:** debris, small props and fence panels play out locally from the shared blasts. Cars are synced at a low rate, because players use them as cover.
 
-**Platforms.** Mac and Linux builds from the same commit play together. A version check when a player connects turns away mismatched builds.
+**Platforms.** Mac and Linux builds of the same minor version play together (0.2.0 with 0.2.5). A version check when a player connects turns away builds of another minor version or protocol, and says which version is needed (see Versions and releases in the README).
 
 ## 5. Tuning
 
@@ -187,9 +187,8 @@ banked. Against the first bot, two current bots ended 15 and 14 to 1 and 0, and 
 The server is the game itself started with `-- --server` (and `--headless`). It runs no physics and uses little CPU.
 
 - **Docker:** `tools/server/deploy.sh <ssh host> <dir>` exports the Linux build and runs it in Docker on that host,
-  in `~/<dir>` (container `propane-server`, `restart: unless-stopped`, UDP 24680). Run it from the commit a release
-  was built from: a downloaded build only joins a server from the same commit (games run from source join any server
-  with the same version and protocol). Logs: `docker compose logs -f` in that folder.
+  in `~/<dir>` (container `propane-server`, `restart: unless-stopped`, UDP 24680). Run it from the latest release's
+  commit (`main`): it then plays with every patch of that minor version. Logs: `docker compose logs -f` in that folder.
 - **Reaching it:** players connect to the machine's address on UDP 24680: its LAN address, its address on a VPN the
   players share, or, with UDP 24680 forwarded on the router, the public address.
 - **From source:** `godot --headless --path . -- --server [--port=24680]`.
@@ -200,7 +199,8 @@ The server is the game itself started with `-- --server` (and `--headless`). It 
 | --- | --- |
 | `src/Main.cs` | The root scene: menus over a backdrop, single player, the match, or server mode. |
 | `src/Net/LobbyServer.cs` | The server: lobbies, match flow and clock, relaying, scores, first-claim ties, pickups. |
-| `src/Net/NetClient.cs`, `NetTransport.cs`, `Protocol.cs` | The client connection, the ENet transport (with simulated lag for tests), the message types and the version check. |
+| `src/Net/NetClient.cs`, `NetTransport.cs`, `Protocol.cs` | The client connection, the ENet transport (with simulated lag for tests), the message types. |
+| `src/Net/BuildInfo.cs`, `UpdateCheck.cs` | Versions and who plays together; the launch check for a newer release. |
 | `src/Net/Match.cs` | A match on one player's machine: everything this player sends, and playing what the others send. |
 | `src/Net/BodySync.cs` | Ownership and corrections for tanks and cars. |
 | `src/Net/SnapshotBuffer.cs` | Smooth playback of other players, `InterpolationDelay` behind. |
@@ -227,5 +227,6 @@ Details settled while building, within the decisions above:
 | `net_bots.sh -n 1 -w 1 -- --scenario=pickup --capture-dir=DIR` | Taking an ammo can and its return. |
 | `net_bots.sh -n 4 -l 120 -b smart,simple,smart,simple` | Bot brains against each other; the server log ends each match with tanks gained / lost to hits / lost to throws. Add `--bot-log` to log what each bot is doing. |
 | `godot res://scenes/dev/menu_test.tscn -- --capture-dir=DIR` | Clicks through every menu, a solo match, leaving it, and single player and back. |
+| `menu_test.tscn -- --scenario=update --update-check --fake-version=0.0.9 --capture-dir=DIR` | The offer of a newer release, and a newer server (`-- --server --port=24993 --fake-version=9.9.0`) asking for an update. |
 
 Results, 2026-10-09: with three bots under 120 ms round trip, 30 ms jitter and 3% loss, every bot agreed on which tanks existed and their states throughout; resting tanks matched exactly and venting tanks to within about half a metre. The same held through the Docker server on another machine, over the LAN and over a VPN. When the match's creator left mid-match, the others played on in step. A client with a different protocol was turned away with a message.

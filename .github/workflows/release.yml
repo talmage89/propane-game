@@ -1,5 +1,6 @@
 # Every push to main builds the macOS (Apple Silicon) and Linux (x86_64) games and publishes them as a new release for
-# the version in project.godot. Each release is a new version: the job fails if config/version already has a release.
+# the version in project.godot. tools/release/cut.sh makes those pushes. The job stops first if the version may not be
+# released (tools/release/check_version.sh): already released, not newer, or a patch that changes the protocol.
 name: Release
 
 on:
@@ -25,16 +26,15 @@ jobs:
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # the release tags, for the version check and the notes
 
-      - name: Check the version is new
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Check the version
         run: |
           set -euo pipefail
           version="$(sed -n 's/^config\/version="\(.*\)"$/\1/p' project.godot)"
-          [[ -n "$version" ]] || { echo "::error::config/version not found in project.godot"; exit 1; }
-          if gh release view "v$version" >/dev/null 2>&1 || git ls-remote --exit-code --tags origin "v$version" >/dev/null; then
-            echo "::error::v$version is already released. Bump config/version in project.godot."
+          if ! tools/release/check_version.sh "$version" 2>check.log; then
+            echo "::error::$(cat check.log)"
             exit 1
           fi
           echo "VERSION=$version" >>"$GITHUB_ENV"
@@ -95,9 +95,15 @@ jobs:
         run: |
           set -euo pipefail
           tag="v$VERSION"
+          previous="$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -1)"
           {
-            echo "Built from ${GITHUB_SHA::7}."
+            echo "Built from ${GITHUB_SHA::7}. Plays with every ${VERSION%.*}.x."
             echo
+            if [[ -n "$previous" ]]; then
+              echo "Changes since $previous:"
+              git log --format='- %s' --invert-grep --grep='^Release v' "$previous..$GITHUB_SHA"
+              echo
+            fi
             echo "**macOS (Apple Silicon):** unzip, then open Propane.app. The first time, macOS blocks it because it is"
             echo "not notarized: open System Settings > Privacy & Security and click Open Anyway."
             echo

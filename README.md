@@ -32,7 +32,8 @@ Nothing else is needed: each build carries its own .NET runtime.
 Requires Godot 4.7.2 (.NET edition) and the .NET 10 SDK.
 
 - Editor: open `project.godot` and press Play (F5).
-- Command line: `/Applications/Godot_mono.app/Contents/MacOS/Godot --path .`
+- Command line: `make run`. `make` lists the other tasks (tests, a local server, bots, releases); they find Godot on
+  `PATH` (`godot-mono` or `godot`) or in `/Applications`, or set `GODOT` to its binary.
 
 The game opens maximized on the main menu: Single player, Multiplayer or Quit. In play it captures the mouse; click
 the window to recapture it after switching away.
@@ -42,17 +43,17 @@ the window to recapture it after switching away.
 Choose Multiplayer, type your name and the server's address (`host` or `host:port`, UDP port 24680 by default), then
 create a lobby or join one. Everyone picks a name and colour in the lobby, and whoever created it sets the match
 length and starts. **Host on this computer** runs a server inside your game instead; the lobby then shows the
-addresses friends can use. Builds must match: the server turns away a different version.
+addresses friends can use. Versions with the same major and minor number play together (0.2.0 with 0.2.5); the
+server turns away others and says which version it needs.
 
-To play against bots, create a lobby and run `tools/dev/add_bots.sh -S host[:port]` (from source; `-x` stops them).
+To play against bots, create a lobby and run `make bots SERVER=host[:port]` (from source; `make bots-stop` stops them).
 Starting the game with `-- --connect=host[:port]` skips straight to that server's lobbies. On macOS, the first time
 you host, allow incoming connections if the system asks.
 
 The dedicated server is the same game run headless: `./Propane.x86_64 --headless -- --server [--port=24680]`.
 `tools/server/deploy.sh <ssh host> <dir>` exports it and runs it in Docker on any machine you can reach over ssh;
-see [MULTIPLAYER.md](MULTIPLAYER.md) for hosting and reaching it. A downloaded build only joins a server built from the
-same commit, so deploy the server from the commit the release was built from. Games run from source can join any
-server with the same version.
+see [MULTIPLAYER.md](MULTIPLAYER.md) for hosting and reaching it. Keep a server on the latest release: it then plays
+with every patch of that minor version.
 
 ## Controls
 
@@ -135,12 +136,38 @@ tools/dev/compare_tanks.py /tmp/n/bot*.log
 `net_test.tscn` scenarios: bots playing (default), `duel` (hits, drops and a thrown player, filmed from both sides)
 and `pickup` (an ammo can taken and returning). [MULTIPLAYER.md](MULTIPLAYER.md) lists the commands.
 
-## Releases
+## Versions and releases
 
-Every push to `main` runs `.github/workflows/release.yml` on a Linux runner: it runs the generator tests, exports
-both builds, and publishes them as a new GitHub release for `config/version` in `project.godot`. Every release is a
-new version: bump `config/version` on `dev` before merging to `main`, or the job stops before building because that
-version is already released. Releases are never replaced. Day-to-day work happens on `dev`.
+Work happens on `dev`; `main` is what has been released. The version is `config/version` in `project.godot`,
+MAJOR.MINOR.PATCH, and it decides who plays together:
+
+| Release | For | Plays with |
+| --- | --- | --- |
+| Patch (0.2.0 → 0.2.1) | Changes local to each player: fixes, menus, HUD, visuals, performance, single player. | Every 0.2.x, so nobody has to update. |
+| Minor (0.2.x → 0.3.0) | Anything players in one match share: a message, the suburb built from the server's plan, tanks, the tuners. | Only 0.3.x. Older games are told to update. |
+| Major | Kept for big milestones. | Only its own minor version. |
+
+`Protocol.Version` in `src/Net/Protocol.cs` must also match, and is bumped whenever a message changes shape. A
+release that changes it has to be at least a minor one. Hello, Welcome and Rejected never change shape (fields may only
+be appended), so any build can be told why it was turned away and which version it needs. In a match everyone plays
+on the creator's tuning, so changing a baked tuning value is fine in a patch; adding or removing a tuner is not.
+
+To release, on a clean, pushed `dev`:
+
+```sh
+make release-patch   # or release-minor, release-major; tools/release/cut.sh X.Y.Z picks the number
+```
+
+`tools/release/cut.sh` takes the next version after the latest release tag and checks it with
+`tools/release/check_version.sh`: newer than every release, and a patch only when the protocol is unchanged. For a
+patch, it lists any changed files that players in a match share and asks before going on. Then it shows the changes,
+runs the tests, commits the new version on `dev`, and pushes `dev` and fast-forwards `main` to it in one push.
+
+That push runs `.github/workflows/release.yml` on a Linux runner: the same version check, the generator tests, both
+exports, and a new GitHub release with the changes since the previous one. Releases are never replaced.
+
+A downloaded game checks GitHub for a newer release at launch and, if there is one, offers it on the main menu;
+updating is up to the player. A newer server that turns a game away offers the download it needs.
 
 The same build runs locally:
 
