@@ -36,7 +36,9 @@ public partial class Main : Node
         AddChild(net);
         net.MatchStarting += OnMatchStarting;
         net.StatusChanged += OnStatusChanged;
-        menus = new Menus { Name = "Menus", Net = net };
+        var updates = new UpdateCheck { Name = "UpdateCheck" };
+        AddChild(updates);
+        menus = new Menus { Name = "Menus", Net = net, Updates = updates };
         menus.SinglePlayerRequested += StartSinglePlayer;
         menus.HostRequested += Host;
         AddChild(menus);

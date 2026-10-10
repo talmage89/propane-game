@@ -34,6 +34,9 @@ public partial class Menus : CanvasLayer
     /// <summary>The connection the multiplayer screens use. Set before adding to the tree.</summary>
     public NetClient Net { get; set; } = null!;
 
+    /// <summary>The launch check for a newer release, offered on the main menu. Optional; set before adding to the tree.</summary>
+    public UpdateCheck? Updates { get; set; }
+
     public Screen Current { get; private set; } = Screen.None;
 
     /// <summary>When this game is hosting, where others can reach it (shown in the lobby screens).</summary>
@@ -62,6 +65,10 @@ public partial class Menus : CanvasLayer
         version.Position = new Vector2(16, -34);
         AddChild(version);
 
+        if (Updates != null)
+        {
+            Updates.Found += () => Refresh(Screen.Main);
+        }
         Net.StatusChanged += OnStatus;
         Net.LobbiesChanged += () => Refresh(Screen.Browser);
         Net.LobbyChanged += OnLobbyChanged;
@@ -185,6 +192,12 @@ public partial class Menus : CanvasLayer
         var quit = UiStyle.Button("Quit");
         quit.Pressed += () => GetTree().Quit();
         layout.AddChild(quit);
+        if (Updates?.Latest is { } latest)
+        {
+            layout.AddChild(new HSeparator());
+            layout.AddChild(UiStyle.Text($"Propane {latest} is out.", 16, UiStyle.SoftInk, HorizontalAlignment.Center));
+            AddDownload($"Download {latest}");
+        }
         AddMessage();
     }
 
@@ -231,6 +244,11 @@ public partial class Menus : CanvasLayer
         buttons.AddChild(back);
         layout.AddChild(buttons);
         AddMessage();
+        // Turned away by a newer server: offer the download that plays there.
+        if (message.Length > 0 && Net.State == NetClient.Status.Offline && Net.RejectedBy is { } needed && BuildInfo.IsNewer(needed))
+        {
+            AddDownload($"Download Propane {BuildInfo.Series(needed)}");
+        }
     }
 
     /// <summary>Connects as if typed on the connect screen.</summary>
@@ -453,6 +471,16 @@ public partial class Menus : CanvasLayer
         {
             layout.AddChild(Wrap(UiStyle.Text(HostingNote, 15, UiStyle.SoftInk, HorizontalAlignment.Center)));
         }
+    }
+
+    /// <summary>A button that opens the download page in the browser.</summary>
+    private void AddDownload(string text)
+    {
+        var row = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.Center };
+        var download = UiStyle.Button(text);
+        download.Pressed += () => OS.ShellOpen(BuildInfo.ReleasesUrl);
+        row.AddChild(download);
+        layout.AddChild(row);
     }
 
     private void AddMessage()

@@ -59,7 +59,7 @@ public partial class NetTest : Node
         AddChild(director);
         net.StatusChanged += (status, reason) =>
         {
-            Log($"status {status} {reason}");
+            Log($"status {status} {reason}" + (net.RejectedBy != null ? $" (server {net.RejectedBy})" : ""));
             if (status == NetClient.Status.Connected && role == "host")
             {
                 net.CreateLobby();

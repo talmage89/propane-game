@@ -213,12 +213,13 @@ public partial class LobbyServer : Node
         var protocol = r.Int();
         var version = r.String();
         var build = r.String();
-        var mismatch = BuildInfo.Mismatch(protocol, version, build);
+        var mismatch = BuildInfo.Mismatch(protocol, version);
         if (mismatch != null)
         {
-            transport.Send(client.Id, new NetWriter(Msg.Rejected).String(mismatch), reliable: true);
+            // The server's version follows the reason, for a client to offer the update; older clients ignore it.
+            transport.Send(client.Id, new NetWriter(Msg.Rejected).String(mismatch).String(BuildInfo.GameVersion), reliable: true);
             client.KickAt = NetTransport.Now + 1;
-            Log($"peer {client.Id} turned away: {mismatch}");
+            Log($"peer {client.Id} ({version}, build {build}) turned away: {mismatch}");
             return;
         }
         client.Name = Protocol.CleanName(r.String());
@@ -226,7 +227,7 @@ public partial class LobbyServer : Node
         client.Welcomed = true;
         transport.Send(client.Id, new NetWriter(Msg.Welcome).Int(client.Id).String(BuildInfo.GameVersion), reliable: true);
         SendLobbyList(client);
-        Log($"peer {client.Id} is {client.Name}");
+        Log($"peer {client.Id} is {client.Name} ({version}, build {build})");
     }
 
     // ------------------------------------------------------------------ Lobbies

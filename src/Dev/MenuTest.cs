@@ -8,6 +8,9 @@ namespace Propane.Dev;
 /// computer, the lobby browser and lobby, a solo match (debug builds may start alone) with its Esc menu, leaving it,
 /// and single player with its pause menu and the way back to the main menu.
 /// Run: godot --resolution 1600x900 res://scenes/dev/menu_test.tscn -- --capture-dir=/tmp/m
+/// <c>--scenario=update</c> instead shows the offer of a newer release and of the download a newer server asks for.
+/// Pretend to be old and point it at a newer server: <c>-- --scenario=update --update-check --fake-version=0.0.9
+/// --server-address=127.0.0.1:24993</c>, with a server started with <c>-- --server --port=24993 --fake-version=9.9.0</c>.
 /// </summary>
 public partial class MenuTest : Node
 {
@@ -24,6 +27,16 @@ public partial class MenuTest : Node
         AddChild(main);
         var director = new CaptureDirector { QuitAfter = 40f };
         AddChild(director);
+        if (DevArgs.Get("scenario") == "update")
+        {
+            director.QuitAfter = 8f;
+            director.ShotAt(4f, "01_update_offered");
+            director.At(4.5f, () => Press("Multiplayer"));
+            director.At(5f, () => main.GetNode<UI.Menus>("Menus").ConnectTo(DevArgs.Get("server-address") ?? "127.0.0.1:24993", "Tester"));
+            director.ShotAt(6.5f, "02_server_needs_update");
+            director.At(7f, () => GD.Print($"[menutest] download offered: {FindButton(GetTree().Root, "Download Propane 9.9.x") != null}"));
+            return;
+        }
 
         director.ShotAt(1.5f, "01_main_menu");
         director.At(2f, () => Press("Multiplayer"));

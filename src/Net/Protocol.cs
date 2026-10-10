@@ -56,7 +56,11 @@ public enum Msg : byte
 
 public static class Protocol
 {
-    /// <summary>Bumped whenever a message changes shape. Clients and server must agree exactly.</summary>
+    /// <summary>
+    /// Bumped whenever a message changes shape. Clients and server must agree exactly, and a release that changes it
+    /// must bump at least the minor version (tools/release/check_version.sh enforces this). Hello, Welcome and
+    /// Rejected never change shape (fields may only be appended), so any build can be told why it was turned away.
+    /// </summary>
     public const int Version = 1;
 
     public const int DefaultPort = 24680;
@@ -210,52 +214,5 @@ public sealed class NetReader
     {
         var origin = Vec3();
         return new Transform3D(new Basis(Quat()), origin);
-    }
-}
-
-/// <summary>The build's identity, for turning away clients whose game does not match the server's.</summary>
-public static class BuildInfo
-{
-    private static string? build;
-
-    public static string GameVersion => ProjectSettings.GetSetting("application/config/version").AsString();
-
-    /// <summary>
-    /// The commit an exported build was made from (written to <c>res://build_id.txt</c> by the release script), or
-    /// "dev" when running from source.
-    /// </summary>
-    public static string Build
-    {
-        get
-        {
-            if (build != null)
-            {
-                return build;
-            }
-            build = "dev";
-            if (Godot.FileAccess.FileExists("res://build_id.txt"))
-            {
-                var text = Godot.FileAccess.GetFileAsString("res://build_id.txt").Trim();
-                if (text.Length > 0)
-                {
-                    build = text;
-                }
-            }
-            return build;
-        }
-    }
-
-    /// <summary>Whether a client's build may join this one: same protocol and version, and the same commit unless either runs from source.</summary>
-    public static string? Mismatch(int protocol, string version, string clientBuild)
-    {
-        if (protocol != Protocol.Version || version != GameVersion)
-        {
-            return $"Version mismatch: the server runs {GameVersion} (protocol {Protocol.Version}), you have {version} (protocol {protocol}).";
-        }
-        if (clientBuild != Build && clientBuild != "dev" && Build != "dev")
-        {
-            return $"Build mismatch: the server runs build {Build}, you have {clientBuild}. Download the same release.";
-        }
-        return null;
     }
 }

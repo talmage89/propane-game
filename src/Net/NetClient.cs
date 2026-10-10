@@ -41,6 +41,9 @@ public partial class NetClient : Node
     private double nextPing;
     private string? lastError;
 
+    /// <summary>The version of the server that last turned this game away, when it said.</summary>
+    public string? RejectedBy { get; private set; }
+
     public Status State { get; private set; } = Status.Offline;
 
     public int MyId { get; private set; }
@@ -111,6 +114,7 @@ public partial class NetClient : Node
         PlayerName = Protocol.CleanName(name);
         Color = color;
         lastError = null;
+        RejectedBy = null;
         var error = transport.Connect(address, port);
         if (error != Error.Ok)
         {
@@ -203,6 +207,7 @@ public partial class NetClient : Node
                     break;
                 case Msg.Rejected:
                     lastError = r.String();
+                    RejectedBy = r.AtEnd ? null : r.String();
                     Drop(lastError);
                     break;
                 case Msg.Notice:
