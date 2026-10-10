@@ -102,7 +102,9 @@ on Linux), which then takes precedence. **Defaults** restores the values in code
 ## Dev harnesses
 
 Each scene in `scenes/dev` is a scripted test. Arguments after `--` are read by `src/Dev/DevArgs.cs`;
-`--capture-dir=<dir>` saves screenshots, and `--tune.<Name>=<value>` overrides any tuning value.
+`--capture-dir=<dir>` saves screenshots, `--record=<file.mp4>` films the window in real time (needs ffmpeg on `PATH`;
+a game in a match stays in step, unlike Godot's `--write-movie`), and `--tune.<Name>=<value>` overrides any tuning
+value. For example, `tools/dev/net_bots.sh -n 4 -l 90 -w 1 -- --record=/tmp/bots.mp4` films a match from the first bot.
 
 ```sh
 GODOT=/Applications/Godot_mono.app/Contents/MacOS/Godot
