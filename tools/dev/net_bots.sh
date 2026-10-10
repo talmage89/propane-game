@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # Runs a local multiplayer test: a headless server and N bot clients (scenes/dev/net_test.tscn) playing one match.
 # Logs go to the output directory; compare the clients' views of the tanks with tools/dev/compare_tanks.py.
-# Usage: tools/dev/net_bots.sh [-n bots] [-l match seconds] [-o out dir] [-g godot] [-w windowed bots] [-s "server args"] [-S host:port of an existing server]
+# Usage: tools/dev/net_bots.sh [-n bots] [-l match seconds] [-o out dir, default build/net] [-g godot] [-w windowed bots] [-s "server args"] [-S host:port of an existing server]
 #   [-b brain per bot, e.g. smart,simple,simple] [-- extra bot args]
 # Extra bot args (after --) go to every bot, e.g. --net-lag=120 --net-jitter=30 --net-loss=5 --capture-dir=... --shot-every=5
 set -euo pipefail
 
 bots=2
 length=60
-out="${TMPDIR:-/tmp}/propane-net"
+out=""
 godot="${GODOT:-godot-mono}"
 windowed=0
 port=$((24700 + RANDOM % 200))
@@ -32,6 +32,7 @@ done
 shift $((OPTIND - 1))
 [[ "${1:-}" == "--" ]] && shift
 project="$(cd "$(dirname "$0")/../.." && pwd)"
+out="${out:-$project/build/net}"
 mkdir -p "$out"
 rm -f "$out"/*.log
 budget=$((length + 75))

@@ -4,6 +4,12 @@ GODOT ?= $(shell command -v godot-mono || command -v godot || echo /Applications
 export GODOT
 
 N ?= 4
+# Each checkout keeps its own Godot user data (override.cfg, written by setup). One whose folder name ends in a number
+# (the worktrees dev-0, dev-1...) also gets its own server port, 24680 plus that number, so worktrees don't collide.
+CHECKOUT := $(notdir $(CURDIR))
+SLOT := $(shell echo '$(CHECKOUT)' | sed -n 's/.*[^0-9]\([0-9]\{1,2\}\)$$/\1/p')
+PORT ?= $(if $(SLOT),$(shell echo $$((24680 + $(SLOT)))),24680)
+SERVER ?= 127.0.0.1:$(PORT)
 
 .DEFAULT_GOAL := help
 .PHONY: help setup run build test server bots bots-stop package deploy release-patch release-minor release-major
@@ -12,6 +18,7 @@ help: ## List the tasks
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN { FS = ":.*## " } { printf "  make %-14s %s\n", $$1, $$2 }'
 
 setup: ## Import the assets and compile: a fresh clone, or after switching branches or pulling
+	@printf '; Written by make setup: user:// for this checkout only.\n[application]\nconfig/use_custom_user_dir=true\nconfig/custom_user_dir_name="Propane-dev/%s"\n' "$(CHECKOUT)" >override.cfg
 	"$(GODOT)" --headless --path . --import >/dev/null 2>&1 || true
 	@$(MAKE) --no-print-directory build
 
@@ -24,13 +31,13 @@ build: ## Compile the C# code
 test: build ## Run the generator tests (as CI does before a release)
 	"$(GODOT)" --headless --path . res://scenes/dev/generator_tests.tscn -- --seeds=100
 
-server: build ## Run a multiplayer server here (PORT=24680)
-	"$(GODOT)" --headless --path . -- --server $(if $(PORT),--port=$(PORT))
+server: build ## Run a multiplayer server here (PORT, default 24680, or this worktree's)
+	"$(GODOT)" --headless --path . -- --server --port=$(PORT)
 
-bots: build ## Add N bots to a server's first open lobby (SERVER=host[:port], default this computer)
-	tools/dev/add_bots.sh -n $(N) $(if $(SERVER),-S $(SERVER))
+bots: build ## Add N bots to a server's first open lobby (SERVER=host[:port], default this computer on PORT)
+	tools/dev/add_bots.sh -n $(N) -S $(SERVER)
 
-bots-stop: ## Stop the bots
+bots-stop: ## Stop this checkout's bots
 	tools/dev/add_bots.sh -x
 
 package: ## Build the macOS and Linux release archives here, in build/dist (needs rcodesign)

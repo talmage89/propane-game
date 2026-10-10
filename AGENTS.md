@@ -32,21 +32,17 @@ design/MULTIPLAYER.md first. macOS (Apple Silicon) first, Linux second.
 - Its siblings `dev-1` to `dev-5` are long-lived git worktrees, one agent each. Check out any branch there, or
   `git switch --detach dev`. Git won't check out `dev` twice, so land a branch by merging it in `dev-0`.
 - Worktrees share the repository, so commits and branches made in one are visible in all without a fetch.
-- Fresh clone or worktree, or after switching branches or pulling: `make setup` (imports the assets into `.godot/` and
-  compiles; about 25 s fresh, a few seconds after). Nothing else is gitignored that a build needs; `build/` holds
-  only release output.
+- Fresh clone or worktree, or after switching branches or pulling: `make setup`. It imports the assets into `.godot/`
+  and compiles (about 25 s fresh, a few seconds after), and its `override.cfg` gives the checkout its own `user://`.
+  Nothing else gitignored is needed: `build/` holds only release output and dev logs.
 
 ## Parallel agents
 
-Each worktree has its own `.godot/`, build and `tuning.tres`, so builds, scenes and Blender scripts run side by
-side. What they share:
+Each worktree has its own `.godot/`, build, `tuning.tres`, `user://` (after `make setup`), server port (24680 plus
+its number) and bot logs in `build/`, so builds, scenes, servers, bots and Blender scripts run side by side. Still
+shared:
 
-- `user://` (`~/.local/share/godot/app_userdata/Propane`): settings, logs and shader caches. `menu_test.tscn` resets
-  its settings file there, so run one at a time.
-- Ports: `make server` and `make bots` default to 24680; give each worktree its own `PORT` and `SERVER`.
-  `net_bots.sh` picks a random port.
-- `/tmp`: use worktree-specific `--capture-dir`, `--record` and `net_bots.sh -o` paths (its default output is wiped on
-  each run). `make bots-stop` stops every worktree's bots.
+- `/tmp`: give `--capture-dir` and `--record` absolute paths in the worktree, such as `$PWD/build/shots`.
 - One GPU and CPU: `--fixed-fps` screenshots are unaffected, but soak frame times and `--record` are skewed by others'
   load.
 - Blender scripts write only the worktree's `assets/`, but `.glb` files can't be merged: on a conflict, rerun the

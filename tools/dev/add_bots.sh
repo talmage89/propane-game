@@ -2,7 +2,8 @@
 # Adds bot players to a multiplayer server, to play against: they join the first open lobby (create one first) and
 # play every match the lobby starts. They run headless from this checkout, in the background, until stopped.
 # Usage: tools/dev/add_bots.sh [-n count] [-S host[:port]] [-k skill 0..1] [-b smart|simple]
-#        tools/dev/add_bots.sh -x     stops the bots this script started
+#        tools/dev/add_bots.sh -x     stops the bots this checkout started
+# Their logs and pids are in build/bots.
 # Defaults: 4 bots, a server on this computer (127.0.0.1:24680, e.g. Host on this computer), skill 1, the smart brain.
 set -euo pipefail
 
@@ -22,7 +23,8 @@ while getopts "n:S:k:b:x" opt; do
   esac
 done
 project="$(cd "$(dirname "$0")/../.." && pwd)"
-pids="${TMPDIR:-/tmp}/propane-bots.pids"
+logs="$project/build/bots"
+pids="$logs/pids"
 
 if (( stop )); then
   [[ -f "$pids" ]] && xargs kill <"$pids" 2>/dev/null || true
@@ -45,12 +47,13 @@ fi
 address="${server%%:*}"
 port=24680
 [[ "$server" == *:* ]] && port="${server##*:}"
+mkdir -p "$logs"
 names=(Ada Bo Cy Dee Eli Flo Gus)
 for i in $(seq 1 "$count"); do
   name="${names[$(( (i - 1) % ${#names[@]} ))]}Bot"
   nohup "$godot" --headless --path "$project" res://scenes/dev/net_test.tscn -- --server="$address" --port="$port" --role=join \
     --name="$name" --color=$(( (i + 2) % 8 )) --brain="$brain" --bot-skill="$skill" --matches=100000 --quit=86400 \
-    >"${TMPDIR:-/tmp}/propane-bot-$i.log" 2>&1 &
+    >"$logs/bot$i.log" 2>&1 &
   echo $! >>"$pids"
   sleep 0.3
 done

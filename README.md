@@ -31,7 +31,8 @@ Nothing else is needed: each build carries its own .NET runtime.
 
 Requires Godot 4.7.2 (.NET edition) and the .NET 10 SDK.
 
-- First: `make setup` imports the assets and compiles. Run it again after switching branches or pulling.
+- First: `make setup` imports the assets and compiles. Run it again after switching branches or pulling. It also
+  gives the checkout its own Godot user data folder, `Propane-dev/<folder name>`, in a gitignored `override.cfg`.
 - Editor: open `project.godot` and press Play (F5).
 - Command line: `make run`. `make` lists the other tasks (tests, a local server, bots, releases); they find Godot on
   `PATH` (`godot-mono` or `godot`) or in `/Applications`, or set `GODOT` to its binary.
@@ -135,8 +136,9 @@ $GODOT --fixed-fps 60 res://scenes/dev/suburb_preview.tscn -- --capture-dir=/tmp
 $GODOT res://scenes/dev/menu_test.tscn -- --capture-dir=/tmp/m
 
 # Multiplayer: a local server and bot players under simulated lag and loss, then compare what each bot saw.
-GODOT=$GODOT tools/dev/net_bots.sh -n 3 -l 60 -o /tmp/n -- --net-lag=120 --net-jitter=30 --net-loss=3
-tools/dev/compare_tanks.py /tmp/n/bot*.log
+# Logs go to build/net (-o picks another directory).
+GODOT=$GODOT tools/dev/net_bots.sh -n 3 -l 60 -- --net-lag=120 --net-jitter=30 --net-loss=3
+tools/dev/compare_tanks.py build/net/bot*.log
 ```
 
 `net_test.tscn` scenarios: bots playing (default), `duel` (hits, drops and a thrown player, filmed from both sides)

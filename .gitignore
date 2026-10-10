@@ -6,3 +6,4 @@ obj/
 .DS_Store
 build/
 build_id.txt
+override.cfg
