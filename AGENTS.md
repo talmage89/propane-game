@@ -20,4 +20,4 @@ first. macOS (Apple Silicon) first, Linux second.
 - Verify with the scripted scenes in `scenes/dev` and review their screenshots. Test network changes with
   `tools/dev/net_bots.sh`.
 - Don't commit `.import` churn from opening the editor.
-- Update the docs with the code. Use British spelling and match the surrounding style.
+- Update the docs with the code. Use American spelling and match the surrounding style.
