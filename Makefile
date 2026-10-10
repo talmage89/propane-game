@@ -6,10 +6,14 @@ export GODOT
 N ?= 4
 
 .DEFAULT_GOAL := help
-.PHONY: help run build test server bots bots-stop package deploy release-patch release-minor release-major
+.PHONY: help setup run build test server bots bots-stop package deploy release-patch release-minor release-major
 
 help: ## List the tasks
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN { FS = ":.*## " } { printf "  make %-14s %s\n", $$1, $$2 }'
+
+setup: ## Import the assets and compile: a fresh clone, or after switching branches or pulling
+	"$(GODOT)" --headless --path . --import >/dev/null 2>&1 || true
+	@$(MAKE) --no-print-directory build
 
 run: build ## Play from source
 	"$(GODOT)" --path .

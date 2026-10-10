@@ -10,8 +10,8 @@ around you. There is no health and no score.
 Multiplayer is **tank bank**, a free-for-all for 2–5 players: every tank you blow up is banked as a point, and getting
 shot (or thrown by a blast) spills your tanks back out for anyone to take. Most banked when the clock runs out wins.
 
-See [DESIGN.md](DESIGN.md) for the design and the decisions behind it, and [MULTIPLAYER.md](MULTIPLAYER.md) for
-multiplayer.
+See [DESIGN.md](design/DESIGN.md) for the design and the decisions behind it, and
+[MULTIPLAYER.md](design/MULTIPLAYER.md) for multiplayer.
 
 ## Download and play
 
@@ -31,6 +31,7 @@ Nothing else is needed: each build carries its own .NET runtime.
 
 Requires Godot 4.7.2 (.NET edition) and the .NET 10 SDK.
 
+- First: `make setup` imports the assets and compiles. Run it again after switching branches or pulling.
 - Editor: open `project.godot` and press Play (F5).
 - Command line: `make run`. `make` lists the other tasks (tests, a local server, bots, releases); they find Godot on
   `PATH` (`godot-mono` or `godot`) or in `/Applications`, or set `GODOT` to its binary.
@@ -52,8 +53,8 @@ you host, allow incoming connections if the system asks.
 
 The dedicated server is the same game run headless: `./Propane.x86_64 --headless -- --server [--port=24680]`.
 `tools/server/deploy.sh <ssh host> <dir>` exports it and runs it in Docker on any machine you can reach over ssh;
-see [MULTIPLAYER.md](MULTIPLAYER.md) for hosting and reaching it. Keep a server on the latest release: it then plays
-with every patch of that minor version.
+see [MULTIPLAYER.md](design/MULTIPLAYER.md) for hosting and reaching it. Keep a server on the latest release: it
+then plays with every patch of that minor version.
 
 ## Controls
 
@@ -97,6 +98,7 @@ on Linux), which then takes precedence. **Defaults** restores the values in code
 | `tools/release`, `.github/workflows` | Export templates, the release build, and the CI job that publishes it. |
 | `tools/server` | The multiplayer server's Docker setup and deploy script. |
 | `tools/dev` | Multiplayer test runs with bot players, and a comparison of what each bot saw. |
+| `design` | The design docs: the single-player sandbox and multiplayer. |
 | `docs` | README images. |
 
 ## Dev harnesses
@@ -138,7 +140,7 @@ tools/dev/compare_tanks.py /tmp/n/bot*.log
 ```
 
 `net_test.tscn` scenarios: bots playing (default), `duel` (hits, drops and a thrown player, filmed from both sides)
-and `pickup` (an ammo can taken and returning). [MULTIPLAYER.md](MULTIPLAYER.md) lists the commands.
+and `pickup` (an ammo can taken and returning). [MULTIPLAYER.md](design/MULTIPLAYER.md) lists the commands.
 
 ## Versions and releases
 

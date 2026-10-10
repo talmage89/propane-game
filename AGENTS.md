@@ -1,7 +1,9 @@
 # AGENTS.md
 
-Propane: a Godot 4.7.2 .NET (C#, Jolt) game. Read README.md, DESIGN.md and MULTIPLAYER.md
-first. macOS (Apple Silicon) first, Linux second.
+Keep this file lean: only what an agent can't learn from the code and the other docs, in as few words as possible.
+
+Propane: a Godot 4.7.2 .NET (C#, Jolt) game. Read README.md, design/DESIGN.md and
+design/MULTIPLAYER.md first. macOS (Apple Silicon) first, Linux second.
 
 ## Rules
 
@@ -9,6 +11,7 @@ first. macOS (Apple Silicon) first, Linux second.
 - Every gameplay or effect value is a `Tuning` tuner.
 - `dev` is for work, `main` for releases. Never commit or push to `main`: a push publishes a public release. Release
   only with `make release-patch|minor|major`. Ask before pushing.
+- `dev` may move fast but is always a release candidate: land only work that builds and passes `make test`.
 - A patch must play with every patch of its minor version. Anything players in a match share (messages, how the
   suburb is built, tanks, tuners) needs a minor release. Bump `Protocol.Version` when a message changes shape; Hello,
   Welcome and Rejected may only gain trailing fields.
@@ -21,3 +24,30 @@ first. macOS (Apple Silicon) first, Linux second.
   `tools/dev/net_bots.sh`.
 - Don't commit `.import` churn from opening the editor.
 - Update the docs with the code. Use American spelling and match the surrounding style.
+
+## Workspace
+
+- The primary clone, `dev-0`, always has `dev` checked out. Commit there only when working directly on `dev`; never
+  switch its branch.
+- Its siblings `dev-1` to `dev-5` are long-lived git worktrees, one agent each. Check out any branch there, or
+  `git switch --detach dev`. Git won't check out `dev` twice, so land a branch by merging it in `dev-0`.
+- Worktrees share the repository, so commits and branches made in one are visible in all without a fetch.
+- Fresh clone or worktree, or after switching branches or pulling: `make setup` (imports the assets into `.godot/` and
+  compiles; about 25 s fresh, a few seconds after). Nothing else is gitignored that a build needs; `build/` holds
+  only release output.
+
+## Parallel agents
+
+Each worktree has its own `.godot/`, build and `tuning.tres`, so builds, scenes and Blender scripts run side by
+side. What they share:
+
+- `user://` (`~/.local/share/godot/app_userdata/Propane`): settings, logs and shader caches. `menu_test.tscn` resets
+  its settings file there, so run one at a time.
+- Ports: `make server` and `make bots` default to 24680; give each worktree its own `PORT` and `SERVER`.
+  `net_bots.sh` picks a random port.
+- `/tmp`: use worktree-specific `--capture-dir`, `--record` and `net_bots.sh -o` paths (its default output is wiped on
+  each run). `make bots-stop` stops every worktree's bots.
+- One GPU and CPU: `--fixed-fps` screenshots are unaffected, but soak frame times and `--record` are skewed by others'
+  load.
+- Blender scripts write only the worktree's `assets/`, but `.glb` files can't be merged: on a conflict, rerun the
+  script after the merge.
