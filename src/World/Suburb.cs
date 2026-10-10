@@ -10,7 +10,7 @@ using Propane.World.Plan;
 namespace Propane.World;
 
 /// <summary>
-/// One generated neighbourhood: a raised diorama slab with roads, houses, fenced backyards, props and tanks.
+/// One generated neighborhood: a raised diorama slab with roads, houses, fenced backyards, props and tanks.
 /// Built from a <see cref="SuburbPlan"/>.
 /// </summary>
 public partial class Suburb : Node3D
@@ -52,7 +52,7 @@ public partial class Suburb : Node3D
 
     public int TanksRemaining => tanks.Count(t => IsInstanceValid(t) && t.State != PropaneTank.TankState.Exploded);
 
-    /// <summary>Centres of the groups of tanks still in play: tanks within a few metres of each other count as one.</summary>
+    /// <summary>Centers of the groups of tanks still in play: tanks within a few meters of each other count as one.</summary>
     public List<Vector3> TankGroupCenters()
     {
         var live = LiveTanks.Select(t => t.GlobalPosition).ToList();
@@ -117,7 +117,7 @@ public partial class Suburb : Node3D
     public static Vector3 ToWorld(Vector2 p, float elevation = 0) => new(p.X, GroundHeight + elevation, p.Y);
 
     /// <summary>
-    /// Tags every visual for the transition: 1 shows it only inside the reveal ring (the ring grows to materialise a
+    /// Tags every visual for the transition: 1 shows it only inside the reveal ring (the ring grows to materialize a
     /// suburb and shrinks to dissolve one), 0 shows it normally.
     /// </summary>
     public void SetRevealSide(float side)
@@ -227,7 +227,7 @@ public partial class Suburb : Node3D
                 }
             }
 
-            // Dashed centre line, kept out of intersections.
+            // Dashed center line, kept out of intersections.
             foreach (var (t0, t1) in Spans(road, 0, p => !OnOtherCarriageway(p, road, 3f) && !InBulb(p, 1f)))
             {
                 for (var t = t0 + 1f; t + DashLength < t1; t += DashLength + DashGap)
@@ -409,7 +409,7 @@ public partial class Suburb : Node3D
         foreach (var run in plan.Fences)
         {
             var length = run.A.DistanceTo(run.B);
-            // Style and colour are fixed per run from its position, so they are stable for a seed.
+            // Style and color are fixed per run from its position, so they are stable for a seed.
             var hash = (uint)HashCode.Combine(Mathf.RoundToInt(run.A.X * 10), Mathf.RoundToInt(run.A.Y * 10), plan.Seed);
             var isPicket = hash % 10 < 3;
             var model = isPicket ? picket : privacy;
@@ -476,7 +476,7 @@ public partial class Suburb : Node3D
             mesh.Scale = Vector3.One * scale;
             WorldMaterials.Apply(mesh);
             SetTint(mesh, prop.Tint);
-            // A corner-pivoted model hangs under a holder so the prop's origin is the centre of its base.
+            // A corner-pivoted model hangs under a holder so the prop's origin is the center of its base.
             Node3D model = mesh;
             if (info.PivotOffset != Vector3.Zero)
             {

@@ -19,7 +19,7 @@ public partial class MenuTest : Node
     public override void _Ready()
     {
         DevArgs.Setup();
-        // A fresh settings file, so the run neither reads nor changes the player's name, colour and server.
+        // A fresh settings file, so the run neither reads nor changes the player's name, color and server.
         DirAccess.RemoveAbsolute(ProjectSettings.GlobalizePath("user://menu_test_settings.cfg"));
         Core.PlayerSettings.UseFile("user://menu_test_settings.cfg");
         DisplayServer.WindowSetVsyncMode(DisplayServer.VSyncMode.Disabled);
@@ -52,7 +52,7 @@ public partial class MenuTest : Node
         director.ShotAt(7f, "06_lobby_changed");
         director.At(7.3f, () => Press("Start match"));
         director.ShotAt(7.5f, "07_loading");
-        director.ShotAt(9.5f, "08_materialise");
+        director.ShotAt(9.5f, "08_materialize");
         director.ShotAt(12f, "09_countdown");
         director.ShotAt(15.5f, "10_playing");
         director.At(16f, () => SendKey(Key.Escape));
@@ -86,7 +86,7 @@ public partial class MenuTest : Node
     private static Button? FindButton(Node root, string text) =>
         root.FindChildren("*", "Button", owned: false).OfType<Button>().FirstOrDefault(b => b.Text == text && b.IsVisibleInTree() && !b.Disabled);
 
-    /// <summary>Clicks the n-th colour swatch in the lobby (the buttons with no text and a tooltip).</summary>
+    /// <summary>Clicks the n-th color swatch in the lobby (the buttons with no text and a tooltip).</summary>
     private void ClickSwatch(int index)
     {
         var swatches = GetTree().Root.FindChildren("*", "Button", owned: false).OfType<Button>()

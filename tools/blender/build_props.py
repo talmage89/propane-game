@@ -3,9 +3,9 @@
 Run from the project root:
   blender -b --factory-startup --python tools/blender/build_props.py -- assets/props
 
-Each prop is exported to its own GLB with the origin at the centre of its base. Blender -Y is the prop's front, so
-after glTF export the front faces Godot +Z, like the Kenney models. Materials carry their colour as the base colour
-factor; materials whose names start with "Tint_" take a per-instance colour in game.
+Each prop is exported to its own GLB with the origin at the center of its base. Blender -Y is the prop's front, so
+after glTF export the front faces Godot +Z, like the Kenney models. Materials carry their color as the base color
+factor; materials whose names start with "Tint_" take a per-instance color in game.
 """
 import bpy, bmesh, math, os, sys
 from mathutils import Vector, Matrix
@@ -143,7 +143,7 @@ def wheelie_bin():
     for x in (-0.24, 0.24):
         p.cyl((x, 0.3, 0.1), 0.1, 0.05, "Rubber", segments=14, axis="X")
     p.cyl((0, 0.3, 0.1), 0.015, 0.5, "DarkSteel", segments=8, axis="X")
-    # A moulded foot under the front, so the bin stands level on it and the wheels.
+    # A molded foot under the front, so the bin stands level on it and the wheels.
     p.box((0, -0.2, 0.025), (0.36, 0.08, 0.05), "Tint_Body", bevel=0.01)
     p.export()
 

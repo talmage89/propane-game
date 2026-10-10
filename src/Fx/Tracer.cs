@@ -13,7 +13,7 @@ public partial class Tracer : MeshInstance3D
 
     private Vector3 from;
     private Vector3 to;
-    private float travelled;
+    private float traveled;
     private float total;
 
     public static Tracer Create(Vector3 start, Vector3 end)
@@ -39,8 +39,8 @@ public partial class Tracer : MeshInstance3D
 
     public override void _Process(double delta)
     {
-        travelled += Speed * (float)delta;
-        if (travelled - StreakLength > total)
+        traveled += Speed * (float)delta;
+        if (traveled - StreakLength > total)
         {
             QueueFree();
             return;
@@ -51,8 +51,8 @@ public partial class Tracer : MeshInstance3D
     private void Update()
     {
         var dir = (to - from).Normalized();
-        var head = Mathf.Min(travelled + 0.8f, total);
-        var tail = Mathf.Clamp(travelled - StreakLength, 0, total);
+        var head = Mathf.Min(traveled + 0.8f, total);
+        var tail = Mathf.Clamp(traveled - StreakLength, 0, total);
         var length = Mathf.Max(head - tail, 0.01f);
         var center = from + dir * (tail + head) * 0.5f;
         // Ribbon along dir, turned toward the camera in the shader; X carries the width.

@@ -16,8 +16,8 @@ public sealed class ModelInfo
     public Aabb Bounds { get; set; }
 
     /// <summary>
-    /// Where the model sits under its prop's origin, scaled: zero for models authored centred on their base, and for
-    /// corner-pivoted kits (Kenney furniture) the shift that centres the footprint and puts the base on the ground.
+    /// Where the model sits under its prop's origin, scaled: zero for models authored centered on their base, and for
+    /// corner-pivoted kits (Kenney furniture) the shift that centers the footprint and puts the base on the ground.
     /// </summary>
     public Vector3 PivotOffset { get; set; }
 
@@ -72,10 +72,10 @@ public static class Catalog
     public const float PickupBedHalfWidthModel = 0.72f;
     public const float PickupBedWallModel = 0.2f;
 
-    /// <summary>Height of the bed floor above the ground, in metres.</summary>
+    /// <summary>Height of the bed floor above the ground, in meters.</summary>
     public const float PickupBedFloor = PickupBedFloorModel * CarScale;
 
-    /// <summary>Distance from the truck's origin back to the middle of its bed, in metres.</summary>
+    /// <summary>Distance from the truck's origin back to the middle of its bed, in meters.</summary>
     public const float PickupBedCenterBehind = -(PickupBedFrontModel + PickupBedBackModel) * 0.5f * CarScale;
 
     public static readonly string[] TreeModels =
@@ -103,7 +103,7 @@ public static class Catalog
     /// <summary>Loads (once) and measures a model at a scale, optionally recentring it on its footprint.</summary>
     public static ModelInfo Get(string path, float scale, bool recenter = false)
     {
-        var key = $"{path}@{scale}{(recenter ? ":centred" : "")}";
+        var key = $"{path}@{scale}{(recenter ? ":centered" : "")}";
         if (Models.TryGetValue(key, out var info))
         {
             return info;

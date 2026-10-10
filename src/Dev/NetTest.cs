@@ -338,7 +338,7 @@ public partial class NetTest : Node
         }
     }
 
-    /// <summary>The host follows another (playing) bot at a few metres and films it: running, aiming, shooting, thrown.</summary>
+    /// <summary>The host follows another (playing) bot at a few meters and films it: running, aiming, shooting, thrown.</summary>
     private void Watch(Match match, float dt)
     {
         var player = match.Player;
@@ -356,7 +356,7 @@ public partial class NetTest : Node
         var target = other.IsRagdolled ? other.PelvisPosition : other.GlobalPosition + Vector3.Up;
         if (player.GlobalPosition.DistanceTo(other.GlobalPosition) > 9f)
         {
-            // Keep up: drop in a few metres behind and to the side of them.
+            // Keep up: drop in a few meters behind and to the side of them.
             var back = other.GlobalPosition + new Vector3(Mathf.Sin(other.FacingYaw), 0, Mathf.Cos(other.FacingYaw)) * 5f + new Vector3(1.5f, 0.3f, 0);
             player.Teleport(back, player.FacingYaw);
         }

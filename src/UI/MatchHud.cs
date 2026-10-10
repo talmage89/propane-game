@@ -5,7 +5,7 @@ using Propane.Player;
 
 namespace Propane.UI;
 
-/// <summary>A score floating over another player: where, what and in which colour.</summary>
+/// <summary>A score floating over another player: where, what and in which color.</summary>
 public readonly record struct ScoreTag(Vector2 Screen, int Score, Color Color, float Scale);
 
 /// <summary>

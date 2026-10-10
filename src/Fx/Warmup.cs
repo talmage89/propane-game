@@ -5,7 +5,7 @@ using Propane.Tank;
 namespace Propane.Fx;
 
 /// <summary>
-/// Instantiates one of every effect, out of sight, while a suburb is materialising, so the first real shot and
+/// Instantiates one of every effect, out of sight, while a suburb is materializing, so the first real shot and
 /// explosion do not hitch while their shaders compile.
 /// </summary>
 public static class Warmup

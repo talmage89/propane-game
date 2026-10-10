@@ -1,4 +1,4 @@
-// Shared material for all suburb geometry: flat colour or colormap texture, plus the transition reveal.
+// Shared material for all suburb geometry: flat color or colormap texture, plus the transition reveal.
 shader_type spatial;
 render_mode cull_back, depth_draw_opaque;
 
@@ -11,7 +11,7 @@ uniform float roughness : hint_range(0.0, 1.0) = 0.85;
 uniform float metallic : hint_range(0.0, 1.0) = 0.0;
 uniform float specular : hint_range(0.0, 1.0) = 0.35;
 uniform vec4 emission_color : source_color = vec4(0.0, 0.0, 0.0, 1.0);
-// Per-instance tint for cheap colour variation. Only surfaces marked tintable take it fully; the rest take a
+// Per-instance tint for cheap color variation. Only surfaces marked tintable take it fully; the rest take a
 // faint share so instances still vary slightly.
 instance uniform vec4 instance_tint : source_color = vec4(1.0);
 uniform bool tintable = false;

@@ -69,7 +69,7 @@ public static class Protocol
 
     public static bool IsRelay(Msg type) => (byte)type >= (byte)Msg.PlayerState;
 
-    /// <summary>Player colours, picked in the lobby. Bright and far apart, readable against grass, roads and the void.</summary>
+    /// <summary>Player colors, picked in the lobby. Bright and far apart, readable against grass, roads and the void.</summary>
     public static readonly Color[] PlayerColors =
     {
         new(0.92f, 0.44f, 0.16f), // orange

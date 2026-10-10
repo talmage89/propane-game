@@ -1,4 +1,4 @@
-// Fireball and flame billows: noise-eroded soft discs with internal structure. Colour follows a temperature
+// Fireball and flame billows: noise-eroded soft discs with internal structure. Color follows a temperature
 // ramp that stays saturated orange under the AgX tonemapper; only the hottest cores approach yellow-white.
 shader_type spatial;
 render_mode blend_mix, unshaded, depth_draw_never, cull_disabled, shadows_disabled;

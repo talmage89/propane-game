@@ -15,7 +15,7 @@ public static class WorldMaterials
 
     public static Shader WorldShader => worldShader ??= GD.Load<Shader>("res://shaders/world_lit.gdshader");
 
-    /// <summary>A flat-colour world material.</summary>
+    /// <summary>A flat-color world material.</summary>
     public static ShaderMaterial Flat(Color color, float roughness = 0.85f, float metallic = 0f)
     {
         var material = new ShaderMaterial { Shader = WorldShader };

@@ -2,7 +2,7 @@ using Godot;
 
 namespace Propane.Core;
 
-/// <summary>What the player last typed or picked in the menus (name, colour, server), kept between runs.</summary>
+/// <summary>What the player last typed or picked in the menus (name, color, server), kept between runs.</summary>
 public static class PlayerSettings
 {
     private static string path = "user://settings.cfg";

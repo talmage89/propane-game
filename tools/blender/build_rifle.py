@@ -4,7 +4,7 @@ Run from the project root:
   blender -b --factory-startup --python tools/blender/build_rifle.py -- assets/rifle/rifle.glb
 
 Blender axes: +Y is the barrel direction (Godot -Z after glTF export), +Z up, +X to the right.
-The origin is the centre of the pistol grip, where the right hand holds it. Empties named Socket_* mark
+The origin is the center of the pistol grip, where the right hand holds it. Empties named Socket_* mark
 the left-hand grip, the muzzle, the stock butt and the sight's eye point.
 """
 import bpy, bmesh, math, sys

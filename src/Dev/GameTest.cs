@@ -151,7 +151,7 @@ public partial class GameTest : Node
                 director.ShotAt(time, $"dissolve_{time:0.0}");
             }
             director.ShotAt(5.8f, "void");
-            director.ShotAt(7f, "materialised");
+            director.ShotAt(7f, "materialized");
         }
         else if (DevArgs.Get("scenario") == "auto")
         {
@@ -224,7 +224,7 @@ public partial class GameTest : Node
         director.At(10f, () => game.RequestNewSuburb());
         director.ShotAt(10.3f, "11_dissolve");
         director.ShotAt(10.9f, "12_void");
-        director.ShotAt(11.5f, "13_materialise");
+        director.ShotAt(11.5f, "13_materialize");
         director.ShotAt(12.5f, "14_new_suburb");
         director.ShotAt(15f, "15_settled");
     }
@@ -263,7 +263,7 @@ public partial class GameTest : Node
         }
     }
 
-    /// <summary>Blows up a tank a few metres away and follows the ragdoll and get-up from the player camera.</summary>
+    /// <summary>Blows up a tank a few meters away and follows the ragdoll and get-up from the player camera.</summary>
     private void ScriptRagdoll(CaptureDirector director)
     {
         var distance = DevArgs.GetFloat("distance", 4f);

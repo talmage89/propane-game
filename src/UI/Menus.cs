@@ -355,7 +355,7 @@ public partial class Menus : CanvasLayer
         }
         layout.AddChild(new HSeparator());
 
-        // Name and colour.
+        // Name and color.
         var profile = new HBoxContainer();
         profile.AddThemeConstantOverride("separation", 10);
         var name = nameField = UiStyle.Field(Net.PlayerName, "Name");

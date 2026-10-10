@@ -122,7 +122,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
     /// <summary>Only looking around is allowed (the countdown before a match, and after it ends).</summary>
     public bool InputLocked { get; set; }
 
-    /// <summary>The body colour: the player's colour in a match.</summary>
+    /// <summary>The body color: the player's color in a match.</summary>
     public Color BodyColor
     {
         get => bodyColor;
@@ -395,7 +395,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         var accel = tuning.Acceleration * (grounded ? 1f : tuning.AirControl) * control;
         planar = planar.MoveToward(target, accel * dt);
 
-        // Horizontal knockback decays separately so a blast is not cancelled by walking against it.
+        // Horizontal knockback decays separately so a blast is not canceled by walking against it.
         knockback = knockback.MoveToward(Vector3.Zero, (grounded ? KnockbackFriction * 3f : KnockbackFriction * 0.3f) * dt);
         knockback.Y = 0;
         velocity.X = planar.X;

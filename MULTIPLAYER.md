@@ -15,7 +15,7 @@ Status: **built, 2026-10-09** (see section 7 for how it is built and tested). Th
 | Mode | Tank bank, every player for themselves, 2–5 players. |
 | Scoring | One point for every tank a player detonates (see the rule above). A chain reaction credits every tank in it to whoever detonated the first one. |
 | Own tanks | Not a special case. A player who detonates tanks they dropped earns them back, like any others. |
-| Score display | A number above each player, in that player's colour, shown only when that player is in line of sight. |
+| Score display | A number above each player, in that player's color, shown only when that player is in line of sight. |
 | Health | None. Nobody dies. |
 | Bullet hits | A hit drops 1 tank behind the victim. After a hit, the victim has a 0.5 s grace period before another hit can drop a tank. |
 | Ragdoll | Being ragdolled drops 5 tanks where the player was when they were thrown. It counts even when the player's own blast threw them. |
@@ -23,11 +23,11 @@ Status: **built, 2026-10-09** (see section 7 for how it is built and tested). Th
 | Dropped tanks | Indestructible for 1 s after they drop: they ignore bullets and chain reactions. A player with no points loses nothing. |
 | Venting | Unchanged: a punctured tank vents forever. |
 | Match length | A timer that the lobby's creator sets, 2–3 minutes by default. Most points at the end wins. |
-| Tank placement | Fewer, bigger piles nearer the centre of the suburb, so the fighting stays close. |
+| Tank placement | Fewer, bigger piles nearer the center of the suburb, so the fighting stays close. |
 | Tank supply | The tanks the suburb starts with are all there will be. Nothing is resupplied. |
 | Ammo | Limited ammo. Ammo pickups are placed around the suburb and respawn, appearing with the reveal effect. |
 | Tank arrows | Kept, as in single player. |
-| Identity | Each player picks a name and colour in the lobby. |
+| Identity | Each player picks a name and color in the lobby. |
 | Hit feedback | A hit marker for the shooter, a "+N" when you score, and an arrow showing which way a shot came from. |
 | Flow | A main menu (single player, multiplayer). In multiplayer, a player creates a lobby or joins one, and the creator starts the match. No joining mid-match. |
 | Tuning | Every new value is a tuner in `Tuning` (section 5). The tuning panel is only in debug builds, where any player may change values. Release builds use the baked values. |
@@ -38,8 +38,8 @@ Status: **built, 2026-10-09** (see section 7 for how it is built and tested). Th
 
 1. **Main menu:** single player (today's sandbox) or multiplayer.
 2. **Multiplayer:** the player connects to a server, then creates a lobby or joins an existing one.
-3. **Lobby:** each player sets a name and colour. The creator sets the match length and starts the match.
-4. **Match start:** the server sends the suburb seed. Each client builds the suburb, which materialises as it does today, and play begins when the timer starts.
+3. **Lobby:** each player sets a name and color. The creator sets the match length and starts the match.
+4. **Match start:** the server sends the suburb seed. Each client builds the suburb, which materializes as it does today, and play begins when the timer starts.
 5. **Match:** runs for the lobby's match length.
 6. **End:** a results screen, then back to the lobby.
 
@@ -107,8 +107,8 @@ These tuners are added to `Tuning`, alongside the existing ones, under new panel
 | --- | --- |
 | `MpTankCount` | Tanks per suburb in a match. |
 | `MpClusterSizeMin`, `MpClusterSizeMax` | Pile sizes in a match. |
-| `MpCentreBias` | How strongly piles are pulled toward the suburb's centre. |
-| `MpCentreRadius` | The radius of the central area that piles favour. |
+| `MpCenterBias` | How strongly piles are pulled toward the suburb's center. |
+| `MpCenterRadius` | The radius of the central area that piles favor. |
 
 **Ammo**
 
@@ -154,7 +154,7 @@ None at the moment.
 
 - **Main menu:** Single player, Multiplayer, Quit. Single player is the sandbox as before; its pause menu gains a Main menu button.
 - **Multiplayer:** (or start the game with `-- --connect=host[:port]`) type a name and the server's address (`host` or `host:port`; the port defaults to 24680, UDP). **Host on this computer** runs a server inside the game and joins it, for playing without a dedicated server; the lobby screens then show the addresses others can connect to.
-- **Lobbies:** create one or join one from the list (lobbies in a match can't be joined). In the lobby, everyone picks a name and a colour (a colour someone else has is greyed out), and the creator sets the match length and presses Start. A release build needs two players to start; a debug build may start alone, for testing.
+- **Lobbies:** create one or join one from the list (lobbies in a match can't be joined). In the lobby, everyone picks a name and a color (a color someone else has is grayed out), and the creator sets the match length and presses Start. A release build needs two players to start; a debug build may start alone, for testing.
 - **In a match:** the clock and the tanks you have banked are at the top, ammo at the bottom right. R reloads (an empty magazine also reloads on the next trigger pull). Walking over an ammo can takes it, unless the reserve is full. Esc opens the controls with Resume, Leave match and Quit; the match keeps running behind it. Leaving a match also leaves the lobby.
 - **After a match:** the results show for `ResultsTime`, then everyone is back in the lobby, ready for another.
 
@@ -212,15 +212,15 @@ Details settled while building, within the decisions above:
 
 - **Remote players** are full copies of the character (animation, rifle, ragdoll) driven by the states their own game sends. A thrown player's ragdoll falls on its own on every screen, steered after the real one; it gets up where the real one got up. Shots hit other players' bodies and limbs. Players pass through each other.
 - **Ownership** goes to whoever last disturbed a body (a shot, a puncture, a blast, a push, a drop); the match's creator owns everything nobody has touched, and a player's bodies pass to the creator (or the next player) if they leave. Claims go through the server, which echoes them to everyone in one order, so all players agree on each owner.
-- **Dropped tanks** glow in the dropper's colour while they ignore bullets and chain reactions.
+- **Dropped tanks** glow in the dropper's color while they ignore bullets and chain reactions.
 - **Tuning in a match:** everyone plays on the creator's values: the baked ones in a release build, the creator's live ones in a debug build. In a debug build, F1 opens the panel, and a change applies to every player in the match. The player's own values come back after the match.
-- **Starting values** (all tuners): 40 tanks in piles of 5–12 within about 40 m of the centre; a 30-round magazine, 60 in reserve, at most 150, a 1.6 s reload; 8 ammo cans of 30 rounds that come back after 20 s; a 2:30 match after a 4 s countdown; results for 10 s.
+- **Starting values** (all tuners): 40 tanks in piles of 5–12 within about 40 m of the center; a 30-round magazine, 60 in reserve, at most 150, a 1.6 s reload; 8 ammo cans of 30 rounds that come back after 20 s; a 2:30 match after a 4 s countdown; results for 10 s.
 
 ### Testing
 
 | Command | Checks |
 | --- | --- |
-| `godot --headless res://scenes/dev/generator_tests.tscn -- --seeds=100` | Match suburbs too: a start per player, spread apart and clear; ammo spots; tanks nearer the centre; the plan unchanged through `PlanCodec`. |
+| `godot --headless res://scenes/dev/generator_tests.tscn -- --seeds=100` | Match suburbs too: a start per player, spread apart and clear; ammo spots; tanks nearer the center; the plan unchanged through `PlanCodec`. |
 | `tools/dev/net_bots.sh -n 3 -l 60 -- --net-lag=120 --net-jitter=30 --net-loss=3` | A local server and bot players (`scenes/dev/net_test.tscn`) that run to tanks, shoot them and each other, and fetch ammo, under simulated lag and loss. `-w N` shows N of them in windows; `-S host:port` uses an existing server. |
 | `tools/dev/compare_tanks.py out/bot*.log` | Where each bot had every tank at the same match times: counts, states and drift. |
 | `net_bots.sh -n 2 -w 2 -s "--start-score=8" -- --scenario=duel --capture-dir=DIR` | Scripted close-up: hits with the grace period, dropped tanks, a blast that throws the victim, from both sides. |
@@ -229,4 +229,4 @@ Details settled while building, within the decisions above:
 | `godot res://scenes/dev/menu_test.tscn -- --capture-dir=DIR` | Clicks through every menu, a solo match, leaving it, and single player and back. |
 | `menu_test.tscn -- --scenario=update --update-check --fake-version=0.0.9 --capture-dir=DIR` | The offer of a newer release, and a newer server (`-- --server --port=24993 --fake-version=9.9.0`) asking for an update. |
 
-Results, 2026-10-09: with three bots under 120 ms round trip, 30 ms jitter and 3% loss, every bot agreed on which tanks existed and their states throughout; resting tanks matched exactly and venting tanks to within about half a metre. The same held through the Docker server on another machine, over the LAN and over a VPN. When the match's creator left mid-match, the others played on in step. A client with a different protocol was turned away with a message.
+Results, 2026-10-09: with three bots under 120 ms round trip, 30 ms jitter and 3% loss, every bot agreed on which tanks existed and their states throughout; resting tanks matched exactly and venting tanks to within about half a meter. The same held through the Docker server on another machine, over the LAN and over a VPN. When the match's creator left mid-match, the others played on in step. A client with a different protocol was turned away with a message.

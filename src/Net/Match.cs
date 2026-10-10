@@ -44,7 +44,7 @@ public partial class Match : Node3D
     }
 
     private const float RevealMaxRadius = 320f;
-    private const float MaterialiseShare = 0.58f;
+    private const float MaterializeShare = 0.58f;
     private const int StatesPerMessage = 20;
     private const float TagRefresh = 1f / 30f;
 
@@ -241,7 +241,7 @@ public partial class Match : Node3D
             AddChild(tuningPanel);
         }
 
-        // The suburb materialises around the player, as in single player.
+        // The suburb materializes around the player, as in single player.
         suburb.SetRevealSide(1f);
         RenderingServer.GlobalShaderParameterSet("reveal_center", player.GlobalPosition);
         RenderingServer.GlobalShaderParameterSet("reveal_radius", 0f);
@@ -273,7 +273,7 @@ public partial class Match : Node3D
         if (revealing)
         {
             revealTime += dt;
-            var t = Mathf.Clamp(revealTime / Mathf.Max(tuning.TransitionTime * MaterialiseShare, 0.01f), 0, 1);
+            var t = Mathf.Clamp(revealTime / Mathf.Max(tuning.TransitionTime * MaterializeShare, 0.01f), 0, 1);
             RenderingServer.GlobalShaderParameterSet("reveal_radius", Mathf.Lerp(0f, RevealMaxRadius, t * t));
             if (t >= 1f)
             {

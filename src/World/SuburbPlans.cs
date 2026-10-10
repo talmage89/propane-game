@@ -20,14 +20,14 @@ public static class SuburbPlans
         ClusterSizeMax = Mathf.Max(tuning.ClusterSizeMin, tuning.ClusterSizeMax),
     };
 
-    /// <summary>A match suburb: fewer, bigger piles near the centre, a start for every player, and ammo pickups.</summary>
+    /// <summary>A match suburb: fewer, bigger piles near the center, a start for every player, and ammo pickups.</summary>
     public static SuburbSettings Match(Tuning tuning, int players) => new()
     {
         TankCount = tuning.MpTankCount,
         ClusterSizeMin = tuning.MpClusterSizeMin,
         ClusterSizeMax = Mathf.Max(tuning.MpClusterSizeMin, tuning.MpClusterSizeMax),
-        CentreBias = tuning.MpCentreBias,
-        CentreRadius = tuning.MpCentreRadius,
+        CenterBias = tuning.MpCenterBias,
+        CenterRadius = tuning.MpCenterRadius,
         PlayerSpawns = Mathf.Max(players, 1),
         AmmoSpots = tuning.PickupCount,
     };

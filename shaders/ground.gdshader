@@ -43,9 +43,9 @@ void fragment() {
 	} else if (pattern == 2) {
 		c *= 0.94 + 0.1 * n2;
 		float f = fract(dot(p, normalize(joint_axis)) / joint_spacing);
-		float metres = min(f, 1.0 - f) * joint_spacing;
-		float aa = fwidth(metres) + 0.004;
-		float joint = 1.0 - smoothstep(0.012, 0.012 + aa, metres);
+		float meters = min(f, 1.0 - f) * joint_spacing;
+		float aa = fwidth(meters) + 0.004;
+		float joint = 1.0 - smoothstep(0.012, 0.012 + aa, meters);
 		c *= mix(1.0, 0.8, joint);
 	} else if (pattern == 3) {
 		c *= 0.92 + 0.12 * n3;

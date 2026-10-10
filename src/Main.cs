@@ -138,7 +138,7 @@ public partial class Main : Node
 
         private void Place()
         {
-            // The tank sits left of centre, clear of the menu panel.
+            // The tank sits left of center, clear of the menu panel.
             var focus = new Vector3(0, 0.32f, 0);
             var position = focus + new Vector3(Mathf.Sin(angle) * 2.3f, 0.75f, Mathf.Cos(angle) * 2.3f);
             var right = (focus - position).Normalized().Cross(Vector3.Up).Normalized();

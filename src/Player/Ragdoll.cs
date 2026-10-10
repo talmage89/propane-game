@@ -70,7 +70,7 @@ public partial class Ragdoll : PhysicalBoneSimulator3D
                 length = rest.Origin.DistanceTo(skeleton.GetBoneGlobalRest(skeleton.FindBone(spec.LengthTo)).Origin);
             }
 
-            // Bones run along their local +Y, so a Y capsule centred halfway along the bone fits it.
+            // Bones run along their local +Y, so a Y capsule centered halfway along the bone fits it.
             var half = Vector3.Up * length * 0.5f;
             var body = new PhysicalBone3D
             {

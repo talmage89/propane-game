@@ -1,4 +1,4 @@
-// Ammo pickup: flat colours, plus a build-up from the base when it (re)appears and the suburb transition reveal.
+// Ammo pickup: flat colors, plus a build-up from the base when it (re)appears and the suburb transition reveal.
 shader_type spatial;
 render_mode cull_back, depth_draw_opaque;
 
@@ -8,7 +8,7 @@ uniform vec4 albedo_color : source_color = vec4(1.0);
 uniform float roughness : hint_range(0.0, 1.0) = 0.6;
 uniform float metallic : hint_range(0.0, 1.0) = 0.2;
 uniform vec4 emission_color : source_color = vec4(0.0, 0.0, 0.0, 1.0);
-// 0 = nothing shown, 1 = whole. The cut sweeps up from build_base over build_height metres, with a glowing edge.
+// 0 = nothing shown, 1 = whole. The cut sweeps up from build_base over build_height meters, with a glowing edge.
 instance uniform float build = 1.0;
 instance uniform float build_base = 0.0;
 instance uniform float build_height = 1.0;

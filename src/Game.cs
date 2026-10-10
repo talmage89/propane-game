@@ -12,7 +12,7 @@ namespace Propane;
 /// <summary>
 /// Top of the game: the void, the player, the current suburb, the HUD and menus, and the loop. Clearing every tank
 /// (after a short beat) or pressing R swaps in a new suburb: the old one dissolves in toward the player, the player
-/// moves to the new spawn while only the void is visible, and the new suburb materialises outward around them.
+/// moves to the new spawn while only the void is visible, and the new suburb materializes outward around them.
 /// </summary>
 public partial class Game : Node3D
 {
@@ -21,7 +21,7 @@ public partial class Game : Node3D
         Playing,
         Celebrating,
         Dissolving,
-        Materialising,
+        Materializing,
     }
 
     private const float RevealMaxRadius = 320f;
@@ -47,7 +47,7 @@ public partial class Game : Node3D
 
     public Suburb? Current => current;
 
-    public bool InTransition => phase is Phase.Dissolving or Phase.Materialising;
+    public bool InTransition => phase is Phase.Dissolving or Phase.Materializing;
 
     /// <summary>Leave single player for the main menu (from the pause menu). Subscribe before adding to the tree.</summary>
     public event System.Action? ExitRequested;
@@ -96,10 +96,10 @@ public partial class Game : Node3D
         }
         AddChild(pauseMenu);
 
-        // The first suburb materialises around the player, like every later one.
+        // The first suburb materializes around the player, like every later one.
         RenderingServer.GlobalShaderParameterSet("reveal_radius", 0f);
         LoadSuburb();
-        BeginMaterialise();
+        BeginMaterialize();
         Warmup.Run(this, new Vector3(0, -400f, 0));
         CaptureMouse(true);
         // Played for real, the game fills the screen; dev harnesses that host it keep their requested window.
@@ -194,7 +194,7 @@ public partial class Game : Node3D
                 }
                 break;
             }
-            case Phase.Materialising:
+            case Phase.Materializing:
             {
                 var duration = tuning.TransitionTime * (1f - DissolveShare);
                 var t = Mathf.Clamp(phaseTime / duration, 0, 1);
@@ -288,16 +288,16 @@ public partial class Game : Node3D
         }
         RenderingServer.GlobalShaderParameterSet("reveal_radius", 0f);
         LoadSuburb();
-        BeginMaterialise();
+        BeginMaterialize();
     }
 
-    private void BeginMaterialise()
+    private void BeginMaterialize()
     {
         current?.SetRevealSide(1f);
         revealCenter = player.GlobalPosition;
         RenderingServer.GlobalShaderParameterSet("reveal_center", revealCenter);
         RenderingServer.GlobalShaderParameterSet("reveal_radius", 0f);
-        phase = Phase.Materialising;
+        phase = Phase.Materializing;
         phaseTime = 0;
     }
 

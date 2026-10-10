@@ -10,7 +10,7 @@ namespace Propane.Net;
 /// </summary>
 public partial class AmmoPickup : Node3D
 {
-    /// <summary>How close (metres, across the ground) a player must come to take it.</summary>
+    /// <summary>How close (meters, across the ground) a player must come to take it.</summary>
     public const float TakeRadius = 1.1f;
 
     private const float Height = 0.85f;

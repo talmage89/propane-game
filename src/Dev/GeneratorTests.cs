@@ -82,7 +82,7 @@ public partial class GeneratorTests : Node
 
     /// <summary>
     /// Match suburbs: the same checks, plus a start for every player and the ammo spots, tank piles pulled toward the
-    /// centre, and the plan surviving the trip through <see cref="Net.PlanCodec"/> unchanged.
+    /// center, and the plan surviving the trip through <see cref="Net.PlanCodec"/> unchanged.
     /// </summary>
     private void TestMatchSuburbs(int count, SuburbSettings single, GameCatalog catalog)
     {
@@ -148,9 +148,9 @@ public partial class GeneratorTests : Node
             spRadius.Add(sp.Tanks.Average(t => t.Position.DistanceTo(sp.Bounds.GetCenter())));
             mpRadius.Add(plan.Tanks.Average(t => t.Position.DistanceTo(plan.Bounds.GetCenter())));
         }
-        Check(0, "match: tanks nearer the centre than in single player", mpRadius.Average() < spRadius.Average() * 0.85f,
+        Check(0, "match: tanks nearer the center than in single player", mpRadius.Average() < spRadius.Average() * 0.85f,
             $"{mpRadius.Average():0.0} vs {spRadius.Average():0.0} m");
-        GD.Print($"[tests] match suburbs: {count} seeds in {timer.ElapsedMilliseconds} ms; tanks average {mpRadius.Average():0.0} m from the centre " +
+        GD.Print($"[tests] match suburbs: {count} seeds in {timer.ElapsedMilliseconds} ms; tanks average {mpRadius.Average():0.0} m from the center " +
                  $"(single player {spRadius.Average():0.0} m); closest starts {spawnGaps.Min():0.0}..{spawnGaps.Max():0.0} m apart; " +
                  $"ammo spots {ammoCounts.Min()}..{ammoCounts.Max()}; plan {planBytes.Average() / 1024f:0.0} KB encoded (max {planBytes.Max() / 1024f:0.0})");
     }
@@ -279,7 +279,7 @@ public partial class GeneratorTests : Node
         {
             var (tx, ty) = Cell(tank.Position);
             var ok = false;
-            // The tank itself is not an obstacle; reaching within about a metre of it is enough.
+            // The tank itself is not an obstacle; reaching within about a meter of it is enough.
             for (var dx = -4; dx <= 4 && !ok; dx++)
             {
                 for (var dy = -4; dy <= 4 && !ok; dy++)
@@ -293,7 +293,7 @@ public partial class GeneratorTests : Node
         }
     }
 
-    /// <summary>Sizes of the groups of tanks close enough to set each other off (within 1.2 m of a neighbour).</summary>
+    /// <summary>Sizes of the groups of tanks close enough to set each other off (within 1.2 m of a neighbor).</summary>
     private static IEnumerable<int> GroupSizes(SuburbPlan plan)
     {
         var tanks = plan.Tanks.Select(t => new Vector3(t.Position.X, t.Elevation, t.Position.Y)).ToList();

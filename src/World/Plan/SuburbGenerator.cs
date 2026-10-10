@@ -17,7 +17,7 @@ public interface IPlanCatalog
     Vector2 PropFootprint(string model, float scale);
 }
 
-/// <summary>Generator settings. Distances in metres.</summary>
+/// <summary>Generator settings. Distances in meters.</summary>
 public sealed record SuburbSettings
 {
     public float MapSize { get; init; } = 190f;
@@ -37,11 +37,11 @@ public sealed record SuburbSettings
     public float LotDepthMax { get; init; } = 34f;
     public float CulDeSacRadius { get; init; } = 10.5f;
 
-    /// <summary>How strongly tank groups are pulled toward the map's centre (0 spreads them evenly, as in single player).</summary>
-    public float CentreBias { get; init; }
+    /// <summary>How strongly tank groups are pulled toward the map's center (0 spreads them evenly, as in single player).</summary>
+    public float CenterBias { get; init; }
 
-    /// <summary>Radius of the central area that tank groups and ammo favour when <see cref="CentreBias"/> is above 0.</summary>
-    public float CentreRadius { get; init; } = 40f;
+    /// <summary>Radius of the central area that tank groups and ammo favor when <see cref="CenterBias"/> is above 0.</summary>
+    public float CenterRadius { get; init; } = 40f;
 
     /// <summary>Separate player spawn points to choose, for a multiplayer match. 0 for single player.</summary>
     public int PlayerSpawns { get; init; }
@@ -618,7 +618,7 @@ public sealed class SuburbGenerator
     }
 
     /// <summary>
-    /// Neighbouring lots share boundaries, so fence segments are grouped by the line they lie on, unioned, and then
+    /// Neighboring lots share boundaries, so fence segments are grouped by the line they lie on, unioned, and then
     /// the gate openings are cut out of the union.
     /// </summary>
     private void MergeFences()
@@ -841,12 +841,12 @@ public sealed class SuburbGenerator
         var minSize = Mathf.Clamp(settings.ClusterSizeMin, 1, settings.ClusterSizeMax);
         while (plan.Tanks.Count < settings.TankCount && candidates.Count > 0)
         {
-            // A little noise keeps the spread from looking regular. With a centre bias, the first group goes nearest
-            // the centre and later ones weigh closeness to it against spreading out.
+            // A little noise keeps the spread from looking regular. With a center bias, the first group goes nearest
+            // the center and later ones weigh closeness to it against spreading out.
             var spot = sites.Count == 0
-                ? settings.CentreBias > 0 ? candidates.OrderBy(c => c.Position.DistanceTo(MapCenter)).First() : candidates[0]
+                ? settings.CenterBias > 0 ? candidates.OrderBy(c => c.Position.DistanceTo(MapCenter)).First() : candidates[0]
                 : candidates.OrderByDescending(c => sites.Min(t => t.DistanceTo(c.Position)) * SpotAppeal(c.Reason) *
-                                                    CentreFactor(c.Position) * (0.75f + 0.5f * (float)rng.NextDouble())).First();
+                                                    CenterFactor(c.Position) * (0.75f + 0.5f * (float)rng.NextDouble())).First();
             candidates.Remove(spot);
             // Group sizes lean small, so a map has a few big stacks among pairs and loners.
             var size = minSize + (int)((settings.ClusterSizeMax - minSize + 1) * Mathf.Pow((float)rng.NextDouble(), 1.4f));
@@ -967,22 +967,22 @@ public sealed class SuburbGenerator
 
     private Vector2 MapCenter => plan.Bounds.GetCenter();
 
-    /// <summary>1 inside the central area, falling away beyond it as strongly as the centre bias asks.</summary>
-    private float CentreFactor(Vector2 p)
+    /// <summary>1 inside the central area, falling away beyond it as strongly as the center bias asks.</summary>
+    private float CenterFactor(Vector2 p)
     {
-        if (settings.CentreBias <= 0)
+        if (settings.CenterBias <= 0)
         {
             return 1f;
         }
-        var radius = Mathf.Max(settings.CentreRadius, 1f);
+        var radius = Mathf.Max(settings.CenterRadius, 1f);
         var beyond = Mathf.Max(0f, p.DistanceTo(MapCenter) - radius) / radius;
-        var factor = 1f / (1f + settings.CentreBias * beyond);
+        var factor = 1f / (1f + settings.CenterBias * beyond);
         return factor * factor;
     }
 
     /// <summary>
     /// Player spawns for a match: points on the roads around the central area, clear of cars and tanks, spread as far
-    /// apart as they can be, each facing the centre.
+    /// apart as they can be, each facing the center.
     /// </summary>
     private void ChooseSpawns(int count)
     {
@@ -1004,7 +1004,7 @@ public sealed class SuburbGenerator
             candidates.Add(plan.Spawn);
         }
         // Keep to the ring around the action when there is room; otherwise take the nearest points there are.
-        var reach = Mathf.Max(settings.CentreRadius, 20f) * 1.4f;
+        var reach = Mathf.Max(settings.CenterRadius, 20f) * 1.4f;
         var near = candidates.Where(p => p.DistanceTo(MapCenter) <= reach).ToList();
         if (near.Count < count * 3)
         {
@@ -1023,12 +1023,12 @@ public sealed class SuburbGenerator
         }
         foreach (var p in chosen)
         {
-            var toCentre = MapCenter - p;
-            plan.Spawns.Add(new SpawnPoint(p, YawFacing(toCentre.LengthSquared() > 0.01f ? toCentre : Vector2.Up)));
+            var toCenter = MapCenter - p;
+            plan.Spawns.Add(new SpawnPoint(p, YawFacing(toCenter.LengthSquared() > 0.01f ? toCenter : Vector2.Up)));
         }
     }
 
-    /// <summary>Ammo pickups on the sidewalks: clear spots, spread apart, favouring the central area like the tanks.</summary>
+    /// <summary>Ammo pickups on the sidewalks: clear spots, spread apart, favoring the central area like the tanks.</summary>
     private void ChooseAmmoSpots(int count)
     {
         var walk = settings.RightOfWayHalfWidth - settings.SidewalkWidth * 0.5f;
@@ -1055,7 +1055,7 @@ public sealed class SuburbGenerator
         var chosen = new List<Vector2> { candidates.OrderBy(p => p.DistanceTo(MapCenter) + Range(0f, 10f)).First() };
         while (chosen.Count < count)
         {
-            var best = candidates.OrderByDescending(p => chosen.Min(c => c.DistanceTo(p)) * CentreFactor(p) * (0.85f + 0.3f * (float)rng.NextDouble())).First();
+            var best = candidates.OrderByDescending(p => chosen.Min(c => c.DistanceTo(p)) * CenterFactor(p) * (0.85f + 0.3f * (float)rng.NextDouble())).First();
             if (chosen.Min(c => c.DistanceTo(best)) < 4f)
             {
                 break;
@@ -1065,7 +1065,7 @@ public sealed class SuburbGenerator
         plan.AmmoSpots.AddRange(chosen);
     }
 
-    /// <summary>A pickup (about a metre across) fits here clear of props, tanks and fences.</summary>
+    /// <summary>A pickup (about a meter across) fits here clear of props, tanks and fences.</summary>
     private bool IsClearForPickup(Vector2 p)
     {
         var area = new OrientedRect(p, new Vector2(0.6f, 0.6f), 0);

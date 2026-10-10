@@ -10,7 +10,7 @@ uniform sampler2D orm_texture : hint_default_white, filter_linear_mipmap_anisotr
 uniform float normal_strength = 1.0;
 // Soot from nearby blasts darkens the tank.
 instance uniform float soot = 0.0;
-// A freshly dropped tank glows at its rim in the dropper's colour while it ignores bullets (alpha is the strength).
+// A freshly dropped tank glows at its rim in the dropper's color while it ignores bullets (alpha is the strength).
 instance uniform vec4 shield_color : source_color = vec4(1.0, 1.0, 1.0, 0.0);
 
 varying vec3 world_pos;

@@ -9,7 +9,7 @@ uniform vec4 color : source_color = vec4(1.0, 0.8, 0.5, 1.0);
 uniform float intensity = 8.0;
 uniform float opacity = 1.0;
 uniform float coverage = 0.0;
-// Whitens the centre of the sprite, for a hot core inside a coloured halo.
+// Whitens the center of the sprite, for a hot core inside a colored halo.
 uniform float core_heat = 0.0;
 uniform sampler2D dot_texture : source_color, filter_linear_mipmap;
 

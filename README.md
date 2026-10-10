@@ -41,7 +41,7 @@ the window to recapture it after switching away.
 ## Multiplayer
 
 Choose Multiplayer, type your name and the server's address (`host` or `host:port`, UDP port 24680 by default), then
-create a lobby or join one. Everyone picks a name and colour in the lobby, and whoever created it sets the match
+create a lobby or join one. Everyone picks a name and color in the lobby, and whoever created it sets the match
 length and starts. **Host on this computer** runs a server inside your game instead; the lobby then shows the
 addresses friends can use. Versions with the same major and minor number play together (0.2.0 with 0.2.5); the
 server turns away others and says which version it needs.
@@ -83,7 +83,7 @@ on Linux), which then takes precedence. **Defaults** restores the values in code
 | Path | Contents |
 | --- | --- |
 | `src/Main.cs` | The root: the menus over their backdrop, then single player, a match, or the multiplayer server. |
-| `src/Game.cs` | Single player: the void, player, HUD, menus, and the suburb swap with its dissolve and materialise. |
+| `src/Game.cs` | Single player: the void, player, HUD, menus, and the suburb swap with its dissolve and materialize. |
 | `src/Net` | Multiplayer: the server, the client connection, the match world, body sync, ammo pickups. |
 | `src/Core` | Tuning, input map, physics and render layers, shared assets, events, spawn roots. |
 | `src/World` | The void environment, the model catalog, and the suburb builder. `Plan/` holds the pure-data generator. |

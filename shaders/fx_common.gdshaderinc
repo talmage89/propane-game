@@ -13,7 +13,7 @@ void fx_billboard(inout mat4 modelview, mat4 view, mat4 inv_view, mat4 model, fl
 			vec4(0.0, 0.0, 0.0, 1.0));
 }
 
-// 0 where the particle meets opaque geometry, 1 once it is `softness` metres in front of it.
+// 0 where the particle meets opaque geometry, 1 once it is `softness` meters in front of it.
 float fx_soft_fade(vec2 screen_uv, vec3 vertex, mat4 inv_projection, float softness) {
 	float depth = textureLod(fx_depth_texture, screen_uv, 0.0).r;
 	vec4 scene = inv_projection * vec4(screen_uv * 2.0 - 1.0, depth, 1.0);

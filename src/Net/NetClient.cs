@@ -239,7 +239,7 @@ public partial class NetClient : Node
                     var me = members.Find(m => m.Id == MyId);
                     if (me != null)
                     {
-                        // The server may have changed the colour if someone else had it.
+                        // The server may have changed the color if someone else had it.
                         Color = me.Color;
                         PlayerName = me.Name;
                     }

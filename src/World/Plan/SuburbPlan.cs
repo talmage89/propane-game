@@ -5,7 +5,7 @@ namespace Propane.World.Plan;
 
 // The plan is pure data in map coordinates: Vector2(x, y) maps to world (X, Z). The builder turns it into nodes.
 
-/// <summary>An oriented rectangle: centre, half extents along its own axes, and rotation (radians, about up).</summary>
+/// <summary>An oriented rectangle: center, half extents along its own axes, and rotation (radians, about up).</summary>
 public readonly record struct OrientedRect(Vector2 Center, Vector2 HalfExtents, float Angle)
 {
     public Vector2 AxisX => new(Mathf.Cos(Angle), Mathf.Sin(Angle));
@@ -44,7 +44,7 @@ public readonly record struct OrientedRect(Vector2 Center, Vector2 HalfExtents, 
         return Mathf.Abs(d.Dot(AxisX)) <= HalfExtents.X && Mathf.Abs(d.Dot(AxisY)) <= HalfExtents.Y;
     }
 
-    /// <summary>Converts a point in this rectangle's local frame (origin at centre) to map space.</summary>
+    /// <summary>Converts a point in this rectangle's local frame (origin at center) to map space.</summary>
     public Vector2 ToMap(Vector2 local) => Center + AxisX * local.X + AxisY * local.Y;
 
     private static (float, float) Project(OrientedRect rect, Vector2 axis)

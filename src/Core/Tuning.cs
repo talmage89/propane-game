@@ -233,11 +233,11 @@ public partial class Tuning : Resource
     [Export(PropertyHint.Range, "0,20,1")] public int RagdollDropCount { get; set; } = 5;
     /// <summary>Dropped tanks ignore bullets and chain reactions for this long.</summary>
     [Export(PropertyHint.Range, "0,5,0.05")] public float DropInvulnerableTime { get; set; } = 1f;
-    /// <summary>How far apart dropped tanks land (metres).</summary>
+    /// <summary>How far apart dropped tanks land (meters).</summary>
     [Export(PropertyHint.Range, "0,4,0.05")] public float DropScatter { get; set; } = 0.9f;
     /// <summary>How hard dropped tanks are thrown out as they spawn (m/s).</summary>
     [Export(PropertyHint.Range, "0,15,0.1")] public float DropToss { get; set; } = 3f;
-    /// <summary>How far behind the victim a bullet hit's tanks land (metres).</summary>
+    /// <summary>How far behind the victim a bullet hit's tanks land (meters).</summary>
     [Export(PropertyHint.Range, "0,4,0.05")] public float HitDropDistance { get; set; } = 0.9f;
 
     // ---------------------------------------------------------------- Multiplayer: suburb
@@ -245,10 +245,10 @@ public partial class Tuning : Resource
     [Export(PropertyHint.Range, "1,120,1")] public int MpTankCount { get; set; } = 40;
     [Export(PropertyHint.Range, "1,16,1")] public int MpClusterSizeMin { get; set; } = 5;
     [Export(PropertyHint.Range, "1,16,1")] public int MpClusterSizeMax { get; set; } = 12;
-    /// <summary>How strongly piles are pulled toward the suburb's centre: 0 spreads them like single player.</summary>
-    [Export(PropertyHint.Range, "0,6,0.05")] public float MpCentreBias { get; set; } = 1.5f;
-    /// <summary>Radius (metres) of the central area that piles favour.</summary>
-    [Export(PropertyHint.Range, "5,120,1")] public float MpCentreRadius { get; set; } = 40f;
+    /// <summary>How strongly piles are pulled toward the suburb's center: 0 spreads them like single player.</summary>
+    [Export(PropertyHint.Range, "0,6,0.05")] public float MpCenterBias { get; set; } = 1.5f;
+    /// <summary>Radius (meters) of the central area that piles favor.</summary>
+    [Export(PropertyHint.Range, "5,120,1")] public float MpCenterRadius { get; set; } = 40f;
 
     // ---------------------------------------------------------------- Multiplayer: ammo
     [ExportGroup("Ammo")]
@@ -263,7 +263,7 @@ public partial class Tuning : Resource
 
     // ---------------------------------------------------------------- Multiplayer: HUD
     [ExportGroup("Match HUD")]
-    /// <summary>The farthest (metres) another player's score shows above them, when in line of sight.</summary>
+    /// <summary>The farthest (meters) another player's score shows above them, when in line of sight.</summary>
     [Export(PropertyHint.Range, "5,300,1")] public float ScoreTagRange { get; set; } = 70f;
     [Export(PropertyHint.Range, "0.3,3,0.05")] public float ScoreTagScale { get; set; } = 1f;
     [Export(PropertyHint.Range, "0.02,2,0.01")] public float HitMarkerTime { get; set; } = 0.25f;
@@ -279,6 +279,6 @@ public partial class Tuning : Resource
     [Export(PropertyHint.Range, "0,0.5,0.005")] public float InterpolationDelay { get; set; } = 0.1f;
     /// <summary>How quickly (seconds) a drifted object eases back to where its owner has it.</summary>
     [Export(PropertyHint.Range, "0.02,2,0.01")] public float CorrectionBlendTime { get; set; } = 0.25f;
-    /// <summary>Drift (metres) past which an object snaps to its owner's position instead of easing.</summary>
+    /// <summary>Drift (meters) past which an object snaps to its owner's position instead of easing.</summary>
     [Export(PropertyHint.Range, "0.1,20,0.1")] public float SnapDistance { get; set; } = 3f;
 }

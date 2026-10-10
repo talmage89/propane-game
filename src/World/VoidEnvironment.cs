@@ -15,7 +15,7 @@ public partial class VoidEnvironment : Node3D
     private StaticBody3D floorBody = null!;
     private MeshInstance3D floorMesh = null!;
 
-    /// <summary>The node the floor recentres on (normally the camera).</summary>
+    /// <summary>The node the floor recenters on (normally the camera).</summary>
     public Node3D? Follow { get; set; }
 
     public DirectionalLight3D Sun { get; private set; } = null!;

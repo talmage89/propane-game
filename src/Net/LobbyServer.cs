@@ -335,7 +335,7 @@ public partial class LobbyServer : Node
         }
     }
 
-    /// <summary>The wanted colour if nobody else in the lobby has it, otherwise the first free one.</summary>
+    /// <summary>The wanted color if nobody else in the lobby has it, otherwise the first free one.</summary>
     private int FreeColor(Lobby lobby, int wanted, int self)
     {
         var taken = lobby.Members.Where(id => id != self && clients.ContainsKey(id)).Select(id => clients[id].Color).ToHashSet();

@@ -18,7 +18,7 @@ public partial class PropaneTank : RigidBody3D
         Exploded,
     }
 
-    /// <summary>Centre of the vessel in the tank's local frame (origin is the centre of the foot ring).</summary>
+    /// <summary>Center of the vessel in the tank's local frame (origin is the center of the foot ring).</summary>
     public static readonly Vector3 LocalCenter = new(0, 0.235f, 0);
 
     private const float ShellRadius = 0.156f;
@@ -86,7 +86,7 @@ public partial class PropaneTank : RigidBody3D
         SetProcess(false);
     }
 
-    /// <summary>Makes a dropped tank ignore bullets and chain reactions for a while, glowing in the dropper's colour.</summary>
+    /// <summary>Makes a dropped tank ignore bullets and chain reactions for a while, glowing in the dropper's color.</summary>
     public void MakeInvulnerable(float seconds, Color color)
     {
         invulnerableUntil = Now + seconds;
@@ -195,7 +195,7 @@ public partial class PropaneTank : RigidBody3D
     public void Detonate() => Explode(GlobalTransform * LocalCenter, chain: true);
 
     /// <summary>
-    /// Another player's detonation of this tank, at the centre they had it at. It throws things here as everywhere,
+    /// Another player's detonation of this tank, at the center they had it at. It throws things here as everywhere,
     /// but sets off no tanks: that player runs the chain and sends each explosion.
     /// </summary>
     public void DetonateRemote(Vector3 center)

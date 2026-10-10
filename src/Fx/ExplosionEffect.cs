@@ -40,7 +40,7 @@ public partial class ExplosionEffect : Node3D
     /// <summary>Loads the textures an explosion uses, so the first one does not stall on disk.</summary>
     public static void Preload() => flipbookTexture ??= GD.Load<Texture2D>("res://assets/tank/T_Fireball_SubUV_8x8.png");
 
-    /// <summary>Spawns an explosion centred at <paramref name="position"/>, with the ground at <paramref name="groundY"/>.</summary>
+    /// <summary>Spawns an explosion centered at <paramref name="position"/>, with the ground at <paramref name="groundY"/>.</summary>
     public static ExplosionEffect Create(Vector3 position, float groundY)
     {
         var effect = new ExplosionEffect { Name = "Explosion" };
