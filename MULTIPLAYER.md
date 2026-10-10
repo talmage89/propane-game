@@ -47,7 +47,7 @@ Status: **built, 2026-10-09** (see section 7 for how it is built and tested). Th
 
 - **Hitstop** is off. It changes `Engine.TimeScale`, which also slows the physics and would make the clients drift apart.
 - **Pause on focus loss** is off. Esc opens a menu without stopping the game.
-- **R** reloads instead of generating a new suburb.
+- **R** reloads instead of generating a new suburb. The left hand swaps the magazine and the empty one drops to the ground: it is only for show, so each game drops its own and nothing shoots, blasts or syncs it. An empty rifle locks its bolt open until the reload releases it.
 - **The tuning panel** is debug-only (see section 1).
 
 ## 4. Networking

@@ -192,6 +192,11 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
 
         rifle = new Rifle { Name = "Rifle", TopLevel = true };
         AddChild(rifle);
+        if (Ammo != null || IsRemote)
+        {
+            // A match, where reloads drop magazines.
+            DroppedMagazine.Preload();
+        }
 
         ragdoll = new Ragdoll { Name = "Ragdoll" };
         skeleton.AddChild(ragdoll);
@@ -342,6 +347,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         rig.ReadyAmount = readyAmount;
         rig.Recoil = recoil;
         rig.Reload = IsRemote ? remoteState.Reload : Ammo?.ReloadProgress ?? 0f;
+        rifle.Animate(dt, rig.Reload);
         recoil = Mathf.MoveToward(recoil, 0, dt * 9f);
         if (IsRemote)
         {
@@ -612,7 +618,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
             }
         }
 
-        rifle.Flash();
+        rifle.Fire(lastRound: Ammo is { Magazine: 0 });
         Spawn.Effect(Tracer.Create(muzzle, end));
 
         if (DevLog.Enabled)
@@ -891,7 +897,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
     /// <summary>Plays the muzzle flash and tracer of another player's shot.</summary>
     public void RemoteShot(Vector3 end)
     {
-        rifle.Flash();
+        rifle.Fire();
         Spawn.Effect(Tracer.Create(rifle.MuzzlePosition, end));
         recoil = 1f;
         readyAmount = 1f;

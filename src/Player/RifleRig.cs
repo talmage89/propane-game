@@ -47,7 +47,7 @@ public partial class RifleRig : SkeletonModifier3D
     /// <summary>0..1, decays after each shot.</summary>
     public float Recoil { get; set; }
 
-    /// <summary>Reload progress 0..1: the rifle cants in and the left hand drops to the magazine. 0 when not reloading.</summary>
+    /// <summary>Reload progress 0..1: the rifle cants in while the left hand swaps the magazine. 0 when not reloading.</summary>
     public float Reload { get; set; }
 
     /// <summary>Weight of the whole rig; 0 while ragdolling or getting up.</summary>
@@ -140,14 +140,16 @@ public partial class RifleRig : SkeletonModifier3D
         var stance = hip.InterpolateWith(aimed, Mathf.SmoothStep(0, 1, AimAmount));
         stance = stance.InterpolateWith(port, Mathf.SmoothStep(0, 1, SprintAmount));
 
-        // Reload: the rifle comes in front of the chest, canted over, while the left hand swaps the magazine.
+        // Reload: the rifle comes in front of the chest, pointing across the body and canted over, with the magazine
+        // well where the left hand can work it.
         var reloadWeight = Reload > 0 ? Mathf.SmoothStep(0, 0.18f, Reload) * (1f - Mathf.SmoothStep(0.82f, 1f, Reload)) : 0f;
         if (reloadWeight > 0)
         {
-            var reloadDir = (chestForward * 0.9f - Vector3.Up * 0.2f - chestRight * 0.22f).Normalized();
+            var reloadDir = (chestForward * 0.8f - Vector3.Up * 0.25f - chestRight * 0.45f).Normalized();
             var reloadBasis = Basis.LookingAt(reloadDir, Vector3.Up).Rotated(reloadDir, Mathf.DegToRad(-38f));
-            var reloadPocket = shoulder - chestUp * 0.2f + chestForward * 0.12f - chestRight * 0.06f;
-            var reloadPose = new Transform3D(reloadBasis, reloadPocket - reloadBasis * Rifle.ButtLocal.Origin);
+            var shoulderL = fromSkeleton * skeleton.GetBoneGlobalPose(upperL).Origin;
+            var well = shoulder.Lerp(shoulderL, 0.5f) + chestForward * 0.3f - chestUp * 0.2f;
+            var reloadPose = new Transform3D(reloadBasis, well - reloadBasis * Rifle.MagWellLocal.Origin);
             stance = stance.InterpolateWith(reloadPose, reloadWeight);
         }
 
@@ -167,14 +169,8 @@ public partial class RifleRig : SkeletonModifier3D
 
         // 3. Hands onto the grips.
         var rightHand = handNow.InterpolateWith(RightHandTransform(stance), Weight);
-        // Mid-reload the left hand leaves the foregrip for the magazine well, just ahead of the pistol grip.
-        var toMagazine = Reload > 0 ? Mathf.SmoothStep(0.2f, 0.42f, Reload) * (1f - Mathf.SmoothStep(0.6f, 0.82f, Reload)) : 0f;
-        var grip = Rifle.ForegripLocal;
-        if (toMagazine > 0)
-        {
-            grip = new Transform3D(grip.Basis, grip.Origin.Lerp(new Vector3(0, -0.16f, -0.12f), toMagazine));
-        }
-        var leftHand = leftNow.InterpolateWith(LeftHandTransform(stance, grip), Weight);
+        // The foregrip, or mid-reload wherever the rifle's reload needs the left hand: the magazine, the bolt catch.
+        var leftHand = leftNow.InterpolateWith(LeftHandTransform(stance, Rifle.LeftHandLocal), Weight);
 
         var upperRWorld = fromSkeleton * skeleton.GetBoneGlobalPose(upperR).Origin;
         var upperLWorld = fromSkeleton * skeleton.GetBoneGlobalPose(upperL).Origin;
@@ -215,8 +211,8 @@ public partial class RifleRig : SkeletonModifier3D
         return new Transform3D(basis, wrist);
     }
 
-    /// <summary>Wrist transform for the left hand on the vertical foregrip, in world space.</summary>
-    private static Transform3D LeftHandTransform(Transform3D rifle, Transform3D foregrip)
+    /// <summary>Wrist transform for the left hand around an upright grip (foregrip or magazine), in world space.</summary>
+    private static Transform3D LeftHandTransform(Transform3D rifle, Vector3 gripLocal)
     {
         var rx = rifle.Basis.Column0.Normalized();
         var ry = rifle.Basis.Column1.Normalized();
@@ -226,7 +222,7 @@ public partial class RifleRig : SkeletonModifier3D
         var palm = (rx - fingers * rx.Dot(fingers)).Normalized();
         var thumb = palm.Cross(fingers);
         var basis = new Basis(palm, fingers, thumb);
-        var grip = rifle * foregrip.Origin;
+        var grip = rifle * gripLocal;
         var wrist = grip - fingers * 0.06f - palm * 0.03f + ry * 0.02f;
         return new Transform3D(basis, wrist);
     }

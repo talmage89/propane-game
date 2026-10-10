@@ -7,8 +7,9 @@ using Propane.World;
 namespace Propane.Dev;
 
 /// <summary>
-/// Scripted player test: locomotion, hip fire, aimed fire, a tank blast that ragdolls the player, and the get-up.
+/// Scripted player test: locomotion, hip fire, aimed fire, reloads, a tank blast that ragdolls the player, and the get-up.
 /// Run: godot --fixed-fps 60 res://scenes/dev/player_range.tscn -- --capture-dir=/tmp/p [--scenario=...] [--view=side]
+/// Views: player, side, front, left, top, rightclose, leftclose, rifleleft, rifleright.
 /// </summary>
 public partial class PlayerRange : Node3D
 {
@@ -65,6 +66,26 @@ public partial class PlayerRange : Node3D
                 script.Hold(8.0f, 9.5f, new PlayerIntent { Move = new Vector2(1, 0), Aim = true });
                 director.ShotAt(9.0f, "07_strafe_aim");
                 break;
+            case "reload":
+                // A match's magazine: empty it (the bolt locks open), reload from empty, then a reload with rounds
+                // left. Times in the clips are scaled to the 1.6 s reload.
+                player.Ammo = new AmmoState { Magazine = 3, Reserve = 60 };
+                script.Hold(1.0f, 1.6f, new PlayerIntent { FireHeld = true });
+                director.ShotAt(1.7f, "r00_locked");
+                script.Reload(1.8f);
+                foreach (var t in new[] { 0.3f, 0.45f, 0.6f, 0.9f, 1.2f, 1.45f, 1.7f, 1.88f, 2.1f })
+                {
+                    director.ShotAt(1.8f + t / 1.5f, $"r1_{t:0.00}");
+                }
+                script.Fire(3.8f);
+                script.Fire(4.1f);
+                script.Reload(4.6f);
+                foreach (var t in new[] { 0.45f, 0.9f, 1.3f, 1.7f })
+                {
+                    director.ShotAt(4.6f + t / 1.25f, $"r2_{t:0.00}");
+                }
+                director.ShotAt(6.8f, "r3_after");
+                break;
             case "ragdoll":
                 AddTank(new Vector3(0.6f, 0, -2.2f));
                 AddTank(new Vector3(-3f, 0, -12f));
@@ -99,6 +120,14 @@ public partial class PlayerRange : Node3D
         if (view.EndsWith("close") || view == "top")
         {
             focus = player.GlobalPosition + Vector3.Up * 1.3f;
+        }
+        if (view.StartsWith("rifle"))
+        {
+            // Close on the rifle from either side of the character, for the hands, the action and the reload.
+            var rifle = player.GetNode<Rifle>("Rifle");
+            focus = rifle.GlobalTransform * new Vector3(0, 0, -0.12f);
+            var side = view == "rifleleft" ? -1f : 1f;
+            offset = new Basis(Vector3.Up, player.FacingYaw) * new Vector3(0.8f * side, 0.2f, -0.45f);
         }
         observer.LookAtFromPosition(focus + offset, focus);
     }

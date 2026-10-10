@@ -122,6 +122,8 @@ $GODOT res://scenes/dev/soak.tscn
 # Tank close-ups (scenarios: full, vent, blast, look), the character and rifle rig, the world kit, map overviews.
 $GODOT --fixed-fps 60 res://scenes/dev/tank_range.tscn -- --capture-dir=/tmp/t --scenario=blast
 $GODOT --fixed-fps 60 res://scenes/dev/player_range.tscn -- --capture-dir=/tmp/p
+# Player scenarios: stances (default), reload, ragdoll. --view=rifleleft or rifleright follows the rifle up close.
+$GODOT --fixed-fps 60 res://scenes/dev/player_range.tscn -- --capture-dir=/tmp/p --scenario=reload --view=rifleleft
 $GODOT --fixed-fps 60 res://scenes/dev/world_lab.tscn -- --capture-dir=/tmp/w
 $GODOT --fixed-fps 60 res://scenes/dev/suburb_preview.tscn -- --capture-dir=/tmp/s
 
@@ -182,14 +184,15 @@ It runs on Linux, which keeps CI off the more expensive macOS runners.
 
 ## Assets
 
-The tank, its debris and the fireball flipbook come from the propane-tank Blender project; the other models are
-CC0 kits (see [CREDITS.md](CREDITS.md)). The scripts in `tools/blender` rebuild them with Blender 5.1:
+The tank, its debris and the fireball flipbook come from the propane-tank Blender project, and the rifle from the
+rifle Blender project; the other models are CC0 kits (see [CREDITS.md](CREDITS.md)). The scripts in `tools/blender`
+rebuild them with Blender 5.1 (`import_rifle.py` needs only Python):
 
 | Script | Builds |
 | --- | --- |
 | `export_tank.py` | `assets/tank/tank.glb` and `debris.glb` (with convex hulls) from the tank project's Unreal export |
 | `build_character.py` | `assets/character/mannequin.glb`: the Quaternius mannequin with animations from both libraries |
-| `build_rifle.py` | `assets/rifle/rifle.glb`, with hand, muzzle, butt and eye sockets |
+| `import_rifle.py` | `assets/rifle`: the rifle (one skinned mesh, its clips and sockets), a lone magazine for dropped magazines, and the textures both share, from the rifle project's export |
 | `build_props.py` | `assets/props/*.glb`: fences, grill, bins, mailbox, lamp, hydrant, patio heater and more |
 
 Each script's header gives its exact command line.

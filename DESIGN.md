@@ -35,7 +35,7 @@ Multiplayer (tank bank, 2–5 players) is designed and built separately: see [MU
 - Unaimed, the character carries the rifle low and relaxed, snapping it up to the hip to fire, and shots spread wide. Moving and jumping widen the spread further. Sprinting drops it to a low-ready carry.
 - Aimed, the rifle comes up to the shoulder and the spread is tight. The character turns to face where the camera points.
 - Holding the trigger fires automatically at the fire rate (semi-automatic when the toggle is off), with unlimited ammo and no reload. They are hitscan from the camera through a random point in the spread cone. A second ray from the muzzle stops shots from passing through walls next to the character.
-- Each shot has recoil kick, a muzzle flash, a tracer, an impact effect matched to the surface, and a small push on light objects.
+- Each shot has recoil kick, a muzzle flash, the rifle's action cycling, a tracer, an impact effect matched to the surface, and a small push on light objects.
 
 **Tanks.**
 - 30 per map, in groups of 1 to 10 packed tight enough to chain, placed where they belong: by grills and patio heaters, beside garages and sheds, on porches, at the curb, filling pickup beds, and now and then out on a lawn. The groups are spread across the map, about seven to a suburb. The total and the group sizes are dials.
