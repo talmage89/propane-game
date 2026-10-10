@@ -1,5 +1,5 @@
-# Every push to main builds the macOS (Apple Silicon) and Linux (x86_64) games and publishes them as the release for
-# the version in project.godot. Pushing again without bumping config/version replaces that release's builds.
+# Every push to main builds the macOS (Apple Silicon) and Linux (x86_64) games and publishes them as a new release for
+# the version in project.godot. Each release is a new version: the job fails if config/version already has a release.
 name: Release
 
 on:
@@ -25,6 +25,19 @@ jobs:
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
+
+      - name: Check the version is new
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/^config\/version="\(.*\)"$/\1/p' project.godot)"
+          [[ -n "$version" ]] || { echo "::error::config/version not found in project.godot"; exit 1; }
+          if gh release view "v$version" >/dev/null 2>&1 || git ls-remote --exit-code --tags origin "v$version" >/dev/null; then
+            echo "::error::v$version is already released. Bump config/version in project.godot."
+            exit 1
+          fi
+          echo "VERSION=$version" >>"$GITHUB_ENV"
 
       - uses: actions/setup-dotnet@v4
         with:
@@ -81,8 +94,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          version="$(sed -n 's/^config\/version="\(.*\)"$/\1/p' project.godot)"
-          tag="v$version"
+          tag="v$VERSION"
           {
             echo "Built from ${GITHUB_SHA::7}."
             echo
@@ -91,6 +103,5 @@ jobs:
             echo
             echo "**Linux (x86_64):** extract the archive and run \`./Propane.x86_64\`. Needs Vulkan drivers."
           } > build/notes.md
-          gh release delete "$tag" --cleanup-tag --yes 2>/dev/null || true
-          gh release create "$tag" build/dist/* --target "$GITHUB_SHA" --title "Propane $version" \
+          gh release create "$tag" build/dist/* --target "$GITHUB_SHA" --title "Propane $VERSION" \
             --notes-file build/notes.md --latest

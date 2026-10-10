@@ -138,9 +138,9 @@ and `pickup` (an ammo can taken and returning). [MULTIPLAYER.md](MULTIPLAYER.md)
 ## Releases
 
 Every push to `main` runs `.github/workflows/release.yml` on a Linux runner: it runs the generator tests, exports
-both builds, and publishes them as the GitHub release for `config/version` in `project.godot`. Pushing again without
-changing the version replaces that release's builds, so bump the version to keep the previous one. Day-to-day work
-happens on `dev`.
+both builds, and publishes them as a new GitHub release for `config/version` in `project.godot`. Every release is a
+new version: bump `config/version` on `dev` before merging to `main`, or the job stops before building because that
+version is already released. Releases are never replaced. Day-to-day work happens on `dev`.
 
 The same build runs locally:
 
