@@ -10,7 +10,7 @@ namespace Propane.Net;
 /// <summary>
 /// The multiplayer server. It runs no physics: it hosts lobbies, generates each match's suburb, relays messages
 /// between the players in a match, keeps the score and the match clock, and settles ties (the first claim on a tank
-/// or a pickup wins). It runs headless on a home server (<c>--server</c>), or inside a player's game for testing.
+/// or a pickup wins). It runs headless on a dedicated server (<c>--server</c>), or inside a player's game for testing.
 /// </summary>
 public partial class LobbyServer : Node
 {

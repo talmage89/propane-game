@@ -3,7 +3,7 @@
 # play every match the lobby starts. They run headless from this checkout, in the background, until stopped.
 # Usage: tools/dev/add_bots.sh [-n count] [-S host[:port]] [-k skill 0..1] [-b smart|simple]
 #        tools/dev/add_bots.sh -x     stops the bots this script started
-# Defaults: 4 bots, a server on this computer (127.0.0.1:24680), skill 1, the smart brain.
+# Defaults: 4 bots, a server on this computer (127.0.0.1:24680, e.g. Host on this computer), skill 1, the smart brain.
 set -euo pipefail
 
 count=4

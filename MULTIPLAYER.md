@@ -54,7 +54,7 @@ Status: **built, 2026-10-09** (see section 7 for how it is built and tested). Th
 
 Every client simulates the whole suburb, so the game responds instantly. Each moving object has one owner, which corrects the other copies. Small disagreements between screens are accepted in exchange for that responsiveness. This approach is called state synchronization with distributed authority.
 
-**The server** runs no physics. It hosts the lobbies, relays messages within each match, keeps the score and the match clock, and settles ties: when two claims for the same thing arrive, the first one wins. It can run headless on a dedicated server, or inside a player's game during development.
+**The server** runs no physics. It hosts the lobbies, relays messages within each match, keeps the score and the match clock, and settles ties: when two claims for the same thing arrive, the first one wins. It runs headless on a dedicated server, or inside a player's game.
 
 **The world.** The server generates the match's suburb and sends the whole plan (about 10 KB compressed) rather than just its seed. The generator's trigonometry can differ in the last bit between an Apple Silicon Mac and an x86 Linux machine, and a single flipped comparison would give the players different suburbs. Houses and other static parts never need syncing.
 
@@ -160,8 +160,9 @@ None at the moment.
 
 ### Playing against bots
 
-`tools/dev/add_bots.sh` starts bot players (4 by default) on a server, from a source checkout. Create a lobby
-first: they join the first open lobby and play every match it starts. `-S host:port` picks another server, `-k 0.5`
+`tools/dev/add_bots.sh -S host:port` starts bot players (4 by default) on that server, from a source checkout; without
+`-S` they join a server on this computer. Create a lobby first: they join the first open lobby and play every match it
+starts. `-k 0.5`
 makes them easier (slower to turn, looser aim, slower to react), `-b simple` gives them the first, easy brain, and
 `-x` stops them. Each uses about 7% of a core and 0.6 GB while it waits.
 
@@ -185,10 +186,10 @@ banked. Against the first bot, two current bots ended 15 and 14 to 1 and 0, and 
 
 The server is the game itself started with `-- --server` (and `--headless`). It runs no physics and uses little CPU.
 
-- **Docker:** `tools/server/deploy.sh` exports the Linux build and runs it in Docker on a remote machine
-  (`~/propane-server`, container `propane-server`, `restart: unless-stopped`, UDP 24680). Run it from the
-  commit a release was built from: a downloaded build only joins a server from the same commit (games run from source
-  join any server with the same version and protocol). Logs: `docker compose logs -f` in that folder.
+- **Docker:** `tools/server/deploy.sh <ssh host> <dir>` exports the Linux build and runs it in Docker on that host,
+  in `~/<dir>` (container `propane-server`, `restart: unless-stopped`, UDP 24680). Run it from the commit a release
+  was built from: a downloaded build only joins a server from the same commit (games run from source join any server
+  with the same version and protocol). Logs: `docker compose logs -f` in that folder.
 - **Reaching it:** players connect to the machine's address on UDP 24680: its LAN address, its address on a VPN the
   players share, or, with UDP 24680 forwarded on the router, the public address.
 - **From source:** `godot --headless --path . -- --server [--port=24680]`.

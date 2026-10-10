@@ -1,11 +1,15 @@
 #!/usr/bin/env bash
 # Exports the Linux build and runs it as the multiplayer server in Docker on a remote host.
-# Usage: tools/server/deploy.sh [ssh host] [remote dir] [path to the Godot .NET editor]
-# Defaults: host "server", directory ~/propane-server. Needs the export templates (tools/release/install_templates.sh).
+# Usage: tools/server/deploy.sh <ssh host> <remote dir, relative to the remote home> [path to the Godot .NET editor]
+# The host needs Docker. Needs the export templates (tools/release/install_templates.sh).
 set -euo pipefail
 
-host="${1:-server}"
-remote="${2:-propane-server}"
+if (( $# < 2 )); then
+  echo "usage: $0 <ssh host> <remote dir> [godot]" >&2
+  exit 2
+fi
+host="$1"
+remote="$2"
 godot="${3:-${GODOT:-godot-mono}}"
 project="$(cd "$(dirname "$0")/../.." && pwd)"
 stage="$(mktemp -d)"
