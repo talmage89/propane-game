@@ -16,7 +16,7 @@ namespace Propane.Net;
 /// A multiplayer match on this player's machine: the suburb the server generated, this player, everyone else's
 /// remote copy, the ammo pickups and the match HUD. Every player simulates the whole suburb; this class sends what
 /// this player does (movement, shots, punctures, explosions, drops, the bodies they own) and plays what the others
-/// send. See design/MULTIPLAYER.md for the rules and the networking model.
+/// send. See docs/multiplayer.md for the rules and the networking model.
 /// </summary>
 public partial class Match : Node3D
 {

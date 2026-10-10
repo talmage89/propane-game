@@ -1,56 +1,47 @@
-# Propane — multiplayer design
+# Multiplayer
 
-Tank bank: a free-for-all for 2–5 players in one suburb. Detonating tanks scores points, and being shot spills them
-back out as tanks for anyone to take. Most points when the timer runs out wins.
+How multiplayer works today: tank bank's rules, the networking model, hosting, bots and tests. It describes the
+code; when the code changes, change this file with it. The game's lasting direction is in [design](../design/).
 
-Status: **built, 2026-10-09** (see section 7 for how it is built and tested). The single-player sandbox in
-[DESIGN.md](DESIGN.md) is unchanged, apart from the main menu in front of it.
+## Tank bank
 
-## 1. Decided
+A free-for-all in one suburb. **Every tank a player detonates is credited to that player as one point, which they
+hold**, wherever the tank came from: the map, another player's drop, or their own. Players lose points only by being
+hit or thrown. Every gain and loss of tanks follows from that rule; there are no special cases. Most points when the
+clock runs out wins.
 
-**The scoring rule.** Every tank a player detonates is credited to that player as one point, which they hold. It doesn't matter where the tank came from: the map, another player's drop, or their own drop. Players lose points only through the loss rules below. Every gain and loss of tanks follows from this rule; there are no special cases.
+- A chain reaction credits every tank in it to whoever detonated the first one.
+- A bullet hit drops 1 tank behind the victim, then a 0.5 s grace period before another hit can drop one.
+- Being ragdolled drops 5 tanks where the player was thrown, even by their own blast. A ragdolled player can still be
+  shot.
+- Dropped tanks ignore bullets and chain reactions for 1 s, glowing in the dropper's color. A player with no points
+  loses nothing.
+- Fewer, bigger piles nearer the center keep the fighting close. The suburb's tanks are all there will be.
+- Ammo is limited; ammo cans around the suburb come back after being taken.
+- Each player's score floats above them in their color, in line of sight. A shooter sees a hit marker, a scorer a
+  "+N", and a victim an arrow toward the shot.
+- No health: nobody dies.
 
-| Area | Decision |
-| --- | --- |
-| Mode | Tank bank, every player for themselves, 2–5 players. |
-| Scoring | One point for every tank a player detonates (see the rule above). A chain reaction credits every tank in it to whoever detonated the first one. |
-| Own tanks | Not a special case. A player who detonates tanks they dropped earns them back, like any others. |
-| Score display | A number above each player, in that player's color, shown only when that player is in line of sight. |
-| Health | None. Nobody dies. |
-| Bullet hits | A hit drops 1 tank behind the victim. After a hit, the victim has a 0.5 s grace period before another hit can drop a tank. |
-| Ragdoll | Being ragdolled drops 5 tanks where the player was when they were thrown. It counts even when the player's own blast threw them. |
-| Hits while ragdolled | A ragdolled player can still be shot and lose tanks, with the same grace period. |
-| Dropped tanks | Indestructible for 1 s after they drop: they ignore bullets and chain reactions. A player with no points loses nothing. |
-| Venting | Unchanged: a punctured tank vents forever. |
-| Match length | A timer that the lobby's creator sets, 2–3 minutes by default. Most points at the end wins. |
-| Tank placement | Fewer, bigger piles nearer the center of the suburb, so the fighting stays close. |
-| Tank supply | The tanks the suburb starts with are all there will be. Nothing is resupplied. |
-| Ammo | Limited ammo. Ammo pickups are placed around the suburb and respawn, appearing with the reveal effect. |
-| Tank arrows | Kept, as in single player. |
-| Identity | Each player picks a name and color in the lobby. |
-| Hit feedback | A hit marker for the shooter, a "+N" when you score, and an arrow showing which way a shot came from. |
-| Flow | A main menu (single player, multiplayer). In multiplayer, a player creates a lobby or joins one, and the creator starts the match. No joining mid-match. |
-| Tuning | Every new value is a tuner in `Tuning` (section 5). The tuning panel is only in debug builds, where any player may change values. Release builds use the baked values. |
-| Platforms | macOS (Apple Silicon) is the first-class client and Linux comes second. Both play together. |
-| Audio | None in the MVP. |
+The counts and times are tuners (the Match, Tank bank, Multiplayer suburb, Ammo, HUD and Network groups of
+`src/Core/Tuning.cs`).
 
-## 2. Match flow
+## Match flow
 
-1. **Main menu:** single player (today's sandbox) or multiplayer.
+1. **Main menu:** single player (the sandbox), multiplayer or quit.
 2. **Multiplayer:** the player connects to a server, then creates a lobby or joins an existing one.
 3. **Lobby:** each player sets a name and color. The creator sets the match length and starts the match.
-4. **Match start:** the server sends the suburb seed. Each client builds the suburb, which materializes as it does today, and play begins when the timer starts.
+4. **Match start:** the server sends the suburb's plan. Each client builds it, it materializes as in single player, and play begins when the timer starts.
 5. **Match:** runs for the lobby's match length.
 6. **End:** a results screen, then back to the lobby.
 
-## 3. Changes from single player in a match
+## Changes from single player in a match
 
 - **Hitstop** is off. It changes `Engine.TimeScale`, which also slows the physics and would make the clients drift apart.
 - **Pause on focus loss** is off. Esc opens a menu without stopping the game.
 - **R** reloads instead of generating a new suburb. The left hand swaps the magazine and the empty one drops to the ground: it is only for show, so each game drops its own and nothing shoots, blasts or syncs it. An empty rifle locks its bolt open until the reload releases it.
-- **The tuning panel** is debug-only (see section 1).
+- **The tuning panel** is debug-only.
 
-## 4. Networking
+## Networking
 
 Every client simulates the whole suburb, so the game responds instantly. Each moving object has one owner, which corrects the other copies. Small disagreements between screens are accepted in exchange for that responsiveness. This approach is called state synchronization with distributed authority.
 
@@ -75,82 +66,8 @@ Every client simulates the whole suburb, so the game responds instantly. Each mo
 
 **Platforms.** Mac and Linux builds of the same minor version play together (0.2.0 with 0.2.5). A version check when a player connects turns away builds of another minor version or protocol, and says which version is needed (see Versions and releases in the README).
 
-## 5. Tuning
 
-These tuners are added to `Tuning`, alongside the existing ones, under new panel groups. Values given in this document are the defaults; the rest are set in playtesting. All existing tuners (rifle, blast, player, camera and so on) also apply in multiplayer.
-
-**Match**
-
-| Tuner | Controls |
-| --- | --- |
-| `MatchLengthDefault` | The match length a new lobby starts with (2–3 min). |
-| `MatchLengthMin`, `MatchLengthMax`, `MatchLengthStep` | The range and step of the lobby's match-length setting. |
-| `MaxPlayers` | Lobby size (5). |
-| `CountdownTime` | The countdown between the creator pressing start and the timer starting. |
-| `ResultsTime` | How long the results screen shows before returning to the lobby. |
-
-**Tank bank**
-
-| Tuner | Controls |
-| --- | --- |
-| `HitDropCount` | Tanks dropped per bullet hit (1). |
-| `HitGraceTime` | The grace period after a hit before another hit can drop tanks (0.5 s). |
-| `RagdollDropCount` | Tanks dropped when ragdolled (5). |
-| `DropInvulnerableTime` | How long dropped tanks ignore bullets and chain reactions (1 s). |
-| `DropScatter` | How far apart dropped tanks land. |
-| `DropToss` | How hard dropped tanks are thrown out as they spawn. |
-| `HitDropDistance` | How far behind the victim a bullet-hit drop lands. |
-
-**Multiplayer suburb**
-
-| Tuner | Controls |
-| --- | --- |
-| `MpTankCount` | Tanks per suburb in a match. |
-| `MpClusterSizeMin`, `MpClusterSizeMax` | Pile sizes in a match. |
-| `MpCenterBias` | How strongly piles are pulled toward the suburb's center. |
-| `MpCenterRadius` | The radius of the central area that piles favor. |
-
-**Ammo**
-
-| Tuner | Controls |
-| --- | --- |
-| `MagazineSize` | Rounds per magazine. |
-| `StartingReserve` | Reserve rounds at match start. |
-| `MaxReserve` | The most reserve rounds a player can carry. |
-| `ReloadTime` | How long a reload takes. |
-| `PickupCount` | Ammo pickups per suburb. |
-| `PickupAmount` | Rounds per pickup. |
-| `PickupRespawnTime` | Time before a taken pickup reappears. |
-| `PickupRevealTime` | How long the reveal effect takes when a pickup reappears. |
-
-**HUD**
-
-| Tuner | Controls |
-| --- | --- |
-| `ScoreTagRange` | The farthest a player's score is shown, in line of sight. |
-| `ScoreTagScale` | The size of the score above players. |
-| `HitMarkerTime` | How long the hit marker shows. |
-| `ScorePopupTime` | How long a "+N" shows. |
-| `HitDirectionTime` | How long the incoming-shot arrow shows. |
-
-**Network**
-
-| Tuner | Controls |
-| --- | --- |
-| `PlayerSendRate` | Player state updates per second. |
-| `TankSendRate` | Venting-tank corrections per second. |
-| `CarSendRate` | Car corrections per second. |
-| `InterpolationDelay` | How far behind real time remote players are shown, for smoothing. |
-| `CorrectionBlendTime` | How quickly a drifted object eases back toward its owner's position. |
-| `SnapDistance` | How far an object may drift before it snaps instead of easing. |
-
-## 6. Open questions
-
-None at the moment.
-
-## 7. How it is built
-
-### Playing
+## Playing
 
 - **Main menu:** Single player, Multiplayer, Quit. Single player is the sandbox as before; its pause menu gains a Main menu button.
 - **Multiplayer:** (or start the game with `-- --connect=host[:port]`) type a name and the server's address (`host` or `host:port`; the port defaults to 24680, UDP). **Host on this computer** runs a server inside the game and joins it, for playing without a dedicated server; the lobby screens then show the addresses others can connect to.
@@ -158,7 +75,7 @@ None at the moment.
 - **In a match:** the clock and the tanks you have banked are at the top, ammo at the bottom right. R reloads (an empty magazine also reloads on the next trigger pull). Walking over an ammo can takes it, unless the reserve is full. Esc opens the controls with Resume, Leave match and Quit; the match keeps running behind it. Leaving a match also leaves the lobby.
 - **After a match:** the results show for `ResultsTime`, then everyone is back in the lobby, ready for another.
 
-### Playing against bots
+## Playing against bots
 
 `tools/dev/add_bots.sh -S host:port` starts bot players (4 by default) on that server, from a source checkout; without
 `-S` they join a server on this computer. Create a lobby first: they join the first open lobby and play every match it
@@ -182,7 +99,7 @@ lost to hits and lost to throws at the end of a match): the first bot often thre
 ended with almost nothing; the current bots never throw themselves on purpose, and the leader usually ends with 8–17
 banked. Against the first bot, two current bots ended 15 and 14 to 1 and 0, and 8 and 6 to 3 and 1.
 
-### Hosting the server
+## Hosting the server
 
 The server is the game itself started with `-- --server` (and `--headless`). It runs no physics and uses little CPU.
 
@@ -193,7 +110,7 @@ The server is the game itself started with `-- --server` (and `--headless`). It 
   players share, or, with UDP 24680 forwarded on the router, the public address.
 - **From source:** `godot --headless --path . -- --server [--port=24680]`.
 
-### Code
+## Code
 
 | Path | Contents |
 | --- | --- |
@@ -216,7 +133,7 @@ Details settled while building, within the decisions above:
 - **Tuning in a match:** everyone plays on the creator's values: the baked ones in a release build, the creator's live ones in a debug build. In a debug build, F1 opens the panel, and a change applies to every player in the match. The player's own values come back after the match.
 - **Starting values** (all tuners): 40 tanks in piles of 5–12 within about 40 m of the center; a 30-round magazine, 60 in reserve, at most 150, a 1.6 s reload; 8 ammo cans of 30 rounds that come back after 20 s; a 2:30 match after a 4 s countdown; results for 10 s.
 
-### Testing
+## Testing
 
 | Command | Checks |
 | --- | --- |

@@ -2,12 +2,13 @@
 
 Keep this file lean: only what an agent can't learn from the code and the other docs, in as few words as possible.
 
-Propane: a Godot 4.7.2 .NET (C#, Jolt) game. Read README.md, design/DESIGN.md and
-design/MULTIPLAYER.md first. macOS (Apple Silicon) first, Linux second.
+Propane: a Godot 4.7.2 .NET (C#, Jolt) game. Read README.md and design/ first, and
+docs/multiplayer.md for network work. macOS (Apple Silicon) first, Linux second.
 
 ## Rules
 
-- The owner sets the design. The "Decided" tables are rulings: present options neutrally and ask before changing them.
+- The owner sets the design: design/ and the game's current rules and feel. Present options neutrally and ask before
+  changing them.
 - Every gameplay or effect value is a `Tuning` tuner.
 - `dev` is for work, `main` for releases. Never commit or push to `main`: a push publishes a public release. Release
   only with `make release-patch|minor|major`. Ask before pushing.

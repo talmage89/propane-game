@@ -10,8 +10,8 @@ around you. There is no health and no score.
 Multiplayer is **tank bank**, a free-for-all for 2–5 players: every tank you blow up is banked as a point, and getting
 shot (or thrown by a blast) spills your tanks back out for anyone to take. Most banked when the clock runs out wins.
 
-See [DESIGN.md](design/DESIGN.md) for the design and the decisions behind it, and
-[MULTIPLAYER.md](design/MULTIPLAYER.md) for multiplayer.
+[design/VISION.md](design/VISION.md) is what the game is and must stay. [docs/multiplayer.md](docs/multiplayer.md) gives
+tank bank's full rules and how multiplayer is built.
 
 ## Download and play
 
@@ -54,7 +54,7 @@ you host, allow incoming connections if the system asks.
 
 The dedicated server is the same game run headless: `./Propane.x86_64 --headless -- --server [--port=24680]`.
 `tools/server/deploy.sh <ssh host> <dir>` exports it and runs it in Docker on any machine you can reach over ssh;
-see [MULTIPLAYER.md](design/MULTIPLAYER.md) for hosting and reaching it. Keep a server on the latest release: it
+see [docs/multiplayer.md](docs/multiplayer.md) for hosting and reaching it. Keep a server on the latest release: it
 then plays with every patch of that minor version.
 
 ## Controls
@@ -99,8 +99,8 @@ on Linux), which then takes precedence. **Defaults** restores the values in code
 | `tools/release`, `.github/workflows` | Export templates, the release build, and the CI job that publishes it. |
 | `tools/server` | The multiplayer server's Docker setup and deploy script. |
 | `tools/dev` | Multiplayer test runs with bot players, and a comparison of what each bot saw. |
-| `design` | The design docs: the single-player sandbox and multiplayer. |
-| `docs` | README images. |
+| `design` | The owner's standing decisions: the vision the game holds to. |
+| `docs` | How multiplayer works, and the README images. |
 
 ## Dev harnesses
 
@@ -142,7 +142,7 @@ tools/dev/compare_tanks.py build/net/bot*.log
 ```
 
 `net_test.tscn` scenarios: bots playing (default), `duel` (hits, drops and a thrown player, filmed from both sides)
-and `pickup` (an ammo can taken and returning). [MULTIPLAYER.md](design/MULTIPLAYER.md) lists the commands.
+and `pickup` (an ammo can taken and returning). [docs/multiplayer.md](docs/multiplayer.md) lists the commands.
 
 ## Versions and releases
 
