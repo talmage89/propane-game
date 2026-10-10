@@ -32,9 +32,11 @@ design/MULTIPLAYER.md first. macOS (Apple Silicon) first, Linux second.
 - Its siblings `dev-1` to `dev-5` are long-lived git worktrees, one agent each. Check out any branch there, or
   `git switch --detach dev`. Git won't check out `dev` twice, so land a branch by merging it in `dev-0`.
 - Worktrees share the repository, so commits and branches made in one are visible in all without a fetch.
-- Fresh clone or worktree, or after switching branches or pulling: `make setup`. It imports the assets into `.godot/`
-  and compiles (about 25 s fresh, a few seconds after), and its `override.cfg` gives the checkout its own `user://`.
-  Nothing else gitignored is needed: `build/` holds only release output and dev logs.
+- Keeping your worktree current is your job. Start work from the latest `dev`, and bring `dev` into your branch when
+  the work depends on it (not when extending a separate branch that is meant to stay behind).
+- After any checkout, switch, merge or pull, run `make setup` so the ignored state matches: it imports the assets into
+  `.godot/` and compiles (about 25 s fresh, a few seconds after), and its `override.cfg` gives the checkout its own
+  `user://`. Nothing else gitignored is needed: `build/` holds only release output and dev logs.
 
 ## Parallel agents
 
