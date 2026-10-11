@@ -28,7 +28,11 @@ public partial class Match
         }
         public void CreateActors(SessionContext session) => match.BuildActors();
         public void CreateViews(SessionContext session) => match.BuildViews();
-        public void RegisterReplication(SessionContext session) => match.RegisterReplication();
+        public void RegisterReplication(SessionContext session)
+        {
+            match.RegisterReplication();
+            match.PreparePresentation();
+        }
         public void AttachInbox(SessionContext session)
         {
             session.OnDetaching(() => match.Net.DetachMatch(match.Setup.Id, match.OnMessage));
@@ -36,7 +40,6 @@ public partial class Match
         }
         public void Ready(SessionContext session)
         {
-            match.AcknowledgeReady();
             match.Send(new NetWriter(Msg.Loaded, match.Setup.Id));
         }
     }
@@ -186,7 +189,7 @@ public partial class Match
     private void OnMeleeStarted(uint swing, Vector3 direction) => Send(new NetWriter(Msg.MeleeStart, Setup.Id).UInt(swing).Vec3(direction));
     private void OnPushedBody(RigidBody3D body) => Claim(new[] { body });
 
-    private void AcknowledgeReady()
+    private void PreparePresentation()
     {
         // The suburb materializes around the player, as in single player.
         suburb.SetRevealSide(1f);
@@ -196,7 +199,8 @@ public partial class Match
 
         CaptureMouse(true);
         ShowNotice("Waiting for everyone to arrive", 30f);
-        // Loaded is sent after the handoff: Countdown, Go or even End may already be waiting in the inbox.
+        // Prepare loading presentation before the handoff, so buffered Countdown/Go/End remain authoritative.
+        // Loaded is sent only after replay in the mode's Ready stage.
         GD.Print($"[match] seed {plan.Seed}: {plan.Lots.Count} lots, {plan.Tanks.Count} tanks, {pickups.Count} pickups, {Setup.Players.Count} players, host {Setup.HostId}, me {me}");
     }
 }

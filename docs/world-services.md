@@ -111,7 +111,8 @@ exclusive offline-world time-scale lease: it changes simulation timing, never an
 
 `SessionFactory` executes one synchronous order: construct scoped services, configure the mode while scoped nodes
 are detached, attach the world, build its world source, add actors, add local views, register replication, attach the
-matching inbox and acknowledge readiness.
+matching inbox and acknowledge readiness. Loading presentation is initialized before attaching the inbox;
+replayed Countdown/Go/End messages must not be overwritten by the ready acknowledgment.
 `ISessionWorldSource` builds content; `ISessionMode` supplies assembly policy, not a new rules engine. Sandbox and
 Tank Bank adapters retain their facade's existing gameplay. A new Lab/lobby source or mode can implement those
 interfaces without editing the factory. `WorldContext` still owns content replacement within a live session.
@@ -121,7 +122,7 @@ inbox detach callbacks, subscriptions and replication stop adapters. Disposal in
 cancels the session, detaches the inbox, unsubscribes, stops control/replication, frees views, frees actors and
 finally disposes world content/services. Callback failures are collected while cleanup completes. Partial assembly
 uses exactly the same path. Actor/view readiness is checked explicitly because Godot does not propagate managed
-`_Ready` exceptions through `AddChild`; failed initialization cannot reach the inbox or ready acknowledgement.
+`_Ready` exceptions through `AddChild`; failed initialization cannot reach the inbox or ready acknowledgment.
 If construction and cleanup both fail, the factory retains both errors. Closing a local view removes its
 camera/HUD/device source without retiring the actor.
 
