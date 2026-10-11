@@ -704,7 +704,7 @@ public partial class Match : Node3D
             var gatherGrant = result.Peer == me && result.Reason == ClaimRefusal.None && gatherRequests.Contains(result.Request);
             if (!gatherGrant && entry != null && authority.Body.Epoch > entry.Epoch &&
                 entry.Body is PropaneTank changed && IsInstanceValid(changed)) { changed.Disturb(); }
-            if (entry != null && !bodies.OnAuthority(authority, out authority)) { continue; }
+            if (entry != null && !bodies.OnAuthority(authority, out authority, Clock.Seconds)) { continue; }
             if (authority.State == TankLedger.State.Exploded)
             {
                 foreach (var canceled in outgoingAuthority.Where(r => r.Type != Msg.Claim && r.Ids.Contains(id)).ToArray())
@@ -743,7 +743,7 @@ public partial class Match : Node3D
                 suburb.AddTank(tank);
                 if (pilePose is { } pose) { tank.MarkPile(pose); }
                 Track(tank, authority.Owner, replace: entry != null);
-                if (entry == null) { bodies.OnAuthority(authority); }
+                if (entry == null) { bodies.OnAuthority(authority, Clock.Seconds); }
             }
             if (result.Reason != ClaimRefusal.None) { tank!.CancelChainFuse(); }
             var wasIntact = tank!.State == PropaneTank.TankState.Intact;
