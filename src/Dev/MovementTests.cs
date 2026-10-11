@@ -333,7 +333,8 @@ public partial class MovementTests : Node
         AddChild(player);
         for (var i = 0; i < 60; i++) await ToSignal(GetTree(), SceneTree.SignalName.PhysicsFrame);
         Check(player.ResolvedState.EffectiveAim && player.AimAmount > 0.99f, "facade starts grounded and aimed");
-        var tree = player.FindChildren("*", "AnimationTree", owned: false).OfType<AnimationTree>().Single();
+        var feet = player.FindChildren("*", "Skeleton3D", owned: false).OfType<Skeleton3D>()
+            .Single(s => s.FindBone("foot_l") >= 0).GetNode<FootPlacement>("Feet");
         var creepSpeed = Tuning.Current.CreepSpeed;
         input.Intent.Move = Vector2.Down;
         foreach (var speed in new[] { 0.98f, 1.6f, 2.2f, 2.8f })
@@ -344,8 +345,10 @@ public partial class MovementTests : Node
             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             Check(player.ResolvedState.Gait == PlayerGait.Creep && Math.Abs(player.Velocity.Length() - speed) < 0.001f,
                 $"creep facade reaches {speed} m/s");
-            Check(Math.Abs(tree.Get("parameters/walk_scale/scale").AsSingle() - speed / 0.98f) < 0.001f,
-                $"walk playback matches {speed} m/s without a cap");
+            var phase = feet.Pose.Phase;
+            for (var i = 0; i < 4; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            Check(Math.Abs(feet.Pose.Phase - phase) > 0.00001f && feet.Pose.Walk > 0.99f,
+                $"creep stride keeps advancing at {speed} m/s");
         }
         Tuning.Current.CreepSpeed = creepSpeed;
         input.Intent.Move = Vector2.Zero;

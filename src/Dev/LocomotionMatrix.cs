@@ -33,11 +33,16 @@ public partial class LocomotionMatrix : Node
         position += velocity * dt;
         Player.SetRemoteState(new PlayerNetState
         {
-            Position = position, Velocity = velocity, Yaw = 0,
-            AimTarget = position + new Vector3(0, 1.5f, -20), Grounded = true,
-            Support = PlayerSupport.Grounded, Gait = gait,
+            Position = position,
+            Velocity = velocity,
+            Yaw = 0,
+            AimTarget = position + new Vector3(0, 1.5f, -20),
+            Grounded = true,
+            Support = PlayerSupport.Grounded,
+            Gait = gait,
             Weapon = gait == PlayerGait.Creep ? WeaponAction.Aim : WeaponAction.Carry,
-            Aim = gait == PlayerGait.Creep ? 1 : 0, Ready = gait == PlayerGait.Creep ? 1 : 0,
+            Aim = gait == PlayerGait.Creep ? 1 : 0,
+            Ready = gait == PlayerGait.Creep ? 1 : 0,
             Sprint = gait == PlayerGait.Sprint ? 1 : 0,
         });
         Probe.Label = $"{gait}_{direction * 45:000}";

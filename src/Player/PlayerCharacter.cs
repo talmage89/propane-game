@@ -41,6 +41,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
     private Node3D model = null!;
     private Skeleton3D skeleton = null!;
     private CharacterAnimator animator = null!;
+    private FootPlacement feet = null!;
     private RifleRig rig = null!;
     private RifleHandFollow handFollow = null!;
     private Ragdoll ragdoll = null!;
@@ -63,7 +64,6 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
     private float sprintAmount;
     private float readyAmount;
     private float fireCooldown;
-    private float landingTimer;
     private float groundedTimer;
     private float bloom;
     private float recoil;
@@ -190,16 +190,17 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         ragdoll = new Ragdoll { Name = "Ragdoll" };
         skeleton.AddChild(ragdoll);
         ragdoll.Build(skeleton);
+        var player = model.FindChildren("*", "AnimationPlayer", owned: false).OfType<AnimationPlayer>().First();
+        animator = new CharacterAnimator(player, model, model.GetPathTo(skeleton));
+        animator.Initialize();
+        feet = new FootPlacement { Name = "Feet", Player = this, Pose = animator.Pose };
+        skeleton.AddChild(feet);
         rig = new RifleRig { Name = "RifleRig", Rifle = rifle };
         skeleton.AddChild(rig);
         poseBlend = new PoseBlend { Name = "PoseBlend" };
         skeleton.AddChild(poseBlend);
         handFollow = new RifleHandFollow { Name = "RifleHandFollow", Rifle = rifle, Rig = rig };
         skeleton.AddChild(handFollow);
-
-        var player = model.FindChildren("*", "AnimationPlayer", owned: false).OfType<AnimationPlayer>().First();
-        animator = new CharacterAnimator(player, model, model.GetPathTo(skeleton));
-        animator.Initialize();
 
         if (!IsRemote)
         {
@@ -252,7 +253,9 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         ResetToActive();
         resolver.Reset();
         ResolvedState = default;
-        airTime = landingTimer = 0;
+        airTime = 0;
+        animator.Pose.Reset();
+        feet.Reset();
         GlobalPosition = position;
         Velocity = Vector3.Zero;
         knockback = Vector3.Zero;
@@ -291,6 +294,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         if (IsRemote)
         {
             UpdateRemote(dt);
+            animator.Pose.ObservePhysics(ResolvedState, Velocity.Y);
             return;
         }
         intent = (inputOverride ?? deviceInput).Read();
@@ -338,17 +342,15 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
                 UpdateGettingUp(dt);
                 break;
         }
+        animator.Pose.ObservePhysics(ResolvedState, Velocity.Y);
     }
 
     public override void _Process(double delta)
     {
         var dt = (float)delta;
         var tuning = Tuning.Current;
-        var planar = new Vector3(Velocity.X, 0, Velocity.Z);
-        var forward = Forward(facingYaw);
-        var grounded = ResolvedState.Grounded;
-        animator.UpdateLocomotion(ResolvedState.Active ? planar.Dot(forward) : 0f, ResolvedState.Active ? planar.Length() : 0f,
-            !ResolvedState.Active || grounded, dt, ResolvedState.Gait);
+        var planar = feet.SamplePlanarVelocity(dt);
+        animator.UpdateLocomotion(ResolvedState.Active ? planar.Length() : 0f, dt, ResolvedState.Gait);
 
         visual.Rotation = new Vector3(0, facingYaw, 0);
         rig.AimTarget = aimTarget;
@@ -443,23 +445,10 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         {
             if (resolved.Support == PlayerSupport.Landing && airTime > tuning.LandingMinAirTime)
             {
-                // The landing crouch only plays from a standstill: running straight on must not drag it along.
-                if (wish.LengthSquared() < tuning.MovingInputThreshold * tuning.MovingInputThreshold)
-                {
-                    animator.PlayLand();
-                    landingTimer = tuning.LandingPoseTime;
-                }
                 CameraRig.AddTrauma(Mathf.Clamp(airTime * tuning.LandingTraumaPerSecond, 0, tuning.LandingTraumaMax));
             }
             airTime = 0;
         }
-        landingTimer -= dt;
-        if (landingTimer > 0 && wish.LengthSquared() >= tuning.MovingInputThreshold * tuning.MovingInputThreshold)
-        {
-            animator.StopLand();
-            landingTimer = 0;
-        }
-
         UpdateFacing(dt, wish, resolved.Ready);
     }
 
@@ -473,7 +462,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
             if (wish.LengthSquared() > tuning.FacingInputThreshold * tuning.FacingInputThreshold)
             {
                 // Legs follow the movement, torso twists to the aim. Moving backward, the legs face forward and
-                // the animation plays in reverse, so the twist never exceeds the spine's comfortable range.
+                // the feet step in actual travel direction, keeping the spine within its comfortable range.
                 var moveYaw = Mathf.Atan2(-wish.X, -wish.Z);
                 var offset = Mathf.Wrap(moveYaw - aimYaw, -Mathf.Pi, Mathf.Pi);
                 if (Mathf.Abs(offset) > Mathf.DegToRad(tuning.BackpedalAngleDegrees))
@@ -724,7 +713,9 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         ResolvedState = new PlayerState(PlayerLifecycle.Ragdoll, PlayerSupport.Airborne, PlayerGait.Default,
             WeaponAction.Carry, 0, 0, 0, intent.Aim, false, false);
         aimAmount = sprintAmount = readyAmount = 0;
-        airTime = landingTimer = 0;
+        airTime = 0;
+        animator.Pose.Reset();
+        feet.Reset();
         Ammo?.CancelReload();
         stateTimer = 0;
         settleTimer = 0;

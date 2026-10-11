@@ -97,8 +97,11 @@ Pause and focus changes clear pending presses and mouse motion, and resample hel
 
 `src/Player/PlayerState.cs` resolves lifecycle, support, gait and weapon action once per physics tick, from intent and
 pre-move floor contact. The accepted jump overrides contact; landing is the first tick that samples contact again.
-Held aim is intent, effective aim owns creep/spread, and recent fire only owns ready presentation. Animation uses the
-resolved gait (creep selects the walk clip), while actual velocity still accelerates toward the target. The node
+Held aim is intent, effective aim owns creep/spread, and recent fire only owns ready presentation. Animation blends
+the resolved gaits on one stride clock while actual velocity still accelerates toward the target.
+A foot modifier plants world-space contacts, steps in the travel direction and adjusts the pelvis to static ground;
+remote clips follow displayed snapshot displacement. Jump poses follow latched takeoff, vertical velocity and
+impact-scaled landing. See [the locomotion review](docs/locomotion.md) for measurements and captures. The node
 facade owns collisions, ammo and lifecycle transitions; the resolver has no scene or engine dependencies.
 A throw immediately clears weapon poses and cancels reload, so get-up cannot restore a pose from before the throw.
 
