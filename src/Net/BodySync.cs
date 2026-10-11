@@ -171,9 +171,12 @@ public sealed class BodySync
     }
 
     /// <summary>A moving or resting state. Ordering uses only the server's epoch and its owner's sequence.</summary>
-    public void OnState(int sender, BodyState state, bool rest, double now)
+    public void OnState(int sender, BodyState state, bool rest, double now, double transit = 0)
     {
         if (!entries.TryGetValue(state.Id, out var entry) || state.Epoch < entry.Epoch) { return; }
+        // Backdate moving targets by the server-to-client relay leg, bounded by our existing extrapolation limit.
+        // This adjusts pose prediction only: clocks never decide which epoch or sequence wins.
+        if (!rest) { now -= System.Math.Clamp(transit, 0, MaxExtrapolation); }
         if (state.Epoch > entry.Epoch)
         {
             // Unreliable motion can overtake the reliable grant. Retain one latest future state per body.

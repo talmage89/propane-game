@@ -123,6 +123,27 @@ public static class AuthorityTests
             sync.OnState(2, Pose(Id, 3, 1), false, 7);
             TestRunner.Assert(!sync.Get(Id)!.HasTarget, "completed rest forgot its sequence boundary");
         });
+        runner.Run("authority/correction includes bounded relay transit through an overtaken grant", () =>
+        {
+            using var body = new BodyFixture(runner);
+            var sync = new BodySync(4, 2);
+            sync.Register(Id, body.Body, true, 2);
+            var motion = Pose(Id, 2, 1) with { Linear = Vector3.Right * 10, Angular = Vector3.Zero };
+            sync.OnState(3, motion, false, 2, 0.1);
+            sync.OnAuthority(Grant(3, 2));
+            TestRunner.Assert(Math.Abs(sync.Get(Id)!.TargetReceived - 1.9) < 0.00001, "future grant forgot relay transit");
+            sync.Correct(2);
+            TestRunner.Assert(body.Body.GlobalPosition.IsEqualApprox(motion.Transform.Origin + Vector3.Right),
+                "correction left the body behind by its relay transit");
+            sync.OnState(3, motion with { Sequence = 2 }, false, 3, 100);
+            TestRunner.Assert(Math.Abs(sync.Get(Id)!.TargetReceived - 2.7) < 0.00001, "extrapolation accepted unbounded clock error");
+            sync.OnState(3, motion with { Sequence = 3 }, false, 4, -1);
+            TestRunner.Assert(sync.Get(Id)!.TargetReceived == 4, "negative clock error predicted backward");
+            sync.OnState(3, motion with { Sequence = 4 }, true, 5, 0.1);
+            TestRunner.Assert(sync.Get(Id) is { TargetReceived: 5, TargetRest: true }, "relay transit changed resting settle time");
+            sync.OnState(3, motion with { Sequence = 3 }, false, 6, 0);
+            TestRunner.Assert(sync.Get(Id) is { LastSequence: 4, TargetRest: true }, "timestamp overrode sequence ordering");
+        });
         runner.Run("authority/future motion survives overtaking its reliable grant", () =>
         {
             using var body = new BodyFixture();

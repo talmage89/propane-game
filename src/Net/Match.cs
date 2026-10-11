@@ -1019,7 +1019,8 @@ public partial class Match : Node3D
                 }
                 break;
             case BodyStatesMessage states:
-                foreach (var body in states.Bodies) { bodies.OnState(sender, body, rest: false, now); }
+                var transit = Net.PingMs > 0 ? now + Net.ServerClockOffset - states.Time : 0;
+                foreach (var body in states.Bodies) { bodies.OnState(sender, body, rest: false, now, transit); }
                 break;
             case BodyRestMessage rest:
                 bodies.OnState(sender, new BodyState(rest.Id, rest.Transform, Vector3.Zero, Vector3.Zero, rest.Epoch, rest.Sequence), rest: true, now);

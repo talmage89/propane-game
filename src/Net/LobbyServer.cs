@@ -598,7 +598,8 @@ public partial class LobbyServer : Node
                 match.Tanks.ValidateBodies(states.Bodies.Select(b => b.Id));
                 var accepted = states.Bodies.Where(b => match.Tanks.Update(client.Id, b, rest: false)).ToArray();
                 if (accepted.Length == 0) { return; }
-                message = message with { Payload = states with { Bodies = accepted } };
+                // Receivers can estimate this relay leg using their server clock offset. Owner clocks are unrelated.
+                message = message with { Payload = states with { Time = NetTransport.Now, Bodies = accepted } };
                 break;
             case BodyRestMessage rest:
                 match.Tanks.ValidateBodies(new[] { rest.Id });

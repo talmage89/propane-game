@@ -92,6 +92,16 @@ public static class ServerTests
             f.Reject(new NetWriter(Msg.Shot, f.Id).Vec3(Vector3.One).Vec3(Vector3.Up).Vec3(Vector3.Forward).Byte(1).Int(999).Int(-1).ToArray());
             f.Reject(new NetWriter(Msg.Shot, f.Id).Vec3(Vector3.One).Vec3(Vector3.Up).Vec3(Vector3.Forward).Byte(1).Int(0).Int(int.MaxValue).ToArray());
         });
+        runner.Run("server/motion relay timestamps use the server clock, never an owner clock", () =>
+        {
+            using var f = new Fixture();
+            var before = NetTransport.Now;
+            f.Receive(MessageCodec.Encode(new NetMessage(Msg.BodyStates, f.Id, 0,
+                new BodyStatesMessage(100000, new[] { DropBody(0, 0) with { Id = BodySync.MapTankId(0), Sequence = 1 } })), false));
+            var after = NetTransport.Now;
+            TestRunner.Assert(f.Packets.Single().Message.Payload is BodyStatesMessage relayed &&
+                relayed.Time >= before && relayed.Time <= after, "relay kept the owner's unrelated clock");
+        });
         runner.Run("server/drop registration recovers an early snapshot and preserves the final rest", () =>
         {
             using var f = new Fixture();
