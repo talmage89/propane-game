@@ -1,3 +1,4 @@
+using System.Linq;
 using Godot;
 using Propane.Core;
 using Propane.Player;
@@ -51,6 +52,26 @@ public partial class PlayerRange : Node3D
         var scenario = DevArgs.Get("scenario") ?? "stances";
         switch (scenario)
         {
+            case "creep":
+                // Two full strides after acceleration and gait/rig blends settle; 12 frames per stride.
+                var skeleton = player.FindChildren("*", "Skeleton3D", owned: false).OfType<Skeleton3D>()
+                    .Single(s => s.FindBone("foot_l") >= 0);
+                var animation = player.FindChildren("*", "AnimationPlayer", owned: false).OfType<AnimationPlayer>()
+                    .Single(p => p.HasAnimation("Walk"));
+                var period = (float)animation.GetAnimation("Walk").Length * 0.98f / Tuning.Current.CreepSpeed;
+                var end = 2f + period * 2;
+                script.Hold(0.25f, end + 0.5f, new PlayerIntent { Move = Vector2.Down, Aim = true });
+                var stride = new StrideProbe { Player = player, SampleFrom = 2f, SampleUntil = end };
+                skeleton.AddChild(stride);
+                for (var i = 0; i <= 24; i++)
+                {
+                    var label = $"creep_{i:00}";
+                    director.At(2f + period * i / 12, () => CaptureAfterDraw(director, label));
+                }
+                director.At(end + 0.1f, stride.Finish);
+                director.QuitAfter = end + 0.3f;
+                GD.Print($"[creep] speed={Tuning.Current.CreepSpeed:0.00} clip-scale={Tuning.Current.CreepSpeed / 0.98f:0.000} stride={period:0.000}s");
+                break;
             case "stances":
                 AddTank(new Vector3(1.5f, 0, -9f));
                 director.ShotAt(0.8f, "00_idle_hip");
@@ -132,6 +153,13 @@ public partial class PlayerRange : Node3D
     }
 
     public override void _PhysicsProcess(double delta) => script.Advance((float)delta);
+
+    private async void CaptureAfterDraw(CaptureDirector director, string label)
+    {
+        if (DisplayServer.GetName() == "headless") return;
+        await ToSignal(RenderingServer.Singleton, RenderingServer.SignalName.FramePostDraw);
+        if (IsInsideTree()) director.Screenshot(label);
+    }
 
     public override void _Process(double delta)
     {

@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 using Godot;
 using Propane.Core;
@@ -332,6 +333,22 @@ public partial class MovementTests : Node
         AddChild(player);
         for (var i = 0; i < 60; i++) await ToSignal(GetTree(), SceneTree.SignalName.PhysicsFrame);
         Check(player.ResolvedState.EffectiveAim && player.AimAmount > 0.99f, "facade starts grounded and aimed");
+        var tree = player.FindChildren("*", "AnimationTree", owned: false).OfType<AnimationTree>().Single();
+        var creepSpeed = Tuning.Current.CreepSpeed;
+        input.Intent.Move = Vector2.Down;
+        foreach (var speed in new[] { 0.98f, 1.6f, 2.2f, 2.8f })
+        {
+            Tuning.Current.CreepSpeed = speed;
+            for (var i = 0; i < 60; i++) await ToSignal(GetTree(), SceneTree.SignalName.PhysicsFrame);
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            Check(player.ResolvedState.Gait == PlayerGait.Creep && Math.Abs(player.Velocity.Length() - speed) < 0.001f,
+                $"creep facade reaches {speed} m/s");
+            Check(Math.Abs(tree.Get("parameters/walk_scale/scale").AsSingle() - speed / 0.98f) < 0.001f,
+                $"walk playback matches {speed} m/s without a cap");
+        }
+        Tuning.Current.CreepSpeed = creepSpeed;
+        input.Intent.Move = Vector2.Zero;
         player.ReceiveBlast(new BlastInfo(Vector3.Zero, Vector3.Forward, 0, 1));
         Check(player.ResolvedState.Lifecycle == PlayerLifecycle.Ragdoll && player.AimAmount == 0 &&
             player.CaptureNetState().Sprint == 0, "ragdoll immediately clears resolved control and weapon poses");

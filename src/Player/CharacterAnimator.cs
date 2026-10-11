@@ -92,7 +92,8 @@ public sealed class CharacterAnimator
             currentGait = gait;
             tree.Set(Gait, gait);
         }
-        tree.Set(WalkScale, direction * Mathf.Clamp(speed / WalkClipSpeed, 0.5f, 2.2f));
+        // Creep is a live speed dial. A playback cap would make the planted feet slide at faster settings.
+        tree.Set(WalkScale, direction * speed / WalkClipSpeed);
         tree.Set(JogScale, direction * Mathf.Clamp(speed / JogClipSpeed, 0.5f, 1.35f));
         tree.Set(SprintScale, direction * Mathf.Clamp(speed / SprintClipSpeed, 0.7f, 1.3f));
         tree.Set(IdleScale, 1f);

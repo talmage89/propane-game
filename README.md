@@ -152,12 +152,15 @@ $GODOT res://scenes/dev/soak.tscn
 # Tank close-ups (scenarios: full, vent, blast, look), the character and rifle rig, the world kit, map overviews.
 $GODOT --fixed-fps 60 res://scenes/dev/tank_range.tscn -- --capture-dir=/tmp/t --scenario=blast
 $GODOT --fixed-fps 60 res://scenes/dev/player_range.tscn -- --capture-dir=/tmp/p
-# Player scenarios: stances (default), reload, ragdoll, movement (labeled gait/jump transitions),
+# Player scenarios: stances (default), reload, ragdoll, creep (two measured strides), movement (labeled gait/jump transitions),
 # sprint-repro (discovery sequence, exact-tick assertions and transition log).
 # --view=rifleleft or rifleright follows the rifle up close.
 $GODOT --fixed-fps 60 res://scenes/dev/player_range.tscn -- --capture-dir=/tmp/p --scenario=reload --view=rifleleft
 $GODOT --fixed-fps 60 res://scenes/dev/player_range.tscn -- --capture-dir=/tmp/movement --scenario=movement --view=side
 $GODOT --headless res://scenes/dev/player_range.tscn -- --scenario=sprint-repro
+# Compare aimed walk speeds from the side and the player camera (--view=player).
+# Captures 12 frames per stride and writes final world-space foot/toe samples to stride.csv.
+$GODOT --fixed-fps 60 res://scenes/dev/player_range.tscn -- --scenario=creep --view=side --tune.CreepSpeed=1.6 --capture-dir=/tmp/creep
 $GODOT --fixed-fps 60 res://scenes/dev/world_lab.tscn -- --capture-dir=/tmp/w
 $GODOT --fixed-fps 60 res://scenes/dev/suburb_preview.tscn -- --capture-dir=/tmp/s
 
@@ -173,6 +176,11 @@ tools/dev/compare_tanks.py build/net/bot*.log
 `net_test.tscn` scenarios: bots playing (default), `duel` (hits, drops and a thrown player, filmed from both sides),
 `pickup` (an ammo can taken and returning), and `movement` (remote creep, sprint, jumping and held-aim landing,
 with assertions and labeled frames). [docs/multiplayer.md](docs/multiplayer.md) lists the commands.
+
+The creep probe reports median and 75th-percentile horizontal foot/toe drift for adjacent samples within 3 cm of
+each bone's minimum height, after two seconds of settling. These are near-floor proxies for planted contacts;
+they do not prove contact classification, lateral stepping or foot IK. The headless movement suite also checks
+actual facade velocity and animation playback at 0.98, 1.6, 2.2 and 2.8 m/s.
 
 ## Versions and releases
 
