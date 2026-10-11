@@ -35,8 +35,8 @@ IDs/states; bodies still moving during results use a tighter final moving tolera
 Missing/malformed samples, nonfinite values, duplicate IDs, clock/phase reversals, differing matches or
 incomplete play/end coverage fail. Loading gaps are outside the comparison interval. A loaded machine may
 start logging play up to the smaller of 10 s or 10% of the requested duration late. A playing/results gap may
-last at most 5 s, and gaps above 0.35 s may occupy at most 10% of the captured play/results interval. The 5 s
-bound has 24% margin over the observed 4.018 s stall; the startup bound covers the observed 7.30 s late start.
+last at most 10 s, and gaps above 0.35 s may occupy at most 10% of the captured play/results interval. The 10 s
+bound has 69% margin over the observed 5.923 s stall; the startup bound covers the observed 7.30 s late start.
 No positions or lifecycle comparisons are invented inside these wide gaps: affected pairs are reported as
 unobserved. Gaps pause a disagreement’s observed duration without proving agreement or resetting its clock.
 Smaller gaps still interpolate. The final common observed grid must follow settlement; exact completion

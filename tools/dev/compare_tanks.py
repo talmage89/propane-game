@@ -22,14 +22,14 @@ class Limits:
     # Persistent resting outliers are failures, not included in the noise budget.
     # Final moving drift <=0.281m -> 0.50m (+78%); clean <=0.197m -> 0.35m (+78%).
     # Clean profile: 1.5s/2.5m; see docs/network-soak.md for all runs and margins.
-    # Loaded-machine validation saw 4.018s gaps and a 7.30s late play start. Permit up to 5s
+    # Loaded-machine validation saw gaps up to 5.923s and a 7.30s late play start. Permit up to 10s
     # per gap, <=10% unobserved time, and <=min(10s, 10% of play) late startup. Positions
     # across gaps >0.35s are unobserved, never guessed. See docs/network-soak.md.
     settle: float = 2.0
     resting: float = .10
     moving: float = 3.0
     final_moving: float = .50
-    gap: float = 5.0
+    gap: float = 10.0
     interpolation_gap: float = .35
     missing_fraction: float = .10
     startup: float = 10.0

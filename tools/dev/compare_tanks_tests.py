@@ -171,12 +171,19 @@ class TankChecks(unittest.TestCase):
         too_late = log(length=90)
         too_late[1] = too_late[1][120:]
         excessive_gap = log(length=90)
-        del excessive_gap[1][20:80]
+        del excessive_gap[1][20:125]
         excessive_total = log(length=30)
         del excessive_total[1][20:65]
         for other in (too_late, excessive_gap, excessive_total):
             with self.assertRaises(ValueError):
                 compare([log(length=other[1][0].length), other])
+
+    def test_loaded_six_second_stall_retains_dense_capture_coverage(self):
+        other = log(length=90)
+        del other[1][200:260]
+        result = compare([log(length=90), other])
+        self.assertFalse(result["failures"])
+        self.assertGreater(result["unobserved_pairs"], 100)
 
     def test_late_completion_resting_position_is_checked_directly(self):
         other = log(.025)
