@@ -153,6 +153,9 @@ $GODOT --headless res://scenes/dev/movement_tests.tscn
 # suburbs with player starts, ammo spots and the plan's encoding. Exits 1 on failure.
 $GODOT --headless res://scenes/dev/generator_tests.tscn -- --seeds=200
 
+# Seeded bot fence courses using the real suburb builder and player (baseline before navigation work).
+$GODOT --headless --fixed-fps 60 res://scenes/dev/bot_navigation_course.tscn -- --baseline --seeds=20
+
 # Plain C# assertion suites; make test runs these, the generator, and two separate builds of one saved plan.
 $GODOT --headless res://scenes/dev/unit_tests.tscn
 tools/dev/check_world.sh

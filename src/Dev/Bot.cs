@@ -40,6 +40,8 @@ public sealed class Bot : IBotBrain
     private float retarget;
     private float blocked;
     private float stuck;
+    public int StuckEvents { get; private set; }
+    public int BlacklistedTargets { get; private set; }
     private float strafeTimer;
     private Vector3? vantage;
     private Vector3? cover;
@@ -402,7 +404,7 @@ public sealed class Bot : IBotBrain
             blocked = 0;
             if (vantage == null)
             {
-                blacklist[tank.GetInstanceId()] = clock + 10f;
+                Blacklist(tank, 10f);
                 retarget = 0;
                 Status = "no vantage point";
                 return;
@@ -578,6 +580,12 @@ public sealed class Bot : IBotBrain
                                                  node is not PropaneTank { State: PropaneTank.TankState.Exploded } &&
                                                  node is not AmmoPickup { Available: false };
 
+    private void Blacklist(PropaneTank tank, float seconds)
+    {
+        blacklist[tank.GetInstanceId()] = clock + seconds;
+        BlacklistedTargets++;
+    }
+
     /// <summary>Jumps and sidesteps when running into something.</summary>
     private void Unstick(PlayerCharacter player, float dt)
     {
@@ -585,6 +593,7 @@ public sealed class Bot : IBotBrain
         lastPosition = player.GlobalPosition;
         var trying = intent.Move.LengthSquared() > 0.25f;
         stuck = trying && moved < 0.02f ? stuck + dt : 0;
+        if (stuck > 0.4f && stuck - dt <= 0.4f) { StuckEvents++; }
         if (stuck > 0.4f)
         {
             intent.JumpPressed = true;
@@ -595,7 +604,7 @@ public sealed class Bot : IBotBrain
                 strafeSide = -strafeSide;
                 if (target is PropaneTank tank)
                 {
-                    blacklist[tank.GetInstanceId()] = clock + 8f;
+                    Blacklist(tank, 8f);
                 }
                 retarget = 0;
             }

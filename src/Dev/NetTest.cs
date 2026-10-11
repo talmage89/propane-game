@@ -113,7 +113,8 @@ public partial class NetTest : Node
                     GetTree().Quit(1);
                     return;
                 }
-                Log($"finished match {match.Setup.Id}; final scores {ScoreLine()}");
+                Log($"finished match {match.Setup.Id}; final scores {ScoreLine()}" +
+                    (bot is Bot smart ? $"; stuck={smart.StuckEvents} blacklist={smart.BlacklistedTargets}" : ""));
                 RemoveChild(match);
                 match.QueueFree();
                 match = null;
@@ -207,7 +208,7 @@ public partial class NetTest : Node
             bot.Think(match, dt);
             if (DevArgs.Get("bot-log") != null && Mathf.PosMod(clock, 2f) < dt)
             {
-                Log($"bot: {bot.Status}");
+                Log($"bot: {bot.Status}" + (bot is Bot smart ? $"; stuck={smart.StuckEvents} blacklist={smart.BlacklistedTargets}" : ""));
             }
         }
 
