@@ -14,7 +14,7 @@ public static class LabScenarios
 {
     public static IReadOnlyList<LabScenario> All { get; } = Array.AsReadOnly(new[]
     {
-        new LabScenario("stack", "Huge stack", "Build an upright pyramid. Shoot twice and watch it chain.",
+        new LabScenario("stack", "Huge stack", "Build an upright pyramid. Puncture several, then detonate one.",
             new[] { LabEnvironment.Void }, lab => lab.BuildStack()),
         new LabScenario("duel", "Duel vs a banking bot", "Bank tanks, steal the bot’s bank, and beat the clock.",
             new[] { LabEnvironment.Void, LabEnvironment.Suburb }, lab => lab.BuildDuel(), Banking: true),
