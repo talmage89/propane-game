@@ -12,7 +12,7 @@ PORT ?= $(if $(SLOT),$(shell echo $$((24680 + $(SLOT)))),24680)
 SERVER ?= 127.0.0.1:$(PORT)
 
 .DEFAULT_GOAL := help
-.PHONY: help setup run build lint check test test-full server bots bots-stop package deploy release-patch release-minor release-major
+.PHONY: help setup run build lint check test test-core test-behavior test-generator test-world test-full server bots bots-stop package deploy release-patch release-minor release-major
 
 help: ## List the tasks
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN { FS = ":.*## " } { printf "  make %-14s %s\n", $$1, $$2 }'
@@ -36,14 +36,20 @@ lint: ## Check C# formatting and compile with warnings as errors
 check: lint ## Run lint, then the tests
 	@$(MAKE) --no-print-directory test
 
-test: build ## Run all headless regression suites and separate-process world tests (as CI does)
+# These same partitions run as separate CI jobs. Shared build runs once, even with make -j.
+test: test-core test-behavior test-generator test-world ## Run the fast headless gate (the same suites as CI)
+
+test-core: build ## Run checker, platform, movement and unit assertions
 	python3 -B tools/dev/check_world_tests.py
+	python3 -B tools/dev/time_gate_tests.py
 	python3 -B tools/dev/check_scores_tests.py
 	python3 -B tools/dev/compare_vents_tests.py
 	python3 -B tools/dev/compare_tank_paths_tests.py
+	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/core_tests.tscn
 	"$(GODOT)" --headless --path . res://scenes/dev/shutdown_tests.tscn
 	"$(GODOT)" --headless --path . res://scenes/dev/shutdown_tests.tscn -- --paused --window-close --repeat-quit
-	"$(GODOT)" --headless --path . res://scenes/dev/unit_tests.tscn
+
+test-behavior: build ## Run isolated physics, navigation, menu, grip and feet probes
 	"$(GODOT)" --headless --path . --fixed-fps 60 res://scenes/dev/blast_query_tests.tscn
 	"$(GODOT)" --headless --path . --fixed-fps 60 res://scenes/dev/gather_range.tscn
 	"$(GODOT)" --headless --path . --fixed-fps 60 res://scenes/dev/gather_range.tscn -- --scenario=grant-races
@@ -51,11 +57,10 @@ test: build ## Run all headless regression suites and separate-process world tes
 	"$(GODOT)" --headless --path . --fixed-fps 60 res://scenes/dev/game_test.tscn -- --scenario=gather --tune.FixedSeed=23
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/melee_range.tscn
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/player_range.tscn -- --scenario=melee --assert-motion --assert-grip
-	"$(GODOT)" --headless --path . res://scenes/dev/movement_tests.tscn
 	"$(GODOT)" --headless --path . --fixed-fps 60 res://scenes/dev/bot_navigation_course.tscn -- --seeds=5
-	"$(GODOT)" --headless --path . res://scenes/dev/menu_test.tscn -- --scenario=gamepad --port=$(PORT)
-	"$(GODOT)" --headless --path . res://scenes/dev/menu_test.tscn -- --scenario=devices --port=$(PORT)
-	"$(GODOT)" --headless --path . res://scenes/dev/menu_test.tscn -- --scenario=mouse --port=$(PORT)
+	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/menu_test.tscn -- --scenario=gamepad --port=$(PORT)
+	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/menu_test.tscn -- --scenario=devices --port=$(PORT)
+	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/menu_test.tscn -- --scenario=mouse --port=$(PORT)
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/player_range.tscn -- --scenario=grip --grip-sweep --assert-grip --assert-motion
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/player_range.tscn -- --scenario=ragdoll --assert-grip --assert-motion
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/player_range.tscn -- --scenario=feet --assert-feet --assert-motion
@@ -63,13 +68,16 @@ test: build ## Run all headless regression suites and separate-process world tes
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/player_range.tscn -- --scenario=feet-events --assert-feet --assert-grip --assert-motion
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/player_range.tscn -- --scenario=movement --assert-motion --assert-grip
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/player_range.tscn -- --scenario=motion --assert-motion --assert-grip
-	"$(GODOT)" --headless --path . res://scenes/dev/generator_tests.tscn -- --seeds=100
-	"$(GODOT)" --headless --path . res://scenes/dev/platform_tests.tscn
+
+test-generator: build ## Check every generator assertion with bounded seed depth
+	"$(GODOT)" --headless --path . res://scenes/dev/generator_tests.tscn -- --seeds=20 --large-seeds=3 --formation-seeds=2
+
+test-world: build ## Compare all formations built in two fresh processes
 	tools/dev/check_world.sh
 
-test-full: build ## Deeper sweeps than make test: 200 generator seeds, 100 per large match size, 100 navigation seeds
+test-full: test ## Run the gate plus deep sweeps
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/player_range.tscn -- --scenario=melee-reloads --assert-motion --assert-grip
-	"$(GODOT)" --headless --path . res://scenes/dev/generator_tests.tscn -- --seeds=200 --large-seeds=100
+	"$(GODOT)" --headless --path . res://scenes/dev/generator_tests.tscn -- --seeds=200 --large-seeds=100 --formation-seeds=6
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/bot_navigation_course.tscn -- --seeds=100
 
 server: build ## Run a multiplayer server here (PORT, default 24680, or this worktree's)

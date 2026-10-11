@@ -47,6 +47,7 @@ public partial class BotNavigationCourse : Node3D, IPlayerInputSource
 
     public override void _Ready()
     {
+        DevArgs.MarkReady();
         DisplayServer.WindowSetVsyncMode(DisplayServer.VSyncMode.Disabled);
         ProcessPhysicsPriority = -10;
         DevArgs.Setup();

@@ -29,6 +29,7 @@ public partial class GatherRange : Node3D
 
     public override void _Ready()
     {
+        DevArgs.MarkReady();
         DevArgs.Setup();
         DisplayServer.WindowSetVsyncMode(DisplayServer.VSyncMode.Disabled);
         var effects = new Node3D(); AddChild(effects);

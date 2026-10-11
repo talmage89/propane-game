@@ -20,6 +20,7 @@ public partial class BlastQueryTests : Node3D
 
     public override void _Ready()
     {
+        DevArgs.MarkReady();
         // More colliders than one blast page, including duplicate shapes on the same body.
         var bodies = new List<RigidBody3D>();
         for (var i = 0; i < 1100; i++)

@@ -200,6 +200,7 @@ $GODOT --headless res://scenes/dev/movement_tests.tscn
 
 # Generator: exact determinism and encoding, authored hull overlaps and tier supports, placement and reachability,
 # all four formations, and supply/start safety at 2, 8, 16, 24 and 32 players. Exits 1 on failure.
+# make test uses bounded sweeps; make test-full retains the deep seed coverage.
 $GODOT --headless res://scenes/dev/generator_tests.tscn -- --seeds=200
 
 # Bot navigation: real picket/privacy fences, gates, bins, cars, piles, houses and touching-fence recovery.
@@ -209,7 +210,7 @@ $GODOT --fixed-fps 60 res://scenes/dev/bot_navigation_course.tscn -- --seeds=5 -
 # --baseline compares direct movement plus the old stuck recovery; --first-seed=39 --seeds=1 replays one seed.
 # --nav-log traces waypoints/replans. make test runs five seeds; docs/bot-navigation.md describes the component.
 
-# Plain C# assertion suites; make test runs these, the generator, and two separate builds of a saved plan for each formation.
+# Plain C# assertion suites; make test runs these in a shared runner and checks saved plans in two fresh processes.
 $GODOT --headless res://scenes/dev/unit_tests.tscn
 tools/dev/check_world.sh
 

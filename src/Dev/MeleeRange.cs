@@ -25,6 +25,7 @@ public partial class MeleeRange : Node3D
 
     public override void _Ready()
     {
+        DevArgs.MarkReady();
         DevArgs.Setup();
         ProcessPhysicsPriority = -10;
         InputSetup.Register();
@@ -98,11 +99,11 @@ public partial class MeleeRange : Node3D
                 Require(largeHits == 1, "large prop surface outside center reach missed, or duplicate shapes hit twice");
                 proved = true;
                 GD.Print("[melee-range] PASS large prop surface and duplicate shapes");
-                GetTree().Quit();
+                ShutdownGuard.Quit(GetTree());
             }
             if (time > 8.5f && !proved) throw new InvalidOperationException("proof timeout");
         }
-        catch (Exception error) { GD.PushError($"[melee-range] FAIL {error.Message}"); GetTree().Quit(1); }
+        catch (Exception error) { GD.PushError($"[melee-range] FAIL {error.Message}"); ShutdownGuard.Quit(GetTree(), 1); }
     }
 
     private bool Once(float at, float dt) => time >= at && time - dt < at;

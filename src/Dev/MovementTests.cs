@@ -23,6 +23,7 @@ public partial class MovementTests : Node
 
     public override void _Ready()
     {
+        DevArgs.MarkReady();
         ProcessMode = ProcessModeEnum.Always;
         Callable.From(RunTests).CallDeferred();
     }
@@ -50,12 +51,12 @@ public partial class MovementTests : Node
             PauseTests();
             await FacadeTests().ConfigureAwait(true);
             GD.Print($"[movement-tests] PASS {checks} assertions");
-            ShutdownGuard.Quit(GetTree());
+            CoreTests.Complete(this);
         }
         catch (Exception e)
         {
             GD.PushError($"[movement-tests] FAIL {e}");
-            ShutdownGuard.Quit(GetTree(), 1);
+            CoreTests.Complete(this, 1);
         }
     }
 

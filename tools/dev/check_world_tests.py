@@ -9,18 +9,18 @@ import unittest
 
 class WorldCheckTests(unittest.TestCase):
     def run_check(self, failure):
-        with tempfile.TemporaryDirectory(prefix="propane-world-test-") as tmp:
+        with tempfile.TemporaryDirectory(prefix="wptest-world-test-") as tmp:
             scratch = Path(tmp)
             fake = scratch / "godot"
             fake.write_text(
                 "#!/usr/bin/env bash\n"
                 "for arg in \"$@\"; do\n"
-                "  if [[ $arg == --$FAILURE-world-plan=* ]]; then\n"
+                "  if [[ $arg == --$FAILURE-world-plans=* ]]; then\n"
                 "    echo 'child shutdown backtrace sentinel' >&2\n"
                 "    exit 134\n"
                 "  fi\n"
                 "done\n"
-                "echo '[world] hash fixture'\n"
+                'for formation in Rows Square Triangular Cluster; do echo "[world] hash fixture fences 1 formation $formation"; done\n'
             )
             fake.chmod(0o755)
             env = dict(os.environ, GODOT=str(fake), TMPDIR=tmp, FAILURE=failure)
@@ -28,7 +28,7 @@ class WorldCheckTests(unittest.TestCase):
                 ["bash", str(Path(__file__).with_name("check_world.sh"))],
                 env=env, capture_output=True, text=True, check=False,
             )
-            logs = list(scratch.glob("propane-world-*"))
+            logs = list(scratch.glob("wptest-world-*"))
             if failure:
                 self.assertEqual(result.returncode, 134, result.stderr)
                 self.assertIn("child shutdown backtrace sentinel", result.stderr)
@@ -53,7 +53,7 @@ class WorldCheckTests(unittest.TestCase):
 
 class DeployLogTests(unittest.TestCase):
     def test_export_failure_prints_tail_after_earlier_errors(self):
-        with tempfile.TemporaryDirectory(prefix="propane-deploy-test-") as tmp:
+        with tempfile.TemporaryDirectory(prefix="wptest-deploy-test-") as tmp:
             project = Path(tmp)
             script = project / "tools" / "server" / "deploy.sh"
             script.parent.mkdir(parents=True)

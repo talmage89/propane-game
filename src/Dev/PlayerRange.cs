@@ -22,6 +22,7 @@ public partial class PlayerRange : Node3D
 
     public override void _Ready()
     {
+        DevArgs.MarkReady();
         DisplayServer.WindowSetVsyncMode(DisplayServer.VSyncMode.Disabled);
         ProcessPhysicsPriority = -10;
         DevArgs.Setup();
@@ -77,7 +78,7 @@ public partial class PlayerRange : Node3D
                         if (player.Ammo!.Reloading || player.Ammo.Magazine != (empty ? 0 : 5) || player.Ammo.Reserve != 90)
                         {
                             GD.PushError("[melee-reloads] FAIL canceled reload transferred ammo or remained active");
-                            GetTree().Quit(1);
+                            ShutdownGuard.Quit(GetTree(), 1);
                         }
                     });
                 }

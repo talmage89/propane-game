@@ -13,6 +13,7 @@ public partial class PlatformTests : Node
 
     public override void _Ready()
     {
+        DevArgs.MarkReady();
         const string root = "https://github.com/talmage89/propane-game/releases/download/v1.2.3/Propane-1.2.3-";
         Check("Windows download", BuildInfo.DownloadUrl("1.2.3", "Windows") == root + "windows-x86_64.zip");
         Check("macOS download", BuildInfo.DownloadUrl("v1.2.3", "macOS") == root + "macos-arm64.zip");
@@ -37,7 +38,7 @@ public partial class PlatformTests : Node
             CultureInfo.CurrentCulture = culture;
         }
         GD.Print(failures == 0 ? "[platformtests] ALL PASSED (9 checks)" : $"[platformtests] {failures} FAILURES");
-        ShutdownGuard.Quit(GetTree(), failures == 0 ? 0 : 1);
+        CoreTests.Complete(this, failures == 0 ? 0 : 1);
     }
 
     private void Check(string name, bool passed)

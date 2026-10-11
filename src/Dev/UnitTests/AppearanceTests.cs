@@ -7,6 +7,7 @@ using Propane.Net;
 
 namespace Propane.Dev.UnitTests;
 
+[UnitSuite]
 public static class AppearanceTests
 {
     public static void Register(TestRunner runner)

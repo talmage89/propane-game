@@ -19,6 +19,7 @@ public partial class MenuTest : Node
 
     public override void _Ready()
     {
+        DevArgs.MarkReady();
         DevArgs.Setup();
         // A fresh settings file, so the run neither reads nor changes the player's name, color and server.
         DirAccess.RemoveAbsolute(ProjectSettings.GlobalizePath("user://menu_test_settings.cfg"));

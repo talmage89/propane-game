@@ -1,6 +1,7 @@
 using System;
+using System.Linq;
+using System.Reflection;
 using Godot;
-using Propane.Core;
 
 namespace Propane.Dev.UnitTests;
 
@@ -12,25 +13,32 @@ public partial class TestRunner : Node
 
     public override void _Ready()
     {
+        DevArgs.MarkReady();
         try
         {
             if (WorldBuildTests.RunProcessMode(this))
             {
-                ShutdownGuard.Quit(GetTree());
+                CoreTests.Complete(this);
                 return;
             }
-            WorldBuildTests.Register(this);
-            ProtocolTests.Register(this);
-            AppearanceTests.Register(this);
-            PlanTests.Register(this);
-            ServerTests.Register(this);
-            LifecycleTests.Register(this);
-            NavigationTests.Register(this);
-            AuthorityTests.Register(this);
-            LocomotionTests.Register(this);
-            GatherTests.Register(this);
-            RecoilTests.Register(this);
-            MeleeTests.Register(this);
+            var suites = typeof(TestRunner).Assembly.GetTypes()
+                .Where(type => type.IsDefined(typeof(UnitSuiteAttribute), false))
+                .OrderBy(type => type.GetCustomAttribute<UnitSuiteAttribute>()!.Order)
+                .ThenBy(type => type.FullName, StringComparer.Ordinal)
+                .ToArray();
+            Assert(suites.Length > 0, "no unit suites discovered");
+            foreach (var suite in suites)
+            {
+                var register = suite.GetMethod("Register", BindingFlags.Public | BindingFlags.Static,
+                    new[] { typeof(TestRunner) });
+                Assert(register != null && register.ReturnType == typeof(void),
+                    $"{suite.FullName} must expose public static void Register(TestRunner)");
+                GD.Print($"[unit] BEGIN {suite.Name}");
+                var before = tests;
+                register!.CreateDelegate<Action<TestRunner>>()(this);
+                Assert(tests > before, $"{suite.FullName} registered no assertions");
+            }
+            GD.Print($"[unit] {suites.Length} discovered suites");
         }
         catch (Exception e)
         {
@@ -38,7 +46,7 @@ public partial class TestRunner : Node
             GD.Print($"[unit] FAIL suite setup: {e}");
         }
         GD.Print($"[unit] {tests} tests, {failures} failures");
-        ShutdownGuard.Quit(GetTree(), failures == 0 ? 0 : 1);
+        CoreTests.Complete(this, failures == 0 ? 0 : 1);
     }
 
     public void Run(string name, Action test)
@@ -69,4 +77,13 @@ public partial class TestRunner : Node
         catch (T) { return; }
         throw new InvalidOperationException($"expected {typeof(T).Name}");
     }
+}
+
+/// <summary>Opt a static Register(TestRunner) suite into discovery; negative order is reserved for world setup.</summary>
+[AttributeUsage(AttributeTargets.Class)]
+public sealed class UnitSuiteAttribute : Attribute
+{
+    public int Order { get; }
+
+    public UnitSuiteAttribute(int order = 0) => Order = order;
 }

@@ -8,6 +8,7 @@ using Propane.World.Plan;
 
 namespace Propane.Dev.UnitTests;
 
+[UnitSuite]
 public static class PlanTests
 {
     public static SuburbPlan Fixture()

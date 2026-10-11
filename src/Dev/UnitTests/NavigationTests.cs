@@ -6,6 +6,7 @@ using Propane.Navigation;
 
 namespace Propane.Dev.UnitTests;
 
+[UnitSuite]
 internal static class NavigationTests
 {
     private sealed class CourseWorld : INavigationWorld
