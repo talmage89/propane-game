@@ -23,8 +23,9 @@ public static class PileBuilder
 
     /// <summary>
     /// Spacing is (across, layer rise, depth), in meters. Rows lie on their sides in a barrel pyramid;
-    /// square and triangular tiers also lie on their sides, cradled between two tanks below. Incomplete tiers are filled only
-    /// after their entire supporting tier. Cluster is a compact upright hexagonal lattice.
+    /// square and triangular tiers also lie on their sides, cradled between two tanks below. Incomplete base tiers
+    /// with enough tanks reserve one above its two supports, so a pyramid does not become a flat mat. Cluster uses the across pitch
+    /// for a compact upright hexagonal lattice.
     /// </summary>
     public static IReadOnlyList<Transform3D> Build(PileFormation formation, int count, Vector3 spacing)
     {
@@ -41,7 +42,7 @@ public static class PileBuilder
             var points = new List<Vector3>();
             for (var row = -side; row <= side; row++)
                 for (var col = -side; col <= side; col++)
-                    points.Add(new Vector3((col + (row & 1) * 0.5f) * spacing.X, 0, row * spacing.Z * Mathf.Sqrt(3f) / 2f));
+                    points.Add(new Vector3((col + (row & 1) * 0.5f) * spacing.X, 0, row * spacing.X * Mathf.Sqrt(3f) / 2f));
             foreach (var p in points.OrderBy(p => p.LengthSquared()).ThenBy(p => p.Z).ThenBy(p => p.X).Take(count)) Add(p, Basis.Identity);
         }
         else
@@ -54,6 +55,10 @@ public static class PileBuilder
             };
             var width = 1;
             while (Capacity(width) < count) width++;
+            // Five tanks can form square tiers (four plus one), four triangular tiers (three plus one).
+            // When the next wider base would consume the whole count, leave one tank for an upper tier.
+            var reserveUpper = formation == PileFormation.Square && count >= 5 && count <= width * width ||
+                formation == PileFormation.Triangular && count >= 4 && count <= width * (width + 1) / 2;
             for (var layer = 0; layer < width && result.Count < count; layer++)
             {
                 var n = width - layer;
@@ -68,6 +73,13 @@ public static class PileBuilder
                     }
                 foreach (var p in points.OrderBy(p => p.X * p.X + p.Z * p.Z).ThenBy(p => p.Z).ThenBy(p => p.X))
                 {
+                    if (layer == 0 && reserveUpper && result.Count == count - 1) break;
+                    if (layer == 1 && reserveUpper)
+                    {
+                        var left = new Vector3(p.X - spacing.X / 2, Radius, p.Z - LocalCenter.Y);
+                        var right = new Vector3(p.X + spacing.X / 2, Radius, p.Z - LocalCenter.Y);
+                        if (!result.Any(t => t.Origin.IsEqualApprox(left)) || !result.Any(t => t.Origin.IsEqualApprox(right))) continue;
+                    }
                     Add(p + new Vector3(0, Radius, -LocalCenter.Y), new Basis(Vector3.Right, Mathf.Pi / 2));
                 }
             }

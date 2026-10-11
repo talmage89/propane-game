@@ -414,7 +414,7 @@ public partial class LobbyServer : Node
 
         var started = Time.GetTicksMsec();
         var seed = random.Next();
-        var settings = SuburbPlans.Match(tuning, Mathf.Max(match.Players.Count, tuning.MaxPlayers));
+        var settings = SuburbPlans.Match(tuning, match.Players.Count);
         var plan = SuburbPlans.Generate(settings, seed, () => random.Next());
         var planBytes = PlanCodec.Encode(plan);
         match.PickupUp = Enumerable.Repeat(true, plan.AmmoSpots.Count).ToArray();

@@ -80,6 +80,16 @@ can edit. In a downloaded build, Save writes the player's own `tuning.tres` in t
 (`~/Library/Application Support/Godot/app_userdata/Propane` on macOS, `~/.local/share/godot/app_userdata/Propane`
 on Linux), which then takes precedence. **Defaults** restores the values in code. `FixedSeed` (World group) replays one suburb; 0 picks a random one.
 
+Tank piles use weighted formations in both modes: side-laid rows, square tiers, triangular tiers, and upright tight
+clusters. The **Tank Piles** tuners control weights and spacing. Each upper tier is placed only after its supports;
+cramped sites use smaller whole formations. Pyramids stand on clear ground rather than moving pickup beds.
+
+Match settings use the actual player count. Tank supply is `MpTankCount + MpTanksPerPlayer × players`, ammo cans are
+`PickupCount + PickupsPerPlayer × players`, and map width is `MpMapSizeBase + MpMapSizePerPlayer × players`. Pile
+limits gain `floor(MpPileSizePerPlayer × players)`. `MpStartSpacing` is a hard minimum between clear road starts;
+invalid settings fail generation instead of placing players on top of one another. The lobby cap remains a separate
+setting. These shared plan and tuner changes require the next release to be minor (`Protocol.Version` is 2).
+
 ## Layout
 
 | Path | Contents |

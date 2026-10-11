@@ -207,6 +207,16 @@ public partial class Tuning : Resource
     [Export(PropertyHint.Range, "0.3,10,0.1")] public float TransitionTime { get; set; } = 2.4f;
     [Export] public int FixedSeed { get; set; } = 0;
 
+    [ExportGroup("Tank Piles")]
+    [Export(PropertyHint.Range, "0.5,4,0.05")] public float PileSiteSpacing { get; set; } = 1f;
+    [Export(PropertyHint.Range, "0,10,0.1")] public float PileRowsWeight { get; set; } = 1f;
+    [Export(PropertyHint.Range, "0,10,0.1")] public float PileSquareWeight { get; set; } = 1f;
+    [Export(PropertyHint.Range, "0,10,0.1")] public float PileTriangularWeight { get; set; } = 1f;
+    [Export(PropertyHint.Range, "0,10,0.1")] public float PileClusterWeight { get; set; } = 1f;
+    [Export(PropertyHint.Range, "0.32,0.5,0.001")] public float PileSpacing { get; set; } = 0.36f;
+    [Export(PropertyHint.Range, "0.15,0.35,0.001")] public float PileLayerHeight { get; set; } = 0.249f;
+    [Export(PropertyHint.Range, "0.468,0.8,0.001")] public float PileDepthSpacing { get; set; } = 0.49f;
+
     // ---------------------------------------------------------------- HUD
     [ExportGroup("HUD")]
     /// <summary>Small arrows toward every group of tanks: on the screen edge, or over the group when in view.</summary>
@@ -242,7 +252,14 @@ public partial class Tuning : Resource
 
     // ---------------------------------------------------------------- Multiplayer: suburb
     [ExportGroup("Multiplayer Suburb")]
-    [Export(PropertyHint.Range, "1,120,1")] public int MpTankCount { get; set; } = 40;
+    /// <summary>Base supply, before adding the per-player supply.</summary>
+    [Export(PropertyHint.Range, "0,120,1")] public int MpTankCount { get; set; } = 20;
+    [Export(PropertyHint.Range, "0,20,1")] public int MpTanksPerPlayer { get; set; } = 4;
+    [Export(PropertyHint.Range, "150,400,1")] public float MpMapSizeBase { get; set; } = 190f;
+    [Export(PropertyHint.Range, "0,20,0.5")] public float MpMapSizePerPlayer { get; set; } = 4f;
+    [Export(PropertyHint.Range, "0,2,0.05")] public float MpPileSizePerPlayer { get; set; } = 0.25f;
+    [Export(PropertyHint.Range, "2,30,0.5")] public float MpStartSpacing { get; set; } = 12f;
+    [Export(PropertyHint.Range, "55,100,1")] public float MpRoadSpacing { get; set; } = 70f;
     [Export(PropertyHint.Range, "1,16,1")] public int MpClusterSizeMin { get; set; } = 5;
     [Export(PropertyHint.Range, "1,16,1")] public int MpClusterSizeMax { get; set; } = 12;
     /// <summary>How strongly piles are pulled toward the suburb's center: 0 spreads them like single player.</summary>
@@ -256,7 +273,9 @@ public partial class Tuning : Resource
     [Export(PropertyHint.Range, "0,600,1")] public int StartingReserve { get; set; } = 60;
     [Export(PropertyHint.Range, "0,999,1")] public int MaxReserve { get; set; } = 150;
     [Export(PropertyHint.Range, "0,6,0.05")] public float ReloadTime { get; set; } = 1.6f;
-    [Export(PropertyHint.Range, "0,40,1")] public int PickupCount { get; set; } = 8;
+    /// <summary>Base ammo cans, before adding the per-player supply.</summary>
+    [Export(PropertyHint.Range, "0,40,1")] public int PickupCount { get; set; } = 3;
+    [Export(PropertyHint.Range, "0,10,1")] public int PickupsPerPlayer { get; set; } = 1;
     [Export(PropertyHint.Range, "1,300,1")] public int PickupAmount { get; set; } = 30;
     [Export(PropertyHint.Range, "0,120,0.5")] public float PickupRespawnTime { get; set; } = 20f;
     [Export(PropertyHint.Range, "0.05,5,0.05")] public float PickupRevealTime { get; set; } = 1.2f;

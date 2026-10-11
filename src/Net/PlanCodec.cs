@@ -13,7 +13,7 @@ namespace Propane.Net;
 /// </summary>
 public static class PlanCodec
 {
-    private const int FormatVersion = 1;
+    private const int FormatVersion = 2;
 
     public static byte[] Encode(SuburbPlan plan)
     {
@@ -99,6 +99,11 @@ public static class PlanCodec
                 w.Write(tank.Yaw);
                 w.Write(tank.Elevation);
                 w.Write(tank.Reason);
+                w.Write(tank.Rotation.X);
+                w.Write(tank.Rotation.Y);
+                w.Write(tank.Rotation.Z);
+                w.Write(tank.Pile);
+                w.Write((byte)tank.Formation);
             }
             Vec2(w, plan.Spawn);
             w.Write(plan.SpawnYaw);
@@ -184,7 +189,8 @@ public static class PlanCodec
         }
         for (int i = 0, n = r.ReadInt32(); i < n; i++)
         {
-            plan.Tanks.Add(new TankPlacement(Vec2(r), r.ReadSingle(), r.ReadSingle(), r.ReadString()));
+            plan.Tanks.Add(new TankPlacement(Vec2(r), r.ReadSingle(), r.ReadSingle(), r.ReadString(),
+                new Vector3(r.ReadSingle(), r.ReadSingle(), r.ReadSingle()), r.ReadInt32(), (PileFormation)r.ReadByte()));
         }
         plan.Spawn = Vec2(r);
         plan.SpawnYaw = r.ReadSingle();

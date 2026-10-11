@@ -144,8 +144,9 @@ public sealed record Paving(OrientedRect Area, PavingKind Kind);
 /// <summary>A player start: map position and facing (as <see cref="SuburbGenerator.YawFacing"/>).</summary>
 public sealed record SpawnPoint(Vector2 Position, float Yaw);
 
-/// <summary>Where a tank goes and why (for debugging the generator).</summary>
-public sealed record TankPlacement(Vector2 Position, float Yaw, float Elevation, string Reason);
+/// <summary>Foot origin, world yaw, local Euler rotation, and pile identity; clients build these exact transforms.</summary>
+public sealed record TankPlacement(Vector2 Position, float Yaw, float Elevation, string Reason,
+    Vector3 Rotation = default, int Pile = 0, PileFormation Formation = PileFormation.Cluster);
 
 public sealed class SuburbPlan
 {

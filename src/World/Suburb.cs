@@ -677,8 +677,8 @@ public partial class Suburb : Node3D
                 tank.NetId = Net.BodySync.MapTankId(index);
             }
             DynamicRoot.AddChild(tank);
-            tank.Position = ToWorld(placement.Position, placement.Elevation + 0.01f);
-            tank.Rotation = new Vector3(0, placement.Yaw, 0);
+            tank.Position = ToWorld(placement.Position, placement.Elevation);
+            tank.Basis = new Basis(Vector3.Up, placement.Yaw) * Basis.FromEuler(placement.Rotation);
             tank.Sleeping = true;
             tank.Detonated += OnTankDetonated;
             tanks.Add(tank);

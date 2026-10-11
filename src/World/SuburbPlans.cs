@@ -13,23 +13,38 @@ public static class SuburbPlans
 
     private const int Rerolls = 6;
 
-    public static SuburbSettings SinglePlayer(Tuning tuning) => new()
+    public static SuburbSettings SinglePlayer(Tuning tuning) => Piles(tuning) with
     {
         TankCount = tuning.TankCount,
         ClusterSizeMin = tuning.ClusterSizeMin,
         ClusterSizeMax = Mathf.Max(tuning.ClusterSizeMin, tuning.ClusterSizeMax),
     };
 
-    /// <summary>A match suburb: fewer, bigger piles near the center, a start for every player, and ammo pickups.</summary>
-    public static SuburbSettings Match(Tuning tuning, int players) => new()
+    /// <summary>A player-scaled suburb: piles near the center, a clear start for every player, and ammo pickups.</summary>
+    public static SuburbSettings Match(Tuning tuning, int players) => Piles(tuning) with
     {
-        TankCount = tuning.MpTankCount,
-        ClusterSizeMin = tuning.MpClusterSizeMin,
-        ClusterSizeMax = Mathf.Max(tuning.MpClusterSizeMin, tuning.MpClusterSizeMax),
+        MapSize = tuning.MpMapSizeBase + tuning.MpMapSizePerPlayer * Mathf.Max(players, 1),
+        TankCount = tuning.MpTankCount + tuning.MpTanksPerPlayer * Mathf.Max(players, 1),
+        ClusterSizeMin = tuning.MpClusterSizeMin + (int)(tuning.MpPileSizePerPlayer * Mathf.Max(players, 1)),
+        ClusterSizeMax = Mathf.Max(tuning.MpClusterSizeMin, tuning.MpClusterSizeMax) + (int)(tuning.MpPileSizePerPlayer * Mathf.Max(players, 1)),
         CenterBias = tuning.MpCenterBias,
         CenterRadius = tuning.MpCenterRadius,
         PlayerSpawns = Mathf.Max(players, 1),
-        AmmoSpots = tuning.PickupCount,
+        AmmoSpots = tuning.PickupCount + tuning.PickupsPerPlayer * Mathf.Max(players, 1),
+        StartSpacing = tuning.MpStartSpacing,
+        RoadSpacing = tuning.MpRoadSpacing,
+    };
+
+    private static SuburbSettings Piles(Tuning tuning) => new()
+    {
+        PileSiteSpacing = tuning.PileSiteSpacing,
+        RowsWeight = tuning.PileRowsWeight,
+        SquareWeight = tuning.PileSquareWeight,
+        TriangularWeight = tuning.PileTriangularWeight,
+        TightWeight = tuning.PileClusterWeight,
+        PileSpacing = tuning.PileSpacing,
+        PileLayerHeight = tuning.PileLayerHeight,
+        PileDepthSpacing = tuning.PileDepthSpacing,
     };
 
     /// <summary>
