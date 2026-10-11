@@ -219,6 +219,24 @@ The server is the game itself started with `-- --server` (and `--headless`). It 
 | `src/Net/AmmoPickup.cs` | The ammo can and its build-up reveal. |
 | `src/UI/Menus.cs`, `MatchHud.cs`, `MatchMenu.cs`, `ResultsScreen.cs` | Front end, match HUD, pause menu, results. |
 
+### Transport contract
+
+`IPacketTransport` defines whole messages with opaque connection handles, explicit send acceptance, payload limits,
+disconnect reasons and per-connection diagnostics. Callbacks run only during main-thread Poll. Received memory is
+borrowed until the callback returns; retain a copy. ReliableOrdered guarantees order per connection, while player
+pose and body-state classes are disposable. `ProtocolPeerMap` isolates the compatibility bridge to wire player ids.
+
+`FaultPacketTransport` wraps any backend with seeded lag/jitter and an injected monotonic clock. Loss affects only
+outgoing unreliable messages. ReliableStall delays reliable traffic while permitting snapshots to overtake it;
+reliable order remains independent per connection and direction. Incoming and outgoing queues each cap at 4096
+packets/4 MiB per connection; payload limits also respect the buffer size. Accepted reliable sends retry backend
+pressure in order. Reliable receive overflow fails the connection; unreliable overflow counts a drop.
+
+The unit runner uses in-memory loopback sockets with manual time and receive buffers poisoned after callbacks. It
+asserts ordering, seeded schedules, loss rules, reliable stalls, backpressure, oversize sends, disconnect reasons,
+reconnect cleanup and packet lifetime without threads, real ports or sleeping. These limits and faults are transport
+test policies, not gameplay tuners.
+
 Details settled while building, within the decisions above:
 
 - **Remote players** are full copies of the character (animation, rifle, ragdoll) driven by the states their own game sends. A thrown player's ragdoll falls on its own on every screen, steered after the real one; it gets up where the real one got up. Shots hit other players' bodies and limbs. Players pass through each other.

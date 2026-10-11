@@ -1,0 +1,246 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using Propane.Net;
+
+namespace Propane.Dev.UnitTests;
+
+/// <summary>Contract assertions use manual time and poisoned receive buffers; never sleeps or opens a socket.</summary>
+public static class TransportTests
+{
+    private sealed class Clock : IMonotonicClock { public double Seconds { get; set; } = 100; }
+    private static readonly PacketEndpoint Endpoint = new("", 1234);
+    private static void Assert(bool condition, string message) => TestRunner.Assert(condition, message);
+
+    private sealed class Pair : IDisposable
+    {
+        public readonly Clock Clock = new();
+        public readonly LoopbackNetwork Network = new();
+        public readonly LoopbackTransport Server;
+        public readonly LoopbackTransport RawClient;
+        public readonly IPacketTransport Client;
+        public readonly ConnectionHandle ClientHandle;
+        public readonly ConnectionHandle ServerHandle;
+        public readonly List<(TrafficClass Traffic, byte[] Bytes)> AtServer = new();
+        public readonly List<byte[]> AtClient = new();
+
+        public Pair(PacketFaults? faults = null, int seed = 1, int maxPayload = 512 * 1024,
+            int queuePackets = 4096, int queueBytes = 4 << 20, int faultPackets = 4096, int faultBytes = 4 << 20)
+        {
+            Server = Network.Create(maxPayload, queuePackets, queueBytes);
+            RawClient = Network.Create(maxPayload, queuePackets, queueBytes);
+            Client = faults == null ? RawClient : new FaultPacketTransport(RawClient, Clock, seed, faults, faultPackets, faultBytes);
+            Assert(Server.Listen(Endpoint, 5).Success, "listen failed");
+            Assert(Client.Connect(Endpoint, out var connection).Success && connection != null, "connect failed");
+            ClientHandle = connection!;
+            Client.Poll();
+            Server.Poll();
+            ServerHandle = Server.PeerIds.Connection(2)!;
+            Server.Packet += (_, traffic, bytes) => AtServer.Add((traffic, bytes.ToArray()));
+            Client.Packet += (_, _, bytes) => AtClient.Add(bytes.ToArray());
+        }
+        public SendResult Send(byte value, TrafficClass traffic = TrafficClass.ReliableOrdered) => Client.Send(ClientHandle, traffic, new byte[] { value });
+        public void Pump(double advance = 0) { Clock.Seconds += advance; Client.Poll(); Server.Poll(); }
+        public void Dispose() { Client.Close(); Server.Close(); }
+    }
+
+    public static void Register(TestRunner runner)
+    {
+        runner.Run("transport/reliable order survives seeded jitter in both directions", () =>
+        {
+            using var p = new Pair(new PacketFaults(.05, .3));
+            for (byte i = 0; i < 100; i++)
+            {
+                Assert(p.Send(i) == SendResult.Success, "reliable send failed");
+                Assert(p.Server.Send(p.ServerHandle, TrafficClass.ReliableOrdered, new byte[] { i }) == SendResult.Success, "reply failed");
+            }
+            p.Pump();
+            Assert(p.AtServer.Count == 0 && p.AtClient.Count == 0, "lag bypassed");
+            p.Pump(.4);
+            Assert(p.AtServer.Select(n => n.Bytes[0]).SequenceEqual(Enumerable.Range(0, 100).Select(i => (byte)i)), "outgoing reordered");
+            Assert(p.AtClient.Select(n => n[0]).SequenceEqual(Enumerable.Range(0, 100).Select(i => (byte)i)), "incoming reordered");
+        });
+        runner.Run("transport/reliable deadlines are independent per connection", () =>
+        {
+            var network = new LoopbackNetwork();
+            var clock = new Clock();
+            var raw = network.Create();
+            var server = new FaultPacketTransport(raw, clock, 1, new PacketFaults(Jitter: 1));
+            var a = network.Create();
+            var b = network.Create();
+            try
+            {
+                server.Listen(Endpoint, 5);
+                a.Connect(Endpoint, out _); b.Connect(Endpoint, out _);
+                a.Poll(); b.Poll(); server.Poll();
+                var values = new List<byte>();
+                a.Packet += (_, _, bytes) => values.Add(bytes.Span[0]);
+                b.Packet += (_, _, bytes) => values.Add(bytes.Span[0]);
+                server.Send(raw.PeerIds.Connection(2)!, TrafficClass.ReliableOrdered, new byte[] { 1 });
+                server.Send(raw.PeerIds.Connection(3)!, TrafficClass.ReliableOrdered, new byte[] { 2 });
+                var random = new Random(1);
+                var first = random.NextDouble(); var second = random.NextDouble();
+                Assert(first > second, "seed no longer exercises independent deadlines");
+                clock.Seconds += (first + second) / 2;
+                server.Poll(); a.Poll(); b.Poll();
+                Assert(values.SequenceEqual(new byte[] { 2 }), "one connection stalled another");
+                clock.Seconds += 1;
+                server.Poll(); a.Poll(); b.Poll();
+                Assert(values.SequenceEqual(new byte[] { 2, 1 }), "first connection never drained");
+            }
+            finally { server.Close(); a.Close(); b.Close(); }
+        });
+        runner.Run("transport/loss drops only outgoing disposable traffic", () =>
+        {
+            using var p = new Pair(new PacketFaults(Loss: 1));
+            for (byte i = 0; i < 20; i++)
+            {
+                p.Send(i);
+                p.Send(i, TrafficClass.UnreliablePlayerPoses);
+                p.Send(i, TrafficClass.UnreliableBodyStates);
+            }
+            p.Pump();
+            Assert(p.AtServer.Count == 20 && p.AtServer.All(n => n.Traffic == TrafficClass.ReliableOrdered), "loss affected reliable traffic");
+            var d = p.Client.Diagnostics(p.ClientHandle);
+            Assert(d.PacketsOut == 60 && d.BytesOut == 60 && d.Drops == 40 && d.QueuedPackets == 0, "fault counters wrong");
+        });
+        runner.Run("transport/fault schedule repeats with its seed", () =>
+        {
+            static string Replay(int seed)
+            {
+                using var p = new Pair(new PacketFaults(.1, .4, .3), seed);
+                for (byte i = 0; i < 40; i++) { p.Send(i, TrafficClass.UnreliableBodyStates); }
+                var trace = new List<string>();
+                for (var tick = 0; tick < 30; tick++)
+                {
+                    p.Pump(.025);
+                    trace.Add(string.Join(',', p.AtServer.Select(n => n.Bytes[0])));
+                }
+                return string.Join(';', trace);
+            }
+            Assert(Replay(123) == Replay(123), "same seed changed loss/delay");
+            Assert(Replay(123) != Replay(456), "different seeds did not change schedule");
+        });
+        runner.Run("transport/reliable stall permits unreliable traffic and then drains in order", () =>
+        {
+            using var p = new Pair(new PacketFaults(ReliableStall: .5));
+            p.Send(1); p.Send(2); p.Send(3, TrafficClass.UnreliablePlayerPoses);
+            p.Pump(.25);
+            Assert(p.AtServer.Select(n => n.Bytes[0]).SequenceEqual(new byte[] { 3 }), "stall failed or blocked poses");
+            p.Pump(.26);
+            Assert(p.AtServer.Select(n => n.Bytes[0]).SequenceEqual(new byte[] { 3, 1, 2 }), "stalled reliable packets reordered/lost");
+            p.Server.Send(p.ServerHandle, TrafficClass.ReliableOrdered, new byte[] { 4 });
+            p.Client.Poll();
+            Assert(p.AtClient.Count == 0, "incoming reliable stall bypassed");
+            p.Pump(.51);
+            Assert(p.AtClient.Single()[0] == 4, "incoming reliable stall never drained");
+        });
+        runner.Run("transport/disconnect preserves kinds, detail and backend codes during polling", () =>
+        {
+            foreach (var kind in Enum.GetValues<DisconnectKind>())
+            {
+                using var p = new Pair(new PacketFaults(Lag: 1));
+                var reason = new DisconnectReason(kind, "test reason", 4321);
+                var seen = new List<DisconnectReason>();
+                p.Client.Disconnected += (_, r) => seen.Add(r);
+                p.Server.Disconnected += (_, r) => seen.Add(r);
+                p.Send(7);
+                p.Client.Disconnect(p.ClientHandle, reason);
+                Assert(seen.Count == 0, "disconnect callback outside Poll");
+                Assert(p.Send(8) == SendResult.Closed, "disconnected handle accepted send");
+                p.Pump(2);
+                Assert(seen.Count == 2 && seen.All(r => r == reason), "reason/code lost");
+                Assert(p.AtServer.Count == 0 && p.Client.Diagnostics(p.ClientHandle).QueuedPackets == 0, "queued data survived disconnect");
+            }
+        });
+        runner.Run("transport/reconnect discards old delayed packets and retires old handles", () =>
+        {
+            using var p = new Pair(new PacketFaults(Lag: .1));
+            p.Send(1);
+            p.Client.Close();
+            Assert(p.Client.Connect(Endpoint, out var fresh).Success && fresh != p.ClientHandle, "reconnect failed/reused handle");
+            Assert(p.Client.Send(fresh!, TrafficClass.ReliableOrdered, new byte[] { 2 }) == SendResult.Closed, "connecting send accepted");
+            p.Client.Poll(); p.Server.Poll();
+            Assert(p.Send(3) == SendResult.Closed, "retired handle revived");
+            Assert(p.Client.Send(fresh!, TrafficClass.ReliableOrdered, new byte[] { 4 }) == SendResult.Success, "fresh handle rejected");
+            p.Pump(.2);
+            Assert(p.AtServer.Select(n => n.Bytes[0]).SequenceEqual(new byte[] { 4 }), "old delayed packet survived reconnect");
+        });
+        runner.Run("transport/close notification is local and deferred", () =>
+        {
+            using var p = new Pair();
+            DisconnectReason? reason = null;
+            p.Client.Disconnected += (_, r) => reason = r;
+            p.Client.Close();
+            Assert(reason == null && p.Send(1) == SendResult.Closed, "close lifetime wrong");
+            p.Client.Poll();
+            Assert(reason?.Kind == DisconnectKind.LocalClose, "local close cause missing");
+        });
+        runner.Run("transport/oversize and backpressure accept no bytes", () =>
+        {
+            using var p = new Pair(maxPayload: 4, queuePackets: 2, queueBytes: 4);
+            Assert(p.Client.Send(p.ClientHandle, TrafficClass.ReliableOrdered, new byte[5]) == SendResult.Oversized, "oversize accepted");
+            Assert(p.Client.Send(p.ClientHandle, TrafficClass.ReliableOrdered, new byte[3]) == SendResult.Success, "first send refused");
+            Assert(p.Client.Send(p.ClientHandle, TrafficClass.ReliableOrdered, new byte[2]) == SendResult.Backpressure, "byte bound ignored");
+            Assert(p.Send(1) == SendResult.Success, "exact capacity refused");
+            Assert(p.Send(2) == SendResult.Backpressure, "packet bound ignored");
+            Assert(p.Client.Diagnostics(p.ClientHandle).PacketsOut == 2 && p.Client.Diagnostics(p.ClientHandle).BytesOut == 4, "failed sends counted");
+            p.Pump();
+            Assert(p.Send(2) == SendResult.Success, "pressure did not clear");
+        });
+        runner.Run("transport/decorator has packet and byte bounds", () =>
+        {
+            using var p = new Pair(new PacketFaults(Lag: 1), maxPayload: 4, faultPackets: 2, faultBytes: 4);
+            Assert(p.Client.Send(p.ClientHandle, TrafficClass.ReliableOrdered, new byte[5]) == SendResult.Oversized, "decorator oversize accepted");
+            Assert(p.Client.Send(p.ClientHandle, TrafficClass.ReliableOrdered, new byte[3]) == SendResult.Success, "decorator first send refused");
+            Assert(p.Client.Send(p.ClientHandle, TrafficClass.ReliableOrdered, new byte[2]) == SendResult.Backpressure, "decorator byte bound ignored");
+            Assert(p.Send(2) == SendResult.Success, "decorator exact capacity refused");
+            Assert(p.Send(2) == SendResult.Backpressure, "decorator packet bound ignored");
+            p.Pump(1.01);
+            Assert(p.Send(3) == SendResult.Success, "decorator pressure never cleared");
+            using var small = new Pair(new PacketFaults(), maxPayload: 4, faultBytes: 2);
+            Assert(small.Client.MaxPayloadSize == 2 && small.Client.Send(small.ClientHandle, TrafficClass.ReliableOrdered, new byte[3]) == SendResult.Oversized,
+                "decorator advertised a packet that can never fit its buffer");
+        });
+        runner.Run("transport/decorator retries reliable backend pressure without reordering", () =>
+        {
+            using var p = new Pair(new PacketFaults());
+            p.RawClient.BlockSends = true;
+            p.Send(1); p.Send(2); p.Send(3, TrafficClass.UnreliableBodyStates);
+            p.Pump();
+            Assert(p.AtServer.Count == 0 && p.Client.Diagnostics(p.ClientHandle).QueuedPackets == 2 && p.Client.Diagnostics(p.ClientHandle).Drops == 1, "blocked queue policy wrong");
+            p.RawClient.BlockSends = false;
+            p.Pump();
+            Assert(p.AtServer.Select(n => n.Bytes[0]).SequenceEqual(new byte[] { 1, 2 }), "retry reordered or lost reliable traffic");
+        });
+        runner.Run("transport/receive overflow fails reliable connections, drops unreliable", () =>
+        {
+            using var p = new Pair(new PacketFaults(Lag: 1), faultPackets: 1);
+            p.Server.Send(p.ServerHandle, TrafficClass.UnreliablePlayerPoses, new byte[] { 1 });
+            p.Server.Send(p.ServerHandle, TrafficClass.UnreliableBodyStates, new byte[] { 2 });
+            p.Client.Poll();
+            Assert(p.Client.Diagnostics(p.ClientHandle).Drops == 1, "incoming unreliable overflow not counted");
+            DisconnectReason? reason = null;
+            p.Client.Disconnected += (_, r) => reason = r;
+            p.Server.Send(p.ServerHandle, TrafficClass.ReliableOrdered, new byte[] { 3 });
+            p.Client.Poll(); p.Client.Poll();
+            Assert(reason?.Kind == DisconnectKind.TransportFailure, "reliable overflow silently dropped data");
+        });
+        runner.Run("transport/receive memory is borrowed and delayed packets own copies", () =>
+        {
+            using var p = new Pair(new PacketFaults(Lag: .2));
+            var bytes = new byte[] { 7 };
+            p.Client.Send(p.ClientHandle, TrafficClass.ReliableOrdered, bytes);
+            bytes[0] = 9;
+            p.Pump(.21);
+            Assert(p.AtServer.Single().Bytes[0] == 7, "send did not copy caller bytes");
+            ReadOnlyMemory<byte> borrowed = default;
+            p.RawClient.Packet += (_, _, data) => borrowed = data;
+            p.Server.Send(p.ServerHandle, TrafficClass.ReliableOrdered, new byte[] { 11 });
+            p.Client.Poll();
+            Assert(borrowed.Span[0] == 0xdd && p.AtClient.Count == 0, "test did not invalidate borrowed memory");
+            p.Pump(.21);
+            Assert(p.AtClient.Single()[0] == 11, "decorator retained borrowed memory");
+        });
+    }
+}

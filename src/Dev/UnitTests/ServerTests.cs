@@ -12,6 +12,7 @@ public static class ServerTests
 {
     public static void Register(TestRunner runner)
     {
+        TransportTests.Register(runner);
         runner.Run("server/truncated messages never relay or mutate", () =>
         {
             using var f = new Fixture();
