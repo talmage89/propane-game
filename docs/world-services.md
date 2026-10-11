@@ -148,3 +148,8 @@ routing through `Input.ParseInputEvent`, movement yaw, camera following, shot di
 survivor continuity after closing one view. A third, camera-free actor navigates, shoots a tank twice, strikes a prop and recovers from the blast ragdoll.
 The unit suite injects failure into every factory stage and checks cancellation, adapter/node retirement order,
 completion after a throwing stop adapter and device isolation. Both run in `make test`.
+
+A6's `ParticipantRoster` supplies server-owned actor records and monotonic allocation slots. Actor ids and lives
+are independent of peer ids; retired ids/slots are never recycled. Drop entity ids use allocation slots, with
+explicit exhaustion checks instead of masked counters. The ENet adapter keeps its backend ids private and issues
+protocol peer ids through `ProtocolPeerMap`.

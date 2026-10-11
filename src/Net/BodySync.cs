@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Godot;
 using Propane.Core;
@@ -334,6 +335,13 @@ public sealed class BodySync
     /// <summary>Id of a car by its index in the plan's props.</summary>
     public static uint CarId(int propIndex) => CarBase + (uint)propIndex;
 
-    /// <summary>Id of the n-th tank a player drops; the spawn slot keeps players' ids apart.</summary>
-    public static uint DropTankId(int slot, int counter) => DropTankBase + ((uint)slot << 20) + (uint)(counter & 0xFFFFF);
+    // Allocation slots belong to session actors, independently of their position in any round's spawn list.
+    public const int MaxAllocationSlots = (int)((CarBase - DropTankBase) >> 20);
+    public const int MaxDropsPerActor = 1 << 20;
+    public static uint DropTankId(int slot, int counter)
+    {
+        if (slot < 0 || slot >= MaxAllocationSlots || counter < 0 || counter >= MaxDropsPerActor)
+            throw new ArgumentOutOfRangeException(nameof(counter), "entity allocation space exhausted");
+        return DropTankBase + ((uint)slot << 20) + (uint)counter;
+    }
 }
