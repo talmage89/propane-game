@@ -146,7 +146,7 @@ public partial class Match : Node3D
     // Packet seam for assertion suites; production sends through the connection.
     internal Action<byte[]>? AuthoritySendOverride { get; set; }
 
-    /// <summary>When (on <see cref="NetTransport.Now"/>) another player's shot last hit this player, and whose it was.</summary>
+    /// <summary>When (on <see cref="MonotonicClock.Now"/>) another player's shot last hit this player, and whose it was.</summary>
     public double LastHitTime { get; private set; } = -100;
 
     public int LastHitBy { get; private set; }
@@ -335,7 +335,7 @@ public partial class Match : Node3D
     public override void _PhysicsProcess(double delta)
     {
         var dt = (float)delta;
-        var now = NetTransport.Now;
+        var now = MonotonicClock.Now;
         foreach (var remote in remotes.Values)
         {
             if (remote.Buffer.HasData)
@@ -749,7 +749,7 @@ public partial class Match : Node3D
     private void OnHitByShot(Vector3 shooterPosition)
     {
         matchHud.AddHitDirection(shooterPosition);
-        var now = NetTransport.Now;
+        var now = MonotonicClock.Now;
         if (phase != Phase.Playing || now < graceUntil)
         {
             return;
@@ -890,12 +890,12 @@ public partial class Match : Node3D
 
     // ------------------------------------------------------------------ Sending
 
-    private void Send(NetWriter message, bool reliable = true) => Net.Send(message, reliable);
+    private void Send(NetWriter message, TrafficClass traffic = TrafficClass.ReliableOrdered) => Net.Send(message, traffic);
 
     private void SendPlayerState(double now)
     {
         var message = new NetMessage(Msg.PlayerState, Setup.Id, 0, new PlayerStateMessage(now, player.CaptureNetState()));
-        Net.Send(MessageCodec.Encode(message, fromServer: false), reliable: false);
+        Net.Send(MessageCodec.Encode(message, fromServer: false), TrafficClass.UnreliablePlayerPoses);
     }
 
     private void SendBodies(float dt, double now)
@@ -910,7 +910,7 @@ public partial class Match : Node3D
                 w.UInt(entry.Id).Transform(entry.Body.GlobalTransform).Vec3(entry.Body.LinearVelocity).Vec3(entry.Body.AngularVelocity)
                     .UInt(entry.Epoch).UInt(checked(++entry.Sequence));
             }
-            Send(w, reliable: false);
+            Send(w, TrafficClass.UnreliableBodyStates);
         }
         foreach (var entry in rested)
         {
@@ -998,7 +998,7 @@ public partial class Match : Node3D
 
     private void OnRelay(int sender, object payload)
     {
-        var now = NetTransport.Now;
+        var now = MonotonicClock.Now;
         var remote = remotes.GetValueOrDefault(sender);
         switch (payload)
         {

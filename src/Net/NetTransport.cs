@@ -1,219 +1,173 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
-using System.Linq;
 using Godot;
 
 namespace Propane.Net;
 
-/// <summary>
-/// The connection: an ENet host (the server) or an ENet client, sending whole messages as reliable or unreliable
-/// packets. Used directly rather than through Godot's RPCs, so the server can route every message itself.
-/// For testing, it can hold packets back to simulate lag, jitter and loss.
-/// </summary>
+/// <summary>ENet adapter. Channel zero and its reliability modes retain Protocol 2's wire behavior.</summary>
 [SuppressMessage("Design", "CA1001", Justification = "Close releases the ENet connection; the RefCounted peer remains reusable for reconnects.")]
-public sealed class NetTransport
+public sealed class NetTransport : IPacketTransport
 {
-    public const int ServerId = 1;
-
+    private const int ServerId = 1;
     private readonly ENetMultiplayerPeer peer = new();
-    private readonly List<Pending> incoming = new();
-    private readonly List<Pending> outgoing = new();
-    private readonly Random random = new();
-    private readonly HashSet<int> peers = new();
-    private double lastReliableIn;
-    private double lastReliableOut;
+    private readonly ProtocolPeerMap peerIds;
+    private readonly Dictionary<int, ConnectionHandle> connections = new();
+    private readonly HashSet<ConnectionHandle> connected = new();
+    private readonly Dictionary<ConnectionHandle, PacketCounters> counters = new();
+    private readonly Queue<(ConnectionHandle Connection, DisconnectReason Reason)> disconnected = new();
     private bool open;
+    private bool server;
+    private double pollMs;
 
-    private readonly record struct Pending(double At, int Peer, byte[] Data, bool Reliable);
+    public event Action<ConnectionHandle>? Connected;
+    public event Action<ConnectionHandle, DisconnectReason>? Disconnected;
+    public event Action<ConnectionHandle, TrafficClass, ReadOnlyMemory<byte>>? Packet;
+    // Godot ENetMultiplayerPeer advertises 16 MiB internally (not exposed by its C# API).
+    public int MaxPayloadSize => 1 << 24;
 
-    /// <summary>A peer finished connecting (on a client, the server, id 1).</summary>
-    public event Action<int>? PeerConnected;
-
-    public event Action<int>? PeerDisconnected;
-
-    public event Action<int, byte[]>? Received;
-
-    /// <summary>Simulated one-way delay (seconds) added on this side, in each direction.</summary>
-    public double SimulatedLag { get; set; }
-
-    /// <summary>Simulated random extra delay (seconds) on top of the lag.</summary>
-    public double SimulatedJitter { get; set; }
-
-    /// <summary>Fraction (0..1) of unreliable packets dropped, for testing.</summary>
-    public double SimulatedLoss { get; set; }
-
-    public bool IsServer { get; private set; }
-
-    public int UniqueId => open ? peer.GetUniqueId() : 0;
-
-    public bool IsConnected => open && peer.GetConnectionStatus() == MultiplayerPeer.ConnectionStatus.Connected;
-
-    public NetTransport()
+    public NetTransport(ProtocolPeerMap peerIds)
     {
+        this.peerIds = peerIds;
         peer.PeerConnected += id =>
         {
-            peers.Add((int)id);
-            PeerConnected?.Invoke((int)id);
+            var connection = connections.GetValueOrDefault((int)id) ?? Add((int)id);
+            connected.Add(connection);
+            Connected?.Invoke(connection);
         };
         peer.PeerDisconnected += id =>
         {
-            peers.Remove((int)id);
-            PeerDisconnected?.Invoke((int)id);
+            if (connections.TryGetValue((int)id, out var connection))
+            {
+                // Godot's ENetMultiplayerPeer discards ENet event.data and exposes no timeout cause.
+                Retire(connection, new DisconnectReason(DisconnectKind.TransportFailure,
+                    server ? "Lost the connection to the client. ENet did not supply a disconnect reason." :
+                    "Lost the connection to the server. ENet did not supply a disconnect reason."));
+            }
         };
     }
 
-    public Error Host(int port, int maxClients)
+    private ConnectionHandle Add(int id)
     {
-        var error = peer.CreateServer(port, maxClients);
-        IsServer = true;
-        open = error == Error.Ok;
-        return error;
+        var connection = new ConnectionHandle();
+        connections.Add(id, connection);
+        counters.Add(connection, new PacketCounters());
+        peerIds.Bind(connection, id);
+        return connection;
     }
 
-    public Error Connect(string address, int port)
+    public OpenResult Listen(PacketEndpoint endpoint, int maxConnections)
     {
-        var error = peer.CreateClient(address, port);
-        IsServer = false;
+        Close();
+        peerIds.Clear();
+        peer.SetBindIP(string.IsNullOrEmpty(endpoint.Address) ? "*" : endpoint.Address);
+        var error = peer.CreateServer(endpoint.Port, maxConnections);
+        server = true;
         open = error == Error.Ok;
-        if (open)
+        return new OpenResult(open, open ? null : error.ToString(), (int)error);
+    }
+
+    public OpenResult Connect(PacketEndpoint endpoint, out ConnectionHandle? connection)
+    {
+        Close();
+        peerIds.Clear();
+        var error = peer.CreateClient(endpoint.Address, endpoint.Port);
+        server = false;
+        open = error == Error.Ok;
+        connection = open ? Add(ServerId) : null;
+        if (open) { peer.GetPeer(ServerId)?.SetTimeout(32, 3000, 8000); }
+        return new OpenResult(open, open ? null : error.ToString(), (int)error);
+    }
+
+    public SendResult Send(ConnectionHandle connection, TrafficClass traffic, ReadOnlyMemory<byte> bytes)
+    {
+        if (!open || !connected.Contains(connection)) { return SendResult.Closed; }
+        if (bytes.Length > MaxPayloadSize) { return SendResult.Oversized; }
+        var id = peerIds.PeerId(connection);
+        if (peer.GetPeer(id) is not { } target || target.GetState() != ENetPacketPeer.PeerState.Connected) { return SendResult.Closed; }
+        peer.SetTargetPeer(id);
+        peer.TransferChannel = 0;
+        peer.TransferMode = traffic == TrafficClass.ReliableOrdered ? MultiplayerPeer.TransferModeEnum.Reliable : MultiplayerPeer.TransferModeEnum.Unreliable;
+        var error = peer.PutPacket(bytes.ToArray());
+        // Godot exposes no native send-buffer limit. Admission errors it does return still reject the send.
+        if (error != Error.Ok) { return error is Error.Unconfigured or Error.InvalidParameter ? SendResult.Closed : SendResult.Backpressure; }
+        var stats = counters[connection];
+        stats.PacketsOut++;
+        stats.BytesOut += bytes.Length;
+        return SendResult.Success;
+    }
+
+    public void Poll()
+    {
+        var started = Stopwatch.GetTimestamp();
+        try
         {
-            // Notice a dead server in seconds, not the ENet default of half a minute.
-            peer.GetPeer(ServerId)?.SetTimeout(32, 3000, 8000);
+            if (open)
+            {
+                peer.Poll();
+                if (peer.GetConnectionStatus() == MultiplayerPeer.ConnectionStatus.Disconnected)
+                {
+                    // Connecting failures do not emit PeerDisconnected in Godot. Established losses were retired above.
+                    foreach (var connection in new List<ConnectionHandle>(connections.Values))
+                    {
+                        Retire(connection, new DisconnectReason(server ? DisconnectKind.TransportFailure : DisconnectKind.Timeout,
+                            server ? "ENet stopped listening." : "The server did not answer. Check the address, the port and that the server is running."));
+                    }
+                    open = false;
+                }
+                while (open && peer.GetAvailablePacketCount() > 0)
+                {
+                    var id = peer.GetPacketPeer();
+                    var reliable = peer.GetPacketMode() == MultiplayerPeer.TransferModeEnum.Reliable;
+                    var bytes = peer.GetPacket();
+                    if (!connections.TryGetValue(id, out var connection) || !connected.Contains(connection)) { continue; }
+                    var stats = counters[connection];
+                    stats.PacketsIn++;
+                    stats.BytesIn += bytes.Length;
+                    Packet?.Invoke(connection, reliable ? TrafficClass.ReliableOrdered :
+                        bytes.Length > 0 && bytes[0] == (byte)Msg.BodyStates ? TrafficClass.UnreliableBodyStates : TrafficClass.UnreliablePlayerPoses, bytes);
+                }
+            }
+            // Snapshot: a handler may close/reconnect; new notifications belong to the next poll.
+            var count = disconnected.Count;
+            while (count-- > 0 && disconnected.TryDequeue(out var item))
+            {
+                try { Disconnected?.Invoke(item.Connection, item.Reason); }
+                finally { peerIds.Forget(item.Connection); counters.Remove(item.Connection); }
+            }
         }
-        return error;
+        finally { pollMs = Stopwatch.GetElapsedTime(started).TotalMilliseconds; }
+    }
+
+    public void Disconnect(ConnectionHandle connection, DisconnectReason reason)
+    {
+        if (!connections.ContainsValue(connection)) { return; }
+        var id = peerIds.PeerId(connection);
+        // Keep the supplied reason locally. The remote application rejection travels in Msg.Rejected unchanged.
+        if (open) { peer.DisconnectPeer(id); }
+        Retire(connection, reason);
+    }
+
+    private void Retire(ConnectionHandle connection, DisconnectReason reason)
+    {
+        connections.Remove(peerIds.PeerId(connection));
+        connected.Remove(connection);
+        peerIds.Retire(connection);
+        disconnected.Enqueue((connection, reason));
     }
 
     public void Close()
     {
-        if (open)
-        {
-            open = false;
-            peer.Close();
-        }
-        incoming.Clear();
-        outgoing.Clear();
-        peers.Clear();
+        foreach (var connection in new List<ConnectionHandle>(connections.Values)) { Retire(connection, DisconnectReason.LocalClose); }
+        if (open) { open = false; peer.Close(); }
     }
 
-    /// <summary>Drops one client (server only).</summary>
-    public void Kick(int id)
+    public TransportDiagnostics Diagnostics(ConnectionHandle connection)
     {
-        if (open && IsServer)
-        {
-            peer.DisconnectPeer(id);
-        }
+        if (!counters.TryGetValue(connection, out var stats)) { return default; }
+        var target = open && connected.Contains(connection) ? peer.GetPeer(peerIds.PeerId(connection)) : null;
+        return stats.Snapshot(pollMs, rtt: target?.GetStatistic(ENetPacketPeer.PeerStatistic.RoundTripTime) ?? 0,
+            nativeLoss: target == null ? null : target.GetStatistic(ENetPacketPeer.PeerStatistic.PacketLoss) / ENetPacketPeer.PacketLossScale);
     }
-
-    public void Send(int to, byte[] data, bool reliable)
-    {
-        if (!open)
-        {
-            return;
-        }
-        if (SimulatedLag <= 0 && SimulatedJitter <= 0 && SimulatedLoss <= 0)
-        {
-            Put(to, data, reliable);
-            return;
-        }
-        if (!reliable && random.NextDouble() < SimulatedLoss)
-        {
-            return;
-        }
-        outgoing.Add(new Pending(DelayedTime(reliable, ref lastReliableOut), to, data, reliable));
-    }
-
-    public void Send(int to, NetWriter message, bool reliable) => Send(to, message.ToArray(), reliable);
-
-    public void Poll()
-    {
-        if (!open)
-        {
-            return;
-        }
-        Flush(outgoing, p => Put(p.Peer, p.Data, p.Reliable));
-        peer.Poll();
-        while (open && peer.GetAvailablePacketCount() > 0)
-        {
-            var from = peer.GetPacketPeer();
-            var mode = peer.GetPacketMode();
-            var data = peer.GetPacket();
-            if (data.Length == 0)
-            {
-                continue;
-            }
-            if (SimulatedLag <= 0 && SimulatedJitter <= 0)
-            {
-                Received?.Invoke(from, data);
-            }
-            else
-            {
-                var reliable = mode == MultiplayerPeer.TransferModeEnum.Reliable;
-                incoming.Add(new Pending(DelayedTime(reliable, ref lastReliableIn), from, data, reliable));
-            }
-        }
-        Flush(incoming, p => Received?.Invoke(p.Peer, p.Data));
-    }
-
-    /// <summary>Round-trip time to the server in milliseconds, as ENet measures it (client only).</summary>
-    public double RoundTripMs
-    {
-        get
-        {
-            if (!open || IsServer)
-            {
-                return 0;
-            }
-            var server = peer.GetPeer(ServerId);
-            return server == null ? 0 : server.GetStatistic(ENetPacketPeer.PeerStatistic.RoundTripTime) + SimulatedLag * 2000;
-        }
-    }
-
-    private void Put(int to, byte[] data, bool reliable)
-    {
-        // A peer that has gone (or is going) cannot take packets.
-        if (!open || !peers.Contains(to) || peer.GetPeer(to) is not { } target || target.GetState() != ENetPacketPeer.PeerState.Connected)
-        {
-            return;
-        }
-        peer.SetTargetPeer(to);
-        // Channel 0 picks ENet's own reliable or unreliable channel for the mode.
-        peer.TransferChannel = 0;
-        peer.TransferMode = reliable ? MultiplayerPeer.TransferModeEnum.Reliable : MultiplayerPeer.TransferModeEnum.Unreliable;
-        peer.PutPacket(data);
-    }
-
-    private double DelayedTime(bool reliable, ref double lastReliable)
-    {
-        var at = Now + SimulatedLag + random.NextDouble() * SimulatedJitter;
-        if (reliable)
-        {
-            // Reliable messages keep their order.
-            at = Math.Max(at, lastReliable);
-            lastReliable = at;
-        }
-        return at;
-    }
-
-    private static void Flush(List<Pending> queue, Action<Pending> deliver)
-    {
-        if (queue.Count == 0)
-        {
-            return;
-        }
-        var now = Now;
-        var ready = queue.FindAll(p => p.At <= now);
-        if (ready.Count == 0)
-        {
-            return;
-        }
-        queue.RemoveAll(p => p.At <= now);
-        // A stable sort, so reliable messages with equal times keep their order.
-        foreach (var p in ready.OrderBy(p => p.At))
-        {
-            deliver(p);
-        }
-    }
-
-    public static double Now => Time.GetTicksUsec() / 1_000_000.0;
 }

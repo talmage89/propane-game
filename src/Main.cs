@@ -82,11 +82,10 @@ public partial class Main : Node
         {
             Name = "Server",
             Port = port,
-            SimulatedLag = DevArgs.GetFloat("net-lag", 0) / 2000f,
             StartScore = (int)DevArgs.GetFloat("start-score", 0),
         };
         AddChild(server);
-        if (server.Start() != Error.Ok)
+        if (!server.Start().Success)
         {
             GetTree().Quit(1);
         }
@@ -181,7 +180,7 @@ public partial class Main : Node
         {
             hostedServer = new LobbyServer { Name = "HostedServer", Port = port };
             AddChild(hostedServer);
-            if (hostedServer.Start() != Error.Ok)
+            if (!hostedServer.Start().Success)
             {
                 hostedServer.QueueFree();
                 hostedServer = null;

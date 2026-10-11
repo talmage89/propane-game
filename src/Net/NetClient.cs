@@ -37,10 +37,18 @@ public partial class NetClient : Node
     private const double PingInterval = 1.0;
     private const double ConnectTimeout = 8.0;
 
-    private readonly NetTransport transport = new();
+    private readonly IPacketTransport transport;
+    private readonly IMonotonicClock clock;
+    private ConnectionHandle? server;
+
+    public NetClient() : this(PacketTransports.CreateClient()) { }
+    public NetClient(IPacketTransport transport, IMonotonicClock? clock = null)
+    {
+        this.transport = transport;
+        this.clock = clock ?? MonotonicClock.Instance;
+    }
     private double connectStarted;
     private double nextPing;
-    private string? lastError;
 
     /// <summary>The version of the server that last turned this game away, when it said.</summary>
     public string? RejectedBy { get; private set; }
@@ -70,7 +78,10 @@ public partial class NetClient : Node
     /// <summary>Sampling time on the estimated server clock; zero until a ping establishes the offset.</summary>
     internal double BodySampleTime(double now) => PingMs > 0 ? now + ServerClockOffset : 0;
 
-    public NetTransport Transport => transport;
+    public IPacketTransport Transport => transport;
+    public TransportDiagnostics Diagnostics => server != null ? transport.Diagnostics(server) : default;
+
+    public DisconnectReason? LastDisconnect { get; private set; }
 
     /// <summary>Connection, welcome, rejection or loss. The string is a reason to show, if any.</summary>
     public event Action<Status, string?>? StatusChanged;
@@ -97,29 +108,35 @@ public partial class NetClient : Node
 
     public override void _Ready()
     {
-        transport.PeerConnected += id =>
+        transport.Connected += OnTransportConnected;
+        transport.Disconnected += OnTransportDisconnected;
+        transport.Packet += OnPacket;
+    }
+
+    private void OnTransportConnected(ConnectionHandle connection)
+    {
+        if (connection == server)
         {
-            if (id == NetTransport.ServerId)
-            {
-                Send(new NetWriter(Msg.Hello).Int((int)Dev.DevArgs.GetFloat("fake-protocol", Protocol.Version)).String(BuildInfo.GameVersion).String(BuildInfo.Build).String(PlayerName).Int(Color).Bool(OS.IsDebugBuild()));
-            }
-        };
-        transport.PeerDisconnected += id =>
-        {
-            if (id == NetTransport.ServerId)
-            {
-                Drop(lastError ?? "Lost the connection to the server.");
-            }
-        };
-        transport.Received += (_, data) => Handle(data);
-        var lag = Dev.DevArgs.GetFloat("net-lag", 0) / 1000f;
-        transport.SimulatedLag = lag / 2;
-        transport.SimulatedJitter = Dev.DevArgs.GetFloat("net-jitter", 0) / 1000f;
-        transport.SimulatedLoss = Dev.DevArgs.GetFloat("net-loss", 0) / 100f;
+            Send(new NetWriter(Msg.Hello).Int((int)Dev.DevArgs.GetFloat("fake-protocol", Protocol.Version)).String(BuildInfo.GameVersion).String(BuildInfo.Build).String(PlayerName).Int(Color).Bool(OS.IsDebugBuild()));
+        }
+    }
+
+    private void OnTransportDisconnected(ConnectionHandle connection, DisconnectReason reason)
+    {
+        if (connection == server) { Drop(reason); }
+    }
+
+    private void OnPacket(ConnectionHandle connection, TrafficClass traffic, ReadOnlyMemory<byte> data)
+    {
+        if (connection == server) { Handle(data.ToArray()); }
     }
 
     public override void _ExitTree()
     {
+        transport.Connected -= OnTransportConnected;
+        transport.Disconnected -= OnTransportDisconnected;
+        transport.Packet -= OnPacket;
+        server = null;
         inbox.Clear();
         transport.Close();
     }
@@ -130,15 +147,15 @@ public partial class NetClient : Node
         PlayerName = Protocol.CleanName(name);
         Color = color;
         lastMatchId = 0;
-        lastError = null;
+        LastDisconnect = null;
         RejectedBy = null;
-        var error = transport.Connect(address, port);
-        if (error != Error.Ok)
+        var result = transport.Connect(new PacketEndpoint(address, port), out server);
+        if (!result.Success)
         {
-            Drop($"Could not connect to {address}:{port} ({error}).");
+            Drop(new DisconnectReason(DisconnectKind.TransportFailure, $"Could not connect to {address}:{port} ({result.Detail}).", result.BackendCode));
             return;
         }
-        connectStarted = NetTransport.Now;
+        connectStarted = clock.Seconds;
         SetState(Status.Connecting, null);
     }
 
@@ -151,6 +168,8 @@ public partial class NetClient : Node
         {
             return;
         }
+        LastDisconnect = DisconnectReason.LocalClose;
+        server = null;
         transport.Close();
         inbox.Clear();
         Lobby = null;
@@ -161,21 +180,30 @@ public partial class NetClient : Node
     public override void _Process(double delta)
     {
         transport.Poll();
-        var now = NetTransport.Now;
+        var now = clock.Seconds;
         if (State == Status.Connecting && now - connectStarted > ConnectTimeout)
         {
-            Drop("The server did not answer. Check the address, the port and that the server is running.");
+            Drop(new DisconnectReason(DisconnectKind.Timeout, "The server did not answer. Check the address, the port and that the server is running."));
         }
         if (State == Status.Connected && now >= nextPing)
         {
             nextPing = now + PingInterval;
-            Send(new NetWriter(Msg.Ping).Double(now), reliable: false);
+            Send(new NetWriter(Msg.Ping).Double(now), TrafficClass.UnreliablePlayerPoses);
         }
     }
 
-    public void Send(NetWriter message, bool reliable = true) => transport.Send(NetTransport.ServerId, message, reliable);
+    public SendResult Send(NetWriter message, TrafficClass traffic = TrafficClass.ReliableOrdered) => Send(message.ToArray(), traffic);
 
-    public void Send(byte[] message, bool reliable = true) => transport.Send(NetTransport.ServerId, message, reliable);
+    public SendResult Send(byte[] message, TrafficClass traffic = TrafficClass.ReliableOrdered)
+    {
+        if (server == null) { return SendResult.Closed; }
+        var result = transport.Send(server, traffic, message);
+        if (traffic == TrafficClass.ReliableOrdered && result != SendResult.Success)
+        {
+            Drop(new DisconnectReason(DisconnectKind.TransportFailure, $"Could not send a required message ({result}). Please reconnect."));
+        }
+        return result;
+    }
 
     // ------------------------------------------------------------------ Lobby requests
 
@@ -227,9 +255,8 @@ public partial class NetClient : Node
                     SetState(Status.Connected, null);
                     break;
                 case RejectedMessage rejected:
-                    lastError = rejected.Reason;
                     RejectedBy = rejected.Version;
-                    Drop(lastError);
+                    Drop(new DisconnectReason(DisconnectKind.ApplicationRejected, rejected.Reason));
                     break;
                 case TextMessage notice:
                     NoticeReceived?.Invoke(notice.Value);
@@ -253,7 +280,7 @@ public partial class NetClient : Node
                     MatchStarting?.Invoke(setup);
                     break;
                 case PongMessage pong:
-                    var now = NetTransport.Now;
+                    var now = clock.Seconds;
                     PingMs = (now - pong.Sent) * 1000;
                     ServerClockOffset = pong.ServerTime - (pong.Sent + now) / 2;
                     break;
@@ -264,7 +291,7 @@ public partial class NetClient : Node
         }
         catch (MatchInbox.OverflowException e)
         {
-            Drop(e.Message);
+            Drop(new DisconnectReason(DisconnectKind.TransportFailure, e.Message));
         }
         catch (Exception e)
         {
@@ -272,14 +299,20 @@ public partial class NetClient : Node
         }
     }
 
-    private void Drop(string reason)
+    private void Drop(DisconnectReason reason)
     {
+        LastDisconnect = reason;
+        PingMs = 0;
+        ServerClockOffset = 0;
+        nextPing = 0;
+        if (server != null) { transport.Disconnect(server, reason); }
+        server = null;
         transport.Close();
         inbox.Clear();
         Lobby = null;
         MyId = 0;
         State = Status.Offline;
-        StatusChanged?.Invoke(Status.Offline, reason);
+        StatusChanged?.Invoke(Status.Offline, reason.Detail);
     }
 
     private void SetState(Status status, string? reason)
