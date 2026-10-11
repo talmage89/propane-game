@@ -984,7 +984,7 @@ public partial class Match : Node3D
         }
     }
 
-    private PlayerCharacter? Actor(int id) => Session.Actors.FirstOrDefault(a => a.Character.ActorId == id)?.Character;
+    private PlayerCharacter? Actor(int id) => Session.Actor(id)?.Character;
     private NetWriter ActorWriter(Msg type, PlayerCharacter actor) =>
         new(type, Setup.Id, actor.ActorId, actor.LifeId, checked(++actor.Runtime.ActionSequence));
     private readonly Dictionary<(int Actor, Msg Type), (uint Life, uint Action)> receivedActions = new();

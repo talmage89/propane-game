@@ -485,7 +485,7 @@ ENet's identifiers. A lobby owns a revisioned participant roster: **ActorId**, *
 name, appearance, versioned controller configuration, presence, allocation slot and **LifeId**. Actor ids and
 allocation slots are never reused in that lobby session, including across matches. Spawn slots are a separate,
 frozen match mapping. Drop entities use the actor's allocation slot, never its spawn position. Allocation fails
-before an id, life, epoch or publication counter can wrap. Local view ids are session-local and never transmitted.
+before an id, life, epoch or publication counter can wrap. Local view ids are process-local and never transmitted.
 
 One peer may own several actors. Each has its own input, aim, ammo, pose/action sequence, grace and predictions;
 there is one shared world and one body synchronizer per peer. The server owns bank and standings. Attacker owners

@@ -152,3 +152,6 @@ A6's `ParticipantRoster` supplies server-owned actor records and monotonic alloc
 are independent of peer ids; retired ids/slots are never recycled. Drop entity ids use allocation slots, with
 explicit exhaustion checks instead of masked counters. The ENet adapter keeps its backend ids private and issues
 protocol peer ids through `ProtocolPeerMap`.
+
+Actor lookup uses the session identity registry; retired actor ids cannot be reattached. Offline sessions allocate
+positive actor ids through the same registry. Local views allocate process-local ids, including fixture views.
