@@ -256,8 +256,8 @@ The bot (`src/Dev/Bot.cs`) plays to win:
 `src/Navigation` takes collision queries, actor capabilities/state and a goal, and returns world movement intent.
 It has no `Match` dependency. [Bot navigation](bot-navigation.md) describes its assumptions, local difficulty dials
 and seeded regression course. `Tuning.Bot...` properties are local C# dials (also accepted by `--tune.Bot...` in dev
-harnesses); they are deliberately absent from exported match tuning and its snapshot schema. The smart brain keeps
-that local tuning object when a match installs its shared movement tuning. `--bot-log` logs cumulative stuck,
+harnesses); they are deliberately absent from exported match tuning and its snapshot schema. Each world copies
+those local values alongside the creator's shared movement tuning. `--bot-log` logs cumulative stuck,
 blacklist, replan and jump counts. The simple brain remains the original benchmark.
 
 Measured over two-minute matches of four bots each, before and after (the server logs each player's tanks gained,

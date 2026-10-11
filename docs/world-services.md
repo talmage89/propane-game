@@ -13,6 +13,7 @@ while explicitly presenting that fixture's context.
 
 `Tuning.SavedTemplate` is an application composition/UI accessor, never the gameplay target. Each context copies
 its template. Matches validate and copy the creator-supplied snapshot without swapping any process-wide override.
+Unexported local bot dials are copied explicitly too: they remain local and never enter the match snapshot.
 The tuning panel receives an explicit `Target`: edits belong to that world; Save writes the target and updates the
 application template for future worlds. Unsaved world edits disappear when that world ends.
 
@@ -26,7 +27,7 @@ Network timestamps, interpolation, transport fault delays, server-owned deadline
 continue to use `MonotonicClock` and the server clock. Never compare those timestamps with simulation seconds.
 
 Call `World.Dispose()` before freeing or replacing a facade. Cleanup invalidates first, cancels timers/deferred
-work, clears events and receiver registrations, runs stop adapters (including inbox detach and replication),
+work, stops processing/physics, clears events and receiver registrations, runs stop adapters (including inbox detach and replication),
 releases views, restores presentation, and synchronously frees content and physics resources. It is idempotent.
 `World.Construct` uses that same path on a construction failure. Content spawn services retain their originating
 root; retiring content removes its effects and cancels source callbacks before the next suburb is built.
@@ -49,3 +50,15 @@ unpaused offline context can acquire it; construction of a second context, pause
 always-processing driver expires the presentation lease in real seconds while gameplay uses simulation seconds.
 Network worlds cannot acquire it. The isolation scene also asserts actual physics pause/resume, independent reveal,
 lease restrictions and a production client/server handshake completing while a world is paused.
+
+The driver subscribes to [scene-tree frame signals](https://docs.godotengine.org/en/stable/classes/class_scenetree.html#signals),
+which run before node processing. This keeps the native signal emitter alive while deferred navigation synchronously
+retires its own world, including the driver. It unregisters both signals on exit. Work queued from a button waits
+until its signal returns, then cleanup completes before replacement. Invalidation also stops the remaining callbacks
+of an event currently being dispatched; a retired receiver is skipped in a blast's registration snapshot.
+
+`menu_test.tscn -- --scenario=lifetime` drives the real main/pause/lobby/match buttons through ten single-player and
+ten solo-match cycles after warming immutable catalog variants and lazy UI resources. It checks exact node, object
+and orphan counts and verifies each retired world's timers and receiver registry are empty. Server-owned match
+seeds still vary; the test never alters the server's construction inputs or messages. Rendered runs capture first
+and last entries plus the final browser.

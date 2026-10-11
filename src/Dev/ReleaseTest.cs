@@ -69,7 +69,7 @@ public partial class ReleaseTest : Node
                     return;
                 }
                 main.GetNode<Game>("Game").PauseOnFocusLoss = false;
-                GetTree().Paused = false;
+                main.GetNode<Game>("Game").World.SetPaused(false);
                 Advance(20, 6);
             }
         }

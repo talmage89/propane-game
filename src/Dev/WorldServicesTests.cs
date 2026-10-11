@@ -16,6 +16,12 @@ public partial class WorldServicesTests : Node
     {
         try
         {
+            var events = new GameEvents();
+            var stale = 0;
+            events.Explosion += _ => events.Clear();
+            events.Explosion += _ => stale++;
+            events.RaiseExplosion(Vector3.Zero);
+            Assert(stale == 0, "invalidation did not stop remaining event callbacks");
             await PauseAndLease().ConfigureAwait(true);
             await Exercise().ConfigureAwait(true); // Warm immutable assets before counting.
             await Collect().ConfigureAwait(true);
@@ -38,11 +44,13 @@ public partial class WorldServicesTests : Node
 
     private async Task Exercise()
     {
-        using var template = new Tuning { TankMass = 7, BlastSpeed = 4 };
+        using var template = new Tuning { TankMass = 7, BlastSpeed = 4, BotRouteSpacing = 7 };
         using var a = new WorldContext(this, template);
         template.TankMass = 29;
+        template.BotRouteSpacing = 29;
         using var b = new WorldContext(this, template);
         Assert(a.Physics.Space != b.Physics.Space && a.Tuning != b.Tuning, "world physics/tuning shared");
+        Assert(a.Tuning.BotRouteSpacing == 7 && b.Tuning.BotRouteSpacing == 29, "world copy lost local bot tuners");
         var first = PropaneTank.Create(a);
         var second = PropaneTank.Create(b);
         a.Root.AddChild(first); b.Root.AddChild(second);
@@ -67,12 +75,14 @@ public partial class WorldServicesTests : Node
         b.Schedule(second, 2, () => surviving++);
         a.OnStopping(() =>
         {
-            Assert(!a.IsAlive && a.Clock.PendingCount == 0 && a.BlastReceivers.Count == 0, "stop ran before invalidation/cancellation");
+            Assert(!a.IsAlive && a.Clock.PendingCount == 0 && a.BlastReceivers.Count == 0 && !a.Root.CanProcess() && !PhysicsServer3D.SpaceIsActive(a.Physics.Space), "stop ran before invalidation/cancellation");
             stops++;
         });
         // Flush the physics broadphase. Freeze prevents the fixture moving before the query.
         await ToSignal(GetTree(), SceneTree.SignalName.PhysicsFrame);
         await ToSignal(GetTree(), SceneTree.SignalName.PhysicsFrame);
+        // Two physics ticks may belong to one render frame; wait for the deferred-work phase explicitly.
+        await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
         // The deferred callback was valid before teardown. Queue another to prove cancellation.
         Assert(deferred == 1, "world deferred work did not run");
         a.Defer(() => old++);

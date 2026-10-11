@@ -74,7 +74,7 @@ public partial class Game : Node3D
         World.Construct(BuildWorld);
     }
 
-    public override void _ExitTree() => World.Dispose();
+    public override void _ExitTree() => World?.Dispose();
 
     private void BuildWorld()
     {
@@ -122,6 +122,7 @@ public partial class Game : Node3D
 
     public override void _UnhandledInput(InputEvent @event)
     {
+        if (World is not { IsAlive: true }) { return; }
         if (@event.IsActionPressed(InputSetup.Pause))
         {
             if (tuningPanel.Visible)
@@ -164,7 +165,7 @@ public partial class Game : Node3D
     {
         // Losing focus pauses rather than leaving the mouse captured behind another window.
         // macOS can report focus loss before the game is ready, when it launches behind another window.
-        if (what == NotificationApplicationFocusOut && PauseOnFocusLoss && IsNodeReady() && !World.Paused && !tuningPanel.Visible)
+        if (what == NotificationApplicationFocusOut && PauseOnFocusLoss && IsNodeReady() && World is { IsAlive: true, Paused: false } && !tuningPanel.Visible)
         {
             Pause();
         }
@@ -172,6 +173,7 @@ public partial class Game : Node3D
 
     public override void _Process(double delta)
     {
+        if (World is not { IsAlive: true }) { return; }
         var dt = (float)delta;
         UpdateHud();
         if (World.Paused)

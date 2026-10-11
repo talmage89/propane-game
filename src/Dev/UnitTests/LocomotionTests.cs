@@ -15,6 +15,31 @@ public static class LocomotionTests
         runner.Run("locomotion handles remote takeoff without a jumping snapshot", RemoteJump);
         runner.Run("locomotion scales landing and allows immediate movement", Landing);
         runner.Run("locomotion resets phase and support blends on lifecycle exit", Reset);
+        runner.Run("pose blend preserves unit rotations during tiny simulation steps", () => PoseNormalization(runner.World));
+    }
+
+    private static void PoseNormalization(WorldContext world)
+    {
+        var skeleton = new Skeleton3D();
+        skeleton.AddBone("index_test");
+        skeleton.AddChild(new Ragdoll { Name = "Ragdoll" });
+        skeleton.AddChild(new RifleRig { World = world, Name = "RifleRig", Active = false });
+        var blend = new PoseBlend { World = world, Active = false };
+        skeleton.AddChild(blend);
+        world.Root.AddChild(skeleton);
+        try
+        {
+            blend._ProcessModificationWithDelta(0.000001);
+            var target = new Quaternion(Vector3.Up, 0.06f);
+            for (var i = 0; i < 6000; i++)
+            {
+                skeleton.SetBonePoseRotation(0, target);
+                // Direct invocation propagates errors to the runner instead of Godot logging and swallowing them.
+                blend._ProcessModificationWithDelta(0.000001);
+                TestRunner.Assert(skeleton.GetBonePoseRotation(0).IsNormalized(), "pose blend lost its unit rotation");
+            }
+        }
+        finally { skeleton.Free(); }
     }
 
     private static PlayerState State(PlayerSupport support, PlayerLifecycle lifecycle = PlayerLifecycle.Active) =>

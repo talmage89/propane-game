@@ -11,10 +11,23 @@ public sealed class GameEvents
     public event Action<Vector3>? Explosion;
     public event Action<Vector3, IReadOnlyList<RigidBody3D>, uint>? LocalBlast;
 
-    public void RaiseExplosion(Vector3 position) { if (!closed) { Explosion?.Invoke(position); } }
+    public void RaiseExplosion(Vector3 position)
+    {
+        if (closed || Explosion == null) { return; }
+        foreach (Action<Vector3> callback in Explosion.GetInvocationList())
+        {
+            if (closed) { break; }
+            callback(position);
+        }
+    }
     public void RaiseLocalBlast(Vector3 position, IReadOnlyList<RigidBody3D> pushed, uint cause)
     {
-        if (!closed) { LocalBlast?.Invoke(position, pushed, cause); }
+        if (closed || LocalBlast == null) { return; }
+        foreach (Action<Vector3, IReadOnlyList<RigidBody3D>, uint> callback in LocalBlast.GetInvocationList())
+        {
+            if (closed) { break; }
+            callback(position, pushed, cause);
+        }
     }
     internal void Clear() { closed = true; Explosion = null; LocalBlast = null; }
 }

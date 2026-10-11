@@ -204,8 +204,13 @@ $GODOT --fixed-fps 60 res://scenes/dev/bot_navigation_course.tscn -- --seeds=5 -
 $GODOT --headless res://scenes/dev/unit_tests.tscn
 tools/dev/check_world.sh
 
-# Scoped worlds: overlapping physics/tuning, isolated events/spawns/callbacks and leak-free teardown.
+# Scoped worlds: overlapping physics/tuning, events/spawns/callbacks, pause/reveal/hitstop and leak-free teardown.
 $GODOT --headless --fixed-fps 60 res://scenes/dev/world_services_tests.tscn
+# Clear/replace proof: shooting sequence, finish remaining fixture tanks, assert automatic replacement.
+$GODOT --fixed-fps 60 res://scenes/dev/game_test.tscn -- --scenario=clear --quit=32 --capture-dir=/tmp/clear
+# Real menu lifetime: ten single-player and ten solo-match retirements with exact node/object/orphan counts.
+$GODOT --headless --fixed-fps 60 res://scenes/dev/menu_test.tscn -- --scenario=lifetime
+$GODOT --fixed-fps 60 res://scenes/dev/menu_test.tscn -- --scenario=lifetime --capture-dir=/tmp/menu-lifetime
 
 # Blast-query completeness: 1,100 rigid bodies and duplicate collision shapes; asserts every body is pushed.
 $GODOT --headless --fixed-fps 60 res://scenes/dev/blast_query_tests.tscn

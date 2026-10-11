@@ -139,7 +139,8 @@ public partial class PoseBlend : SkeletonModifier3D
                 if (angle > limit) target = previous[i].Slerp(target, limit / angle);
                 skeleton.SetBonePoseRotation(i, target);
             }
-            previous[i] = target;
+            // Repeated tiny blends can accumulate roundoff; Inverse requires a unit quaternion next frame.
+            previous[i] = target.Normalized();
         }
     }
 }

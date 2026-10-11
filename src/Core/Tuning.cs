@@ -1,3 +1,5 @@
+using System.Linq;
+using System.Reflection;
 using Godot;
 
 namespace Propane.Core;
@@ -14,6 +16,24 @@ public partial class Tuning : Resource
     public const string PlayerPath = "user://tuning.tres";
 
     private static Tuning? savedTemplate;
+    private static readonly PropertyInfo[] LocalTuners = typeof(Tuning)
+        .GetProperties(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)
+        .Where(property => property.CanWrite && !property.IsDefined(typeof(ExportAttribute)) &&
+            (property.PropertyType == typeof(float) || property.PropertyType == typeof(int) || property.PropertyType == typeof(bool)))
+        .ToArray();
+
+    /// <summary>Godot duplicates exported properties; copy local brain dials too, without adding them to snapshots.</summary>
+    public Tuning Copy()
+    {
+        var copy = (Tuning)Duplicate();
+        copy.CopyLocalTunersFrom(this);
+        return copy;
+    }
+
+    internal void CopyLocalTunersFrom(Tuning source)
+    {
+        foreach (var property in LocalTuners) { property.SetValue(this, property.GetValue(source)); }
+    }
 
     /// <summary>
     /// The file Save writes to: the project's own tuning in the editor, the player's copy in an exported build.

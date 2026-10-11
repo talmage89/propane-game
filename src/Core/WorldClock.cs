@@ -33,6 +33,7 @@ public sealed class WorldClock : IDisposable
         if (disposed) { return; }
         if (!double.IsFinite(delta) || delta < 0) { throw new ArgumentOutOfRangeException(nameof(delta)); }
         Now += delta;
+        if (pending.Count == 0) { return; }
         // Snapshot due work: callbacks may schedule or cancel timers, including disposing the world.
         var due = pending.FindAll(timer => timer.Callback == null || timer.Due <= Now);
         foreach (var timer in due)

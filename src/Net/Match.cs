@@ -158,6 +158,7 @@ public partial class Match : Node3D
     public override void _Ready()
     {
         using var tuning = Tuning.FromSnapshot(Setup.Tuning);
+        tuning.CopyLocalTunersFrom(Net.Template);
         World = new WorldContext(this, tuning, networked: true, present: true);
         World.OnStopping(StopReplication);
         World.Construct(BuildWorld);
@@ -299,7 +300,7 @@ public partial class Match : Node3D
         GD.Print($"[match] seed {plan.Seed}: {plan.Lots.Count} lots, {plan.Tanks.Count} tanks, {pickups.Count} pickups, {Setup.Players.Count} players, host {Setup.HostId}, me {me}");
     }
 
-    public override void _ExitTree() => World.Dispose();
+    public override void _ExitTree() => World?.Dispose();
 
     private void StopReplication()
     {
@@ -324,7 +325,7 @@ public partial class Match : Node3D
 
     public override void _Process(double delta)
     {
-        if (!World.IsAlive || World.Paused) { return; }
+        if (World is not { IsAlive: true } || World.Paused) { return; }
         var dt = (float)delta;
         var tuning = World.Tuning;
         if (revealing)
@@ -357,8 +358,8 @@ public partial class Match : Node3D
                 if (endLeft <= 0)
                 {
                     endLeft = float.MaxValue;
-                    Finished?.Invoke();
-                    // Finished may remove this scene immediately; its viewport and world are then unavailable.
+                    World.Defer(() => Finished?.Invoke(), whilePaused: true);
+                    // Navigation runs after this native node notification returns.
                     return;
                 }
                 break;
@@ -371,7 +372,7 @@ public partial class Match : Node3D
 
     public override void _PhysicsProcess(double delta)
     {
-        if (!World.IsAlive || World.Paused) { return; }
+        if (World is not { IsAlive: true } || World.Paused) { return; }
         var dt = (float)delta;
         var now = MonotonicClock.Now;
         foreach (var remote in remotes.Values)
@@ -452,6 +453,7 @@ public partial class Match : Node3D
 
     public override void _UnhandledInput(InputEvent @event)
     {
+        if (World is not { IsAlive: true }) { return; }
         if (@event.IsActionPressed(InputSetup.Pause))
         {
             if (tuningPanel?.Visible == true)

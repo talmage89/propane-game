@@ -109,7 +109,8 @@ public partial class GameTest : Node
         }
         else if (DevArgs.Get("scenario") == "clear")
         {
-            // Clears the whole suburb tank by tank, then waits for the automatic swap to the next one.
+            // Exercise shooting, then finish the fixture so missed shots cannot prevent the clear/replace proof.
+            World.Suburb? cleared = null;
             for (var i = 0; i < 14; i++)
             {
                 var start = 2.5f + i * 1.6f;
@@ -124,14 +125,25 @@ public partial class GameTest : Node
             }
             director.At(25.5f, () =>
             {
-                foreach (var tank in game.Current?.LiveTanks ?? Enumerable.Empty<PropaneTank>())
+                cleared = game.Current;
+                foreach (var tank in (cleared?.LiveTanks ?? Enumerable.Empty<PropaneTank>()).ToList())
                 {
-                    GD.Print($"[clear] left: {tank.State} at {tank.GlobalPosition} up {tank.GlobalBasis.Y.Y:0.00} sleeping {tank.Sleeping}");
+                    GD.Print($"[clear] finish fixture: {tank.State} at {tank.GlobalPosition}");
+                    tank.Detonate();
                 }
             });
             director.ShotAt(26f, "cleared");
             director.ShotAt(31f, "next_suburb");
-            director.At(31.5f, () => GD.Print($"[clear] next suburb has {game.Current?.TanksRemaining} tanks"));
+            director.At(31.5f, () =>
+            {
+                if (cleared == null || IsInstanceValid(cleared) || game.Current == null || game.InTransition || game.Current.TanksRemaining <= 0)
+                {
+                    GD.PushError("[clear] FAIL cleared suburb was not retired and replaced");
+                    GetTree().Quit(1);
+                    return;
+                }
+                GD.Print($"[clear] PASS retired cleared suburb; next suburb has {game.Current.TanksRemaining} tanks");
+            });
         }
         else if (DevArgs.Get("scenario") == "dissolve")
         {

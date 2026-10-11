@@ -23,7 +23,7 @@ public sealed class WorldContext : IDisposable
     public WorldContext(Node owner, Tuning template, bool networked = false, bool present = false)
     {
         ViewRoot = owner;
-        Tuning = (Tuning)template.Duplicate();
+        Tuning = template.Copy();
         Networked = networked;
         Physics = new World3D();
         Root = new Node3D { Name = "World", ProcessMode = Node.ProcessModeEnum.Pausable };
@@ -40,7 +40,7 @@ public sealed class WorldContext : IDisposable
         viewport.AddChild(Root);
         Root.AddChild(EffectsRoot);
         Root.AddChild(ContentRoot);
-        viewport.AddChild(new WorldDriver { World = this, ProcessMode = Node.ProcessModeEnum.Always, ProcessPhysicsPriority = -100 });
+        viewport.AddChild(new WorldDriver { World = this, ProcessMode = Node.ProcessModeEnum.Always });
         WorldTimeScale.Register();
         try
         {
@@ -121,6 +121,7 @@ public sealed class WorldContext : IDisposable
 
     public Spawn ForContent(Node3D root) => new(this, root);
     public void Register(IBlastReceiver receiver) { EnsureAlive(); receivers.Add(receiver); }
+    internal bool IsRegistered(IBlastReceiver receiver) => receivers.Contains(receiver);
     public void Unregister(IBlastReceiver receiver) => receivers.Remove(receiver);
     public void OnStopping(Action stop) { EnsureAlive(); stopping.Add(stop); }
     public void Defer(Action callback, bool whilePaused = false) { EnsureAlive(); deferred.Add((callback, whilePaused)); }
@@ -173,7 +174,7 @@ public sealed class WorldContext : IDisposable
 
     internal void FlushDeferred()
     {
-        if (!IsAlive) { return; }
+        if (!IsAlive || deferred.Count == 0) { return; }
         var callbacks = deferred.FindAll(work => work.WhilePaused || (!Paused && Root.CanProcess()));
         foreach (var work in callbacks) { deferred.Remove(work); }
         foreach (var work in callbacks) { if (IsAlive) { work.Callback(); } }
@@ -192,6 +193,8 @@ public sealed class WorldContext : IDisposable
     {
         if (!IsAlive) { return; }
         IsAlive = false;
+        if (GodotObject.IsInstanceValid(Root)) { Root.ProcessMode = Node.ProcessModeEnum.Disabled; }
+        PhysicsServer3D.SpaceSetActive(Physics.Space, false);
         WorldTimeScale.Unregister(this);
         Clock.Dispose();
         Reveal.Dispose();
@@ -231,14 +234,30 @@ public sealed class WorldContext : IDisposable
 
 }
 
+/// <summary>Tree signals keep the emitter alive when a callback synchronously retires this world's driver.</summary>
 internal partial class WorldDriver : Node
 {
     public required WorldContext World { get; init; }
-    public override void _PhysicsProcess(double delta) => World.Advance(delta);
-    public override void _Process(double delta)
+    private SceneTree tree = null!;
+    public override void _Ready()
+    {
+        tree = GetTree();
+        tree.PhysicsFrame += PhysicsTick;
+        tree.ProcessFrame += ProcessTick;
+    }
+    private void PhysicsTick()
+    {
+        if (World.IsAlive) { World.Advance(GetPhysicsProcessDeltaTime()); }
+    }
+    private void ProcessTick()
     {
         World.PollTimeScale();
         World.FlushDeferred();
     }
-    public override void _ExitTree() => World.Invalidate();
+    public override void _ExitTree()
+    {
+        tree.PhysicsFrame -= PhysicsTick;
+        tree.ProcessFrame -= ProcessTick;
+        World.Invalidate();
+    }
 }

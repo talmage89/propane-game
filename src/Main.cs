@@ -150,6 +150,7 @@ public partial class Main : Node
 
         public override void _Process(double delta)
         {
+            if (!world.IsAlive || world.Paused) { return; }
             angle += (float)delta * 0.09f;
             Place();
         }

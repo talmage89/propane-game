@@ -32,6 +32,16 @@ public static class AuthorityTests
 
     public static void Register(TestRunner runner)
     {
+        runner.Run("authority/match copies local bot dials beside creator tuning", () =>
+        {
+            using var local = new Tuning { TankMass = 7, BotRouteSpacing = 9 };
+            using var fixture = new MatchFixture(runner, local);
+            var tuning = fixture.Match.World.Tuning;
+            TestRunner.Assert(tuning.TankMass == fixture.Server.Setup.Tuning["TankMass"].AsSingle() && tuning.BotRouteSpacing == 9,
+                "local brain dials were lost or local gameplay tuning overrode the creator");
+            local.BotRouteSpacing = 15;
+            TestRunner.Assert(tuning.BotRouteSpacing == 9 && local.TankMass == 7, "match tuning retained its application template");
+        });
         runner.Run("authority/predicted explosions can retire already freed body entries", () =>
         {
             var body = new RigidBody3D();
@@ -530,11 +540,12 @@ public static class AuthorityTests
     private sealed class MatchFixture : IDisposable
     {
         public readonly ServerTests.Fixture Server = new();
-        private readonly NetClient client = new();
+        private readonly NetClient client;
         public readonly Match Match;
         private readonly Queue<byte[]> sent = new();
-        public MatchFixture(TestRunner runner)
+        public MatchFixture(TestRunner runner, Tuning? template = null)
         {
+            client = new NetClient { Template = template ?? Tuning.SavedTemplate };
             client.Handle(MessageCodec.Encode(new NetMessage(Msg.Welcome, 0, 0, new WelcomeMessage(2, null)), true));
             Match = new Match { Net = client, Setup = Server.Setup, AuthoritySendOverride = sent.Enqueue };
             runner.AddChild(Match);

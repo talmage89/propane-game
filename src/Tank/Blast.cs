@@ -53,6 +53,7 @@ public static class Blast
         foreach (var receiver in new List<IBlastReceiver>(world.BlastReceivers))
         {
             if (!world.IsAlive) { return; }
+            if (!world.IsRegistered(receiver)) { continue; }
             var target = receiver.BlastTargetPosition;
             var distance = center.DistanceTo(target);
             var reach = Mathf.Max(radius, Mathf.Max(tuning.RagdollRadius, tuning.StaggerRadius));
