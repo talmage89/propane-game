@@ -292,6 +292,51 @@ public static class AuthorityTests
             TestRunner.Assert(restored != tank && restored.State == PropaneTank.TankState.Venting && restored.HoleLocal == vent.Hole &&
                 restored.HoleNormalLocal == vent.Normal && restored.SwirlSign == vent.Swirl && restored.GlobalTransform.IsEqualApprox(Pose(Id).Transform), "refusal did not recreate the authoritative tank");
         });
+        runner.Run("authority/newer motion cannot suppress refused lifecycle restoration", () =>
+        {
+            using var f = new MatchFixture(runner);
+            Send(f.Server, 3, Msg.Puncture, Puncture(3));
+            f.Deliver();
+            var tank = f.Match.LiveTanks.Single(t => t.NetId == Id);
+            tank.GlobalPosition = new Vector3(0, 60, 0);
+            tank.Detonate();
+            tank.Free();
+            // Refusal was generated before this disposable publication, but arrives after it.
+            var vent = new VentParameters(Puncture(3).Hole, Puncture(3).Normal, Puncture(3).Swirl);
+            var latest = Pose(Id, 2, 8) with { Transform = new Transform3D(Basis.Identity, new Vector3(9, 2, 3)) };
+            f.Match.OnMessage(new NetMessage(Msg.BodyStates, f.Server.Id, 3, new BodyStatesMessage(1, new[] { latest })));
+            f.Match.OnMessage(new NetMessage(Msg.Authority, f.Server.Id, 0,
+                new AuthorityMessage(2, 1, ClaimRefusal.WrongPhase, new[]
+                {
+                    new BodyAuthority(Pose(Id, 2, 7), 3, TankLedger.State.Venting, false, vent, Vector3.Zero),
+                })));
+            var restored = f.Match.LiveTanks.Single(t => t.NetId == Id);
+            TestRunner.Assert(restored != tank && restored.State == PropaneTank.TankState.Venting && restored.HoleLocal == vent.Hole,
+                "newer publication suppressed the refused explosion's restoration");
+            TestRunner.Assert(restored.GlobalTransform.IsEqualApprox(latest.Transform), "restoration rewound newer motion");
+            TestRunner.Assert(f.Match.Bodies.Get(Id) is { LastSequence: 8, HasTarget: true, Target.Origin: var position } && position == latest.Transform.Origin,
+                "restoration lost the newer correction or its sequence boundary");
+        });
+        runner.Run("authority/newer motion cannot suppress refused fuse cancellation", () =>
+        {
+            using var f = new MatchFixture(runner);
+            Send(f.Server, 3, Msg.Puncture, Puncture(3));
+            f.Deliver();
+            var tank = f.Match.LiveTanks.Single(t => t.NetId == Id);
+            Action? callback = null;
+            tank.FuseScheduleOverride = (_, finish) => callback = finish;
+            tank.ChainHit(Vector3.Zero, 0, 99);
+            f.Match.Claim(new[] { tank }, atomic: true);
+            f.Server.Server.AdvanceMatches(NetTransport.Now + 20);
+            Send(f.Server, 3, Msg.BodyStates, new BodyStatesMessage(1, new[] { Pose(Id, 2, 7) }));
+            f.Server.Packets.Clear();
+            f.Match.OnMessage(new NetMessage(Msg.BodyStates, f.Server.Id, 3, new BodyStatesMessage(2, new[] { Pose(Id, 2, 8) })));
+            f.Flush();
+            TestRunner.Assert(callback != null && f.Match.LastAuthorityRefusal == ClaimRefusal.WrongPhase, "probe did not refuse the predicted chain claim");
+            callback!();
+            TestRunner.Assert(tank.State == PropaneTank.TankState.Venting && tank.ChainCause == 0 &&
+                f.Match.Bodies.Get(Id) is { LastSequence: 8, ClaimPending: false }, "newer motion suppressed fuse cancellation or lost its boundary");
+        });
     }
 
     private static void Send(ServerTests.Fixture f, int peer, Msg type, object payload) =>

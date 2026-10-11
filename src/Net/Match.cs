@@ -467,10 +467,11 @@ public partial class Match : Node3D
     // ------------------------------------------------------------------ Tanks
 
     /// <summary>Starts following a tank: its id, owner and what happens to it here.</summary>
-    private void Track(PropaneTank tank, int owner)
+    private void Track(PropaneTank tank, int owner, bool replace = false)
     {
         tanks[tank.NetId] = tank;
-        bodies.Register(tank.NetId, tank, isTank: true, owner);
+        if (replace) { bodies.ReplaceBody(tank.NetId, tank); }
+        else { bodies.Register(tank.NetId, tank, isTank: true, owner); }
         tank.Punctured += OnTankPunctured;
         tank.Detonated += OnTankDetonated;
     }
@@ -574,12 +575,13 @@ public partial class Match : Node3D
                 // their bodies; silently canceling a queued group could strand its other members.
             }
         }
-        foreach (var authority in result.Bodies)
+        foreach (var reported in result.Bodies)
         {
+            var authority = reported;
             var id = authority.Body.Id;
             if (exploded.Contains(id)) { continue; }
             var entry = bodies.Get(id);
-            if (entry != null && !bodies.OnAuthority(authority)) { continue; }
+            if (entry != null && !bodies.OnAuthority(authority, out authority)) { continue; }
             if (authority.State == TankLedger.State.Exploded)
             {
                 foreach (var canceled in outgoingAuthority.Where(r => r.Type != Msg.Claim && r.Ids.Contains(id)).ToArray())
@@ -615,8 +617,8 @@ public partial class Match : Node3D
                 tank = PropaneTank.Create();
                 tank.NetId = id;
                 suburb.AddTank(tank);
-                Track(tank, authority.Owner);
-                bodies.OnAuthority(authority);
+                Track(tank, authority.Owner, replace: entry != null);
+                if (entry == null) { bodies.OnAuthority(authority); }
             }
             if (result.Reason != ClaimRefusal.None) { tank!.CancelChainFuse(); }
             var wasIntact = tank!.State == PropaneTank.TankState.Intact;

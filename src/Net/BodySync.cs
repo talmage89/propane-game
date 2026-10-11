@@ -45,6 +45,7 @@ public sealed class BodySync
         public uint LastSequence;
         public bool PublishRequired;
         internal (int Sender, BodyState Body, bool IsRest, double Received)? Future;
+        internal (BodyState Body, bool IsRest)? Latest;
     }
 
     private readonly Dictionary<uint, Entry> entries = new();
@@ -84,6 +85,16 @@ public sealed class BodySync
         {
             byInstance.Remove(entry.InstanceId);
         }
+    }
+
+    /// <summary>Rebinds a refused exploded prediction without losing its ordered correction stream.</summary>
+    public void ReplaceBody(uint id, RigidBody3D body)
+    {
+        var entry = entries[id];
+        byInstance.Remove(entry.InstanceId);
+        entry.Body = body;
+        entry.InstanceId = body.GetInstanceId();
+        byInstance[entry.InstanceId] = entry;
     }
 
     /// <summary>
@@ -126,10 +137,13 @@ public sealed class BodySync
         entry.Body.LinearVelocity, entry.Body.AngularVelocity, entry.Epoch, entry.Sequence);
 
     /// <summary>Server-ordered authority. Even the same peer's next grant starts a separate sequence space.</summary>
-    public bool OnAuthority(BodyAuthority authority)
+    public bool OnAuthority(BodyAuthority authority) => OnAuthority(authority, out _);
+
+    public bool OnAuthority(BodyAuthority authority, out BodyAuthority resolved)
     {
-        if (!entries.TryGetValue(authority.Body.Id, out var entry) || authority.Body.Epoch < entry.Epoch ||
-            authority.Body.Epoch == entry.Epoch && authority.Body.Sequence < entry.LastSequence) { return false; }
+        resolved = authority;
+        // A publication orders motion, not lifecycle. A newer same-epoch pose must not hide a refusal.
+        if (!entries.TryGetValue(authority.Body.Id, out var entry) || authority.Body.Epoch < entry.Epoch) { return false; }
         if (authority.Body.Epoch > entry.Epoch)
         {
             entry.Epoch = authority.Body.Epoch;
@@ -137,16 +151,22 @@ public sealed class BodySync
             entry.LastSequence = 0;
             entry.HasTarget = false;
             entry.PublishRequired = authority.Owner == Me;
+            entry.Latest = null;
         }
         entry.Owner = authority.Owner;
         entry.ClaimPending = false;
         entry.Sequence = System.Math.Max(entry.Sequence, authority.Body.Sequence);
-        entry.LastSequence = authority.Body.Sequence;
+        entry.LastSequence = System.Math.Max(entry.LastSequence, authority.Body.Sequence);
+        if (entry.Latest is not { } latest || authority.Body.Sequence >= latest.Body.Sequence)
+        {
+            entry.Latest = (authority.Body, authority.Rest);
+        }
         if (entry.Future is { } future && future.Body.Epoch <= entry.Epoch)
         {
             entry.Future = null;
             OnState(future.Sender, future.Body, future.IsRest, future.Received);
         }
+        if (entry.Latest is { } newest) { resolved = authority with { Body = newest.Body, Rest = newest.IsRest }; }
         return true;
     }
 
@@ -166,6 +186,7 @@ public sealed class BodySync
         }
         if (entry.Owner != sender || sender == Me || state.Sequence <= entry.LastSequence) { return; }
         entry.LastSequence = state.Sequence;
+        entry.Latest = (state, rest);
         entry.HasTarget = true;
         entry.TargetRest = rest;
         entry.Target = state.Transform;

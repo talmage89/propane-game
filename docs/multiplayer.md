@@ -117,6 +117,8 @@ trajectory normally.
 The pose is the owner's last publication, not server-simulated physics. Refusal cancels pending chain fuses; an old
 fuse callback cannot detonate a restored lifecycle. Effects already played locally remain
 transient; reconciliation does not rewind debris or player motion.
+Newer movement in the same epoch cannot suppress lifecycle reconciliation. Restoration uses the newest known
+pose and preserves its correction stream, even when the predicted explosion already freed the tank's node.
 
 Chain punctures, delayed detonations and ownership claims for pushed bodies carry the initiating explosion's
 request ID. The root is sent before its children, even when waiting for a puncture grant; the server accepts a child
