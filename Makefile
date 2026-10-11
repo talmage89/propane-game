@@ -41,6 +41,10 @@ test: build ## Run all headless regression suites and separate-process world tes
 	python3 -B tools/dev/compare_vents_tests.py
 	"$(GODOT)" --headless --path . res://scenes/dev/unit_tests.tscn
 	"$(GODOT)" --headless --path . res://scenes/dev/movement_tests.tscn
+	"$(GODOT)" --headless --path . res://scenes/dev/menu_test.tscn -- --scenario=gamepad --port=$(PORT)
+	"$(GODOT)" --headless --path . res://scenes/dev/menu_test.tscn -- --scenario=devices --port=$(PORT)
+	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/player_range.tscn -- --scenario=grip --grip-sweep --assert-grip
+	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/player_range.tscn -- --scenario=ragdoll --assert-grip
 	"$(GODOT)" --headless --path . res://scenes/dev/generator_tests.tscn -- --seeds=100
 	"$(GODOT)" --headless --path . res://scenes/dev/platform_tests.tscn
 	tools/dev/check_world.sh

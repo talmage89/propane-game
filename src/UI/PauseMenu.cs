@@ -2,7 +2,7 @@ using Godot;
 
 namespace Propane.UI;
 
-/// <summary>Esc pauses the game: controls reference, resume and quit.</summary>
+/// <summary>Esc or Start/Options pauses the game: controls reference, resume and quit.</summary>
 public partial class PauseMenu : CanvasLayer
 {
     public event System.Action? ResumeRequested;
@@ -42,20 +42,7 @@ public partial class PauseMenu : CanvasLayer
         layout.AddChild(title);
         layout.AddChild(UiStyle.Text("Paused", 18, UiStyle.SoftInk, HorizontalAlignment.Center));
         layout.AddChild(new HSeparator());
-        foreach (var (keys, action) in new[]
-                 {
-                     ("W A S D", "Move"), ("Shift", "Sprint"), ("Space", "Jump"), ("Mouse", "Look"), ("Left click", "Fire"),
-                     ("Right click", "Aim (tighter spread)"), ("R", "New suburb"), ("F1  or  `", "Tuning panel"), ("F11  or  Alt+Enter", "Fullscreen"),
-                 })
-        {
-            var row = new HBoxContainer();
-            var key = UiStyle.Text(keys, 19);
-            key.AddThemeFontOverride("font", UiStyle.BoldFont);
-            key.CustomMinimumSize = new Vector2(210, 0);
-            row.AddChild(key);
-            row.AddChild(UiStyle.Text(action, 19, UiStyle.SoftInk));
-            layout.AddChild(row);
-        }
+        layout.AddChild(new ControlsReference());
         layout.AddChild(new HSeparator());
         layout.AddChild(UiStyle.Text("One shot punctures a tank. A second sets it off.", 16, UiStyle.SoftInk, HorizontalAlignment.Center));
         var buttons = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.Center };
@@ -73,5 +60,6 @@ public partial class PauseMenu : CanvasLayer
         }
         buttons.AddChild(quit);
         layout.AddChild(buttons);
+        AddChild(new MenuNavigation { Screen = this, Root = layout, Back = () => ResumeRequested?.Invoke() });
     }
 }

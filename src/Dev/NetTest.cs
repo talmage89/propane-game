@@ -589,6 +589,7 @@ public partial class NetTest : Node
     }
 
     private Camera3D? movementCamera;
+    private GripProbe? remoteGrip;
     private bool sawRemoteCreep;
     private bool sawRemoteSprint;
     private bool sawRemoteAir;
@@ -629,8 +630,18 @@ public partial class NetTest : Node
         if (role != "host") return;
         var other = match.RemoteBodies.FirstOrDefault();
         if (other == null) return;
+        if (remoteGrip == null && (DevArgs.Get("grip-metrics") != null || DevArgs.Get("assert-grip") != null))
+            remoteGrip = GripProbe.Attach(other);
         var focus = other.GlobalPosition + Vector3.Up;
-        movementCamera!.LookAtFromPosition(focus + new Vector3(4, 0.5f, -1.5f), focus);
+        var offset = new Vector3(4, 0.5f, -1.5f);
+        var view = DevArgs.Get("view");
+        if (view is "rifleleft" or "rifleright")
+        {
+            var rifle = other.GetNode<Rifle>("Rifle");
+            focus = rifle.GlobalTransform * new Vector3(0, 0, -0.12f);
+            offset = new Basis(Vector3.Up, other.FacingYaw) * new Vector3(view == "rifleleft" ? -0.8f : 0.8f, 0.2f, -0.45f);
+        }
+        movementCamera!.LookAtFromPosition(focus + offset, focus);
         var state = other.ResolvedState;
         var speed = new Vector2(other.Velocity.X, other.Velocity.Z).Length();
         remoteGaitTime = remoteGait == state.Gait ? remoteGaitTime + dt : 0;
@@ -689,6 +700,7 @@ public partial class NetTest : Node
         if (!movementProved && duelTime >= 10)
         {
             movementProved = true;
+            remoteGrip?.Finish();
             if (!sawRemoteCreep || !sawRemoteSprint || !sawRemoteAir || !sawRemoteRestoredAim ||
                 !capturedCreep || !capturedSprint || !capturedLanding || !capturedRelease)
             {
