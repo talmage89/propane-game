@@ -45,6 +45,7 @@ test: build ## Run all headless regression suites and separate-process world tes
 	"$(GODOT)" --headless --path . --fixed-fps 60 res://scenes/dev/bot_navigation_course.tscn -- --seeds=5
 	"$(GODOT)" --headless --path . res://scenes/dev/menu_test.tscn -- --scenario=gamepad --port=$(PORT)
 	"$(GODOT)" --headless --path . res://scenes/dev/menu_test.tscn -- --scenario=devices --port=$(PORT)
+	"$(GODOT)" --headless --path . res://scenes/dev/menu_test.tscn -- --scenario=mouse --port=$(PORT)
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/player_range.tscn -- --scenario=grip --grip-sweep --assert-grip
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/player_range.tscn -- --scenario=ragdoll --assert-grip
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/player_range.tscn -- --scenario=feet --assert-feet

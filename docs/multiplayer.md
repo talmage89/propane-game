@@ -44,9 +44,11 @@ loading-buffer message rather than continuing with missing events.
 
 ## Appearance
 
-The lobby accepts any opaque sRGB color, including duplicates and near-duplicates. Eight presets remain available.
-Settings store the same record as the network. An old saved palette index migrates once, only when no appearance
-record exists; a corrupt saved record uses a safe preset.
+The lobby accepts any opaque sRGB color, including duplicates and near-duplicates. Eight presets remain available;
+**Custom color** offers a character preview, byte-accurate RGB sliders and six-digit hex entry. A gamepad selects
+channels with up/down and adjusts with left/right or the left stick. Apply sends and saves the preview's exact
+bytes; Cancel leaves the accepted choice alone. Settings store the same record as the network. An old saved
+palette index migrates once, only when no appearance record exists; a corrupt saved record uses a safe preset.
 
 `AppearanceRecord` is immutable. `AppearanceCodec` is the only serializer, shared by settings, Hello, SetProfile,
 LobbyState, MatchStart and MatchEnd/standings. The server accepts the requested appearance without substituting
@@ -67,6 +69,11 @@ Hello retains its existing protocol/version/build/name/palette-index/debug prefi
 compatible Hello without the record uses its valid legacy palette index. A custom color sends the nearest preset
 as that fallback, while preserving its exact RGB bytes in the record. Incompatible builds are rejected before
 interpreting extensions. Welcome and Rejected are unchanged.
+
+Readability is presentation only: score tags select a contrasting outline, and lobby/results swatches have a dark
+frame. Near-black/white bodies gain a subtle rim and shield glow gains neutral contrast support. The Appearance
+tuners control these treatments; all eight presets keep their existing character/glow presentation. Stored and
+accepted colors are never modified by contrast handling.
 
 ## Changes from single player in a match
 
@@ -337,6 +344,7 @@ Details settled while building, within the decisions above:
 | `net_bots.sh -n 2 -l 10 -- --match-delay=26` | Builds after the server's loading timeout and Go; the ready log must already say `playing True`. Use `--matches=2` without the delay to exercise another round on the same connection. |
 | `godot res://scenes/dev/menu_test.tscn -- --capture-dir=DIR` | Clicks through every menu, a solo match, leaving it, and single player and back. |
 | `menu_test.tscn -- --scenario=gamepad --capture-dir=DIR` | Joypad-only navigation, name/address defaults, hosting, browsing and joining, color and match length, single-player pause/resume, a solo debug match, overlays and results. Asserts focus and outcomes; also runs headlessly in `make test`, using the checkout's hosting port. |
+| `menu_test.tscn -- --scenario=mouse --capture-dir=DIR` | Actual mouse/keyboard color entry, exact preview/accepted/saved bytes, lobby sample, solo debug character and real server results. Runs headlessly in `make test`. |
 | `menu_test.tscn -- --scenario=devices --capture-dir=DIR` | Live device-aware controls and reload hints, keyboard pause, mouse Resume, disconnect repeat cancellation and focus recovery. Also runs headlessly in `make test`. |
 | `menu_test.tscn -- --scenario=update --update-check --fake-version=0.0.9 --capture-dir=DIR` | The offer of a newer release, and a newer server (`-- --server --port=24993 --fake-version=9.9.0`) asking for an update. |
 | `menu_test.tscn -- --scenario=rejection --server-address=127.0.0.1:24993 --capture-dir=DIR` | Run against `-- --server --port=24993 --fake-version=9.9.0`. Asserts the typed application rejection, exact version-mismatch message and download button in the real connection UI; exits nonzero on failure. |
@@ -352,7 +360,8 @@ Results, 2026-10-09: with three bots under 120 ms round trip, 30 ms jitter and 3
 
 Protocol 2 also changes **Hello** (trailing appearance record), **SetProfile**, **LobbyState**, **MatchStart** and
 **MatchEnd** (one appearance record in each profile/standing), and **Drop** (removes the redundant palette index).
-It keeps the unreleased `Protocol.Version` at 2; the next release must be minor. Welcome and Rejected retain their existing layouts.
+Appearance adds shared presentation tuners. It keeps the unreleased `Protocol.Version` at 2; the next release must
+be minor. Welcome and Rejected retain their existing layouts.
 
 Protocol 2 adds authority request IDs, grouped epoch grants, per-body publication sequences and canonical/refused
 lifecycle reconciliation, as well as match ids, scalar tuning, timestamps on final body rests, drop refusal replies and discrete player

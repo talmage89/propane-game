@@ -30,6 +30,18 @@ public static class AppearanceTests
                 TestRunner.Assert(AppearanceCodec.Decode(AppearanceCodec.Encode(appearance)) == appearance, "sRGB bytes changed");
             }
         });
+        runner.Run("appearance/contrast supports extremes without changing presets", () =>
+        {
+            foreach (var preset in Protocol.PlayerColors)
+            {
+                TestRunner.Assert(AppearanceContrast.Strength(preset) == 0 && AppearanceContrast.ScoreOutline(preset) != Colors.White,
+                    "preset presentation changed");
+            }
+            TestRunner.Assert(Mathf.IsEqualApprox(AppearanceContrast.Strength(Colors.Black), 1) && Mathf.IsEqualApprox(AppearanceContrast.Strength(Colors.White), 1),
+                "extremes have no contrast edge");
+            TestRunner.Assert(AppearanceContrast.ScoreOutline(Colors.Black) == Colors.White && AppearanceContrast.ScoreOutline(Colors.Blue) == Colors.White &&
+                AppearanceContrast.ScoreOutline(Colors.White) != Colors.White, "score outline cannot contrast with its text");
+        });
         runner.Run("appearance/unknown slots skip binary payload and keep safe defaults", () =>
         {
             var record = new byte[] { 1, 12, 34, 56, 3, 240, 3, 0, 255, 0, 128, 3, 3, 0, (byte)'h', (byte)'a', (byte)'t', 241, 0, 0 };

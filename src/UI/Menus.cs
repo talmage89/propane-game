@@ -33,6 +33,7 @@ public partial class Menus : CanvasLayer
     private MenuNavigation navigation = null!;
     private Screen builtScreen;
     private LineEdit? serverField;
+    private AppearancePicker? picker;
 
     /// <summary>The connection the multiplayer screens use. Set before adding to the tree.</summary>
     public NetClient Net { get; set; } = null!;
@@ -97,6 +98,7 @@ public partial class Menus : CanvasLayer
     public void Show(Screen screen, string? note = null)
     {
         message = note ?? "";
+        if (screen != Screen.Lobby) { picker?.Close(); }
         Current = screen;
         Visible = screen != Screen.None;
         Rebuild();
@@ -392,7 +394,7 @@ public partial class Menus : CanvasLayer
         {
             var row = new HBoxContainer();
             row.AddThemeConstantOverride("separation", 12);
-            row.AddChild(new ColorRect { Color = member.Appearance.Color, CustomMinimumSize = new Vector2(20, 20), SizeFlagsVertical = Control.SizeFlags.ShrinkCenter });
+            row.AddChild(UiStyle.ColorSample(member.Appearance.Color, 20, member.Id.ToString(System.Globalization.CultureInfo.InvariantCulture)));
             var label = UiStyle.Text(member.Name + (member.Id == Net.MyId ? "  (you)" : ""), 20);
             label.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
             row.AddChild(label);
@@ -455,6 +457,22 @@ public partial class Menus : CanvasLayer
             colors.AddChild(swatch);
         }
         layout.AddChild(colors);
+        var custom = UiStyle.Button($"Custom color · #{Net.Appearance.Color.ToHtml(false).ToUpperInvariant()}");
+        custom.SetMeta("focus_key", "custom_color");
+        custom.Disabled = lobby.Phase != LobbyServer.LobbyPhase.Waiting;
+        custom.Pressed += () =>
+        {
+            if (picker != null) { return; }
+            picker = new AppearancePicker { Initial = Net.Appearance };
+            picker.Applied += appearance => SetProfile(nameField?.Text ?? Net.PlayerName, appearance);
+            picker.Closed += () =>
+            {
+                picker = null;
+                if (Visible) { navigation.Configure("custom_color"); }
+            };
+            AddChild(picker);
+        };
+        layout.AddChild(custom);
         layout.AddChild(new HSeparator());
 
         // Match length: the creator sets it.

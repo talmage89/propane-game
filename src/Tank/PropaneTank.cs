@@ -114,11 +114,15 @@ public partial class PropaneTank : RigidBody3D
         if (left <= 0)
         {
             mesh.SetInstanceShaderParameter("shield_color", new Color(shieldColor, 0f));
+            mesh.SetInstanceShaderParameter("shield_contrast", new Color(0, 0, 0, 0));
             SetProcess(false);
             return;
         }
         var pulse = 0.65f + 0.35f * Mathf.Sin((float)Now * 18f);
-        mesh.SetInstanceShaderParameter("shield_color", new Color(shieldColor, Mathf.Clamp(left / 0.25f, 0, 1) * pulse));
+        var fade = Mathf.Clamp(left / 0.25f, 0, 1) * pulse;
+        mesh.SetInstanceShaderParameter("shield_color", new Color(shieldColor, fade));
+        mesh.SetInstanceShaderParameter("shield_contrast", new Color(AppearanceContrast.Edge(shieldColor),
+            AppearanceContrast.Strength(shieldColor) * Tuning.Current.AppearanceGlowContrast * fade));
     }
 
     /// <summary>

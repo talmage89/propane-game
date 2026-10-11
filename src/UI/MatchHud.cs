@@ -270,7 +270,7 @@ public partial class MatchHud : CanvasLayer
                 var text = tag.Score.ToString();
                 var width = font.GetStringSize(text, HorizontalAlignment.Left, -1, size).X;
                 var at = tag.Screen - new Vector2(width / 2f, 0);
-                DrawStringOutline(font, at, text, HorizontalAlignment.Left, -1, size, Mathf.Max(4, size / 5), new Color(0.05f, 0.06f, 0.08f, 0.85f));
+                DrawStringOutline(font, at, text, HorizontalAlignment.Left, -1, size, Mathf.Max(4, size / 5), new Color(AppearanceContrast.ScoreOutline(tag.Color), 0.85f));
                 DrawString(font, at, text, HorizontalAlignment.Left, -1, size, tag.Color);
             }
 
