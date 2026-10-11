@@ -84,5 +84,9 @@ public partial class ShutdownGuard : Node
     {
         GC.Collect();
         GC.WaitForPendingFinalizers();
+        // Finalizing a native query releases the strong binding that kept its shape wrapper reachable.
+        // Drain that second wave before physics flushes RID frees and Godot tears down C# bindings.
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
     }
 }
