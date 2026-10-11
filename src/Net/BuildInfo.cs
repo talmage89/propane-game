@@ -41,6 +41,21 @@ public static class BuildInfo
     /// <summary>Where players download the game.</summary>
     public const string ReleasesUrl = "https://github.com/talmage89/propane-game/releases/latest";
 
+    /// <summary>The release archive for this player's platform; unknown versions or platforms use the release page.</summary>
+    public static string DownloadUrl(string version, string platform)
+    {
+        var archive = platform switch
+        {
+            "Windows" => "windows-x86_64.zip",
+            "macOS" => "macos-arm64.zip",
+            "Linux" => "linux-x86_64.tar.gz",
+            _ => null,
+        };
+        return archive != null && SemVer.Parse(version) is { } v
+            ? $"https://github.com/talmage89/propane-game/releases/download/v{v}/Propane-{v}-{archive}"
+            : ReleasesUrl;
+    }
+
     private static string? build;
 
     /// <summary>This game's version. <c>--fake-version=X.Y.Z</c> pretends to be another, for testing.</summary>

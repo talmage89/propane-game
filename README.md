@@ -15,9 +15,12 @@ tank bank's full rules and how multiplayer is built.
 
 ## Download and play
 
-Builds for macOS (Apple Silicon) and Linux (x86_64) are on the
+Builds for Windows (x86_64), macOS (Apple Silicon) and Linux (x86_64) are on the
 [latest release](https://github.com/talmage89/propane-game/releases/latest).
 
+- **Windows:** extract the ZIP and run `Propane.exe`, keeping all the extracted files together. It is not code
+  signed, so Windows SmartScreen may block the first launch: click **More info**, then **Run anyway**.
+  Needs a GPU with Vulkan drivers.
 - **macOS:** unzip and open `Propane.app`. It is not notarized by Apple, so the first launch is blocked: open
   System Settings > Privacy & Security and click **Open Anyway**. Downloading with
   `gh release download --repo talmage89/propane-game` skips the prompt.
@@ -55,8 +58,8 @@ addresses friends can use. Versions with the same major and minor number play to
 server turns away others and says which version it needs.
 
 To play against bots, create a lobby and run `make bots SERVER=host[:port]` (from source; `make bots-stop` stops them).
-Starting the game with `-- --connect=host[:port]` skips straight to that server's lobbies. On macOS, the first time
-you host, allow incoming connections if the system asks.
+Starting the game with `-- --connect=host[:port]` skips straight to that server's lobbies. On Windows or macOS, the
+first time you host, allow incoming connections if the system asks.
 
 The dedicated server is the same game run headless: `./Propane.x86_64 --headless -- --server [--port=24680]`.
 `tools/server/deploy.sh <ssh host> <dir>` exports it and runs it in Docker on any machine you can reach over ssh;
@@ -83,8 +86,10 @@ then plays with every patch of that minor version.
 Every gameplay and effect dial is a property of `src/Core/Tuning.cs`. Press F1 in game for live sliders. Run from
 the editor, **Save** writes them to `res://tuning.tres`, which the game loads on start and which the Godot inspector
 can edit. In a downloaded build, Save writes the player's own `tuning.tres` in the game's data folder
-(`~/Library/Application Support/Godot/app_userdata/Propane` on macOS, `~/.local/share/godot/app_userdata/Propane`
-on Linux), which then takes precedence. **Defaults** restores the values in code. `FixedSeed` (World group) replays one suburb; 0 picks a random one.
+(`%APPDATA%\Godot\app_userdata\Propane` on Windows,
+`~/Library/Application Support/Godot/app_userdata/Propane` on macOS,
+`~/.local/share/godot/app_userdata/Propane` on Linux), which then takes precedence. **Defaults** restores the values
+in code. `FixedSeed` (World group) replays one suburb; 0 picks a random one.
 
 ## Layout
 
@@ -111,9 +116,10 @@ on Linux), which then takes precedence. **Defaults** restores the values in code
 ## Dev harnesses
 
 Each scene in `scenes/dev` is a scripted test. Arguments after `--` are read by `src/Dev/DevArgs.cs`;
-`--capture-dir=<dir>` saves screenshots, `--record=<file.mp4>` films the window in real time (needs ffmpeg on `PATH`;
-a game in a match stays in step, unlike Godot's `--write-movie`), and `--tune.<Name>=<value>` overrides any tuning
-value. For example, `tools/dev/net_bots.sh -n 4 -l 90 -w 1 -- --record=/tmp/bots.mp4` films a match from the first bot.
+`--capture-dir=<dir>` saves screenshots, `--record=<file.mp4>` films the window in real time (needs ffmpeg on `PATH`,
+including `ffmpeg.exe` on Windows; a game in a match stays in step, unlike Godot's `--write-movie`), and
+`--tune.<Name>=<value>` overrides any tuning value. For example,
+`tools/dev/net_bots.sh -n 4 -l 90 -w 1 -- --record=/tmp/bots.mp4` films a match from the first bot.
 
 ```sh
 GODOT=/Applications/Godot_mono.app/Contents/MacOS/Godot
@@ -121,6 +127,9 @@ GODOT=/Applications/Godot_mono.app/Contents/MacOS/Godot
 # Generator: determinism, overlaps, tank count and placement, spawn safety, reachability, and the same for match
 # suburbs with player starts, ammo spots and the plan's encoding. Exits 1 on failure.
 $GODOT --headless res://scenes/dev/generator_tests.tscn -- --seeds=200
+
+# Platform download URLs and recorder arguments, including Windows paths and non-English locales. Exits 1 on failure.
+$GODOT --headless res://scenes/dev/platform_tests.tscn
 
 # The real game with a scripted player. Scenarios: loop (default), clear (destroys every tank), ragdoll, shoot,
 # tour (camera in tight spots), spots (visits each tank), settle (props that move on their own), dissolve, menus,
@@ -177,22 +186,24 @@ make release-patch   # or release-minor, release-major; tools/release/cut.sh X.Y
 patch, it lists any changed files that players in a match share and asks before going on. Then it shows the changes,
 runs the tests, commits the new version on `dev`, and pushes `dev` and fast-forwards `main` to it in one push.
 
-That push runs `.github/workflows/release.yml` on a Linux runner: the same version check, the generator tests, both
+That push runs `.github/workflows/release.yml` on a Linux runner: the same version check, the headless tests, all three
 exports, and a new GitHub release with the changes since the previous one. Releases are never replaced.
 
-A downloaded game checks GitHub for a newer release at launch and, if there is one, offers it on the main menu;
-updating is up to the player. A newer server that turns a game away offers the download it needs.
+A downloaded game checks GitHub for a newer release at launch and, if there is one, offers this platform's archive
+on the main menu; updating is up to the player. A newer server that turns a game away offers the download it needs.
 
 The same build runs locally:
 
 ```sh
-tools/release/install_templates.sh 4.7.2   # once: the .NET export templates, with an Apple Silicon only macOS binary
+tools/release/install_templates.sh 4.7.2   # .NET templates for all three platforms; macOS is Apple Silicon only
 RCODESIGN=/path/to/rcodesign tools/release/build.sh   # writes build/dist/*.zip and *.tar.gz
 ```
 
 Godot's built-in ad-hoc signing writes entitlement data that current macOS rejects (the app is killed at launch),
-so the preset exports unsigned and [rcodesign](https://github.com/indygreg/apple-platform-rs) signs the app ad hoc.
-It runs on Linux, which keeps CI off the more expensive macOS runners.
+so the macOS preset exports unsigned and [rcodesign](https://github.com/indygreg/apple-platform-rs) signs the app ad hoc.
+It runs on Linux, which keeps CI off the more expensive macOS runners. Windows exports on the same runner, with
+Godot applying `icon.svg` and the current project version to the executable; it needs no signing or resource tools.
+The release and development shell tools require a Unix environment (Linux or macOS); downloaded games do not.
 
 ## Assets
 

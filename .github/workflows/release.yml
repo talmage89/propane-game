@@ -1,5 +1,5 @@
-# Every push to main builds the macOS (Apple Silicon) and Linux (x86_64) games and publishes them as a new release for
-# the version in project.godot. tools/release/cut.sh makes those pushes. The job stops first if the version may not be
+# Every push to main builds Windows (x86_64), macOS (Apple Silicon) and Linux (x86_64), then publishes a new release
+# for the version in project.godot. tools/release/cut.sh makes those pushes. The job stops first if the version may not be
 # released (tools/release/check_version.sh): already released, not newer, or a patch that changes the protocol.
 name: Release
 
@@ -71,12 +71,11 @@ jobs:
           fi
           TEMPLATE_CACHE="$cache" tools/release/install_templates.sh "$GODOT_VERSION"
 
-      - name: Generator tests
+      - name: Headless tests
         run: |
           set -euo pipefail
           "$GODOT" --headless --path . --import
-          dotnet build Propane.sln -c Debug -nologo -v quiet
-          "$GODOT" --headless --path . res://scenes/dev/generator_tests.tscn -- --seeds=100
+          make test
 
       - name: Build
         run: tools/release/build.sh "$GODOT"
@@ -96,6 +95,9 @@ jobs:
               git log --format='- %s' --invert-grep --grep='^Release v' "$previous..$GITHUB_SHA"
               echo
             fi
+            echo "**Windows (x86_64):** extract the ZIP and run Propane.exe. It is unsigned: if SmartScreen blocks it,"
+            echo "click More info, then Run anyway. Needs a GPU with Vulkan drivers."
+            echo
             echo "**macOS (Apple Silicon):** unzip, then open Propane.app. The first time, macOS blocks it because it is"
             echo "not notarized: open System Settings > Privacy & Security and click Open Anyway."
             echo
