@@ -200,6 +200,11 @@ an atomic `Claim` for the complete group, including tanks it already owns. Nothi
 component rechecks eligibility, membership and clearance after the reply, then uses the granted epochs as its lease.
 A refused grant or changed member leaves the group alone; ownership/lifecycle changes cancel an active glide.
 
+Built square and triangular pyramids stand upright on ordinary collar/foot contacts and start asleep, just like
+other built tanks. Their tier rise is `PileUprightLayerHeight`; side-laid rows retain `PileLayerHeight`.
+[The upright pile proof](upright-piles.md) covers stability, player passes and disturbances. This shared construction
+change and tuner require a minor release; the unreleased `Protocol.Version` stays 2.
+
 Gathered piles use `PileBuilder`'s upright cluster with the existing pile spacing: it supports every count without
 upper tiers depending on a tank that might be interrupted. Site checks require flat floor support, an empty footprint
 and clear enclosing-sphere sweeps for lift, traverse and settle. Players, houses and other obstacles block the path;

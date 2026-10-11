@@ -552,7 +552,10 @@ public partial class Tuning : Resource
     [Export(PropertyHint.Range, "0,10,0.1")] public float PileTriangularWeight { get; set; } = 1f;
     [Export(PropertyHint.Range, "0,10,0.1")] public float PileClusterWeight { get; set; } = 1f;
     [Export(PropertyHint.Range, "0.32,0.5,0.001")] public float PileSpacing { get; set; } = 0.36f;
+    /// <summary>Rise of the side-laid rows.</summary>
     [Export(PropertyHint.Range, "0.15,0.35,0.001")] public float PileLayerHeight { get; set; } = 0.249f;
+    /// <summary>Upright pyramid rise: the authored collision collar is 0.462 m above the foot.</summary>
+    [Export(PropertyHint.Range, "0.36,0.6,0.001")] public float PileUprightLayerHeight { get; set; } = 0.462f;
     [Export(PropertyHint.Range, "0.468,0.8,0.001")] public float PileDepthSpacing { get; set; } = 0.49f;
 
     // ---------------------------------------------------------------- HUD

@@ -44,6 +44,7 @@ public static class SuburbPlans
         TightWeight = tuning.PileClusterWeight,
         PileSpacing = tuning.PileSpacing,
         PileLayerHeight = tuning.PileLayerHeight,
+        PileUprightLayerHeight = tuning.PileUprightLayerHeight,
         PileDepthSpacing = tuning.PileDepthSpacing,
     };
 

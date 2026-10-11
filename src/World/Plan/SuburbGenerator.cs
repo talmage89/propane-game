@@ -36,6 +36,7 @@ public sealed record SuburbSettings
     public float TightWeight { get; init; } = 1f;
     public float PileSpacing { get; init; } = 0.36f;
     public float PileLayerHeight { get; init; } = 0.249f;
+    public float PileUprightLayerHeight { get; init; } = 0.462f;
     public float PileDepthSpacing { get; init; } = 0.49f;
     public float StartSpacing { get; init; } = 12f;
 
@@ -874,7 +875,7 @@ public sealed class SuburbGenerator
             for (; size > 0; size--)
             {
                 var slots = PileBuilder.Build(formation, size,
-                    new Vector3(settings.PileSpacing, settings.PileLayerHeight, settings.PileDepthSpacing))
+                    new Vector3(settings.PileSpacing, settings.PileLayerHeight, settings.PileDepthSpacing), settings.PileUprightLayerHeight)
                     .Select(t => new Transform3D(turn * t.Basis, turn * t.Origin + new Vector3(spot.Position.X, 0, spot.Position.Y))).ToList();
                 // A sideways vessel's footprint is longer than its diameter. Enclose the whole hull
                 // in a circle so this clearance remains conservative at every yaw.
