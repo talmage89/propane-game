@@ -186,6 +186,7 @@ Details settled while building, within the decisions above:
 | `tools/dev/check_scores.py out/server.log out/bot*.log` | Server conservation audit and identical per-player final scores on every bot; exits nonzero on a missing audit or disagreement. |
 | `net_bots.sh -n 2 -w 2 -s "--start-score=8" -- --scenario=duel --capture-dir=DIR` | Scripted close-up: hits with the grace period, dropped tanks, a blast that throws the victim, from both sides. |
 | `net_bots.sh -n 2 -l 45 -w 1 -- --scenario=movement --capture-dir=DIR` | Scripted remote creep, sprint, air aim suppression and held-aim landing through real snapshots; exits 1 on missing states. |
+| `net_bots.sh -n 2 -l 45 -w 1 -- --scenario=movement --assert-grip --view=rifleright --capture-dir=DIR` | Final-pose wrist, sampled hand penetration and eye-line assertions on the remote character; close-ups and `grip.csv` from the host. |
 | `net_bots.sh -n 1 -w 1 -- --scenario=pickup --capture-dir=DIR` | Taking an ammo can and its return. |
 | `net_bots.sh -n 2 -w 2 -l 10 -s "--start-score=8" -- --scenario=drop-refusal --net-lag=120 --net-jitter=30 --net-loss=3 --capture-dir=DIR` | The creator lowers the hit-drop count while a hit is in flight; the victim rolls back the refused drop, both clients keep one accepted tank and a bank of 7. |
 | `net_bots.sh -n 4 -l 120 -b smart,simple,smart,simple` | Bot brains against each other; the server log ends each match with tanks gained / lost to hits / lost to throws. Add `--bot-log` to log what each bot is doing. |
