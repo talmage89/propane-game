@@ -47,7 +47,7 @@ historical-release branch; direct current-build `SceneTree.Quit` calls still fai
 | Target | Assertions |
 | --- | --- |
 | `test-core` | Python timing/world-wrapper/score/vent/tank-agreement/launcher checkers, platform, movement, all unit suites, normal shutdown and paused window-close witnesses |
-| `test-behavior` | Session actors and animation metrics, scoped worlds, blast completeness, upright piles, gather/races/appearance/real-game gather, melee collision/poses, navigation, gamepad/devices/input/mouse menus, grip/recovery, feet/corrections/events, movement/motion continuity |
+| `test-behavior` | Native vent correction, session actors and animation metrics, scoped worlds, blast completeness, upright piles, gather/races/appearance/real-game gather, melee collision/poses, navigation, gamepad/devices/input/mouse menus, grip/recovery, feet/corrections/events, movement/motion continuity |
 | `test-generator` | 20 single-player and 2-player seeds, three each at 8/16/24/32 players, two forced seeds for every formation at all six sizes |
 | `test-world` | All four saved formation plans built and hashed in two fresh processes |
 

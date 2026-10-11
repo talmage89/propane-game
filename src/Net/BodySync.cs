@@ -93,7 +93,11 @@ public sealed class BodySync
     {
         entry.ClaimPending = true;
         entry.ObserveWhilePending = !predictMotion;
-        if (predictMotion) { entry.HasTarget = false; }
+        if (predictMotion)
+        {
+            entry.HasTarget = false;
+            if (entry.Body is Tank.PropaneTank tank) { tank.CorrectingMotion = false; }
+        }
     }
 
     public void Register(uint id, RigidBody3D body, bool isTank, int owner)
@@ -185,6 +189,7 @@ public sealed class BodySync
             entry.Latest = null;
         }
         entry.Owner = authority.Owner;
+        if (entry.Owner == Me && entry.Body is Tank.PropaneTank tank) { tank.CorrectingMotion = false; }
         entry.ClaimPending = false;
         entry.ObserveWhilePending = false;
         entry.Sequence = System.Math.Max(entry.Sequence, authority.Body.Sequence);

@@ -228,6 +228,8 @@ tools/dev/check_world.sh
 
 # Scoped worlds: overlapping physics/tuning, events/spawns/callbacks, pause/reveal/hitstop and leak-free teardown.
 $GODOT --headless --fixed-fps 60 res://scenes/dev/world_services_tests.tscn
+# Native vent correction: fresh observers add no speculative jet impulse; stale/predicted/owned vents keep thrust.
+$GODOT --headless --fixed-fps 60 res://scenes/dev/body_correction_tests.tscn
 # Clear/replace proof: shooting sequence, finish remaining fixture tanks, assert automatic replacement.
 $GODOT --fixed-fps 60 res://scenes/dev/game_test.tscn -- --scenario=clear --quit=32 --capture-dir=/tmp/clear
 # Real menu lifetime: ten single-player and ten solo-match retirements with exact node/object/orphan counts.
@@ -332,7 +334,8 @@ GODOT=$GODOT tools/dev/net_bots.sh -n 3 -l 60 -- --net-lag=120 --net-jitter=30 -
 `duel` (hits, drops and a thrown player, filmed from both sides),
 `pickup` (an ammo can taken and returning), and `movement` (remote creep, sprint, jumping and held-aim landing,
 with assertions and labeled frames), `drop-refusal` (rolling back a refused predicted drop), and `puncture-race`
-(canonical vent adoption and trajectory assertions after two simultaneous bullet contacts).
+(canonical vent adoption and trajectory assertions after two simultaneous bullet contacts), and `vent-contact`
+(eight owner-started, rapidly spinning vents on clear floor, with contact and trajectory logs).
 `tools/dev/compare_vents.py` compares its logs.
 [docs/multiplayer.md](docs/multiplayer.md) lists the commands.
 

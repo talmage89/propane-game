@@ -34,6 +34,7 @@ remain under build. Historical copies were built inside this worktree with
 | Revision | Silent endpoint | Detection |
 | --- | --- | ---: |
 | dev `d2aa9c9` | client | 6.311 s |
+| dev `d2aa9c9` | server | 3.349 s |
 | integrated branch before fix `4a03c3d` | client | 25.208 s |
 | loading-specific grace | client | 3.972 s |
 | loading-specific grace | server | 8.350 s |
@@ -58,3 +59,43 @@ deliberately stopping its victim; that invalidated its unrelated gameplay fixtur
 The final probe uses ordinary simple bots. Its server-silence condition observes
 either client, since the first timeout can cause that client to quit before the
 other times out.
+
+## Vent correction
+
+BodySync wrote the owner's velocity plus correction steering before native integration,
+then the observer tank applied another jet force using its own delayed vent age and
+orientation. Fresh observers now integrate the corrected velocity without that
+speculative impulse or spin clamp. Presentation and vent age still advance. Stale
+observers, predicted local impulses and actual owners retain their original jet
+physics. Claims and local grants clear suppression immediately, before another
+correction tick; a nonpredictive gather lease continues observing the remote owner.
+
+The native `body_correction_tests` fixture uses baked tuning, zero gravity/damping
+and a continuously fresh zero-velocity publication to isolate the extra impulse.
+The identical test fails before the change at 0.127 m/s and passes afterward at
+0.000000 m/s. Ordinary owner peak speed is 2.338 m/s; stale, predicted and granted
+ownership all resume thrust. This regression is in `make test`. Both new fixtures
+were copied into the archived integrated branch for the before measurements;
+its production replication and tank physics remained unchanged.
+
+The `vent-contact` network fixture puts eight owner-started vents on clear ground,
+sets their initial spin to the existing VentMaxSpin, and records actual contacts.
+Two 30-second 120/30/3 captures, using the same fixture and saved tuning, show:
+
+| Copy | Vent pair grids after first six vent seconds | Median / p95 / p99 / maximum drift | Final drift |
+| --- | ---: | --- | ---: |
+| Before force suppression | 5,112 | 0.111 / 0.235 / 0.293 / 0.448 m | 0.218 m |
+| After force suppression | 5,128 | 0.107 / 0.213 / 0.267 / 0.411 m | 0.159 m |
+
+The owner had floor contact in 718/768 and 726/776 contact samples; peak speed was
+1.752/1.701 m/s and spin 30.576/30.594 rad/s. Observer contact histories differed,
+confirming native collision integration still adds disagreement. These captures
+show a reduction, not a proof that every historical contact trajectory is resolved.
+No fault/clean final bound (0.50/0.35 m), resting bound (0.10 m), gameplay rule or
+tuner was changed. Rapidly spinning floor vents remain subject to the same final
+bound as free flight. Broader final-code soaks are recorded below.
+
+```sh
+godot-mono --headless --fixed-fps 60 --path . res://scenes/dev/body_correction_tests.tscn
+tools/dev/net_bots.sh -n 2 -l 30 -s '--tune.FixedSeed=23' -o "$PWD/build/vna-contact" -- --scenario=vent-contact --tune.FixedSeed=23 --net-lag=120 --net-jitter=30 --net-loss=3 --tank-motion-trace
+```

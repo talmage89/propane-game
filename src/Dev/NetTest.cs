@@ -127,7 +127,7 @@ public partial class NetTest : Node
             match = new Match { Name = "Match", Net = net, Setup = setup, CreateLocalView = DisplayServer.GetName() != "headless" };
             match.Finished += () =>
             {
-                if (DevArgs.Get("scenario") is "duel" or "pickup" or "drop-refusal" or "puncture-race" or "appearance" or "gather" or "melee" or "body-stream")
+                if (DevArgs.Get("scenario") is "duel" or "pickup" or "drop-refusal" or "puncture-race" or "appearance" or "gather" or "melee" or "body-stream" or "vent-contact")
                 {
                     ScenarioAssert(scenarioPassed, "scenario ended before all assertions passed");
                 }
@@ -159,6 +159,7 @@ public partial class NetTest : Node
             raceVent = null;
             raceCamera = null;
             raceWorst = 0;
+            ventContactTick = 0;
             match.AuthorityResolved += result =>
             {
                 if (DevArgs.Get("tank-authority-trace") != null)
@@ -305,6 +306,10 @@ public partial class NetTest : Node
         else if (DevArgs.Get("scenario") == "body-stream")
         {
             BodyStreamScenario(match);
+        }
+        else if (DevArgs.Get("scenario") == "vent-contact")
+        {
+            VentContactScenario(match);
         }
         else if (DevArgs.Get("scenario") == "movement")
         {

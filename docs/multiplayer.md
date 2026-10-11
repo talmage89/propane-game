@@ -163,8 +163,10 @@ own server clock estimate to include both transport legs in bounded motion extra
 motion overtaking its grant. Rest settling uses receipt time; clocks never order states.
 The reliable canonical grant/refusal supplies an observer correction target before the owner publishes again;
 an overtaking newer publication keeps its sampling and receipt times. Motion expires after 0.5 s without a
-receipt, independently of sampling transit. Venting observers retain rotation-error steering through the spin
-limiter while corrections are fresh; owners and stale observers keep the ordinary gameplay spin limit.
+receipt, independently of sampling transit. Fresh vent observers use the owner's velocities and retain
+rotation-error steering through the spin limiter. They do not add their own jet impulse after that correction;
+vent presentation and age still advance. Owners, stale observers and predicted local claims keep the ordinary
+jet force and gameplay spin limit. A local claim or grant releases observer force suppression immediately.
 
 `Claim` requests carry expected epochs and proposed poses for the complete group. The server validates every member
 before granting any, so later grouped interactions can include bodies already owned without a partial handoff.
@@ -402,6 +404,8 @@ Details settled while building, within the decisions above:
 | `net_bots.sh -n 1 -w 1 -- --scenario=pickup --capture-dir=DIR` | Taking an ammo can and its return. |
 | `net_bots.sh -n 2 -w 2 -l 20 -- --scenario=puncture-race --net-lag=120 --net-jitter=30 --net-loss=3 --capture-dir=DIR` | Two opposed bullet contacts on simulation tick 180; both copies must still be intact. Every client asserts canonical hole, normal, swirl and lean, and bounded owner correction error over time. A third bot observes without shooting. |
 | `python3 -B tools/dev/compare_vents.py out/bot*.log` | Identical canonical vent parameters and at least 100 overlapping, time-aligned trajectory samples per pair; exits nonzero if maximum drift exceeds the default snap distance (3 m, a test tolerance). |
+| `net_bots.sh -n 2 -l 30 -- --scenario=vent-contact --net-lag=120 --net-jitter=30 --net-loss=3 --tank-motion-trace` | Eight isolated owner-started vents spin on clear floor. Asserts canonical ownership and vent state, logs actual collider contacts, speed and spin, and checks agreement through the final grid. |
+| `godot-mono --headless --fixed-fps 60 --path . res://scenes/dev/body_correction_tests.tscn` | Native integration asserts zero extra jet impulse for fresh observers, ordinary owner thrust, and immediate thrust restoration for stale, predicted and granted ownership. |
 | `net_bots.sh -n 2 -w 2 -l 10 -s "--start-score=8" -- --scenario=drop-refusal --net-lag=120 --net-jitter=30 --net-loss=3 --capture-dir=DIR` | The creator lowers the hit-drop count while a hit is in flight; the victim rolls back the refused drop, both clients keep one accepted tank and a bank of 7. |
 | `net_bots.sh -n 4 -l 120 -b smart,simple,smart,simple` | Bot brains against each other; the server log ends each match with tanks gained / lost to hits / lost to throws. Add `--bot-log` to log what each bot is doing. |
 | `net_bots.sh -k -n 2 -l 10 -- --match-delay=26` | Skips the complete-match audit for this intentionally incomplete capture. Builds after the server's loading timeout and Go; the ready log must already say `playing True`. Use `--matches=2` without the delay to exercise another round on the same connection. |
