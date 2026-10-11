@@ -83,6 +83,8 @@ on Linux), which then takes precedence. **Defaults** restores the values in code
 Tank piles use weighted formations in both modes: side-laid rows, square tiers, triangular tiers, and upright tight
 clusters. The **Tank Piles** tuners control weights and spacing. Each upper tier is placed only after its supports;
 cramped sites use smaller whole formations. Pyramids stand on clear ground rather than moving pickup beds.
+Rifle hits still puncture, then detonate. A blast within `ChainRadius` punctures a fresh neighbor and lights its
+`ChainFuseMin`/`ChainFuseMax` fuse, letting one detonation clear a fresh pile in succession.
 
 Match settings use the actual player count. Tank supply is `MpTankCount + MpTanksPerPlayer × players`, ammo cans are
 `PickupCount + PickupsPerPlayer × players`, and map width is `MpMapSizeBase + MpMapSizePerPlayer × players`. Pile
@@ -137,6 +139,10 @@ $GODOT res://scenes/dev/soak.tscn
 
 # Tank close-ups (scenarios: full, vent, blast, look), the character and rifle rig, the world kit, map overviews.
 $GODOT --fixed-fps 60 res://scenes/dev/tank_range.tscn -- --capture-dir=/tmp/t --scenario=blast
+# Formation close-up and stability: Rows, Square, Triangular, Cluster; --count defaults to 14.
+# --awake tests contact settling; --chain=fresh detonates one tank and requires zero survivors.
+# --chain=primed first punctures each tank with a rifle shot, then checks the same chain.
+$GODOT --fixed-fps 60 res://scenes/dev/tank_range.tscn -- --capture-dir=/tmp/pile --formation=Square --chain=fresh
 $GODOT --fixed-fps 60 res://scenes/dev/player_range.tscn -- --capture-dir=/tmp/p
 # Player scenarios: stances (default), reload, ragdoll. --view=rifleleft or rifleright follows the rifle up close.
 $GODOT --fixed-fps 60 res://scenes/dev/player_range.tscn -- --capture-dir=/tmp/p --scenario=reload --view=rifleleft

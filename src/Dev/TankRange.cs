@@ -1,7 +1,10 @@
+using System;
+using System.Linq;
 using Godot;
 using Propane.Core;
 using Propane.Tank;
 using Propane.World;
+using Propane.World.Plan;
 
 namespace Propane.Dev;
 
@@ -17,6 +20,7 @@ public partial class TankRange : Node3D
     public override void _Ready()
     {
         DevArgs.Setup();
+        DisplayServer.WindowSetVsyncMode(DisplayServer.VSyncMode.Disabled);
         var effects = new Node3D { Name = "Effects" };
         AddChild(effects);
         var dynamic = new Node3D { Name = "Dynamic" };
@@ -42,6 +46,12 @@ public partial class TankRange : Node3D
             var dir = DevArgs.Get("capture-dir") ?? "user://";
             Fx.FxLibrary.ScorchTexture.GetImage().SavePng($"{dir}/tex_scorch.png");
             Fx.FxLibrary.BulletHoleTexture.GetImage().SavePng($"{dir}/tex_hole.png");
+        }
+
+        if (DevArgs.Get("formation") is { } name)
+        {
+            FormationRange(Enum.Parse<PileFormation>(name, true));
+            return;
         }
 
         AddTank(new Vector3(0, 0, 0));
@@ -110,6 +120,64 @@ public partial class TankRange : Node3D
                 director.ShotAt(13.5f, "13_chain_after");
                 break;
         }
+    }
+
+    private void FormationRange(PileFormation formation)
+    {
+        var ground = new StaticBody3D { CollisionLayer = Layers.World };
+        ground.AddChild(new CollisionShape3D { Shape = new BoxShape3D { Size = new Vector3(20, 0.2f, 20) }, Position = new Vector3(0, -0.1f, 0) });
+        AddChild(ground);
+        var tuning = Tuning.Current;
+        var transforms = PileBuilder.Build(formation, (int)DevArgs.GetFloat("count", 14),
+            new Vector3(tuning.PileSpacing, tuning.PileLayerHeight, tuning.PileDepthSpacing));
+        foreach (var transform in transforms)
+        {
+            var tank = PropaneTank.Create();
+            AddChild(tank);
+            tank.Transform = transform;
+            tank.Sleeping = DevArgs.Get("awake") == null;
+            tanks.Add(tank);
+        }
+        camera.LookAtFromPosition(new Vector3(2.5f, 1.8f, 3f), new Vector3(0, 0.4f, 0));
+        var initial = tanks.Select(t => t.Transform).ToArray();
+        var director = new CaptureDirector { QuitAfter = 12f };
+        AddChild(director);
+        director.ShotAt(0.2f, "00_placed");
+        director.ShotAt(4f, "01_settled");
+        director.At(4.2f, () =>
+        {
+            var drift = tanks.Select((t, i) => t.Position.DistanceTo(initial[i].Origin)).Max();
+            var tilt = tanks.Select((t, i) => t.Basis.GetRotationQuaternion().AngleTo(initial[i].Basis.GetRotationQuaternion())).Max();
+            GD.Print($"[formation] {formation} count {tanks.Count} drift {drift:0.0000} m rotation {Mathf.RadToDeg(tilt):0.00} deg");
+            // Allow millimeters of Jolt contact settling, but fail on sliding, rolling or a collapsing tier.
+            if (drift > 0.006f || tilt > Mathf.DegToRad(0.5f))
+            {
+                GD.PushError("[formation] moved before hit");
+                GetTree().Quit(1);
+                return;
+            }
+            if (DevArgs.Get("chain") != null)
+            {
+                // Also exercise a pile that the player has already punctured with rifle shots.
+                if (DevArgs.Get("chain") == "primed")
+                    foreach (var tank in tanks)
+                        tank.TakeShot(tank.GlobalTransform * (PropaneTank.LocalCenter + Vector3.Right * PileBuilder.Radius),
+                            tank.GlobalBasis.X, Vector3.Zero);
+                tanks[0].Detonate();
+            }
+        });
+        if (DevArgs.Get("chain") != null)
+        {
+            director.ShotAt(4.4f, "02_chain");
+            director.ShotAt(5.2f, "03_chain");
+        }
+        director.At(11f, () =>
+        {
+            if (DevArgs.Get("chain") == null) return;
+            var live = tanks.Count(t => IsInstanceValid(t) && t.State != PropaneTank.TankState.Exploded);
+            GD.Print($"[formation] {formation} chain survivors {live}");
+            if (live != 0) { GD.PushError("[formation] incomplete chain"); GetTree().Quit(1); }
+        });
     }
 
     private void AddTank(Vector3 position)

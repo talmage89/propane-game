@@ -137,7 +137,9 @@ public partial class GameTest : Node
             director.At(2.5f, () =>
             {
                 venting = ApproachNearest(8f);
-                venting?.ChainHit(venting.GlobalPosition + Vector3.Up, 1f);
+                if (venting != null)
+                    venting.TakeShot(venting.GlobalTransform * (PropaneTank.LocalCenter + Vector3.Right * World.Plan.PileBuilder.Radius),
+                        venting.GlobalBasis.X, Vector3.Zero);
                 late = game.Current!.LiveTanks.Where(t => t != venting).OrderBy(t => t.GlobalPosition.DistanceTo(game.Player.GlobalPosition)).FirstOrDefault();
                 target = venting;
             });

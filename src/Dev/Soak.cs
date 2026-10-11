@@ -33,7 +33,8 @@ public partial class Soak : Node
             stage = "venting";
             foreach (var tank in game.Current!.LiveTanks)
             {
-                tank.ChainHit(tank.GlobalPosition + new Vector3(1, 0.4f, 0.5f), 1f);
+                tank.TakeShot(tank.GlobalTransform * (Tank.PropaneTank.LocalCenter + Vector3.Right * World.Plan.PileBuilder.Radius),
+                    tank.GlobalBasis.X, Vector3.Zero);
             }
         });
         director.At(7f, () => Overview(game.Current!.Plan.Bounds));
@@ -41,7 +42,7 @@ public partial class Soak : Node
         director.At(9.5f, () =>
         {
             stage = "single";
-            game.Current!.LiveTanks.First().Detonate();
+            game.Current!.LiveTanks.FirstOrDefault()?.Detonate();
         });
         director.At(11f, () =>
         {
