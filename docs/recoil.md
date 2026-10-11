@@ -35,6 +35,9 @@ Local Lab bot soaks also exercise abrupt turns while firing. Shot fitting now sy
 the facing already resolved by movement, so physics fits the muzzle in the same frame that rendering uses.
 It also clears a finished reload's presentation contact before fitting the firing foregrip: physics may fire
 before rendering has advanced the last magazine/bolt pose.
+When a new animation sample moves the hips, the cached upper root is rebased into that sample's parent frame
+before constraining the firing torso. The fitting skeleton's world frame is retained too, covering a second
+movement tick before rendering. The fixed shot muzzle can then keep both contacts as the body and clip advance.
 Upper-body constraint trials reject out-of-reach wrists before solving IK; the final trial retains contact
 error reporting. This fixes transient turn/contact errors without changing recoil, spread or the primary ray.
 
