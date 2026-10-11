@@ -28,6 +28,7 @@ public partial class PropaneTank : RigidBody3D
     private Transform3D? pilePose;
     private Transform3D? restPose;
 
+    private readonly WorldClock clock = new();
     private VentJet? vent;
     private Decal? holeDecal;
     private uint fuseGeneration;
@@ -282,11 +283,12 @@ public partial class PropaneTank : RigidBody3D
             }
         }
         if (FuseScheduleOverride != null) { FuseScheduleOverride(fuse, FinishFuse); }
-        else { GetTree().CreateTimer(fuse, processAlways: false, processInPhysics: true).Timeout += FinishFuse; }
+        else { clock.Schedule(fuse, FinishFuse); }
     }
 
     public override void _PhysicsProcess(double delta)
     {
+        clock.Advance(delta);
         if (Gathering) { UpdateGatherShimmer(); }
         if (State == TankState.Intact && !Gathering)
         {
@@ -358,7 +360,9 @@ public partial class PropaneTank : RigidBody3D
         QueueFree();
     }
 
-    private static double Now => Time.GetTicksUsec() / 1_000_000.0;
+    private double Now => clock.Now;
+
+    public override void _ExitTree() => clock.Dispose();
 
     private void Puncture(Vector3 point, Vector3 normal, float swirl) =>
         PunctureLocal(ToLocal(point), (GlobalBasis.Inverse() * normal).Normalized(), swirl);

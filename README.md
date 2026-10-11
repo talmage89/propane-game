@@ -149,6 +149,8 @@ limits gain `floor(MpPileSizePerPlayer × players)`. `MpStartSpacing` is a hard 
 invalid settings fail generation instead of placing players on top of one another. The lobby cap remains a separate
 setting. These shared plan and tuner changes require the next release to be minor (`Protocol.Version` is 2).
 
+[World services](docs/world-services.md) documents simulation timers and their network clock boundaries.
+
 ## Layout
 
 | Path | Contents |

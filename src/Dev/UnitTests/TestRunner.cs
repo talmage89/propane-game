@@ -30,6 +30,7 @@ public partial class TestRunner : Node
             GatherTests.Register(this);
             RecoilTests.Register(this);
             MeleeTests.Register(this);
+            WorldClockTests.Register(this);
         }
         catch (Exception e)
         {
