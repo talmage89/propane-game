@@ -7,7 +7,7 @@ namespace Propane.Net;
 /// <summary>
 /// Keeps the tanks and cars in a match in step across players. Every player simulates every body. Each body has
 /// one owner, whose copy is the truth: the owner sends its body's state while it moves, and a final resting state
-/// when it stops; everyone else eases their copy toward the owner's, snapping only when far off.
+/// when it stops; everyone else eases their copy toward the owner's, snapping when far off or solid geometry prevents recovery.
 /// <para>
 /// Ownership goes to whoever last disturbed a body (a shot, a puncture, a blast, a push or a drop). Claims travel
 /// through the server, which grants groups atomically with new epochs or refuses them with canonical state.
@@ -36,6 +36,7 @@ public sealed class BodySync
 
         public bool HasTarget;
         public bool TargetRest;
+        internal bool CheckTargetGeometry;
         public Transform3D Target;
         public Vector3 TargetLinear;
         public Vector3 TargetAngular;
@@ -224,6 +225,7 @@ public sealed class BodySync
     {
         entry.HasTarget = true;
         entry.TargetRest = rest;
+        entry.CheckTargetGeometry = !rest;
         entry.Target = state.Transform;
         entry.TargetLinear = rest ? Vector3.Zero : state.Linear;
         entry.TargetAngular = rest ? Vector3.Zero : state.Angular;
@@ -289,6 +291,24 @@ public sealed class BodySync
                 body.GlobalTransform = new Transform3D(new Basis(current.Basis.GetRotationQuaternion().Slerp(targetRotation, weight)),
                     current.Origin.Lerp(targetPosition, weight));
                 continue;
+            }
+            if (entry.CheckTargetGeometry)
+            {
+                entry.CheckTargetGeometry = false;
+                // Velocity steering cannot recover a copy trapped across a solid surface. Use the
+                // actual owner sample here, not extrapolation through unobserved geometry. One query
+                // per accepted snapshot; ordinary free-space corrections retain their smoothing.
+                if (body.IsInsideTree() && current.Origin.DistanceSquaredTo(entry.Target.Origin) > .0001f)
+                {
+                    using var ray = PhysicsRayQueryParameters3D.Create(current.Origin, entry.Target.Origin,
+                        Layers.World | Layers.Props | Layers.Floor, new Godot.Collections.Array<Rid> { body.GetRid() });
+                    if (body.GetWorld3D().DirectSpaceState.IntersectRay(ray).Count > 0)
+                    {
+                        Snap(body, entry.Target, entry.TargetLinear, entry.TargetAngular);
+                        Trace?.Invoke(entry, $"obstructed-snap age={age:0.000} error={error.Length():0.000}");
+                        continue;
+                    }
+                }
             }
             if (error.Length() > tuning.SnapDistance)
             {

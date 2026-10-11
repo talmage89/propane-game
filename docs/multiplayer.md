@@ -114,7 +114,7 @@ and string limits apply inside the plan, and starts must agree with the player a
   vent parameters while preserving its current position and velocity; owner corrections reconcile its trajectory.
   An intact observer already moving from a relayed blast also keeps that motion when adopting the child vent;
   snapping to the puncture's pre-blast pose would erase the accepted push until owner publications arrive.
-- *Ownership:* whoever punctured a venting tank owns it and sends its position and velocity at a set rate. Other clients ease toward that position, and snap only if they have drifted far.
+- *Ownership:* whoever punctured a venting tank owns it and sends its position and velocity at a set rate. Other clients ease toward that position, snapping if they drift far or solid geometry blocks recovery to the actual owner sample.
 - *Sleeping tanks:* the owner publishes an initial pose and a reliable final rest when it stops. These states
   also relay during loading and buffer until each client has built its bodies. Observers retain that resting
   target until newer movement, an epoch change or a local predicted claim replaces it; local collisions cannot
@@ -151,7 +151,10 @@ positions. Those remain decisions of the distributed client authorities.
 
 The ledger also owns each body's peer and monotonically increasing epoch. Every accepted ownership or lifecycle
 claim increments that body's epoch, including another grant to the same peer; departure transfers get new epochs.
-Movement and reliable rests carry a per-body sequence within the epoch. Neither side compares owner clocks:
+Moving publications include a reliable checkpoint every 0.25 s plus up to one normal send interval, and immediately
+when publication is required. The server preserves its delivery class on the second leg; other moving samples
+remain disposable. Native ENet throttling can suppress those samples beyond injected loss. Checkpoints and
+reliable rests carry the same per-body sequence within the epoch. Neither side compares owner clocks:
 old epochs and duplicate/older sequences cannot replace a newer state or wake a completed rest. A client retains
 one newest future state per body when an unreliable publication overtakes its reliable grant.
 Moving batches use sampling timestamps on the sender's ping-estimated server clock. The server bounds these to

@@ -33,6 +33,38 @@ public static class AuthorityTests
 
     public static void Register(TestRunner runner)
     {
+        runner.Run("authority/solid geometry cannot trap a fresh observer across a wall", () =>
+        {
+            using var body = new BodyFixture(runner.World.Root);
+            var wall = new StaticBody3D { CollisionLayer = Layers.World };
+            using var shape = new BoxShape3D { Size = new Vector3(.1f, 10, 10) };
+            wall.AddChild(new CollisionShape3D { Shape = shape });
+            runner.World.Root.AddChild(wall);
+            try
+            {
+                var from = new Vector3(-1, 2, 0);
+                var pose = new Transform3D(Basis.Identity, new Vector3(1, 2, 0));
+                using var ray = PhysicsRayQueryParameters3D.Create(from, pose.Origin, Layers.World);
+                TestRunner.Assert(runner.World.Physics.DirectSpaceState.IntersectRay(ray).Count > 0, "wall fixture was not visible to native physics");
+                var sync = new BodySync(Tuning.SavedTemplate, 4, 2);
+                sync.Register(Id, body.Body, true, 2);
+                body.Body.GlobalPosition = from;
+                sync.OnState(2, new BodyState(Id, pose, Vector3.Right, Vector3.Zero, 1, 1), false, 1);
+                sync.Correct(1);
+                TestRunner.Assert(body.Body.GlobalTransform.IsEqualApprox(pose), "fresh observer steered into a wall instead of recovering the owner pose");
+                // Free-space copies still ease: obstruction does not lower the normal snap threshold.
+                var clearFrom = from + Vector3.Forward * 20;
+                var clearPose = new Transform3D(Basis.Identity, pose.Origin + Vector3.Forward * 20);
+                using var clearRay = PhysicsRayQueryParameters3D.Create(clearFrom, clearPose.Origin, Layers.World);
+                TestRunner.Assert(runner.World.Physics.DirectSpaceState.IntersectRay(clearRay).Count == 0, "free-space fixture was obstructed");
+                body.Body.GlobalPosition = clearFrom;
+                sync.OnState(2, new BodyState(Id, clearPose, Vector3.Right, Vector3.Zero, 1, 2), false, 2);
+                sync.Correct(2);
+                TestRunner.Assert(body.Body.GlobalPosition.IsEqualApprox(clearFrom) && body.Body.LinearVelocity.X > 1,
+                    "unobstructed observer lost ordinary smoothing");
+            }
+            finally { wall.Free(); }
+        });
         runner.Run("authority/moving owners periodically checkpoint through disposable loss", () =>
         {
             using var body = new BodyFixture(runner);

@@ -155,3 +155,26 @@ The native fixture `tools/dev/net_bots.sh -n 2 -l 20 -s '--net-loss=100' -o /tmp
 assertion failed and it exited without completion. Afterward it passed: 599 grids, 0.324 m peak
 moving drift, 0.152 m final drift, and matching score audits. These fixture physics overrides
 are dev-only, not tuner changes. The Match send partition is isolated in its own commit.
+
+## Recovering across collision geometry
+
+Fresh velocity steering cannot carry a simulated observer through a solid surface. In
+`/tmp/nas-motion-trace-1`, vent `10000016` epoch 3 was owned by Bot3. Bot4 at shared time
+91156.970936 had position (10.961, -0.042, 26.784), predicted goal (10.869, 0.613, 26.871),
+receipt quiet time 0.048 s, sample age 0.348 s, and 2.901 rad rotation disagreement. The ray
+to the actual owner sample hit SlabBody. Similar fresh corrections remained across that slab
+for seconds, also after an epoch-4 handoff changed which peer owned the low copy.
+
+Body sync now tests the path to the actual owner sample once per accepted moving target.
+If solid world/prop/floor geometry blocks it, an observer restores that pose and its owner's
+velocities instead of indefinitely steering into the surface. It does not extrapolate through
+the obstacle. Owners and predicted local claims do not take this path; free-space copies keep
+the existing smoothing and distance threshold. Gather retains its existing frozen stream.
+
+The native wall regression proved a hit before correcting a 2 m discrepancy below the 3 m
+normal snap threshold. Before it failed (205 tests, one failure,
+`build/net-assert-artifacts/geometry-before.log`); afterward it passed, including unobstructed
+smoothing (205 tests, zero failures, `geometry-after-clean.log`). An intermediate fixture
+tried moving the wall and failed its free-space check because native geometry had not updated
+within that synchronous test; the final fixture uses a separate demonstrably clear path.
+Final builds were warning-free. This adds at most one geometry ray per received moving sample.
