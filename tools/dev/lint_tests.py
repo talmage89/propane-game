@@ -27,8 +27,9 @@ set -euo pipefail
 printf '%s %s\\n' "${0##*/}" "$*" >> "$COMMAND_LOG"
 if [[ "${0##*/}" == dotnet && "$1" == format && "$PROBE_FAIL" == format ]]; then exit 1; fi
 if [[ "${0##*/}" == dotnet && "$*" == *-warnaserror* && "$PROBE_FAIL" == build ]]; then exit 1; fi
+if [[ "${0##*/}" == godot && "$*" == *--hash-world-plan=* ]]; then printf '[world] hash probe fences 1\\n'; fi
 """
-    for name in ("dotnet", "godot"):
+    for name in ("dotnet", "godot", "python3"):
         path = scratch / name
         path.write_text(stub)
         path.chmod(0o755)
@@ -42,10 +43,15 @@ if [[ "${0##*/}" == dotnet && "$*" == *-warnaserror* && "$PROBE_FAIL" == build ]
         commands = log.read_text().splitlines()
         require(bool(commands) and commands[0] == "dotnet format Propane.sln --verify-no-changes", "format must run first", result.stdout)
         if failure == "none":
-            require(result.returncode == 0 and len(commands) == 5, "check did not finish in five tool calls", result.stdout)
+            require(result.returncode == 0 and len(commands) == 11, "check did not finish in eleven tool calls", result.stdout)
             require("-warnaserror" in commands[1] and "--no-incremental" in commands[1], "lint must rebuild with warnings as errors")
-            require(commands[2].startswith("dotnet build ") and commands[3].startswith("godot --headless "), "tests ran before lint")
-            require("generator_tests.tscn" in commands[3] and "platform_tests.tscn" in commands[4], "check skipped a regression scene")
+            require(commands[2].startswith("dotnet build ") and commands[4].startswith("godot --headless "), "tests ran before lint")
+            require(commands[3] == "python3 -B tools/dev/check_scores_tests.py", "check skipped score-checker regressions")
+            scenes = ["unit_tests.tscn", "movement_tests.tscn", "generator_tests.tscn", "platform_tests.tscn"]
+            require(all(scene in command for scene, command in zip(scenes, commands[4:8])), "check skipped a regression scene")
+            require("--seeds=100" in commands[6], "check changed the generator seed count")
+            require("--write-world-plan=" in commands[8] and
+                    all("--hash-world-plan=" in command for command in commands[9:]), "check skipped separate-process world builds")
         else:
             require(result.returncode != 0 and len(commands) == (1 if failure == "format" else 2), "lint failure did not stop check", result.stdout)
     print("PASS: parallel make check orders lint before tests and stops on formatter/build failures")
@@ -73,7 +79,7 @@ def check_installer(scratch):
 
 
 def main():
-    with tempfile.TemporaryDirectory(prefix="wplint-gate-") as directory:
+    with tempfile.TemporaryDirectory(prefix="mnet-lint-") as directory:
         scratch = pathlib.Path(directory)
         shutil.copyfile(ROOT / "Propane.csproj", scratch / "Probe.csproj")
         shutil.copyfile(ROOT / ".editorconfig", scratch / ".editorconfig")

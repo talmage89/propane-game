@@ -11,7 +11,7 @@ from check_scores import check
 
 class ScoreChecks(unittest.TestCase):
     def run_check(self, server, *bots):
-        with tempfile.TemporaryDirectory(prefix="vnet-scores-") as directory:
+        with tempfile.TemporaryDirectory(prefix="mnet-scores-") as directory:
             paths = []
             for index, content in enumerate((server, *bots)):
                 path = Path(directory) / f"{index}.log"

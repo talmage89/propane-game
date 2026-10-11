@@ -3,7 +3,7 @@
 set -euo pipefail
 project="$(cd "$(dirname "$0")/../.." && pwd)"
 godot="${GODOT:-godot-mono}"
-scratch="$(mktemp -d /tmp/wpnet-world-XXXXXX)"
+scratch="$(mktemp -d /tmp/mnet-world-XXXXXX)"
 trap 'rm -rf "$scratch"' EXIT
 scene=res://scenes/dev/unit_tests.tscn
 "$godot" --headless --path "$project" "$scene" -- --write-world-plan="$scratch/plan.bin" >"$scratch/plan.log" 2>&1
