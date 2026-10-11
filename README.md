@@ -116,6 +116,10 @@ GODOT=/Applications/Godot_mono.app/Contents/MacOS/Godot
 # suburbs with player starts, ammo spots and the plan's encoding. Exits 1 on failure.
 $GODOT --headless res://scenes/dev/generator_tests.tscn -- --seeds=200
 
+# Plain C# assertion suites; make test runs these, the generator, and two separate builds of one saved plan.
+$GODOT --headless res://scenes/dev/unit_tests.tscn
+tools/dev/check_world.sh
+
 # The real game with a scripted player. Scenarios: loop (default), clear (destroys every tank), ragdoll, shoot,
 # tour (camera in tight spots), spots (visits each tank), settle (props that move on their own), dissolve, menus,
 # readme (a chain reaction captured as frames for the README GIF; seed 23 is the one in docs/).

@@ -28,8 +28,10 @@ run: build ## Play from source
 build: ## Compile the C# code
 	dotnet build Propane.sln -c Debug -nologo -v quiet
 
-test: build ## Run the generator tests (as CI does before a release)
+test: build ## Run unit, generator and separate-process world tests
+	"$(GODOT)" --headless --path . res://scenes/dev/unit_tests.tscn
 	"$(GODOT)" --headless --path . res://scenes/dev/generator_tests.tscn -- --seeds=100
+	tools/dev/check_world.sh
 
 server: build ## Run a multiplayer server here (PORT, default 24680, or this worktree's)
 	"$(GODOT)" --headless --path . -- --server --port=$(PORT)

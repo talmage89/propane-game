@@ -49,6 +49,10 @@ Every client simulates the whole suburb, so the game responds instantly. Each mo
 
 **The world.** The server generates the match's suburb and sends the whole plan (about 10 KB compressed) rather than just its seed. The generator's trigonometry can differ in the last bit between an Apple Silicon Mac and an x86 Linux machine, and a single flipped comparison would give the players different suburbs. Houses and other static parts never need syncing.
 
+Construction choices are pure functions of that plan and the shared tuning. Fence style and color use explicit
+integer mixing of the run's coordinates and seed, never a process-salted hash. `make test` hashes the built meshes,
+transforms, body masses and collision shapes (fences included) in two fresh processes using one saved plan.
+
 **Tanks:**
 - *Puncture:* the shooter's client punctures the tank at once. It then sends the cause to everyone: the hole position and normal, the jet's lean, and the bullet's push. Every client starts the same vent from the same starting point.
 - *Ownership:* whoever punctured a venting tank owns it and sends its position and velocity at a set rate. Other clients ease toward that position, and snap only if they have drifted far.
