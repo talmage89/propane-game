@@ -117,6 +117,7 @@ public partial class PlayerCharacter
         var normal = hit["normal"].AsVector3();
         var collider = hit["collider"].As<GodotObject>();
         var shotDir = (end - muzzle).Normalized();
+        ShotImpacting?.Invoke(new ShotReport(muzzle, end, normal, shotDir, collider, true));
         switch (collider)
         {
             case PropaneTank tank:

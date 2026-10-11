@@ -281,6 +281,7 @@ public partial class MenuNavigation : Node
         var owner = GetViewport().GuiGetFocusOwner();
         if (owner is BaseButton { Disabled: false } button)
         {
+            if (button.ToggleMode) button.ButtonPressed = !button.ButtonPressed;
             button.EmitSignal(BaseButton.SignalName.Pressed);
         }
         else if (owner is LineEdit field)

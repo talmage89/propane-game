@@ -12,6 +12,8 @@ namespace Propane.UI;
 public partial class TuningPanel : CanvasLayer
 {
     public required Tuning Target { get; init; }
+    public bool IncludeLabDials { get; init; }
+    public event System.Action? CloseRequested;
     private readonly List<(string Property, Range Slider, Label Value, bool IsInt)> rows = new();
     private readonly List<(string Property, CheckButton Toggle)> toggles = new();
     private Label status = null!;
@@ -50,7 +52,7 @@ public partial class TuningPanel : CanvasLayer
         header.AddChild(UiStyle.Text(Note.Length > 0 ? Note : "F1 or ` to close", 15, UiStyle.SoftInk));
         layout.AddChild(header);
 
-        var scroll = new ScrollContainer { SizeFlagsVertical = Control.SizeFlags.ExpandFill, HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled };
+        var scroll = new ScrollContainer { FollowFocus = true, SizeFlagsVertical = Control.SizeFlags.ExpandFill, HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled };
         layout.AddChild(scroll);
         // Keep the values clear of the scroll bar.
         var gutter = new MarginContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
@@ -70,7 +72,16 @@ public partial class TuningPanel : CanvasLayer
         buttons.AddChild(save);
         buttons.AddChild(defaults);
         layout.AddChild(buttons);
-        status = UiStyle.Text("", 14, UiStyle.SoftInk);
+        if (CloseRequested != null)
+        {
+            var close = UiStyle.Button("Close tuning");
+            close.Pressed += () => CloseRequested?.Invoke();
+            buttons.AddChild(close);
+        }
+        scroll.GetVScrollBar().FocusMode = Control.FocusModeEnum.None;
+        if (IncludeLabDials)
+            AddChild(new MenuNavigation { Screen = this, Root = layout, Back = () => CloseRequested?.Invoke() });
+        status = UiStyle.Text(IncludeLabDials ? "Save writes gameplay dials to your saved template." : "", 14, UiStyle.SoftInk);
         layout.AddChild(status);
     }
 
@@ -118,39 +129,54 @@ public partial class TuningPanel : CanvasLayer
                 list.AddChild(ToggleRow(name));
                 continue;
             }
-            var (min, max, step) = ParseRange(entry["hint_string"].AsString(), type == Variant.Type.Int, UseDeclaredRanges);
-            var row = new HBoxContainer();
-            row.AddThemeConstantOverride("separation", 8);
-            var label = UiStyle.Text(Pretty(name), 16);
-            label.CustomMinimumSize = new Vector2(190, 0);
-            label.ClipText = true;
-            var slider = new HSlider
+            AddNumber(list, name, type == Variant.Type.Int, entry["hint_string"].AsString());
+        }
+        if (IncludeLabDials)
+        {
+            list.AddChild(UiStyle.Text("LAB · LAYOUT APPLIES ON RESET", 15, UiStyle.Accent));
+            foreach (var property in typeof(Tuning).GetProperties())
             {
-                MinValue = min,
-                MaxValue = max,
-                Step = step,
-                SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
-                FocusMode = Control.FocusModeEnum.None,
-                CustomMinimumSize = new Vector2(0, 22),
-            };
-            var value = UiStyle.Text("", 16, UiStyle.SoftInk, HorizontalAlignment.Right);
-            value.CustomMinimumSize = new Vector2(76, 0);
-            var isInt = type == Variant.Type.Int;
-            var property = name;
-            slider.ValueChanged += v =>
-            {
-                var set = isInt ? Variant.From((int)v) : Variant.From((float)v);
-                Target.Set(property, set);
-                value.Text = Format(v, isInt);
-                ValueChanged?.Invoke(property, set);
-            };
-            row.AddChild(label);
-            row.AddChild(slider);
-            row.AddChild(value);
-            list.AddChild(row);
-            rows.Add((property, slider, value, isInt));
+                if (System.Attribute.GetCustomAttribute(property, typeof(LabDialAttribute)) is not LabDialAttribute dial) continue;
+                var hint = System.FormattableString.Invariant($"{dial.Min},{dial.Max},{dial.Step}");
+                AddNumber(list, property.Name, property.PropertyType == typeof(int), hint);
+            }
         }
         Refresh();
+    }
+
+    private void AddNumber(VBoxContainer list, string name, bool isInt, string hint)
+    {
+        var (min, max, step) = ParseRange(hint, isInt, UseDeclaredRanges);
+        var row = new HBoxContainer();
+        row.AddThemeConstantOverride("separation", 8);
+        var label = UiStyle.Text(Pretty(name), 16);
+        label.CustomMinimumSize = new Vector2(190, 0);
+        label.ClipText = true;
+        label.TooltipText = Pretty(name);
+        var slider = new HSlider
+        {
+            MinValue = min,
+            MaxValue = max,
+            Step = step,
+            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+            FocusMode = Control.FocusModeEnum.All,
+            CustomMinimumSize = new Vector2(0, 22),
+        };
+        var value = UiStyle.Text("", 16, UiStyle.SoftInk, HorizontalAlignment.Right);
+        value.CustomMinimumSize = new Vector2(76, 0);
+        var property = name;
+        slider.ValueChanged += v =>
+        {
+            var set = isInt ? Variant.From((int)v) : Variant.From((float)v);
+            Write(Target, property, set);
+            value.Text = Format(v, isInt);
+            ValueChanged?.Invoke(property, set);
+        };
+        row.AddChild(label);
+        row.AddChild(slider);
+        row.AddChild(value);
+        list.AddChild(row);
+        rows.Add((property, slider, value, isInt));
     }
 
     private Control ToggleRow(string property)
@@ -158,7 +184,7 @@ public partial class TuningPanel : CanvasLayer
         var row = new HBoxContainer();
         var label = UiStyle.Text(Pretty(property), 16);
         label.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
-        var toggle = new CheckButton { FocusMode = Control.FocusModeEnum.None };
+        var toggle = new CheckButton { FocusMode = Control.FocusModeEnum.All };
         toggle.Toggled += on =>
         {
             Target.Set(property, on);
@@ -175,11 +201,11 @@ public partial class TuningPanel : CanvasLayer
     {
         foreach (var (property, toggle) in toggles)
         {
-            toggle.SetPressedNoSignal(Target.Get(property).AsBool());
+            toggle.SetPressedNoSignal(Read(Target, property).AsBool());
         }
         foreach (var (property, slider, value, isInt) in rows)
         {
-            var v = Target.Get(property).AsDouble();
+            var v = Read(Target, property).AsDouble();
             slider.SetValueNoSignal(v);
             value.Text = Format(v, isInt);
         }
@@ -196,11 +222,33 @@ public partial class TuningPanel : CanvasLayer
         using var defaults = new Tuning();
         foreach (var property in rows.Select(r => r.Property).Concat(toggles.Select(t => t.Property)))
         {
-            Target.Set(property, defaults.Get(property));
-            ValueChanged?.Invoke(property, defaults.Get(property));
+            Write(Target, property, Read(defaults, property));
+            ValueChanged?.Invoke(property, Read(defaults, property));
         }
         Refresh();
         status.Text = "Defaults restored (not saved yet)";
+    }
+
+    private static Variant Read(Tuning tuning, string name)
+    {
+        var property = typeof(Tuning).GetProperty(name);
+        if (property != null && System.Attribute.IsDefined(property, typeof(LabDialAttribute)))
+            return property.PropertyType == typeof(int) ? Variant.From((int)property.GetValue(tuning)!) : Variant.From((float)property.GetValue(tuning)!);
+        return tuning.Get(name);
+    }
+
+    private static void Write(Tuning tuning, string name, Variant value)
+    {
+        var property = typeof(Tuning).GetProperty(name);
+        if (property != null && System.Attribute.IsDefined(property, typeof(LabDialAttribute)))
+        {
+            if (property.PropertyType == typeof(int)) property.SetValue(tuning, value.AsInt32());
+            else property.SetValue(tuning, value.AsSingle());
+        }
+        else
+        {
+            tuning.Set(name, value);
+        }
     }
 
     private static (double, double, double) ParseRange(string hint, bool isInt, bool bounded)
