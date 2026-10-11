@@ -12,8 +12,6 @@ public readonly record struct BlastInfo(Vector3 Center, Vector3 Direction, float
 /// <summary>A node that reacts to blasts itself, rather than being pushed as a rigid body.</summary>
 public interface IBlastReceiver
 {
-    public const string Group = "blast_receivers";
-
     Vector3 BlastTargetPosition { get; }
 
     void ReceiveBlast(BlastInfo blast);

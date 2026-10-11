@@ -15,19 +15,21 @@ namespace Propane.Dev;
 /// </summary>
 public partial class TankRange : Node3D
 {
+    private WorldContext world = null!;
+    public override void _ExitTree() => world.Dispose();
+
     private Camera3D camera = null!;
     private readonly System.Collections.Generic.List<PropaneTank> tanks = new();
 
     public override void _Ready()
     {
         DevArgs.Setup();
+        world = new WorldContext(this, Tuning.SavedTemplate, present: true);
         DisplayServer.WindowSetVsyncMode(DisplayServer.VSyncMode.Disabled);
-        var effects = new Node3D { Name = "Effects" };
-        AddChild(effects);
         var dynamic = new Node3D { Name = "Dynamic" };
         AddChild(dynamic);
-        Spawn.SetEffectsRoot(effects);
-        Spawn.SetWorldRoot(dynamic);
+
+        world.SetContentRoot(dynamic);
 
         var env = new VoidEnvironment();
         AddChild(env);
@@ -128,12 +130,12 @@ public partial class TankRange : Node3D
         var ground = new StaticBody3D { CollisionLayer = Layers.World };
         ground.AddChild(new CollisionShape3D { Shape = new BoxShape3D { Size = new Vector3(20, 0.2f, 20) }, Position = new Vector3(0, -0.1f, 0) });
         AddChild(ground);
-        var tuning = Tuning.Current;
+        var tuning = world.Tuning;
         var transforms = PileBuilder.Build(formation, (int)DevArgs.GetFloat("count", 14),
             new Vector3(tuning.PileSpacing, tuning.PileLayerHeight, tuning.PileDepthSpacing));
         foreach (var transform in transforms)
         {
-            var tank = PropaneTank.Create();
+            var tank = PropaneTank.Create(world);
             AddChild(tank);
             tank.Transform = transform;
             tank.Sleeping = DevArgs.Get("awake") == null;
@@ -232,7 +234,7 @@ public partial class TankRange : Node3D
 
     private void AddTank(Vector3 position)
     {
-        var tank = PropaneTank.Create();
+        var tank = PropaneTank.Create(world);
         AddChild(tank);
         tank.GlobalPosition = position;
         tank.RotateY((float)GD.RandRange(0, Mathf.Tau));

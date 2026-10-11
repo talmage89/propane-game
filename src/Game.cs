@@ -17,6 +17,9 @@ namespace Propane;
 /// </summary>
 public partial class Game : Node3D
 {
+    public WorldContext World { get; private set; } = null!;
+    public Tuning Template { get; init; } = Tuning.SavedTemplate;
+
     private enum Phase
     {
         Playing,
@@ -67,6 +70,14 @@ public partial class Game : Node3D
 
     public override void _Ready()
     {
+        World = new WorldContext(this, Template, present: true);
+        World.Construct(BuildWorld);
+    }
+
+    public override void _ExitTree() => World.Dispose();
+
+    private void BuildWorld()
+    {
         InputSetup.Register();
         _ = GameAssets.Debris;
         ExplosionEffect.Preload();
@@ -74,40 +85,38 @@ public partial class Game : Node3D
         seeds.Randomize();
 
         environment = new VoidEnvironment { Name = "Void" };
-        AddChild(environment);
-        effects = new Node3D { Name = "Effects", ProcessMode = ProcessModeEnum.Pausable };
-        AddChild(effects);
-        Spawn.SetEffectsRoot(effects);
+        World.Root.AddChild(environment);
+        effects = World.EffectsRoot;
 
-        player = new PlayerCharacter { Name = "Player", ProcessMode = ProcessModeEnum.Pausable };
-        AddChild(player);
+        player = new PlayerCharacter { World = World, Name = "Player", ProcessMode = ProcessModeEnum.Pausable };
+        World.Root.AddChild(player);
         environment.Follow = player.CameraRig.Camera;
 
-        hitstop = new Hitstop { Name = "Hitstop", Focus = player };
+        hitstop = new Hitstop { World = World, Name = "Hitstop", Focus = player };
         AddChild(hitstop);
         hud = new Hud { Name = "Hud" };
-        AddChild(hud);
-        tuningPanel = new TuningPanel { Name = "Tuning" };
-        AddChild(tuningPanel);
+        World.AddView(this, hud);
+        tuningPanel = new TuningPanel { Target = World.Tuning, Name = "Tuning" };
+        World.AddView(this, tuningPanel);
         pauseMenu = new PauseMenu { Name = "Pause" };
         pauseMenu.ResumeRequested += Resume;
         if (ExitRequested != null)
         {
-            pauseMenu.MainMenuRequested += () => ExitRequested?.Invoke();
+            pauseMenu.MainMenuRequested += () => World.Defer(() => ExitRequested?.Invoke(), whilePaused: true);
         }
-        AddChild(pauseMenu);
+        World.AddView(this, pauseMenu);
 
         // The first suburb materializes around the player, like every later one.
         RenderingServer.GlobalShaderParameterSet("reveal_radius", 0f);
         LoadSuburb();
         BeginMaterialize();
-        Warmup.Run(this, new Vector3(0, -400f, 0));
+        Warmup.Run(World, World.Root, new Vector3(0, -400f, 0));
         CaptureMouse(true);
         // Played for real, the game fills the screen; dev harnesses that host it keep their requested window.
         // Deferred, because resizing the window runs a frame before everything above is ready.
         if (GetTree().CurrentScene == this && DisplayServer.WindowGetMode() == DisplayServer.WindowMode.Windowed)
         {
-            Callable.From(() => DisplayServer.WindowSetMode(DisplayServer.WindowMode.Maximized)).CallDeferred();
+            World.Defer(() => DisplayServer.WindowSetMode(DisplayServer.WindowMode.Maximized));
         }
     }
 
@@ -163,14 +172,14 @@ public partial class Game : Node3D
 
     public override void _Process(double delta)
     {
-        var dt = (float)(delta / Mathf.Max(Engine.TimeScale, 0.0001));
+        var dt = (float)delta;
         UpdateHud();
         if (GetTree().Paused)
         {
             return;
         }
         phaseTime += dt;
-        var tuning = Tuning.Current;
+        var tuning = World.Tuning;
         switch (phase)
         {
             case Phase.Celebrating:
@@ -227,25 +236,26 @@ public partial class Game : Node3D
             groupRefresh = 0.25f;
             tankGroups = phase == Phase.Playing && current != null ? current.TankGroupCenters() : new List<Vector3>();
         }
-        hud.SetTankArrows(camera, tankGroups, Tuning.Current.TankArrows && phase == Phase.Playing);
+        hud.SetTankArrows(camera, tankGroups, World.Tuning.TankArrows && phase == Phase.Playing);
     }
 
     // ------------------------------------------------------------------ Suburbs
 
     private void LoadSuburb()
     {
-        var tuning = Tuning.Current;
+        var tuning = World.Tuning;
         var settings = SuburbPlans.SinglePlayer(tuning);
         var seed = tuning.FixedSeed != 0 ? tuning.FixedSeed : (int)seeds.Randi();
         // Occasionally a layout comes out sparse; a few rerolls keep every suburb worth exploring.
         var plan = SuburbPlans.Generate(settings, seed, tuning.FixedSeed == 0 ? () => (int)seeds.Randi() : null);
-        current = Suburb.Build(plan, settings);
+        current = Suburb.Build(World, plan, settings);
         current.ProcessMode = ProcessModeEnum.Pausable;
-        AddChild(current);
-        Spawn.SetWorldRoot(current.DynamicRoot);
+        World.Root.AddChild(current);
+        World.SetContentRoot(current.DynamicRoot);
         var gatheringWorld = current;
         current.AddChild(new TankGather
         {
+            World = World,
             Name = "Gather",
             Tanks = () => gatheringWorld.LiveTanks,
             Enabled = () => phase == Phase.Playing
@@ -288,11 +298,11 @@ public partial class Game : Node3D
     private void FinishDissolve()
     {
         // Only the void is visible now, so the player can move to the new spawn without a visible cut.
-        outgoing?.QueueFree();
+        if (outgoing != null) { World.RetireContent(outgoing); }
         outgoing = null;
         foreach (var child in effects.GetChildren())
         {
-            child.QueueFree();
+            child.Free();
         }
         RenderingServer.GlobalShaderParameterSet("reveal_radius", 0f);
         LoadSuburb();

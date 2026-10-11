@@ -27,6 +27,6 @@ public partial class RifleHandFollow : SkeletonModifier3D
             handR = skeleton.FindBone("hand_r");
         }
         var hand = (skeleton.GlobalTransform * skeleton.GetBoneGlobalPose(handR)).Orthonormalized();
-        Rifle.GlobalTransform = hand * RifleRig.RightHandInRifle.AffineInverse();
+        Rifle.GlobalTransform = hand * Rig.RightHandInRifle.AffineInverse();
     }
 }

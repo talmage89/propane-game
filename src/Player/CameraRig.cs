@@ -9,6 +9,8 @@ namespace Propane.Player;
 /// </summary>
 public partial class CameraRig : Node3D
 {
+    public required WorldContext World { get; init; }
+
     private const float PitchMin = -75f;
     private const float PitchMax = 45f;
     private const float FollowSharpness = 18f;
@@ -46,17 +48,17 @@ public partial class CameraRig : Node3D
         TopLevel = true;
         Camera = new Camera3D { Name = "Camera", Current = true, Near = 0.05f, Far = 2000f };
         AddChild(Camera);
-        currentDistance = Tuning.Current.CameraDistance;
-        GameEvents.Explosion += OnExplosion;
+        currentDistance = World.Tuning.CameraDistance;
+        World.Events.Explosion += OnExplosion;
     }
 
-    public override void _ExitTree() => GameEvents.Explosion -= OnExplosion;
+    public override void _ExitTree() => World.Events.Explosion -= OnExplosion;
 
     /// <summary>Jumps straight to the target next frame instead of easing there, for teleports.</summary>
     public void Snap()
     {
         hasTarget = false;
-        currentDistance = Tuning.Current.CameraDistance;
+        currentDistance = World.Tuning.CameraDistance;
         trauma = 0;
         recoilPitch = recoilYaw = 0;
     }
@@ -69,9 +71,9 @@ public partial class CameraRig : Node3D
 
     public void Look(Vector2 mouseDelta, Vector2 stick = default, float dt = 0)
     {
-        var sensitivity = Mathf.RadToDeg(Tuning.Current.MouseSensitivity);
+        var sensitivity = Mathf.RadToDeg(World.Tuning.MouseSensitivity);
         var displacement = mouseDelta * sensitivity + StickLookDelta(stick, dt,
-            Tuning.Current.StickLookDegreesPerSecond, Tuning.Current.StickLookCurve);
+            World.Tuning.StickLookDegreesPerSecond, World.Tuning.StickLookCurve);
         yaw -= displacement.X;
         pitch = Mathf.Clamp(pitch - displacement.Y, PitchMin, PitchMax);
     }
@@ -87,7 +89,7 @@ public partial class CameraRig : Node3D
     public void Kick(float degrees)
     {
         recoilPitch += degrees;
-        recoilYaw += (float)GD.RandRange(-1, 1) * degrees * Tuning.Current.CameraRecoilSideShare;
+        recoilYaw += (float)GD.RandRange(-1, 1) * degrees * World.Tuning.CameraRecoilSideShare;
     }
 
     public void AddTrauma(float amount) => trauma = Mathf.Clamp(trauma + amount, 0, 1);
@@ -95,7 +97,7 @@ public partial class CameraRig : Node3D
     public override void _Process(double delta)
     {
         var dt = (float)delta;
-        var tuning = Tuning.Current;
+        var tuning = World.Tuning;
         Camera.Fov = tuning.FieldOfView;
 
         var recoilReturn = Mathf.Exp(-tuning.CameraRecoilRecovery * dt);
@@ -138,7 +140,7 @@ public partial class CameraRig : Node3D
 
     private Vector3 CastClear(Vector3 from, Vector3 to)
     {
-        var space = GetWorld3D().DirectSpaceState;
+        var space = World.Physics.DirectSpaceState;
         var motion = to - from;
         if (motion.LengthSquared() < 0.0001f)
         {
@@ -160,7 +162,7 @@ public partial class CameraRig : Node3D
 
     private void OnExplosion(Vector3 position)
     {
-        var tuning = Tuning.Current;
+        var tuning = World.Tuning;
         var distance = GlobalPosition.DistanceTo(position);
         var closeness = Mathf.Clamp(1f - distance / tuning.CameraShakeDistance, 0, 1);
         AddTrauma(closeness * closeness * 1.1f + closeness * 0.25f);

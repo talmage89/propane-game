@@ -22,7 +22,7 @@ public static class LocomotionTests
 
     private static void Phase()
     {
-        var pose = new LocomotionPose();
+        var pose = new LocomotionPose(Tuning.SavedTemplate);
         pose.ObservePhysics(State(PlayerSupport.Grounded), 0);
         foreach (var gait in new[] { PlayerGait.Creep, PlayerGait.Sprint, PlayerGait.Default, PlayerGait.Creep })
         {
@@ -35,14 +35,14 @@ public static class LocomotionTests
         {
             var phase = pose.Phase;
             pose.Update(speed, PlayerGait.Creep, 1f / 60);
-            var distance = Mathf.PosMod(pose.Phase - phase, 1) * Tuning.Current.WalkStrideLength;
+            var distance = Mathf.PosMod(pose.Phase - phase, 1) * Tuning.SavedTemplate.WalkStrideLength;
             TestRunner.Assert(Math.Abs(distance - speed / 60) < 0.00001f, $"creep stride caps speed {speed}");
         }
     }
 
     private static void Jump()
     {
-        var pose = new LocomotionPose();
+        var pose = new LocomotionPose(Tuning.SavedTemplate);
         pose.ObservePhysics(State(PlayerSupport.Grounded), 0);
         // The jump lasts one 120 Hz physics tick; render sees Airborne instead of Jumping.
         pose.ObservePhysics(State(PlayerSupport.Jumping), 6.4f);
@@ -62,26 +62,26 @@ public static class LocomotionTests
 
     private static void SpeedBlend()
     {
-        var pose = new LocomotionPose();
+        var pose = new LocomotionPose(Tuning.SavedTemplate);
         void Settle(float speed, PlayerGait gait)
         {
             for (var i = 0; i < 30; i++) pose.Update(speed, gait, 1f / 60);
         }
-        Settle(Tuning.Current.RunSpeed / 2, PlayerGait.Default);
+        Settle(Tuning.SavedTemplate.RunSpeed / 2, PlayerGait.Default);
         TestRunner.Assert(pose.Walk > 0 && pose.Walk < 1 && pose.Sprint == 0, "slow default motion does not blend walk and jog");
-        Settle(Tuning.Current.RunSpeed, PlayerGait.Default);
+        Settle(Tuning.SavedTemplate.RunSpeed, PlayerGait.Default);
         TestRunner.Assert(pose.Walk == 0, "full default speed does not reach jog");
-        Settle(Tuning.Current.SprintSpeed / 2, PlayerGait.Sprint);
+        Settle(Tuning.SavedTemplate.SprintSpeed / 2, PlayerGait.Sprint);
         TestRunner.Assert(pose.Sprint > 0 && pose.Sprint < 1, "slow sprint motion does not blend its gait");
-        Settle(Tuning.Current.SprintSpeed, PlayerGait.Sprint);
+        Settle(Tuning.SavedTemplate.SprintSpeed, PlayerGait.Sprint);
         TestRunner.Assert(pose.Sprint == 1, "full sprint speed does not reach sprint");
-        Settle(Tuning.Current.CreepSpeed, PlayerGait.Creep);
+        Settle(Tuning.SavedTemplate.CreepSpeed, PlayerGait.Creep);
         TestRunner.Assert(pose.Walk == 1 && pose.Sprint == 0, "resolved creep lost its walk presentation");
     }
 
     private static void RemoteJump()
     {
-        var pose = new LocomotionPose();
+        var pose = new LocomotionPose(Tuning.SavedTemplate);
         pose.ObservePhysics(State(PlayerSupport.Grounded), 0);
         pose.ObservePhysics(State(PlayerSupport.Airborne), 5);
         pose.Update(6, PlayerGait.Default, 1f / 60);
@@ -96,7 +96,7 @@ public static class LocomotionTests
     {
         float Impact(float velocity)
         {
-            var pose = new LocomotionPose();
+            var pose = new LocomotionPose(Tuning.SavedTemplate);
             pose.ObservePhysics(State(PlayerSupport.Airborne), velocity);
             pose.ObservePhysics(State(PlayerSupport.Landing), 0);
             pose.Update(6, PlayerGait.Default, 1f / 60);
@@ -104,7 +104,7 @@ public static class LocomotionTests
             return pose.Impact;
         }
         TestRunner.Assert(Impact(-6) > Impact(-2), "landing does not scale with impact");
-        var rebound = new LocomotionPose();
+        var rebound = new LocomotionPose(Tuning.SavedTemplate);
         rebound.ObservePhysics(State(PlayerSupport.Airborne), -6);
         rebound.ObservePhysics(State(PlayerSupport.Landing), 0);
         rebound.ObservePhysics(State(PlayerSupport.Jumping), 6);
@@ -121,7 +121,7 @@ public static class LocomotionTests
 
     private static void Reset()
     {
-        var pose = new LocomotionPose();
+        var pose = new LocomotionPose(Tuning.SavedTemplate);
         pose.ObservePhysics(State(PlayerSupport.Jumping), 6);
         pose.Update(6, PlayerGait.Sprint, 1f / 60);
         pose.ObservePhysics(State(PlayerSupport.Airborne, PlayerLifecycle.Ragdoll), 6);

@@ -6,6 +6,7 @@ namespace Propane.Player;
 /// <summary>A magazine and reserve rounds, for matches. Single player has no ammo limit.</summary>
 public sealed class AmmoState
 {
+    public required Tuning Tuning { get; init; }
     public int Magazine { get; set; }
 
     public int Reserve { get; set; }
@@ -20,24 +21,23 @@ public sealed class AmmoState
     {
         get
         {
-            var time = Tuning.Current.ReloadTime;
+            var time = Tuning.ReloadTime;
             return Reloading && time > 0 ? 1f - ReloadLeft / time : 0f;
         }
     }
 
-    public static AmmoState Starting()
+    public static AmmoState Starting(Tuning tuning)
     {
-        var tuning = Tuning.Current;
-        return new AmmoState { Magazine = tuning.MagazineSize, Reserve = tuning.StartingReserve };
+        return new AmmoState { Tuning = tuning, Magazine = tuning.MagazineSize, Reserve = tuning.StartingReserve };
     }
 
-    public bool CanReload => !Reloading && Reserve > 0 && Magazine < Tuning.Current.MagazineSize;
+    public bool CanReload => !Reloading && Reserve > 0 && Magazine < Tuning.MagazineSize;
 
     public void StartReload()
     {
         if (CanReload)
         {
-            ReloadLeft = Mathf.Max(Tuning.Current.ReloadTime, 0.001f);
+            ReloadLeft = Mathf.Max(Tuning.ReloadTime, 0.001f);
         }
     }
 
@@ -53,7 +53,7 @@ public sealed class AmmoState
         if (ReloadLeft <= 0)
         {
             ReloadLeft = 0;
-            var moved = Mathf.Min(Tuning.Current.MagazineSize - Magazine, Reserve);
+            var moved = Mathf.Min(Tuning.MagazineSize - Magazine, Reserve);
             Magazine += moved;
             Reserve -= moved;
         }
@@ -62,7 +62,7 @@ public sealed class AmmoState
     /// <summary>Adds picked-up rounds to the reserve, up to the cap. Returns how many fit.</summary>
     public int AddReserve(int rounds)
     {
-        var added = Mathf.Clamp(Tuning.Current.MaxReserve - Reserve, 0, rounds);
+        var added = Mathf.Clamp(Tuning.MaxReserve - Reserve, 0, rounds);
         Reserve += added;
         return added;
     }

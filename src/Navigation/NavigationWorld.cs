@@ -34,13 +34,13 @@ public sealed class NavigationWorld : INavigationWorld
     private readonly Vector3? escapeFrom;
 
     public NavigationWorld(PhysicsDirectSpaceState3D space, NavigationCapabilities capabilities,
-        IReadOnlyList<NavigationHazard> hazards, float margin, Vector3? escapeFrom = null, float? minimumJumpRange = null)
+        IReadOnlyList<NavigationHazard> hazards, float margin, float minimumJumpRange, Vector3? escapeFrom = null)
     {
         this.space = space;
         this.capabilities = capabilities;
         this.hazards = hazards;
         this.margin = margin;
-        this.minimumJumpRange = minimumJumpRange ?? Tuning.Current.BotJumpMinimumRange;
+        this.minimumJumpRange = minimumJumpRange;
         this.escapeFrom = escapeFrom;
     }
 

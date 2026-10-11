@@ -9,6 +9,8 @@ namespace Propane.Fx;
 /// </summary>
 public partial class ExplosionEffect : Node3D
 {
+    public required WorldContext World { get; init; }
+
     private const float FlipbookDuration = 64f / 24f;
     private const float FlipbookWidth = 2.5f;
     private const float FlipbookHeight = 4f;
@@ -22,7 +24,6 @@ public partial class ExplosionEffect : Node3D
     private const int MaxShadowedFlashes = 3;
 
     private static Texture2D? flipbookTexture;
-    private static int shadowedFlashes;
     private bool castsShadow;
 
     private float elapsed;
@@ -41,18 +42,18 @@ public partial class ExplosionEffect : Node3D
     public static void Preload() => flipbookTexture ??= GD.Load<Texture2D>("res://assets/tank/T_Fireball_SubUV_8x8.png");
 
     /// <summary>Spawns an explosion centered at <paramref name="position"/>, with the ground at <paramref name="groundY"/>.</summary>
-    public static ExplosionEffect Create(Vector3 position, float groundY)
+    public static ExplosionEffect Create(WorldContext world, Vector3 position, float groundY, Spawn? spawn = null)
     {
-        var effect = new ExplosionEffect { Name = "Explosion" };
+        var effect = new ExplosionEffect { World = world, Name = "Explosion" };
         effect.groundHeight = groundY;
-        Spawn.Effect(effect);
+        (spawn ?? world.Spawn).Effect(effect);
         effect.GlobalPosition = position;
         return effect;
     }
 
     public override void _Ready()
     {
-        var tuning = Tuning.Current;
+        var tuning = World.Tuning;
         var scale = tuning.FireballScale;
         var groundOffset = groundHeight - GlobalPosition.Y;
 
@@ -62,14 +63,14 @@ public partial class ExplosionEffect : Node3D
             LightEnergy = tuning.FlashEnergy,
             OmniRange = tuning.FlashRange,
             OmniAttenuation = 1.4f,
-            ShadowEnabled = castsShadow = shadowedFlashes < MaxShadowedFlashes,
+            ShadowEnabled = castsShadow = World.ShadowedFlashes < MaxShadowedFlashes,
             LightSize = 0.4f,
             Position = new Vector3(0, 0.8f * scale, 0),
         };
         AddChild(flash);
         if (castsShadow)
         {
-            shadowedFlashes++;
+            World.ShadowedFlashes++;
         }
 
         coreMaterial = new ShaderMaterial { Shader = GD.Load<Shader>("res://shaders/fx_glow.gdshader") };
@@ -128,7 +129,7 @@ public partial class ExplosionEffect : Node3D
     {
         if (castsShadow)
         {
-            shadowedFlashes--;
+            World.ShadowedFlashes--;
             castsShadow = false;
         }
     }
@@ -145,7 +146,7 @@ public partial class ExplosionEffect : Node3D
 
     private void UpdateLayers(float t)
     {
-        var tuning = Tuning.Current;
+        var tuning = World.Tuning;
         var scale = tuning.FireballScale;
 
         // Light: a hard pop that decays with a long orange tail.

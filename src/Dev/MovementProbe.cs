@@ -22,7 +22,7 @@ public partial class MovementProbe : Node
     {
         var state = Player.ResolvedState;
         var intent = Input.LastRead;
-        var tuning = Tuning.Current;
+        var tuning = Player.World.Tuning;
         var expected = state.EffectiveAim ? PlayerGait.Creep
             : intent.Sprint && intent.Move.Y > tuning.SprintForwardThreshold ? PlayerGait.Sprint : PlayerGait.Default;
         var speed = expected == PlayerGait.Creep ? tuning.CreepSpeed

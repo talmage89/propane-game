@@ -13,6 +13,8 @@ namespace Propane.Player;
 /// </summary>
 public partial class RifleRig : SkeletonModifier3D
 {
+    public required WorldContext World { get; init; }
+
     private int[] spine = null!;
     private int head, neck, clavicleR;
     private readonly int[,] fingers = new int[10, 3];
@@ -48,10 +50,10 @@ public partial class RifleRig : SkeletonModifier3D
         LeftHandTransform(Rifle.GlobalTransform, Rifle.ForegripLocal.Origin, Basis.Identity).Origin);
 
     /// <summary>Right-eye landmark in the mannequin head frame (meters).</summary>
-    public static Vector3 EyePosition(Skeleton3D skeleton) =>
-        skeleton.GlobalTransform * (skeleton.GetBoneGlobalPose(skeleton.FindBone("Head")) * EyeLandmark);
+    public static Vector3 EyePosition(Skeleton3D skeleton, Tuning tuning) =>
+        skeleton.GlobalTransform * (skeleton.GetBoneGlobalPose(skeleton.FindBone("Head")) * new Vector3(tuning.RifleEyeSide, tuning.RifleEyeUp, tuning.RifleEyeForward));
 
-    private static Vector3 EyeLandmark => new(Tuning.Current.RifleEyeSide, Tuning.Current.RifleEyeUp, Tuning.Current.RifleEyeForward);
+    private Vector3 EyeLandmark => new(World.Tuning.RifleEyeSide, World.Tuning.RifleEyeUp, World.Tuning.RifleEyeForward);
 
     /// <summary>The rifle visual this rig places.</summary>
     public Rifle? Rifle { get; set; }
@@ -74,7 +76,7 @@ public partial class RifleRig : SkeletonModifier3D
     public bool Melee { get; set; }
     public float MeleeProgress { get; set; }
 
-    public void Kick() => recoil.Kick(Tuning.Current.RifleRecoilFrequency, Tuning.Current.RifleRecoilImpulse);
+    public void Kick() => recoil.Kick(World.Tuning.RifleRecoilFrequency, World.Tuning.RifleRecoilImpulse);
 
     /// <summary>Reload progress 0..1: the rifle cants in while the left hand swaps the magazine. 0 when not reloading.</summary>
     public float Reload { get => reloadPhase; set => reloadTarget = value; }
@@ -89,14 +91,14 @@ public partial class RifleRig : SkeletonModifier3D
         {
             if (!hadMelee) meleeReloadForward = reloadPhase > 0.5f;
             hadMelee = true;
-            reloadPhase = Mathf.MoveToward(reloadPhase, meleeReloadForward ? 1 : 0, dt * Tuning.Current.MeleeReloadReturnSpeed);
+            reloadPhase = Mathf.MoveToward(reloadPhase, meleeReloadForward ? 1 : 0, dt * World.Tuning.MeleeReloadReturnSpeed);
             return;
         }
         hadMelee = false;
         if (!remote) { reloadPhase = reloadTarget; return; }
         if (Weight <= 0.001f) { reloadPhase = 0; return; }
         var target = reloadTarget > 0 ? reloadTarget : reloadPhase > 0 ? 1 : 0;
-        reloadPhase = Mathf.MoveToward(reloadPhase, target, dt * Tuning.Current.RifleReloadPhaseSpeed);
+        reloadPhase = Mathf.MoveToward(reloadPhase, target, dt * World.Tuning.RifleReloadPhaseSpeed);
         if (reloadTarget == 0 && reloadPhase >= 1) reloadPhase = 0;
     }
 
@@ -104,7 +106,7 @@ public partial class RifleRig : SkeletonModifier3D
     public float Weight { get; set; } = 1f;
 
     /// <summary>The right hand's wrist transform in rifle space, for carrying the rifle while ragdolling.</summary>
-    public static Transform3D RightHandInRifle => RightHandTransform(Transform3D.Identity);
+    public Transform3D RightHandInRifle => RightHandTransform(Transform3D.Identity);
 
     public override void _ProcessModificationWithDelta(double delta)
     {
@@ -118,7 +120,7 @@ public partial class RifleRig : SkeletonModifier3D
             Resolve(skeleton);
         }
 
-        var tuning = Tuning.Current;
+        var tuning = World.Tuning;
         // Logical aim may clear in one tick (release, jump, sprint or reload). Keep that decision in the
         // character, but blend the presentation here, including while the rig is off during a ragdoll.
         var blendStep = tuning.RifleStanceBlendSpeed * (float)delta;
@@ -372,7 +374,7 @@ public partial class RifleRig : SkeletonModifier3D
             lastReloadPhase = Reload;
             hasUpperPose = true;
         }
-        var limit = Mathf.DegToRad(Melee ? Tuning.Current.MeleePoseAngularSpeed : Tuning.Current.PoseAngularSpeed) * dt;
+        var limit = Mathf.DegToRad(Melee ? World.Tuning.MeleePoseAngularSpeed : World.Tuning.PoseAngularSpeed) * dt;
         var amount = 1f;
         var proposedAim = aimBlend;
         var fittedAim = proposedAim;
@@ -390,12 +392,12 @@ public partial class RifleRig : SkeletonModifier3D
             var rifle = carried.InterpolateWith(wanted, amount);
             fittedAim = Mathf.Lerp(lastFitAim, proposedAim, amount);
             if (Reload == 0)
-                rifle.Origin += (EyePosition(s) - rifle * Rifle!.EyeLocal.Origin) * Mathf.SmoothStep(0, 1, fittedAim);
+                rifle.Origin += (EyePosition(s, World.Tuning) - rifle * Rifle!.EyeLocal.Origin) * Mathf.SmoothStep(0, 1, fittedAim);
             if (Weight < 0.999f)
                 leftStart = from * s.GetBoneGlobalPose(spine[2]) * handoffChest.AffineInverse() * handoffLeft;
             var shoulderR = from * s.GetBoneGlobalPose(upperR).Origin;
             var shoulderL = from * s.GetBoneGlobalPose(upperL).Origin;
-            var margin = Tuning.Current.RifleReachMargin * Weight * Weight;
+            var margin = World.Tuning.RifleReachMargin * Weight * Weight;
             // Bound reload progress with the coherent pose. Sampling the authored curved contact path keeps
             // the hand clear of the receiver; interpolating wrist frames would cut across that clearance.
             fittedReload = Mathf.Lerp(lastReloadPhase, proposedReload, amount);
@@ -448,13 +450,13 @@ public partial class RifleRig : SkeletonModifier3D
         var target = skeleton.GetBonePoseRotation(bone).Normalized();
         var difference = previousBones![bone].Inverse() * target;
         var angle = 2 * Mathf.Atan2(new Vector3(difference.X, difference.Y, difference.Z).Length(), Mathf.Abs(difference.W));
-        var limit = Mathf.DegToRad(Tuning.Current.PoseAngularSpeed) * dt;
+        var limit = Mathf.DegToRad(World.Tuning.PoseAngularSpeed) * dt;
         if (angle > limit) skeleton.SetBonePoseRotation(bone, previousBones[bone].Slerp(target, limit / angle));
     }
 
     /// <summary>Two-bone neck/head fit to the authored eye socket. The head's desired gaze supplies the
     /// pole, so the cheek settles on the stock without translating or scaling either bone.</summary>
-    private static void FitEye(Skeleton3D skeleton, int neckBone, int headBone, Vector3 eyeTarget, Vector3 headPole, float weight)
+    private void FitEye(Skeleton3D skeleton, int neckBone, int headBone, Vector3 eyeTarget, Vector3 headPole, float weight)
     {
         var a = skeleton.GetBoneGlobalPose(neckBone).Origin;
         var b = skeleton.GetBoneGlobalPose(headBone).Origin;
@@ -482,9 +484,9 @@ public partial class RifleRig : SkeletonModifier3D
         forward.Rotated(Vector3.Up, Mathf.DegToRad(yaw)).Rotated(right, -Mathf.DegToRad(pitch)).Normalized();
 
     /// <summary>Wrist frames fitted to the mannequin palm and the rifle's grip geometry.</summary>
-    private static Transform3D RightHandTransform(Transform3D rifle)
+    private Transform3D RightHandTransform(Transform3D rifle)
     {
-        var t = Tuning.Current;
+        var t = World.Tuning;
         var local = new Transform3D(Basis.Identity, new Vector3(t.RifleRightWristSide, t.RifleRightWristUp, t.RifleRightWristBack));
         // +X is the back of the firing hand, +Y runs forward along the palm, +Z toward the thumb.
         local.Basis = new Basis(Vector3.Right, new Vector3(0, Mathf.Sin(Mathf.DegToRad(t.RifleRightWristPitchDegrees)), -Mathf.Cos(Mathf.DegToRad(t.RifleRightWristPitchDegrees))),
@@ -494,7 +496,7 @@ public partial class RifleRig : SkeletonModifier3D
 
     private Transform3D LeftHandTransform(Transform3D rifle, Vector3 gripLocal, Basis gripBasis)
     {
-        var t = Tuning.Current;
+        var t = World.Tuning;
         var magazine = Rifle?.MagazineHold ?? 0;
         var bolt = Rifle?.BoltHold ?? 0;
         var angle = Mathf.DegToRad(Mathf.Lerp(t.RifleLeftWristPitchDegrees, t.RifleMagazineWristPitchDegrees, magazine));
@@ -546,7 +548,7 @@ public partial class RifleRig : SkeletonModifier3D
 
     private void PoseFingers(Skeleton3D skeleton)
     {
-        var t = Tuning.Current;
+        var t = World.Tuning;
         // Each local X is the finger's flexion axis after its authored rest orientation. Set absolute curls:
         // inheriting the pistol clip's rotations caused fingers to cross the handguard and receiver.
         for (var f = 0; f < 10; f++)

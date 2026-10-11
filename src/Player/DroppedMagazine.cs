@@ -15,7 +15,6 @@ public partial class DroppedMagazine : RigidBody3D
     private const int HullPoints = 24;
     private const float MagazineMass = 0.13f;
 
-    private static readonly List<DroppedMagazine> Dropped = new();
     private static Mesh? mesh;
     private static Shape3D? shape;
 
@@ -33,7 +32,7 @@ public partial class DroppedMagazine : RigidBody3D
     }
 
     /// <summary>Drops a magazine from <paramref name="at"/> (its top, oriented as on the rifle).</summary>
-    public static void Drop(Transform3D at, Vector3 velocity)
+    public static void Drop(WorldContext world, Transform3D at, Vector3 velocity)
     {
         Preload();
         var body = new DroppedMagazine
@@ -49,18 +48,18 @@ public partial class DroppedMagazine : RigidBody3D
         };
         body.AddChild(new CollisionShape3D { Shape = shape });
         body.AddChild(new MeshInstance3D { Mesh = mesh, MaterialOverride = Rifle.BodyMaterial, Layers = RenderLayers.Actors });
-        Spawn.InWorld(body);
+        world.Spawn.InWorld(body);
         body.GlobalTransform = at;
         body.LinearVelocity = velocity;
         // Tumbles mostly end over end, as a magazine falls.
         body.AngularVelocity = at.Basis * new Vector3((float)GD.RandRange(-4, -1), (float)GD.RandRange(-1, 1), (float)GD.RandRange(-1.5, 1.5));
 
-        Dropped.RemoveAll(magazine => !IsInstanceValid(magazine));
-        Dropped.Add(body);
-        if (Dropped.Count > MaxDropped)
+        world.Magazines.RemoveAll(magazine => !IsInstanceValid(magazine));
+        world.Magazines.Add(body);
+        if (world.Magazines.Count > MaxDropped)
         {
-            Dropped[0].QueueFree();
-            Dropped.RemoveAt(0);
+            world.Magazines[0].QueueFree();
+            world.Magazines.RemoveAt(0);
         }
     }
 }

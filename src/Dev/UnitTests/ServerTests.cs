@@ -115,7 +115,7 @@ public static class ServerTests
             runner.AddChild(moving);
             try
             {
-                var sync = new BodySync(4, 2);
+                var sync = new BodySync(Tuning.SavedTemplate, 4, 2);
                 sync.Register(body.Id, moving, true, 2);
                 var received = sampled + 0.24;
                 sync.OnState(2, relayed.Bodies.Single(), false, received, received - relayed.Time);

@@ -13,6 +13,9 @@ namespace Propane.Dev;
 /// <summary>Seeded courses using the real suburb fence builder and player controller, not a simulated capsule.</summary>
 public partial class BotNavigationCourse : Node3D, IPlayerInputSource
 {
+    private WorldContext world = null!;
+    public override void _ExitTree() => world.Dispose();
+
     private readonly BotNavigator navigator = new();
     private PlayerCharacter player = null!;
     private Suburb? suburb;
@@ -50,9 +53,10 @@ public partial class BotNavigationCourse : Node3D, IPlayerInputSource
         DisplayServer.WindowSetVsyncMode(DisplayServer.VSyncMode.Disabled);
         ProcessPhysicsPriority = -10;
         DevArgs.Setup();
+        world = new WorldContext(this, Tuning.SavedTemplate, present: true);
         InputSetup.Register();
         AddChild(new VoidEnvironment());
-        player = new PlayerCharacter { Name = "CourseBot", InputOverride = this };
+        player = new PlayerCharacter { World = world, Name = "CourseBot", InputOverride = this };
         AddChild(player);
         observer = new Camera3D { Current = true, Fov = 55 };
         AddChild(observer);
@@ -101,7 +105,7 @@ public partial class BotNavigationCourse : Node3D, IPlayerInputSource
             var house = new OrientedRect(new Vector2(0, 3), Catalog.Houses[0].Footprint / 2, 0);
             plan.Lots.Add(new Lot { Bounds = house.Grown(2), House = house, Seed = seed + 1, HouseModel = 0 });
         }
-        suburb = Suburb.Build(plan, new SuburbSettings { TankCount = 0 });
+        suburb = Suburb.Build(world, plan, new SuburbSettings { TankCount = 0 });
         AddChild(suburb);
         suburb.Rotation = new Vector3(0, (seed % 7 - 3) * 0.13f, 0);
         player.GlobalPosition = suburb.GlobalTransform * new Vector3(course == 1 ? 3 : (seed % 5 - 2) * 0.25f,
@@ -160,13 +164,13 @@ public partial class BotNavigationCourse : Node3D, IPlayerInputSource
         }
         else
         {
-            var t = Tuning.Current;
+            var t = world.Tuning;
             var shape = player.GetChildren().OfType<CollisionShape3D>().Single();
             var capabilities = new NavigationCapabilities(shape.Shape, shape.Position, ((CapsuleShape3D)shape.Shape).Radius,
                 t.RunSpeed, t.SprintSpeed, t.JumpVelocity, t.PlayerGravity, t.Acceleration, t.AirControl);
             var hazards = suburb!.LiveTanks.Select(tank => new NavigationHazard(tank.GlobalPosition, t.BotTankClearance)).ToArray();
-            var world = new NavigationWorld(GetWorld3D().DirectSpaceState, capabilities, hazards, t.BotJumpMargin, minimumJumpRange: t.BotJumpMinimumRange);
-            var move = navigator.Navigate(world, new NavigationState(here, player.Velocity, player.IsOnFloor()), capabilities, goal, t, dt);
+            var navigation = new NavigationWorld(GetWorld3D().DirectSpaceState, capabilities, hazards, t.BotJumpMargin, minimumJumpRange: t.BotJumpMinimumRange);
+            var move = navigator.Navigate(navigation, new NavigationState(here, player.Velocity, player.IsOnFloor()), capabilities, goal, t, dt);
             if (move.Direction.LengthSquared() > 0)
             {
                 var yaw = Mathf.RadToDeg(Mathf.Atan2(-move.Direction.X, -move.Direction.Z));
@@ -187,9 +191,9 @@ public partial class BotNavigationCourse : Node3D, IPlayerInputSource
             {
                 var landing = here + move.Direction * capabilities.JumpRange;
                 var pile = new NavigationWorld(GetWorld3D().DirectSpaceState, capabilities,
-                    new[] { new NavigationHazard(here.Lerp(landing, 0.5f), t.BotTankClearance) }, t.BotJumpMargin);
+                    new[] { new NavigationHazard(here.Lerp(landing, 0.5f), t.BotTankClearance) }, t.BotJumpMargin, t.BotJumpMinimumRange);
                 var vent = new NavigationWorld(GetWorld3D().DirectSpaceState, capabilities,
-                    new[] { new NavigationHazard(landing, t.RagdollRadius + 1) }, t.BotJumpMargin);
+                    new[] { new NavigationHazard(landing, t.RagdollRadius + 1) }, t.BotJumpMargin, t.BotJumpMinimumRange);
                 if (pile.Jump(here, landing) || vent.Jump(here, landing))
                 {
                     throw new InvalidOperationException("jump must reject pile and vent clearance zones");
@@ -197,7 +201,7 @@ public partial class BotNavigationCourse : Node3D, IPlayerInputSource
                 if (course == 0)
                 {
                     var escape = new NavigationWorld(GetWorld3D().DirectSpaceState, capabilities,
-                        new[] { new NavigationHazard(here, t.RagdollRadius + 1) }, t.BotJumpMargin, here);
+                        new[] { new NavigationHazard(here, t.RagdollRadius + 1) }, t.BotJumpMargin, t.BotJumpMinimumRange, here);
                     if (!escape.Walk(here, here - move.Direction * 2))
                     {
                         throw new InvalidOperationException("a bot already inside danger must be able to walk out");

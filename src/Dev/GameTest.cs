@@ -398,7 +398,7 @@ public partial class GameTest : Node
 
     private void ScriptGather(CaptureDirector director)
     {
-        Core.Tuning.Current.GatherDelay = 2;
+        game.World.Tuning.GatherDelay = 2;
         director.QuitAfter = 24;
         PropaneTank[] members = System.Array.Empty<PropaneTank>();
         Vector3 center = Vector3.Zero;

@@ -12,6 +12,8 @@ namespace Propane.Player;
 /// </summary>
 public partial class Rifle : Node3D
 {
+    public required WorldContext World { get; init; }
+
     private const string ScenePath = "res://assets/rifle/rifle.glb";
     private const float FlashDuration = 0.06f;
 
@@ -31,7 +33,7 @@ public partial class Rifle : Node3D
     private const float EmptyReturnEnd = 2.3f;
 
     /// <summary>Live contact point in the magazine's frame (origin at its top).</summary>
-    private static Vector3 MagazineGrip => new(0, -Tuning.Current.RifleMagazineGripDown, Tuning.Current.RifleMagazineGripBack);
+    private Vector3 MagazineGrip => new(0, -World.Tuning.RifleMagazineGripDown, World.Tuning.RifleMagazineGripBack);
 
     /// <summary>Where the left palm meets the bolt catch, beside it on the receiver's left side.</summary>
     private static readonly Vector3 BoltCatchSlap = new(-0.012f, -0.012f, 0.004f);
@@ -180,7 +182,7 @@ public partial class Rifle : Node3D
         flashSprite.RotateObjectLocal(Vector3.Back, (float)GD.RandRange(0, Mathf.Tau));
 
         boltLocked = lastRound;
-        clip = lastRound ? "FireLast" : Tuning.Current.FullAuto ? "Fire" : "FireSemi";
+        clip = lastRound ? "FireLast" : World.Tuning.FullAuto ? "Fire" : "FireSemi";
         clipTime = clip == "FireSemi" ? SemiShotTime : 0f;
     }
 
@@ -260,7 +262,7 @@ public partial class Rifle : Node3D
         Pose(name, time);
         // Keep this identical for trial and committed poses: contacts follow the visible magazine.
         var rest = skeleton.GetBoneRest(magazineBone).Origin;
-        skeleton.SetBonePosePosition(magazineBone, rest + (skeleton.GetBonePosePosition(magazineBone) - rest) * Tuning.Current.RifleMagazineTravel);
+        skeleton.SetBonePosePosition(magazineBone, rest + (skeleton.GetBonePosePosition(magazineBone) - rest) * World.Tuning.RifleMagazineTravel);
         MagazinePose = MagazineLocal();
         LeftHandLocal = ReloadHand(name == "ReloadEmpty", time, MagazinePose * MagazineGrip);
     }
@@ -278,7 +280,7 @@ public partial class Rifle : Node3D
         {
             var boltReach = Mathf.SmoothStep(SeatedTime, BoltCatchReached, t);
             task = magazine.Lerp(boltCatchLocal, boltReach) + Vector3.Left *
-                (Tuning.Current.RifleBoltApproachClearance * Mathf.Sin(Mathf.Pi * boltReach));
+                (World.Tuning.RifleBoltApproachClearance * Mathf.Sin(Mathf.Pi * boltReach));
             back = Mathf.SmoothStep(EmptyReturnStart, EmptyReturnEnd, t);
         }
         else
@@ -294,7 +296,7 @@ public partial class Rifle : Node3D
         // A straight lerp dragged the thumb through the seated magazine and the receiver.
         // Approach the foregrip from below: lateral clearance eases out sooner so already curled
         // fingertips do not sweep sideways through the grip on the last part of the return.
-        var clearance = Tuning.Current.RifleReloadClearance * Mathf.Sin(Mathf.Pi * contact);
+        var clearance = World.Tuning.RifleReloadClearance * Mathf.Sin(Mathf.Pi * contact);
         return ForegripLocal.Origin.Lerp(task, contact) + Vector3.Down * clearance + Vector3.Left * (clearance * contact);
     }
 
@@ -314,7 +316,7 @@ public partial class Rifle : Node3D
         {
             velocity = velocity.Normalized() * 4f;
         }
-        DroppedMagazine.Drop(world, velocity + world.Basis * new Vector3(0, -1.2f, 0));
+        DroppedMagazine.Drop(World, world, velocity + world.Basis * new Vector3(0, -1.2f, 0));
     }
 
     private void Pose(string name, float time)

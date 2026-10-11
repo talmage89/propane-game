@@ -14,6 +14,9 @@ namespace Propane.Dev;
 /// </summary>
 public partial class PlayerRange : Node3D
 {
+    private WorldContext world = null!;
+    public override void _ExitTree() => world.Dispose();
+
     private readonly ScriptedInput script = new();
     private PlayerCharacter player = null!;
     private Camera3D? observer;
@@ -25,19 +28,18 @@ public partial class PlayerRange : Node3D
         DisplayServer.WindowSetVsyncMode(DisplayServer.VSyncMode.Disabled);
         ProcessPhysicsPriority = -10;
         DevArgs.Setup();
+        world = new WorldContext(this, Tuning.SavedTemplate, present: true);
         InputSetup.Register();
         Core.DevLog.Enabled = DevArgs.Get("verbose-log") != null;
-        var effects = new Node3D { Name = "Effects" };
-        AddChild(effects);
         var dynamic = new Node3D { Name = "Dynamic" };
         AddChild(dynamic);
-        Spawn.SetEffectsRoot(effects);
-        Spawn.SetWorldRoot(dynamic);
+
+        world.SetContentRoot(dynamic);
         var env = new VoidEnvironment();
         AddChild(env);
 
         var scenario = DevArgs.Get("scenario") ?? "stances";
-        player = new PlayerCharacter { Name = "Player", IsRemote = scenario == "feet" };
+        player = new PlayerCharacter { World = world, Name = "Player", IsRemote = scenario == "feet" };
         AddChild(player);
         player.InputOverride = script;
         env.Follow = player;
@@ -45,7 +47,7 @@ public partial class PlayerRange : Node3D
         view = DevArgs.Get("view") ?? (scenario == "feet" ? "side" : "player");
         if (view == "player" && player.IsRemote)
         {
-            reviewCamera = new CameraRig { Name = "ReviewCamera" };
+            reviewCamera = new CameraRig { World = world, Name = "ReviewCamera" };
             AddChild(reviewCamera);
             reviewCamera.SetOrientation(0, -10);
         }
@@ -69,9 +71,9 @@ public partial class PlayerRange : Node3D
                 {
                     var start = episode * 3;
                     var empty = episode >= 5;
-                    director.At(start + .05f, () => player.Ammo = new AmmoState { Magazine = empty ? 0 : 5, Reserve = 90 });
+                    director.At(start + .05f, () => player.Ammo = new AmmoState { Tuning = world.Tuning, Magazine = empty ? 0 : 5, Reserve = 90 });
                     script.Reload(start + .2f);
-                    script.Melee(start + .2f + (0.1f + episode % 5 * .2f) * Tuning.Current.ReloadTime);
+                    script.Melee(start + .2f + (0.1f + episode % 5 * .2f) * world.Tuning.ReloadTime);
                     director.At(start + 2.9f, () =>
                     {
                         if (player.Ammo!.Reloading || player.Ammo.Magazine != (empty ? 0 : 5) || player.Ammo.Reserve != 90)
@@ -83,7 +85,7 @@ public partial class PlayerRange : Node3D
                 }
                 break;
             case "melee":
-                player.Ammo = new AmmoState { Magazine = 5, Reserve = 90 };
+                player.Ammo = new AmmoState { Tuning = world.Tuning, Magazine = 5, Reserve = 90 };
                 script.Melee(1);
                 script.Hold(2.5f, 3.4f, new PlayerIntent { Aim = true });
                 script.Melee(3);
@@ -103,7 +105,7 @@ public partial class PlayerRange : Node3D
 
                 break;
             case "motion":
-                player.Ammo = new AmmoState { Magazine = 30, Reserve = 90 };
+                player.Ammo = new AmmoState { Tuning = world.Tuning, Magazine = 30, Reserve = 90 };
                 script.Hold(0.5f, 3, new PlayerIntent { Move = Vector2.Down * 0.3f });
                 script.Hold(3, 5.5f, new PlayerIntent { Move = Vector2.Down });
                 script.Hold(5.5f, 8, new PlayerIntent { Move = Vector2.Down, Sprint = true });
@@ -139,7 +141,7 @@ public partial class PlayerRange : Node3D
                 script.Hold(4.3f, 6, new PlayerIntent { Move = Vector2.Right, Aim = true });
                 script.Hold(6.3f, 8.3f, new PlayerIntent { Aim = true });
                 // A half-turn exceeds both the controller's standing twist and the feet's turn threshold.
-                var turnLook = Mathf.Pi / Tuning.Current.MouseSensitivity / 1.2f;
+                var turnLook = Mathf.Pi / world.Tuning.MouseSensitivity / 1.2f;
                 script.Look(6.5f, 7.7f, new Vector2(turnLook, 0));
                 script.Look(7.7f, 8.9f, new Vector2(-turnLook, 0));
                 director.At(6.5f, () => events.SampleTurns = true);
@@ -163,7 +165,7 @@ public partial class PlayerRange : Node3D
                 director.At(20.35f, events.AssertSplitSupport);
                 director.At(20.6f, () => { player.Teleport(new Vector3(0, 0, -8.5f), Mathf.Pi / 2); events.SkipNextPose = true; if (motion != null) motion.SkipNextPose = true; });
                 script.Hold(20.7f, 21.5f, new PlayerIntent { Aim = true });
-                script.Look(20.7f, 21.5f, new Vector2(Mathf.Pi / 2 / Tuning.Current.MouseSensitivity / 0.8f, 0));
+                script.Look(20.7f, 21.5f, new Vector2(Mathf.Pi / 2 / world.Tuning.MouseSensitivity / 0.8f, 0));
                 script.Hold(21.6f, 24.5f, new PlayerIntent { Move = Vector2.Up, Aim = true });
                 director.QuitAfter = 25;
                 for (var frame = 0; frame < 25 * 12; frame++)
@@ -192,7 +194,7 @@ public partial class PlayerRange : Node3D
                 // Two full strides after acceleration and gait/rig blends settle; 12 frames per stride.
                 var skeleton = player.FindChildren("*", "Skeleton3D", owned: false).OfType<Skeleton3D>()
                     .Single(s => s.FindBone("foot_l") >= 0);
-                var period = Tuning.Current.WalkStrideLength / Tuning.Current.CreepSpeed;
+                var period = world.Tuning.WalkStrideLength / world.Tuning.CreepSpeed;
                 var end = 2f + period * 2;
                 script.Hold(0.25f, end + 0.5f, new PlayerIntent { Move = Vector2.Down, Aim = true });
                 var stride = new StrideProbe { Player = player, SampleFrom = 2f, SampleUntil = end };
@@ -204,10 +206,10 @@ public partial class PlayerRange : Node3D
                 }
                 director.At(end + 0.1f, stride.Finish);
                 director.QuitAfter = end + 0.3f;
-                GD.Print($"[creep] speed={Tuning.Current.CreepSpeed:0.00} stride-length={Tuning.Current.WalkStrideLength:0.000}m stride={period:0.000}s");
+                GD.Print($"[creep] speed={world.Tuning.CreepSpeed:0.00} stride-length={world.Tuning.WalkStrideLength:0.000}m stride={period:0.000}s");
                 break;
             case "grip":
-                player.Ammo = new AmmoState { Magazine = 3, Reserve = 60 };
+                player.Ammo = new AmmoState { Tuning = world.Tuning, Magazine = 3, Reserve = 60 };
                 script.Hold(1, 4, new PlayerIntent { Aim = true });
                 script.Hold(2, 2.6f, new PlayerIntent { FireHeld = true });
                 script.Reload(4.1f);
@@ -233,13 +235,13 @@ public partial class PlayerRange : Node3D
                 if (DevArgs.Get("grip-sweep") != null)
                 {
                     // Extend the same inputs through pitch changes in every hold and firing at both limits.
-                    director.At(15.2f, () => player.Ammo = new AmmoState { Magazine = 30, Reserve = 90 });
+                    director.At(15.2f, () => player.Ammo = new AmmoState { Tuning = world.Tuning, Magazine = 30, Reserve = 90 });
                     script.Hold(15.2f, 17.8f, new PlayerIntent { Aim = true });
                     script.Hold(16, 16.4f, new PlayerIntent { FireHeld = true });
                     script.Hold(17, 17.4f, new PlayerIntent { FireHeld = true });
                     script.Hold(20, 23, new PlayerIntent { Move = Vector2.Down });
                     script.Hold(23, 26, new PlayerIntent { Move = Vector2.Down, Sprint = true });
-                    director.At(26, () => player.Ammo = new AmmoState { Magazine = 30, Reserve = 90 });
+                    director.At(26, () => player.Ammo = new AmmoState { Tuning = world.Tuning, Magazine = 30, Reserve = 90 });
                     script.Hold(26, 28.9f, new PlayerIntent { FireHeld = true });
                     script.Hold(29, 32, new PlayerIntent { Move = Vector2.Down, Sprint = true });
                     script.Reload(29.5f);
@@ -252,13 +254,13 @@ public partial class PlayerRange : Node3D
                     director.At(33.2f, () =>
                     {
                         player.CameraRig.SetOrientation(0, -75);
-                        player.Ammo = new AmmoState { Magazine = 0, Reserve = 90 };
+                        player.Ammo = new AmmoState { Tuning = world.Tuning, Magazine = 0, Reserve = 90 };
                     });
                     script.Reload(33.5f);
                     director.At(36.2f, () =>
                     {
                         player.CameraRig.SetOrientation(0, 45);
-                        player.Ammo = new AmmoState { Magazine = 5, Reserve = 90 };
+                        player.Ammo = new AmmoState { Tuning = world.Tuning, Magazine = 5, Reserve = 90 };
                     });
                     script.Reload(36.5f);
                     foreach (var (t, label) in new (float, string)[]
@@ -323,7 +325,7 @@ public partial class PlayerRange : Node3D
             case "reload":
                 // A match's magazine: empty it (the bolt locks open), reload from empty, then a reload with rounds
                 // left. Times in the clips are scaled to the 1.6 s reload.
-                player.Ammo = new AmmoState { Magazine = 3, Reserve = 60 };
+                player.Ammo = new AmmoState { Tuning = world.Tuning, Magazine = 3, Reserve = 60 };
                 script.Hold(1.0f, 1.6f, new PlayerIntent { FireHeld = true });
                 director.ShotAt(1.7f, "r00_locked");
                 script.Reload(1.8f);
@@ -371,7 +373,7 @@ public partial class PlayerRange : Node3D
     {
         if (reviewCamera != null)
         {
-            reviewCamera.Target = player.GlobalPosition + Vector3.Up * Tuning.Current.CameraHeight;
+            reviewCamera.Target = player.GlobalPosition + Vector3.Up * world.Tuning.CameraHeight;
             return;
         }
         if (observer == null)
@@ -420,7 +422,7 @@ public partial class PlayerRange : Node3D
 
     private void AddTank(Vector3 position)
     {
-        var tank = PropaneTank.Create();
+        var tank = PropaneTank.Create(world);
         AddChild(tank);
         tank.GlobalPosition = position;
         tanks.Add(tank);

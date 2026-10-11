@@ -33,10 +33,14 @@ public interface IPlayerInputSource
 public sealed class DeviceInput : IPlayerInputSource
 {
     private readonly Func<bool> gameplayEnabled;
+    private readonly Tuning tuning;
 
     /// <summary>The facade supplies UI focus; tests can enable actions without a rendered mouse capture.</summary>
-    public DeviceInput(Func<bool>? gameplayEnabled = null) =>
+    public DeviceInput(Tuning tuning, Func<bool>? gameplayEnabled = null)
+    {
+        this.tuning = tuning;
         this.gameplayEnabled = gameplayEnabled ?? (() => Input.MouseMode == Input.MouseModeEnum.Captured);
+    }
 
     private Vector2 look;
     private bool jump;
@@ -93,7 +97,7 @@ public sealed class DeviceInput : IPlayerInputSource
         var captured = gameplayEnabled();
         var intent = new PlayerIntent
         {
-            Move = captured ? Input.GetVector(InputSetup.MoveLeft, InputSetup.MoveRight, InputSetup.MoveBack, InputSetup.MoveForward, Tuning.Current.StickDeadzone) : Vector2.Zero,
+            Move = captured ? Input.GetVector(InputSetup.MoveLeft, InputSetup.MoveRight, InputSetup.MoveBack, InputSetup.MoveForward, tuning.StickDeadzone) : Vector2.Zero,
             Sprint = captured && Input.IsActionPressed(InputSetup.Sprint),
             Aim = captured && Input.IsActionPressed(InputSetup.Aim),
             JumpPressed = captured && jump,
@@ -103,7 +107,7 @@ public sealed class DeviceInput : IPlayerInputSource
             MeleePressed = captured && melee,
             Look = captured ? look : Vector2.Zero,
             LookStick = captured ? Input.GetVector(InputSetup.LookLeft, InputSetup.LookRight,
-                InputSetup.LookUp, InputSetup.LookDown, Tuning.Current.StickDeadzone) : Vector2.Zero,
+                InputSetup.LookUp, InputSetup.LookDown, tuning.StickDeadzone) : Vector2.Zero,
         };
         look = Vector2.Zero;
         jump = false;

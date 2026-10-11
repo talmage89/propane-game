@@ -16,7 +16,7 @@ public sealed class WorldClock : IDisposable
     private readonly List<Pending> pending = new();
     private bool disposed;
     public double Now { get; private set; }
-    public int PendingCount => pending.Count;
+    public int PendingCount => pending.FindAll(timer => timer.Callback != null).Count;
 
     /// <summary>Cancel individually, or cancel all work when the world is invalidated.</summary>
     public IDisposable Schedule(double seconds, Action callback)

@@ -8,9 +8,13 @@ namespace Propane.Dev;
 /// <summary>Lines up asset models next to the mannequin and a tank at chosen scales, for judging proportions.</summary>
 public partial class WorldLab : Node3D
 {
+    private WorldContext world = null!;
+    public override void _ExitTree() => world.Dispose();
+
     public override void _Ready()
     {
         DevArgs.Setup();
+        world = new WorldContext(this, Tuning.SavedTemplate, present: true);
         var env = new VoidEnvironment();
         AddChild(env);
         var set = DevArgs.Get("set") ?? "houses";
@@ -57,7 +61,7 @@ public partial class WorldLab : Node3D
         var dummy = GameAssets.Instantiate("res://assets/character/mannequin.glb");
         AddChild(dummy);
         dummy.Position = new Vector3(-1.5f, 0, 1f);
-        var tank = Tank.PropaneTank.Create();
+        var tank = Tank.PropaneTank.Create(world);
         AddChild(tank);
         tank.Position = new Vector3(-2.5f, 0, 1f);
         tank.Freeze = true;

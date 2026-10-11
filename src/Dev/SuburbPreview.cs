@@ -14,18 +14,20 @@ namespace Propane.Dev;
 /// </summary>
 public partial class SuburbPreview : Node3D
 {
+    private WorldContext world = null!;
+    public override void _ExitTree() => world.Dispose();
+
     public override void _Ready()
     {
         DevArgs.Setup();
-        var effects = new Node3D { Name = "Effects" };
-        AddChild(effects);
-        Spawn.SetEffectsRoot(effects);
+        world = new WorldContext(this, Tuning.SavedTemplate, present: true);
+
         var env = new VoidEnvironment();
         AddChild(env);
 
         var seed = (int)DevArgs.GetFloat("seed", 7);
         var players = (int)DevArgs.GetFloat("players", 0);
-        var settings = players > 0 ? SuburbPlans.Match(Tuning.Current, players) : SuburbPlans.SinglePlayer(Tuning.Current);
+        var settings = players > 0 ? SuburbPlans.Match(world.Tuning, players) : SuburbPlans.SinglePlayer(world.Tuning);
         if (DevArgs.Get("formation") is { } name)
         {
             var formation = Enum.Parse<PileFormation>(name, true);
@@ -41,9 +43,9 @@ public partial class SuburbPreview : Node3D
         var plan = new SuburbGenerator(settings, new GameCatalog(), seed).Generate();
         var planMs = timer.ElapsedMilliseconds;
         timer.Restart();
-        var suburb = Suburb.Build(plan, settings);
+        var suburb = Suburb.Build(world, plan, settings);
         AddChild(suburb);
-        Spawn.SetWorldRoot(suburb.DynamicRoot);
+        world.SetContentRoot(suburb.DynamicRoot);
         GD.Print($"[suburb] seed {seed} roads {plan.Roads.Count} bulbs {plan.CulDeSacs.Count} lots {plan.Lots.Count} houses {plan.Lots.Count(l => l.HouseModel >= 0)} " +
                  $"fences {plan.Fences.Count} props {plan.Props.Count} tanks {plan.Tanks.Count} plan {planMs} ms build {timer.ElapsedMilliseconds} ms nodes {CountNodes(suburb)}");
         foreach (var tank in plan.Tanks)

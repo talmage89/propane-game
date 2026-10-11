@@ -16,6 +16,7 @@ namespace Propane;
 /// </summary>
 public partial class Main : Node
 {
+    public Tuning SavedTuning { get; init; } = Tuning.SavedTemplate;
     private NetClient net = null!;
     private Menus menus = null!;
     private Node3D? backdrop;
@@ -39,7 +40,7 @@ public partial class Main : Node
             return;
         }
         InputSetup.Register();
-        net = new NetClient { Name = "Net" };
+        net = new NetClient { Name = "Net", Template = SavedTuning };
         AddChild(net);
         net.MatchStarting += OnMatchStarting;
         net.StatusChanged += OnStatusChanged;
@@ -97,7 +98,7 @@ public partial class Main : Node
     {
         if (backdrop == null)
         {
-            backdrop = new Backdrop { Name = "Backdrop" };
+            backdrop = new Backdrop { Name = "Backdrop", Template = SavedTuning };
             AddChild(backdrop);
         }
         RenderingServer.GlobalShaderParameterSet("reveal_radius", 100000f);
@@ -107,26 +108,31 @@ public partial class Main : Node
 
     private void HideBackdrop()
     {
-        backdrop?.QueueFree();
+        backdrop?.Free();
         backdrop = null;
     }
 
     /// <summary>The hero shot behind the menus: one venting tank on the white floor, the camera circling it.</summary>
     private partial class Backdrop : Node3D
     {
+        public required Tuning Template { get; init; }
+        private WorldContext world = null!;
         private Camera3D camera = null!;
         private float angle = 0.6f;
 
         public override void _Ready()
         {
+            world = new WorldContext(this, Template, present: true);
             var environment = new VoidEnvironment { Name = "Void" };
             AddChild(environment);
-            var tank = PropaneTank.Create();
+            var tank = PropaneTank.Create(world);
             tank.Freeze = true;
             AddChild(tank);
             tank.RotationDegrees = new Vector3(0, 35, 0);
             tank.AddChild(new VentJet
             {
+                World = world,
+                ContentSpawn = world.Spawn,
                 Name = "VentJet",
                 Transform = new Transform3D(Basis.LookingAt(Vector3.Back.Rotated(Vector3.Up, 0.5f), Vector3.Up), new Vector3(0.12f, 0.3f, 0.1f)),
             });
@@ -135,6 +141,8 @@ public partial class Main : Node
             environment.Follow = camera;
             Place();
         }
+
+        public override void _ExitTree() => world.Dispose();
 
         public override void _Process(double delta)
         {
@@ -158,7 +166,7 @@ public partial class Main : Node
     {
         menus.Show(Menus.Screen.None);
         HideBackdrop();
-        game = new Game { Name = "Game" };
+        game = new Game { Name = "Game", Template = SavedTuning };
         game.ExitRequested += ExitSinglePlayer;
         AddChild(game);
     }
@@ -167,7 +175,8 @@ public partial class Main : Node
     {
         GetTree().Paused = false;
         Engine.TimeScale = 1.0;
-        game?.QueueFree();
+        game?.World.Dispose();
+        game?.Free();
         game = null;
         ShowMenus(Menus.Screen.Main);
     }
@@ -223,8 +232,8 @@ public partial class Main : Node
         if (match != null)
         {
             // Exit synchronously so its tuning and callbacks are restored before another scene enters.
-            RemoveChild(match);
-            match.QueueFree();
+            match.World.Dispose();
+            match.Free();
             match = null;
         }
     }

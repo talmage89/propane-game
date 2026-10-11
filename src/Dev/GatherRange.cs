@@ -12,6 +12,9 @@ namespace Propane.Dev;
 /// <summary>Physical gather regression: separate clusters, singles, shields, vents, blockers, shot/bump/blast interrupts.</summary>
 public partial class GatherRange : Node3D
 {
+    private WorldContext world = null!;
+    public override void _ExitTree() => world.Dispose();
+
     private readonly List<PropaneTank> tanks = new();
     private readonly Dictionary<PropaneTank, Transform3D> settled = new();
     private TankGather gather = null!;
@@ -30,9 +33,9 @@ public partial class GatherRange : Node3D
     public override void _Ready()
     {
         DevArgs.Setup();
+        world = new WorldContext(this, Tuning.SavedTemplate, present: true);
         DisplayServer.WindowSetVsyncMode(DisplayServer.VSyncMode.Disabled);
-        var effects = new Node3D(); AddChild(effects);
-        Spawn.SetEffectsRoot(effects); Spawn.SetWorldRoot(this);
+        world.SetContentRoot(this);
         var env = new VoidEnvironment(); AddChild(env);
         var camera = new Camera3D { Current = true, Fov = 60 }; AddChild(camera);
         camera.LookAtFromPosition(new Vector3(10, 12, 19), new Vector3(1, 0.5f, 0)); env.Follow = camera;
@@ -42,10 +45,10 @@ public partial class GatherRange : Node3D
         AddChild(floor);
         if (DevArgs.Get("scenario") == "appearance") { Appearance(camera); return; }
         if (DevArgs.Get("scenario") == "grant-races") { GrantRaces(); return; }
-        Tuning.Current.GatherDelay = 2;
-        Tuning.Current.GatherScanInterval = 0.1f;
-        Tuning.Current.GatherDuration = 3;
-        Tuning.Current.GatherLift = 2.5f;
+        world.Tuning.GatherDelay = 2;
+        world.Tuning.GatherScanInterval = 0.1f;
+        world.Tuning.GatherDuration = 3;
+        world.Tuning.GatherLift = 2.5f;
         // Two independent groups and a third whose first member will be shot while traversing.
         foreach (var x in new[] { -8f, 0f, 8f })
         {
@@ -72,6 +75,7 @@ public partial class GatherRange : Node3D
         var blastTest = AddTank(new Vector3(30, 0, 0));
         gather = new TankGather
         {
+            World = world,
             Tanks = () => tanks,
             Publish = (tank, phase) =>
         {
@@ -110,7 +114,7 @@ public partial class GatherRange : Node3D
             var tank = bumpTest; tank.BeginGather(); tank.Disturb(); tank.ApplyCentralImpulse(Vector3.Right * tank.Mass);
             bump = !tank.Gathering && !tank.Freeze;
             var pushed = blastTest; pushed.BeginGather();
-            Blast.Detonate(this, pushed.GlobalPosition + Vector3.Up, null, chain: false);
+            Blast.Detonate(world, pushed.GlobalPosition + Vector3.Up, null, chain: false);
             blast = !pushed.Gathering && !pushed.Freeze;
             Require(bump && blast, "bump or blast failed to release glide");
             GD.Print("[gather] PASS bump/blast release physics");
@@ -128,7 +132,7 @@ public partial class GatherRange : Node3D
 
     private PropaneTank AddTank(Vector3 at)
     {
-        var tank = PropaneTank.Create(); AddChild(tank); tank.Position = at; tank.Sleeping = true; tanks.Add(tank); return tank;
+        var tank = PropaneTank.Create(world); AddChild(tank); tank.Position = at; tank.Sleeping = true; tanks.Add(tank); return tank;
     }
 
     private void Block(Vector3 at, Vector3 size, uint layer)
@@ -151,13 +155,13 @@ public partial class GatherRange : Node3D
     private void Appearance(Camera3D camera)
     {
         var colors = new[] { new AppearanceRecord(18, 171, 239), new AppearanceRecord(0, 0, 0), new AppearanceRecord(255, 255, 255) };
-        Tuning.Current.DropInvulnerableTime = 1;
-        Tuning.Current.GatherShimmer = 1;
+        world.Tuning.DropInvulnerableTime = 1;
+        world.Tuning.GatherShimmer = 1;
         camera.LookAtFromPosition(new Vector3(0, 1.7f, 1.8f), new Vector3(0, 1.2f, 0));
         foreach (var (appearance, index) in colors.Select((color, i) => (color, i)))
         {
             var tank = AddTank(new Vector3((index - 1) * 0.6f, 1, 0));
-            tank.MakeInvulnerable(Tuning.Current.DropInvulnerableTime, appearance.Color);
+            tank.MakeInvulnerable(world.Tuning.DropInvulnerableTime, appearance.Color);
             tank.BeginGather();
         }
         var director = new CaptureDirector { QuitAfter = 2 }; AddChild(director);
@@ -170,7 +174,7 @@ public partial class GatherRange : Node3D
                 var contrast = mesh.GetInstanceShaderParameter("shield_contrast").AsColor();
                 Require(tank.Invulnerable && tank.Gathering && glow.A > 0 && new Color(glow, 1) == colors[index].Color,
                     "gather start lost the drop appearance or shield");
-                Require(mesh.GetInstanceShaderParameter("gather_shimmer").AsSingle() == Tuning.Current.GatherShimmer,
+                Require(mesh.GetInstanceShaderParameter("gather_shimmer").AsSingle() == world.Tuning.GatherShimmer,
                     "gather shimmer missing alongside shield");
                 Require(index == 0 ? contrast.A == 0 : contrast.A > 0, "extreme-color shield contrast missing");
             }
@@ -199,7 +203,7 @@ public partial class GatherRange : Node3D
                 var mesh = tank.GetNode<MeshInstance3D>("Mesh");
                 Require(!tank.Invulnerable && tank.Gathering && mesh.GetInstanceShaderParameter("shield_color").AsColor().A == 0 &&
                     mesh.GetInstanceShaderParameter("shield_contrast").AsColor().A == 0 &&
-                    mesh.GetInstanceShaderParameter("gather_shimmer").AsSingle() == Tuning.Current.GatherShimmer,
+                    mesh.GetInstanceShaderParameter("gather_shimmer").AsSingle() == world.Tuning.GatherShimmer,
                     "shield expiry erased shimmer or retained glow/contrast");
             }
             GD.Print("[gather appearance] PASS shield expiry preserves active shimmer");
@@ -209,14 +213,14 @@ public partial class GatherRange : Node3D
 
     private void GrantRaces()
     {
-        Tuning.Current.GatherDelay = 0.1f;
-        Tuning.Current.GatherScanInterval = 0.05f;
-        Tuning.Current.GatherDuration = 1;
+        world.Tuning.GatherDelay = 0.1f;
+        world.Tuning.GatherScanInterval = 0.05f;
+        world.Tuning.GatherDuration = 1;
         AddTank(new Vector3(-0.8f, 0, 0)); AddTank(new Vector3(0.8f, 0, 0));
         var requests = 0;
         var lease = true;
         var stop = false;
-        gather = new TankGather { Tanks = () => tanks, Enabled = () => !stop };
+        gather = new TankGather { World = world, Tanks = () => tanks, Enabled = () => !stop };
         gather.Grant = (members, done) =>
         {
             requests++;

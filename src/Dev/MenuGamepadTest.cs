@@ -166,19 +166,19 @@ public partial class MenuGamepadTest : Node
         await Navigate("match_length").ConfigureAwait(true);
         var length = Net.Lobby!.MatchLength;
         await Axis(JoyAxis.LeftX, 1).ConfigureAwait(true);
-        await Wait(() => Net.Lobby!.MatchLength == length + Tuning.Current.MatchLengthStep, "stick right increases match length").ConfigureAwait(true);
+        await Wait(() => Net.Lobby!.MatchLength == length + Tuning.SavedTemplate.MatchLengthStep, "stick right increases match length").ConfigureAwait(true);
         CheckFocus("match_length");
         await Press(JoyButton.DpadLeft).ConfigureAwait(true);
         await Wait(() => Net.Lobby!.MatchLength == length, "D-pad left decreases match length").ConfigureAwait(true);
         CheckFocus("match_length");
-        while (Net.Lobby!.MatchLength > Tuning.Current.MatchLengthMin)
+        while (Net.Lobby!.MatchLength > Tuning.SavedTemplate.MatchLengthMin)
         {
-            var shorter = Mathf.Max(Tuning.Current.MatchLengthMin, Net.Lobby.MatchLength - Tuning.Current.MatchLengthStep);
+            var shorter = Mathf.Max(Tuning.SavedTemplate.MatchLengthMin, Net.Lobby.MatchLength - Tuning.SavedTemplate.MatchLengthStep);
             await Press(JoyButton.DpadLeft).ConfigureAwait(true);
             await Wait(() => Net.Lobby!.MatchLength == shorter, "shorter length acknowledged").ConfigureAwait(true);
         }
         await Press(JoyButton.DpadLeft).ConfigureAwait(true);
-        Check(Net.Lobby!.MatchLength == Tuning.Current.MatchLengthMin, "length clamps at minimum");
+        Check(Net.Lobby!.MatchLength == Tuning.SavedTemplate.MatchLengthMin, "length clamps at minimum");
         CheckFocus("match_length");
         Check(!Reachable().ContainsKey("−"), "disabled shorter button is skipped");
         await Shot("08_lobby_length").ConfigureAwait(true);
@@ -496,9 +496,9 @@ public partial class MenuGamepadTest : Node
         Check(!GetTree().Paused, "mouse still clicks Resume");
         await Press(JoyButton.RightShoulder).ConfigureAwait(true);
 
-        var hud = new MatchHud();
+        var hud = new MatchHud { World = Main.GetNode<Game>("Game").World };
         AddChild(hud);
-        var ammo = new AmmoState { Magazine = 0, Reserve = 1 };
+        var ammo = new AmmoState { Tuning = Tuning.SavedTemplate, Magazine = 0, Reserve = 1 };
         hud.SetAmmo(ammo);
         Check(Labels().Contains("X / SQUARE TO RELOAD"), "gamepad reload hint");
         Input.ParseInputEvent(new InputEventMouseMotion { Relative = Vector2.One });

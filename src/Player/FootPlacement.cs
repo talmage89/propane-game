@@ -63,7 +63,7 @@ public partial class FootPlacement : SkeletonModifier3D
     /// <summary>Discard contacts. Unexpected motion snaps can fade the previous joint pose into the new solve.</summary>
     public void Reset(bool blendPose = false)
     {
-        resetTime = blendPose && hasPose ? Tuning.Current.LocomotionSettleTime : 0;
+        resetTime = blendPose && hasPose ? Player.World.Tuning.LocomotionSettleTime : 0;
         if (resetTime > 0)
         {
             BeginPoseBlend();
@@ -85,7 +85,7 @@ public partial class FootPlacement : SkeletonModifier3D
     {
         var root = Player.GlobalPosition;
         var displacement = root - motionRoot;
-        motionVelocity = Player.IsRemote ? hasMotion && displacement.Length() < Tuning.Current.FootResetDistance
+        motionVelocity = Player.IsRemote ? hasMotion && displacement.Length() < Player.World.Tuning.FootResetDistance
             ? displacement / Mathf.Max(dt, 0.00001f) : Vector3.Zero : Player.Velocity;
         motionVelocity.Y = 0;
         motionRoot = root;
@@ -99,7 +99,7 @@ public partial class FootPlacement : SkeletonModifier3D
         var s = GetSkeleton();
         if (s == null || delta <= 0) return;
         var dt = (float)delta;
-        var t = Tuning.Current;
+        var t = Player.World.Tuning;
         if (!Player.ResolvedState.Active) { Reset(); return; }
         var root = Player.GlobalPosition;
         if (initialized && root.DistanceTo(previousRoot) > t.FootResetDistance) Reset(true);
@@ -327,7 +327,7 @@ public partial class FootPlacement : SkeletonModifier3D
     private bool NeedsPoseRecovery(Skeleton3D s, float dt)
     {
         if (!hasPose) return false;
-        var limit = Mathf.DegToRad(Tuning.Current.FootPoseRecoverySpeed) * dt;
+        var limit = Mathf.DegToRad(Player.World.Tuning.FootPoseRecoverySpeed) * dt;
         for (var i = 0; i < 2; i++)
         {
             var leg = legs[i];
@@ -352,7 +352,7 @@ public partial class FootPlacement : SkeletonModifier3D
     {
         if (!hasPose) return false;
         var limited = false;
-        var limit = Mathf.DegToRad(Tuning.Current.PoseAngularSpeed) * dt;
+        var limit = Mathf.DegToRad(Player.World.Tuning.PoseAngularSpeed) * dt;
         for (var i = 0; i < 2; i++)
         {
             var leg = legs[i];
@@ -379,14 +379,14 @@ public partial class FootPlacement : SkeletonModifier3D
         if (resetTime > 0)
         {
             resetTime = Mathf.Max(0, resetTime - dt);
-            var amount = Mathf.SmoothStep(0, 1, resetTime / Tuning.Current.LocomotionSettleTime);
+            var amount = Mathf.SmoothStep(0, 1, resetTime / Player.World.Tuning.LocomotionSettleTime);
             BlendPose(s, resetLegRotations, resetPelvisPosition, amount);
         }
     }
 
     private void BeginPoseBlend()
     {
-        resetTime = Tuning.Current.LocomotionSettleTime;
+        resetTime = Player.World.Tuning.LocomotionSettleTime;
         Array.Copy(lastLegRotations, resetLegRotations, lastLegRotations.Length);
         resetPelvisPosition = lastPelvisPosition;
     }
@@ -441,7 +441,7 @@ public partial class FootPlacement : SkeletonModifier3D
 
     private Transform3D GroundTarget(Skeleton3D s, int side, Vector3 root, Basis facing, Vector3 lead)
     {
-        var t = Tuning.Current;
+        var t = Player.World.Tuning;
         var position = root + facing * new Vector3(side == 0 ? -t.FootHalfWidth : t.FootHalfWidth, t.FootSoleHeight, 0) + lead;
         var lateral = lead.Dot(facing * Vector3.Right);
         var other = legs[1 - side];
@@ -464,7 +464,7 @@ public partial class FootPlacement : SkeletonModifier3D
 
     private bool HasGround(Vector3 position, out Vector3 ground, out Vector3 normal)
     {
-        var t = Tuning.Current;
+        var t = Player.World.Tuning;
         // Each player samples several native queries per frame; release the temporary query and results now.
         using var ray = PhysicsRayQueryParameters3D.Create(position + Vector3.Up * t.FootProbeUp,
             position - Vector3.Up * t.FootProbeDown, Layers.World | Layers.Floor);
@@ -488,7 +488,7 @@ public partial class FootPlacement : SkeletonModifier3D
     private Transform3D SupportedGoal(Leg leg)
     {
         var goal = SeparateStep(leg, leg.Goal);
-        if (HasGround(goal.Origin, out var ground, out _)) goal.Origin.Y = ground.Y + Tuning.Current.FootSoleHeight;
+        if (HasGround(goal.Origin, out var ground, out _)) goal.Origin.Y = ground.Y + Player.World.Tuning.FootSoleHeight;
         return goal;
     }
 
@@ -506,7 +506,7 @@ public partial class FootPlacement : SkeletonModifier3D
         // change or reversal must not yank a swinging ankle sideways when the other foot lifts.
         leg.Goal.Origin += root - leg.GoalRoot;
         leg.GoalRoot = root;
-        leg.Goal = leg.Goal.InterpolateWith(target, 1 - Mathf.Exp(-Tuning.Current.FootStepTargetSpeed * dt));
+        leg.Goal = leg.Goal.InterpolateWith(target, 1 - Mathf.Exp(-Player.World.Tuning.FootStepTargetSpeed * dt));
         var start = leg.Start;
         start.Origin += root - leg.RootStart;
         leg.Target = start.InterpolateWith(leg.Goal, Mathf.SmoothStep(0, 1, progress));
@@ -522,8 +522,8 @@ public partial class FootPlacement : SkeletonModifier3D
         var side = ReferenceEquals(leg, legs[0]) ? 0 : 1;
         var right = new Basis(Vector3.Up, Player.FacingYaw) * Vector3.Right;
         var gap = (step.Origin - legs[1 - side].Target.Origin).Dot(right);
-        var wanted = side == 0 ? Mathf.Min(gap, -Tuning.Current.FootMinimumSeparation)
-            : Mathf.Max(gap, Tuning.Current.FootMinimumSeparation);
+        var wanted = side == 0 ? Mathf.Min(gap, -Player.World.Tuning.FootMinimumSeparation)
+            : Mathf.Max(gap, Player.World.Tuning.FootMinimumSeparation);
         step.Origin += right * (wanted - gap);
         return step;
     }

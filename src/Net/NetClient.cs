@@ -237,9 +237,11 @@ public partial class NetClient : Node
     /// Asks the server to start the lobby's match (creator only), on this player's tuning: the values baked into a
     /// release build, or the live ones in a debug build.
     /// </summary>
+    public Tuning Template { get; init; } = Tuning.SavedTemplate;
+
     public void StartMatch()
     {
-        var tuning = OS.IsDebugBuild() ? Tuning.Current : Tuning.LoadBaked();
+        var tuning = OS.IsDebugBuild() ? Template : Tuning.LoadBaked();
         Send(new NetWriter(Msg.StartMatch).Snapshot(tuning.Snapshot()));
     }
 

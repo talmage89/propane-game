@@ -14,12 +14,13 @@ public static class WorldClockTests
         {
             runner.Run($"world/clock timer at simulation speed {speed}", () =>
             {
-                var tank = PropaneTank.Create();
-                runner.AddChild(tank);
+                using var world = new WorldContext(runner, Tuning.SavedTemplate);
+                var tank = PropaneTank.Create(world);
+                world.Root.AddChild(tank);
                 try
                 {
                     tank.MakeInvulnerable(2, Colors.White);
-                    using var clock = new WorldClock();
+                    var clock = world.Clock;
                     var fired = 0;
                     clock.Schedule(2, () => fired++);
                     var wall = 0.0;

@@ -15,6 +15,8 @@ public readonly record struct ScoreTag(Vector2 Screen, int Score, Color Color, f
 /// </summary>
 public partial class MatchHud : CanvasLayer
 {
+    public required WorldContext World { get; init; }
+
     private static readonly Color Dark = new(0.12f, 0.13f, 0.15f);
     private static readonly Color Warn = new(0.85f, 0.2f, 0.15f);
 
@@ -102,7 +104,7 @@ public partial class MatchHud : CanvasLayer
         notice.Size = new Vector2(800, 40);
         root.AddChild(notice);
 
-        overlay = new Overlay { MouseFilter = Control.MouseFilterEnum.Ignore };
+        overlay = new Overlay { World = World, MouseFilter = Control.MouseFilterEnum.Ignore };
         overlay.SetAnchorsPreset(Control.LayoutPreset.FullRect);
         root.AddChild(overlay);
         SetScore(0, false);
@@ -112,7 +114,7 @@ public partial class MatchHud : CanvasLayer
     public override void _Process(double delta)
     {
         var dt = (float)delta;
-        var tuning = Tuning.Current;
+        var tuning = World.Tuning;
         scorePop = Mathf.MoveToward(scorePop, 0, dt * 3f);
         var s = 1f + scorePop * scorePop * 0.45f;
         score.Scale = new Vector2(s, s);
@@ -163,7 +165,7 @@ public partial class MatchHud : CanvasLayer
     /// <summary>"+N" by the score; points that keep coming (a chain) add to the one showing.</summary>
     public void AddScorePopup(int amount)
     {
-        popupAmount = popupAge < Tuning.Current.ScorePopupTime * 0.7f ? popupAmount + amount : amount;
+        popupAmount = popupAge < World.Tuning.ScorePopupTime * 0.7f ? popupAmount + amount : amount;
         popupAge = 0f;
         popup.Text = $"+{popupAmount}";
     }
@@ -203,7 +205,7 @@ public partial class MatchHud : CanvasLayer
 
     public void SetNotice(string text) => notice.Text = text;
 
-    public void ShowHitMarker() => overlay.HitMarker = Tuning.Current.HitMarkerTime;
+    public void ShowHitMarker() => overlay.HitMarker = World.Tuning.HitMarkerTime;
 
     /// <summary>An arrow round the crosshair toward where a shot that hit you came from.</summary>
     public void AddHitDirection(Vector3 from) => overlay.Hits.Add((from, 0f));
@@ -230,6 +232,7 @@ public partial class MatchHud : CanvasLayer
     /// <summary>Everything drawn rather than laid out: the hit marker, incoming-shot arrows, score tags and the reload ring.</summary>
     private partial class Overlay : Control
     {
+        public required WorldContext World { get; init; }
         public Camera3D? Camera;
         public Vector3 Player;
         public float HitMarker;
@@ -240,7 +243,7 @@ public partial class MatchHud : CanvasLayer
         public void Tick(float dt)
         {
             HitMarker = Mathf.Max(0, HitMarker - dt);
-            var life = Mathf.Max(Tuning.Current.HitDirectionTime, 0.05f);
+            var life = Mathf.Max(World.Tuning.HitDirectionTime, 0.05f);
             for (var i = Hits.Count - 1; i >= 0; i--)
             {
                 var (from, age) = Hits[i];
@@ -261,7 +264,7 @@ public partial class MatchHud : CanvasLayer
             var center = Size / 2f;
             var light = new Color(1, 1, 1, 0.95f);
             var dark = new Color(0.05f, 0.06f, 0.08f, 0.6f);
-            var tuning = Tuning.Current;
+            var tuning = World.Tuning;
 
             foreach (var tag in Tags)
             {
@@ -270,7 +273,7 @@ public partial class MatchHud : CanvasLayer
                 var text = tag.Score.ToString();
                 var width = font.GetStringSize(text, HorizontalAlignment.Left, -1, size).X;
                 var at = tag.Screen - new Vector2(width / 2f, 0);
-                DrawStringOutline(font, at, text, HorizontalAlignment.Left, -1, size, Mathf.Max(4, size / 5), new Color(AppearanceContrast.ScoreOutline(tag.Color), 0.85f));
+                DrawStringOutline(font, at, text, HorizontalAlignment.Left, -1, size, Mathf.Max(4, size / 5), new Color(AppearanceContrast.ScoreOutline(tag.Color, World.Tuning), 0.85f));
                 DrawString(font, at, text, HorizontalAlignment.Left, -1, size, tag.Color);
             }
 

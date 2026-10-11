@@ -13,51 +13,38 @@ public partial class Tuning : Resource
     /// <summary>Where an exported build keeps the player's saved dials, since <c>res://</c> is read-only there.</summary>
     public const string PlayerPath = "user://tuning.tres";
 
-    private static Tuning? current;
+    private static Tuning? savedTemplate;
 
     /// <summary>
     /// The file Save writes to: the project's own tuning in the editor, the player's copy in an exported build.
     /// </summary>
     public static string FilePath => OS.HasFeature("editor") ? ProjectPath : PlayerPath;
 
-    /// <summary>The live tuning values. Loaded on first access from <see cref="FilePath"/>, falling back to the project's.</summary>
-    public static Tuning Current
+    /// <summary>The application saved template, used only at composition and by application UI. Worlds own copies. Loaded on first access from <see cref="FilePath"/>, falling back to the project's.</summary>
+    public static Tuning SavedTemplate
     {
         get
         {
-            if (current != null)
+            if (savedTemplate != null)
             {
-                return current;
+                return savedTemplate;
             }
             var path = ResourceLoader.Exists(FilePath) ? FilePath : ProjectPath;
-            current = (ResourceLoader.Exists(path) ? ResourceLoader.Load<Tuning>(path, cacheMode: ResourceLoader.CacheMode.Ignore) : null)
+            savedTemplate = (ResourceLoader.Exists(path) ? ResourceLoader.Load<Tuning>(path, cacheMode: ResourceLoader.CacheMode.Ignore) : null)
                 ?? new Tuning();
-            return current;
+            return savedTemplate;
         }
     }
 
-    public static Error SaveCurrent() => ResourceSaver.Save(Current, FilePath);
-
-    private static Tuning? playerTuning;
-
-    /// <summary>
-    /// Makes <paramref name="match"/> the live values for a multiplayer match, keeping the player's own aside until
-    /// <see cref="EndMatch"/>. Everyone in a match plays on the same values.
-    /// </summary>
-    public static void UseForMatch(Tuning match)
+    /// <summary>Save a panel's explicit target and update the application's template for future worlds.</summary>
+    public static Error SaveTemplate(Tuning target)
     {
-        playerTuning ??= Current;
-        current = match;
-    }
-
-    /// <summary>Puts the player's own values back after a match.</summary>
-    public static void EndMatch()
-    {
-        if (playerTuning != null)
+        var error = ResourceSaver.Save(target, FilePath);
+        if (error == Error.Ok)
         {
-            current = playerTuning;
-            playerTuning = null;
+            foreach (var name in ValueNames(target)) { SavedTemplate.Set(name, target.Get(name)); }
         }
+        return error;
     }
 
     /// <summary>The values baked into the build (<c>res://tuning.tres</c>), ignoring any the player saved.</summary>

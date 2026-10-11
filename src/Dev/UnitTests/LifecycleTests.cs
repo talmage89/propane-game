@@ -53,7 +53,7 @@ public static class LifecycleTests
             var body = new RigidBody3D { Sleeping = true };
             try
             {
-                var sync = new BodySync(me: 3, host: 2);
+                var sync = new BodySync(Core.Tuning.SavedTemplate, me: 3, host: 2);
                 var id = BodySync.MapTankId(0);
                 sync.Register(id, body, isTank: true, owner: 2);
                 var state = new BodyState(id, Transform3D.Identity, Vector3.Zero, Vector3.Zero, 1, 10);

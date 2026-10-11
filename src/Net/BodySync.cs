@@ -49,16 +49,20 @@ public sealed class BodySync
         internal (BodyState Body, bool IsRest)? Latest;
     }
 
+    private readonly Tuning settings;
     private readonly Dictionary<uint, Entry> entries = new();
     private readonly Dictionary<ulong, Entry> byInstance = new();
     private double tankTimer;
     private double carTimer;
 
-    public BodySync(int me, int host)
+    public BodySync(Tuning tuning, int me, int host)
     {
+        settings = tuning;
         Me = me;
         Host = host;
     }
+
+    public void Clear() { entries.Clear(); byInstance.Clear(); }
 
     public int Me { get; }
 
@@ -212,7 +216,7 @@ public sealed class BodySync
     /// <summary>Eases every copy this player does not own toward its owner's latest state. Call every physics step.</summary>
     public void Correct(double now)
     {
-        var tuning = Tuning.Current;
+        var tuning = settings;
         var blend = Mathf.Max(tuning.CorrectionBlendTime, 0.02f);
         foreach (var entry in entries.Values)
         {
@@ -282,7 +286,7 @@ public sealed class BodySync
     /// </summary>
     public (List<Entry> Moving, List<Entry> Rested) Collect(double dt)
     {
-        var tuning = Tuning.Current;
+        var tuning = settings;
         tankTimer -= dt;
         carTimer -= dt;
         var sendTanks = tankTimer <= 0;

@@ -10,6 +10,9 @@ namespace Propane.Tank;
 /// </summary>
 public partial class VentJet : Node3D
 {
+    public required WorldContext World { get; init; }
+    public required Spawn ContentSpawn { get; init; }
+
     private const float FlameLifetime = 0.36f;
     private const float SmokeLifetime = 4.5f;
 
@@ -26,7 +29,7 @@ public partial class VentJet : Node3D
 
     public override void _Ready()
     {
-        var scale = Tuning.Current.VentFlameScale;
+        var scale = World.Tuning.VentFlameScale;
 
         // Many small, short-lived puffs overlap into one continuous tongue of flame. They live in world space,
         // so a spinning tank sprays a curling spiral rather than a rigid stick.
@@ -130,7 +133,7 @@ public partial class VentJet : Node3D
         ignition = Mathf.Min(1f, ignition + (float)delta * 6f);
         // Layered sines give an irregular flicker without a noise lookup.
         var flicker = 0.78f + 0.12f * Mathf.Sin(time * 31f) + 0.07f * Mathf.Sin(time * 53f + 1.3f) + 0.05f * Mathf.Sin(time * 97f);
-        light.LightEnergy = Tuning.Current.VentLightEnergy * flicker * ignition;
+        light.LightEnergy = World.Tuning.VentLightEnergy * flicker * ignition;
         core.Scale = Vector3.One * (0.85f + 0.3f * flicker);
         jetMaterial.SetShaderParameter("flicker", (0.75f + 0.35f * flicker) * ignition);
         coreMaterial.SetShaderParameter("opacity", ignition);
@@ -140,15 +143,15 @@ public partial class VentJet : Node3D
     public void Extinguish()
     {
         smoke.Emitting = false;
-        Spawn.Detach(smoke);
+        ContentSpawn.Detach(smoke);
         var lingering = smoke;
-        lingering.GetTree().CreateTimer(SmokeLifetime, processAlways: false).Timeout += () =>
+        World.Schedule(lingering, SmokeLifetime, () =>
         {
             if (IsInstanceValid(lingering))
             {
                 lingering.QueueFree();
             }
-        };
+        });
         QueueFree();
     }
 }

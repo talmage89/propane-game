@@ -6,6 +6,8 @@ namespace Propane.Fx;
 /// <summary>Freezes time for a few frames when a blast goes off close to the player, for weight.</summary>
 public partial class Hitstop : Node
 {
+    public required WorldContext World { get; init; }
+
     private ulong releaseAt;
     private bool active;
 
@@ -15,12 +17,12 @@ public partial class Hitstop : Node
     public override void _Ready()
     {
         ProcessMode = ProcessModeEnum.Always;
-        GameEvents.Explosion += OnExplosion;
+        World.Events.Explosion += OnExplosion;
     }
 
     public override void _ExitTree()
     {
-        GameEvents.Explosion -= OnExplosion;
+        World.Events.Explosion -= OnExplosion;
         Engine.TimeScale = 1.0;
     }
 
@@ -35,7 +37,7 @@ public partial class Hitstop : Node
 
     private void OnExplosion(Vector3 position)
     {
-        var tuning = Tuning.Current;
+        var tuning = World.Tuning;
         if (Focus == null || tuning.HitstopDuration <= 0 || Focus.GlobalPosition.DistanceTo(position) > tuning.HitstopRadius)
         {
             return;

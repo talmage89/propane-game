@@ -13,6 +13,9 @@ public partial class AppearancePicker : CanvasLayer
     public event Action<AppearanceRecord>? Applied;
     public event Action? Closed;
     public AppearanceRecord Selected { get; private set; } = AppearanceRecord.FromPalette(0);
+    private WorldContext previewWorld = null!;
+    public override void _ExitTree() => previewWorld.Dispose();
+
     private PlayerCharacter preview = null!;
     private Label colorText = null!;
     private LineEdit hex = null!;
@@ -49,6 +52,7 @@ public partial class AppearancePicker : CanvasLayer
         layout.AddChild(viewportContainer);
         var viewport = new SubViewport { Size = new Vector2I(540, 170), OwnWorld3D = true, TransparentBg = true };
         viewportContainer.AddChild(viewport);
+        previewWorld = new WorldContext(viewport, Tuning.SavedTemplate, present: true);
         viewport.AddChild(new WorldEnvironment
         {
             Environment = new Godot.Environment
@@ -57,12 +61,12 @@ public partial class AppearancePicker : CanvasLayer
                 BackgroundColor = new Color(0.8f, 0.82f, 0.85f),
                 AmbientLightSource = Godot.Environment.AmbientSource.Color,
                 AmbientLightColor = Colors.White,
-                AmbientLightEnergy = Tuning.Current.AppearancePreviewAmbient,
+                AmbientLightEnergy = previewWorld.Tuning.AppearancePreviewAmbient,
                 TonemapMode = Godot.Environment.ToneMapper.Filmic,
             },
         });
-        viewport.AddChild(new DirectionalLight3D { RotationDegrees = new Vector3(-35, -25, 0), LightEnergy = Tuning.Current.AppearancePreviewLight });
-        preview = new PlayerCharacter { Name = "Preview", IsRemote = true, BodyColor = Selected.Color };
+        viewport.AddChild(new DirectionalLight3D { RotationDegrees = new Vector3(-35, -25, 0), LightEnergy = previewWorld.Tuning.AppearancePreviewLight });
+        preview = new PlayerCharacter { World = previewWorld, Name = "Preview", IsRemote = true, BodyColor = Selected.Color };
         viewport.AddChild(preview);
         preview.SetPhysicsProcess(false);
         var camera = new Camera3D { Position = new Vector3(2, 1.5f, -4), Projection = Camera3D.ProjectionType.Orthogonal, Size = 2.4f };

@@ -39,7 +39,7 @@ public sealed class Bot : IBotBrain
     private Node3D? target;
     private float retarget;
     private float blocked;
-    private readonly Tuning localTuning = Tuning.Current;
+    private Tuning tuning = null!;
     private readonly BotNavigator navigator = new();
     private Vector3? navigationGoal;
     public int StuckEvents => navigator.StuckEvents;
@@ -81,6 +81,7 @@ public sealed class Bot : IBotBrain
 
     public void Think(Match match, float dt)
     {
+        tuning = match.World.Tuning;
         clock += dt;
         tapCooldown -= dt;
         var player = match.Player;
@@ -92,7 +93,6 @@ public sealed class Bot : IBotBrain
             navigator.Reset();
             return;
         }
-        var tuning = Tuning.Current;
         var here = player.GlobalPosition;
         var ammo = player.Ammo;
 
@@ -263,7 +263,6 @@ public sealed class Bot : IBotBrain
     {
         var player = match.Player;
         var here = player.GlobalPosition;
-        var tuning = Tuning.Current;
         foreach (var key in blacklist.Keys.Where(k => blacklist[k] < clock).ToList())
         {
             blacklist.Remove(key);
@@ -357,7 +356,7 @@ public sealed class Bot : IBotBrain
         fightTime += dt;
         // Aim like a person: a moment to react, then an error that wanders and tightens while tracking.
         var settle = Mathf.Clamp(fightTime / 1.2f, 0, 1);
-        var error = Mathf.Lerp(localTuning.BotAimErrorEasy, localTuning.BotAimErrorHard, Skill) * Mathf.Lerp(1.6f, 0.55f, settle);
+        var error = Mathf.Lerp(tuning.BotAimErrorEasy, tuning.BotAimErrorHard, Skill) * Mathf.Lerp(1.6f, 0.55f, settle);
         var t = clock;
         var wobble = new Vector3(Mathf.Sin(t * 1.7f + 0.3f), 0.6f * Mathf.Sin(t * 2.3f + 1.1f), Mathf.Cos(t * 1.9f + 2.2f)) * error;
         var aimPoint = Aim(enemy) + wobble;
@@ -375,7 +374,7 @@ public sealed class Bot : IBotBrain
 
         var camera = player.CameraRig.Camera;
         var off = Mathf.RadToDeg((-camera.GlobalBasis.Z).AngleTo(aimPoint - camera.GlobalPosition));
-        var reacted = fightTime > Mathf.Lerp(localTuning.BotReactionEasy, localTuning.BotReactionHard, Skill);
+        var reacted = fightTime > Mathf.Lerp(tuning.BotReactionEasy, tuning.BotReactionHard, Skill);
         var firing = reacted && off < 2f && CanSee(player, Aim(enemy));
         // Short bursts, letting the aim settle in between.
         burstClock += dt;
@@ -390,7 +389,6 @@ public sealed class Bot : IBotBrain
 
     private void Demolish(Match match, PlayerCharacter player, PropaneTank tank, float dt)
     {
-        var tuning = Tuning.Current;
         var here = player.GlobalPosition;
         var center = tank.GlobalTransform * PropaneTank.LocalCenter;
         var distance = Flat(center - here).Length();
@@ -535,7 +533,7 @@ public sealed class Bot : IBotBrain
                     continue;
                 }
                 var blockedPath = space.IntersectRay(PhysicsRayQueryParameters3D.Create(here + Vector3.Up * 0.6f, spot + Vector3.Up * 0.6f, Layers.World | Layers.Props)).Count > 0;
-                var cost = radius + (blockedPath ? localTuning.BotCoverDetourCost : 0) + spot.DistanceTo(eye) * -0.05f;
+                var cost = radius + (blockedPath ? tuning.BotCoverDetourCost : 0) + spot.DistanceTo(eye) * -0.05f;
                 if (cost < bestCost)
                 {
                     bestCost = cost;
@@ -575,7 +573,7 @@ public sealed class Bot : IBotBrain
             pitch = player.CameraRig.Pitch;
             hasView = true;
         }
-        var k = 1f - Mathf.Exp(-localTuning.BotAimTurnSharpness * Mathf.Lerp(0.35f, 1f, Skill) * dt);
+        var k = 1f - Mathf.Exp(-tuning.BotAimTurnSharpness * Mathf.Lerp(0.35f, 1f, Skill) * dt);
         yaw += Mathf.Wrap(wantYaw - yaw, -180f, 180f) * k;
         pitch = Mathf.Lerp(pitch, wantPitch, k);
         player.CameraRig.SetOrientation(yaw, pitch);
@@ -626,20 +624,19 @@ public sealed class Bot : IBotBrain
             if (intent.Move.LengthSquared() < 0.01f && !navigator.Jumping) { navigator.Reset(); return; }
             var basis = new Basis(Vector3.Up, Mathf.DegToRad(player.CameraRig.Yaw));
             var wish = basis * new Vector3(intent.Move.X, 0, -intent.Move.Y);
-            navigationGoal = player.GlobalPosition + wish.Normalized() * localTuning.BotRouteSpacing * 2;
+            navigationGoal = player.GlobalPosition + wish.Normalized() * tuning.BotRouteSpacing * 2;
         }
-        var tuning = Tuning.Current;
         var shape = player.GetChildren().OfType<CollisionShape3D>().Single();
         var capabilities = new NavigationCapabilities(shape.Shape, shape.Position, ((CapsuleShape3D)shape.Shape).Radius,
             tuning.RunSpeed, tuning.SprintSpeed, tuning.JumpVelocity, tuning.PlayerGravity, tuning.Acceleration, tuning.AirControl);
         var hazards = match.LiveTanks.Select(t => new NavigationHazard(t.GlobalPosition,
-            t.State == PropaneTank.TankState.Venting ? tuning.RagdollRadius + localTuning.BotVentClearance : localTuning.BotTankClearance)).ToArray();
-        var world = new NavigationWorld(player.GetWorld3D().DirectSpaceState, capabilities, hazards, localTuning.BotJumpMargin, player.GlobalPosition, localTuning.BotJumpMinimumRange);
+            t.State == PropaneTank.TankState.Venting ? tuning.RagdollRadius + tuning.BotVentClearance : tuning.BotTankClearance)).ToArray();
+        var world = new NavigationWorld(player.GetWorld3D().DirectSpaceState, capabilities, hazards, tuning.BotJumpMargin, tuning.BotJumpMinimumRange, player.GlobalPosition);
         var move = navigator.Navigate(world, new NavigationState(player.GlobalPosition, player.Velocity, player.IsOnFloor()),
-            capabilities, navigationGoal.Value, localTuning, dt);
+            capabilities, navigationGoal.Value, tuning, dt);
         if (move.Failed)
         {
-            if (target != null) { Blacklist(target, localTuning.BotTargetRetryTime); }
+            if (target != null) { Blacklist(target, tuning.BotTargetRetryTime); }
             target = null;
             vantage = cover = null;
             retarget = 0;

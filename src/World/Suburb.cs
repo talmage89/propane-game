@@ -43,6 +43,8 @@ public partial class Suburb : Node3D
     private SuburbPlan plan = null!;
     private SuburbSettings settings = null!;
     private float revealSide;
+    private WorldContext world = null!;
+    private Spawn contentSpawn = null!;
 
     public Node3D StaticRoot { get; private set; } = null!;
 
@@ -92,15 +94,17 @@ public partial class Suburb : Node3D
     /// Builds the suburb. In a match (<paramref name="networked"/>), each tank takes its network id from its index in
     /// the plan before it enters the tree.
     /// </summary>
-    public static Suburb Build(SuburbPlan plan, SuburbSettings settings, bool networked = false)
+    public static Suburb Build(WorldContext world, SuburbPlan plan, SuburbSettings settings, bool networked = false)
     {
         var suburb = new Suburb { Name = $"Suburb_{plan.Seed}" };
+        suburb.world = world;
         suburb.plan = plan;
         suburb.settings = settings;
         suburb.StaticRoot = new Node3D { Name = "Static" };
         suburb.DynamicRoot = new Node3D { Name = "Dynamic" };
         suburb.AddChild(suburb.StaticRoot);
         suburb.AddChild(suburb.DynamicRoot);
+        suburb.contentSpawn = world.ForContent(suburb.DynamicRoot);
         suburb.BuildGround();
         suburb.BuildRoads();
         suburb.BuildPavings();
@@ -686,7 +690,7 @@ public partial class Suburb : Node3D
         for (var index = 0; index < plan.Tanks.Count; index++)
         {
             var placement = plan.Tanks[index];
-            var tank = PropaneTank.Create();
+            var tank = PropaneTank.Create(world, contentSpawn);
             if (networked)
             {
                 tank.NetId = Net.BodySync.MapTankId(index);

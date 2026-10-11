@@ -273,7 +273,7 @@ public partial class LobbyServer : Node
         {
             LeaveLobby(client);
         }
-        var lobby = new Lobby { Id = nextLobbyId++, CreatorId = client.Id, MatchLength = Tuning.Current.MatchLengthDefault };
+        var lobby = new Lobby { Id = nextLobbyId++, CreatorId = client.Id, MatchLength = Tuning.SavedTemplate.MatchLengthDefault };
         lobbies[lobby.Id] = lobby;
         Log($"{client.Name} created lobby {lobby.Id}");
         AddMember(lobby, client);
@@ -292,7 +292,7 @@ public partial class LobbyServer : Node
             Notice(client, "That lobby is in a match. Join when it ends.");
             return;
         }
-        if (lobby.Members.Count >= Tuning.Current.MaxPlayers)
+        if (lobby.Members.Count >= Tuning.SavedTemplate.MaxPlayers)
         {
             Notice(client, "That lobby is full.");
             return;
@@ -389,7 +389,7 @@ public partial class LobbyServer : Node
 
     private byte[] LobbyList()
     {
-        var w = new NetWriter(Msg.LobbyList).Int(Tuning.Current.MaxPlayers).Int(lobbies.Count);
+        var w = new NetWriter(Msg.LobbyList).Int(Tuning.SavedTemplate.MaxPlayers).Int(lobbies.Count);
         foreach (var lobby in lobbies.Values.OrderBy(l => l.Id))
         {
             var creator = clients.GetValueOrDefault(lobby.CreatorId);

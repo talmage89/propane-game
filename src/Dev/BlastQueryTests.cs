@@ -10,6 +10,9 @@ namespace Propane.Dev;
 /// <summary>More than two full blast pages, duplicate body shapes and a real impulse on every body.</summary>
 public partial class BlastQueryTests : Node3D
 {
+    private WorldContext world = null!;
+    public override void _ExitTree() => world.Dispose();
+
     private void Require(bool condition, string message)
     {
         if (condition) { return; }
@@ -20,6 +23,7 @@ public partial class BlastQueryTests : Node3D
 
     public override void _Ready()
     {
+        world = new WorldContext(this, Tuning.SavedTemplate, present: true);
         // More colliders than one blast page, including duplicate shapes on the same body.
         var bodies = new List<RigidBody3D>();
         for (var i = 0; i < 1100; i++)
@@ -35,15 +39,15 @@ public partial class BlastQueryTests : Node3D
             if (i % 10 == 0) { body.AddChild(new CollisionShape3D { Shape = new SphereShape3D { Radius = 0.02f } }); }
             AddChild(body); bodies.Add(body);
         }
-        Spawn.SetEffectsRoot(this);
-        Spawn.SetWorldRoot(this);
+
+        world.SetContentRoot(this);
         var director = new CaptureDirector { QuitAfter = 1 }; AddChild(director);
         director.At(0.2f, () =>
         {
             var query = new PhysicsShapeQueryParameters3D { Shape = new SphereShape3D { Radius = 4 }, Transform = new Transform3D(Basis.Identity, Vector3.Up), CollisionMask = Layers.Pushable };
             var seen = Blast.QueryAll(GetWorld3D().DirectSpaceState, query).Select(h => h["collider_id"].AsUInt64()).Distinct().Count();
             Require(seen == bodies.Count, $"truncated blast query {seen}/{bodies.Count}");
-            Blast.Detonate(this, Vector3.Up, null, false);
+            Blast.Detonate(world, Vector3.Up, null, false);
         });
         director.At(0.3f, () =>
         {

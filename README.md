@@ -149,7 +149,7 @@ limits gain `floor(MpPileSizePerPlayer × players)`. `MpStartSpacing` is a hard 
 invalid settings fail generation instead of placing players on top of one another. The lobby cap remains a separate
 setting. These shared plan and tuner changes require the next release to be minor (`Protocol.Version` is 2).
 
-[World services](docs/world-services.md) documents simulation timers and their network clock boundaries.
+[World services](docs/world-services.md) documents scoped ownership, cleanup, and simulation/network clock boundaries.
 
 ## Layout
 
@@ -203,6 +203,9 @@ $GODOT --fixed-fps 60 res://scenes/dev/bot_navigation_course.tscn -- --seeds=5 -
 # Plain C# assertion suites; make test runs these, the generator, and two separate builds of a saved plan for each formation.
 $GODOT --headless res://scenes/dev/unit_tests.tscn
 tools/dev/check_world.sh
+
+# Scoped worlds: overlapping physics/tuning, isolated events/spawns/callbacks and leak-free teardown.
+$GODOT --headless --fixed-fps 60 res://scenes/dev/world_services_tests.tscn
 
 # Blast-query completeness: 1,100 rigid bodies and duplicate collision shapes; asserts every body is pushed.
 $GODOT --headless --fixed-fps 60 res://scenes/dev/blast_query_tests.tscn

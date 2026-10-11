@@ -233,7 +233,7 @@ public partial class NetTest : Node
             var split = tune.IndexOf('=');
             var name = tune[..split];
             var value = float.Parse(tune[(split + 1)..], System.Globalization.CultureInfo.InvariantCulture);
-            Tuning.Current.Set(name, value);
+            match.World.Tuning.Set(name, value);
             net.Send(new NetWriter(Msg.TuningSet, match.Setup.Id).String(name).Scalar(value));
             Log($"sent tuning {name} = {value}");
         }
@@ -350,7 +350,7 @@ public partial class NetTest : Node
         if (raceVent == null) { return; }
         ScenarioAssert(tank.HoleLocal == raceVent.Hole && tank.HoleNormalLocal == raceVent.Normal && tank.SwirlSign == raceVent.Swirl,
             "race: contender retained different canonical vent parameters");
-        var lean = raceVent.Normal.Rotated(Vector3.Up, Mathf.DegToRad(Tuning.Current.VentSwirlDegrees) * raceVent.Swirl).Normalized();
+        var lean = raceVent.Normal.Rotated(Vector3.Up, Mathf.DegToRad(match.World.Tuning.VentSwirlDegrees) * raceVent.Swirl).Normalized();
         ScenarioAssert(tank.JetDirectionLocal.IsEqualApprox(lean), "race: jet lean differs from canonical vent");
         var entry = match.Bodies.Get(id)!;
         if (entry.Owner != net.MyId && entry.HasTarget)
@@ -358,7 +358,7 @@ public partial class NetTest : Node
             var lead = (float)Math.Clamp(MonotonicClock.Now - entry.TargetReceived, 0, 0.3);
             var drift = tank.GlobalPosition.DistanceTo(entry.Target.Origin + entry.TargetLinear * lead);
             raceWorst = Mathf.Max(raceWorst, drift);
-            ScenarioAssert(drift <= Tuning.Current.SnapDistance + 0.5f, $"race: trajectory escaped owner corrections ({drift:0.000} m)");
+            ScenarioAssert(drift <= match.World.Tuning.SnapDistance + 0.5f, $"race: trajectory escaped owner corrections ({drift:0.000} m)");
         }
         if (raceTick % 6 == 0)
         {
@@ -441,7 +441,7 @@ public partial class NetTest : Node
                 }
                 if (!tank.Gathering) { continue; }
                 ScenarioAssert(!tank.Invulnerable && glow.A == 0 && mesh.GetInstanceShaderParameter("shield_contrast").AsColor().A == 0 &&
-                    mesh.GetInstanceShaderParameter("gather_shimmer").AsSingle() == Tuning.Current.GatherShimmer,
+                    mesh.GetInstanceShaderParameter("gather_shimmer").AsSingle() == match.World.Tuning.GatherShimmer,
                     "gather: expired shield glow/contrast remained or shimmer missing");
                 if (host)
                 {
@@ -495,7 +495,7 @@ public partial class NetTest : Node
         {
             // The second victim hit is already in flight. With 120 ms lag, this creator change reaches the server
             // before the victim's old-count Drop, while reliable order delivers Shot before TuningSet to the victim.
-            Tuning.Current.HitDropCount = 0;
+            match.World.Tuning.HitDropCount = 0;
             net.Send(new NetWriter(Msg.TuningSet, match.Setup.Id).String(nameof(Tuning.HitDropCount)).Scalar(0));
         }
         if (Once(3.5f, dt))
@@ -654,7 +654,7 @@ public partial class NetTest : Node
         if (!pickup.Available && pickupTakenAt < 0)
         {
             pickupTakenAt = duelTime;
-            ScenarioAssert(player.Ammo!.Reserve == 10 + Tuning.Current.PickupAmount,
+            ScenarioAssert(player.Ammo!.Reserve == 10 + match.World.Tuning.PickupAmount,
                 "pickup: can did not add its rounds exactly once");
         }
         if (Once(5f, dt)) { ScenarioAssert(pickupTakenAt >= 0, "pickup: player never took the can"); }
@@ -665,12 +665,12 @@ public partial class NetTest : Node
             {
                 director.Screenshot($"pickup_1_taken_{offset:0.00}");
                 Log($"pickup available {pickup.Available}, ammo {player.Ammo!.Magazine}/{player.Ammo.Reserve}");
-                ScenarioAssert(!pickup.Available && player.Ammo.Reserve == 10 + Tuning.Current.PickupAmount,
+                ScenarioAssert(!pickup.Available && player.Ammo.Reserve == 10 + match.World.Tuning.PickupAmount,
                     "pickup: can returned early or changed ammo while absent");
             }
         }
-        var respawn = Tuning.Current.PickupRespawnTime;
-        var reveal = Tuning.Current.PickupRevealTime;
+        var respawn = match.World.Tuning.PickupRespawnTime;
+        var reveal = match.World.Tuning.PickupRevealTime;
         foreach (var f in new[] { 0.15f, 0.4f, 0.65f, 0.9f, 1.2f })
         {
             var t = pickupTakenAt + respawn + reveal * f;
@@ -744,7 +744,7 @@ public partial class NetTest : Node
         duelInput.Advance(dt);
         var attacker = victim ? other : player;
         var target = victim ? player : other;
-        var origin = new Vector3(Tuning.Current.MpMapSizeBase + Tuning.Current.MpMapSizePerPlayer * match.RemoteBodies.Count() + 30, 0.05f, 0);
+        var origin = new Vector3(match.World.Tuning.MpMapSizeBase + match.World.Tuning.MpMapSizePerPlayer * match.RemoteBodies.Count() + 30, 0.05f, 0);
         if (Once(.25f, dt) || Once(10.5f, dt))
         {
             player.Teleport(origin + (victim ? Vector3.Forward * 1.8f : Vector3.Zero), victim ? Mathf.Pi : 0);
@@ -875,13 +875,13 @@ public partial class NetTest : Node
         var speed = new Vector2(other.Velocity.X, other.Velocity.Z).Length();
         remoteGaitTime = remoteGait == state.Gait ? remoteGaitTime + dt : 0;
         remoteGait = state.Gait;
-        if (!sawRemoteCreep && state.Gait == PlayerGait.Creep && state.EffectiveAim && Math.Abs(speed - Tuning.Current.CreepSpeed) < 0.15f)
+        if (!sawRemoteCreep && state.Gait == PlayerGait.Creep && state.EffectiveAim && Math.Abs(speed - match.World.Tuning.CreepSpeed) < 0.15f)
         {
             sawRemoteCreep = true;
             CaptureRemoteFrame("remote_00_creep");
             Log($"remote creep: {state.Support}/{state.Weapon} speed={speed:0.00}");
         }
-        if (!sawRemoteSprint && state.Gait == PlayerGait.Sprint && speed > Tuning.Current.SprintSpeed - 0.15f)
+        if (!sawRemoteSprint && state.Gait == PlayerGait.Sprint && speed > match.World.Tuning.SprintSpeed - 0.15f)
         {
             sawRemoteSprint = true;
             CaptureRemoteFrame("remote_01_sprint");
@@ -1000,7 +1000,7 @@ public partial class NetTest : Node
             }
         }
         var self = match.Player;
-        Log($"tuning BlastRadius {Tuning.Current.BlastRadius} PickupRespawnTime {Tuning.Current.PickupRespawnTime}");
+        Log($"tuning BlastRadius {match.World.Tuning.BlastRadius} PickupRespawnTime {match.World.Tuning.PickupRespawnTime}");
         Log($"perf fps {Engine.GetFramesPerSecond():0} process {Performance.GetMonitor(Performance.Monitor.TimeProcess) * 1000:0.0} ms physics {Performance.GetMonitor(Performance.Monitor.TimePhysicsProcess) * 1000:0.0} ms bodies {Performance.GetMonitor(Performance.Monitor.Physics3DActiveObjects)}");
         Log($"digest clock {match.TimeLeft:0.0} me {self.GlobalPosition.X:0.0},{self.GlobalPosition.Z:0.0}{(self.IsRagdolled ? "R" : "")} ammo {self.Ammo?.Magazine}/{self.Ammo?.Reserve} scores {ScoreLine()} remotes {remotes}");
         Log($"tanks clock {match.TimeLeft:0.0} n {match.LiveTanks.Count()}{tanks}");
