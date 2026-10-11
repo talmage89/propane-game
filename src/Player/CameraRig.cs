@@ -13,8 +13,6 @@ public partial class CameraRig : Node3D
     private const float PitchMax = 45f;
     private const float FollowSharpness = 18f;
     private const float CollisionRadius = 0.22f;
-    private const float RecoilRecovery = 7f;
-    private const float RecoilReturnShare = 0.65f;
     private const float TraumaDecay = 1.6f;
     private const float MaxShakeDegrees = 3.2f;
     private const float MaxShakeOffset = 0.12f;
@@ -22,6 +20,7 @@ public partial class CameraRig : Node3D
     private float yaw;
     private float pitch = -8f;
     private float recoilPitch;
+    private float recoilYaw;
     private float trauma;
     private float shakeTime;
     private float currentDistance;
@@ -59,7 +58,7 @@ public partial class CameraRig : Node3D
         hasTarget = false;
         currentDistance = Tuning.Current.CameraDistance;
         trauma = 0;
-        recoilPitch = 0;
+        recoilPitch = recoilYaw = 0;
     }
 
     public void SetOrientation(float yawDegrees, float pitchDegrees)
@@ -84,11 +83,11 @@ public partial class CameraRig : Node3D
         return length > 0 ? stick.Normalized() * Mathf.Pow(length, curve) * degreesPerSecond * dt : Vector2.Zero;
     }
 
-    /// <summary>Recoil: kicks the view up; most of it recovers on its own.</summary>
+    /// <summary>Transient view kick. Recovery leaves the player's input orientation unchanged.</summary>
     public void Kick(float degrees)
     {
         recoilPitch += degrees;
-        yaw += (float)GD.RandRange(-0.25, 0.25) * degrees;
+        recoilYaw += (float)GD.RandRange(-1, 1) * degrees * Tuning.Current.CameraRecoilSideShare;
     }
 
     public void AddTrauma(float amount) => trauma = Mathf.Clamp(trauma + amount, 0, 1);
@@ -99,10 +98,9 @@ public partial class CameraRig : Node3D
         var tuning = Tuning.Current;
         Camera.Fov = tuning.FieldOfView;
 
-        // Recoil recovers toward a fraction of the kick, so sustained fire climbs a little.
-        var recovered = recoilPitch * (1f - Mathf.Exp(-RecoilRecovery * dt));
-        recoilPitch -= recovered;
-        pitch = Mathf.Clamp(pitch + recovered * (1f - RecoilReturnShare), PitchMin, PitchMax);
+        var recoilReturn = Mathf.Exp(-tuning.CameraRecoilRecovery * dt);
+        recoilPitch *= recoilReturn;
+        recoilYaw *= recoilReturn;
 
         if (!hasTarget)
         {
@@ -111,7 +109,7 @@ public partial class CameraRig : Node3D
         }
         smoothedTarget = smoothedTarget.Lerp(Target, 1f - Mathf.Exp(-FollowSharpness * dt));
 
-        var basis = new Basis(Vector3.Up, Mathf.DegToRad(yaw)) * new Basis(Vector3.Right, Mathf.DegToRad(Pitch));
+        var basis = new Basis(Vector3.Up, Mathf.DegToRad(yaw + recoilYaw)) * new Basis(Vector3.Right, Mathf.DegToRad(Pitch));
         var right = basis.Column0;
         var back = basis.Column2;
 

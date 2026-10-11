@@ -15,6 +15,12 @@ instance uniform vec4 shield_color : source_color = vec4(1.0, 1.0, 1.0, 0.0);
 // Neutral support for black emission; a dark edge separates white glow from the white void.
 instance uniform vec4 shield_contrast : source_color = vec4(0.0);
 
+// Construct scan while gathering; zero strength leaves the ordinary tank material.
+instance uniform float gather_shimmer = 0.0;
+instance uniform float gather_speed = 4.0;
+instance uniform float gather_bands = 18.0;
+instance uniform float gather_sharpness = 6.0;
+
 varying vec3 world_pos;
 
 void vertex() {
@@ -35,5 +41,6 @@ void fragment() {
 	NORMAL_MAP_DEPTH = normal_strength;
 	float rim = pow(1.0 - clamp(dot(NORMAL, VIEW), 0.0, 1.0), 2.0);
 	ALBEDO = mix(ALBEDO, shield_contrast.rgb, rim * shield_contrast.a);
-	EMISSION = shield_contrast.rgb * shield_contrast.a * rim * 6.0 + reveal_glow.rgb * glow * 6.0 + shield_color.rgb * shield_color.a * (0.8 + rim * 6.0);
+	float gather_scan = pow(0.5 + 0.5 * sin(world_pos.y * gather_bands - TIME * gather_speed), gather_sharpness);
+	EMISSION = shield_contrast.rgb * shield_contrast.a * rim * 6.0 + reveal_glow.rgb * glow * 6.0 + shield_color.rgb * shield_color.a * (0.8 + rim * 6.0) + vec3(gather_shimmer * gather_scan);
 }

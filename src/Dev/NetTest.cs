@@ -117,7 +117,7 @@ public partial class NetTest : Node
             match = new Match { Name = "Match", Net = net, Setup = setup };
             match.Finished += () =>
             {
-                if (DevArgs.Get("scenario") is "duel" or "pickup" or "drop-refusal" or "puncture-race" or "appearance")
+                if (DevArgs.Get("scenario") is "duel" or "pickup" or "drop-refusal" or "puncture-race" or "appearance" or "gather")
                 {
                     ScenarioAssert(scenarioPassed, "scenario ended before all assertions passed");
                 }
@@ -160,6 +160,7 @@ public partial class NetTest : Node
             match.Player.InputOverride = bot;
             clock = 0;
             duelTime = -1;
+            gatherPositions.Clear();
             duelInput = new ScriptedInput();
             duelTank = null;
             duelBlastAt = duelThrowAt = -1;
@@ -172,6 +173,8 @@ public partial class NetTest : Node
             movementCamera = null;
             remoteFeet = null;
             remoteGrip = null;
+            remoteMotion = null;
+            sawRemoteReload = false;
             sawRemoteCreep = sawRemoteSprint = sawRemoteAir = sawRemoteRestoredAim = movementProved = false;
             capturedCreep = capturedSprint = capturedLanding = capturedRelease = false;
             remoteGait = PlayerGait.Default;
@@ -221,7 +224,7 @@ public partial class NetTest : Node
             GetTree().Quit();
             return;
         }
-        if (DevArgs.Get("scenario") is "duel" or "drop-refusal")
+        if (DevArgs.Get("scenario") is "duel" or "drop-refusal" or "gather")
         {
             Duel(match, dt);
         }
@@ -352,6 +355,7 @@ public partial class NetTest : Node
 
     private static string Vector(Vector3 v) => FormattableString.Invariant($"{v.X:R},{v.Y:R},{v.Z:R}");
 
+    private readonly Dictionary<uint, Vector3> gatherPositions = new();
     private float duelTime = -1;
     private ScriptedInput duelInput = new();
     private uint? duelTank;
@@ -395,6 +399,37 @@ public partial class NetTest : Node
         var victimSpot = World.Suburb.ToWorld(mid + road.Direction * 7f, 0.05f);
         var host = role == "host";
         var refusal = DevArgs.Get("scenario") == "drop-refusal";
+        var gathering = DevArgs.Get("scenario") == "gather";
+        if (gathering && Once(3.7f, dt))
+        {
+            // Leave the spilled tanks alone; the creator must acquire the dropper's entire group.
+            player.Teleport((host ? shooterSpot : victimSpot) + Vector3.Right * 8, 0);
+        }
+        if (gathering && Once(35, dt))
+        {
+            var drops = match.LiveTanks.Where(IsDrop).ToArray();
+            ScenarioAssert(drops.Length == 2 && drops.All(t => !t.Loose && !t.Gathering && t.State == PropaneTank.TankState.Intact), "gather: dropped group never became an intact pile");
+            foreach (var tank in drops)
+            {
+                gatherPositions[tank.NetId] = tank.GlobalPosition;
+                ScenarioAssert(match.Bodies.Get(tank.NetId)?.Owner == match.Bodies.Host, "gather: dropper retained ownership");
+                Log($"gather final {tank.NetId:x} {tank.GlobalPosition}");
+            }
+        }
+        if (gathering && Once(40, dt))
+        {
+            ScenarioAssert(gatherPositions.Count == 2 && match.LiveTanks.Where(IsDrop).All(t =>
+                gatherPositions.TryGetValue(t.NetId, out var position) && position.DistanceTo(t.GlobalPosition) <= 0.006f && t.AtRest), "gather: final pile unstable");
+            scenarioPassed = !scenarioFailed;
+            if (scenarioPassed) { Log("gather: assertions passed; two drops acquired, settled and stable on this client"); }
+            director.Screenshot($"gather_{role}_settled");
+        }
+        if (gathering && host && duelTime is > 18 and < 32 && Mathf.PosMod(duelTime, 1) < dt)
+        {
+            var drops = match.LiveTanks.Where(IsDrop).ToArray();
+            if (drops.Length > 0) { AimAt(player, drops[0].GlobalTransform * PropaneTank.LocalCenter); }
+            director.Screenshot($"gather_{role}_{duelTime:00}");
+        }
         if (Once(0.8f, dt)) { duelInitialScore = match.MyScore; }
         if (refusal && host && Once(2.55f, dt))
         {
@@ -415,7 +450,7 @@ public partial class NetTest : Node
                 if (scenarioPassed) { Log("drop-refusal: assertions passed"); }
             }
         }
-        if (!refusal && Once(14f, dt))
+        if (!refusal && !gathering && Once(14f, dt))
         {
             ScenarioAssert(host ? duelBlastAt >= 0 && match.MyScore > duelInitialScore : duelThrowAt >= 0 && match.MyScore <= 1,
                 host ? "duel: dropped tank never detonated and scored" : "duel: blast never threw the victim and spilled five tanks");
@@ -472,7 +507,7 @@ public partial class NetTest : Node
         {
             director.Screenshot($"shooter_{duelTime:00.0}");
         }
-        if (refusal) { return; }
+        if (refusal || gathering) { return; }
         // Drops keep moving under lag. Follow one tank every frame, retrying until its detonation is observed;
         // a fixed aim/fire gap used to miss the first shot and puncture a different tank with the second.
         if (duelTime >= 4f && duelBlastAt < 0)
@@ -624,6 +659,8 @@ public partial class NetTest : Node
     private Camera3D? movementCamera;
     private GripProbe? remoteGrip;
     private LocomotionProbe? remoteFeet;
+    private MotionProbe? remoteMotion;
+    private bool sawRemoteReload;
     private bool sawRemoteCreep;
     private bool sawRemoteSprint;
     private bool sawRemoteAir;
@@ -652,6 +689,11 @@ public partial class NetTest : Node
                 duelInput.Hold(1.5f, 3.0f, new PlayerIntent { Aim = true });
                 duelInput.Hold(4.5f, 7.5f, new PlayerIntent { Aim = true });
                 duelInput.Jump(5.0f);
+                duelInput.Hold(8.6f, 9.3f, new PlayerIntent { FireHeld = true });
+                duelInput.Hold(9.5f, 11.2f, new PlayerIntent { Aim = true });
+                duelInput.Hold(10, 10.7f, new PlayerIntent { FireHeld = true });
+                duelInput.Hold(11.4f, 13.8f, new PlayerIntent { Move = Vector2.Down * 0.3f });
+                duelInput.Reload(11.6f);
             }
             else
             {
@@ -670,6 +712,9 @@ public partial class NetTest : Node
         // sequence after that controlled staging has settled; the matrix measures ordinary corrections.
         if (remoteFeet == null && duelTime >= 1 && (DevArgs.Get("feet-metrics") != null || DevArgs.Get("assert-feet") != null))
             remoteFeet = LocomotionProbe.Attach(other);
+        if (remoteMotion == null && duelTime >= 1 && DevArgs.Get("assert-motion") != null)
+            remoteMotion = MotionProbe.Attach(other);
+        sawRemoteReload |= other.ResolvedState.Weapon == WeaponAction.Reload;
         if (remoteFeet != null) remoteFeet.Label = other.ResolvedState.Gait.ToString();
         var focus = other.GlobalPosition + Vector3.Up;
         var offset = new Vector3(4, 0.5f, -1.5f);
@@ -736,11 +781,18 @@ public partial class NetTest : Node
                 CaptureRemoteFrame("remote_07_release_sprint");
             }
         }
-        if (!movementProved && duelTime >= 10)
+        if (!movementProved && duelTime >= 14.5f)
         {
             movementProved = true;
             remoteGrip?.Finish();
             remoteFeet?.Finish();
+            remoteMotion?.Finish();
+            if (DevArgs.Get("assert-motion") != null && (!sawRemoteReload || remoteMotion?.RecoilFrames < 10))
+            {
+                GD.PushError("[net movement] FAIL missing remote reload or recoil");
+                GetTree().Quit(1);
+                return;
+            }
             if (!sawRemoteCreep || !sawRemoteSprint || !sawRemoteAir || !sawRemoteRestoredAim ||
                 !capturedCreep || !capturedSprint || !capturedLanding || !capturedRelease)
             {
@@ -748,7 +800,7 @@ public partial class NetTest : Node
                 GetTree().Quit(1);
                 return;
             }
-            Log("[net movement] PASS remote creep, sprint, air aim suppression and restored landing aim");
+            Log("[net movement] PASS remote creep, sprint, air aim suppression, restored landing aim, bursts and walking reload");
         }
     }
 

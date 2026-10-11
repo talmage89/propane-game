@@ -43,7 +43,7 @@ public static class Blast
         };
         var seen = new HashSet<ulong>();
         var pushed = new List<RigidBody3D>();
-        foreach (var hit in space.IntersectShape(query, MaxQueryResults))
+        foreach (var hit in QueryAll(space, query))
         {
             if (hit["collider"].As<GodotObject>() is not RigidBody3D body || !seen.Add(body.GetInstanceId()))
             {
@@ -83,6 +83,24 @@ public static class Blast
         }
     }
 
+    /// <summary>Full pages are ambiguous: exclude their bodies and keep querying until a short page proves completion.</summary>
+    internal static IEnumerable<Godot.Collections.Dictionary> QueryAll(PhysicsDirectSpaceState3D space, PhysicsShapeQueryParameters3D query)
+    {
+        while (true)
+        {
+            var page = space.IntersectShape(query, MaxQueryResults);
+            var excluded = query.Exclude;
+            foreach (var hit in page)
+            {
+                var rid = hit["rid"].AsRid();
+                if (!excluded.Contains(rid)) { excluded.Add(rid); }
+                yield return hit;
+            }
+            query.Exclude = excluded;
+            if (page.Count < MaxQueryResults) { yield break; }
+        }
+    }
+
     /// <summary>Pushes one body; returns whether it moved it.</summary>
     private static bool Push(PhysicsDirectSpaceState3D space, RigidBody3D body, Vector3 center, float radius,
         Tuning tuning, RandomNumberGenerator rng, bool chain, uint cause)
@@ -117,6 +135,7 @@ public static class Blast
             breakaway.Release();
         }
 
+        if (body is PropaneTank pushedTank) { pushedTank.Disturb(); }
         body.Sleeping = false;
         body.ApplyCentralImpulse(PushDirection(center, massCenter, tuning, rng) * deltaV * body.Mass);
         var spin = new Vector3(rng.RandfRange(-1, 1), rng.RandfRange(-1, 1), rng.RandfRange(-1, 1));

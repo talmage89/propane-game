@@ -5,6 +5,7 @@ using System.Linq;
 using Godot;
 using Propane.Core;
 using Propane.Player;
+using Propane.Tank;
 
 namespace Propane.Net;
 
@@ -35,6 +36,7 @@ public sealed record AuthorityMessage(int Peer, uint Request, ClaimRefusal Reaso
 public sealed record BodyState(uint Id, Transform3D Transform, Vector3 Linear, Vector3 Angular, uint Epoch = 1, uint Sequence = 0);
 public sealed record BodyStatesMessage(double Time, IReadOnlyList<BodyState> Bodies);
 public sealed record BodyRestMessage(uint Id, Transform3D Transform, double Time, uint Epoch = 1, uint Sequence = 1);
+public sealed record GatherMessage(GatherPhase Phase, IReadOnlyList<BodyState> Bodies);
 public sealed record DropMessage(byte Reason, IReadOnlyList<BodyState> Tanks);
 public sealed record DropRefusedMessage(IReadOnlyList<uint> Ids);
 public sealed record RagdollMessage(Vector3 Position, Vector3 Velocity, Vector3 Spin);
@@ -92,6 +94,7 @@ public static class MessageCodec
             Msg.Puncture => ReadPuncture(r),
             Msg.Explode => new ExplodeMessage(Id(r.UInt()), Vector(r), Id(r.UInt()), Id(r.UInt()), r.UInt()),
             Msg.Claim => ReadClaim(r),
+            Msg.Gather => ReadGather(r),
             Msg.BodyStates => ReadStates(r),
             Msg.BodyRest => new BodyRestMessage(Id(r.UInt()), Transform(r), Time(r.Double()), Id(r.UInt()), Id(r.UInt())),
             Msg.Drop => ReadDrop(r),
@@ -171,6 +174,10 @@ public static class MessageCodec
                 w.UInt(p.Request).UInt(p.Cause).UShort((ushort)p.Bodies.Count);
                 foreach (var claim in p.Bodies) { WriteBody(w, claim); }
                 break;
+            case GatherMessage p:
+                w.Byte((byte)p.Phase).UShort((ushort)p.Bodies.Count);
+                foreach (var body in p.Bodies) { WriteBody(w, body); }
+                break;
             case BodyStatesMessage p:
                 w.Double(p.Time).UShort((ushort)p.Bodies.Count); foreach (var body in p.Bodies) { WriteBody(w, body); }
                 break;
@@ -187,6 +194,15 @@ public static class MessageCodec
             default: throw new InvalidDataException("unsupported message payload");
         }
         return w.ToArray();
+    }
+
+    private static GatherMessage ReadGather(NetReader r)
+    {
+        var phase = (GatherPhase)Range(r.Byte(), 0, (int)GatherPhase.Settled);
+        var bodies = ReadArray(r, r.UShort(), Protocol.MaxCollection, () => ReadBody(r), min: 1);
+        Unique(bodies.Select(b => b.Id).ToArray());
+        if (bodies.Any(b => b.Id >= BodySync.CarBase || b.Sequence == 0)) { throw new InvalidDataException("invalid gather body"); }
+        return new GatherMessage(phase, bodies);
     }
 
     private static HelloMessage ReadHello(NetReader r)

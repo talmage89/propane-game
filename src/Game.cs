@@ -3,6 +3,7 @@ using Godot;
 using Propane.Core;
 using Propane.Fx;
 using Propane.Player;
+using Propane.Tank;
 using Propane.UI;
 using Propane.World;
 using Propane.World.Plan;
@@ -242,6 +243,13 @@ public partial class Game : Node3D
         current.ProcessMode = ProcessModeEnum.Pausable;
         AddChild(current);
         Spawn.SetWorldRoot(current.DynamicRoot);
+        var gatheringWorld = current;
+        current.AddChild(new TankGather
+        {
+            Name = "Gather",
+            Tanks = () => gatheringWorld.LiveTanks,
+            Enabled = () => phase == Phase.Playing
+        });
         current.TankDestroyed += OnTankDestroyed;
         hud.SetTanks(current.TanksRemaining, animate: false);
 

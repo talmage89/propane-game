@@ -1,5 +1,10 @@
 # Locomotion review
 
+This is package 3's historical proof. [Package 4](motion.md) adds rifle motion and replaces its 40-degree
+rotation allowance with 25 degrees at 60 Hz, including snapshot and lifecycle handoffs. The final contact
+release radius is now 0.3 m. Correction episodes last 3.5 seconds; the proxy samples settled poses from
+2.1 through 3.25 seconds to retain contact coverage after bounded pose recovery. Ordinary episodes still last 3 seconds.
+
 Movement package 3 presents the existing controller; movement speeds, facing rules, aim ownership and rifle fit
 remain the controller's decisions. Review with `player_range` at 60 rendered frames per second.
 

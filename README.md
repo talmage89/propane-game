@@ -110,6 +110,9 @@ A foot modifier plants world-space contacts, steps in the travel direction and a
 remote clips follow displayed snapshot displacement. Jump poses follow latched takeoff, vertical velocity and
 impact-scaled landing. See [the locomotion review](docs/locomotion.md) for measurements and captures. The node
 facade owns collisions, ammo and lifecycle transitions; the resolver has no scene or engine dependencies.
+Rifle and torso sway follow that stride; walk is subtle and aimed creep stays steady. Shots add spring momentum,
+with the shoulder absorbing the kick and the camera returning fully. Contact-aware upper-body blends keep hands
+attached through stance changes, reload and get-up. See [the motion review](docs/motion.md) for captures and bounds.
 A throw immediately clears weapon poses and cancels reload, so get-up cannot restore a pose from before the throw.
 
 ## Tuning
@@ -127,6 +130,13 @@ clusters. The **Tank Piles** tuners control weights and spacing. Each upper tier
 cramped sites use smaller whole formations. Pyramids stand on clear ground rather than moving pickup beds.
 Rifle hits puncture, then detonate. A blast within `ChainRadius` acts as a shot: an intact neighbor punctures and
 keeps venting and moving; an already-venting neighbor detonates after its `ChainFuseMin`/`ChainFuseMax` fuse.
+
+Loose intact tanks gather with nearby resting neighbors after 20 undisturbed seconds. The **Tank Gather** tuners
+control radius (3 m), minimum group size (2), delay, a three-stage lift/glide/settle and optional scan shimmer (set
+`GatherShimmer` to 0 to disable it). Connected neighbors gather at a clear center; isolated singles, venting tanks,
+shielded drops and tanks still in their original or gathered pile stay put. Shots, blast pushes, movement, new members
+and player bumps reset the wait or interrupt a gliding tank. Cramped groups wait for a clear site and path.
+Rebuilt piles use `PileBuilder`'s upright cluster: every count fits, and removing one tank leaves no suspended tier.
 
 Match settings use the actual player count. Tank supply is `MpTankCount + MpTanksPerPlayer × players`, ammo cans are
 `PickupCount + PickupsPerPlayer × players`, and map width is `MpMapSizeBase + MpMapSizePerPlayer × players`. Pile
@@ -187,6 +197,9 @@ $GODOT --fixed-fps 60 res://scenes/dev/bot_navigation_course.tscn -- --seeds=5 -
 $GODOT --headless res://scenes/dev/unit_tests.tscn
 tools/dev/check_world.sh
 
+# Blast-query completeness: 1,100 rigid bodies and duplicate collision shapes; asserts every body is pushed.
+$GODOT --headless --fixed-fps 60 res://scenes/dev/blast_query_tests.tscn
+
 # Platform download URLs and recorder arguments, including Windows paths and non-English locales. Exits 1 on failure.
 $GODOT --headless res://scenes/dev/platform_tests.tscn
 
@@ -211,11 +224,19 @@ $GODOT res://scenes/dev/soak.tscn
 
 # Tank close-ups (scenarios: full, vent, blast, look), the character and rifle rig, the world kit, map overviews.
 $GODOT --fixed-fps 60 res://scenes/dev/tank_range.tscn -- --capture-dir=/tmp/t --scenario=blast
+# Gathering: separate close groups, isolated single, frozen vent, shielded drop, house/player clearance,
+# shot/bump/blast interruption and settled-pile stability. These and the following probes run in make test.
+$GODOT --fixed-fps 60 res://scenes/dev/gather_range.tscn -- --capture-dir=/tmp/gather
+$GODOT --headless --fixed-fps 60 res://scenes/dev/gather_range.tscn -- --scenario=grant-races
+# A real single-player rifle blast knocks intact tanks loose, then they gather; seed 23 fixes the clear road fixture.
+$GODOT --fixed-fps 60 res://scenes/dev/game_test.tscn -- --scenario=gather --tune.FixedSeed=23 --capture-dir=/tmp/gather-game
 # Formation close-up and stability: Rows, Square, Triangular, Cluster; --count defaults to 14.
 # --awake tests contact settling; --chain=fresh requires intact neighbors in range to puncture and keep venting.
 # --chain=primed first punctures each tank, then requires venting neighbors in range to detonate after the fuse.
 $GODOT --fixed-fps 60 res://scenes/dev/tank_range.tscn -- --capture-dir=/tmp/pile --formation=Square --chain=fresh
 $GODOT --fixed-fps 60 res://scenes/dev/player_range.tscn -- --capture-dir=/tmp/p
+# Motion: all gaits, hip/aimed bursts, walking reload and get-up into run, captured at 60 Hz.
+$GODOT --fixed-fps 60 res://scenes/dev/player_range.tscn -- --scenario=motion --view=side --assert-motion --assert-grip --capture-dir=/tmp/motion
 # Player scenarios: stances (default), reload, ragdoll, creep (two measured strides), movement (labeled gait/jump transitions),
 # sprint-repro (discovery sequence, exact-tick assertions and transition log), grip (all rifle contacts).
 # feet (all eight body-relative directions in every gait) and feet-events (local starts/stops/turns/jumps/terrain)

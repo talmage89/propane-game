@@ -6,6 +6,7 @@ using Godot;
 using Propane.Core;
 using Propane.Net;
 using Propane.Player;
+using Propane.Tank;
 
 namespace Propane.Dev.UnitTests;
 
@@ -46,6 +47,7 @@ public static class ProtocolTests
             Packet(Msg.BodyStates, new BodyStatesMessage(1, new[] { body with { Sequence = 1 } })), Packet(Msg.BodyRest, new BodyRestMessage(body.Id, body.Transform, 1)),
             Packet(Msg.Drop, new DropMessage(1, new[] { body with { Id = BodySync.DropTankId(0, 0) } })),
             Packet(Msg.Ragdoll, new RagdollMessage(Vector3.One, Vector3.Up, Vector3.Right)), Packet(Msg.GetUp, new GetUpMessage(Vector3.One, 1)),
+            Packet(Msg.Gather, new GatherMessage(GatherPhase.Glide, new[] { body with { Sequence = 1 } })),
             Packet(Msg.TuningSet, new TuningMessage(nameof(Tuning.BlastRadius), 5f)),
         };
     }

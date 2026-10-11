@@ -66,7 +66,6 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
     private float fireCooldown;
     private float groundedTimer;
     private float bloom;
-    private float recoil;
     private float airTime;
     private Vector3 knockback;
     private float staggerTimer;
@@ -196,13 +195,13 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         var player = model.FindChildren("*", "AnimationPlayer", owned: false).OfType<AnimationPlayer>().First();
         animator = new CharacterAnimator(player, model, model.GetPathTo(skeleton));
         animator.Initialize();
-        feet = new FootPlacement { Name = "Feet", Player = this, Pose = animator.Pose };
-        skeleton.AddChild(feet);
-        rig = new RifleRig { Name = "RifleRig", Rifle = rifle };
-        skeleton.AddChild(rig);
         poseBlend = new PoseBlend { Name = "PoseBlend" };
         skeleton.AddChild(poseBlend);
-        handFollow = new RifleHandFollow { Name = "RifleHandFollow", Rifle = rifle, Rig = rig };
+        feet = new FootPlacement { Name = "Feet", Player = this, Pose = animator.Pose };
+        skeleton.AddChild(feet);
+        rig = new RifleRig { Name = "RifleRig", Rifle = rifle, Pose = animator.Pose };
+        skeleton.AddChild(rig);
+        handFollow = new RifleHandFollow { Name = "RifleHandFollow", Rifle = rifle, Rig = rig, Blend = poseBlend };
         skeleton.AddChild(handFollow);
 
         if (!IsRemote)
@@ -361,10 +360,9 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         rig.AimAmount = aimAmount;
         rig.SprintAmount = sprintAmount;
         rig.ReadyAmount = readyAmount;
-        rig.Recoil = recoil;
         rig.Reload = IsRemote ? remoteState.Reload : Ammo?.ReloadProgress ?? 0f;
+        rig.AdvanceReload(dt, IsRemote);
         rifle.Animate(dt, rig.Reload);
-        recoil = Mathf.MoveToward(recoil, 0, dt * tuning.RecoilRecoverySpeed);
         if (IsRemote)
         {
             return;
@@ -499,7 +497,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         for (var i = 0; i < GetSlideCollisionCount(); i++)
         {
             var collision = GetSlideCollision(i);
-            if (collision.GetCollider() is not RigidBody3D body || body.Freeze)
+            if (collision.GetCollider() is not RigidBody3D body || body.Freeze && body is not PropaneTank { Gathering: true })
             {
                 continue;
             }
@@ -510,6 +508,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
                 continue;
             }
             var push = -new Vector3(normal.X, 0, normal.Z).Normalized() * into * Mathf.Min(body.Mass, 30f) * PushStrength * dt;
+            if (body is PropaneTank tank) { tank.Disturb(); }
             body.ApplyImpulse(push, collision.GetPosition() - body.GlobalPosition);
             PushedBody?.Invoke(body);
         }
@@ -567,7 +566,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         sprintAmount = Mathf.Min(sprintAmount, tuning.ShotSprintPoseLimit);
         Fire(SpreadDegrees);
         bloom += tuning.ShotBloomDegrees;
-        recoil = 1f;
+        rig.Kick();
         CameraRig.Kick(tuning.RecoilKickDegrees * Mathf.Lerp(1f, tuning.AimRecoilScale, aim));
     }
 
@@ -891,7 +890,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
     {
         rifle.Fire();
         Spawn.Effect(Tracer.Create(rifle.MuzzlePosition, end));
-        recoil = 1f;
+        rig.Kick();
         readyAmount = 1f;
     }
 
