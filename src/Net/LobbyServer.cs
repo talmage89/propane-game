@@ -570,7 +570,7 @@ public partial class LobbyServer : Node
                 try
                 {
                     var limit = drop.Reason == 1 ? match.Tuning.RagdollDropCount : match.Tuning.HitDropCount;
-                    if (lobby.Phase != LobbyPhase.Playing || drop.Tanks.Count > limit || drop.Tanks.Count > match.Scores[client.Id] || drop.Color != match.Profiles[client.Id].Color)
+                    if (lobby.Phase != LobbyPhase.Playing || NetTransport.Now >= match.PhaseEnds || drop.Tanks.Count > limit || drop.Tanks.Count > match.Scores[client.Id] || drop.Color != match.Profiles[client.Id].Color)
                     {
                         throw new InvalidDataException("drop outside play, exceeds bank/tuner or has wrong color");
                     }

@@ -61,6 +61,24 @@ public static class ServerTests
             f.Receive(f.Drop(new[] { DropBody(0, 0) }));
             f.AssertScore(2, 3, -1);
         });
+        runner.Run("server/expired playing clock refuses drops before the phase tick", () =>
+        {
+            using var f = new Fixture(playing: false);
+            f.Receive(new NetWriter(Msg.Loaded, f.Id));
+            f.Receive(new NetWriter(Msg.Loaded, f.Id), peer: 3);
+            var past = NetTransport.Now - 20;
+            f.Server.AdvanceMatches(past); // Loading -> Countdown.
+            f.Server.AdvanceMatches(past); // Countdown -> Playing, with an already expired deadline.
+            f.Packets.Clear();
+            // Production polls incoming packets before advancing phases on this process frame.
+            f.Receive(f.Drop(new[] { DropBody(0, 0) }));
+            TestRunner.Assert(f.Packets.Single() is { Peer: 2, Message.Payload: DropRefusedMessage reply } &&
+                reply.Ids.SequenceEqual(new[] { DropBody(0, 0).Id }), "expired clock accepted a predicted drop");
+            f.Packets.Clear();
+            f.Server.AdvanceMatches(NetTransport.Now);
+            TestRunner.Assert(f.Packets.Select(p => p.Message.Payload).OfType<IReadOnlyList<Standing>>().First().All(s => s.Score == 4),
+                "late drop changed final banks before the phase tick");
+        });
         runner.Run("server/body and shot ids must exist", () =>
         {
             using var f = new Fixture();
