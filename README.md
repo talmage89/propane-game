@@ -87,9 +87,11 @@ Aim cancels sprint. Releasing aim with sprint still held restores sprint's targe
 including after firing. Jumping drops effective aim in the air; held aim returns on landing. Reload owns the weapon
 and suppresses aim/fire while leaving the selected movement gait free.
 
-The lobby keeps eight quick color presets. **Custom color** opens a character preview with RGB sliders and hex
-entry; the choice is saved between runs, and old saved palette choices migrate automatically. With a gamepad,
-up/down selects a channel and left/right or the left stick adjusts it; **Use color** saves and **Cancel** keeps
+The lobby keeps eight quick color presets. **Custom color** opens a live character preview, twelve presets, and hue,
+saturation and brightness strips; click or drag a strip, or focus it and use left/right or the left stick. Taps
+make fine adjustments; holding accelerates larger moves. Up/down moves between rows and left/right selects a
+preset in its row; A / Cross picks it. Hex entry is available for exact colors. The choice is saved between runs,
+and old saved palette choices migrate automatically; **Use color** saves and **Cancel** keeps
 the previous choice.
 
 Menus work with D-pad or left stick, A / Cross to confirm, and B / Circle to go back. Start / Options opens and
@@ -210,7 +212,7 @@ $GODOT --resolution 1280x720 res://scenes/dev/release_test.tscn -- --windowed --
 # ./Propane.x86_64 -- --release-test --capture-dir=/tmp/release (Propane.exe on Windows).
 # Add --scenario=network --connect=host:port --name=Tester to test against another client on a source server.
 
-# Custom color with actual mouse/keyboard input: preview, lobby, solo debug character and server results.
+# Custom color with mouse/keyboard: presets, HSV click/drag, exact hex, saved settings, preview and match.
 $GODOT res://scenes/dev/menu_test.tscn -- --scenario=mouse --capture-dir=/tmp/menu-color
 
 # The real game with a scripted player. Scenarios: loop (default), clear (destroys every tank), ragdoll, shoot,

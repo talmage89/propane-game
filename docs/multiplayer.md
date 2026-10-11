@@ -45,10 +45,12 @@ loading-buffer message rather than continuing with missing events.
 ## Appearance
 
 The lobby accepts any opaque sRGB color, including duplicates and near-duplicates. Eight presets remain available;
-**Custom color** offers a character preview, byte-accurate RGB sliders and six-digit hex entry. A gamepad selects
-channels with up/down and adjusts with left/right or the left stick. Apply sends and saves the preview's exact
-bytes; Cancel leaves the accepted choice alone. Settings store the same record as the network. An old saved
-palette index migrates once, only when no appearance record exists; a corrupt saved record uses a safe preset.
+**Custom color** offers a live character preview, twelve local preset swatches, hue/saturation/brightness strips
+and six-digit hex entry. Click or drag the strips, or select rows with gamepad up/down and adjust with left/right
+or the left stick; holding accelerates larger moves. A / Cross picks a focused preset. HSV editing retains hue
+through gray and black. Use color sends and saves the preview's exact sRGB bytes; Cancel leaves the accepted choice
+alone. Settings store the same record as the network. An old saved palette index migrates once, only when no
+appearance record exists; a corrupt saved record uses a safe preset.
 
 `AppearanceRecord` is immutable. `AppearanceCodec` is the only serializer, shared by settings, Hello, SetProfile,
 LobbyState, MatchStart and MatchEnd/standings. The server accepts the requested appearance without substituting
