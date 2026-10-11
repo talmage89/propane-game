@@ -23,16 +23,22 @@ public static class PileBuilder
 
     /// <summary>
     /// Spacing is (across, layer rise, depth), in meters. Rows lie on their sides in a barrel pyramid;
-    /// square and triangular tiers also lie on their sides, cradled between two tanks below. Incomplete base tiers
-    /// with enough tanks reserve one above its two supports, so a pyramid does not become a flat mat. Cluster uses the across pitch
-    /// for a compact upright hexagonal lattice.
+    /// square and triangular tiers stand upright with each foot spanning two collars below. Upright layer height
+    /// is separate from the rows' rise. Incomplete bases reserve one tank above two existing supports so a pyramid
+    /// does not become a flat mat. Cluster uses the across pitch for a compact upright hexagonal lattice.
     /// </summary>
-    public static IReadOnlyList<Transform3D> Build(PileFormation formation, int count, Vector3 spacing)
+    public static IReadOnlyList<Transform3D> Build(PileFormation formation, int count, Vector3 spacing, float uprightLayerHeight)
     {
         if (count < 0) throw new ArgumentOutOfRangeException(nameof(count));
         if (spacing.X < Radius * 2 || spacing.Y <= 0 || spacing.Z < Height || !spacing.IsFinite())
             throw new ArgumentOutOfRangeException(nameof(spacing), "Across spacing must fit the diameter, depth must fit the height, and layer rise must be positive.");
+        if (uprightLayerHeight <= 0 || !float.IsFinite(uprightLayerHeight))
+            throw new ArgumentOutOfRangeException(nameof(uprightLayerHeight));
         if (!Enum.IsDefined(formation)) throw new ArgumentOutOfRangeException(nameof(formation));
+        var upright = formation is PileFormation.Square or PileFormation.Triangular;
+        var rise = upright ? uprightLayerHeight : spacing.Y;
+        var origin = upright ? Vector3.Zero : new Vector3(0, Radius, -LocalCenter.Y);
+        var basis = upright ? Basis.Identity : new Basis(Vector3.Right, Mathf.Pi / 2);
         var result = new List<Transform3D>(count);
         if (count == 0) return result;
         void Add(Vector3 p, Basis basis) { if (result.Count < count) result.Add(new Transform3D(basis, p)); }
@@ -73,7 +79,7 @@ public static class PileBuilder
                         var x = (col - (n - 1) / 2f + (formation == PileFormation.Triangular ? row * 0.5f : 0)) * spacing.X;
                         var z = formation == PileFormation.Rows ? 0 : formation == PileFormation.Triangular
                             ? row * spacing.Z : (row + layer / 2) * spacing.Z;
-                        points.Add(new Vector3(x, layer * spacing.Y, z));
+                        points.Add(new Vector3(x, layer * rise, z));
                     }
                 }
 
@@ -82,11 +88,11 @@ public static class PileBuilder
                     if (layer == 0 && reserveUpper && result.Count == count - 1) break;
                     if (layer == 1 && reserveUpper)
                     {
-                        var left = new Vector3(p.X - spacing.X / 2, Radius, p.Z - LocalCenter.Y);
-                        var right = new Vector3(p.X + spacing.X / 2, Radius, p.Z - LocalCenter.Y);
+                        var left = new Vector3(p.X - spacing.X / 2, 0, p.Z) + origin;
+                        var right = new Vector3(p.X + spacing.X / 2, 0, p.Z) + origin;
                         if (!result.Any(t => t.Origin.IsEqualApprox(left)) || !result.Any(t => t.Origin.IsEqualApprox(right))) continue;
                     }
-                    Add(p + new Vector3(0, Radius, -LocalCenter.Y), new Basis(Vector3.Right, Mathf.Pi / 2));
+                    Add(p + origin, basis);
                 }
             }
         }
