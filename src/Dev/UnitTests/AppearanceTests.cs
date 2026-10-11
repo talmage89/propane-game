@@ -97,23 +97,30 @@ public static class AppearanceTests
         {
             DirAccess.MakeDirRecursiveAbsolute(ProjectSettings.GlobalizePath("res://build"));
             var path = $"res://build/appearance-settings-{Guid.NewGuid():N}.cfg";
-            using var config = new ConfigFile();
-            config.SetValue("player", "color", 4);
-            TestRunner.Assert(config.Save(path) == Error.Ok, "fixture save failed");
-            PlayerSettings.UseFile(path);
-            TestRunner.Assert(PlayerSettings.Appearance == AppearanceRecord.FromPalette(4), "palette did not migrate");
-            using var reread = new ConfigFile();
-            TestRunner.Assert(reread.Load(path) == Error.Ok && reread.HasSectionKey("player", "appearance"), "migration was not saved");
-            var custom = new AppearanceRecord(12, 34, 56);
-            PlayerSettings.Appearance = custom;
-            PlayerSettings.UseFile(path);
-            TestRunner.Assert(PlayerSettings.Appearance == custom, "old index overwrote custom record");
-            reread.Load(path);
-            reread.SetValue("player", "appearance", new byte[] { 255 });
-            reread.Save(path);
-            PlayerSettings.UseFile(path);
-            TestRunner.Assert(PlayerSettings.Appearance == null, "corrupt record was accepted or re-migrated");
-            PlayerSettings.UseFile("user://settings.cfg");
+            try
+            {
+                using var config = new ConfigFile();
+                config.SetValue("player", "color", 4);
+                TestRunner.Assert(config.Save(path) == Error.Ok, "fixture save failed");
+                PlayerSettings.UseFile(path);
+                TestRunner.Assert(PlayerSettings.Appearance == AppearanceRecord.FromPalette(4), "palette did not migrate");
+                using var reread = new ConfigFile();
+                TestRunner.Assert(reread.Load(path) == Error.Ok && reread.HasSectionKey("player", "appearance"), "migration was not saved");
+                var custom = new AppearanceRecord(12, 34, 56);
+                PlayerSettings.Appearance = custom;
+                PlayerSettings.UseFile(path);
+                TestRunner.Assert(PlayerSettings.Appearance == custom, "old index overwrote custom record");
+                reread.Load(path);
+                reread.SetValue("player", "appearance", new byte[] { 255 });
+                reread.Save(path);
+                PlayerSettings.UseFile(path);
+                TestRunner.Assert(PlayerSettings.Appearance == null, "corrupt record was accepted or re-migrated");
+            }
+            finally
+            {
+                PlayerSettings.UseFile("user://settings.cfg");
+                DirAccess.RemoveAbsolute(ProjectSettings.GlobalizePath(path));
+            }
         });
         runner.Run("appearance/server accepts duplicate colors through roster match and standings", () =>
         {
