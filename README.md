@@ -112,6 +112,9 @@ value. For example, `tools/dev/net_bots.sh -n 4 -l 90 -w 1 -- --record=/tmp/bots
 ```sh
 GODOT=/Applications/Godot_mono.app/Contents/MacOS/Godot
 
+# Movement resolver: gait/target speed on each transition tick, lifecycle, jump buffer and coyote time.
+$GODOT --headless res://scenes/dev/movement_tests.tscn
+
 # Generator: determinism, overlaps, tank count and placement, spawn safety, reachability, and the same for match
 # suburbs with player starts, ammo spots and the plan's encoding. Exits 1 on failure.
 $GODOT --headless res://scenes/dev/generator_tests.tscn -- --seeds=200
