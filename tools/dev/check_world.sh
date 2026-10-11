@@ -4,7 +4,20 @@ set -euo pipefail
 project="$(cd "$(dirname "$0")/../.." && pwd)"
 godot="${GODOT:-godot-mono}"
 scratch="$(mktemp -d "${TMPDIR:-/tmp}/propane-world-XXXXXX")"
-trap 'rm -rf "$scratch"' EXIT
+cleanup() {
+  local status=$?
+  if (( status == 0 )); then
+    rm -rf "$scratch"
+  else
+    echo "World check failed (status $status); logs kept in $scratch" >&2
+    for log in "$scratch"/*.log; do
+      [[ -f "$log" ]] || continue
+      echo "--- $log (last 80 lines) ---" >&2
+      tail -n 80 "$log" >&2
+    done
+  fi
+}
+trap cleanup EXIT
 scene=res://scenes/dev/unit_tests.tscn
 for formation in Rows Square Triangular Cluster; do
   "$godot" --headless --path "$project" "$scene" -- --formation="$formation" --write-world-plan="$scratch/plan.bin" >"$scratch/plan.log" 2>&1
