@@ -67,6 +67,32 @@ public static class AuthorityTests
             TestRunner.Assert(group.Count == 2 && group.All(b => b.Epoch == 1) && sync.Entries.All(e => e.ClaimPending), "owned member was omitted or duplicate member repeated");
             TestRunner.Assert(sync.Collect(1).Moving.Count == 0, "unconfirmed group published motion");
         });
+        runner.Run("authority/group grants include partial ownership overlap", () =>
+        {
+            var ledger = Ledger();
+            ledger.Claim(3, Claim(1, Pose(Id)), true);
+            var group = ledger.Claim(3, Claim(2, Pose(Id, 2), Pose(Other)), true);
+            TestRunner.Assert(group.Reason == ClaimRefusal.None && group.Bodies.All(b => b.Owner == 3) &&
+                ledger.Get(Id)!.Body.Epoch == 3 && ledger.Get(Other)!.Body.Epoch == 2, "partly owned group did not get one complete grant");
+            ledger.Claim(4, Claim(3, Pose(Id, 3)), true);
+            var stale = ledger.Claim(3, Claim(4, Pose(Other, 2), Pose(Id, 3)), true);
+            TestRunner.Assert(stale.Reason == ClaimRefusal.StaleEpoch && ledger.Get(Other)!.Body.Epoch == 2 &&
+                ledger.Get(Id)!.Owner == 4, "overlapping claim partially regranted the valid prefix");
+        });
+        runner.Run("authority/departure resolves an overlapping in-flight group claim", () =>
+        {
+            using var f = new MatchFixture(runner);
+            var group = f.Match.LiveTanks.Where(t => t.NetId == Id || t.NetId == Other).ToArray();
+            f.Match.Claim(group, atomic: true);
+            Send(f.Server, 3, Msg.Claim, Claim(10, Pose(Id), Pose(Other)));
+            f.Server.Server.OnDisconnected(3);
+            // The accepted competing grant and its successor grant both cross our pending request.
+            f.Deliver();
+            f.Flush();
+            TestRunner.Assert(f.Match.LastAuthorityRefusal == ClaimRefusal.StaleEpoch &&
+                group.All(t => f.Match.Bodies.Get(t.NetId) is { Owner: 2, Epoch: 3, ClaimPending: false }),
+                "departure stranded a pending group or restored the departed owner");
+        });
         runner.Run("authority/stale and non-owner publications never enter the server cache", () =>
         {
             var ledger = Ledger();
