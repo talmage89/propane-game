@@ -37,7 +37,9 @@ public partial class MeleeRange : Node3D
         var dynamic = new Node3D(); AddChild(dynamic); world.SetContentRoot(dynamic);
         attacker = new PlayerCharacter { World = world, InputOverride = input }; AddChild(attacker);
         victim = new PlayerCharacter { World = world, InputLocked = true, Position = new Vector3(0, 0, -1.45f) }; AddChild(victim);
-        LocalView.Attach(attacker, this).CameraRig.Camera.Current = true;
+        var view = LocalView.Attach(attacker, this);
+        view.Hud.ShowHud(false);
+        view.CameraRig.Camera.Current = true;
         victim.Ragdolled += (_, _, _) => throws++;
         attacker.MeleeHit += hit =>
         {

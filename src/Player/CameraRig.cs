@@ -43,7 +43,7 @@ public partial class CameraRig : Node3D
     {
         if (Aim == null) aim.Advance(delta);
         GlobalTransform = aim.Transform;
-        Camera.Transform = aim.Transform.AffineInverse() * aim.EyeTransform;
+        Camera.Transform = aim.EyeOffset;
         Camera.Fov = World.Tuning.FieldOfView;
     }
 }

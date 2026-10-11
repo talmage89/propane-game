@@ -43,7 +43,7 @@ public partial class PlayerRange : Node3D
         var scenario = DevArgs.Get("scenario") ?? "stances";
         player = new PlayerCharacter { World = world, Name = "Player", IsRemote = scenario == "feet" };
         AddChild(player);
-        if (!player.IsRemote) LocalView.Attach(player, this);
+        if (!player.IsRemote) LocalView.Attach(player, this).Hud.ShowHud(false);
         player.InputOverride = script;
         env.Follow = player;
 

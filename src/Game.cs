@@ -21,6 +21,7 @@ public partial class Game : Node3D
     public SessionContext Session { get; private set; } = null!;
     public WorldContext World => Session.World;
     public Tuning Template { get; init; } = Tuning.SavedTemplate;
+    internal ulong? TestRandomSeed { get; init; }
 
     private enum Phase
     {
@@ -71,7 +72,11 @@ public partial class Game : Node3D
     }
 
     public override void _Ready() => SessionFactory.Build(this, Template, new SandboxSource(this), new SandboxMode(this),
-        session => Session = session);
+        session =>
+        {
+            Session = session;
+            if (TestRandomSeed is { } seed) World.Random.Seed = seed;
+        });
 
     public override void _ExitTree() => Session?.Dispose();
 

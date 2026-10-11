@@ -65,7 +65,7 @@ public partial class SessionActorsTests : Node
         public void CreateViews(SessionContext session)
         {
             var row = new HBoxContainer();
-            session.World.AddView(test, row);
+            session.AddView(test, row);
             for (var i = 0; i < 2; i++)
             {
                 var panel = new SubViewportContainer { CustomMinimumSize = new Vector2(480, 270) };

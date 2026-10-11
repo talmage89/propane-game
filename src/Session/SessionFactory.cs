@@ -35,6 +35,7 @@ public static class SessionFactory
         {
             bind(session);
             mode.Configure(session);
+            session.AttachWorld();
             source.Build(session);
             mode.CreateActors(session);
             mode.CreateViews(session);
@@ -43,9 +44,10 @@ public static class SessionFactory
             mode.Ready(session);
             return session;
         }
-        catch
+        catch (Exception construction)
         {
-            session.Dispose();
+            try { session.Dispose(); }
+            catch (Exception retirement) { throw new AggregateException("session construction and retirement failed", construction, retirement); }
             throw;
         }
     }

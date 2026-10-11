@@ -28,7 +28,7 @@ public partial class PlayerCharacter
             return;
         }
 
-        var cameraTarget = state switch
+        var aimFocus = state switch
         {
             State.Ragdoll or State.Capturing => ragdoll.Pelvis.GlobalPosition + Vector3.Up * 0.45f,
             _ => GlobalPosition + Vector3.Up * tuning.CameraHeight,
@@ -37,9 +37,9 @@ public partial class PlayerCharacter
         {
             var t = Mathf.Clamp(stateTimer / animator.GetUpDuration, 0, 1);
             var pelvis = skeleton.GlobalTransform * skeleton.GetBoneGlobalPose(skeleton.FindBone("pelvis")).Origin;
-            cameraTarget = (pelvis + Vector3.Up * 0.45f).Lerp(GlobalPosition + Vector3.Up * tuning.CameraHeight, Mathf.SmoothStep(0, 1, t));
+            aimFocus = (pelvis + Vector3.Up * 0.45f).Lerp(GlobalPosition + Vector3.Up * tuning.CameraHeight, Mathf.SmoothStep(0, 1, t));
         }
-        Aim.Target = cameraTarget;
+        Aim.Target = aimFocus;
         Aim.Advance(delta);
     }
 

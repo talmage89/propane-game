@@ -12,7 +12,7 @@ namespace Propane.Dev.UnitTests;
 [UnitSuite]
 public static class SessionTests
 {
-    private sealed class Assembly(List<string> log, string? fail) : ISessionMode, ISessionWorldSource
+    private sealed class Assembly(List<string> log, string? fail, bool badStop = false, bool badActor = false) : ISessionMode, ISessionWorldSource
     {
         private ActorRuntime actor = null!;
         private void Step(string name)
@@ -22,10 +22,11 @@ public static class SessionTests
         }
         public void Configure(SessionContext session)
         {
+            Assert(!session.World.Root.IsInsideTree(), "world nodes entered before mode services were constructed");
             session.Cancellation.Register(() => log.Add("cancel"));
             session.OnDetaching(() => log.Add("detach"));
             session.OnUnsubscribing(() => log.Add("unsubscribe"));
-            session.OnStopping(() => log.Add("stop"));
+            session.OnStopping(() => { log.Add("stop"); if (badStop) throw new InvalidOperationException("bad adapter"); });
             Step("configure");
         }
         public void Build(SessionContext session)
@@ -37,7 +38,7 @@ public static class SessionTests
         }
         public void CreateActors(SessionContext session)
         {
-            var character = new PlayerCharacter { World = session.World };
+            var character = badActor ? new UninitializedActor { World = session.World } : new PlayerCharacter { World = session.World };
             character.TreeExiting += () => log.Add("actor freed");
             actor = session.AddActor(character);
             Step("actors");
@@ -86,6 +87,23 @@ public static class SessionTests
             Assert(log.Skip(stages.Length).SequenceEqual(new[] { "cancel", "detach", "unsubscribe", "stop", "view freed", "actor freed", "content freed" }),
                 "cleanup stopped on an adapter error or freed simulation before views");
             Assert(session.Actors.Count == 0 && !GodotObject.IsInstanceValid(session.World.Root), "adapter failure leaked the world");
+        });
+        runner.Run("session/readiness failure retires and retains both error causes", () =>
+        {
+            var log = new List<string>();
+            var assembly = new Assembly(log, null, badStop: true, badActor: true);
+            SessionContext session = null!;
+            try
+            {
+                SessionFactory.Build(runner, runner.World.Tuning, assembly, assembly, built => session = built, present: false);
+                throw new InvalidOperationException("uninitialized actor was accepted");
+            }
+            catch (AggregateException errors)
+            {
+                Assert(errors.Flatten().InnerExceptions.Count == 2, "construction or retirement error was lost");
+                Assert(errors.Flatten().InnerExceptions.Any(error => error.Message.Contains("initialization", StringComparison.Ordinal)), "readiness failure was lost");
+            }
+            Assert(!session.IsAlive && session.Actors.Count == 0 && !GodotObject.IsInstanceValid(session.World.Root), "uninitialized actor leaked its session");
         });
         runner.Run("input/assigned devices isolate strengths and edges", () =>
         {

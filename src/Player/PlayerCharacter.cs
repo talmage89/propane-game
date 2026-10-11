@@ -94,6 +94,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
 
     private ActorRuntime? runtime;
     public ActorRuntime Runtime => runtime ??= new ActorRuntime(this);
+    internal bool Initialized { get; private set; }
     public LogicalAim Aim => Runtime.Aim;
     public LocalView? View { get; internal set; }
     // Compatibility for dev capture callers; simulation never uses a view.
@@ -240,6 +241,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         aimTarget = GlobalPosition + Forward(facingYaw) * 20f;
         Rotation = Vector3.Zero;
         visual.Rotation = new Vector3(0, facingYaw, 0);
+        Initialized = true;
     }
 
     public override void _ExitTree()
@@ -372,8 +374,8 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         var tuning = World.Tuning;
         var grounded = ResolvedState.Grounded;
 
-        var cameraYaw = Mathf.DegToRad(Aim.Yaw);
-        var wish = new Basis(Vector3.Up, cameraYaw) * new Vector3(ResolvedState.MoveX, 0, -ResolvedState.MoveY);
+        var lookYaw = Mathf.DegToRad(Aim.Yaw);
+        var wish = new Basis(Vector3.Up, lookYaw) * new Vector3(ResolvedState.MoveX, 0, -ResolvedState.MoveY);
         if (wish.LengthSquared() > 1f)
         {
             wish = wish.Normalized();

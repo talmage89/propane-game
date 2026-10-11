@@ -52,24 +52,6 @@ public partial class Match
         World.Root.AddChild(suburb);
         World.SetContentRoot(suburb.DynamicRoot);
 
-        var mapTanks = suburb.MapTanks;
-        for (var i = 0; i < mapTanks.Count; i++)
-        {
-            Track(mapTanks[i], Setup.HostId);
-        }
-        foreach (var body in suburb.DynamicRoot.GetChildren().OfType<RigidBody3D>().Where(b => b.HasMeta(Suburb.PlanIndexMeta)))
-        {
-            var index = body.GetMeta(Suburb.PlanIndexMeta).AsInt32();
-            if (plan.Props[index].Model.StartsWith("car:"))
-            {
-                bodies.Register(BodySync.CarId(index), body, isTank: false, Setup.HostId);
-            }
-            else
-            {
-                looseProps[index] = body;
-            }
-        }
-
         gather = new TankGather
         {
             World = World,
@@ -163,6 +145,24 @@ public partial class Match
 
     private void RegisterReplication()
     {
+        var mapTanks = suburb.MapTanks;
+        for (var i = 0; i < mapTanks.Count; i++)
+        {
+            Track(mapTanks[i], Setup.HostId);
+        }
+        foreach (var body in suburb.DynamicRoot.GetChildren().OfType<RigidBody3D>().Where(b => b.HasMeta(Suburb.PlanIndexMeta)))
+        {
+            var index = body.GetMeta(Suburb.PlanIndexMeta).AsInt32();
+            if (plan.Props[index].Model.StartsWith("car:"))
+            {
+                bodies.Register(BodySync.CarId(index), body, isTank: false, Setup.HostId);
+            }
+            else
+            {
+                looseProps[index] = body;
+            }
+        }
+
         player.Fired += OnFired;
         player.Ragdolled += OnRagdolled;
         player.GotUp += OnGotUp;

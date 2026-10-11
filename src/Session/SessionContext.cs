@@ -18,6 +18,7 @@ public sealed class SessionContext : IDisposable
     private readonly List<Action> stop = new();
     private readonly CancellationTokenSource cancellation = new();
     private readonly List<Exception> errors = new();
+    private readonly bool present;
     private bool stopped;
     private bool disposed;
 
@@ -26,9 +27,12 @@ public sealed class SessionContext : IDisposable
     {
         Source = source;
         Mode = mode;
-        World = new WorldContext(owner, template, networked, present);
+        this.present = present;
+        World = new WorldContext(owner, template, networked, attach: false);
         World.OnStopping(Stop);
     }
+
+    internal void AttachWorld() => World.Attach(present);
 
     public WorldContext World { get; }
     public ISessionWorldSource Source { get; }
@@ -47,6 +51,7 @@ public sealed class SessionContext : IDisposable
         var actor = character.Runtime;
         actors.Add(actor);
         World.Root.AddChild(character);
+        if (!character.Initialized) throw new InvalidOperationException("actor did not complete initialization");
         return actor;
     }
 
@@ -71,6 +76,7 @@ public sealed class SessionContext : IDisposable
         EnsureAlive();
         views.Add(view);
         World.AddView(parent, view, followsPause);
+        if (view is LocalView { Initialized: false }) throw new InvalidOperationException("local view did not complete initialization");
         return view;
     }
 

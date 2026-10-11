@@ -11,6 +11,7 @@ public partial class LocalView : Node
     public DeviceInput? Input { get; init; }
     public CameraRig CameraRig { get; private set; } = null!;
     public Hud Hud { get; private set; } = null!;
+    internal bool Initialized { get; private set; }
 
     public override void _Ready()
     {
@@ -21,6 +22,7 @@ public partial class LocalView : Node
         Actor.View ??= this;
         if (Input != null) Actor.Runtime.IntentSource = Input;
         Godot.Input.JoyConnectionChanged += OnJoyConnectionChanged;
+        Initialized = true;
     }
 
     private void OnJoyConnectionChanged(long device, bool connected)

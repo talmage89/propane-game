@@ -39,6 +39,7 @@ public sealed class LogicalAim : System.IDisposable
 
     public Transform3D Transform { get; private set; } = Transform3D.Identity;
     public Transform3D EyeTransform { get; private set; } = Transform3D.Identity;
+    public Transform3D EyeOffset { get; private set; } = Transform3D.Identity;
     public Vector3 EyeOrigin => EyeTransform.Origin;
     public Vector3 Forward => -EyeTransform.Basis.Z;
 
@@ -133,7 +134,8 @@ public sealed class LogicalAim : System.IDisposable
         var rotation = new Vector3(Mathf.DegToRad(N(1) * MaxShakeDegrees * shake), Mathf.DegToRad(N(2) * MaxShakeDegrees * shake),
             Mathf.DegToRad(N(3) * MaxShakeDegrees * 0.6f * shake));
         var offset = new Vector3(N(4), N(5), 0) * MaxShakeOffset * shake;
-        EyeTransform = Transform * new Transform3D(Basis.FromEuler(rotation), offset);
+        EyeOffset = new Transform3D(Basis.FromEuler(rotation), offset);
+        EyeTransform = Transform * EyeOffset;
     }
 
     private Vector3 CastClear(Vector3 from, Vector3 to)

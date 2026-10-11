@@ -17,9 +17,10 @@ public sealed class WorldContext : IDisposable
     private readonly HashSet<IBlastReceiver> receivers = new();
     private WorldPresentation? presentation;
     private bool disposed;
+    private bool attached;
     private readonly List<Exception> stopErrors = new();
 
-    public WorldContext(Node owner, Tuning template, bool networked = false, bool present = false)
+    public WorldContext(Node owner, Tuning template, bool networked = false, bool present = false, bool attach = true)
     {
         ViewRoot = owner;
         Tuning = template.Copy();
@@ -42,10 +43,19 @@ public sealed class WorldContext : IDisposable
         Root.AddChild(ContentRoot);
         viewport.AddChild(new WorldDriver { World = this, ProcessMode = Node.ProcessModeEnum.Always });
         WorldTimeScale.Register();
+        if (attach) Attach(present);
+    }
+
+    /// <summary>Session modes finish constructing their services before any scoped node enters the tree.</summary>
+    public void Attach(bool present = false)
+    {
+        EnsureAlive();
+        if (attached) throw new InvalidOperationException("world already attached");
+        attached = true;
         try
         {
-            owner.AddChild(viewport);
-            if (present) { Present(owner.GetViewport()); }
+            ViewRoot.AddChild(viewport);
+            if (present) Present(ViewRoot.GetViewport());
         }
         catch
         {

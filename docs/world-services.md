@@ -92,8 +92,9 @@ exclusive offline-world time-scale lease: it changes simulation timing, never an
 
 ## Session assembly
 
-`SessionFactory` executes one synchronous order: construct scoped services, configure the mode, build its world
-source, add actors, add local views, register replication, attach the matching inbox and acknowledge readiness.
+`SessionFactory` executes one synchronous order: construct scoped services, configure the mode while scoped nodes
+are detached, attach the world, build its world source, add actors, add local views, register replication, attach the
+matching inbox and acknowledge readiness.
 `ISessionWorldSource` builds content; `ISessionMode` supplies assembly policy, not a new rules engine. Sandbox and
 Tank Bank adapters retain their facade's existing gameplay. A new Lab/lobby source or mode can implement those
 interfaces without editing the factory. `WorldContext` still owns content replacement within a live session.
@@ -102,7 +103,10 @@ interfaces without editing the factory. `WorldContext` still owns content replac
 inbox detach callbacks, subscriptions and replication stop adapters. Disposal invalidates world work first,
 cancels the session, detaches the inbox, unsubscribes, stops control/replication, frees views, frees actors and
 finally disposes world content/services. Callback failures are collected while cleanup completes. Partial assembly
-uses exactly the same path. Closing a local view removes its camera/HUD/device source without retiring the actor.
+uses exactly the same path. Actor/view readiness is checked explicitly because Godot does not propagate managed
+`_Ready` exceptions through `AddChild`; failed initialization cannot reach the inbox or ready acknowledgement.
+If construction and cleanup both fail, the factory retains both errors. Closing a local view removes its
+camera/HUD/device source without retiring the actor.
 
 Ammo, intent, the movement resolver, resolved state, logical aim, swing/publication sequence, snapshot buffer,
 hit grace and drop predictions now belong to each actor. Match interpolation iterates the session registry.
