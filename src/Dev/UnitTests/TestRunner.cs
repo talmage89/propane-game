@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using Godot;
 using Propane.Core;
 
@@ -17,8 +18,33 @@ public partial class TestRunner : Node
 
     public override void _Ready()
     {
+        TestThreadGuard.Install();
+        TestThreadGuard.AssertMainThread("unit suite setup");
         World = new WorldContext(this, Tuning.SavedTemplate, present: true);
         DevArgs.MarkReady();
+        if (DevArgs.Get("test-thread-violation") is { } violation)
+        {
+            // Separate-process negative probes: the guard must exit 1 before a rejected native call returns.
+            var root = GetTree().Root;
+            if (violation == "finalizer")
+            {
+                MakeThreadGarbage(root);
+                GC.Collect();
+                GC.WaitForPendingFinalizers();
+            }
+            var worker = new System.Threading.Thread(() =>
+            {
+                if (violation == "managed") { Run("injected unit callback", () => { }); }
+                else if (violation == "node") { root.GetChildCount(); }
+                else { TestThreadGuard.AssertMainThread($"unknown thread probe {violation}"); }
+            })
+            { Name = "TestThreadProbe" };
+            worker.Start();
+            worker.Join();
+            GD.PushError("[unit] FAIL thread guard allowed the injected violation to return");
+            CoreTests.Complete(this, 2);
+            return;
+        }
         try
         {
             if (WorldBuildTests.RunProcessMode(this))
@@ -56,6 +82,7 @@ public partial class TestRunner : Node
 
     public void Run(string name, Action test)
     {
+        TestThreadGuard.AssertMainThread($"unit test {name}");
         tests++;
         World.SetContentRoot(World.Root);
         try
@@ -82,6 +109,16 @@ public partial class TestRunner : Node
         try { action(); }
         catch (T) { return; }
         throw new InvalidOperationException($"expected {typeof(T).Name}");
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static void MakeThreadGarbage(Node root) => _ = new ThreadFinalizerProbe(root);
+
+    private sealed class ThreadFinalizerProbe
+    {
+        private readonly Node root;
+        public ThreadFinalizerProbe(Node root) => this.root = root;
+        ~ThreadFinalizerProbe() => root.GetChildCount();
     }
 }
 
