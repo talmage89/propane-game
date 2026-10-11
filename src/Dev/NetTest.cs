@@ -1105,10 +1105,11 @@ public partial class NetTest : Node
         }
         if (role == "host")
         {
-            streamTank.GlobalPosition = streamOrigin + Vector3.Right * ((clock - streamStarted) * 8);
-            streamTank.LinearVelocity = Vector3.Right * 8;
+            var flight = Mathf.Min(clock - streamStarted, 15);
+            streamTank.GlobalPosition = streamOrigin + Vector3.Right * (flight * 8);
+            streamTank.LinearVelocity = flight < 15 ? Vector3.Right * 8 : Vector3.Zero;
             streamTank.AngularVelocity = Vector3.Zero;
-            streamTank.Sleeping = false;
+            streamTank.Sleeping = flight >= 15;
         }
         if (!scenarioPassed && clock - streamStarted >= 10)
         {

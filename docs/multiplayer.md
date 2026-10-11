@@ -156,7 +156,7 @@ when publication is required. The server preserves its delivery class on the sec
 remain disposable. Native ENet throttling can suppress those samples beyond injected loss. Checkpoints and
 reliable rests carry the same per-body sequence within the epoch. Neither side compares owner clocks:
 old epochs and duplicate/older sequences cannot replace a newer state or wake a completed rest. A client retains
-one newest future state per body when an unreliable publication overtakes its reliable grant.
+one newest future state per body when a motion publication overtakes its reliable grant.
 Moving batches use sampling timestamps on the sender's ping-estimated server clock. The server bounds these to
 the existing 0.3 s extrapolation window; zero means no ping yet and falls back to relay time. Receivers use their
 own server clock estimate to include both transport legs in bounded motion extrapolation. This also survives
@@ -313,8 +313,9 @@ The server is the game itself started with `-- --server` (and `--headless`). It 
 
 `NetClient` and `LobbyServer` accept an `IPacketTransport` before entering the tree. `PacketTransports` selects
 ENet for production; the unit suites inject an in-memory loopback with a manual monotonic clock. Gameplay sends
-`ReliableOrdered`, `ReliableBodyStates`, `UnreliablePlayerPoses` or `UnreliableBodyStates`, never backend channel
-numbers. ENet keeps control and disposable traffic on channel zero; reliable body checkpoints use channel one
+`ReliableOrdered`, three `ReliableBodyStates` lanes, `UnreliablePlayerPoses` or `UnreliableBodyStates`, never backend
+channel numbers. ENet keeps control and disposable traffic on channel zero; reliable body checkpoints rotate per
+body through channels one to three
 so their retransmission cannot block lifecycle/control delivery. Ordering is per connection and reliable class,
 with no ordering across classes. On receive, the adapter uses native reliability/channel for checkpoints and the
 existing type byte to distinguish disposable body states. Epoch/sequence validation handles overtaking motion.

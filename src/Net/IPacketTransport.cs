@@ -11,14 +11,24 @@ public enum TrafficClass
     // Includes disposable ping/clock samples, which also used ENet's unreliable channel zero.
     UnreliablePlayerPoses,
     UnreliableBodyStates,
-    // Ordered independently of control: checkpoint retransmission must not block lifecycle grants.
+    // Independently ordered checkpoints: newer poses can bypass a retry on another lane.
     ReliableBodyStates,
+    ReliableBodyStates2,
+    ReliableBodyStates3,
 }
 
 public static class TrafficReliability
 {
     public static bool IsReliable(this TrafficClass traffic) =>
-        traffic is TrafficClass.ReliableOrdered or TrafficClass.ReliableBodyStates;
+        traffic is TrafficClass.ReliableOrdered or TrafficClass.ReliableBodyStates or
+            TrafficClass.ReliableBodyStates2 or TrafficClass.ReliableBodyStates3;
+
+    internal static TrafficClass NextBodyCheckpoint(TrafficClass current) => current switch
+    {
+        TrafficClass.ReliableBodyStates => TrafficClass.ReliableBodyStates2,
+        TrafficClass.ReliableBodyStates2 => TrafficClass.ReliableBodyStates3,
+        _ => TrafficClass.ReliableBodyStates,
+    };
 }
 
 public enum SendResult { Success, Closed, Oversized, Backpressure }

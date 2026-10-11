@@ -47,6 +47,21 @@ public static class TransportTests
 
     public static void Register(TestRunner runner)
     {
+        runner.Run("transport/new checkpoint lanes pass a blocked older snapshot", () =>
+        {
+            using var p = new Pair(new PacketFaults(BodyStall: 2, Loss: 1));
+            Assert(TrafficClass.ReliableBodyStates2.IsReliable() && TrafficClass.ReliableBodyStates3.IsReliable(),
+                "replacement checkpoints are still disposable");
+            p.Send(1, TrafficClass.ReliableBodyStates);
+            p.Send(2, TrafficClass.ReliableBodyStates2);
+            p.Send(3, TrafficClass.ReliableBodyStates3);
+            p.Pump(.1);
+            Assert(p.AtServer.Select(n => n.Bytes[0]).SequenceEqual(new byte[] { 2, 3 }),
+                "older snapshot blocked its replacements");
+            p.Pump(2);
+            Assert(p.AtServer.Select(n => n.Bytes[0]).SequenceEqual(new byte[] { 2, 3, 1 }),
+                "late reliable snapshot disappeared");
+        });
         runner.Run("transport/stalled motion checkpoints cannot delay reliable control", () =>
         {
             Assert(NetTransport.Channel(TrafficClass.ReliableBodyStates) != NetTransport.Channel(TrafficClass.ReliableOrdered),

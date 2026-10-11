@@ -50,6 +50,7 @@ public sealed class BodySync
         public uint LastGatherSequence;
         public bool PublishRequired;
         public bool PublishReliably;
+        internal TrafficClass CheckpointTraffic = TrafficClass.ReliableBodyStates3;
         internal double LastReliablePublication;
         internal (int Sender, BodyState Body, bool IsRest, double Received, double Updated)? Future;
         internal (BodyState Body, bool IsRest)? Latest;
@@ -394,7 +395,13 @@ public sealed class BodySync
                     // share the existing state/sequence stream and survive that suppression. No extra
                     // samples: reserve an ordinary publication at half the correction silence bound.
                     entry.PublishReliably = entry.PublishRequired || publicationTime - entry.LastReliablePublication >= StaleAfter / 2;
-                    if (entry.PublishReliably) { entry.LastReliablePublication = publicationTime; }
+                    if (entry.PublishReliably)
+                    {
+                        entry.LastReliablePublication = publicationTime;
+                        // Rotate per body, not per batch: a stable batch layout must not pin a
+                        // body behind the retransmission of one older checkpoint.
+                        entry.CheckpointTraffic = TrafficReliability.NextBodyCheckpoint(entry.CheckpointTraffic);
+                    }
                     entry.PublishRequired = false;
                     moving.Add(entry);
                     Trace?.Invoke(entry, "publish-moving");

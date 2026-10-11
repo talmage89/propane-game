@@ -12,7 +12,7 @@ public sealed record PacketFaults(double Lag = 0, double Jitter = 0, double Loss
 /// Seeded lag in both directions. Reliable order is per connection and class, independently in/out. ReliableStall adds a
 /// retransmission-like delay only to reliable traffic. Owns copied packets and bounded queues; no native memory
 /// survives a backend callback. Queued reliable sends retry backpressure without later sends in that lane passing.
-/// BodyStall is a test seam for checkpoint blockage without delaying control.
+/// BodyStall is a test seam for first-lane checkpoint blockage without delaying control or other checkpoints.
 /// </summary>
 public sealed class FaultPacketTransport : IPacketTransport
 {
@@ -20,7 +20,7 @@ public sealed class FaultPacketTransport : IPacketTransport
     {
         public readonly List<Pending> Incoming = new();
         public readonly List<Pending> Outgoing = new();
-        public readonly double[] LastReliableIn = new double[2], LastReliableOut = new double[2];
+        public readonly double[] LastReliableIn = new double[4], LastReliableOut = new double[4];
         public readonly PacketCounters Counters = new();
         public bool Active = true;
         public bool Ready;
@@ -116,7 +116,7 @@ public sealed class FaultPacketTransport : IPacketTransport
         return SendResult.Success;
     }
 
-    private static int ReliableLane(TrafficClass traffic) => traffic == TrafficClass.ReliableBodyStates ? 1 : 0;
+    private static int ReliableLane(TrafficClass traffic) => NetTransport.Channel(traffic);
 
     private bool Fits(List<Pending> queue, int bytes) => queue.Count < maxPackets && bytes <= maxBytes - queue.Sum(p => p.Bytes.Length);
     private double Delayed(TrafficClass traffic, ref double lastReliable)

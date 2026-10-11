@@ -251,3 +251,71 @@ checking both motion during the frozen glide and final rest after completion.
 Afterward the suite passed all 211 tests (`gather-freeze-after.log`) and the seed-23 native scenario
 passed its gameplay assertions on both peers (`/tmp/nas-gather-freeze-after`). The diagnostic
 assertion now prints shield/glide counts if it fails, without changing its criteria.
+The repeated seed-23 faulted gather also passed (`/tmp/nas-gather-freeze-repeat`): 1100 grids,
+peak rest/moving 0.015/0.604 m, final 0/0 m, longest disagreement episode 0.20 s, and matching
+individual scores with a conserved bank of 14. The first corrected run had 1099 grids,
+0.010/0.632 m peak, final 0/0 m and the same 0.20 s maximum. Neither capture had unobserved grids.
+
+## Integrated verification after upright-pile dev merge
+
+Merged dev `e61840d` in `3ee8c44`, then ran `make setup` and the complete gate before completing
+the soak series. Two soaks overlapped the gate initially; subsequent runs were separated from it.
+All use unchanged creator `tuning.tres` exported to peers, including VentThrust=821 and
+VentMaxSpin=28. No tuner defaults or saved settings were edited for these results.
+
+`/tmp/nas-complete-fault-1` **failed**, not invalid: 2000 grids, 93 unobserved pair grids, four
+moving/lifecycle failures, zero persistent/final resting disagreement, final motion 0.307 m, and
+matching score audits. Bot4 owned `10000006`, epoch 2. Bot1 stayed on sequence 30 at 97498.342799,
+then reached correction silence 1.336 s at 97499.475091 while the owner advanced through sequence
+46. Bot1 only reached 57 at 97500.721516. Its position episode lasted 2.25 s, peak 7.639 m;
+the path to the sample had no obstacle. This is delivery starvation, not an anchor being discarded.
+Drop `20000001`'s vent grant reached Bot2 1.182 s after server publication, and its mixed episode
+lasted 3.05 s (peak 6.409 m across Bot2/3). `20200008` had a 2.15 s mixed lifecycle episode.
+Maximum canonical delay over this capture was 1.897 s. The additional gate load is a confounder,
+not proven to be the cause. No threshold is increased to accept this capture.
+
+`/tmp/nas-complete-fault-2` **passed** during the gate: 1999 grids, no unobserved grids, longest
+episode 1.70 s, final rest/moving 0.001/0.265 m, matching score audits, max canonical delay 0.949 s.
+
+Fault 3 also **failed**, with 13 mixed/lifecycle failures, longest 4.90 s, final resting drift
+0.001 m and final motion 0.461 m (within the final bound). All scores agreed. In this capture,
+Bot1 received `20300011`'s vent grant 3.283 s after server time 97872.833921 and `20300010`'s
+2.866 s after 97873.276324. Bot2 received `20100004`'s vent grant 2.116 s late; its removal
+followed before all peers had displayed the vent. Native server loss statistics reached
+0.6–0.9%, despite simulated loss applying only to disposable traffic. Other worktrees were
+running generator/upright/rendered fixtures during this period; they were neither modified
+nor interrupted. Native control retransmission/queue timing under load remains a different
+residual mechanism from the fixed resting anchors, stale target age, vent spin clamp and
+solid-surface traps. Exact lost UDP datagrams were not captured, so that attribution is an
+inference. Fault 4 passed (longest 1.75 s, final rest/moving 0/0.238 m).
+
+## Letting newer checkpoints pass an older retry
+
+Fault 5 failed only drop `20100005`, epoch 2, owned by Bot2: Bot4 retained sequence 16 at
+98130.467037 and had no fresh target by .765179, while Bot1 had reached 31 at .541336 and 36
+at 98131.108425. Its mixed episode lasted 2.15 s. Canonical delivery in this capture stayed
+below 0.810 s, and the path to the sample was clear. One reliable checkpoint lane prevented
+newer checkpoints from passing an older retry even after moving them off control.
+
+Every body's successive reliable checkpoints now rotate through three independently ordered
+ENet lanes (1–3), with control still on 0. Selection is per body, not per batch: a repeatable batch
+layout cannot pin a tank to one lane. The server preserves each lane; the fault decorator maintains
+separate order and retry state. Existing owner/epoch/sequence ordering rejects late snapshots, so
+an old retry cannot rewind the copy. Publication cadence and sample payloads remain unchanged;
+additional batch headers are the only extra application traffic. This does not bypass congestion
+control or guarantee delivery when all lanes stall. The Match grouping integration is isolated.
+
+Two new regressions failed before (213 tests/two failures, `rotate-before.log`) and passed after
+(213/zero, `rotate-after.log`): per-body rotation and fresh reliable replacements passing a two-second
+first-lane stall under 100% disposable loss. Server tests also verify all three lane classes survive relay.
+`--net-body-stall=2000` exposes that first-lane fault for the native harness only.
+
+The native fixture command is `tools/dev/net_bots.sh -n 2 -l 20
+-s '--net-loss=100 --net-body-stall=2000' -o OUT -- --scenario=body-stream`.
+Before, `/tmp/nas-rotate-before` failed its observer movement assertion and lacked completion.
+The first after-run (`/tmp/nas-rotate-after`) passed actual movement but failed the final moving
+bound by 0.004 m (0.504 m; peak 0.846 m). The fixture now ends its straight flight at 15 s and
+sleeps the owner, additionally verifying the final reliable rest instead of indefinite motion during
+results. This only changes the dev fixture. Builds were warning-free.
+The completed flight/rest fixture passed (`/tmp/nas-rotate-rest`): 600 grids, peak rest/moving
+0.014/1.140 m, final 0/0 m, no above-tolerance episodes or missing grids, and matching scores.

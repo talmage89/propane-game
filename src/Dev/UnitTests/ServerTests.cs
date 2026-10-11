@@ -27,8 +27,14 @@ public static class ServerTests
             traffic.Clear();
             f.Server.OnReceived(2, Packet(2), TrafficClass.ReliableBodyStates);
             TestRunner.Assert(traffic.Single() == TrafficClass.ReliableBodyStates, "server merged checkpoint and control lanes");
+            foreach (var lane in new[] { TrafficClass.ReliableBodyStates2, TrafficClass.ReliableBodyStates3 })
+            {
+                traffic.Clear();
+                f.Server.OnReceived(2, Packet(lane == TrafficClass.ReliableBodyStates2 ? 3u : 4u), lane);
+                TestRunner.Assert(traffic.Single() == lane, "server merged an alternate checkpoint lane");
+            }
             traffic.Clear();
-            f.Server.OnReceived(2, Packet(3), TrafficClass.UnreliableBodyStates);
+            f.Server.OnReceived(2, Packet(5), TrafficClass.UnreliableBodyStates);
             TestRunner.Assert(traffic.Single() == TrafficClass.UnreliableBodyStates, "server made ordinary snapshots reliable");
         });
         runner.Run("server/loading relays the owner's final rest to clients still building", () =>

@@ -76,6 +76,22 @@ public static class AuthorityTests
             var settled = f.Match.Bodies.Collect(.1);
             TestRunner.Assert(settled.Rested.Contains(entry), "actual gather completion lost its final rest");
         });
+        runner.Run("authority/each body's checkpoints advance independent retransmission lanes", () =>
+        {
+            using var body = new BodyFixture(runner);
+            var sync = new BodySync(Tuning.SavedTemplate, 2, 2);
+            sync.Register(Id, body.Body, true, 2);
+            body.Body.Sleeping = false;
+            var lanes = new HashSet<int>();
+            for (var i = 0; i < 3; i++)
+            {
+                var sample = sync.Collect(.3).Moving.Single();
+                TestRunner.Assert(sample.PublishReliably, "probe did not collect a checkpoint");
+                lanes.Add(NetTransport.Channel(sample.CheckpointTraffic));
+            }
+            TestRunner.Assert(lanes.Count == 3 && !lanes.Contains(NetTransport.Channel(TrafficClass.ReliableOrdered)),
+                "new owner checkpoints remain behind an older checkpoint's retransmission");
+        });
         runner.Run("authority/solid geometry cannot trap a fresh observer across a wall", () =>
         {
             using var body = new BodyFixture(runner.World.Root);

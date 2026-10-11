@@ -82,7 +82,21 @@ public sealed class NetTransport : IPacketTransport
         return new OpenResult(open, open ? null : error.ToString(), (int)error);
     }
 
-    internal static int Channel(TrafficClass traffic) => traffic == TrafficClass.ReliableBodyStates ? 1 : 0;
+    internal static int Channel(TrafficClass traffic) => traffic switch
+    {
+        TrafficClass.ReliableBodyStates => 1,
+        TrafficClass.ReliableBodyStates2 => 2,
+        TrafficClass.ReliableBodyStates3 => 3,
+        _ => 0,
+    };
+
+    private static TrafficClass ReliableTraffic(int channel) => channel switch
+    {
+        1 => TrafficClass.ReliableBodyStates,
+        2 => TrafficClass.ReliableBodyStates2,
+        3 => TrafficClass.ReliableBodyStates3,
+        _ => TrafficClass.ReliableOrdered,
+    };
 
     public SendResult Send(ConnectionHandle connection, TrafficClass traffic, ReadOnlyMemory<byte> bytes)
     {
@@ -130,7 +144,7 @@ public sealed class NetTransport : IPacketTransport
                     var stats = counters[connection];
                     stats.PacketsIn++;
                     stats.BytesIn += bytes.Length;
-                    Packet?.Invoke(connection, reliable ? channel == 1 ? TrafficClass.ReliableBodyStates : TrafficClass.ReliableOrdered :
+                    Packet?.Invoke(connection, reliable ? ReliableTraffic(channel) :
                         bytes.Length > 0 && bytes[0] == (byte)Msg.BodyStates ? TrafficClass.UnreliableBodyStates : TrafficClass.UnreliablePlayerPoses, bytes);
                 }
             }
