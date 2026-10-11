@@ -43,16 +43,19 @@ if [[ "${0##*/}" == godot && "$*" == *--hash-world-plan=* ]]; then printf '[worl
         commands = log.read_text().splitlines()
         require(bool(commands) and commands[0] == "dotnet format Propane.sln --verify-no-changes", "format must run first", result.stdout)
         if failure == "none":
-            require(result.returncode == 0 and len(commands) == 12, "check did not finish in twelve tool calls", result.stdout)
+            checkers = ["check_scores_tests.py", "compare_vents_tests.py", "compare_tank_paths_tests.py"]
+            scenes = ["unit_tests.tscn", "movement_tests.tscn", "menu_test.tscn -- --scenario=gamepad",
+                      "menu_test.tscn -- --scenario=devices", "player_range.tscn -- --scenario=grip --grip-sweep --assert-grip",
+                      "player_range.tscn -- --scenario=ragdoll --assert-grip", "generator_tests.tscn -- --seeds=100", "platform_tests.tscn"]
+            first_scene = 3 + len(checkers)
+            first_world = first_scene + len(scenes)
+            require(result.returncode == 0 and len(commands) == first_world + 3, "check did not run every expected tool call", result.stdout)
             require("-warnaserror" in commands[1] and "--no-incremental" in commands[1], "lint must rebuild with warnings as errors")
-            require(commands[2].startswith("dotnet build ") and commands[5].startswith("godot --headless "), "tests ran before lint")
-            require(commands[3] == "python3 -B tools/dev/check_scores_tests.py", "check skipped score-checker regressions")
-            require(commands[4] == "python3 -B tools/dev/compare_vents_tests.py", "check skipped vent-checker regressions")
-            scenes = ["unit_tests.tscn", "movement_tests.tscn", "generator_tests.tscn", "platform_tests.tscn"]
-            require(all(scene in command for scene, command in zip(scenes, commands[5:9])), "check skipped a regression scene")
-            require("--seeds=100" in commands[7], "check changed the generator seed count")
-            require("--write-world-plan=" in commands[9] and
-                    all("--hash-world-plan=" in command for command in commands[10:]), "check skipped separate-process world builds")
+            require(commands[2].startswith("dotnet build ") and commands[first_scene].startswith("godot --headless "), "tests ran before lint")
+            require(commands[3:first_scene] == [f"python3 -B tools/dev/{checker}" for checker in checkers], "check skipped checker regressions")
+            require(all(scene in command for scene, command in zip(scenes, commands[first_scene:first_world])), "check skipped a regression scene")
+            require("--write-world-plan=" in commands[first_world] and
+                    all("--hash-world-plan=" in command for command in commands[first_world + 1:]), "check skipped separate-process world builds")
         else:
             require(result.returncode != 0 and len(commands) == (1 if failure == "format" else 2), "lint failure did not stop check", result.stdout)
     print("PASS: parallel make check orders lint before tests and stops on formatter/build failures")

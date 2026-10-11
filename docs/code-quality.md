@@ -32,8 +32,9 @@ Seven class-specific CA1001 suppressions preserve current lifetimes, with the re
 implicit async context, ValueTask misuse, and whitespace and style drift. It also checks corrected code passes.
 The fixtures compile in an isolated temporary project; they never run or modify game sources.
 The script also stubs the external tools to verify `make -j4 check` runs lint before every regression suite
-(score and vent checkers, unit, movement, 100-seed generator, platform and separate-process world builds) and stops
-at either lint failure. The probe supplies world hashes so this ordering check does not run the real game.
+(score, vent and trajectory checkers, unit, movement, gamepad menus/devices, grip sweep/recovery, 100-seed generator,
+platform and separate-process world builds) and stops at either lint failure. The probe supplies world hashes so this
+ordering check does not run the real game.
 It checks that Godot setup reuses a valid cached editor and stops on a download failure.
 
 `.github/workflows/ci.yml` runs asset import, `make lint` and `make test` on every push to `dev` and every pull
