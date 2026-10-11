@@ -110,6 +110,13 @@ public static class LocomotionTests
         rebound.ObservePhysics(State(PlayerSupport.Jumping), 6);
         rebound.Update(0, PlayerGait.Default, 1f / 60);
         TestRunner.Assert(rebound.Landing == 0 && rebound.Jump == JumpPose.Takeoff, "rebound retains the old landing");
+        rebound.ObservePhysics(State(PlayerSupport.Airborne), -6);
+        // The controller accepts a jump from post-move floor contact before presentation sees Grounded.
+        rebound.ObservePhysics(State(PlayerSupport.Jumping), 6);
+        rebound.ObservePhysics(State(PlayerSupport.Jumping), 6); // Repeated remote support must not retrigger.
+        rebound.Update(0, PlayerGait.Default, 1f / 60);
+        TestRunner.Assert(rebound.Takeoffs == 2 && rebound.Jump == JumpPose.Takeoff,
+            "skipped grounded contact lost a rebound or repeated its takeoff");
     }
 
     private static void Reset()

@@ -23,6 +23,7 @@ public sealed class LocomotionPose
     public float Contact => Mathf.Lerp(Mathf.Lerp(Tuning.Current.JogContactFraction, Tuning.Current.WalkContactFraction, Walk), Tuning.Current.SprintContactFraction, Sprint);
     public float Lift => Mathf.Lerp(Mathf.Lerp(Tuning.Current.JogFootLift, Tuning.Current.WalkFootLift, Walk), Tuning.Current.SprintFootLift, Sprint);
     private bool supported = true;
+    private bool wasJumping;
     private float vertical;
     private float landingTime;
     private float lowestVelocity;
@@ -32,6 +33,7 @@ public sealed class LocomotionPose
     {
         Phase = Walk = Sprint = Moving = Air = Landing = Impact = TakeoffTime = 0;
         supported = true;
+        wasJumping = false;
         Takeoffs = 0;
         lowestVelocity = takeoffLeft = landingTime = 0;
         Jump = JumpPose.Ground;
@@ -42,10 +44,14 @@ public sealed class LocomotionPose
         if (!state.Active) { Reset(); return; }
         if (!state.Grounded)
         {
-            if (supported && (state.Support == PlayerSupport.Jumping || verticalVelocity > Tuning.Current.JumpApexSpeed))
+            // Accepted rebounds can skip the observed grounded tick. Jumping is authoritative; remote
+            // snapshots may hold it across several ticks or omit it entirely.
+            if ((state.Support == PlayerSupport.Jumping && !wasJumping) ||
+                (supported && verticalVelocity > Tuning.Current.JumpApexSpeed))
             {
                 Takeoffs++;
                 landingTime = 0;
+                lowestVelocity = 0;
                 takeoffLeft = Tuning.Current.TakeoffPoseTime;
                 TakeoffTime = 0;
             }
@@ -58,6 +64,7 @@ public sealed class LocomotionPose
             lowestVelocity = 0;
         }
         supported = state.Grounded;
+        wasJumping = state.Support == PlayerSupport.Jumping;
         vertical = verticalVelocity;
     }
 
