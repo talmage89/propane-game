@@ -33,11 +33,13 @@ public partial class NetTest
         }
         if (ventContactTick == 240 && role == "host")
         {
-            foreach (var tank in tanks)
+            for (var i = 0; i < tanks.Length; i++)
             {
+                var tank = tanks[i];
                 var hole = PropaneTank.LocalCenter + Vector3.Right * .15f;
                 tank.TakeShot(tank.ToGlobal(hole), tank.GlobalBasis.X, -tank.GlobalBasis.X);
-                tank.AngularVelocity = Vector3.Up * current.World.Tuning.VentMaxSpin;
+                var axis = DevArgs.Get("vent-contact-axis") == "mixed" && i % 2 == 1 ? Vector3.Right : Vector3.Up;
+                tank.AngularVelocity = axis * current.World.Tuning.VentMaxSpin;
             }
         }
         if (ventContactTick == 1200)

@@ -1178,18 +1178,26 @@ public partial class NetTest : Node
             if (!entry.IsTank || !IsInstanceValid(entry.Body) || entry.Body.Sleeping || entry.HasTarget && entry.TargetRest) { continue; }
             var body = entry.Body;
             var p = body.GlobalPosition;
+            var center = body.GlobalTransform * body.CenterOfMass;
             var lead = (float)Math.Clamp(now - entry.TargetReceived, 0, BodySync.MaxExtrapolation);
-            var goal = entry.HasTarget ? entry.Target.Origin + entry.TargetLinear * lead : p;
-            var barrier = "none";
-            if (entry.HasTarget && p.DistanceSquaredTo(entry.Target.Origin) > .0001f)
+            var sampledCenter = entry.Target * body.CenterOfMass;
+            var goalCenter = entry.HasTarget ? sampledCenter + entry.TargetLinear * lead : center;
+            var rotation = entry.Target.Basis.GetRotationQuaternion();
+            if (lead > 0 && entry.TargetAngular.LengthSquared() > .0001f)
             {
-                using var ray = PhysicsRayQueryParameters3D.Create(p, entry.Target.Origin,
+                rotation = new Quaternion(entry.TargetAngular.Normalized(), entry.TargetAngular.Length() * lead) * rotation;
+            }
+            var goal = entry.HasTarget ? goalCenter - new Basis(rotation) * body.CenterOfMass : p;
+            var barrier = "none";
+            if (entry.HasTarget && center.DistanceSquaredTo(sampledCenter) > .0001f)
+            {
+                using var ray = PhysicsRayQueryParameters3D.Create(center, sampledCenter,
                     Layers.World | Layers.Props | Layers.Floor, new Godot.Collections.Array<Rid> { body.GetRid() });
                 var hit = match.World.Physics.DirectSpaceState.IntersectRay(ray);
                 if (hit.Count > 0 && hit["collider"].As<GodotObject>() is Node collider) { barrier = collider.Name; }
             }
             var angle = entry.HasTarget ? body.GlobalBasis.Orthonormalized().GetRotationQuaternion().AngleTo(entry.Target.Basis.GetRotationQuaternion()) : 0;
-            Log(FormattableString.Invariant($"motion-trace match {match.Setup.Id} time {sampleTime:0.000000} id {entry.Id:x} owner={entry.Owner} epoch={entry.Epoch} sequence={entry.Sequence} last={entry.LastSequence} pending={entry.ClaimPending} target={entry.HasTarget} sample-age={now - entry.TargetReceived:0.000} quiet={now - entry.TargetUpdated:0.000} pos={p.X:0.000},{p.Y:0.000},{p.Z:0.000} goal={goal.X:0.000},{goal.Y:0.000},{goal.Z:0.000} speed={body.LinearVelocity.Length():0.000} spin={body.AngularVelocity.Length():0.000} goal-spin={entry.TargetAngular.Length():0.000} angle={angle:0.000} barrier={barrier}"));
+            Log(FormattableString.Invariant($"motion-trace match {match.Setup.Id} time {sampleTime:0.000000} id {entry.Id:x} owner={entry.Owner} epoch={entry.Epoch} sequence={entry.Sequence} last={entry.LastSequence} pending={entry.ClaimPending} target={entry.HasTarget} sample-age={now - entry.TargetReceived:0.000} quiet={now - entry.TargetUpdated:0.000} pos={p.X:0.000},{p.Y:0.000},{p.Z:0.000} goal={goal.X:0.000},{goal.Y:0.000},{goal.Z:0.000} center={center.X:0.000},{center.Y:0.000},{center.Z:0.000} goal-center={goalCenter.X:0.000},{goalCenter.Y:0.000},{goalCenter.Z:0.000} speed={body.LinearVelocity.Length():0.000} spin={body.AngularVelocity.Length():0.000} goal-spin={entry.TargetAngular.Length():0.000} angle={angle:0.000} barrier={barrier}"));
         }
     }
 

@@ -288,14 +288,24 @@ public sealed class BodySync
                 continue;
             }
             var lead = entry.TargetRest ? 0f : (float)System.Math.Min(age, MaxExtrapolation);
-            var targetPosition = entry.Target.Origin + entry.TargetLinear * lead;
+            var center = body.CenterOfMassMode == RigidBody3D.CenterOfMassModeEnum.Custom
+                ? body.CenterOfMass
+                : body.IsInsideTree()
+                    ? PhysicsServer3D.BodyGetDirectState(body.GetRid())?.CenterOfMassLocal ?? Vector3.Zero
+                    : Vector3.Zero;
+            // Linear velocity describes the mass center. Rotating an offset node origin must neither
+            // translate that center during extrapolation nor create a spurious steering velocity.
+            var sampledCenter = entry.Target * center;
+            var targetCenter = sampledCenter + entry.TargetLinear * lead;
             var targetRotation = entry.Target.Basis.GetRotationQuaternion();
             if (lead > 0 && entry.TargetAngular.LengthSquared() > 0.0001f)
             {
                 targetRotation = new Quaternion(entry.TargetAngular.Normalized(), entry.TargetAngular.Length() * lead) * targetRotation;
             }
+            var targetPosition = targetCenter - new Basis(targetRotation) * center;
             var current = body.GlobalTransform;
-            var error = targetPosition - current.Origin;
+            var currentCenter = current * center;
+            var error = targetCenter - currentCenter;
             var rotationError = (targetRotation * current.Basis.Orthonormalized().GetRotationQuaternion().Inverse()).Normalized();
             var angle = rotationError.GetAngle();
             if (angle > Mathf.Pi)
@@ -318,9 +328,9 @@ public sealed class BodySync
                 // Velocity steering cannot recover a copy trapped across a solid surface. Use the
                 // actual owner sample here, not extrapolation through unobserved geometry. One query
                 // per accepted snapshot; ordinary free-space corrections retain their smoothing.
-                if (body.IsInsideTree() && current.Origin.DistanceSquaredTo(entry.Target.Origin) > .0001f)
+                if (body.IsInsideTree() && currentCenter.DistanceSquaredTo(sampledCenter) > .0001f)
                 {
-                    using var ray = PhysicsRayQueryParameters3D.Create(current.Origin, entry.Target.Origin,
+                    using var ray = PhysicsRayQueryParameters3D.Create(currentCenter, sampledCenter,
                         Layers.World | Layers.Props | Layers.Floor, new Godot.Collections.Array<Rid> { body.GetRid() });
                     if (body.GetWorld3D().DirectSpaceState.IntersectRay(ray).Count > 0)
                     {

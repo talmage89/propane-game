@@ -169,6 +169,10 @@ receipt, independently of sampling transit. Fresh vent observers use the owner's
 rotation-error steering through the spin limiter. They do not add their own jet impulse after that correction;
 vent presentation and age still advance. Owners, stale observers and predicted local claims keep the ordinary
 jet force and gameplay spin limit. A local claim or grant releases observer force suppression immediately.
+Linear velocity describes a body's mass center, which can differ from its node origin. Correction extrapolates
+and steers that center, rotates the local offset, and converts back to a node transform for a snap. Rotation error
+alone must not translate an already aligned mass center. Custom tank centers and native automatic centers use
+the same model; captures still compare the original node positions.
 
 `Claim` requests carry expected epochs and proposed poses for the complete group. The server validates every member
 before granting any, so later grouped interactions can include bodies already owned without a partial handoff.

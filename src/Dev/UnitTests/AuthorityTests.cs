@@ -33,6 +33,39 @@ public static class AuthorityTests
 
     public static void Register(TestRunner runner)
     {
+        runner.Run("authority/rotating an offset body does not translate its mass center", () =>
+        {
+            using var body = new BodyFixture(runner);
+            body.Body.CenterOfMassMode = RigidBody3D.CenterOfMassModeEnum.Custom;
+            body.Body.CenterOfMass = Vector3.Up * .19f;
+            var center = Vector3.Up * 10;
+            var rotated = new Basis(Vector3.Forward, Mathf.Pi / 2);
+            body.Body.GlobalTransform = new Transform3D(rotated, center - rotated * body.Body.CenterOfMass);
+            var pose = new Transform3D(Basis.Identity, center - body.Body.CenterOfMass);
+            var sync = new BodySync(Tuning.SavedTemplate, 4, 2);
+            sync.Register(Id, body.Body, true, 2);
+            sync.OnState(2, new BodyState(Id, pose, Vector3.Zero, Vector3.Zero, 1, 1), false, 1);
+            sync.Correct(1);
+            TestRunner.Assert(body.Body.LinearVelocity.Length() < .0001f,
+                "orientation error accelerated an already aligned mass center");
+            TestRunner.Assert(body.Body.AngularVelocity.Length() > 1, "orientation error was not corrected");
+        });
+        runner.Run("authority/spinning motion extrapolates around the mass center", () =>
+        {
+            using var body = new BodyFixture(runner);
+            body.Body.CenterOfMassMode = RigidBody3D.CenterOfMassModeEnum.Custom;
+            body.Body.CenterOfMass = Vector3.Up * .19f;
+            var center = Vector3.Up * 10;
+            body.Body.GlobalPosition = center - body.Body.CenterOfMass - Vector3.Right * 100;
+            var pose = new Transform3D(Basis.Identity, center - body.Body.CenterOfMass);
+            var sync = new BodySync(Tuning.SavedTemplate, 4, 2);
+            sync.Register(Id, body.Body, true, 2);
+            sync.OnState(2, new BodyState(Id, pose, Vector3.Right * 10, Vector3.Forward * 10, 1, 1), false, 1);
+            sync.Correct(1.1);
+            var actual = body.Body.GlobalTransform * body.Body.CenterOfMass;
+            TestRunner.Assert(actual.DistanceTo(center + Vector3.Right) < .0001f,
+                "extrapolated rotation displaced the translating mass center");
+        });
         runner.Run("authority/pending gather lease still applies the resting owner", () =>
         {
             using var body = new BodyFixture(runner);

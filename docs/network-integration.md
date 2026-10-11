@@ -257,3 +257,61 @@ completion (including mixed resting/moving classification). The unchanged origin
 moving bound is now applied to those intact positions too. The regression fails
 before this correction and all 24 comparer tests pass afterward. Vent motion
 after server retirement remains separate from the live, bounded trajectory.
+
+
+## Offset mass-center correction
+
+The first final batch after the publication-clock fix passes four of five faulted
+captures, but fails fault 3 at a fresh final vent (`20300004`, 0.799 m).
+There are no unobserved grids or persistent episodes beyond 0.85 s. Owner sequence
+407 versus observer 405, receipt silence 0.014–0.017 s and sampling age
+0.160–0.174 s rule out another retired or silent stream. The owner is bouncing
+and spinning (2.197 m/s, 19.869 rad/s); an observer's orientation differs by
+3.079 radians. This reproduces the residual under the original bound, rather
+than proving it resolved by the earlier force fix.
+
+Tank physics uses a custom local mass center 0.19 m above its node origin.
+Godot linear velocity describes that mass center. Correction previously
+extrapolated and steered the node origin with that velocity, introducing
+translation solely from orientation error. The offset permits 0.38 m of pivot
+displacement and up to 1.52 m/s of erroneous steering at the existing 0.25 s
+blend time. Correction now extrapolates and steers the world mass center,
+then converts the rotated offset back to an origin for snaps. Geometry recovery
+also queries between sampled mass centers. Automatic bodies use the native
+computed local center; tank centers use their existing custom value. Gameplay
+forces, tuning, message shapes and captured root-position bounds are unchanged.
+
+Two headless regressions fail before this fix: pure rotation incorrectly applies
+linear velocity, and a spinning snap incorrectly displaces a translating mass
+center. All 229 unit assertions pass afterward. The native body-correction
+fixture proves the issue without gravity, damping or collisions: a freely
+spinning reference has zero center drift, while the old observer drifts
+0.023125 m. Custom and automatic centers both fail. The corrected observers
+both drift 0.000002 m and pass. The existing owner/stale/predicted jet assertions
+also pass; make build reports zero warnings/errors.
+
+The `vent-contact-axis=mixed` fixture alternates vertical and horizontal initial
+spin using the existing VentMaxSpin. Two 2-bot/30-second, FixedSeed=23, 120/30/3
+runs pass their unchanged final checks before/after (0.150/0.197 m). Across
+5,440 vent pair grids after the first six play seconds, median/p95/p99/maximum
+root drift is 0.098/0.202/0.255/0.461 m before and
+0.105/0.233/0.332/0.564 m after. Owner floor contacts are 751/776 versus
+683/776, peak speed 1.752 versus 4.904 m/s, and spin 30.740 versus
+30.706 rad/s. These nonidentical native trajectories do not prove a floor-drift
+reduction; the force-free regression proves the mathematical defect directly.
+Logs retain both results under `build/vna-center-floor-before` and `-after`.
+No resting, intact, free-flight or venting bound has been relaxed.
+
+The native repeat of the failed layout (seed 797598340, 4 bots, 90 seconds,
+120/30/3 and melee-start) passes 1,999 grids/262,962 pairs with no unobserved
+grids, final rest/moving drift 0/0.158 m, and longest episode 1.50 s.
+All four bots agree with the server audit (21 banked). This is a new action
+schedule on the same layout, not a deterministic replay or a substitute for
+the final ten-fault/five-clean matrix.
+
+```sh
+godot-mono --headless --fixed-fps 60 --path . res://scenes/dev/body_correction_tests.tscn
+godot-mono --headless --path . res://scenes/dev/unit_tests.tscn
+tools/dev/net_bots.sh -p 25090 -n 2 -l 30 -s '--tune.FixedSeed=23' -o "$PWD/build/vna-center-floor-after" -- --scenario=vent-contact --vent-contact-axis=mixed --tune.FixedSeed=23 --net-lag=120 --net-jitter=30 --net-loss=3 --tank-motion-trace
+tools/dev/net_bots.sh -p 25090 -n 4 -l 90 -s '--tune.FixedSeed=797598340' -o "$PWD/build/vna-center-repro" -- --melee-start --digest-every=0.5 --net-lag=120 --net-jitter=30 --net-loss=3 --tank-motion-trace --tank-authority-trace
+```

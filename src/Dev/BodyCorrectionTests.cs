@@ -1,4 +1,5 @@
 using System;
+using System.Threading.Tasks;
 using Godot;
 using Propane.Core;
 using Propane.Net;
@@ -62,6 +63,7 @@ public partial class BodyCorrectionTests : Node3D
             sync.Correct(3);
             for (var tick = 0; tick < 30; tick++) { await ToSignal(GetTree(), SceneTree.SignalName.PhysicsFrame); }
             Assert(observer.LinearVelocity.Length() > .01f, "confirmed ownership retained observer force suppression");
+            await CheckSpinningCenters().ConfigureAwait(true);
             GD.Print($"[body correction] PASS fresh observer impulse {freshSpeed:0.000000} m/s, owner peak {ownerSpeed:0.000} m/s; stale, predicted and granted-owner jets resume");
             ShutdownGuard.Quit(GetTree());
         }
@@ -70,6 +72,59 @@ public partial class BodyCorrectionTests : Node3D
             GD.PushError($"[body correction] FAIL {error}");
             ShutdownGuard.Quit(GetTree(), 1);
         }
+    }
+
+    private async Task CheckSpinningCenters()
+    {
+        var worst = 0f;
+        foreach (var custom in new[] { true, false })
+        {
+            var center = Vector3.Up * 20 + Vector3.Right * (custom ? 8 : 12);
+            var offset = Vector3.Up * .19f;
+            var reference = Spinner(center, offset, 0, custom);
+            var follower = Spinner(center, offset, .8f, custom);
+            reference.AngularVelocity = Vector3.Forward * 10;
+            for (var tick = 0; tick < 4; tick++) { await ToSignal(GetTree(), SceneTree.SignalName.PhysicsFrame); }
+            Assert(PhysicsServer3D.BodyGetDirectState(follower.GetRid()).CenterOfMassLocal.DistanceTo(offset) < .0001f,
+                "native spinner did not initialize its offset mass center");
+            var sync = new BodySync(world.Tuning, 4, 2);
+            sync.Register(1, follower, false, 2);
+            var referenceDrift = 0f;
+            var followerDrift = 0f;
+            for (var tick = 0; tick < 120; tick++)
+            {
+                await ToSignal(GetTree(), SceneTree.SignalName.PhysicsFrame);
+                var now = tick / 120.0;
+                sync.OnState(2, new BodyState(1, reference.GlobalTransform, reference.LinearVelocity,
+                    reference.AngularVelocity, 1, (uint)tick + 1), false, now);
+                sync.Correct(now);
+                referenceDrift = Mathf.Max(referenceDrift, (reference.GlobalTransform * offset).DistanceTo(center));
+                followerDrift = Mathf.Max(followerDrift, (follower.GlobalTransform * offset).DistanceTo(center));
+            }
+            GD.Print($"[body correction] spinning {(custom ? "custom" : "automatic")} center drift reference={referenceDrift:0.000000}m observer={followerDrift:0.000000}m");
+            Assert(referenceDrift < .0002f, "native reference spinner translated without a force");
+            worst = Mathf.Max(worst, followerDrift);
+        }
+        Assert(worst < .002f, $"rotation-only correction displaced the mass center by {worst:0.000000} m");
+    }
+
+    private RigidBody3D Spinner(Vector3 center, Vector3 offset, float angle, bool custom)
+    {
+        var body = new RigidBody3D
+        {
+            GravityScale = 0,
+            LinearDamp = 0,
+            AngularDamp = 0,
+            CollisionLayer = 0,
+            CollisionMask = 0,
+            CenterOfMassMode = custom ? RigidBody3D.CenterOfMassModeEnum.Custom : RigidBody3D.CenterOfMassModeEnum.Auto
+        };
+        if (custom) { body.CenterOfMass = offset; }
+        body.AddChild(new CollisionShape3D { Shape = new BoxShape3D { Size = Vector3.One * .2f }, Position = offset });
+        world.Root.AddChild(body);
+        var basis = new Basis(Vector3.Forward, angle);
+        body.GlobalTransform = new Transform3D(basis, center - basis * offset);
+        return body;
     }
 
     private PropaneTank CreateVent(uint id, Vector3 position)
