@@ -29,6 +29,8 @@ public sealed class ScriptedInput : IPlayerInputSource
     /// <summary>The script's clock, for scheduling relative to now.</summary>
     public float Now => time;
 
+    public PlayerIntent LastRead { get; private set; }
+
     public PlayerIntent Read()
     {
         var intent = new PlayerIntent();
@@ -57,6 +59,7 @@ public sealed class ScriptedInput : IPlayerInputSource
             intent.ReloadPressed |= presses[nextPress].Reload;
             nextPress++;
         }
+        LastRead = intent;
         return intent;
     }
 }

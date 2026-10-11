@@ -125,7 +125,8 @@ value. For example, `tools/dev/net_bots.sh -n 4 -l 90 -w 1 -- --record=/tmp/bots
 ```sh
 GODOT=/Applications/Godot_mono.app/Contents/MacOS/Godot
 
-# Movement resolver: gait/target speed on each transition tick, lifecycle, jump buffer and coyote time.
+# Movement resolver: gait/target speed on each transition tick, lifecycle, jump buffer and coyote time;
+# injected gamepad actions and stick look.
 $GODOT --headless res://scenes/dev/movement_tests.tscn
 
 # Generator: determinism, overlaps, tank count and placement, spawn safety, reachability, and the same for match
@@ -143,8 +144,12 @@ $GODOT res://scenes/dev/soak.tscn
 # Tank close-ups (scenarios: full, vent, blast, look), the character and rifle rig, the world kit, map overviews.
 $GODOT --fixed-fps 60 res://scenes/dev/tank_range.tscn -- --capture-dir=/tmp/t --scenario=blast
 $GODOT --fixed-fps 60 res://scenes/dev/player_range.tscn -- --capture-dir=/tmp/p
-# Player scenarios: stances (default), reload, ragdoll. --view=rifleleft or rifleright follows the rifle up close.
+# Player scenarios: stances (default), reload, ragdoll, movement (labeled gait/jump transitions),
+# sprint-repro (discovery sequence, exact-tick assertions and transition log).
+# --view=rifleleft or rifleright follows the rifle up close.
 $GODOT --fixed-fps 60 res://scenes/dev/player_range.tscn -- --capture-dir=/tmp/p --scenario=reload --view=rifleleft
+$GODOT --fixed-fps 60 res://scenes/dev/player_range.tscn -- --capture-dir=/tmp/movement --scenario=movement --view=side
+$GODOT --headless res://scenes/dev/player_range.tscn -- --scenario=sprint-repro
 $GODOT --fixed-fps 60 res://scenes/dev/world_lab.tscn -- --capture-dir=/tmp/w
 $GODOT --fixed-fps 60 res://scenes/dev/suburb_preview.tscn -- --capture-dir=/tmp/s
 
@@ -157,8 +162,9 @@ GODOT=$GODOT tools/dev/net_bots.sh -n 3 -l 60 -- --net-lag=120 --net-jitter=30 -
 tools/dev/compare_tanks.py build/net/bot*.log
 ```
 
-`net_test.tscn` scenarios: bots playing (default), `duel` (hits, drops and a thrown player, filmed from both sides)
-and `pickup` (an ammo can taken and returning). [docs/multiplayer.md](docs/multiplayer.md) lists the commands.
+`net_test.tscn` scenarios: bots playing (default), `duel` (hits, drops and a thrown player, filmed from both sides),
+`pickup` (an ammo can taken and returning), and `movement` (remote creep, sprint, jumping and held-aim landing,
+with assertions and labeled frames). [docs/multiplayer.md](docs/multiplayer.md) lists the commands.
 
 ## Versions and releases
 

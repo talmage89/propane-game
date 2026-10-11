@@ -20,6 +20,8 @@ public partial class PlayerRange : Node3D
 
     public override void _Ready()
     {
+        DisplayServer.WindowSetVsyncMode(DisplayServer.VSyncMode.Disabled);
+        ProcessPhysicsPriority = -10;
         DevArgs.Setup();
         InputSetup.Register();
         Core.DevLog.Enabled = DevArgs.Get("verbose-log") != null;
@@ -65,6 +67,36 @@ public partial class PlayerRange : Node3D
                 director.ShotAt(7.2f, "06_sprint");
                 script.Hold(8.0f, 9.5f, new PlayerIntent { Move = new Vector2(1, 0), Aim = true });
                 director.ShotAt(9.0f, "07_strafe_aim");
+                break;
+            case "movement":
+            case "sprint-repro":
+                var repro = scenario == "sprint-repro";
+                if (repro)
+                {
+                    // Discovery sequence, including the second release after a recent shot.
+                    script.Hold(0.5f, 9.5f, new PlayerIntent { Move = new Vector2(0, 1), Sprint = true });
+                    script.Jump(1.0f);
+                    script.Hold(1.15f, 2.0f, new PlayerIntent { Aim = true });
+                    script.Hold(6.5f, 7.2f, new PlayerIntent { Aim = true });
+                    script.Fire(6.8f);
+                }
+                else
+                {
+                    script.Hold(0.3f, 6.0f, new PlayerIntent { Move = new Vector2(0, 1) });
+                    script.Hold(1.3f, 6.0f, new PlayerIntent { Sprint = true });
+                    script.Hold(2.3f, 4.8f, new PlayerIntent { Aim = true });
+                    script.Jump(3.3f);
+                    director.ShotAt(0.9f, "move_00_default");
+                    director.ShotAt(2.0f, "move_01_sprint");
+                    director.ShotAt(3.0f, "move_02_creep");
+                    director.ShotAt(3.65f, "move_03_air_aim_held");
+                    director.ShotAt(4.6f, "move_04_landed_creep");
+                    director.ShotAt(5.2f, "move_05_release_sprint");
+                    director.QuitAfter = 6.5f;
+                }
+                var probe = new MovementProbe { Player = player, Input = script };
+                AddChild(probe);
+                director.At(repro ? 9f : 6f, () => probe.Finish(!repro));
                 break;
             case "reload":
                 // A match's magazine: empty it (the bolt locks open), reload from empty, then a reload with rounds
