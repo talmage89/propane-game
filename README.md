@@ -90,7 +90,7 @@ Match settings use the actual player count. Tank supply is `MpTankCount + MpTank
 `PickupCount + PickupsPerPlayer × players`, and map width is `MpMapSizeBase + MpMapSizePerPlayer × players`. Pile
 limits gain `floor(MpPileSizePerPlayer × players)`. `MpStartSpacing` is a hard minimum between clear road starts;
 invalid settings fail generation instead of placing players on top of one another. The lobby cap remains a separate
-setting. These shared plan and tuner changes require the next release to be minor (`Protocol.Version` is 2).
+setting. These shared plan and tuner changes require the next release to be minor (`Protocol.Version` is 3).
 
 ## Layout
 
