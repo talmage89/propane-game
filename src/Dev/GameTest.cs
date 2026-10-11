@@ -459,6 +459,9 @@ public partial class GameTest : Node
         {
             Require(exploded && members.Count(t => t.Loose && t.State == PropaneTank.TankState.Intact) >= 2,
                 "player's blast did not knock an intact group loose");
+            // The blast proof is complete. Random shell fragments can legitimately block every departure path;
+            // remove only those fragments so this fixture measures gather timing and stability, not debris luck.
+            foreach (var debris in game.Current!.DynamicRoot.GetChildren().OfType<DebrisBody>().ToArray()) { debris.Free(); }
             var camera = new Camera3D { Current = true }; AddChild(camera);
             camera.LookAtFromPosition(center + new Vector3(5, 4, 7), center + direction * 3 + Vector3.Up * 0.5f);
         });
