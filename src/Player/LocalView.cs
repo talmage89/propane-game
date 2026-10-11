@@ -20,9 +20,19 @@ public partial class LocalView : Node
         AddChild(Hud);
         Actor.View ??= this;
         if (Input != null) Actor.Runtime.IntentSource = Input;
+        Godot.Input.JoyConnectionChanged += OnJoyConnectionChanged;
     }
 
-    public override void _UnhandledInput(InputEvent @event) => Input?.Accumulate(@event);
+    private void OnJoyConnectionChanged(long device, bool connected)
+    {
+        if (!connected) Input?.Disconnect(device);
+    }
+    // Explicit assignments observe releases even when a menu consumes them. Primary keeps the established path.
+    public override void _Input(InputEvent @event)
+    {
+        if (Input is { Assignment.IsPrimary: false }) Input.Accumulate(@event);
+    }
+    public override void _UnhandledInput(InputEvent @event) { if (Input is { Assignment.IsPrimary: true }) Input.Accumulate(@event); }
     public override void _Notification(int what)
     {
         if (what == NotificationPaused || what == NotificationUnpaused || what == NotificationDisabled || what == NotificationEnabled ||
@@ -34,6 +44,7 @@ public partial class LocalView : Node
 
     public override void _ExitTree()
     {
+        Godot.Input.JoyConnectionChanged -= OnJoyConnectionChanged;
         if (Actor.View == this) Actor.View = null;
         if (Input != null && ReferenceEquals(Actor.Runtime.IntentSource, Input)) Actor.Runtime.IntentSource = null;
     }

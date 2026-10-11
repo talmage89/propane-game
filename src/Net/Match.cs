@@ -233,10 +233,7 @@ public partial class Match : Node3D
         var now = Clock.Seconds;
         foreach (var remote in RemoteActors)
         {
-            if (remote.Snapshots!.HasData)
-            {
-                remote.Character.SetRemoteState(remote.Snapshots!.Sample(now));
-            }
+            (remote.IntentSource as ReplicatedIntent)?.Apply(remote.Character, now);
         }
         bodies.Correct(now);
 

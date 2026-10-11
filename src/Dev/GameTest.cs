@@ -23,6 +23,7 @@ public partial class GameTest : Node
         Core.DevLog.Enabled = DevArgs.Get("verbose-log") != null;
         game = new Game { PauseOnFocusLoss = false };
         AddChild(game);
+        if (ulong.TryParse(DevArgs.Get("effects-seed"), out var effectsSeed)) game.World.Random.Seed = effectsSeed;
         game.Player.InputOverride = input;
         var director = new CaptureDirector { QuitAfter = DevArgs.GetFloat("quit", 16f) };
         AddChild(director);

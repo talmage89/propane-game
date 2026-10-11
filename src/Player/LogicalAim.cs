@@ -165,9 +165,13 @@ public sealed class LogicalAim : System.IDisposable
         var closeness = Mathf.Clamp(1f - distance / tuning.CameraShakeDistance, 0, 1);
         AddTrauma(closeness * closeness * 1.1f + closeness * 0.25f);
     }
+    private bool disposed;
     public void Dispose()
     {
+        if (disposed) return;
+        disposed = true;
         probe.Dispose();
         shakeNoise.Dispose();
+        Exclude.Clear();
     }
 }

@@ -21,7 +21,7 @@ public partial class PlayerCharacter
         var forward = Aim.Forward;
         var start = origin + forward * Mathf.Max(0, (GlobalPosition + Vector3.Up * 1.4f - origin).Dot(forward));
         var query = PhysicsRayQueryParameters3D.Create(start, start + forward * World.Tuning.ShotRange, Layers.ShotMask, shotExclude);
-        var hit = GetWorld3D().DirectSpaceState.IntersectRay(query);
+        var hit = World.Physics.DirectSpaceState.IntersectRay(query);
         aimTarget = hit.Count > 0 ? hit["position"].AsVector3() : start + forward * World.Tuning.ShotRange;
         // Never aim at something right behind or inside the character.
         var chest = GlobalPosition + Vector3.Up * 1.35f;
@@ -75,7 +75,7 @@ public partial class PlayerCharacter
         var forward = Aim.Forward;
         var direction = RandomInCone(forward, Mathf.DegToRad(spreadDegrees));
         var start = origin + forward * Mathf.Max(0, (GlobalPosition + Vector3.Up * 1.4f - origin).Dot(forward));
-        var space = GetWorld3D().DirectSpaceState;
+        var space = World.Physics.DirectSpaceState;
 
         var hit = space.IntersectRay(PhysicsRayQueryParameters3D.Create(start, start + direction * tuning.ShotRange, Layers.ShotMask, shotExclude));
         var end = hit.Count > 0 ? hit["position"].AsVector3() : start + direction * tuning.ShotRange;
@@ -175,7 +175,7 @@ public partial class PlayerCharacter
             CollisionMask = Layers.Pushable | Layers.Player | Layers.Ragdoll,
             Exclude = shotExclude.Duplicate(),
         };
-        var space = GetWorld3D().DirectSpaceState;
+        var space = World.Physics.DirectSpaceState;
         foreach (var hit in Blast.QueryAll(space, query))
         {
             var collider = hit["collider"].As<GodotObject>();

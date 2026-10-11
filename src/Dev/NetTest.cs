@@ -158,6 +158,12 @@ public partial class NetTest : Node
             };
             AddChild(match);
             match.Player.InputOverride = bot;
+            if (DisplayServer.GetName() == "headless")
+            {
+                ScenarioAssert(match.Session.LocalViews.Count == 0 && match.FindChildren("*", "Camera3D", owned: false).Count == 0,
+                    "headless bot match constructed a camera");
+                Log("camera-free actor: no local views or cameras");
+            }
             if (DevArgs.Get("melee-start") != null)
             {
                 // Stage before countdown so snapshots settle before the ordinary brains choose any targets.

@@ -472,7 +472,7 @@ public sealed class Bot : IBotBrain
     /// </summary>
     private Vector3? FindVantage(PlayerCharacter player, Vector3 target, float near, float far)
     {
-        var space = player.GetWorld3D().DirectSpaceState;
+        var space = player.World.Physics.DirectSpaceState;
         var here = player.GlobalPosition;
         Vector3? best = null;
         var bestCost = float.MaxValue;
@@ -510,7 +510,7 @@ public sealed class Bot : IBotBrain
     /// <summary>The nearest spot within a short run that the shooter cannot see, if there is one.</summary>
     private Vector3? FindCover(PlayerCharacter player, PlayerCharacter shooter)
     {
-        var space = player.GetWorld3D().DirectSpaceState;
+        var space = player.World.Physics.DirectSpaceState;
         var here = player.GlobalPosition;
         var eye = shooter.GlobalPosition + Vector3.Up * 1.6f;
         Vector3? best = null;
@@ -587,7 +587,7 @@ public sealed class Bot : IBotBrain
         var aim = player.Aim;
         var forward = -aim.EyeTransform.Basis.Z;
         var start = aim.EyeOrigin + forward * 2.5f;
-        var hit = player.GetWorld3D().DirectSpaceState.IntersectRay(PhysicsRayQueryParameters3D.Create(start, start + forward * 80f, Layers.ShotMask));
+        var hit = player.World.Physics.DirectSpaceState.IntersectRay(PhysicsRayQueryParameters3D.Create(start, start + forward * 80f, Layers.ShotMask));
         var collider = hit.Count > 0 ? hit["collider"].As<GodotObject>() : null;
         return collider == target || target is PlayerCharacter pc && PlayerCharacter.Owning(collider) == pc;
     }
@@ -595,7 +595,7 @@ public sealed class Bot : IBotBrain
     private static bool CanSee(PlayerCharacter player, Vector3 point)
     {
         var eye = player.GlobalPosition + Vector3.Up * 1.6f;
-        return player.GetWorld3D().DirectSpaceState.IntersectRay(PhysicsRayQueryParameters3D.Create(eye, point, Layers.World | Layers.Props)).Count == 0;
+        return player.World.Physics.DirectSpaceState.IntersectRay(PhysicsRayQueryParameters3D.Create(eye, point, Layers.World | Layers.Props)).Count == 0;
     }
 
     private static bool IsValid(Node3D? node) => node != null && GodotObject.IsInstanceValid(node) &&
@@ -612,7 +612,7 @@ public sealed class Bot : IBotBrain
         VisibleFrom(observer, observer.GlobalPosition + Vector3.Up * 1.6f, point);
 
     private static bool VisibleFrom(PlayerCharacter player, Vector3 eye, Vector3 point) =>
-        player.GetWorld3D().DirectSpaceState.IntersectRay(PhysicsRayQueryParameters3D.Create(eye, point, Layers.World | Layers.Props)).Count == 0;
+        player.World.Physics.DirectSpaceState.IntersectRay(PhysicsRayQueryParameters3D.Create(eye, point, Layers.World | Layers.Props)).Count == 0;
 
     private void Navigate(Match match, float dt)
     {
@@ -631,7 +631,7 @@ public sealed class Bot : IBotBrain
             tuning.RunSpeed, tuning.SprintSpeed, tuning.JumpVelocity, tuning.PlayerGravity, tuning.Acceleration, tuning.AirControl);
         var hazards = match.LiveTanks.Select(t => new NavigationHazard(t.GlobalPosition,
             t.State == PropaneTank.TankState.Venting ? tuning.RagdollRadius + tuning.BotVentClearance : tuning.BotTankClearance)).ToArray();
-        var world = new NavigationWorld(player.GetWorld3D().DirectSpaceState, capabilities, hazards, tuning.BotJumpMargin, tuning.BotJumpMinimumRange, player.GlobalPosition);
+        var world = new NavigationWorld(player.World.Physics.DirectSpaceState, capabilities, hazards, tuning.BotJumpMargin, tuning.BotJumpMinimumRange, player.GlobalPosition);
         var move = navigator.Navigate(world, new NavigationState(player.GlobalPosition, player.Velocity, player.IsOnFloor()),
             capabilities, navigationGoal.Value, tuning, dt);
         if (move.Failed)

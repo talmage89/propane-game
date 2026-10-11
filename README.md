@@ -159,6 +159,7 @@ setting. These shared plan and tuner changes require the next release to be mino
 | `src/Main.cs` | The root: the menus over their backdrop, then single player, a match, or the multiplayer server. |
 | `src/Game.cs` | Single player: the void, player, HUD, menus, and the suburb swap with its dissolve and materialize. |
 | `src/Net` | Multiplayer: the server, the client connection, the match world, body sync, ammo pickups. |
+| `src/Session` | Ordered session assembly, actors, local views and retirement. |
 | `src/Core` | Tuning, input map, physics and render layers, shared assets, events, spawn roots. |
 | `src/World` | The void environment, the model catalog, and the suburb builder. `Plan/` holds the pure-data generator. |
 | `src/Tank` | Propane tanks, the vent jet, blasts, debris and breakaway fence panels. |
@@ -195,6 +196,10 @@ GODOT=/Applications/Godot_mono.app/Contents/MacOS/Godot
 # Shutdown: finalizers for resources discarded during scene destruction must finish before engine teardown.
 # Also runs in make test; --exit-code=7 checks that shutdown preserves a requested failure status.
 $GODOT --headless res://scenes/dev/shutdown_tests.tscn
+
+# Session actors: two assigned views on one World3D, independent shots/melee, view closure and a camera-free bot.
+$GODOT --headless --fixed-fps 60 res://scenes/dev/session_actors_tests.tscn
+$GODOT --fixed-fps 60 res://scenes/dev/session_actors_tests.tscn -- --capture-dir=/tmp/session-actors
 
 # Movement resolver: gait/target speed on each transition tick, lifecycle, jump buffer and coyote time;
 # injected gamepad actions and stick look.

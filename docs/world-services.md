@@ -111,3 +111,15 @@ slot-derived drop ids and `Match.Player` still use today's peer identity. A6 mus
 replace that wire routing, including same-peer contact deduplication. No message or tuner changes here.
 Headless `net_test` attaches no local view, so the existing smart/simple bots and network scenarios run on actors
 with no camera. Rendered runs attach the same view used by the shipped facades.
+
+`InputDeviceAssignment.Primary` retains the shipped single-view keyboard/mouse and gamepad switching. Explicit
+keyboard/mouse or numbered gamepad assignments filter events before tracking per-binding strengths and edges;
+one device cannot release another view's held action. Explicit views observe handled releases too, and disconnect
+clears their cached actions. Menus retain application-level keyboard/mouse and controller navigation. Split-screen
+viewport layout is a dev fixture, not a new shipped mode.
+
+`session_actors_tests.tscn` renders two subviewports sharing the session's `World3D`. It asserts independent device
+routing, movement yaw, camera following, shot directions, melee contacts and survivor continuity after closing one
+view. A third, camera-free actor navigates, shoots a tank twice, strikes a prop and recovers from the blast ragdoll.
+The unit suite injects failure into every factory stage and checks cancellation, adapter/node retirement order,
+completion after a throwing stop adapter and device isolation. Both run in `make test`.

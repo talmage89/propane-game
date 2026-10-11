@@ -601,7 +601,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
     {
         var pelvis = ragdoll.Pelvis.GlobalPosition;
         var query = PhysicsRayQueryParameters3D.Create(pelvis, pelvis + Vector3.Down * RagdollGroundReach, Layers.PlayerMask | Layers.Debris, shotExclude);
-        return GetWorld3D().DirectSpaceState.IntersectRay(query).Count > 0;
+        return World.Physics.DirectSpaceState.IntersectRay(query).Count > 0;
     }
 
     private void BeginGetUp()
@@ -618,7 +618,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         var yaw = Mathf.Atan2(headDir.X, headDir.Z);
         var root = pelvisWorld.Origin - headDir * GetUpPelvisOffset;
         var groundQuery = PhysicsRayQueryParameters3D.Create(root + Vector3.Up * 1.5f, root + Vector3.Down * 3f, Layers.PlayerMask, shotExclude);
-        var ground = GetWorld3D().DirectSpaceState.IntersectRay(groundQuery);
+        var ground = World.Physics.DirectSpaceState.IntersectRay(groundQuery);
         root.Y = ground.Count > 0 ? ground["position"].AsVector3().Y : Mathf.Max(0, root.Y - 0.1f);
         if (IsRemote && pendingRoot is { } given)
         {

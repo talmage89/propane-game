@@ -108,7 +108,7 @@ public sealed class SimpleBot : IBotBrain
         // Fire when the crosshair is on the target.
         if (target is not AmmoPickup && distance < 45f)
         {
-            var space = player.GetWorld3D().DirectSpaceState;
+            var space = player.World.Physics.DirectSpaceState;
             var forward = -aim.EyeTransform.Basis.Z;
             var start = aim.EyeOrigin + forward * 2.5f;
             var hit = space.IntersectRay(PhysicsRayQueryParameters3D.Create(start, start + forward * 60f, Layers.ShotMask));
@@ -158,7 +158,7 @@ public sealed class SimpleBot : IBotBrain
                 return pickup;
             }
         }
-        var space = player.GetWorld3D().DirectSpaceState;
+        var space = player.World.Physics.DirectSpaceState;
         var visible = match.RemoteBodies.Where(b => b.GlobalPosition.DistanceTo(here) < 30f &&
             space.IntersectRay(PhysicsRayQueryParameters3D.Create(here + Vector3.Up * 1.5f, b.GlobalPosition + Vector3.Up * 1.2f, Layers.World)).Count == 0)
             .OrderBy(b => b.GlobalPosition.DistanceTo(here)).FirstOrDefault();

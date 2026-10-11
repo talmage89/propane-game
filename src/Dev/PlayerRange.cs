@@ -30,6 +30,7 @@ public partial class PlayerRange : Node3D
         ProcessPhysicsPriority = -10;
         DevArgs.Setup();
         world = new WorldContext(this, Tuning.SavedTemplate, present: true);
+        if (ulong.TryParse(DevArgs.Get("effects-seed"), out var effectsSeed)) world.Random.Seed = effectsSeed;
         InputSetup.Register();
         Core.DevLog.Enabled = DevArgs.Get("verbose-log") != null;
         var dynamic = new Node3D { Name = "Dynamic" };

@@ -126,7 +126,7 @@ public partial class Match
                 };
                 Session.AddActor(body);
                 body.Teleport(position, spawn.Yaw + Mathf.Pi);
-                body.Runtime.Snapshots = new SnapshotBuffer(World.Tuning);
+                body.Runtime.IntentSource = new ReplicatedIntent(World.Tuning);
             }
         }
         if (!Session.OwnedActors.Any())

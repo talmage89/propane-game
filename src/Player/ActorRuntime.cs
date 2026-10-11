@@ -29,7 +29,7 @@ public sealed class ActorRuntime : IDisposable
     public int SpawnSlot { get; set; }
     public int DropCounter { get; set; }
     public DropPredictions DropPredictions { get; } = new();
-    public SnapshotBuffer? Snapshots { get; set; }
+    public SnapshotBuffer? Snapshots => (IntentSource as ReplicatedIntent)?.Snapshots;
     private bool disposed;
     public void Dispose()
     {
