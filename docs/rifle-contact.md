@@ -1,5 +1,8 @@
 # Rifle contact
 
+[Package 4](motion.md) extends this fit with stride sway, shoulder-absorbed spring recoil and bounded
+pose handoffs. The calibration results below are package 2's historical measurements.
+
 The rifle rig places a rigid rifle before solving the arms. Its wrist offsets and orientations are fitted to
 the mannequin palms, the traced pistol grip and the vertical foregrip. A 25 mm reach margin leaves both elbows
 bent: translation projects the two wrist targets into the intersection of the arms' reachable spheres. IK uses
@@ -16,8 +19,8 @@ Carry and sprint keep a dipped, inboard muzzle; ready points from the hip. Aim s
 shoulder pocket, raises the clavicle and fits the neck/head to the authored `Socket_Eye`. The fit rotates
 bones without stretching them. The get-up handoff keeps the firing wrist attached and projects the gradually
 returning support wrist into reach after blending the rifle. The right-eye landmark is calibrated to the
-mannequin head, rather than its origin. Recoil moves the rifle off the settled eye line briefly; the wrists
-follow the moving rifle.
+mannequin head, rather than its origin. The shoulder and head absorb recoil while both wrists follow the
+moving rifle and the aimed eye fit stays on its socket.
 
 Each finger has three absolute curls relative to its authored rest frame. The firing index rests along the
 receiver and curls toward the trigger during recoil. Reload uses separate magazine curls and follows the
@@ -27,7 +30,7 @@ outside. The source rifle mesh, sockets, clips and their event times are unchang
 reads the same live firing-wrist calibration as the rig.
 
 Placement, recoil, wrist calibration, eye landmark, finger curls and reload clearance are `Tuning` values in
-**Rifle Contact**. These values join the existing shared tuning snapshot: the next release must be minor. No
+**Rifle Contact** and **Rifle Motion**. These values join the existing shared tuning snapshot: the next release must be minor. No
 messages changed, and `Protocol.Version` remains 2.
 
 ## Regression and rendered review

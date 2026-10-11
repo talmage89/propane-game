@@ -11,13 +11,17 @@ public partial class RifleHandFollow : SkeletonModifier3D
 
     public RifleRig? Rig { get; set; }
 
+    public PoseBlend? Blend { get; set; }
+
     public override void _ProcessModificationWithDelta(double delta)
     {
         var skeleton = GetSkeleton();
-        if (skeleton == null || Rifle == null || Rig == null || Rig.Weight > 0.001f)
+        if (skeleton == null || Rifle == null || Rig == null)
         {
             return;
         }
+        Blend?.ObserveFinalPose(skeleton);
+        if (Rig.Weight > 0.001f) return;
         if (handR < 0)
         {
             handR = skeleton.FindBone("hand_r");

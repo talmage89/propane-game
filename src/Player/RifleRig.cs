@@ -22,6 +22,22 @@ public partial class RifleRig : SkeletonModifier3D
     private bool reportedContactFailure;
     private float aimTargetAmount, readyTargetAmount, sprintTargetAmount;
     private float aimBlend, readyBlend, sprintBlend;
+    private readonly RecoilSpring recoil = new();
+    private Vector3 lookDirection;
+    private Transform3D previousStance;
+    private bool hasStance;
+    private Transform3D handoffRifle, handoffLeft, handoffChest;
+    private Vector3 handoffElbowR, handoffElbowL;
+    private Quaternion[]? previousBones;
+    private Quaternion[] desiredBones = null!;
+    private Vector3[] previousPositions = null!, desiredPositions = null!;
+    private int[] upperBones = null!;
+    private Transform3D lastRifle, lastChest;
+    private bool hasUpperPose;
+    private float lastFitAim;
+    private float reloadTarget, reloadPhase;
+
+    public LocomotionPose Pose { get; init; } = null!;
 
     /// <summary>Unclamped wrist targets, for final-pose contact diagnostics.</summary>
     public Transform3D RightTarget { get; private set; }
@@ -48,11 +64,24 @@ public partial class RifleRig : SkeletonModifier3D
     /// <summary>Visual sprint blend: set the character target; reads return the applied 0..1 low-ready blend.</summary>
     public float SprintAmount { get => sprintBlend; set => sprintTargetAmount = value; }
 
-    /// <summary>0..1, decays after each shot.</summary>
-    public float Recoil { get; set; }
+    /// <summary>Live spring displacement, including accumulation during a burst.</summary>
+    public float Recoil => recoil.Position;
+
+    public void Kick() => recoil.Kick(Tuning.Current.RifleRecoilFrequency, Tuning.Current.RifleRecoilImpulse);
 
     /// <summary>Reload progress 0..1: the rifle cants in while the left hand swaps the magazine. 0 when not reloading.</summary>
-    public float Reload { get; set; }
+    public float Reload { get => reloadPhase; set => reloadTarget = value; }
+
+    /// <summary>Snapshots may skip reload progress or its last frames. Finish the visual hand return at a
+    /// bounded rate before releasing carry; local ammo/state timing stays authoritative and immediate.</summary>
+    public void AdvanceReload(float dt, bool remote)
+    {
+        if (!remote) { reloadPhase = reloadTarget; return; }
+        if (Weight <= 0.001f) { reloadPhase = 0; return; }
+        var target = reloadTarget > 0 ? reloadTarget : reloadPhase > 0 ? 1 : 0;
+        reloadPhase = Mathf.MoveToward(reloadPhase, target, dt * Tuning.Current.RifleReloadPhaseSpeed);
+        if (reloadTarget == 0 && reloadPhase >= 1) reloadPhase = 0;
+    }
 
     /// <summary>Weight of the whole rig; 0 while ragdolling or getting up.</summary>
     public float Weight { get; set; } = 1f;
@@ -82,12 +111,29 @@ public partial class RifleRig : SkeletonModifier3D
         var toSkeleton = skeleton.GlobalTransform.AffineInverse();
         var fromSkeleton = skeleton.GlobalTransform;
 
+        recoil.Update((float)delta, tuning.RifleRecoilFrequency, tuning.RifleRecoilDamping);
         if (Weight <= 0.001f)
         {
+            recoil.Reset();
+            hasStance = false;
+            lookDirection = Vector3.Zero;
+            CacheBones(skeleton);
+            hasUpperPose = false;
+            lastFitAim = aimBlend;
             // Ragdolling or getting up: RifleHandFollow keeps the rifle in the right hand.
             return;
         }
 
+        previousBones ??= new Quaternion[skeleton.GetBoneCount()];
+        if (!hasStance)
+        {
+            CacheBones(skeleton);
+            handoffRifle = toSkeleton * Rifle.GlobalTransform;
+            handoffLeft = skeleton.GetBoneGlobalPose(handL);
+            handoffChest = skeleton.GetBoneGlobalPose(spine[2]);
+            handoffElbowR = skeleton.GetBoneGlobalPose(lowerR).Origin;
+            handoffElbowL = skeleton.GetBoneGlobalPose(lowerL).Origin;
+        }
         // The model faces +Z in skeleton space.
         var forward = (fromSkeleton.Basis * Vector3.Back).Normalized();
         forward.Y = 0;
@@ -96,6 +142,21 @@ public partial class RifleRig : SkeletonModifier3D
 
         var chestWorld = fromSkeleton * skeleton.GetBoneGlobalPose(spine[2]).Origin;
         var aimDir = (AimTarget - chestWorld).Normalized();
+        if (lookDirection.LengthSquared() > 0)
+        {
+            var turn = new Quaternion(lookDirection, aimDir);
+            var angle = 2 * Mathf.Atan2(new Vector3(turn.X, turn.Y, turn.Z).Length(), Mathf.Abs(turn.W));
+            var fraction = angle > 0 ? Mathf.Min(1, Mathf.DegToRad(tuning.RifleAimTurnSpeed) * (float)delta / angle) : 1;
+            aimDir = (Quaternion.Identity.Slerp(turn, fraction) * lookDirection).Normalized();
+        }
+        lookDirection = aimDir;
+        // Only the displayed pose follows this eased point; the shot ray still uses the camera/spread.
+        var visualTarget = chestWorld + aimDir * (AimTarget - chestWorld).Length();
+        var gaitScale = Mathf.Lerp(Mathf.Lerp(1, tuning.RifleWalkSwayScale, Pose.Walk), tuning.RifleSprintSwayScale, Pose.Sprint);
+        var sway = gaitScale * Pose.Moving * (1 - Pose.Air) * Mathf.Lerp(1, tuning.RifleAimSwayScale, AimAmount) * Weight;
+        var lateral = Mathf.Sin(Pose.Phase * Mathf.Tau);
+        var bounce = Mathf.Cos(Pose.Phase * Mathf.Tau * 2);
+        var kick = recoil.Position * Weight;
 
         // 1. Torso: yaw toward the aim point, pitch partly with it.
         var flatAim = new Vector3(aimDir.X, 0, aimDir.Z);
@@ -107,7 +168,13 @@ public partial class RifleRig : SkeletonModifier3D
         var pitch = Mathf.Asin(Mathf.Clamp(aimDir.Y, -1, 1));
         var pitchShare = Mathf.Lerp(tuning.RifleHipPitchShare, tuning.RifleAimPitchShare, AimAmount) * (1f - SprintAmount * tuning.RifleSprintPitchSuppression);
         var aimRight = flatAim.LengthSquared() > 0.0001f ? flatAim.Normalized().Cross(Vector3.Up).Normalized() : right;
-        var torsoRotation = new Quaternion(aimRight, pitch * pitchShare) * new Quaternion(Vector3.Up, yaw);
+        var torsoRotation = new Quaternion(aimDir, Mathf.DegToRad(tuning.RifleTorsoSwayDegrees) * lateral * sway)
+            * new Quaternion(aimRight, pitch * pitchShare - Mathf.DegToRad(tuning.RifleRecoilLiftDegrees) * kick * tuning.RifleRecoilTorsoShare)
+            * new Quaternion(Vector3.Up, yaw);
+        var lowerSpine = skeleton.GetBoneGlobalPose(spine[0]);
+        lowerSpine.Origin += toSkeleton.Basis * (-aimDir * tuning.RifleRecoilBack * kick * tuning.RifleRecoilTorsoShare);
+        var lowerParent = skeleton.GetBoneParent(spine[0]);
+        skeleton.SetBonePosePosition(spine[0], skeleton.GetBoneGlobalPose(lowerParent).AffineInverse() * lowerSpine.Origin);
         var spineWeights = new Vector3(tuning.RifleSpineLowerShare, tuning.RifleSpineMiddleShare, tuning.RifleSpineUpperShare);
         spineWeights /= Mathf.Max(spineWeights.X + spineWeights.Y + spineWeights.Z, 0.0001f);
         for (var k = 0; k < spine.Length; k++)
@@ -123,7 +190,7 @@ public partial class RifleRig : SkeletonModifier3D
         // Head follows the aim line before rifle placement; the eye socket then determines cheek weld.
         var headWorld = fromSkeleton * skeleton.GetBoneGlobalPose(head).Origin;
         var headBasis = (fromSkeleton.Basis * skeleton.GetBoneGlobalPose(head).Basis).Orthonormalized();
-        var lookDir = (AimTarget - headWorld).Normalized();
+        var lookDir = (visualTarget - headWorld).Normalized();
         var look = new Quaternion((headBasis * Vector3.Back).Normalized(), lookDir);
         RotateBoneWorld(skeleton, head, Quaternion.Identity.Slerp(look, Mathf.Lerp(tuning.RifleHipHeadFollow, tuning.RifleAimHeadFollow, AimAmount) * Weight), fromSkeleton, toSkeleton);
 
@@ -138,20 +205,22 @@ public partial class RifleRig : SkeletonModifier3D
         var chestForward = forward.Rotated(Vector3.Up, yaw * Weight).Normalized();
         var chestRight = chestForward.Cross(Vector3.Up).Normalized();
         var chestUp = Vector3.Up;
-        var rifleDir = (AimTarget - shoulder).Normalized();
+        var rifleDir = (visualTarget - shoulder).Normalized();
         var aimBasis = Basis.LookingAt(rifleDir, Vector3.Up);
 
         // Shouldered: butt in the shoulder pocket, sight near the eye line.
         var shoulderPocket = shoulder - chestRight * tuning.RifleShoulderInboard + -aimBasis.Column2 * tuning.RifleShoulderForward + aimBasis.Column1 * tuning.RifleShoulderUp;
         // Lean the neck toward the stock without stretching its bones. The actual eye, rather than a
         // guessed face height, anchors the shouldered rifle; the reachable projection below keeps both wrists.
-        var desiredEye = shoulderPocket + aimBasis * (Rifle.EyeLocal.Origin - Rifle.ButtLocal.Origin);
-        var desiredHead = desiredEye - headBasis * EyeLandmark;
-        FitEye(skeleton, neck, head, toSkeleton * desiredEye, toSkeleton * desiredHead, AimAmount * Weight);
         var aimed = new Transform3D(aimBasis, shoulderPocket - aimBasis * Rifle.ButtLocal.Origin);
+        var aimedLift = new Basis(aimed.Basis.Column0.Normalized(), Mathf.DegToRad(tuning.RifleRecoilLiftDegrees) * kick);
+        aimed = new Transform3D(aimedLift * aimed.Basis, shoulderPocket + aimedLift * (aimed.Origin - shoulderPocket)
+            + aimed.Basis.Column2.Normalized() * tuning.RifleRecoilBack * kick * (1 - tuning.RifleRecoilTorsoShare));
+        var desiredEye = aimed * Rifle.EyeLocal.Origin;
+        FitEye(skeleton, neck, head, toSkeleton * desiredEye, toSkeleton * (desiredEye - headBasis * EyeLandmark), AimAmount * Weight);
 
         // Hip: stock tucked under the arm against the ribs, muzzle on the target.
-        var hipDir = (AimTarget - (shoulder - chestUp * tuning.RifleHipSightReferenceDown)).Normalized();
+        var hipDir = (visualTarget - (shoulder - chestUp * tuning.RifleHipSightReferenceDown)).Normalized();
         var hipBasis = Basis.LookingAt(hipDir, Vector3.Up).Rotated(hipDir, Mathf.DegToRad(tuning.RifleReadyRollDegrees));
         var hipPocket = shoulder + chestRight * tuning.RifleHipOutboard - chestUp * tuning.RifleHipDown + chestForward * tuning.RifleHipForward;
         var hip = new Transform3D(hipBasis, hipPocket - hipBasis * Rifle.ButtLocal.Origin);
@@ -184,10 +253,25 @@ public partial class RifleRig : SkeletonModifier3D
             stance = stance.InterpolateWith(reloadPose, reloadWeight);
         }
 
-        // Recoil: straight back, and the muzzle climbs.
-        var kick = Recoil * Recoil;
-        var lift = new Basis(stance.Basis.Column0.Normalized(), Mathf.DegToRad(tuning.RifleRecoilLiftDegrees) * kick);
-        stance = new Transform3D(lift * stance.Basis, stance.Origin + stance.Basis.Column2.Normalized() * tuning.RifleRecoilBack * kick);
+        // The carry breathes in the same stride as the feet. Roll about the stock rather than the grip.
+        var pivot = stance * Rifle.ButtLocal.Origin;
+        var roll = new Basis(-stance.Basis.Column2.Normalized(), Mathf.DegToRad(tuning.RifleSwayRollDegrees) * lateral * sway);
+        stance = new Transform3D(roll * stance.Basis, pivot + roll * (stance.Origin - pivot)
+            + chestRight * (lateral * tuning.RifleSwaySide * sway)
+            + chestUp * (bounce * tuning.RifleSwayUp * sway)
+            + chestForward * (bounce * tuning.RifleSwayForward * sway));
+        if (hasStance)
+        {
+            stance = (fromSkeleton * previousStance).InterpolateWith(stance, Mathf.Lerp(1 - Mathf.Exp(-tuning.RifleMotionResponse * (float)delta), 1, AimAmount));
+        }
+        previousStance = toSkeleton * stance;
+        hasStance = true;
+        // The torso takes most of the rearward travel. The remaining stock compression and muzzle climb
+        // use the spring directly, so smoothing carry/reload never rounds off a shot's kick.
+        pivot = stance * Rifle.ButtLocal.Origin;
+        var lift = new Basis(stance.Basis.Column0.Normalized(), Mathf.DegToRad(tuning.RifleRecoilLiftDegrees) * kick * (1 - AimAmount));
+        stance = new Transform3D(lift * stance.Basis, pivot + lift * (stance.Origin - pivot)
+            + stance.Basis.Column2.Normalized() * tuning.RifleRecoilBack * kick * (1 - tuning.RifleRecoilTorsoShare) * (1 - AimAmount));
         stance = stance.Orthonormalized();
         var shoulderR = fromSkeleton * skeleton.GetBoneGlobalPose(upperR).Origin;
         var shoulderLWorld = fromSkeleton * skeleton.GetBoneGlobalPose(upperL).Origin;
@@ -195,11 +279,11 @@ public partial class RifleRig : SkeletonModifier3D
         var reachL = ArmLength(skeleton, upperL, lowerL, handL) - tuning.RifleReachMargin;
         stance = ReachablePlacement(stance, shoulderR, shoulderLWorld, reachR, reachL, Rifle.LeftHandLocal, Rifle.LeftGripBasis);
         // While the rig fades in (end of a get-up), hand the rifle over from wherever the hand already is.
-        var handNow = (fromSkeleton * skeleton.GetBoneGlobalPose(handR)).Orthonormalized();
         var leftNow = (fromSkeleton * skeleton.GetBoneGlobalPose(handL)).Orthonormalized();
         if (Weight < 0.999f)
         {
-            stance = (handNow * RightHandInRifle.AffineInverse()).InterpolateWith(stance, Weight);
+            stance = (fromSkeleton * handoffRifle).InterpolateWith(stance, Mathf.SmoothStep(0, 1, Weight));
+            leftNow = fromSkeleton * skeleton.GetBoneGlobalPose(spine[2]) * handoffChest.AffineInverse() * handoffLeft;
             // The rigid rotation in the handoff can move a wrist outside the earlier spheres. Refit the
             // carried rifle with its firing hand attached and the support hand still blending from the clip.
             // Grow the reach margin smoothly from zero; the get-up clip may start with a straight arm.
@@ -208,30 +292,113 @@ public partial class RifleRig : SkeletonModifier3D
                 reachR + tuning.RifleReachMargin - fadeMargin, reachL + tuning.RifleReachMargin - fadeMargin,
                 Rifle.LeftHandLocal, Rifle.LeftGripBasis, leftNow.Origin, Weight);
         }
-        Rifle.GlobalTransform = stance;
-
-        // 3. Hands onto the grips.
-        var rightHand = RightHandTransform(stance);
-        // The foregrip, or mid-reload wherever the rifle's reload needs the left hand: the magazine, the bolt catch.
-        var leftHand = leftNow.InterpolateWith(LeftHandTransform(stance, Rifle.LeftHandLocal, Rifle.LeftGripBasis), Weight);
-
-        RightTarget = rightHand;
-        LeftTarget = leftHand;
-
+        // 3. Solve both contacts while bounding the coherent upper pose.
         var upperRWorld = fromSkeleton * skeleton.GetBoneGlobalPose(upperR).Origin;
         var upperLWorld = fromSkeleton * skeleton.GetBoneGlobalPose(upperL).Origin;
         var poleR = upperRWorld + chestRight * tuning.RifleElbowOut - chestUp * tuning.RifleElbowDown;
         var poleL = upperLWorld - chestRight * tuning.RifleElbowOut - chestUp * tuning.RifleElbowDown;
-        SolveTwoBone(skeleton, upperR, lowerR, handR, toSkeleton * rightHand, toSkeleton * poleR);
-        SolveTwoBone(skeleton, upperL, lowerL, handL, toSkeleton * leftHand, toSkeleton * poleL);
-        var rightError = (fromSkeleton * skeleton.GetBoneGlobalPose(handR).Origin).DistanceTo(rightHand.Origin);
-        var leftError = (fromSkeleton * skeleton.GetBoneGlobalPose(handL).Origin).DistanceTo(leftHand.Origin);
+        poleR = (fromSkeleton * handoffElbowR).Lerp(poleR, Mathf.SmoothStep(0, 1, Weight));
+        poleL = (fromSkeleton * handoffElbowL).Lerp(poleL, Mathf.SmoothStep(0, 1, Weight));
+        ConstrainUpperPose(skeleton, stance, leftNow, poleR, poleL, (float)delta, fromSkeleton, toSkeleton);
+        var rightError = (fromSkeleton * skeleton.GetBoneGlobalPose(handR).Origin).DistanceTo(RightTarget.Origin);
+        var leftError = (fromSkeleton * skeleton.GetBoneGlobalPose(handL).Origin).DistanceTo(LeftTarget.Origin);
         if (!reportedContactFailure && (rightError > 0.003f || leftError > 0.003f))
         {
             reportedContactFailure = true;
             GD.PushError($"[rifle] contact failure: right={rightError:F6}m left={leftError:F6}m weight={Weight:F3}");
         }
         PoseFingers(skeleton);
+        for (var f = 0; f < 10; f++)
+            for (var j = 0; j < 3; j++) LimitBone(skeleton, fingers[f, j], (float)delta);
+        CacheBones(skeleton);
+    }
+
+    // Interpolate the coherent upper pose and rifle, then solve contacts again. A post-IK bone clamp
+    // would detach wrists. Reducing the candidate instead also covers unusual get-up arm orientations.
+    private void ConstrainUpperPose(Skeleton3D s, Transform3D wanted, Transform3D leftStart,
+        Vector3 poleR, Vector3 poleL, float dt, Transform3D from, Transform3D to)
+    {
+        foreach (var bone in upperBones)
+        {
+            desiredBones[bone] = s.GetBonePoseRotation(bone).Normalized();
+            desiredPositions[bone] = s.GetBonePosePosition(bone);
+        }
+        var startChest = s.GetBoneGlobalPose(spine[2]);
+        if (!hasUpperPose)
+        {
+            lastRifle = handoffRifle;
+            lastChest = startChest;
+            hasUpperPose = true;
+        }
+        var limit = Mathf.DegToRad(Tuning.Current.PoseAngularSpeed) * dt;
+        var amount = 1f;
+        var proposedAim = aimBlend;
+        var fittedAim = proposedAim;
+        for (var attempt = 0; attempt < 12; attempt++)
+        {
+            foreach (var bone in upperBones)
+            {
+                s.SetBonePoseRotation(bone, previousBones![bone].Slerp(desiredBones[bone], amount));
+                s.SetBonePosePosition(bone, previousPositions[bone].Lerp(desiredPositions[bone], amount));
+            }
+            var carried = from * s.GetBoneGlobalPose(spine[2]) * lastChest.AffineInverse() * lastRifle;
+            var rifle = carried.InterpolateWith(wanted, amount);
+            fittedAim = Mathf.Lerp(lastFitAim, proposedAim, amount);
+            if (Reload == 0)
+                rifle.Origin += (EyePosition(s) - rifle * Rifle!.EyeLocal.Origin) * Mathf.SmoothStep(0, 1, fittedAim);
+            if (Weight < 0.999f)
+                leftStart = from * s.GetBoneGlobalPose(spine[2]) * handoffChest.AffineInverse() * handoffLeft;
+            var shoulderR = from * s.GetBoneGlobalPose(upperR).Origin;
+            var shoulderL = from * s.GetBoneGlobalPose(upperL).Origin;
+            var margin = Tuning.Current.RifleReachMargin * Weight * Weight;
+            rifle = ReachablePlacement(rifle, shoulderR, shoulderL,
+                ArmLength(s, upperR, lowerR, handR) - margin, ArmLength(s, upperL, lowerL, handL) - margin,
+                Rifle!.LeftHandLocal, Rifle.LeftGripBasis, leftStart.Origin, Weight);
+            var right = RightHandTransform(rifle);
+            var left = leftStart.InterpolateWith(LeftHandTransform(rifle, Rifle.LeftHandLocal, Rifle.LeftGripBasis), Weight);
+            // Blend elbow destinations as well as wrists; canonical poles alone snap a returning arm's twist.
+            s.SetBonePoseRotation(upperR, previousBones![upperR]);
+            s.SetBonePoseRotation(lowerR, previousBones[lowerR]);
+            s.SetBonePoseRotation(upperL, previousBones[upperL]);
+            s.SetBonePoseRotation(lowerL, previousBones[lowerL]);
+            var oldR = from * s.GetBoneGlobalPose(lowerR).Origin;
+            var oldL = from * s.GetBoneGlobalPose(lowerL).Origin;
+            SolveTwoBone(s, upperR, lowerR, handR, to * right, to * oldR.Lerp(poleR, amount));
+            SolveTwoBone(s, upperL, lowerL, handL, to * left, to * oldL.Lerp(poleL, amount));
+            var largest = 0f;
+            foreach (var bone in upperBones)
+            {
+                var difference = previousBones[bone].Inverse() * s.GetBonePoseRotation(bone).Normalized();
+                largest = Mathf.Max(largest, 2 * Mathf.Atan2(new Vector3(difference.X, difference.Y, difference.Z).Length(), Mathf.Abs(difference.W)));
+            }
+            Rifle.GlobalTransform = rifle;
+            RightTarget = right;
+            LeftTarget = left;
+            if (largest <= limit) break;
+            amount *= 0.5f;
+        }
+        lastRifle = to * Rifle!.GlobalTransform;
+        lastChest = s.GetBoneGlobalPose(spine[2]);
+        aimBlend = lastFitAim = fittedAim;
+    }
+
+    private void CacheBones(Skeleton3D skeleton)
+    {
+        previousBones ??= new Quaternion[skeleton.GetBoneCount()];
+        for (var i = 0; i < previousBones.Length; i++)
+        {
+            previousBones[i] = skeleton.GetBonePoseRotation(i).Normalized();
+            previousPositions[i] = skeleton.GetBonePosePosition(i);
+        }
+    }
+
+    private void LimitBone(Skeleton3D skeleton, int bone, float dt)
+    {
+        var target = skeleton.GetBonePoseRotation(bone).Normalized();
+        var difference = previousBones![bone].Inverse() * target;
+        var angle = 2 * Mathf.Atan2(new Vector3(difference.X, difference.Y, difference.Z).Length(), Mathf.Abs(difference.W));
+        var limit = Mathf.DegToRad(Tuning.Current.PoseAngularSpeed) * dt;
+        if (angle > limit) skeleton.SetBonePoseRotation(bone, previousBones[bone].Slerp(target, limit / angle));
     }
 
     /// <summary>Two-bone neck/head fit to the authored eye socket. The head's desired gaze supplies the
@@ -363,10 +530,10 @@ public partial class RifleRig : SkeletonModifier3D
                 if (f == 5)
                 {
                     var trigger = new Vector3(t.RifleTriggerIndex1Degrees, t.RifleTriggerIndex2Degrees, t.RifleTriggerIndex3Degrees);
-                    angle = Mathf.Lerp(angle, trigger[j], Recoil);
+                    angle = Mathf.Lerp(angle, trigger[j], Mathf.Clamp(Recoil, 0, 1));
                 }
                 var pose = skeleton.GetBoneRest(bone).Basis.GetRotationQuaternion() * new Quaternion(Vector3.Right, Mathf.DegToRad(angle));
-                skeleton.SetBonePoseRotation(bone, skeleton.GetBonePoseRotation(bone).Slerp(pose, Weight));
+                skeleton.SetBonePoseRotation(bone, skeleton.GetBonePoseRotation(bone).Normalized().Slerp(pose, Weight));
             }
         }
     }
@@ -424,6 +591,10 @@ public partial class RifleRig : SkeletonModifier3D
         upperL = skeleton.FindBone("upperarm_l");
         lowerL = skeleton.FindBone("lowerarm_l");
         handL = skeleton.FindBone("hand_l");
+        upperBones = new[] { spine[0], spine[1], spine[2], skeleton.FindBone("clavicle_l"), clavicleR, neck, head, upperR, lowerR, handR, upperL, lowerL, handL };
+        desiredBones = new Quaternion[skeleton.GetBoneCount()];
+        previousPositions = new Vector3[skeleton.GetBoneCount()];
+        desiredPositions = new Vector3[skeleton.GetBoneCount()];
         resolved = true;
     }
 

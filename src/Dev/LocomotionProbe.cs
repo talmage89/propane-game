@@ -63,7 +63,7 @@ public partial class LocomotionProbe : SkeletonModifier3D
         var angle = 0f;
         for (var i = 0; i < previous.Length; i++)
         {
-            var q = s.GetBonePoseRotation(i);
+            var q = s.GetBonePoseRotation(i).Normalized();
             invalid |= !float.IsFinite(q.LengthSquared());
             if (time > 0.2 && !SkipNextPose && !teleported)
             {
@@ -80,8 +80,8 @@ public partial class LocomotionProbe : SkeletonModifier3D
         var right = s.GlobalTransform * s.GetBoneGlobalPose(s.FindBone("foot_r")).Origin;
         ankleHeightDifference = left.Y - right.Y;
         invalid |= !left.IsFinite() || !right.IsFinite();
-        if (SampleDrift) samples.Add((Label, time, left, right));
         var feet = s.GetNodeOrNull<FootPlacement>("Feet");
+        if (SampleDrift && feet?.Settled != false) samples.Add((Label, time, left, right));
         if (feet != null)
         {
             invalid |= Math.Abs(feet.PelvisOffset) > Tuning.Current.FootPelvisLimit + 0.00001f;
@@ -183,7 +183,7 @@ public partial class LocomotionProbe : SkeletonModifier3D
             foreach (var phase in Enum.GetValues<JumpPose>())
                 if (!jumpPhases.Contains(phase)) { failed = true; GD.PushError($"[feet] missing jump phase {phase}"); }
         }
-        failed |= episodes.Length < expectedEpisodes || !float.IsFinite(maxAngle) || !float.IsFinite(maxAngleRate) || maxAngleRate > 2400;
+        failed |= episodes.Length < expectedEpisodes || !float.IsFinite(maxAngle) || !float.IsFinite(maxAngleRate) || maxAngleRate > 1500.01f;
         failed |= assert && contacts.Count < Mathf.Max(1, expectedEpisodes);
         if (expectedEpisodes > 0)
         {

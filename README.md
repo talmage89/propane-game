@@ -103,6 +103,9 @@ A foot modifier plants world-space contacts, steps in the travel direction and a
 remote clips follow displayed snapshot displacement. Jump poses follow latched takeoff, vertical velocity and
 impact-scaled landing. See [the locomotion review](docs/locomotion.md) for measurements and captures. The node
 facade owns collisions, ammo and lifecycle transitions; the resolver has no scene or engine dependencies.
+Rifle and torso sway follow that stride; walk is subtle and aimed creep stays steady. Shots add spring momentum,
+with the shoulder absorbing the kick and the camera returning fully. Contact-aware upper-body blends keep hands
+attached through stance changes, reload and get-up. See [the motion review](docs/motion.md) for captures and bounds.
 A throw immediately clears weapon poses and cancels reload, so get-up cannot restore a pose from before the throw.
 
 ## Tuning

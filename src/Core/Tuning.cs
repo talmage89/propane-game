@@ -220,7 +220,6 @@ public partial class Tuning : Resource
     [Export(PropertyHint.Range, "1,40,0.5")] public float SprintLowerSpeed { get; set; } = 17.5f;
     [Export(PropertyHint.Range, "1,40,0.5")] public float ReadyRaiseSpeed { get; set; } = 14f;
     [Export(PropertyHint.Range, "0.1,20,0.1")] public float ReadyLowerSpeed { get; set; } = 2.5f;
-    [Export(PropertyHint.Range, "1,40,0.5")] public float RecoilRecoverySpeed { get; set; } = 9f;
     [Export(PropertyHint.Range, "0,1,0.01")] public float StaggerMoveControl { get; set; } = 0.25f;
     [Export(PropertyHint.Range, "0,30,0.5")] public float GroundKnockbackFriction { get; set; } = 15f;
     [Export(PropertyHint.Range, "0,10,0.1")] public float AirKnockbackFriction { get; set; } = 1.5f;
@@ -267,7 +266,7 @@ public partial class Tuning : Resource
     [Export(PropertyHint.Range, "0.001,0.1,0.001")] public float FootGroundTolerance { get; set; } = 0.025f;
     [Export(PropertyHint.Range, "0.1,2,0.01")] public float FootKneePoleForward { get; set; } = 1f;
     [Export(PropertyHint.Range, "0.1,1,0.01")] public float FootKneePoleHeight { get; set; } = 0.5f;
-    [Export(PropertyHint.Range, "0.2,0.7,0.01")] public float FootContactRadius { get; set; } = 0.45f;
+    [Export(PropertyHint.Range, "0.2,0.7,0.01")] public float FootContactRadius { get; set; } = 0.3f;
     [Export(PropertyHint.Range, "0.05,0.6,0.01")] public float FootSettleDistance { get; set; } = 0.18f;
     [Export(PropertyHint.Range, "0.05,0.4,0.01")] public float FootHalfWidth { get; set; } = 0.11f;
     [Export(PropertyHint.Range, "0.01,0.2,0.001")] public float FootSoleHeight { get; set; } = 0.104f;
@@ -365,9 +364,33 @@ public partial class Tuning : Resource
     [Export(PropertyHint.Range, "0,0.6,0.01")] public float RifleElbowOut { get; set; } = 0.3f;
     [Export(PropertyHint.Range, "0,1,0.01")] public float RifleElbowDown { get; set; } = 0.6f;
 
+    // Motion presentation uses the same distance-driven phase as the legs.
+    [ExportGroup("Rifle Motion")]
+    [Export(PropertyHint.Range, "0,0.1,0.001")] public float RifleSwaySide { get; set; } = 0.025f;
+    [Export(PropertyHint.Range, "0,0.1,0.001")] public float RifleSwayUp { get; set; } = 0.008f;
+    [Export(PropertyHint.Range, "0,0.1,0.001")] public float RifleSwayForward { get; set; } = 0.012f;
+    [Export(PropertyHint.Range, "0,15,0.1")] public float RifleSwayRollDegrees { get; set; } = 2.5f;
+    [Export(PropertyHint.Range, "0,15,0.1")] public float RifleTorsoSwayDegrees { get; set; } = 1.5f;
+    [Export(PropertyHint.Range, "0,1,0.01")] public float RifleWalkSwayScale { get; set; } = 0.25f;
+    [Export(PropertyHint.Range, "0,2,0.01")] public float RifleSprintSwayScale { get; set; } = 1.35f;
+    [Export(PropertyHint.Range, "0,1,0.01")] public float RifleAimSwayScale { get; set; } = 0.025f;
+    [Export(PropertyHint.Range, "0,1,0.01")] public float RifleAimPelvisSteady { get; set; } = 0.95f;
+    [Export(PropertyHint.Range, "30,1440,10")] public float RifleAimTurnSpeed { get; set; } = 360f;
+    [Export(PropertyHint.Range, "1,60,1")] public float RifleMotionResponse { get; set; } = 14f;
+    [Export(PropertyHint.Range, "60,1440,10")] public float PoseAngularSpeed { get; set; } = 600f;
+    [Export(PropertyHint.Range, "60,2400,10")] public float FootPoseRecoverySpeed { get; set; } = 1500f;
+    [Export(PropertyHint.Range, "0.1,2,0.01")] public float RifleReloadPhaseSpeed { get; set; } = 0.75f;
+    [Export(PropertyHint.Range, "1,15,0.1")] public float RifleRecoilFrequency { get; set; } = 5f;
+    [Export(PropertyHint.Range, "0.1,0.99,0.01")] public float RifleRecoilDamping { get; set; } = 0.65f;
+    [Export(PropertyHint.Range, "0,4,0.01")] public float RifleRecoilImpulse { get; set; } = 2f;
+    [Export(PropertyHint.Range, "0,1,0.01")] public float RifleRecoilTorsoShare { get; set; } = 0.65f;
+
+    [Export(PropertyHint.Range, "1,30,0.1")] public float CameraRecoilRecovery { get; set; } = 7f;
+    [Export(PropertyHint.Range, "0,1,0.01")] public float CameraRecoilSideShare { get; set; } = 0.15f;
+
     // Visual recoil; both wrists stay attached.
-    [Export(PropertyHint.Range, "0,0.1,0.001")] public float RifleRecoilBack { get; set; } = 0.025f;
-    [Export(PropertyHint.Range, "0,10,0.1")] public float RifleRecoilLiftDegrees { get; set; } = 2f;
+    [Export(PropertyHint.Range, "0,0.1,0.001")] public float RifleRecoilBack { get; set; } = 0.045f;
+    [Export(PropertyHint.Range, "0,10,0.1")] public float RifleRecoilLiftDegrees { get; set; } = 5f;
 
     // Wrist frames fitted to the mannequin palms and the authored grips.
     [Export(PropertyHint.Range, "0,0.1,0.001")] public float RifleRightWristSide { get; set; } = 0.0478f;
