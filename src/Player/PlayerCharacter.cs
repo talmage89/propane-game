@@ -25,25 +25,12 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
 
     private const float CapsuleRadius = 0.32f;
     private const float CapsuleHeight = 1.8f;
-    private const float TurnSharpness = 14f;
-    private const float CombatHoldTime = 1.3f;
-    private const float AimBlendSpeed = 9f;
-    private const float SprintBlendSpeed = 7f;
-    private const float ReadyRaiseSpeed = 14f;
-    private const float ReadyLowerSpeed = 2.5f;
-    private const float CoyoteTime = 0.12f;
-    private const float LandingTime = 1f;
-    private const float JumpBufferTime = 0.12f;
-    private const float ShotRange = 400f;
-    private const float AirSpreadDegrees = 2.5f;
-    private const float MaxSpineTwistDegrees = 70f;
     private const float RagdollSettleSpeed = 0.45f;
     private const float RagdollSettleHold = 0.35f;
     private const float RagdollGroundReach = 0.45f;
     private const float GetUpBlendTime = 0.45f;
     private const float RigReturnTime = 0.3f;
     private const float StaggerControlTime = 0.35f;
-    private const float KnockbackFriction = 5f;
     private const float PushStrength = 6f;
     private const float MinRagdollLaunch = 6f;
     private const float MaxRagdollLift = 5.5f;
@@ -63,21 +50,24 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
     private readonly DeviceInput deviceInput = new();
     private IPlayerInputSource? inputOverride;
     private PlayerIntent intent;
+    private readonly PlayerStateResolver resolver = new();
+
+    /// <summary>The last physics tick's decision, shared by locomotion, shooting, animation and snapshots.</summary>
+    public PlayerState ResolvedState { get; private set; }
+
+    private static StateTuning ResolverTuning(Tuning t) => new(t.RunSpeed, t.SprintSpeed, t.CreepSpeed,
+        t.CoyoteTime, t.JumpBufferTime, t.ReadyHoldTime, t.SprintForwardThreshold);
 
     private float facingYaw;
     private float aimAmount;
     private float sprintAmount;
     private float readyAmount;
-    private float combatTimer;
     private float fireCooldown;
     private float landingTimer;
     private float groundedTimer;
     private float bloom;
     private float recoil;
-    private float coyoteTimer;
-    private float jumpBuffer;
     private float airTime;
-    private bool wasGrounded = true;
     private Vector3 knockback;
     private float staggerTimer;
     private float stateTimer;
@@ -88,7 +78,6 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
     private StandardMaterial3D? bodyMaterial;
     private byte staggers;
     private byte remoteStaggers;
-    private bool remoteGrounded = true;
     private bool hasRemoteState;
     private PlayerNetState remoteState;
     private Vector3? pendingRoot;
@@ -248,10 +237,22 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         }
     }
 
+    public override void _Notification(int what)
+    {
+        if (what == NotificationPaused || what == NotificationUnpaused ||
+            what == NotificationApplicationFocusOut || what == NotificationApplicationFocusIn)
+        {
+            (inputOverride as DeviceInput ?? deviceInput).Reset();
+        }
+    }
+
     /// <summary>Moves the player (and camera) to a spawn point, clearing any motion.</summary>
     public void Teleport(Vector3 position, float yaw)
     {
         ResetToActive();
+        resolver.Reset();
+        ResolvedState = default;
+        airTime = landingTimer = 0;
         GlobalPosition = position;
         Velocity = Vector3.Zero;
         knockback = Vector3.Zero;
@@ -295,9 +296,9 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         intent = (inputOverride ?? deviceInput).Read();
         if (InputLocked)
         {
-            intent = new PlayerIntent { Look = intent.Look };
+            intent = new PlayerIntent { Look = intent.Look, LookStick = intent.LookStick };
         }
-        CameraRig.Look(intent.Look);
+        CameraRig.Look(intent.Look, intent.LookStick, dt);
         if (Ammo != null)
         {
             Ammo.Update(dt);
@@ -307,6 +308,15 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
                 Ammo.CancelReload();
             }
         }
+
+        PrepareCombat(dt);
+        var tuning = Tuning.Current;
+        var lifecycle = state == State.Active ? PlayerLifecycle.Active
+            : state == State.GettingUp ? PlayerLifecycle.GettingUp : PlayerLifecycle.Ragdoll;
+        ResolvedState = resolver.Resolve(new StateIntent(intent.Move.X, intent.Move.Y, intent.Sprint,
+                intent.Aim, intent.JumpPressed, intent.FirePressed || (tuning.FullAuto && intent.FireHeld)),
+            new StatePhysics(lifecycle, IsOnFloor(), Ammo?.Reloading ?? false, staggerTimer > 0,
+                fireCooldown <= 0 && (Ammo == null || Ammo.Magazine > 0)), ResolverTuning(tuning), dt);
 
         switch (state)
         {
@@ -336,9 +346,9 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         var tuning = Tuning.Current;
         var planar = new Vector3(Velocity.X, 0, Velocity.Z);
         var forward = Forward(facingYaw);
-        var grounded = IsRemote ? remoteGrounded : IsOnFloor() || coyoteTimer > 0;
-        animator.UpdateLocomotion(state == State.Active ? planar.Dot(forward) : 0f, state == State.Active ? planar.Length() : 0f,
-            state != State.Active || grounded, dt);
+        var grounded = ResolvedState.Grounded;
+        animator.UpdateLocomotion(ResolvedState.Active ? planar.Dot(forward) : 0f, ResolvedState.Active ? planar.Length() : 0f,
+            !ResolvedState.Active || grounded, dt, ResolvedState.Gait);
 
         visual.Rotation = new Vector3(0, facingYaw, 0);
         rig.AimTarget = aimTarget;
@@ -348,7 +358,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         rig.Recoil = recoil;
         rig.Reload = IsRemote ? remoteState.Reload : Ammo?.ReloadProgress ?? 0f;
         rifle.Animate(dt, rig.Reload);
-        recoil = Mathf.MoveToward(recoil, 0, dt * 9f);
+        recoil = Mathf.MoveToward(recoil, 0, dt * tuning.RecoilRecoverySpeed);
         if (IsRemote)
         {
             return;
@@ -373,27 +383,25 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
     private void UpdateMovement(float dt)
     {
         var tuning = Tuning.Current;
-        var grounded = IsOnFloor();
-        coyoteTimer = grounded ? CoyoteTime : coyoteTimer - dt;
-        jumpBuffer = intent.JumpPressed ? JumpBufferTime : jumpBuffer - dt;
+        var grounded = ResolvedState.Grounded;
 
         var cameraYaw = Mathf.DegToRad(CameraRig.Yaw);
-        var wish = new Basis(Vector3.Up, cameraYaw) * new Vector3(intent.Move.X, 0, -intent.Move.Y);
+        var wish = new Basis(Vector3.Up, cameraYaw) * new Vector3(ResolvedState.MoveX, 0, -ResolvedState.MoveY);
         if (wish.LengthSquared() > 1f)
         {
             wish = wish.Normalized();
         }
 
-        var combat = intent.Aim || combatTimer > 0;
-        var movingForward = intent.Move.Y > 0.3f;
-        var sprinting = intent.Sprint && !combat && movingForward && staggerTimer <= 0;
-        sprintAmount = Mathf.MoveToward(sprintAmount, sprinting ? 1f : 0f, dt * SprintBlendSpeed * (sprinting ? 1f : 2.5f));
-        aimAmount = Mathf.MoveToward(aimAmount, intent.Aim ? 1f : 0f, dt * AimBlendSpeed);
-        var ready = combat || intent.FirePressed;
-        readyAmount = Mathf.MoveToward(readyAmount, ready ? 1f : 0f, dt * (ready ? ReadyRaiseSpeed : ReadyLowerSpeed));
+        var resolved = ResolvedState;
+        var sprinting = resolved.Gait == PlayerGait.Sprint;
+        sprintAmount = Mathf.MoveToward(sprintAmount, sprinting ? 1f : 0f,
+            dt * (sprinting ? tuning.SprintRaiseSpeed : tuning.SprintLowerSpeed));
+        aimAmount = resolved.EffectiveAim ? Mathf.MoveToward(aimAmount, 1f, dt * tuning.AimBlendSpeed) : 0f;
+        readyAmount = Mathf.MoveToward(readyAmount, resolved.Ready ? 1f : 0f,
+            dt * (resolved.Ready ? tuning.ReadyRaiseSpeed : tuning.ReadyLowerSpeed));
 
-        var speed = intent.Aim ? tuning.AimMoveSpeed : sprinting ? tuning.SprintSpeed : tuning.RunSpeed;
-        var control = staggerTimer > 0 ? 0.25f : 1f;
+        var speed = resolved.TargetSpeed;
+        var control = staggerTimer > 0 ? tuning.StaggerMoveControl : 1f;
         staggerTimer -= dt;
         var target = wish * speed;
         var velocity = Velocity;
@@ -402,16 +410,14 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         planar = planar.MoveToward(target, accel * dt);
 
         // Horizontal knockback decays separately so a blast is not canceled by walking against it.
-        knockback = knockback.MoveToward(Vector3.Zero, (grounded ? KnockbackFriction * 3f : KnockbackFriction * 0.3f) * dt);
+        knockback = knockback.MoveToward(Vector3.Zero, (grounded ? tuning.GroundKnockbackFriction : tuning.AirKnockbackFriction) * dt);
         knockback.Y = 0;
         velocity.X = planar.X;
         velocity.Z = planar.Z;
 
-        if (jumpBuffer > 0 && coyoteTimer > 0)
+        if (resolved.Jump)
         {
             velocity.Y = tuning.JumpVelocity;
-            jumpBuffer = 0;
-            coyoteTimer = 0;
         }
         else if (!grounded)
         {
@@ -429,63 +435,62 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         Velocity = new Vector3(after.X - knockback.X, after.Y, after.Z - knockback.Z);
         PushBodies(dt);
 
-        grounded = IsOnFloor();
         if (!grounded)
         {
             airTime += dt;
         }
         else
         {
-            if (!wasGrounded && airTime > 0.3f)
+            if (resolved.Support == PlayerSupport.Landing && airTime > tuning.LandingMinAirTime)
             {
                 // The landing crouch only plays from a standstill: running straight on must not drag it along.
-                if (wish.LengthSquared() < 0.01f)
+                if (wish.LengthSquared() < tuning.MovingInputThreshold * tuning.MovingInputThreshold)
                 {
                     animator.PlayLand();
-                    landingTimer = LandingTime;
+                    landingTimer = tuning.LandingPoseTime;
                 }
-                CameraRig.AddTrauma(Mathf.Clamp(airTime * 0.15f, 0, 0.25f));
+                CameraRig.AddTrauma(Mathf.Clamp(airTime * tuning.LandingTraumaPerSecond, 0, tuning.LandingTraumaMax));
             }
             airTime = 0;
         }
-        wasGrounded = grounded;
         landingTimer -= dt;
-        if (landingTimer > 0 && wish.LengthSquared() >= 0.01f)
+        if (landingTimer > 0 && wish.LengthSquared() >= tuning.MovingInputThreshold * tuning.MovingInputThreshold)
         {
             animator.StopLand();
             landingTimer = 0;
         }
 
-        UpdateFacing(dt, wish, combat);
+        UpdateFacing(dt, wish, resolved.Ready);
     }
 
-    private void UpdateFacing(float dt, Vector3 wish, bool combat)
+    private void UpdateFacing(float dt, Vector3 wish, bool ready)
     {
+        var tuning = Tuning.Current;
         var aimYaw = Mathf.DegToRad(CameraRig.Yaw);
         float targetYaw;
-        if (combat)
+        if (ready)
         {
-            if (wish.LengthSquared() > 0.04f)
+            if (wish.LengthSquared() > tuning.FacingInputThreshold * tuning.FacingInputThreshold)
             {
                 // Legs follow the movement, torso twists to the aim. Moving backward, the legs face forward and
                 // the animation plays in reverse, so the twist never exceeds the spine's comfortable range.
                 var moveYaw = Mathf.Atan2(-wish.X, -wish.Z);
                 var offset = Mathf.Wrap(moveYaw - aimYaw, -Mathf.Pi, Mathf.Pi);
-                if (Mathf.Abs(offset) > Mathf.Pi * 0.6f)
+                if (Mathf.Abs(offset) > Mathf.DegToRad(tuning.BackpedalAngleDegrees))
                 {
                     offset = Mathf.Wrap(offset + Mathf.Pi, -Mathf.Pi, Mathf.Pi);
                 }
-                var limit = Mathf.DegToRad(MaxSpineTwistDegrees);
+                var limit = Mathf.DegToRad(tuning.CombatSpineTwistDegrees);
                 targetYaw = aimYaw + Mathf.Clamp(offset, -limit, limit);
             }
             else
             {
                 // Standing: turn in place only once the twist gets large.
                 var offset = Mathf.Wrap(facingYaw - aimYaw, -Mathf.Pi, Mathf.Pi);
-                targetYaw = Mathf.Abs(offset) > Mathf.DegToRad(50f) ? aimYaw : facingYaw;
+                targetYaw = Mathf.Abs(offset) > Mathf.DegToRad(tuning.CombatTurnDegrees) ? aimYaw : facingYaw;
             }
         }
-        else if (wish.LengthSquared() > 0.04f)
+        else if (wish.LengthSquared() > tuning.FacingInputThreshold * tuning.FacingInputThreshold)
         {
             targetYaw = Mathf.Atan2(-wish.X, -wish.Z);
         }
@@ -493,7 +498,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         {
             targetYaw = facingYaw;
         }
-        facingYaw = Mathf.LerpAngle(facingYaw, targetYaw, 1f - Mathf.Exp(-TurnSharpness * dt));
+        facingYaw = Mathf.LerpAngle(facingYaw, targetYaw, 1f - Mathf.Exp(-tuning.TurnSharpness * dt));
     }
 
     private void PushBodies(float dt)
@@ -525,9 +530,9 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         var origin = camera.GlobalPosition;
         var forward = -camera.GlobalBasis.Z;
         var start = origin + forward * Mathf.Max(0, (GlobalPosition + Vector3.Up * 1.4f - origin).Dot(forward));
-        var query = PhysicsRayQueryParameters3D.Create(start, start + forward * ShotRange, Layers.ShotMask, shotExclude);
+        var query = PhysicsRayQueryParameters3D.Create(start, start + forward * Tuning.Current.ShotRange, Layers.ShotMask, shotExclude);
         var hit = GetWorld3D().DirectSpaceState.IntersectRay(query);
-        aimTarget = hit.Count > 0 ? hit["position"].AsVector3() : start + forward * ShotRange;
+        aimTarget = hit.Count > 0 ? hit["position"].AsVector3() : start + forward * Tuning.Current.ShotRange;
         // Never aim at something right behind or inside the character.
         var chest = GlobalPosition + Vector3.Up * 1.35f;
         if ((aimTarget - chest).Dot(forward) < 2f)
@@ -536,46 +541,28 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         }
     }
 
+    // Ammo and cooldown are physics facts supplied to the resolver, before it chooses this tick's action.
+    private void PrepareCombat(float dt)
+    {
+        fireCooldown -= dt;
+        if (state == State.Active && Ammo != null &&
+            (intent.ReloadPressed || (intent.FirePressed && Ammo.Magazine <= 0)))
+        {
+            Ammo.StartReload();
+        }
+    }
+
     private void UpdateShooting(float dt)
     {
         var tuning = Tuning.Current;
-        fireCooldown -= dt;
-        combatTimer -= dt;
         bloom = Mathf.MoveToward(bloom, 0, tuning.BloomRecovery * dt);
-
-        var planarSpeed = new Vector2(Velocity.X, Velocity.Z).Length();
-        var moving = Mathf.Clamp(planarSpeed / Mathf.Max(tuning.RunSpeed, 0.1f), 0, 1.5f);
-        SpreadDegrees = Mathf.Lerp(tuning.HipSpreadDegrees, tuning.AimSpreadDegrees, aimAmount)
-                        + tuning.MoveSpreadDegrees * moving * (1f - aimAmount * 0.6f)
-                        + bloom
-                        + (IsOnFloor() ? 0f : AirSpreadDegrees);
-
-        if (intent.Aim)
-        {
-            combatTimer = Mathf.Max(combatTimer, 0.2f);
-        }
-        var trigger = intent.FirePressed || (tuning.FullAuto && intent.FireHeld);
-        if (Ammo != null)
-        {
-            if (intent.ReloadPressed)
-            {
-                Ammo.StartReload();
-            }
-            if (Ammo.Reloading)
-            {
-                return;
-            }
-            if (Ammo.Magazine <= 0)
-            {
-                // An empty magazine reloads on the next pull of the trigger, if there is anything to load.
-                if (intent.FirePressed)
-                {
-                    Ammo.StartReload();
-                }
-                return;
-            }
-        }
-        if (!trigger || fireCooldown > 0)
+        var moving = Mathf.Clamp(new Vector2(Velocity.X, Velocity.Z).Length() / Mathf.Max(tuning.RunSpeed, 0.1f), 0, 1.5f);
+        // Logical aim is suppressed immediately at takeoff/reload, independent of presentation blending.
+        var aim = ResolvedState.EffectiveAim ? 1f : 0f;
+        SpreadDegrees = Mathf.Lerp(tuning.HipSpreadDegrees, tuning.AimSpreadDegrees, aim)
+                        + tuning.MoveSpreadDegrees * moving * (1f - aim * tuning.AimMoveSpreadReduction)
+                        + bloom + (ResolvedState.Grounded ? 0f : tuning.AirSpreadDegrees);
+        if (!ResolvedState.Fire)
         {
             return;
         }
@@ -584,12 +571,11 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
             Ammo.Magazine--;
         }
         fireCooldown = 1f / Mathf.Max(tuning.FireRate, 0.1f);
-        combatTimer = CombatHoldTime;
-        sprintAmount = Mathf.Min(sprintAmount, 0.3f);
+        sprintAmount = Mathf.Min(sprintAmount, tuning.ShotSprintPoseLimit);
         Fire(SpreadDegrees);
         bloom += tuning.ShotBloomDegrees;
         recoil = 1f;
-        CameraRig.Kick(tuning.RecoilKickDegrees * Mathf.Lerp(1f, 0.6f, aimAmount));
+        CameraRig.Kick(tuning.RecoilKickDegrees * Mathf.Lerp(1f, tuning.AimRecoilScale, aim));
     }
 
     private void Fire(float spreadDegrees)
@@ -602,8 +588,8 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         var start = origin + forward * Mathf.Max(0, (GlobalPosition + Vector3.Up * 1.4f - origin).Dot(forward));
         var space = GetWorld3D().DirectSpaceState;
 
-        var hit = space.IntersectRay(PhysicsRayQueryParameters3D.Create(start, start + direction * ShotRange, Layers.ShotMask, shotExclude));
-        var end = hit.Count > 0 ? hit["position"].AsVector3() : start + direction * ShotRange;
+        var hit = space.IntersectRay(PhysicsRayQueryParameters3D.Create(start, start + direction * tuning.ShotRange, Layers.ShotMask, shotExclude));
+        var end = hit.Count > 0 ? hit["position"].AsVector3() : start + direction * tuning.ShotRange;
 
         // The bullet really leaves the muzzle: something between the muzzle and the target blocks it first.
         var muzzle = rifle.MuzzlePosition;
@@ -732,6 +718,14 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
     private void BeginRagdoll(Vector3 velocity, Vector3 spin)
     {
         state = State.Ragdoll;
+        // A blast can arrive between our ticks. Drop control/presentation immediately so neither snapshots nor
+        // the returning rig inherit an aimed or sprinting pose from before the throw.
+        resolver.Reset();
+        ResolvedState = new PlayerState(PlayerLifecycle.Ragdoll, PlayerSupport.Airborne, PlayerGait.Default,
+            WeaponAction.Carry, 0, 0, 0, intent.Aim, false, false);
+        aimAmount = sprintAmount = readyAmount = 0;
+        airTime = landingTimer = 0;
+        Ammo?.CancelReload();
         stateTimer = 0;
         settleTimer = 0;
         groundedTimer = 0;
@@ -851,7 +845,10 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         Sprint = sprintAmount,
         Ready = readyAmount,
         Reload = Ammo?.ReloadProgress ?? 0f,
-        Grounded = IsOnFloor() || coyoteTimer > 0,
+        Grounded = ResolvedState.Grounded,
+        Gait = ResolvedState.Gait,
+        Support = ResolvedState.Support,
+        Weapon = ResolvedState.Weapon,
         State = state switch
         {
             State.Active => PlayerNetState.Mode.Active,
@@ -906,6 +903,11 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
     private void UpdateRemote(float dt)
     {
         var tuning = Tuning.Current;
+        if (state != State.Active)
+        {
+            ResolvedState = new PlayerState(state == State.GettingUp ? PlayerLifecycle.GettingUp : PlayerLifecycle.Ragdoll,
+                PlayerSupport.Airborne, PlayerGait.Default, WeaponAction.Carry, 0, 0, 0, false, false, false);
+        }
         switch (state)
         {
             case State.Active:
@@ -917,10 +919,11 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
                 Velocity = remoteState.Velocity;
                 facingYaw = remoteState.Yaw;
                 aimTarget = remoteState.AimTarget;
-                aimAmount = remoteState.Aim;
+                aimAmount = remoteState.Weapon == WeaponAction.Aim && remoteState.Grounded ? remoteState.Aim : 0;
                 sprintAmount = remoteState.Sprint;
-                readyAmount = Mathf.Max(remoteState.Ready, readyAmount - dt * ReadyLowerSpeed);
-                remoteGrounded = remoteState.Grounded;
+                readyAmount = Mathf.Max(remoteState.Ready, readyAmount - dt * tuning.ReadyLowerSpeed);
+                ResolvedState = new PlayerState(PlayerLifecycle.Active, remoteState.Support, remoteState.Gait,
+                    remoteState.Weapon, 0, 0, 0, false, false, false);
                 if (remoteState.Staggers != remoteStaggers)
                 {
                     remoteStaggers = remoteState.Staggers;

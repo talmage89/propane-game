@@ -36,7 +36,8 @@ lint: ## Check C# formatting and compile with warnings as errors
 check: lint ## Run lint, then the tests
 	@$(MAKE) --no-print-directory test
 
-test: build ## Run the headless regression tests
+test: build ## Run the headless regression tests (as CI does)
+	"$(GODOT)" --headless --path . res://scenes/dev/movement_tests.tscn
 	"$(GODOT)" --headless --path . res://scenes/dev/generator_tests.tscn -- --seeds=100
 	"$(GODOT)" --headless --path . res://scenes/dev/platform_tests.tscn
 

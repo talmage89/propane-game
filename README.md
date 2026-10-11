@@ -68,18 +68,33 @@ then plays with every patch of that minor version.
 
 ## Controls
 
-| Input | Action |
-| --- | --- |
-| W A S D | Move |
-| Shift | Sprint |
-| Space | Jump |
-| Mouse | Look |
-| Left click | Fire (hold for full auto; toggle it in the tuning panel) |
-| Right click (hold) | Aim: rifle to the shoulder and a tight spread. The camera does not move. |
-| R | New suburb (single player); reload (multiplayer) |
-| Esc | Pause and show the controls (a match keeps running) |
-| F1 or ` | Tuning panel (live sliders; in a match, debug builds only, and it changes everyone's values) |
-| F11 or Alt+Enter | Fullscreen |
+| Keyboard / mouse | Gamepad (Xbox / PlayStation) | Action |
+| --- | --- | --- |
+| W A S D | Left stick | Move at the default gait (6 m/s) |
+| Shift (hold) | Left stick click (hold) | Sprint forward (9.5 m/s) |
+| Space | A / Cross | Jump, including while aiming |
+| Mouse | Right stick | Look |
+| Left click | Right trigger | Fire (hold for full auto; toggle it in the tuning panel) |
+| Right click (hold) | Left trigger (hold) | Aim and creep: upright shouldered walk (1.6 m/s), tight spread; camera stays put |
+| R | X / Square | New suburb (single player); reload (multiplayer) |
+| Esc | — | Pause and show the controls (a match keeps running) |
+| F1 or ` | — | Tuning panel (live sliders; in a match, debug builds only, and it changes everyone's values) |
+| F11 or Alt+Enter | — | Fullscreen |
+
+Aim cancels sprint. Releasing aim with sprint still held restores sprint's target speed on that physics tick,
+including after firing. Jumping drops effective aim in the air; held aim returns on landing. Reload owns the weapon
+and suppresses aim/fire while leaving the selected movement gait free. Menus still require a keyboard or mouse.
+
+Gameplay buttons and stick axes use named actions ([Godot's controller input model](https://docs.godotengine.org/en/stable/tutorials/inputs/controllers_gamepads_joysticks.html)).
+Mouse look is displacement; stick look is a rate with separate sensitivity, radial curve and deadzone tuners.
+Pause and focus changes clear pending presses and mouse motion, and resample held actions before input resumes.
+
+`src/Player/PlayerState.cs` resolves lifecycle, support, gait and weapon action once per physics tick, from intent and
+pre-move floor contact. The accepted jump overrides contact; landing is the first tick that samples contact again.
+Held aim is intent, effective aim owns creep/spread, and recent fire only owns ready presentation. Animation uses the
+resolved gait (creep selects the walk clip), while actual velocity still accelerates toward the target. The node
+facade owns collisions, ammo and lifecycle transitions; the resolver has no scene or engine dependencies.
+A throw immediately clears weapon poses and cancels reload, so get-up cannot restore a pose from before the throw.
 
 ## Tuning
 
@@ -124,6 +139,10 @@ including `ffmpeg.exe` on Windows; a game in a match stays in step, unlike Godot
 ```sh
 GODOT=/Applications/Godot_mono.app/Contents/MacOS/Godot
 
+# Movement resolver: gait/target speed on each transition tick, lifecycle, jump buffer and coyote time;
+# injected gamepad actions and stick look.
+$GODOT --headless res://scenes/dev/movement_tests.tscn
+
 # Generator: determinism, overlaps, tank count and placement, spawn safety, reachability, and the same for match
 # suburbs with player starts, ammo spots and the plan's encoding. Exits 1 on failure.
 $GODOT --headless res://scenes/dev/generator_tests.tscn -- --seeds=200
@@ -149,8 +168,15 @@ $GODOT res://scenes/dev/soak.tscn
 # Tank close-ups (scenarios: full, vent, blast, look), the character and rifle rig, the world kit, map overviews.
 $GODOT --fixed-fps 60 res://scenes/dev/tank_range.tscn -- --capture-dir=/tmp/t --scenario=blast
 $GODOT --fixed-fps 60 res://scenes/dev/player_range.tscn -- --capture-dir=/tmp/p
-# Player scenarios: stances (default), reload, ragdoll. --view=rifleleft or rifleright follows the rifle up close.
+# Player scenarios: stances (default), reload, ragdoll, creep (two measured strides), movement (labeled gait/jump transitions),
+# sprint-repro (discovery sequence, exact-tick assertions and transition log).
+# --view=rifleleft or rifleright follows the rifle up close.
 $GODOT --fixed-fps 60 res://scenes/dev/player_range.tscn -- --capture-dir=/tmp/p --scenario=reload --view=rifleleft
+$GODOT --fixed-fps 60 res://scenes/dev/player_range.tscn -- --capture-dir=/tmp/movement --scenario=movement --view=side
+$GODOT --headless res://scenes/dev/player_range.tscn -- --scenario=sprint-repro
+# Compare aimed walk speeds from the side and the player camera (--view=player).
+# Captures 12 frames per stride and writes final world-space foot/toe samples to stride.csv.
+$GODOT --fixed-fps 60 res://scenes/dev/player_range.tscn -- --scenario=creep --view=side --tune.CreepSpeed=1.6 --capture-dir=/tmp/creep
 $GODOT --fixed-fps 60 res://scenes/dev/world_lab.tscn -- --capture-dir=/tmp/w
 $GODOT --fixed-fps 60 res://scenes/dev/suburb_preview.tscn -- --capture-dir=/tmp/s
 
@@ -163,8 +189,15 @@ GODOT=$GODOT tools/dev/net_bots.sh -n 3 -l 60 -- --net-lag=120 --net-jitter=30 -
 tools/dev/compare_tanks.py build/net/bot*.log
 ```
 
-`net_test.tscn` scenarios: bots playing (default), `duel` (hits, drops and a thrown player, filmed from both sides)
-and `pickup` (an ammo can taken and returning). [docs/multiplayer.md](docs/multiplayer.md) lists the commands.
+`net_test.tscn` scenarios: bots playing (default), `duel` (hits, drops and a thrown player, filmed from both sides),
+`pickup` (an ammo can taken and returning), and `movement` (remote creep, sprint, jumping and held-aim landing,
+with assertions and labeled frames). [docs/multiplayer.md](docs/multiplayer.md) lists the commands.
+
+The creep probe reports median and 75th-percentile horizontal foot/toe drift for adjacent samples within 3 cm of
+each bone's minimum height, after two seconds of settling. These are near-floor proxies for planted contacts;
+they do not prove contact classification, lateral stepping or foot IK. The headless movement suite also checks
+actual facade velocity and animation playback at 0.98, 1.6, 2.2 and 2.8 m/s.
+[docs/movement.md](docs/movement.md) records the speed comparison and the default's trade-off.
 
 ## Versions and releases
 
