@@ -51,6 +51,16 @@ public static class AuthorityTests
             sync.Correct(2.2);
             TestRunner.Assert(body.Body.GlobalTransform.IsEqualApprox(pushed), "gather lease erased a genuine predicted impulse");
         });
+        runner.Run("authority/match queue preserves a nonpredictive gather target", () =>
+        {
+            using var f = new MatchFixture(runner);
+            var tank = f.Match.LiveTanks.Single(t => t.NetId == Id);
+            f.Match.Bodies.OnAuthority(Grant(3, 2) with { Rest = true }, 0);
+            f.Match.Bodies.Correct(1);
+            f.Match.Claim(new[] { tank }, atomic: true, predictMotion: false);
+            TestRunner.Assert(f.Match.Bodies.Get(Id) is { ClaimPending: true, HasTarget: true, TargetRest: true },
+                "production authority queue discarded the gather rest target");
+        });
         runner.Run("authority/solid geometry cannot trap a fresh observer across a wall", () =>
         {
             using var body = new BodyFixture(runner.World.Root);

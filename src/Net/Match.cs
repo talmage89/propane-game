@@ -560,9 +560,9 @@ public partial class Match : Node3D
     }
 
     /// <summary>One atomic request for all disturbed bodies, with each body's expected epoch and proposed pose.</summary>
-    internal uint Claim(IEnumerable<GodotObject> disturbed, uint cause = 0, bool atomic = false)
+    internal uint Claim(IEnumerable<GodotObject> disturbed, uint cause = 0, bool atomic = false, bool predictMotion = true)
     {
-        var claims = atomic ? bodies.ClaimGroup(disturbed) : bodies.Claim(disturbed);
+        var claims = atomic ? bodies.ClaimGroup(disturbed, predictMotion) : bodies.Claim(disturbed);
         if (claims.Count == 0) { return 0; }
         var request = NewRequest();
         QueueAuthority(new AuthorityRequest(Msg.Claim, request, cause, claims.Select(c => c.Id).ToArray(),
@@ -572,7 +572,7 @@ public partial class Match : Node3D
 
     private void GrantGather(IReadOnlyList<PropaneTank> members, Action<Func<PropaneTank, bool>?> done)
     {
-        var request = Claim(members, atomic: true);
+        var request = Claim(members, atomic: true, predictMotion: false);
         if (request == 0) { done(null); return; }
         gatherRequests.Add(request);
         void Resolve(AuthorityMessage result)
@@ -623,7 +623,11 @@ public partial class Match : Node3D
     {
         foreach (var id in request.Ids)
         {
-            if (bodies.Get(id) is { } entry) { request.Expected[id] = entry.Epoch; entry.ClaimPending = true; entry.HasTarget = false; }
+            if (bodies.Get(id) is { } entry)
+            {
+                request.Expected[id] = entry.Epoch;
+                BodySync.MarkPending(entry, predictMotion: request.Type != Msg.Claim || !entry.ObserveWhilePending);
+            }
         }
         outgoingAuthority.Add(request);
         if (request.Type != Msg.Puncture || request.Cause == 0) { FlushAuthority(); }
