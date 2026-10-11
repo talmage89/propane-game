@@ -78,17 +78,30 @@ public partial class NetTest : Node
                 net.JoinLobby(lobby.Id);
             }
         };
+        if (DevArgs.Get("scenario") == "appearance")
+        {
+            appearanceMenus = new UI.Menus { Net = net, Visible = false };
+            AddChild(appearanceMenus);
+        }
         net.LobbyChanged += () =>
         {
             if (net.Lobby is { } lobby)
             {
                 Log($"lobby {lobby.Id}: {string.Join(", ", lobby.Members.Select(m => $"{m.Name}/{m.Appearance.Color.ToHtml(false)}"))}, {lobby.Phase}");
+                if (DevArgs.Get("scenario") == "appearance" && lobby.Phase == LobbyServer.LobbyPhase.Waiting && lobby.Members.Count == players)
+                {
+                    CheckAppearances(lobby.Members);
+                    appearanceMenus!.Show(UI.Menus.Screen.Lobby);
+                    GetTree().CreateTimer(0.15).Timeout += () => director.Screenshot($"{net.PlayerName}_appearance_lobby");
+                }
                 TryStartMatch();
             }
         };
         net.NoticeReceived += text => Log($"notice: {text}");
         net.MatchStarting += async setup =>
         {
+            appearanceMenus?.Show(UI.Menus.Screen.None);
+            if (DevArgs.Get("scenario") == "appearance") { CheckAppearances(setup.Players.Select(p => p.Player)); }
             var delay = DevArgs.GetFloat("match-delay", 0);
             if (delay > 0)
             {
@@ -104,7 +117,7 @@ public partial class NetTest : Node
             match = new Match { Name = "Match", Net = net, Setup = setup };
             match.Finished += () =>
             {
-                if (DevArgs.Get("scenario") is "duel" or "pickup" or "drop-refusal" or "puncture-race")
+                if (DevArgs.Get("scenario") is "duel" or "pickup" or "drop-refusal" or "puncture-race" or "appearance")
                 {
                     ScenarioAssert(scenarioPassed, "scenario ended before all assertions passed");
                 }
@@ -153,6 +166,8 @@ public partial class NetTest : Node
             pickupTakenAt = -1;
             pickupMovedAway = false;
             scenarioPassed = scenarioFailed = false;
+            appearanceTime = -1;
+            appearanceDropped = appearanceGlowChecked = appearanceResultsChecked = false;
             // Movement proof is per match, just like the duel/pickup assertions on a reused connection.
             movementCamera = null;
             remoteFeet = null;
@@ -165,8 +180,9 @@ public partial class NetTest : Node
         };
         var name = DevArgs.Get("name") ?? (role == "host" ? "HostBot" : $"Bot{OS.GetProcessId() % 1000}");
         var color = (int)DevArgs.GetFloat("color", role == "host" ? 0 : 1);
+        var appearance = DevArgs.Get("appearance") is { } hex ? ParseAppearance(hex) : AppearanceRecord.FromPalette(color);
         // Give a hosted server a moment to open its port.
-        GetTree().CreateTimer(DevArgs.Get("host-server") != null ? 0.3 : 0.05).Timeout += () => net.Connect(address, port, name, color);
+        GetTree().CreateTimer(DevArgs.Get("host-server") != null ? 0.3 : 0.05).Timeout += () => net.Connect(address, port, name, appearance);
     }
 
     private void TryStartMatch()
@@ -208,6 +224,10 @@ public partial class NetTest : Node
         if (DevArgs.Get("scenario") is "duel" or "drop-refusal")
         {
             Duel(match, dt);
+        }
+        else if (DevArgs.Get("scenario") == "appearance")
+        {
+            AppearanceScenario(match, dt);
         }
         else if (DevArgs.Get("scenario") == "puncture-race")
         {
