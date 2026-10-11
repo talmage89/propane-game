@@ -51,16 +51,18 @@ fi
     counter = scratch / "world-count"
     environment = dict(os.environ, PATH=f"{scratch}:{os.environ['PATH']}", GODOT=str(scratch / "godot"),
                        COMMAND_LOG=str(log), WORLD_COUNT=str(counter), TMPDIR=str(scratch))
-    checkers = ["check_test_threads.py", "check_world_tests.py", "time_gate_tests.py", "check_scores_tests.py", "compare_vents_tests.py", "compare_tanks_tests.py", "net_bots_tests.py"]
+    checkers = ["check_test_threads.py", "check_world_tests.py", "time_gate_tests.py", "check_scores_tests.py", "compare_vents_tests.py", "compare_tanks_tests.py", "net_bots_tests.py",
+                "animation_review_tests.py", "animation_metrics.py build/animation-review-gate/metrics.csv --output build/animation-review-gate/results.json"]
     scenes = ["shutdown_tests.tscn", "shutdown_tests.tscn -- --paused --window-close --repeat-quit", "core_tests.tscn", "blast_query_tests.tscn", "gather_range.tscn",
               "gather_range.tscn -- --scenario=grant-races",
               "gather_range.tscn -- --scenario=appearance",
               "game_test.tscn -- --scenario=gather --tune.FixedSeed=23",
               "game_test.tscn -- --scenario=clear --quit=32 --tune.FixedSeed=23",
-              "world_services_tests.tscn", "melee_range.tscn",
+              "world_services_tests.tscn", "session_actors_tests.tscn", "upright_pile_tests.tscn", "melee_range.tscn",
+              "animation_review.tscn -- --cases=walk_000,jog_000,creep_000,creep_180,creep_090,sprint,aim_idle",
               "player_range.tscn -- --scenario=melee --assert-motion --assert-grip",
               "bot_navigation_course.tscn -- --seeds=5",
-              "menu_test.tscn -- --scenario=gamepad", "menu_test.tscn -- --scenario=devices", "menu_test.tscn -- --scenario=mouse",
+              "menu_test.tscn -- --scenario=gamepad", "menu_test.tscn -- --scenario=devices", "menu_test.tscn -- --scenario=input", "menu_test.tscn -- --scenario=mouse",
               "player_range.tscn -- --scenario=grip --grip-sweep --assert-grip --assert-motion",
               "player_range.tscn -- --scenario=ragdoll --assert-grip --assert-motion",
               "player_range.tscn -- --scenario=feet --assert-feet --assert-motion",
@@ -131,9 +133,17 @@ def check_core_wiring():
     require(".Quit(" not in source.replace("ShutdownGuard.Quit(", ""),
             "core runner bypasses shutdown guard")
     require("ShutdownGuard.Quit(node.GetTree(), code)" in source, "standalone completion bypasses shutdown guard")
+    # The animation harness is also transplanted onto v0.2.0, which predates ShutdownGuard.
+    # Accept its wrapper only with this exact guarded current-build / legacy-build split.
+    review_shutdown = re.compile(r"#if PROPANE_REVIEW_RELEASE\s+tree\.Quit\(code\);\s+#else\s+ShutdownGuard\.Quit\(tree, code\);\s+#endif")
+    review = (ROOT / "src/Dev/AnimationReview.cs").read_text()
+    require(review_shutdown.search(review), "animation review lost its guarded current-build shutdown")
     for path in (ROOT / "src/Dev").rglob("*.cs"):
         if path.name != "ShutdownWitness.cs":
-            require(".Quit(" not in path.read_text().replace("ShutdownGuard.Quit(", ""),
+            text = path.read_text()
+            if path.name == "AnimationReview.cs":
+                text = review_shutdown.sub("ShutdownGuard.Quit(tree, code);", text)
+            require(".Quit(" not in text.replace("ShutdownGuard.Quit(", "").replace("AnimationReview.Quit(", ""),
                     f"{path.name} bypasses orderly shutdown")
     runner = (ROOT / "src/Dev/UnitTests/TestRunner.cs").read_text()
     require("Assembly.GetTypes()" in runner and "typeof(UnitSuiteAttribute)" in runner and

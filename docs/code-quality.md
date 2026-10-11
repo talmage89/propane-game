@@ -36,6 +36,9 @@ files. The script also stubs external tools to prove `make -j4 check` runs lint 
 propagates a failure from each checker, scene, saved-plan writer and world-hash process. It checks that the core runner retains platform, movement and unit scenes with failure completion. It rejects missing or
 different world hashes and checks that `test-full` retains the gate and every deep sweep, including melee reloads, and propagates their failures. It checks that Godot
 setup reuses a valid cached editor and stops on a download failure.
+The gate manifest includes session actors, upright piles, real device input and the animation review/metrics.
+The shutdown proof permits `AnimationReview.Quit` only with its guarded current-build branch and explicit
+historical-release branch; direct current-build `SceneTree.Quit` calls still fail.
 
 ## Fast gate and deep sweeps
 
@@ -44,7 +47,7 @@ setup reuses a valid cached editor and stops on a download failure.
 | Target | Assertions |
 | --- | --- |
 | `test-core` | Python timing/world-wrapper/score/vent/tank-agreement/launcher checkers, platform, movement, all unit suites, normal shutdown and paused window-close witnesses |
-| `test-behavior` | Blast completeness, gather/races/appearance/real-game gather, melee collision/poses, navigation, all three menu scenarios, grip/recovery, feet/corrections/events, movement/motion continuity |
+| `test-behavior` | Session actors and animation metrics, scoped worlds, blast completeness, upright piles, gather/races/appearance/real-game gather, melee collision/poses, navigation, gamepad/devices/input/mouse menus, grip/recovery, feet/corrections/events, movement/motion continuity |
 | `test-generator` | 20 single-player and 2-player seeds, three each at 8/16/24/32 players, two forced seeds for every formation at all six sizes |
 | `test-world` | All four saved formation plans built and hashed in two fresh processes |
 
