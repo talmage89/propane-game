@@ -59,9 +59,7 @@ public sealed class Bot : IBotBrain
     private float vantageTimer;
     private float strafeSide = 1f;
     private float clock;
-    private float yaw;
-    private float pitch;
-    private bool hasView;
+    private readonly BotAim aimControl = new();
 
     /// <summary>What the bot is doing, for logs.</summary>
     public string Status { get; private set; } = "";
@@ -89,7 +87,7 @@ public sealed class Bot : IBotBrain
         navigationGoal = null;
         if (!match.IsPlaying || player.IsRagdolled || player.Ammo == null)
         {
-            hasView = false;
+            aimControl.Reset();
             navigator.Reset();
             return;
         }
@@ -557,27 +555,7 @@ public sealed class Bot : IBotBrain
     private static Vector3 Flat(Vector3 v) => new(v.X, 0, v.Z);
 
     /// <summary>Turns the view toward a point with skill-dependent smoothing, including while fleeing.</summary>
-    private void Face(PlayerCharacter player, Vector3 point, float dt)
-    {
-        var aim = player.Aim;
-        var view = point - aim.EyeOrigin;
-        if (view.LengthSquared() < 0.0001f)
-        {
-            return;
-        }
-        var wantYaw = Mathf.RadToDeg(Mathf.Atan2(-view.X, -view.Z));
-        var wantPitch = Mathf.RadToDeg(Mathf.Asin(Mathf.Clamp(view.Normalized().Y, -1, 1)));
-        if (!hasView)
-        {
-            yaw = player.Aim.Yaw;
-            pitch = player.Aim.Pitch;
-            hasView = true;
-        }
-        var k = 1f - Mathf.Exp(-tuning.BotAimTurnSharpness * Mathf.Lerp(0.35f, 1f, Skill) * dt);
-        yaw += Mathf.Wrap(wantYaw - yaw, -180f, 180f) * k;
-        pitch = Mathf.Lerp(pitch, wantPitch, k);
-        player.Aim.SetOrientation(yaw, pitch);
-    }
+    internal void Face(PlayerCharacter player, Vector3 point, float dt) => aimControl.Track(player, point, dt, Skill);
 
     private static Vector3 Aim(PlayerCharacter enemy) => enemy.IsRagdolled ? enemy.PelvisPosition : enemy.GlobalPosition + Vector3.Up * 1.15f;
 

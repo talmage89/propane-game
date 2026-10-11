@@ -78,6 +78,11 @@ test-behavior: build ## Run isolated physics, navigation, menu, grip and feet pr
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/player_range.tscn -- --scenario=feet-events --assert-feet --assert-grip --assert-motion
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/player_range.tscn -- --scenario=movement --assert-motion --assert-grip
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/player_range.tscn -- --scenario=motion --assert-motion --assert-grip
+	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/player_range.tscn -- --scenario=recoil --stance=aim --assert-grip --assert-motion
+	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/player_range.tscn -- --scenario=recoil --stance=hip --assert-grip --assert-motion
+	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/player_range.tscn -- --scenario=recoil --stance=creep --assert-grip --assert-motion
+	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/player_range.tscn -- --scenario=recoil --stance=hip --burst-start=0 --assert-grip --assert-motion
+	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/player_range.tscn -- --scenario=bot-recoil --magazines=2
 
 test-generator: build ## Check every generator assertion with bounded seed depth
 	"$(GODOT)" --headless --path . res://scenes/dev/generator_tests.tscn -- --seeds=20 --large-seeds=3 --formation-seeds=2
@@ -89,6 +94,8 @@ test-full: test ## Run the gate plus deep sweeps
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/upright_pile_tests.tscn -- --deep --awake
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/menu_test.tscn -- --scenario=lifetime --port=$(PORT)
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/player_range.tscn -- --scenario=melee-reloads --assert-motion --assert-grip
+	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/player_range.tscn -- --scenario=recoil --stance=air --assert-grip --assert-motion
+	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/player_range.tscn -- --scenario=bot-recoil
 	"$(GODOT)" --headless --path . res://scenes/dev/generator_tests.tscn -- --seeds=200 --large-seeds=100 --formation-seeds=6
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/bot_navigation_course.tscn -- --seeds=100
 
