@@ -34,14 +34,16 @@ public static class ProtocolTests
             Packet(Msg.MatchEnd, new[] { new Standing(2, "Test", 1, 3, true) }), Packet(Msg.PlayerLeft, new PlayerLeftMessage(3, 2)),
             Packet(Msg.Pong, new PongMessage(1, 2)),
             Packet(Msg.DropRefused, new DropRefusedMessage(new[] { BodySync.DropTankId(0, 0) })),
+            Packet(Msg.Authority, new AuthorityMessage(2, 1, ClaimRefusal.None,
+                new[] { new BodyAuthority(body with { Epoch = 2 }, 2, TankLedger.State.Venting, false, new VentParameters(Vector3.One, Vector3.Up, -1), Vector3.Zero) })),
             Packet(Msg.PlayerState, new PlayerStateMessage(1, new PlayerNetState { Position = Vector3.One, Velocity = Vector3.Zero,
                 Yaw = 1, AimTarget = Vector3.Forward, Aim = 17 / 255f, Sprint = 1, Ready = 128 / 255f, Reload = 0,
                 Grounded = true, State = PlayerNetState.Mode.GettingUp, PelvisPosition = Vector3.Up, PelvisVelocity = Vector3.Down, Staggers = 2,
                 Gait = PlayerGait.Creep, Support = PlayerSupport.Landing, Weapon = WeaponAction.Aim })),
             Packet(Msg.Shot, new ShotMessage(Vector3.Zero, Vector3.Up, Vector3.Forward, 7, 3, -1)),
             Packet(Msg.Puncture, new PunctureMessage(body.Id, body.Transform, body.Linear, body.Angular, Vector3.One, Vector3.Up, -1)),
-            Packet(Msg.Explode, new ExplodeMessage(body.Id, Vector3.One)), Packet(Msg.Claim, new ClaimMessage(new[] { body.Id })),
-            Packet(Msg.BodyStates, new BodyStatesMessage(1, new[] { body })), Packet(Msg.BodyRest, new BodyRestMessage(body.Id, body.Transform, 1)),
+            Packet(Msg.Explode, new ExplodeMessage(body.Id, Vector3.One)), Packet(Msg.Claim, new ClaimMessage(1, new[] { body })),
+            Packet(Msg.BodyStates, new BodyStatesMessage(1, new[] { body with { Sequence = 1 } })), Packet(Msg.BodyRest, new BodyRestMessage(body.Id, body.Transform, 1)),
             Packet(Msg.Drop, new DropMessage(1, 1, new[] { body with { Id = BodySync.DropTankId(0, 0) } })),
             Packet(Msg.Ragdoll, new RagdollMessage(Vector3.One, Vector3.Up, Vector3.Right)), Packet(Msg.GetUp, new GetUpMessage(Vector3.One, 1)),
             Packet(Msg.TuningSet, new TuningMessage(nameof(Tuning.BlastRadius), 5f)),
@@ -57,9 +59,9 @@ public static class ProtocolTests
             Enum.GetValues<Msg>().Order().SequenceEqual(fixtures.Select(f => f.Type).Order()), "missing or duplicate message fixture"));
         foreach (var fixture in fixtures)
         {
-            var fromServer = fixture.Type is >= Msg.Welcome and <= Msg.DropRefused;
+            var fromServer = fixture.Type is >= Msg.Welcome and <= Msg.Authority;
             RoundTrip(runner, fixture, fromServer);
-            if (Protocol.IsRelay(fixture.Type)) { RoundTrip(runner, fixture, true); }
+            if (Protocol.IsRelay(fixture.Type) && fixture.Type is not (Msg.Claim or Msg.Puncture or Msg.Explode)) { RoundTrip(runner, fixture, true); }
         }
         runner.Run("protocol/player movement enums survive client and relay snapshots", () =>
         {
@@ -101,6 +103,26 @@ public static class ProtocolTests
                         TestRunner.Throws<InvalidDataException>(() => MessageCodec.Decode(bytes, fromServer));
                     }
                 }
+            }
+        });
+        runner.Run("protocol/authority requests and ordering fields are validated", () =>
+        {
+            foreach (var type in new[] { Msg.Claim, Msg.Puncture, Msg.Explode })
+            {
+                TestRunner.Throws<InvalidDataException>(() => MessageCodec.Decode(MessageCodec.Encode(fixtures.Single(f => f.Type == type), true), true));
+            }
+            var puncture = (PunctureMessage)fixtures.Single(f => f.Type == Msg.Puncture).Payload;
+            foreach (var payload in new[] { puncture with { Epoch = 0 }, puncture with { Request = 0 }, puncture with { Swirl = 0 }, puncture with { Swirl = .5f } })
+            {
+                TestRunner.Throws<InvalidDataException>(() => MessageCodec.Decode(MessageCodec.Encode(Packet(Msg.Puncture, payload), false), false));
+            }
+            var states = (BodyStatesMessage)fixtures.Single(f => f.Type == Msg.BodyStates).Payload;
+            TestRunner.Throws<InvalidDataException>(() => MessageCodec.Decode(MessageCodec.Encode(Packet(Msg.BodyStates,
+                states with { Bodies = states.Bodies.Select(b => b with { Sequence = 0 }).ToArray() }), false), false));
+            var authority = (AuthorityMessage)fixtures.Single(f => f.Type == Msg.Authority).Payload;
+            foreach (var payload in new[] { authority with { Reason = (ClaimRefusal)255 }, authority with { Bodies = authority.Bodies.Select(b => b with { Vent = null }).ToArray() } })
+            {
+                TestRunner.Throws<InvalidDataException>(() => MessageCodec.Decode(MessageCodec.Encode(Packet(Msg.Authority, payload), true), true));
             }
         });
         runner.Run("protocol/unknown and wrong direction", () =>

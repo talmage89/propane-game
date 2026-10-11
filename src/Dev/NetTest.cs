@@ -29,6 +29,7 @@ public partial class NetTest : Node
     private bool started;
     private float clock;
     private float digestTimer;
+    private float trajectoryTimer;
     private float shotTimer;
     private int matches;
     private int matchesWanted = 1;
@@ -103,7 +104,7 @@ public partial class NetTest : Node
             match = new Match { Name = "Match", Net = net, Setup = setup };
             match.Finished += () =>
             {
-                if (DevArgs.Get("scenario") is "duel" or "pickup" or "drop-refusal")
+                if (DevArgs.Get("scenario") is "duel" or "pickup" or "drop-refusal" or "puncture-race")
                 {
                     ScenarioAssert(scenarioPassed, "scenario ended before all assertions passed");
                 }
@@ -129,6 +130,18 @@ public partial class NetTest : Node
                 {
                     GetTree().CreateTimer(1.0).Timeout += () => GetTree().Quit();
                 }
+            };
+            raceTick = raceSamples = 0;
+            raceVent = null;
+            raceCamera = null;
+            raceWorst = 0;
+            match.AuthorityResolved += result =>
+            {
+                if (DevArgs.Get("scenario") != "puncture-race") { return; }
+                var canonical = result.Bodies.FirstOrDefault(b => b.Body.Id == BodySync.MapTankId(0));
+                if (canonical?.State != TankLedger.State.Venting) { return; }
+                if (raceVent != null) { ScenarioAssert(raceVent == canonical.Vent, "race: canonical vent changed during reconciliation"); }
+                raceVent = canonical.Vent;
             };
             AddChild(match);
             match.Player.InputOverride = bot;
@@ -194,6 +207,10 @@ public partial class NetTest : Node
         {
             Duel(match, dt);
         }
+        else if (DevArgs.Get("scenario") == "puncture-race")
+        {
+            PunctureRace(match);
+        }
         else if (DevArgs.Get("scenario") == "movement")
         {
             MovementScenario(match, dt);
@@ -216,6 +233,12 @@ public partial class NetTest : Node
         }
 
         digestTimer -= dt;
+        trajectoryTimer -= dt;
+        if (DevArgs.Get("tank-trajectories") != null && trajectoryTimer <= 0)
+        {
+            trajectoryTimer = 0.05f;
+            LogTankTrajectory();
+        }
         if (digestTimer <= 0)
         {
             digestTimer = DevArgs.GetFloat("digest-every", 5f);
@@ -229,6 +252,83 @@ public partial class NetTest : Node
             director.Screenshot($"{net.PlayerName}_{clock:000.0}");
         }
     }
+
+    private int raceTick;
+    private int raceSamples;
+    private float raceWorst;
+    private VentParameters? raceVent;
+    private Camera3D? raceCamera;
+
+    /// <summary>
+    /// Injects two opposed bullet contacts on the same simulation tick, while both copies are intact. This isolates
+    /// the authority race from rifle spread/aim. A third client, when present, observes without shooting.
+    /// </summary>
+    private void PunctureRace(Match match)
+    {
+        if (!match.IsPlaying) { return; }
+        raceTick++;
+        var id = BodySync.MapTankId(0);
+        var tank = match.LiveTanks.SingleOrDefault(t => t.NetId == id);
+        ScenarioAssert(tank != null, "race: test tank disappeared");
+        if (tank == null) { return; }
+        if (raceTick == 1)
+        {
+            match.Player.InputOverride = new ScriptedInput();
+            var road = match.Suburb.Plan.Roads.OrderByDescending(r => r.Length).First();
+            var spot = World.Suburb.ToWorld((road.A + road.B) / 2, 8);
+            BodySync.Snap(tank, new Transform3D(Basis.Identity, spot), Vector3.Zero, Vector3.Zero);
+            match.Player.Teleport(spot + new Vector3(20, -7.9f, 0), 0);
+            raceCamera = new Camera3D { Current = true, Fov = 55 };
+            match.AddChild(raceCamera);
+        }
+        if (raceTick == 180 && net.Color < 2)
+        {
+            ScenarioAssert(tank.State == PropaneTank.TankState.Intact && match.Bodies.Get(id)!.Epoch == 1, "race: contender received a puncture before its simultaneous contact");
+            var normal = net.Color == 0 ? Vector3.Right : Vector3.Left;
+            var hole = PropaneTank.LocalCenter + normal * 0.15f;
+            tank.TakeShot(tank.ToGlobal(hole), tank.GlobalBasis * normal, -(tank.GlobalBasis * normal));
+            Log($"race contact tick {raceTick} hole {Vector(tank.HoleLocal)} swirl {tank.SwirlSign}");
+        }
+        if (raceCamera != null)
+        {
+            raceCamera.GlobalPosition = tank.GlobalPosition + new Vector3(2, 1.4f, 3);
+            raceCamera.LookAt(tank.GlobalTransform * PropaneTank.LocalCenter, Vector3.Up);
+        }
+        if (raceTick is 210 or 300 or 600 or 1200) { director.Screenshot($"{net.PlayerName}_race_{raceTick}"); }
+        // At 120 physics ticks/s, allow lagged reliable delivery before checking convergence.
+        if (raceTick < 720) { return; }
+        ScenarioAssert(raceVent != null && tank.State == PropaneTank.TankState.Venting, "race: no canonical puncture after the race");
+        if (raceVent == null) { return; }
+        ScenarioAssert(tank.HoleLocal == raceVent.Hole && tank.HoleNormalLocal == raceVent.Normal && tank.SwirlSign == raceVent.Swirl,
+            "race: contender retained different canonical vent parameters");
+        var lean = raceVent.Normal.Rotated(Vector3.Up, Mathf.DegToRad(Tuning.Current.VentSwirlDegrees) * raceVent.Swirl).Normalized();
+        ScenarioAssert(tank.JetDirectionLocal.IsEqualApprox(lean), "race: jet lean differs from canonical vent");
+        var entry = match.Bodies.Get(id)!;
+        if (entry.Owner != net.MyId && entry.HasTarget)
+        {
+            var lead = (float)Math.Clamp(NetTransport.Now - entry.TargetReceived, 0, 0.3);
+            var drift = tank.GlobalPosition.DistanceTo(entry.Target.Origin + entry.TargetLinear * lead);
+            raceWorst = Mathf.Max(raceWorst, drift);
+            ScenarioAssert(drift <= Tuning.Current.SnapDistance + 0.5f, $"race: trajectory escaped owner corrections ({drift:0.000} m)");
+        }
+        if (raceTick % 6 == 0)
+        {
+            raceSamples++;
+            Log($"race path time {NetTransport.Now + net.ServerClockOffset:0.000} pos {Vector(tank.GlobalPosition)}");
+        }
+        if (raceTick == 720)
+        {
+            Log($"race params owner {entry.Owner} epoch {entry.Epoch} hole {Vector(tank.HoleLocal)} normal {Vector(tank.HoleNormalLocal)} lean {Vector(tank.JetDirectionLocal)} swirl {tank.SwirlSign}");
+        }
+        if (raceTick == 1320)
+        {
+            ScenarioAssert(raceSamples >= 100 && !entry.ClaimPending, "race: insufficient trajectory samples or unresolved claim");
+            scenarioPassed = !scenarioFailed;
+            Log($"puncture-race: assertions passed, {raceSamples} path samples, max correction error {raceWorst:0.000} m");
+        }
+    }
+
+    private static string Vector(Vector3 v) => FormattableString.Invariant($"{v.X:R},{v.Y:R},{v.Z:R}");
 
     private float duelTime = -1;
     private ScriptedInput duelInput = new();
@@ -681,6 +781,20 @@ public partial class NetTest : Node
     }
 
     private string ScoreLine() => match == null ? "" : string.Join(" ", match.Scores.Select(s => $"{s.Key}={s.Value}"));
+
+    /// <summary>Same-machine wall time avoids comparing independently corrected match countdowns.</summary>
+    private void LogTankTrajectory()
+    {
+        if (match == null) { return; }
+        var sampleTime = Time.GetUnixTimeFromSystem();
+        var tanks = new StringBuilder();
+        foreach (var tank in match.LiveTanks.OrderBy(t => t.NetId))
+        {
+            var p = tank.GlobalPosition;
+            tanks.Append(FormattableString.Invariant($" {tank.NetId:x}:{(tank.State == PropaneTank.TankState.Venting ? "V" : "I")}:{p.X:0.000},{p.Y:0.000},{p.Z:0.000}"));
+        }
+        Log(FormattableString.Invariant($"tank-sample time {sampleTime:0.000000} playing {match.IsPlaying} clock {match.TimeLeft:0.000} n {match.LiveTanks.Count()}{tanks}"));
+    }
 
     private void Log(string text) => GD.Print($"[nettest {net.PlayerName} {Time.GetTicksMsec() / 1000.0:0.00}] {text}");
 }

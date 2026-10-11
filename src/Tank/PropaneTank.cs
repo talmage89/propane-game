@@ -26,6 +26,11 @@ public partial class PropaneTank : RigidBody3D
     private const float PunctureKick = 6f;
 
     private VentJet? vent;
+    private Decal? holeDecal;
+    private uint fuseGeneration;
+
+    // Tests hold/replay the production fuse callback without advancing a scene clock.
+    internal Action<float, Action>? FuseScheduleOverride { get; set; }
     private MeshInstance3D mesh = null!;
     private Vector3 holeLocal;
     private Vector3 holeNormalLocal;
@@ -46,6 +51,14 @@ public partial class PropaneTank : RigidBody3D
     public Vector3 HoleLocal => holeLocal;
 
     public Vector3 HoleNormalLocal => holeNormalLocal;
+
+    public Vector3 JetDirectionLocal => jetDirectionLocal;
+
+    /// <summary>Immutable initiating explosion request for a network chain; 0 for a direct shot.</summary>
+    public uint ChainCause { get; private set; }
+
+    /// <summary>Assigned by the match before this explosion starts its child chain.</summary>
+    public uint BlastRequest { get; set; }
 
     /// <summary>Which way the jet leans around the tank's axis (+1 or -1).</summary>
     public float SwirlSign => swirlSign;
@@ -118,6 +131,7 @@ public partial class PropaneTank : RigidBody3D
         {
             return false;
         }
+        ChainCause = 0;
         switch (State)
         {
             case TankState.Intact:
@@ -133,25 +147,49 @@ public partial class PropaneTank : RigidBody3D
     }
 
     /// <summary>
-    /// Another player punctured this tank: start the same vent from the same hole, after the caller has put the tank
-    /// where that player had it.
+    /// Adopts the canonical hole and vent. The caller initializes an intact copy's pose; replacing a contender's
+    /// existing vent preserves its current motion and age.
     /// </summary>
     public void PunctureRemote(Vector3 holeLocalPoint, Vector3 holeNormal, float swirl)
     {
-        if (State != TankState.Intact)
-        {
-            return;
-        }
-        Puncture(ToGlobal(holeLocalPoint), GlobalBasis * holeNormal, swirl);
+        if (State == TankState.Exploded) { return; }
+        if (State == TankState.Venting && holeLocal == holeLocalPoint && holeNormalLocal == holeNormal && swirlSign == swirl) { return; }
+        ClearVent();
+        // Replacing a contender's vent changes only its parameters. Preserve the body's current pose, motion
+        // and vent age; applying the winning bullet impulse a second time would disturb that motion.
+        PunctureLocal(holeLocalPoint, holeNormal, swirl);
+    }
+
+    public void RestoreIntact()
+    {
+        ClearVent();
+        State = TankState.Intact;
+        CanSleep = true;
+        ventAge = 0;
+        CancelChainFuse();
+    }
+
+    internal void CancelChainFuse()
+    {
+        fuseLit = false;
+        fuseGeneration++;
+        ChainCause = 0;
+    }
+
+    private void ClearVent()
+    {
+        if (vent != null) { vent.Extinguish(); vent = null; }
+        if (holeDecal != null) { holeDecal.QueueFree(); holeDecal = null; }
     }
 
     /// <summary>A blast went off within chain range: punctures an intact tank, or detonates a venting one after a fuse.</summary>
-    public void ChainHit(Vector3 blastCenter, float distance)
+    public void ChainHit(Vector3 blastCenter, float distance, uint cause = 0)
     {
         if (State == TankState.Exploded || fuseLit || Invulnerable)
         {
             return;
         }
+        ChainCause = cause;
         if (State == TankState.Intact)
         {
             var (point, normal) = SurfaceFacing(blastCenter);
@@ -163,13 +201,16 @@ public partial class PropaneTank : RigidBody3D
         var tuning = Tuning.Current;
         var closeness = Mathf.Clamp(distance / Mathf.Max(tuning.ChainRadius, 0.01f), 0, 1);
         var fuse = Mathf.Lerp(tuning.ChainFuseMin, tuning.ChainFuseMax, closeness) * (float)GD.RandRange(0.85, 1.15);
-        GetTree().CreateTimer(fuse, processAlways: false, processInPhysics: true).Timeout += () =>
+        var generation = ++fuseGeneration;
+        void FinishFuse()
         {
-            if (IsInstanceValid(this))
+            if (IsInstanceValid(this) && generation == fuseGeneration && fuseLit)
             {
                 Detonate();
             }
-        };
+        }
+        if (FuseScheduleOverride != null) { FuseScheduleOverride(fuse, FinishFuse); }
+        else { GetTree().CreateTimer(fuse, processAlways: false, processInPhysics: true).Timeout += FinishFuse; }
     }
 
     public override void _PhysicsProcess(double delta)
@@ -222,20 +263,24 @@ public partial class PropaneTank : RigidBody3D
         ExplosionEffect.Create(center, groundY);
         SpawnDebris(center);
         SpawnScorch(new Vector3(center.X, groundY, center.Z));
-        Blast.Detonate(this, center, this, chain);
+        // The match assigns/sends the causal request before children emit their lifecycle requests.
         Detonated?.Invoke(this);
+        Blast.Detonate(this, center, this, chain);
         QueueFree();
     }
 
     private static double Now => Time.GetTicksUsec() / 1_000_000.0;
 
-    private void Puncture(Vector3 point, Vector3 normal, float swirl)
+    private void Puncture(Vector3 point, Vector3 normal, float swirl) =>
+        PunctureLocal(ToLocal(point), (GlobalBasis.Inverse() * normal).Normalized(), swirl);
+
+    private void PunctureLocal(Vector3 point, Vector3 normal, float swirl)
     {
         State = TankState.Venting;
         CanSleep = false;
         Sleeping = false;
-        holeLocal = ToLocal(point);
-        holeNormalLocal = (GlobalBasis.Inverse() * normal).Normalized();
+        holeLocal = point;
+        holeNormalLocal = normal;
         // A torn hole rarely vents straight out: lean the jet around the tank's axis so its thrust has a
         // tangential part. Upright, that spins the tank; lying down, it rolls and pinwheels across the ground.
         swirlSign = swirl < 0 ? -1f : 1f;
@@ -248,7 +293,7 @@ public partial class PropaneTank : RigidBody3D
         // Bullet hole decal: a decal projects along its local -Y, so point +Y out of the surface.
         var surfaceBasis = BasisFacing(holeNormalLocal);
         var decalBasis = new Basis(surfaceBasis.Column0, surfaceBasis.Column2, -surfaceBasis.Column1);
-        AddChild(new Decal
+        holeDecal = new Decal
         {
             Name = "BulletHole",
             Transform = new Transform3D(decalBasis, holeLocal),
@@ -257,7 +302,8 @@ public partial class PropaneTank : RigidBody3D
             CullMask = RenderLayers.Actors,
             UpperFade = 0.1f,
             LowerFade = 0.1f,
-        });
+        };
+        AddChild(holeDecal);
     }
 
     /// <summary>The point on the vessel's side facing a world position, and the outward normal there.</summary>

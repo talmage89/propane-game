@@ -15,7 +15,7 @@ public static class Blast
     /// Raised after a blast this game set off (not another player's, which arrives with <c>chain</c> off), with the
     /// rigid bodies it pushed, so a match can take charge of them.
     /// </summary>
-    public static event System.Action<Vector3, IReadOnlyList<RigidBody3D>>? LocalBlast;
+    public static event System.Action<Vector3, IReadOnlyList<RigidBody3D>, uint>? LocalBlast;
 
     /// <summary>
     /// Pushes bodies, throws blast receivers and, when <paramref name="chain"/> is on, sets off tanks in chain range.
@@ -49,7 +49,7 @@ public static class Blast
             {
                 continue;
             }
-            if (Push(space, body, center, radius, tuning, rng, chain))
+            if (Push(space, body, center, radius, tuning, rng, chain, source?.BlastRequest ?? 0))
             {
                 pushed.Add(body);
             }
@@ -79,13 +79,13 @@ public static class Blast
         GameEvents.RaiseExplosion(center);
         if (chain)
         {
-            LocalBlast?.Invoke(center, pushed);
+            LocalBlast?.Invoke(center, pushed, source?.BlastRequest ?? 0);
         }
     }
 
     /// <summary>Pushes one body; returns whether it moved it.</summary>
     private static bool Push(PhysicsDirectSpaceState3D space, RigidBody3D body, Vector3 center, float radius,
-        Tuning tuning, RandomNumberGenerator rng, bool chain)
+        Tuning tuning, RandomNumberGenerator rng, bool chain, uint cause)
     {
         var state = PhysicsServer3D.BodyGetDirectState(body.GetRid());
         var massCenter = state != null ? body.GlobalPosition + state.CenterOfMass : body.GlobalPosition;
@@ -97,7 +97,7 @@ public static class Blast
 
         if (chain && body is PropaneTank tank && distance <= tuning.ChainRadius)
         {
-            tank.ChainHit(center, distance);
+            tank.ChainHit(center, distance, cause);
         }
 
         var falloff = Mathf.Pow(1f - distance / radius, tuning.BlastFalloff);

@@ -7,8 +7,8 @@ using Godot;
 namespace Propane.Net;
 
 /// <summary>
-/// Message types. Clients only ever talk to the server. Messages in the relay range are passed on to the other
-/// players in the sender's match, with the sender's id inserted after the match id.
+/// Message types. Clients only ever talk to the server. Forwarded match messages gain a sender after the match id;
+/// Claim, Puncture and Explode are consumed requests whose ordered results arrive as Authority.
 /// </summary>
 public enum Msg : byte
 {
@@ -41,8 +41,9 @@ public enum Msg : byte
     PlayerLeft,
     Pong,
     DropRefused,
+    Authority,
 
-    // Client to server to the rest of the match. The server reads some of them (claims, explosions, drops).
+    // Match traffic. Authority requests are resolved by the server; the other messages are relayed.
     PlayerState = 64,
     Shot,
     Puncture,
@@ -72,7 +73,7 @@ public static class Protocol
     public static bool IsRelay(Msg type) => type is >= Msg.PlayerState and <= Msg.TuningSet;
 
     public static bool IsMatch(Msg type) => IsRelay(type) || type is Msg.Loaded or Msg.ClaimPickup or Msg.MatchStart or
-        Msg.Countdown or Msg.MatchGo or Msg.Clock or Msg.Score or Msg.PickupTaken or Msg.PickupRespawn or Msg.MatchEnd or Msg.PlayerLeft or Msg.DropRefused;
+        Msg.Countdown or Msg.MatchGo or Msg.Clock or Msg.Score or Msg.PickupTaken or Msg.PickupRespawn or Msg.MatchEnd or Msg.PlayerLeft or Msg.DropRefused or Msg.Authority;
 
     // Wire safety limits, not gameplay tuners. Gameplay counts are also checked against the match's tuning.
     public const int MaxPacketBytes = 1 << 20;

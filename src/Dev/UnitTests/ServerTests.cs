@@ -21,15 +21,15 @@ public static class ServerTests
                 f.Reject(bytes[..^1]);
             }
             // A truncated explosion must not have consumed the id or changed the bank.
-            f.Receive(new NetWriter(Msg.Explode, f.Id).UInt(BodySync.MapTankId(0)).Vec3(Vector3.One));
+            f.Receive(new NetWriter(Msg.Explode, f.Id).UInt(BodySync.MapTankId(0)).Vec3(Vector3.One).UInt(1).UInt(1).UInt(0));
             f.AssertScore(2, 5, 1);
         });
         runner.Run("server/unknown and duplicate explosions cannot score", () =>
         {
             using var f = new Fixture();
-            f.Reject(new NetWriter(Msg.Explode, f.Id).UInt(0x12345678).Vec3(Vector3.One).ToArray());
+            f.Reject(new NetWriter(Msg.Explode, f.Id).UInt(0x12345678).Vec3(Vector3.One).UInt(1).UInt(1).UInt(0).ToArray());
             f.Reject(new NetWriter(Msg.Explode, f.Id).UInt(BodySync.MapTankId(0)).Vec3(new Vector3(float.NaN, 0, 0)).ToArray());
-            var explosion = new NetWriter(Msg.Explode, f.Id).UInt(BodySync.MapTankId(0)).Vec3(Vector3.One);
+            var explosion = new NetWriter(Msg.Explode, f.Id).UInt(BodySync.MapTankId(0)).Vec3(Vector3.One).UInt(1).UInt(1).UInt(0);
             f.Receive(explosion);
             f.AssertScore(2, 5, 1);
             f.Reject(explosion.ToArray(), peer: 3);
@@ -40,15 +40,15 @@ public static class ServerTests
             var first = DropBody(0, 0);
             var second = DropBody(0, 1);
             f.Reject(f.Drop(new[] { first, second with { Id = BodySync.DropTankId(1, 0) } }));
-            f.Reject(new NetWriter(Msg.Explode, f.Id).UInt(first.Id).Vec3(Vector3.One).ToArray());
+            f.Reject(new NetWriter(Msg.Explode, f.Id).UInt(first.Id).Vec3(Vector3.One).UInt(1).UInt(1).UInt(0).ToArray());
             f.Reject(f.Drop(new[] { first, first }));
             f.Receive(f.Drop(new[] { first, second }));
             f.AssertScore(2, 2, -2);
             TestRunner.Assert(f.Packets.Any(p => p.Message.Payload is DropMessage), "drop was not relayed");
-            f.Receive(new NetWriter(Msg.Explode, f.Id).UInt(first.Id).Vec3(Vector3.One));
+            f.Receive(new NetWriter(Msg.Explode, f.Id).UInt(first.Id).Vec3(Vector3.One).UInt(1).UInt(1).UInt(0));
             f.AssertScore(2, 3, 1);
             f.Reject(f.Drop(new[] { first }));
-            f.Reject(new NetWriter(Msg.Explode, f.Id).UInt(first.Id).Vec3(Vector3.One).ToArray());
+            f.Reject(new NetWriter(Msg.Explode, f.Id).UInt(first.Id).Vec3(Vector3.One).UInt(1).UInt(1).UInt(0).ToArray());
         });
         runner.Run("server/drop counts cannot raise scores or exceed bank and tuner", () =>
         {
@@ -61,41 +61,113 @@ public static class ServerTests
             f.Receive(f.Drop(new[] { DropBody(0, 0) }));
             f.AssertScore(2, 3, -1);
         });
+        runner.Run("server/expired playing clock refuses drops before the phase tick", () =>
+        {
+            using var f = new Fixture(playing: false);
+            f.Receive(new NetWriter(Msg.Loaded, f.Id));
+            f.Receive(new NetWriter(Msg.Loaded, f.Id), peer: 3);
+            var past = NetTransport.Now - 20;
+            f.Server.AdvanceMatches(past); // Loading -> Countdown.
+            f.Server.AdvanceMatches(past); // Countdown -> Playing, with an already expired deadline.
+            f.Packets.Clear();
+            // Production polls incoming packets before advancing phases on this process frame.
+            f.Receive(f.Drop(new[] { DropBody(0, 0) }));
+            TestRunner.Assert(f.Packets.Single() is { Peer: 2, Message.Payload: DropRefusedMessage reply } &&
+                reply.Ids.SequenceEqual(new[] { DropBody(0, 0).Id }), "expired clock accepted a predicted drop");
+            f.Packets.Clear();
+            f.Server.AdvanceMatches(NetTransport.Now);
+            TestRunner.Assert(f.Packets.Select(p => p.Message.Payload).OfType<IReadOnlyList<Standing>>().First().All(s => s.Score == 4),
+                "late drop changed final banks before the phase tick");
+        });
         runner.Run("server/body and shot ids must exist", () =>
         {
             using var f = new Fixture();
-            f.Reject(new NetWriter(Msg.Claim, f.Id).UShort(2).UInt(BodySync.MapTankId(0)).UInt(999).ToArray());
-            f.Reject(new NetWriter(Msg.Puncture, f.Id).UInt(999).Transform(Transform3D.Identity).Vec3(Vector3.Zero)
-                .Vec3(Vector3.Zero).Vec3(Vector3.One).Vec3(Vector3.Up).Float(1).ToArray());
-            f.Reject(new NetWriter(Msg.BodyRest, f.Id).UInt(999).Transform(Transform3D.Identity).Double(1).ToArray());
-            f.Reject(MessageCodec.Encode(new NetMessage(Msg.BodyStates, f.Id, 0, new BodyStatesMessage(1,
+            f.Reject(MessageCodec.Encode(new NetMessage(Msg.Claim, f.Id, 0, new ClaimMessage(1,
                 new[] { DropBody(0, 0) with { Id = BodySync.MapTankId(0) }, DropBody(0, 1) with { Id = 999 } })), false));
+            f.Reject(new NetWriter(Msg.Puncture, f.Id).UInt(999).Transform(Transform3D.Identity).Vec3(Vector3.Zero)
+                .Vec3(Vector3.Zero).Vec3(Vector3.One).Vec3(Vector3.Up).Float(1).UInt(1).UInt(1).UInt(0).ToArray());
+            f.Reject(new NetWriter(Msg.BodyRest, f.Id).UInt(999).Transform(Transform3D.Identity).Double(1).UInt(1).UInt(1).ToArray());
+            f.Reject(MessageCodec.Encode(new NetMessage(Msg.BodyStates, f.Id, 0, new BodyStatesMessage(1,
+                new[] { DropBody(0, 0) with { Id = BodySync.MapTankId(0), Sequence = 1 }, DropBody(0, 1) with { Id = 999, Sequence = 1 } })), false));
             f.Reject(new NetWriter(Msg.Shot, f.Id).Vec3(Vector3.One).Vec3(Vector3.Up).Vec3(Vector3.Forward).Byte(1).Int(999).Int(-1).ToArray());
             f.Reject(new NetWriter(Msg.Shot, f.Id).Vec3(Vector3.One).Vec3(Vector3.Up).Vec3(Vector3.Forward).Byte(1).Int(0).Int(int.MaxValue).ToArray());
+        });
+        runner.Run("server/motion bounds future sample timestamps to the relay clock", () =>
+        {
+            using var f = new Fixture();
+            var before = NetTransport.Now;
+            f.Receive(MessageCodec.Encode(new NetMessage(Msg.BodyStates, f.Id, 0,
+                new BodyStatesMessage(100000, new[] { DropBody(0, 0) with { Id = BodySync.MapTankId(0), Sequence = 1 } })), false));
+            var after = NetTransport.Now;
+            TestRunner.Assert(f.Packets.Single().Message.Payload is BodyStatesMessage relayed &&
+                relayed.Time >= before && relayed.Time <= after, "relay accepted a future sample time");
+        });
+        runner.Run("server/motion preserves bounded sample age across both transport legs", () =>
+        {
+            using var f = new Fixture();
+            var sampled = NetTransport.Now - 0.12;
+            var body = DropBody(0, 0) with { Id = BodySync.MapTankId(0), Sequence = 1, Linear = Vector3.Right * 200 };
+            f.Receive(MessageCodec.Encode(new NetMessage(Msg.BodyStates, f.Id, 0,
+                new BodyStatesMessage(sampled, new[] { body })), false));
+            var relayed = (BodyStatesMessage)f.Packets.Single().Message.Payload;
+            TestRunner.Assert(relayed.Time == sampled, "relay erased the owner's sampling age");
+            var moving = new RigidBody3D();
+            runner.AddChild(moving);
+            try
+            {
+                var sync = new BodySync(4, 2);
+                sync.Register(body.Id, moving, true, 2);
+                var received = sampled + 0.24;
+                sync.OnState(2, relayed.Bodies.Single(), false, received, received - relayed.Time);
+                sync.Correct(received);
+                TestRunner.Assert(moving.GlobalPosition.IsEqualApprox(body.Transform.Origin + body.Linear * 0.24f),
+                    "fast vent stayed behind by the sender-to-server leg");
+            }
+            finally { moving.Free(); }
+            f.Packets.Clear();
+            var before = NetTransport.Now;
+            f.Receive(MessageCodec.Encode(new NetMessage(Msg.BodyStates, f.Id, 0,
+                new BodyStatesMessage(0, new[] { body with { Sequence = 2 } })), false));
+            TestRunner.Assert(f.Packets.Single().Message.Payload is BodyStatesMessage unsynced && unsynced.Time >= before,
+                "missing clock synchronization used a stale sampling age");
+            f.Packets.Clear();
+            before = NetTransport.Now;
+            f.Receive(MessageCodec.Encode(new NetMessage(Msg.BodyStates, f.Id, 0,
+                new BodyStatesMessage(1, new[] { body with { Sequence = 3 } })), false));
+            TestRunner.Assert(f.Packets.Single().Message.Payload is BodyStatesMessage ancient &&
+                ancient.Time >= before - 0.3, "owner supplied an unbounded sample age");
         });
         runner.Run("server/drop registration recovers an early snapshot and preserves the final rest", () =>
         {
             using var f = new Fixture();
             var dropped = DropBody(0, 0);
             var state = MessageCodec.Encode(new NetMessage(Msg.BodyStates, f.Id, 0,
-                new BodyStatesMessage(1, new[] { DropBody(0, 1) with { Id = BodySync.MapTankId(0) }, dropped })), false);
+                new BodyStatesMessage(1, new[] { DropBody(0, 1) with { Id = BodySync.MapTankId(0), Sequence = 1 }, dropped with { Sequence = 1 } })), false);
             f.Reject(state); // Unreliable can overtake Drop: refuse the whole batch, without changing the ledger.
             f.Receive(f.Drop(new[] { dropped }));
             f.Packets.Clear();
             f.Receive(state);
             TestRunner.Assert(f.Packets.Single().Message.Payload is BodyStatesMessage, "later snapshot was permanently refused");
             f.Packets.Clear();
-            f.Receive(new NetWriter(Msg.BodyRest, f.Id).UInt(dropped.Id).Transform(dropped.Transform).Double(2));
+            f.Receive(new NetWriter(Msg.BodyRest, f.Id).UInt(dropped.Id).Transform(dropped.Transform).Double(2).UInt(1).UInt(2));
             TestRunner.Assert(f.Packets.Single() is { Peer: 3, Message.Payload: BodyRestMessage }, "reliable final rest was lost");
-            f.Receive(new NetWriter(Msg.Explode, f.Id).UInt(dropped.Id).Vec3(Vector3.One));
+            f.Receive(new NetWriter(Msg.Explode, f.Id).UInt(dropped.Id).Vec3(Vector3.One).UInt(1).UInt(1).UInt(0));
             f.Packets.Clear();
+            state = MessageCodec.Encode(new NetMessage(Msg.BodyStates, f.Id, 0,
+                new BodyStatesMessage(2, new[] { DropBody(0, 1) with { Id = BodySync.MapTankId(0), Sequence = 2 }, dropped with { Sequence = 3 } })), false);
             f.Receive(state); // A late tombstone in a mixed batch must not starve the remaining moving bodies.
             TestRunner.Assert(f.Packets.Single().Message.Payload is BodyStatesMessage, "exploded id poisoned a later batch");
         });
         runner.Run("server/creator departure preserves slots, banks and the new host", () =>
         {
             using var f = new Fixture();
+            f.Receive(MessageCodec.Encode(new NetMessage(Msg.Puncture, f.Id, 0, new PunctureMessage(BodySync.MapTankId(0),
+                Transform3D.Identity, Vector3.Right, Vector3.Up, Vector3.One, Vector3.Up, -1)), false));
+            f.Packets.Clear();
             f.Server.OnDisconnected(2);
+            TestRunner.Assert(f.Packets.Any(p => p.Peer == 3 && p.Message.Payload is AuthorityMessage { Request: 0 } transfer &&
+                transfer.Bodies.Any(b => b.Body.Id == BodySync.MapTankId(0) && b.Owner == 3 && b.Body.Epoch == 3 && b.Body.Sequence == 0 &&
+                    b.State == TankLedger.State.Venting && b.Vent == new VentParameters(Vector3.One, Vector3.Up, -1))), "mid-vent departure did not grant canonical authority with a fresh epoch");
             TestRunner.Assert(f.Packets.Any(p => p.Peer == 3 && p.Message.Payload is PlayerLeftMessage { Player: 2, Host: 3 }),
                 "creator departure did not identify the successor");
             f.Packets.Clear();
@@ -138,14 +210,14 @@ public static class ServerTests
         runner.Run("server/stale lifecycle and gameplay messages are ignored", () =>
         {
             using var f = new Fixture();
-            f.Reject(new NetWriter(Msg.Explode, f.Id + 1).UInt(BodySync.MapTankId(0)).Vec3(Vector3.One).ToArray());
+            f.Reject(new NetWriter(Msg.Explode, f.Id + 1).UInt(BodySync.MapTankId(0)).Vec3(Vector3.One).UInt(1).UInt(1).UInt(0).ToArray());
             f.Server.AdvanceMatches(NetTransport.Now + 20); // End this ten-second match.
             f.Server.AdvanceMatches(NetTransport.Now + 30); // Results -> lobby.
             f.Receive(new NetWriter(Msg.StartMatch).Snapshot(f.Tuning.Snapshot()));
             var next = f.Packets.Select(p => p.Message.Payload).OfType<MatchSetup>().First();
             TestRunner.Assert(next.Id > f.Id, "match id was reused");
             f.Reject(new NetWriter(Msg.Loaded, f.Id).ToArray());
-            f.Reject(new NetWriter(Msg.Explode, f.Id).UInt(BodySync.MapTankId(0)).Vec3(Vector3.One).ToArray());
+            f.Reject(new NetWriter(Msg.Explode, f.Id).UInt(BodySync.MapTankId(0)).Vec3(Vector3.One).UInt(1).UInt(1).UInt(0).ToArray());
             f.Packets.Clear();
             f.Server.AdvanceMatches(NetTransport.Now);
             TestRunner.Assert(!f.Packets.Any(p => p.Message.Type == Msg.Countdown), "stale Loaded started the next match");
@@ -171,14 +243,15 @@ public static class ServerTests
 
     private static BodyState DropBody(int slot, int counter) => new(BodySync.DropTankId(slot, counter), Transform3D.Identity, Vector3.Up, Vector3.Zero);
 
-    private sealed class Fixture : IDisposable
+    internal sealed class Fixture : IDisposable
     {
         public readonly LobbyServer Server = new() { StartScore = 4 };
         public readonly Tuning Tuning = new() { CountdownTime = 0, ResultsTime = 1 };
         public readonly List<(int Peer, NetMessage Message)> Packets = new();
         public readonly int Id;
+        public readonly MatchSetup Setup;
 
-        public Fixture(bool debug = true)
+        public Fixture(bool debug = true, bool playing = true)
         {
             Server.SendOverride = (peer, bytes, _) => Packets.Add((peer, MessageCodec.Decode(bytes, true)));
             for (var peer = 2; peer <= 3; peer++)
@@ -191,12 +264,16 @@ public static class ServerTests
             Receive(new NetWriter(Msg.JoinLobby).Int(1), peer: 3);
             Receive(new NetWriter(Msg.SetMatchLength).Float(10));
             Receive(new NetWriter(Msg.StartMatch).Snapshot(Tuning.Snapshot()));
-            Id = Packets.Select(p => p.Message.Payload).OfType<MatchSetup>().First().Id;
-            Receive(new NetWriter(Msg.Loaded, Id));
-            Receive(new NetWriter(Msg.Loaded, Id), peer: 3);
-            Server.AdvanceMatches(NetTransport.Now);
-            Server.AdvanceMatches(NetTransport.Now);
-            TestRunner.Assert(Packets.Any(p => p.Message.Type == Msg.MatchGo), "fixture never reached play");
+            Setup = Packets.Select(p => p.Message.Payload).OfType<MatchSetup>().First();
+            Id = Setup.Id;
+            if (playing)
+            {
+                Receive(new NetWriter(Msg.Loaded, Id));
+                Receive(new NetWriter(Msg.Loaded, Id), peer: 3);
+                Server.AdvanceMatches(NetTransport.Now);
+                Server.AdvanceMatches(NetTransport.Now);
+                TestRunner.Assert(Packets.Any(p => p.Message.Type == Msg.MatchGo), "fixture never reached play");
+            }
             Packets.Clear();
         }
 
@@ -206,6 +283,18 @@ public static class ServerTests
         {
             Packets.Clear();
             Receive(bytes, peer);
+            if (Packets.Count == 1 && Packets[0] is { Message.Payload: AuthorityMessage { Reason: not ClaimRefusal.None } authority } && Packets[0].Peer == peer)
+            {
+                var request = MessageCodec.Decode(bytes, false).Payload switch
+                {
+                    ClaimMessage claim => claim.Request,
+                    PunctureMessage puncture => puncture.Request,
+                    ExplodeMessage explosion => explosion.Request,
+                    _ => throw new InvalidOperationException("non-claim received an authority refusal"),
+                };
+                TestRunner.Assert(authority.Request == request && authority.Peer == peer, "refusal changed its request identity");
+                return;
+            }
             if (Packets.Count == 1 && Packets[0] is { Message.Payload: DropRefusedMessage reply } && Packets[0].Peer == peer)
             {
                 // Only a fully decoded Drop may receive a refusal. Malformed packets must emit nothing.

@@ -55,11 +55,23 @@ public partial class Match : Node3D
         public readonly SnapshotBuffer Buffer = new();
     }
 
+    private sealed record AuthorityRequest(Msg Type, uint Request, uint Cause, uint[] Ids, object Payload)
+    {
+        public readonly Dictionary<uint, uint> Expected = new();
+    }
+
     private readonly Dictionary<int, Remote> remotes = new();
     private readonly Dictionary<int, PlayerProfile> profiles = new();
     private readonly Dictionary<int, int> scores = new();
     private readonly Dictionary<uint, PropaneTank> tanks = new();
     private readonly HashSet<uint> exploded = new();
+    private readonly HashSet<uint> predictedExplosions = new();
+    private readonly List<AuthorityRequest> outgoingAuthority = new();
+    private readonly Dictionary<uint, AuthorityRequest> pendingAuthority = new();
+    private readonly Dictionary<uint, uint> pendingBodies = new();
+    private readonly HashSet<uint> sentExplosions = new();
+    private uint nextRequest;
+
     private readonly Dictionary<int, RigidBody3D> looseProps = new();
     private readonly List<AmmoPickup> pickups = new();
 
@@ -126,6 +138,13 @@ public partial class Match : Node3D
     public IEnumerable<PropaneTank> LiveTanks => tanks.Values.Where(t => IsInstanceValid(t) && t.State != PropaneTank.TankState.Exploded);
 
     public BodySync Bodies => bodies;
+
+    public ClaimRefusal LastAuthorityRefusal { get; private set; }
+
+    public event Action<AuthorityMessage>? AuthorityResolved;
+
+    // Packet seam for assertion suites; production sends through the connection.
+    internal Action<byte[]>? AuthoritySendOverride { get; set; }
 
     /// <summary>When (on <see cref="NetTransport.Now"/>) another player's shot last hit this player, and whose it was.</summary>
     public double LastHitTime { get; private set; } = -100;
@@ -448,62 +467,231 @@ public partial class Match : Node3D
     // ------------------------------------------------------------------ Tanks
 
     /// <summary>Starts following a tank: its id, owner and what happens to it here.</summary>
-    private void Track(PropaneTank tank, int owner)
+    private void Track(PropaneTank tank, int owner, bool replace = false)
     {
         tanks[tank.NetId] = tank;
-        bodies.Register(tank.NetId, tank, isTank: true, owner);
+        if (replace) { bodies.ReplaceBody(tank.NetId, tank); }
+        else { bodies.Register(tank.NetId, tank, isTank: true, owner); }
         tank.Punctured += OnTankPunctured;
         tank.Detonated += OnTankDetonated;
     }
 
+    private uint NewRequest() => checked(++nextRequest);
+
     private void OnTankPunctured(PropaneTank tank)
     {
-        // This player punctured it, so it is theirs: everyone starts the same vent from this exact state.
-        Claim(new[] { tank }, force: true);
-        Send(new NetWriter(Msg.Puncture, Setup.Id).UInt(tank.NetId).Transform(tank.GlobalTransform).Vec3(tank.LinearVelocity).Vec3(tank.AngularVelocity)
-            .Vec3(tank.HoleLocal).Vec3(tank.HoleNormalLocal).Float(tank.SwirlSign));
+        var request = NewRequest();
+        var puncture = new PunctureMessage(tank.NetId, tank.GlobalTransform, tank.LinearVelocity, tank.AngularVelocity,
+            tank.HoleLocal, tank.HoleNormalLocal, tank.SwirlSign, Request: request, Cause: tank.ChainCause);
+        QueueAuthority(new AuthorityRequest(Msg.Puncture, request, tank.ChainCause, new[] { tank.NetId },
+            puncture));
     }
 
     private void OnTankDetonated(PropaneTank tank)
     {
-        tanks.Remove(tank.NetId);
-        bodies.Remove(tank.NetId);
-        exploded.Add(tank.NetId);
-        if (!tank.DetonatedRemotely)
+        if (tank.DetonatedRemotely)
         {
-            // This player set it off (a shot, or a chain from one): the point is claimed with the explosion.
-            Send(new NetWriter(Msg.Explode, Setup.Id).UInt(tank.NetId).Vec3(tank.GlobalTransform * PropaneTank.LocalCenter));
+            tanks.Remove(tank.NetId);
+            bodies.Remove(tank.NetId);
+            exploded.Add(tank.NetId);
+            return;
+        }
+        // Keep the registry/epoch until the server resolves the prediction. A refusal can recreate this body.
+        predictedExplosions.Add(tank.NetId);
+        var request = NewRequest();
+        tank.BlastRequest = request;
+        var explosion = new ExplodeMessage(tank.NetId, tank.GlobalTransform * PropaneTank.LocalCenter,
+            Request: request, Cause: tank.ChainCause);
+        QueueAuthority(new AuthorityRequest(Msg.Explode, request, tank.ChainCause, new[] { tank.NetId },
+            explosion));
+    }
+
+    internal void OnLocalBlast(Vector3 center, IReadOnlyList<RigidBody3D> pushed, uint cause)
+    {
+        Claim(pushed, cause);
+        // Child punctures are queued during ChainHit, before the blast applies its impulse/spin.
+        // Flush even if every pushed body is already owned or pending and Claim has nothing to send.
+        FlushAuthority();
+    }
+
+    /// <summary>One atomic request for all disturbed bodies, with each body's expected epoch and proposed pose.</summary>
+    internal void Claim(IEnumerable<GodotObject> disturbed, uint cause = 0, bool atomic = false)
+    {
+        var claims = atomic ? bodies.ClaimGroup(disturbed) : bodies.Claim(disturbed);
+        if (claims.Count == 0) { return; }
+        var request = NewRequest();
+        QueueAuthority(new AuthorityRequest(Msg.Claim, request, cause, claims.Select(c => c.Id).ToArray(),
+            new ClaimMessage(request, claims, cause)));
+    }
+
+    private void QueueAuthority(AuthorityRequest request)
+    {
+        foreach (var id in request.Ids)
+        {
+            if (bodies.Get(id) is { } entry) { request.Expected[id] = entry.Epoch; entry.ClaimPending = true; entry.HasTarget = false; }
+        }
+        outgoingAuthority.Add(request);
+        if (request.Type != Msg.Puncture || request.Cause == 0) { FlushAuthority(); }
+    }
+
+    private BodyState? CurrentProposal(uint id) => bodies.Get(id) is { } entry && IsInstanceValid(entry.Body)
+        ? BodySync.Capture(entry) : null;
+
+    private PunctureMessage PunctureProposal(PunctureMessage puncture, uint epoch)
+    {
+        var pose = CurrentProposal(puncture.Id);
+        return puncture with
+        {
+            Epoch = epoch,
+            Transform = pose?.Transform ?? puncture.Transform,
+            Linear = pose?.Linear ?? puncture.Linear,
+            Angular = pose?.Angular ?? puncture.Angular
+        };
+    }
+
+    private void FlushAuthority()
+    {
+        for (var i = 0; i < outgoingAuthority.Count;)
+        {
+            var request = outgoingAuthority[i];
+            if (request.Ids.Any(pendingBodies.ContainsKey) || request.Cause != 0 && !sentExplosions.Contains(request.Cause)) { i++; continue; }
+            outgoingAuthority.RemoveAt(i);
+            pendingAuthority.Add(request.Request, request);
+            foreach (var id in request.Ids) { pendingBodies[id] = request.Request; if (bodies.Get(id) is { } entry) { entry.ClaimPending = true; } }
+            // A chain's root is sent before its children, even when a puncture/ownership grant held it back.
+            if (request.Type == Msg.Explode) { sentExplosions.Add(request.Request); }
+            var payload = request.Payload switch
+            {
+                PunctureMessage p => (object)PunctureProposal(p, request.Expected[p.Id]),
+                ExplodeMessage p => p with { Epoch = request.Expected[p.Id] },
+                ClaimMessage p => p with { Bodies = p.Bodies.Select(c => (CurrentProposal(c.Id) ?? c) with { Epoch = request.Expected[c.Id] }).ToArray() },
+                _ => throw new InvalidOperationException("unknown authority request"),
+            };
+            var bytes = MessageCodec.Encode(new NetMessage(request.Type, Setup.Id, 0, payload), fromServer: false);
+            if (AuthoritySendOverride != null) { AuthoritySendOverride(bytes); }
+            else { Net.Send(bytes); }
         }
     }
 
-    private void OnLocalBlast(Vector3 center, IReadOnlyList<RigidBody3D> pushed) => Claim(pushed);
-
-    /// <summary>Takes charge of bodies this player disturbed, telling the others.</summary>
-    private void Claim(IEnumerable<GodotObject> disturbed, bool force = false)
+    private void OnAuthority(AuthorityMessage result)
     {
-        var ids = bodies.Claim(disturbed);
-        if (force)
+        AuthorityRequest? finished = null;
+        if (result.Peer == me && pendingAuthority.Remove(result.Request, out finished))
         {
-            // A puncture always restates the claim, even on a body already owned, so its order is clear.
-            foreach (var body in disturbed)
+            foreach (var id in finished.Ids) { pendingBodies.Remove(id); if (bodies.Get(id) is { } body) { body.ClaimPending = false; } }
+            if (result.Reason == ClaimRefusal.None)
             {
-                if (bodies.Find(body) is { } entry && !ids.Contains(entry.Id))
+                foreach (var next in outgoingAuthority)
                 {
-                    entry.ClaimPending = true;
-                    ids.Add(entry.Id);
+                    foreach (var grant in result.Bodies.Where(b => next.Expected.ContainsKey(b.Body.Id)))
+                    {
+                        next.Expected[grant.Body.Id] = grant.Body.Epoch;
+                    }
                 }
             }
+            if (result.Reason != ClaimRefusal.None)
+            {
+                LastAuthorityRefusal = result.Reason;
+                if (finished.Type == Msg.Explode)
+                {
+                    // Already owned venting neighbors need no Claim, but can still have this root's fuse.
+                    foreach (var tank in LiveTanks.Where(t => t.ChainCause == finished.Request)) { tank.CancelChainFuse(); }
+                }
+                // Keep dependent predictions' original epochs. They also need explicit refusals to restore
+                // their bodies; silently canceling a queued group could strand its other members.
+            }
         }
-        if (ids.Count == 0)
+        foreach (var reported in result.Bodies)
         {
-            return;
+            var authority = reported;
+            var id = authority.Body.Id;
+            if (exploded.Contains(id)) { continue; }
+            var entry = bodies.Get(id);
+            if (entry != null && !bodies.OnAuthority(authority, out authority)) { continue; }
+            if (authority.State == TankLedger.State.Exploded)
+            {
+                foreach (var canceled in outgoingAuthority.Where(r => r.Type != Msg.Claim && r.Ids.Contains(id)).ToArray())
+                {
+                    outgoingAuthority.Remove(canceled);
+                    if (canceled.Type == Msg.Explode) { sentExplosions.Add(canceled.Request); }
+                }
+                if (predictedExplosions.Remove(id))
+                {
+                    tanks.Remove(id);
+                    bodies.Remove(id);
+                    exploded.Add(id);
+                }
+                else { PlayExplosion(id, authority.Center); }
+                continue;
+            }
+            // A predicted second shot can already have freed the node before our first-shot grant arrives.
+            // Resolve that shot after this grant; don't resurrect the winning prediction between the two echoes.
+            if (result.Peer == me && result.Reason == ClaimRefusal.None && outgoingAuthority.Any(r => r.Ids.Contains(id))) { continue; }
+            if (id >= BodySync.CarBase)
+            {
+                if (entry != null && result.Reason != ClaimRefusal.None)
+                {
+                    BodySync.Snap(entry.Body, authority.Body.Transform, authority.Body.Linear, authority.Body.Angular);
+                    entry.Body.Sleeping = authority.Rest;
+                }
+                continue;
+            }
+            var recreated = !tanks.TryGetValue(id, out var tank) || !IsInstanceValid(tank) || tank.State == PropaneTank.TankState.Exploded;
+            if (recreated)
+            {
+                if (tank != null && IsInstanceValid(tank) && !tank.IsQueuedForDeletion()) { tank.QueueFree(); }
+                tank = PropaneTank.Create();
+                tank.NetId = id;
+                suburb.AddTank(tank);
+                Track(tank, authority.Owner, replace: entry != null);
+                if (entry == null) { bodies.OnAuthority(authority); }
+            }
+            if (result.Reason != ClaimRefusal.None) { tank!.CancelChainFuse(); }
+            var wasIntact = tank!.State == PropaneTank.TankState.Intact;
+            if (authority.State == TankLedger.State.Intact) { tank.RestoreIntact(); }
+            // A losing puncture changes the vent, not its current trajectory. The confirmed owner's stream
+            // corrects motion normally; the later refusal must not rewind adoption to the cached claim pose.
+            var adoptingVent = finished?.Type == Msg.Puncture && !recreated && !wasIntact && authority.State == TankLedger.State.Venting;
+            // A remote root blast can already have pushed an intact copy before its canonical child puncture.
+            // The grant's pose predates that push. Keep existing motion until the confirmed owner's stream arrives;
+            // only a resting intact observer needs initialization from the puncture's pose.
+            var initializeVent = wasIntact && authority.State == TankLedger.State.Venting && tank.Sleeping;
+            if (recreated || initializeVent || result.Reason != ClaimRefusal.None && !adoptingVent)
+            {
+                BodySync.Snap(tank, authority.Body.Transform, authority.Body.Linear, authority.Body.Angular);
+                tank.Sleeping = authority.Rest;
+            }
+            if (authority.Vent is { } vent && authority.State == TankLedger.State.Venting) { tank.PunctureRemote(vent.Hole, vent.Normal, vent.Swirl); }
+            predictedExplosions.Remove(id);
         }
-        var w = new NetWriter(Msg.Claim, Setup.Id).UShort((ushort)ids.Count);
-        foreach (var id in ids)
+        if (finished != null && result.Reason == ClaimRefusal.UnknownBody)
         {
-            w.UInt(id);
+            foreach (var id in finished.Ids.Except(result.Bodies.Select(b => b.Body.Id)))
+            {
+                bodies.Remove(id);
+                if (tanks.Remove(id, out var unknown) && IsInstanceValid(unknown)) { unknown.QueueFree(); }
+                predictedExplosions.Remove(id);
+            }
         }
-        Send(w);
+        FlushAuthority();
+        AuthorityResolved?.Invoke(result);
+    }
+
+    private void PlayExplosion(uint id, Vector3 center)
+    {
+        if (tanks.TryGetValue(id, out var known) && IsInstanceValid(known) && known.State != PropaneTank.TankState.Exploded)
+        {
+            known.DetonateRemote(center);
+        }
+        else
+        {
+            tanks.Remove(id);
+            bodies.Remove(id);
+            exploded.Add(id);
+            var ground = GetWorld3D().DirectSpaceState.IntersectRay(PhysicsRayQueryParameters3D.Create(center, center + Vector3.Down * 30f, Layers.World | Layers.Floor));
+            ExplosionEffect.Create(center, ground.Count > 0 ? ground["position"].AsVector3().Y : 0f);
+            Blast.Detonate(this, center, null, chain: false);
+        }
     }
 
     // ------------------------------------------------------------------ This player's actions
@@ -620,7 +808,7 @@ public partial class Match : Node3D
             var id = BodySync.DropTankId(mySlot, dropCounter++);
             dropPredictions.Add(id);
             SpawnDroppedTank(id, me, color, transform, velocity, spin);
-            w.UInt(id).Transform(transform).Vec3(velocity).Vec3(spin);
+            w.UInt(id).Transform(transform).Vec3(velocity).Vec3(spin).UInt(1).UInt(0);
         }
         Send(w);
     }
@@ -716,22 +904,23 @@ public partial class Match : Node3D
         for (var start = 0; start < moving.Count; start += StatesPerMessage)
         {
             var batch = moving.Skip(start).Take(StatesPerMessage).ToList();
-            var w = new NetWriter(Msg.BodyStates, Setup.Id).Double(now).UShort((ushort)batch.Count);
+            var w = new NetWriter(Msg.BodyStates, Setup.Id).Double(Net.BodySampleTime(now)).UShort((ushort)batch.Count);
             foreach (var entry in batch)
             {
-                w.UInt(entry.Id).Transform(entry.Body.GlobalTransform).Vec3(entry.Body.LinearVelocity).Vec3(entry.Body.AngularVelocity);
+                w.UInt(entry.Id).Transform(entry.Body.GlobalTransform).Vec3(entry.Body.LinearVelocity).Vec3(entry.Body.AngularVelocity)
+                    .UInt(entry.Epoch).UInt(checked(++entry.Sequence));
             }
             Send(w, reliable: false);
         }
         foreach (var entry in rested)
         {
-            Send(new NetWriter(Msg.BodyRest, Setup.Id).UInt(entry.Id).Transform(entry.Body.GlobalTransform).Double(now));
+            Send(new NetWriter(Msg.BodyRest, Setup.Id).UInt(entry.Id).Transform(entry.Body.GlobalTransform).Double(now).UInt(entry.Epoch).UInt(checked(++entry.Sequence)));
         }
     }
 
     // ------------------------------------------------------------------ Receiving
 
-    private void OnMessage(NetMessage message)
+    internal void OnMessage(NetMessage message)
     {
         if (Protocol.IsRelay(message.Type))
         {
@@ -741,6 +930,9 @@ public partial class Match : Node3D
         var tuning = Tuning.Current;
         switch (message.Type)
         {
+            case Msg.Authority:
+                OnAuthority((AuthorityMessage)message.Payload);
+                break;
             case Msg.Countdown:
                 phase = Phase.Countdown;
                 countdownLeft = ((FloatMessage)message.Payload).Value;
@@ -799,7 +991,7 @@ public partial class Match : Node3D
                     remote.Body.QueueFree();
                     ShowNotice($"{remote.Profile.Name} left the match", 3f);
                 }
-                bodies.OwnerLeft(left.Player, left.Host);
+                bodies.Host = left.Host;
                 break;
         }
     }
@@ -831,39 +1023,12 @@ public partial class Match : Node3D
                     OnHitByShot(remote.Body.GlobalPosition + Vector3.Up * 1.4f);
                 }
                 break;
-            case PunctureMessage puncture:
-                if (tanks.TryGetValue(puncture.Id, out var tank) && IsInstanceValid(tank) && tank.State == PropaneTank.TankState.Intact)
-                {
-                    BodySync.Snap(tank, puncture.Transform, puncture.Linear, puncture.Angular);
-                    tank.PunctureRemote(puncture.Hole, puncture.Normal, puncture.Swirl);
-                }
-                break;
-            case ExplodeMessage explosion:
-                if (exploded.Contains(explosion.Id)) { break; }
-                if (tanks.TryGetValue(explosion.Id, out var known) && IsInstanceValid(known))
-                {
-                    known.DetonateRemote(explosion.Center);
-                }
-                else
-                {
-                    // The server accepted an existing tank that this client lost track of. Honor the sender's
-                    // observed blast (including throws), but never run a chain or claim credit here. Only the
-                    // server ledger awards points; arbitrary unknown ids never reach this path through the server.
-                    exploded.Add(explosion.Id);
-                    var center = explosion.Center;
-                    var ground = GetWorld3D().DirectSpaceState.IntersectRay(PhysicsRayQueryParameters3D.Create(center, center + Vector3.Down * 30f, Layers.World | Layers.Floor));
-                    ExplosionEffect.Create(center, ground.Count > 0 ? ground["position"].AsVector3().Y : 0f);
-                    Blast.Detonate(this, center, null, chain: false);
-                }
-                break;
-            case ClaimMessage claim:
-                bodies.OnClaim(sender, claim.Ids);
-                break;
             case BodyStatesMessage states:
-                foreach (var body in states.Bodies) { bodies.OnState(sender, states.Time, body.Id, body.Transform, body.Linear, body.Angular, now); }
+                var transit = Net.PingMs > 0 ? now + Net.ServerClockOffset - states.Time : 0;
+                foreach (var body in states.Bodies) { bodies.OnState(sender, body, rest: false, now, transit); }
                 break;
             case BodyRestMessage rest:
-                bodies.OnRest(sender, rest.Time, rest.Id, rest.Transform, now);
+                bodies.OnState(sender, new BodyState(rest.Id, rest.Transform, Vector3.Zero, Vector3.Zero, rest.Epoch, rest.Sequence), rest: true, now);
                 break;
             case DropMessage drop:
                 if (sender == me) { dropPredictions.Accepted(drop.Tanks.Select(t => t.Id)); }

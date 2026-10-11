@@ -71,7 +71,11 @@ for each formation. Compressed plans are validated before match setup: inflation
 and string limits apply inside the plan, and starts must agree with the player assignments.
 
 **Tanks:**
-- *Puncture:* the shooter's client punctures the tank at once. It then sends the cause to everyone: the hole position and normal, the jet's lean, and the bullet's push. Every client starts the same vent from the same starting point.
+- *Puncture:* the shooter's client punctures the tank at once. The server accepts the first puncture and broadcasts
+  its canonical hole, normal and swirl to everyone, including the contenders. A losing prediction replaces its
+  vent parameters while preserving its current position and velocity; owner corrections reconcile its trajectory.
+  An intact observer already moving from a relayed blast also keeps that motion when adopting the child vent;
+  snapping to the puncture's pre-blast pose would erase the accepted push until owner publications arrive.
 - *Ownership:* whoever punctured a venting tank owns it and sends its position and velocity at a set rate. Other clients ease toward that position, and snap only if they have drifted far.
 - *Sleeping tanks:* intact tanks sleep, so they stay in sync without any messages.
 - *Detonation:* whoever detonates the first tank in a chain runs the whole chain on their client and sends each explosion with its position. Other clients play those explosions and don't run chain reactions themselves for remote blasts.
@@ -86,9 +90,7 @@ and string limits apply inside the plan, and starts must agree with the player a
 - The victim's client spawns the dropped tanks and owns them until another player interacts with them.
 
 A drop must contain unique, unused ids from that player's spawn slot, use that player's match color, and fit both
-their bank and the drop reason's tuner. The server refuses the whole batch if any entry is invalid. Scoring and
-spilling happen only while the server's clock is playing; late explosions can still be relayed for their effects
-after time expires, but earn nothing. Known exploded body ids may appear in late snapshots or claims, which clients
+their bank and the drop reason's tuner. The server refuses the whole batch if any entry is invalid. Scoring, spilling and authority transitions happen only while the server's clock is playing. A late lifecycle prediction is refused and restored to the last authoritative state. Known exploded body ids may appear in late snapshots or claims, which clients
 ignore; body ids that never existed are refused. A client missing a server-accepted tank still plays its reported
 blast, including throws, without running a chain or claiming credit locally.
 
@@ -96,14 +98,49 @@ Drops are predicted locally. The server echoes an accepted Drop to its sender as
 replies with `DropRefused` ids for a fully decoded batch it cannot accept. The sender removes only those pending
 predictions and releases their bank reservation. This also handles legitimate drops overtaken by a live debug
 drop-count change or the server's match deadline. Malformed packets still get no reply.
+The deadline check uses the server clock even when a packet is polled before that frame's phase transition.
+Refusing a predicted root also cancels its pending child fuses, including already owned venting neighbors that
+needed no ownership request. Children already sent still receive explicit refusals and restore their own bodies.
 
 The ledger proves existence and prevents duplicate scoring; it does not prove hits, movement, proximity or blast
 positions. Those remain decisions of the distributed client authorities.
 
-Moving and final resting body states carry the owner's timestamp. Clients compare both against one ordering
-boundary, retained after a correction finishes, so an unreliable snapshot sent before a reliable rest cannot
-resume stale motion afterward. Genuinely newer movement still wakes the copy; changing owners resets the boundary
-because sender clocks are process-local.
+The ledger also owns each body's peer and monotonically increasing epoch. Every accepted ownership or lifecycle
+claim increments that body's epoch, including another grant to the same peer; departure transfers get new epochs.
+Movement and reliable rests carry a per-body sequence within the epoch. Neither side compares owner clocks:
+old epochs and duplicate/older sequences cannot replace a newer state or wake a completed rest. A client retains
+one newest future state per body when an unreliable publication overtakes its reliable grant.
+Moving batches use sampling timestamps on the sender's ping-estimated server clock. The server bounds these to
+the existing 0.3 s extrapolation window; zero means no ping yet and falls back to relay time. Receivers use their
+own server clock estimate to include both transport legs in bounded motion extrapolation. This also survives
+motion overtaking its grant. Rest settling uses receipt time; clocks never order states.
+
+`Claim` requests carry expected epochs and proposed poses for the complete group. The server validates every member
+before granting any, so later grouped interactions can include bodies already owned without a partial handoff.
+A local group with a pending member is left unpredicted for its caller to retry. Prediction never publishes movement until a grant is
+confirmed. `Puncture` and `Explode` use the same expected-epoch path; each request has a peer-local request ID.
+
+`Authority` broadcasts accepted canonical state and replies only to the claimant on refusal. Reasons distinguish
+stale epochs, exploded tanks, wrong phases, incompatible lifecycle transitions, refused chain causes and unknown
+bodies. Replies carry the current owner, epoch, sequence, lifecycle, last reported pose/rest and canonical vent or
+explosion center. A refused prediction restores that state, recreating a locally exploded tank when necessary.
+A losing puncture adopts the canonical vent while preserving current motion; the owner's stream corrects its
+trajectory normally.
+The pose is the owner's last publication, not server-simulated physics. Refusal cancels pending chain fuses; an old
+fuse callback cannot detonate a restored lifecycle. Effects already played locally remain
+transient; reconciliation does not rewind debris or player motion.
+Newer movement in the same epoch cannot suppress lifecycle reconciliation. Restoration uses the newest known
+pose and preserves its correction stream, even when the predicted explosion already freed the tank's node.
+
+Chain punctures, delayed detonations and ownership claims for pushed bodies carry the initiating explosion's
+request ID. The root is sent before its children, even when waiting for a puncture grant; the server accepts a child
+only if that peer's root explosion was accepted. A losing root cannot score a child chain or grant its pushed bodies.
+Local predictions still play immediately. A queued second shot resolves after its first-shot grant, using that
+new epoch. Refused dependent predictions also receive their own authoritative replies.
+Moving ownership and puncture proposals capture their current pose when sent, including after a preceding grant
+unblocks them. Chain punctures wait until the complete blast push before sending, so their canonical motion includes
+that impulse and spin. An already freed predicted tank retains its original proposal; explosion centers always stay
+at the position of the predicted event.
 
 **Left to each client:** debris, small props and fence panels play out locally from the shared blasts. Cars are synced at a low rate, because players use them as cover.
 
@@ -185,7 +222,7 @@ The server is the game itself started with `-- --server` (and `--headless`). It 
 Details settled while building, within the decisions above:
 
 - **Remote players** are full copies of the character (animation, rifle, ragdoll) driven by the states their own game sends. A thrown player's ragdoll falls on its own on every screen, steered after the real one; it gets up where the real one got up. Shots hit other players' bodies and limbs. Players pass through each other.
-- **Ownership** goes to whoever last disturbed a body (a shot, a puncture, a blast, a push, a drop); the match's creator owns everything nobody has touched, and a player's bodies pass to the creator (or the next player) if they leave. Claims go through the server, which echoes them to everyone in one order, so all players agree on each owner. A handoff clears the former owner's correction target and clock comparison. The new owner sends its final state even if its copy was already asleep, so nobody is left correcting toward the former owner forever.
+- **Ownership** goes to whoever last disturbed a body (a shot, a puncture, a blast, a push, a drop); the match's creator owns everything nobody has touched, and a player's bodies pass to the creator (or the next player) if they leave. Claims go through the server as atomic groups with expected epochs; accepted grants are broadcast in one order. A handoff clears the former owner's correction target and sequence boundary. The new owner sends its final state even if its copy was already asleep, so nobody is left correcting toward the former owner forever.
 - **Dropped tanks** glow in the dropper's color while they ignore bullets and chain reactions.
 - **Tuning in a match:** everyone plays on the creator's values: the baked ones in a release build, the creator's live ones in a debug build. Only that original creator's debug build gets F1 and may change the match's values. Hosting succession does not transfer this permission. Hello appends a debug-build flag, captured at match start; this is a client capability declaration, not remote build attestation. Tuning crosses the wire as named bool/int/float scalars, with exact exported types and inclusive declared ranges checked before applying the whole snapshot or a change. `FixedSeed` accepts the full int32 range. The player's own values come back after the match.
 - **Starting values** (all tuners): 20 base tanks plus 4 per player; pile limits of 5–12 plus floor(0.25 × players), near the central 40 m; a 190 m base map plus 4 m per player, with clear starts at least 12 m apart; a 30-round magazine, 60 in reserve, at most 150, a 1.6 s reload; 3 base ammo cans plus 1 per player, of 30 rounds that come back after 20 s; a 2:30 match after a 4 s countdown; results for 10 s.
@@ -198,11 +235,14 @@ Details settled while building, within the decisions above:
 | `godot --headless res://scenes/dev/generator_tests.tscn -- --seeds=100` | All four formations; 2, 8, 16, 24 and 32 players; exact supply counts, clear separated reachable starts, hull overlaps and supports, and exact `PlanCodec` round trips. |
 | `tools/dev/net_bots.sh -n 3 -l 60 -- --net-lag=120 --net-jitter=30 --net-loss=3` | A local server and bot players (`scenes/dev/net_test.tscn`) that run to tanks, shoot them and each other, and fetch ammo, under simulated lag and loss. `-w N` shows N of them in windows; `-S host:port` uses an existing server. |
 | `tools/dev/compare_tanks.py out/bot*.log` | Where each bot had every tank at the same match times: counts, states and drift. |
+| `python3 -B tools/dev/compare_tank_paths.py out/bot*.log` | Add `--tank-trajectories` to a same-machine bot run: roughly 60 ms wall timestamps, linear interpolation to common times, playing drift distributions and final identity/state assertions. Skips intervals over 200 ms and lifecycle changes. Independent match countdowns in the coarse digest can differ; use this probe for drift comparisons. |
 | `tools/dev/check_scores.py out/server.log out/bot*.log` | Server conservation audit and identical per-player final scores on every bot; exits nonzero on a missing audit or disagreement. |
 | `net_bots.sh -n 2 -w 2 -s "--start-score=8" -- --scenario=duel --capture-dir=DIR` | Scripted close-up: hits with the grace period, dropped tanks, a blast that throws the victim, from both sides. |
 | `net_bots.sh -n 2 -l 45 -w 1 -- --scenario=movement --capture-dir=DIR` | Scripted remote creep, sprint, air aim suppression and held-aim landing through real snapshots; exits 1 on missing states. |
 | `net_bots.sh -n 2 -l 45 -w 1 -- --scenario=movement --assert-grip --view=rifleright --capture-dir=DIR` | Final-pose wrist, sampled hand penetration and eye-line assertions on the remote character; close-ups and `grip.csv` from the host. |
 | `net_bots.sh -n 1 -w 1 -- --scenario=pickup --capture-dir=DIR` | Taking an ammo can and its return. |
+| `net_bots.sh -n 2 -w 2 -l 20 -- --scenario=puncture-race --net-lag=120 --net-jitter=30 --net-loss=3 --capture-dir=DIR` | Two opposed bullet contacts on simulation tick 180; both copies must still be intact. Every client asserts canonical hole, normal, swirl and lean, and bounded owner correction error over time. A third bot observes without shooting. |
+| `python3 -B tools/dev/compare_vents.py out/bot*.log` | Identical canonical vent parameters and at least 100 overlapping, time-aligned trajectory samples per pair; exits nonzero if maximum drift exceeds the default snap distance (3 m, a test tolerance). |
 | `net_bots.sh -n 2 -w 2 -l 10 -s "--start-score=8" -- --scenario=drop-refusal --net-lag=120 --net-jitter=30 --net-loss=3 --capture-dir=DIR` | The creator lowers the hit-drop count while a hit is in flight; the victim rolls back the refused drop, both clients keep one accepted tank and a bank of 7. |
 | `net_bots.sh -n 4 -l 120 -b smart,simple,smart,simple` | Bot brains against each other; the server log ends each match with tanks gained / lost to hits / lost to throws. Add `--bot-log` to log what each bot is doing. |
 | `net_bots.sh -n 2 -l 10 -- --match-delay=26` | Builds after the server's loading timeout and Go; the ready log must already say `playing True`. Use `--matches=2` without the delay to exercise another round on the same connection. |
@@ -220,7 +260,8 @@ or the match ends before all checks complete. These assertions also run headless
 
 Results, 2026-10-09: with three bots under 120 ms round trip, 30 ms jitter and 3% loss, every bot agreed on which tanks existed and their states throughout; resting tanks matched exactly and venting tanks to within about half a meter. The same held through the Docker server on another machine, over the LAN and over a VPN. When the match's creator left mid-match, the others played on in step. A client with a different protocol was turned away with a message.
 
-Protocol 2 adds match ids, scalar tuning, timestamps on final body rests, drop refusal replies and discrete player
+Protocol 2 adds authority request IDs, grouped epoch grants, per-body publication sequences and canonical/refused
+lifecycle reconciliation, as well as match ids, scalar tuning, timestamps on final body rests, drop refusal replies and discrete player
 movement states, and appends the debug flag to Hello. These changes share one unreleased protocol bump; the next
 release must be a minor release. Every match-scoped request, event and relay carries its match id, and either side
 ignores a different id.
