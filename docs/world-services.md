@@ -1,31 +1,31 @@
 # World services
 
-`Game` and `Match` are facades around `WorldContext`. A context owns its `World3D`, root, content/effects roots,
+`Game` and `Match` are facades around `SessionContext` and `WorldContext`. A context owns its `World3D`, root, content/effects roots,
 spawn service, tuning copy, random stream, events, blast receiver registry, simulation clock, deferred work, views, and mutable
 magazine/decal/light accounting. Consumers receive a context or tuning explicitly before entering the tree.
 Immutable asset, shader, material, mesh, collision and catalog caches remain shared.
 
 Each simulation lives in a viewport with rendering disabled. The application viewport shares the selected
 `World3D` to present it; camera nodes stay under the facade and query their injected world's physics space. This
-small presentation bridge preserves today's single-view facades. Session factories, actor/view assembly, Lab,
-and split-screen routing are later packages. Authored dev fixtures can place geometry directly under their scene
+presentation bridge preserves the facades. Actors carry camera-independent logical aim; explicit local views
+attach cameras, HUDs and input sources. Lab and split-screen layout remain later packages. Authored dev fixtures can place geometry directly under their scene
 while explicitly presenting that fixture's context.
 The presentation viewport owns the bridge in metadata. When several contexts present there, retirement restores
 the most recently presented live context, or the viewport's original world when none remain, in either teardown order.
 
-`WorldSpace` is an offscreen simulation viewport and receives no application device events. `Game` and `Match`
-forward their application viewport's `_UnhandledInput` to the local player's `AccumulateDeviceInput`, before
-handling their own shortcuts or mouse recapture. UI consumes events first; remote, disabled and retired actors
-cannot accumulate them. `DeviceInput` retains capture gating and the existing pause/focus reset behavior.
-Do not broadcast input into simulation viewports: input belongs to the local view, not every world or actor.
-When device input moves to `LocalView`, that view should own this application-viewport callback instead of the
-facades. The callback audit found no other production input handlers under `WorldSpace`: `Main`, the facades,
-`MenuNavigation` and `HsvColorSlider` already live in the application viewport.
+`WorldSpace` is an offscreen simulation viewport and receives no application device events. Each `LocalView`
+owns a device endpoint in the application viewport, under itself or the session facade when its camera/HUD
+render in a child viewport. `Game` and `Match` handle session shortcuts only. Primary devices accumulate unhandled
+input after UI; explicit assignments also observe handled releases to keep their cached held state accurate.
+`DeviceInput` retains capture gating and the existing pause/focus reset behavior. Closing or reassigning a view
+synchronously releases its endpoint and intent source. Do not broadcast input into simulation viewports.
+`Main`, the facades, `MenuNavigation` and `HsvColorSlider` live in the application viewport.
 
 `menu_test.tscn -- --scenario=input` injects mouse motion, key presses and complete mouse-button clicks through
 `Input.ParseInputEvent`, including menu navigation with Tab/Enter. It checks exact camera displacement, jump,
 melee, single-click fire, single-player suburb replacement, match reload and logical Escape on physical Caps Lock
-in both facades. It also checks paused input and physical/logical system shortcut bindings. This runs in
+in both facades. Controller events also exercise primary-view look, jump, melee, complete trigger taps and
+match reload. It also checks paused input and physical/logical system shortcut bindings. This runs in
 `make test`. Headless Godot cannot capture a pointer, so that run substitutes only `DeviceInput`'s existing
 capture predicate with menu visibility; rendered runs use the default production input source and capture frames
 before/after the turn, in the jump, and with the remapped pause menu open. Gameplay keys stay physical; pause,
@@ -50,7 +50,7 @@ callbacks; world invalidation cancels all timers and deferred work, including ca
 Network timestamps, interpolation, transport fault delays, server-owned deadlines and diagnostic hit timestamps
 continue to use `MonotonicClock` and the server clock. Never compare those timestamps with simulation seconds.
 
-Call `World.Dispose()` before freeing or replacing a facade. Cleanup invalidates first, cancels timers/deferred
+Call `Session.Dispose()` before freeing or replacing a session facade. World-only fixtures use `World.Dispose()`. Cleanup invalidates first, cancels timers/deferred
 work, stops processing/physics, clears events and receiver registrations, runs stop adapters (including inbox detach and replication),
 releases views, restores presentation, and synchronously frees content and physics resources. It is idempotent.
 A presentation viewport owns its selection history; restoring skips disposed and invalidated predecessors.
@@ -90,3 +90,61 @@ ten solo-match cycles after warming immutable catalog variants and lazy UI resou
 and orphan counts and verifies each retired world's timers and receiver registry are empty. Server-owned match
 seeds still vary; the test never alters the server's construction inputs or messages. The ten-cycle sweep runs in
 `make test-full`. Rendered runs capture first and last entries plus the final browser.
+
+## Actors and aim
+
+`PlayerCharacter` is the simulated character, including the skeleton used for ragdoll recovery and muzzle
+placement. `ActorRuntime` owns its intent source and logical aim. No camera, viewport or HUD is needed to move,
+shoot, strike or get up. `LocalView` explicitly attaches a `CameraRig`, HUD and optional device input to an actor;
+closing it releases input but leaves the actor alive. Bot brains and navigation use the actor's aim directly.
+The character's `CameraRig` accessor remains a convenience for existing rendered dev harnesses only.
+
+The aim split preserves the old ray, including its over-the-shoulder origin, wall pull-in, target smoothing,
+render-frame updates and the chest-plane projection that keeps shots from starting behind the character.
+Camera recoil (pitch and random sideways kick), explosion/landing shake (rotation and displacement), and their
+recovery affected the ray before this extraction, so all remain in logical aim. Movement, facing and melee
+continue to use input yaw, excluding transient recoil yaw and shake. A camera renders the resulting transform.
+Rifle/torso sway and the rifle recoil spring remain body presentation; they still affect muzzle placement and
+its obstruction ray, never the primary aim ray. FOV affects projection/crosshair only. Hitstop remains the existing
+exclusive offline-world time-scale lease: it changes simulation timing, never an aim angle.
+
+## Session assembly
+
+`SessionFactory` executes one synchronous order: construct scoped services, configure the mode while scoped nodes
+are detached, attach the world, build its world source, add actors, add local views, register replication, attach the
+matching inbox and acknowledge readiness. Loading presentation is initialized before attaching the inbox;
+replayed Countdown/Go/End messages must not be overwritten by the ready acknowledgment.
+`ISessionWorldSource` builds content; `ISessionMode` supplies assembly policy, not a new rules engine. Sandbox and
+Tank Bank adapters retain their facade's existing gameplay. A new Lab/lobby source or mode can implement those
+interfaces without editing the factory. `WorldContext` still owns content replacement within a live session.
+
+`SessionContext` owns an actor registry independent of peer keys, local views and overlays, a cancellation token,
+inbox detach callbacks, subscriptions and replication stop adapters. Disposal invalidates world work first,
+cancels the session, detaches the inbox, unsubscribes, stops control/replication, frees views, frees actors and
+finally disposes world content/services. Callback failures are collected while cleanup completes. Partial assembly
+uses exactly the same path. Actor/view readiness is checked explicitly because Godot does not propagate managed
+`_Ready` exceptions through `AddChild`; failed initialization cannot reach the inbox or ready acknowledgment.
+If construction and cleanup both fail, the factory retains both errors. Closing a local view removes its
+camera/HUD/device source without retiring the actor.
+
+Ammo, intent, the movement resolver, resolved state, logical aim, swing/publication sequence, snapshot buffer,
+hit grace and drop predictions now belong to each actor. Match interpolation iterates the session registry.
+There remains exactly one owned actor per connection in Tank Bank's Protocol 2 adapter; scoring, relayed targets,
+slot-derived drop ids and `Match.Player` still use today's peer identity. A6 must supply actor/peer/life ids and
+replace that wire routing, including same-peer contact deduplication. No message or tuner changes here.
+Headless `net_test` attaches no local view, so the existing smart/simple bots and network scenarios run on actors
+with no camera. Rendered runs attach the same view used by the shipped facades.
+
+`InputDeviceAssignment.Primary` retains the shipped single-view keyboard/mouse and gamepad switching. Explicit
+keyboard/mouse or numbered gamepad assignments filter events before tracking per-binding strengths and edges;
+one device cannot release another view's held action. Explicit views observe handled releases too, and disconnect
+clears their cached actions. Pause/focus resets resample each assignment's own physical keys, mouse buttons and
+controller bindings, discarding stale cached releases and queued presses without importing another view's held state.
+Menus retain application-level keyboard/mouse and controller navigation. Split-screen
+viewport layout is a dev fixture, not a new shipped mode.
+
+`session_actors_tests.tscn` renders two subviewports sharing the session's `World3D`. It asserts independent device
+routing through `Input.ParseInputEvent`, movement yaw, camera following, shot directions, melee contacts and
+survivor continuity after closing one view. A third, camera-free actor navigates, shoots a tank twice, strikes a prop and recovers from the blast ragdoll.
+The unit suite injects failure into every factory stage and checks cancellation, adapter/node retirement order,
+completion after a throwing stop adapter and device isolation. Both run in `make test`.

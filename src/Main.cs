@@ -178,7 +178,7 @@ public partial class Main : Node
 
     private void ExitSinglePlayer()
     {
-        game?.World.Dispose();
+        game?.Session.Dispose();
         game?.Free();
         game = null;
         ShowMenus(Menus.Screen.Main);
@@ -235,7 +235,7 @@ public partial class Main : Node
         if (match != null)
         {
             // Retire replication, views and content before another scene enters.
-            match.World.Dispose();
+            match.Session.Dispose();
             match.Free();
             match = null;
         }

@@ -17,9 +17,10 @@ public sealed class WorldContext : IDisposable
     private readonly HashSet<IBlastReceiver> receivers = new();
     private WorldPresentation? presentation;
     private bool disposed;
+    private bool attached;
     private readonly List<Exception> stopErrors = new();
 
-    public WorldContext(Node owner, Tuning template, bool networked = false, bool present = false)
+    public WorldContext(Node owner, Tuning template, bool networked = false, bool present = false, bool attach = true)
     {
         ViewRoot = owner;
         Tuning = template.Copy();
@@ -42,10 +43,19 @@ public sealed class WorldContext : IDisposable
         Root.AddChild(ContentRoot);
         viewport.AddChild(new WorldDriver { World = this, ProcessMode = Node.ProcessModeEnum.Always });
         WorldTimeScale.Register();
+        if (attach) Attach(present);
+    }
+
+    /// <summary>Session modes finish constructing their services before any scoped node enters the tree.</summary>
+    public void Attach(bool present = false)
+    {
+        EnsureAlive();
+        if (attached) throw new InvalidOperationException("world already attached");
+        attached = true;
         try
         {
-            owner.AddChild(viewport);
-            if (present) { Present(owner.GetViewport()); }
+            ViewRoot.AddChild(viewport);
+            if (present) Present(ViewRoot.GetViewport());
         }
         catch
         {
@@ -86,6 +96,7 @@ public sealed class WorldContext : IDisposable
     {
         EnsureAlive();
         views.Add((node, node.ProcessMode, followsPause));
+        node.TreeExiting += () => views.RemoveAll(view => view.Node == node);
         if (Paused && followsPause) { node.ProcessMode = Node.ProcessModeEnum.Disabled; }
         parent.AddChild(node);
         return node;
@@ -213,7 +224,8 @@ public sealed class WorldContext : IDisposable
         if (disposed) { return; }
         disposed = true;
         Invalidate();
-        for (var i = views.Count - 1; i >= 0; i--) { if (GodotObject.IsInstanceValid(views[i].Node)) { views[i].Node.Free(); } }
+        var retiringViews = views.ToArray();
+        for (var i = retiringViews.Length - 1; i >= 0; i--) { if (GodotObject.IsInstanceValid(retiringViews[i].Node)) { retiringViews[i].Node.Free(); } }
         views.Clear();
         presentation?.Release(this);
         presentation = null;

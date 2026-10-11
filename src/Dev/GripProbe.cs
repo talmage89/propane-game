@@ -111,10 +111,10 @@ public partial class GripProbe : SkeletonModifier3D
         if (rig.SprintAmount > 0.99f) coverage.Add("sprint");
         if (rig.Recoil > 0.5f) coverage.Add("recoil");
         if (rig.Reload > 0.2f && rig.Reload < 0.8f) coverage.Add(rifle.ReloadFromEmpty ? "empty-reload" : "tactical-reload");
-        if (Player.CameraRig?.Pitch <= -74.9f) coverage.Add("pitch-down");
-        if (Player.CameraRig?.Pitch >= 44.9f) coverage.Add("pitch-up");
+        if ((Player.IsRemote ? (float?)null : Player.Aim.Pitch) <= -74.9f) coverage.Add("pitch-down");
+        if ((Player.IsRemote ? (float?)null : Player.Aim.Pitch) >= 44.9f) coverage.Add("pitch-up");
         coverage.Add(Player.ResolvedState.Gait.ToString());
-        var pitchLimit = Player.CameraRig?.Pitch <= -74.9f ? "down" : Player.CameraRig?.Pitch >= 44.9f ? "up" : null;
+        var pitchLimit = (Player.IsRemote ? (float?)null : Player.Aim.Pitch) <= -74.9f ? "down" : (Player.IsRemote ? (float?)null : Player.Aim.Pitch) >= 44.9f ? "up" : null;
         if (pitchLimit != null && rig.Weight >= 0.999f)
         {
             if (rig.Reload > 0.2f && rig.Reload < 0.8f)
@@ -140,7 +140,7 @@ public partial class GripProbe : SkeletonModifier3D
             }
         }
         count++;
-        csv.AppendLine(FormattableString.Invariant($"{time:F6},{Player.ResolvedState.Gait},{Player.CameraRig?.Pitch ?? 0:F3},{rig.ReadyAmount:F3},{rig.AimAmount:F3},{rig.SprintAmount:F3},{rig.Reload:F3},{rig.Recoil:F3},{values[0]:F6},{values[1]:F6},{values[2]:F4},{values[3]:F4},{values[4]:F6},{values[5]:F6}"));
+        csv.AppendLine(FormattableString.Invariant($"{time:F6},{Player.ResolvedState.Gait},{(Player.IsRemote ? (float?)null : Player.Aim.Pitch) ?? 0:F3},{rig.ReadyAmount:F3},{rig.AimAmount:F3},{rig.SprintAmount:F3},{rig.Reload:F3},{rig.Recoil:F3},{values[0]:F6},{values[1]:F6},{values[2]:F4},{values[3]:F4},{values[4]:F6},{values[5]:F6}"));
 
     }
 

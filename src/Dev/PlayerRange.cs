@@ -30,6 +30,7 @@ public partial class PlayerRange : Node3D
         ProcessPhysicsPriority = -10;
         DevArgs.Setup();
         world = new WorldContext(this, Tuning.SavedTemplate, present: true);
+        if (ulong.TryParse(DevArgs.Get("effects-seed"), out var effectsSeed)) world.Random.Seed = effectsSeed;
         InputSetup.Register();
         Core.DevLog.Enabled = DevArgs.Get("verbose-log") != null;
         var dynamic = new Node3D { Name = "Dynamic" };
@@ -42,6 +43,7 @@ public partial class PlayerRange : Node3D
         var scenario = DevArgs.Get("scenario") ?? "stances";
         player = new PlayerCharacter { World = world, Name = "Player", IsRemote = scenario == "feet" };
         AddChild(player);
+        if (!player.IsRemote) LocalView.Attach(player, this).Hud.ShowHud(false);
         player.InputOverride = script;
         env.Follow = player;
 

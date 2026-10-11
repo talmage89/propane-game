@@ -71,11 +71,14 @@ public partial class NetTest
             var side = new Vector3(-along.Z, 0, along.X);
             var position = center + along * ((slot - (players - 1) / 2f) * 2.5f);
             match.Player.Teleport(position, Mathf.Atan2(-side.X, -side.Z));
-            var camera = match.Player.CameraRig.Camera;
-            match.Player.CameraRig.ProcessMode = ProcessModeEnum.Disabled;
-            camera.GlobalPosition = center + side * 7 + Vector3.Up * 3.4f;
-            camera.LookAt(center + Vector3.Up);
-            camera.Fov = 60;
+            if (match.Player.View is { } view)
+            {
+                var camera = view.CameraRig.Camera;
+                view.CameraRig.ProcessMode = ProcessModeEnum.Disabled;
+                camera.GlobalPosition = center + side * 7 + Vector3.Up * 3.4f;
+                camera.LookAt(center + Vector3.Up);
+                camera.Fov = 60;
+            }
         }
         appearanceTime += dt;
         var own = match.Setup.Players.Single(p => p.Player.Id == net.MyId);
@@ -88,8 +91,7 @@ public partial class NetTest
         if (!appearanceDropped && appearanceTime >= 2)
         {
             appearanceDropped = true;
-            var camera = match.Player.CameraRig.Camera;
-            var toward = camera.GlobalPosition - match.Player.GlobalPosition;
+            var toward = (match.Player.View?.CameraRig.Camera.GlobalPosition ?? match.Player.Aim.EyeOrigin) - match.Player.GlobalPosition;
             toward.Y = 0;
             var at = match.Player.GlobalPosition + toward.Normalized() * 1.3f;
             var body = new BodyState(BodySync.DropTankId(own.Spawn, 900000), new Transform3D(Basis.Identity, at), Vector3.Zero, Vector3.Zero);

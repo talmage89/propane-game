@@ -124,7 +124,7 @@ public partial class NetTest : Node
                 Log("tank-check loading stall 9s");
                 System.Threading.Thread.Sleep(TimeSpan.FromSeconds(9));
             }
-            match = new Match { Name = "Match", Net = net, Setup = setup };
+            match = new Match { Name = "Match", Net = net, Setup = setup, CreateLocalView = DisplayServer.GetName() != "headless" };
             match.Finished += () =>
             {
                 if (DevArgs.Get("scenario") is "duel" or "pickup" or "drop-refusal" or "puncture-race" or "appearance" or "gather" or "melee" or "body-stream")
@@ -192,6 +192,12 @@ public partial class NetTest : Node
                 };
             }
             match.Player.InputOverride = bot;
+            if (DisplayServer.GetName() == "headless")
+            {
+                ScenarioAssert(match.Session.LocalViews.Count == 0 && match.FindChildren("*", "Camera3D", owned: false).Count == 0,
+                    "headless bot match constructed a camera");
+                Log("camera-free actor: no local views or cameras");
+            }
             if (DevArgs.Get("melee-start") != null)
             {
                 // Stage before countdown so snapshots settle before the ordinary brains choose any targets.
@@ -513,9 +519,9 @@ public partial class NetTest : Node
                         mesh.GetInstanceShaderParameter("gather_shimmer").AsSingle() == match.World.Tuning.GatherShimmer,
                         "gather: expired shield glow/contrast remained or shimmer missing");
                 }
-                if (host)
+                if (host && player.View != null)
                 {
-                    var camera = player.CameraRig.Camera;
+                    var camera = player.View.CameraRig.Camera;
                     player.CameraRig.ProcessMode = ProcessModeEnum.Disabled;
                     var center = tank.GlobalTransform * PropaneTank.LocalCenter;
                     camera.LookAtFromPosition(center + new Vector3(1.5f, 1, 2), center);
@@ -610,7 +616,7 @@ public partial class NetTest : Node
             var to = other - mine;
             var yaw = Mathf.Atan2(-to.X, -to.Z);
             player.Teleport(mine, yaw);
-            player.CameraRig.SetOrientation(Mathf.RadToDeg(yaw) + (host ? 0 : 160), -6f);
+            player.Aim.SetOrientation(Mathf.RadToDeg(yaw) + (host ? 0 : 160), -6f);
         }
         if (!host)
         {
@@ -826,7 +832,7 @@ public partial class NetTest : Node
         if (Once(.25f, dt) || Once(10.5f, dt))
         {
             player.Teleport(origin + (victim ? Vector3.Forward * 1.8f : Vector3.Zero), victim ? Mathf.Pi : 0);
-            player.CameraRig.SetOrientation(victim ? 180 : 0, -6);
+            player.Aim.SetOrientation(victim ? 180 : 0, -6);
             if (remoteMotion != null) remoteMotion.SkipNextPose = true;
         }
         if (duelTime > 1 && remoteGrip == null && DevArgs.Get("assert-grip") != null) remoteGrip = GripProbe.Attach(attacker);
@@ -1049,9 +1055,8 @@ public partial class NetTest : Node
 
     private static void AimAt(PlayerCharacter player, Vector3 point)
     {
-        var camera = player.CameraRig.Camera;
-        var view = point - camera.GlobalPosition;
-        player.CameraRig.SetOrientation(Mathf.RadToDeg(Mathf.Atan2(-view.X, -view.Z)), Mathf.RadToDeg(Mathf.Asin(Mathf.Clamp(view.Normalized().Y, -1, 1))));
+        var view = point - player.Aim.EyeOrigin;
+        player.Aim.SetOrientation(Mathf.RadToDeg(Mathf.Atan2(-view.X, -view.Z)), Mathf.RadToDeg(Mathf.Asin(Mathf.Clamp(view.Normalized().Y, -1, 1))));
     }
 
     /// <summary>Scores and where this game has each tank, keyed by match clock, for comparing players' views.</summary>
