@@ -131,9 +131,11 @@ can edit. In a downloaded build, Save writes the player's own `tuning.tres` in t
 `~/.local/share/godot/app_userdata/Propane` on Linux), which then takes precedence. **Defaults** restores the values
 in code. `FixedSeed` (World group) replays one suburb; 0 picks a random one.
 
-Tank piles use weighted formations in both modes: side-laid rows, square tiers, triangular tiers, and upright tight
-clusters. The **Tank Piles** tuners control weights and spacing. Each upper tier is placed only after its supports;
+Tank piles use weighted formations in both modes: side-laid rows, upright square and triangular tiers, and upright
+tight clusters. The **Tank Piles** tuners control weights and spacing. Each upper tier is placed only after its supports;
 cramped sites use smaller whole formations. Pyramids stand on clear ground rather than moving pickup beds.
+Upright tiers span two collars below, using `PileUprightLayerHeight`; rows retain `PileLayerHeight`.
+[Upright pile trials](docs/upright-piles.md) describes the contacts and stability proof.
 Rifle hits puncture, then detonate. A blast within `ChainRadius` acts as a shot: an intact neighbor punctures and
 keeps venting and moving; an already-venting neighbor detonates after its `ChainFuseMin`/`ChainFuseMax` fuse.
 
@@ -264,7 +266,11 @@ $GODOT --headless --fixed-fps 60 res://scenes/dev/gather_range.tscn -- --scenari
 # A real single-player rifle blast knocks intact tanks loose, then they gather; seed 23 fixes the road fixture.
 # Once the knock is proven, the fixture removes random blast fragments so departure paths stay clear.
 $GODOT --fixed-fps 60 res://scenes/dev/game_test.tscn -- --scenario=gather --tune.FixedSeed=23 --capture-dir=/tmp/gather-game
+# Upright pyramids: every physics tick for 120 simulated seconds, player passes, gather neighbors and toppling.
+$GODOT --headless --fixed-fps 60 res://scenes/dev/upright_pile_tests.tscn
+# --deep --awake adds 64/128-tank contact trials (make test-full).
 # Formation close-up and stability: Rows, Square, Triangular, Cluster; --count defaults to 14.
+# --hit=shot|blast|shove captures a disturbance and falling from player height.
 # --awake tests contact settling; --chain=fresh requires intact neighbors in range to puncture and keep venting.
 # --chain=primed first punctures each tank, then requires venting neighbors in range to detonate after the fuse.
 $GODOT --fixed-fps 60 res://scenes/dev/tank_range.tscn -- --capture-dir=/tmp/pile --formation=Square --chain=fresh

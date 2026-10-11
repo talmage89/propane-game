@@ -160,7 +160,7 @@ public partial class TankGather : Node3D
         var tuning = World.Tuning;
         // An upright cluster has no dependent upper supports: interrupting one member cannot strand another.
         var local = PileBuilder.Build(PileFormation.Cluster, members.Count,
-            new Vector3(tuning.PileSpacing, tuning.PileLayerHeight, tuning.PileDepthSpacing));
+            new Vector3(tuning.PileSpacing, tuning.PileLayerHeight, tuning.PileDepthSpacing), tuning.PileUprightLayerHeight);
         Transform3D[]? chosen = null;
         GatherGroups.SelectCenter(members.Select(t => t.GlobalTransform * PropaneTank.LocalCenter).ToArray(),
             tuning.GatherCenterSearch, tuning.GatherSearchRings, tuning.GatherSearchDirections, candidate =>
