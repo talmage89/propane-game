@@ -33,7 +33,7 @@ public static class DevArgs
     public static float GetFloat(string key, float fallback) => float.TryParse(Get(key), out var v) ? v : fallback;
 
     /// <summary>Common setup for dev scenes: applies any <c>--tune.Name=value</c> overrides to the live tuning.</summary>
-    public static void Setup() => ApplyTuningOverrides();
+    public static void Setup(Core.Tuning? target = null) => ApplyTuningOverrides(target ?? Core.Tuning.SavedTemplate);
 
     /// <summary>Optional scene-entry marker for tools/dev/time_gate.py; absent during ordinary runs.</summary>
     public static void MarkReady()
@@ -42,7 +42,7 @@ public static class DevArgs
     }
 
     /// <summary>Applies <c>--tune.Name=value</c> arguments to the live tuning, for trying dial values from the command line.</summary>
-    private static void ApplyTuningOverrides()
+    private static void ApplyTuningOverrides(Core.Tuning target)
     {
         Get("");
         foreach (var (key, value) in values!)
@@ -57,7 +57,7 @@ public static class DevArgs
                 GD.PushError($"[dev] no tuning value named {key[5..]}");
                 continue;
             }
-            property.SetValue(Core.Tuning.SavedTemplate, System.Convert.ChangeType(value, property.PropertyType, System.Globalization.CultureInfo.InvariantCulture));
+            property.SetValue(target, System.Convert.ChangeType(value, property.PropertyType, System.Globalization.CultureInfo.InvariantCulture));
             GD.Print($"[dev] tuning {key[5..]} = {value}");
         }
     }

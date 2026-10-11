@@ -1,7 +1,7 @@
 # Animation review
 
-This is the acceptance harness for the authored directional rifle redo. Production animation, movement rules,
-rigs and assets are unchanged. The fixture attaches a local view for A4's separated camera ownership. Visual thresholds are pending until
+This is the acceptance harness for the authored directional rifle redo.
+The fixture attaches a local view for A4's separated camera ownership. Visual thresholds are pending until
 that redo; numerical checks support the owner's rendered review, not replace it.
 
 ## Controller review
@@ -11,11 +11,11 @@ make build
 mkdir -p build/animation-review
 godot-mono --headless --fixed-fps 60 --path . res://scenes/dev/animation_review.tscn -- --cases=walk_000,jog_000,creep_000,creep_180,creep_090,sprint,aim_idle --metrics=$PWD/build/animation-review/metrics.csv
 python3 -B tools/dev/animation_metrics.py build/animation-review/metrics.csv --output build/animation-review/results.json
-python3 -B tools/dev/animation_review.py --build release=v0.2.0 --build dev=dev --build candidate=wp/anim-0 --output build/animation-review
+python3 -B tools/dev/animation_review.py --build release=v0.2.0 --build dev=dev --build candidate=wp/anim-1 --output build/animation-review
 ```
 
 The last command archives each commit into ignored scratch projects, overlays only the maintained review scene,
-probe and capture helper, imports and builds, then renders both views through `godot-mono`. Labels identify runs;
+probe, capture helper and dev argument helper, imports and builds, then renders both views through `godot-mono`. Labels identify runs;
 commit and harness hashes are recorded. No checkout switches or asset replacements occur. Outputs stay under this
 checkout's `build/`. Pillow and ffmpeg are optional review dependencies; headless tests need only Python's standard
 library and Godot. No downloads or recordings are required by CI.
@@ -28,11 +28,13 @@ stationary half-turn and return, jumping while holding aim, a burst, tactical re
 Teleports separate cases; they are not pivots. Reload starts with 20 rounds. The release has no melee; its slot is
 explicitly marked unavailable. Only its review fixture normalizes the older 3.6 m/s aim speed to 1.6 m/s.
 
-Tuners are fresh **code defaults**, independent of saved settings or ignored `tuning.tres`. Differences in a build's
+Tuners are fresh **code defaults**, independent of saved settings or ignored `tuning.tres`. Direct current-build runs
+accept explicit `--tune.Name=value` overrides for pose research; comparison commands use defaults. Differences in a build's
 camera code remain visible in the player view. Side view has fixed framing. `--cases=a,b` limits a run; `--view=player`
 uses the real player camera. `--capture-dir=$PWD/build/...` saves 12 samples per simulated second. The tool creates
 captioned six-frame sheets and deterministic short MP4s from those images, paired sheets for every build pair,
-and `index.html` with any-two-build selection, synchronized restart and half speed. Independent clip selection compares Walk
+and `index.html` opening release, dev and candidate side by side, with optional two-build selection,
+synchronized restart and half speed. Independent clip selection compares Walk
 against Carry or alternative strikes. A whole-run real-time recording
 can also be requested directly:
 

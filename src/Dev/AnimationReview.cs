@@ -53,6 +53,7 @@ public partial class AnimationReview : Node3D
         using var defaults = new Tuning();
         world = new WorldContext(this, defaults, present: true);
         world.SetContentRoot(dynamic);
+        DevArgs.Setup(world.Tuning);
         player = new PlayerCharacter { World = world, Name = "Player" };
         var sensitivity = world.Tuning.MouseSensitivity;
 #endif

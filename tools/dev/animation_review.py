@@ -15,7 +15,7 @@ import tarfile
 
 ROOT = Path(__file__).resolve().parents[2]
 FILES = ('src/Dev/AnimationReview.cs', 'src/Dev/AnimationReviewProbe.cs',
-         'scenes/dev/animation_review.tscn', 'src/Dev/CaptureDirector.cs')
+         'scenes/dev/animation_review.tscn', 'src/Dev/CaptureDirector.cs', 'src/Dev/DevArgs.cs')
 
 
 def run(args, directory, log):
@@ -35,6 +35,8 @@ def prepare(ref, projects):
             source.extractall(target, filter='data')
     release = sha == subprocess.check_output(['git', 'rev-parse', 'v0.2.0'], cwd=ROOT, text=True).strip()
     for name in FILES:
+        if release and name == 'src/Dev/DevArgs.cs':
+            continue
         (target / name).parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(ROOT / name, target / name)
     # The release predates safe managed-render shutdown and recording. Only transplant the dev capture helper.
@@ -108,21 +110,24 @@ def assemble(builds, output):
                 result.save(paired / sheet.name, quality=90)
     data = {label: {'path': path.relative_to(output).as_posix(), 'cases': json.loads((path / 'cases.json').read_text())}
             for label, path in builds}
-    # One index accepts any number of runs, choosing any two at playback time. No network or CDN dependencies.
+    # Three columns open release, dev and candidate together. Two-run comparisons remain available.
     document = '''<!doctype html><meta charset="utf-8"><title>Propane animation review</title>
-<style>body{font:16px sans-serif;background:#222;color:#eee}main{display:flex;gap:1em}article{width:49%}video,img{width:100%}select,button{margin:.5em}small{display:block}</style>
-<h1>Animation review</h1><p>Fixed-step 12 fps films. Select any two runs. Controller builds use identical inputs and code-default tuners; external clips are stationary previews. Each run has provenance.json.</p>
+<style>body{font:16px sans-serif;background:#222;color:#eee}main{display:flex;gap:1em}article{flex:1;min-width:0}video,img{width:100%}select,button{margin:.5em}small{display:block}</style>
+<h1>Animation review</h1><p>Fixed-step 12 fps films. Compare release, dev and candidate together, or select two runs. Controller builds use identical inputs and code-default tuners; external clips are stationary previews. Each run has provenance.json.</p>
 <label>Left <select id="left"></select></label><label>Right <select id="right"></select></label>
+<label><input id="three" type="checkbox">Three runs</label><label>Third <select id="third"></select></label>
 <select id="view"><option>side</option><option>player</option></select><select id="motion"></select>
 <label><input id="independent" type="checkbox">Compare different clips</label><select id="rightMotion" disabled></select>
-<button id="play">Restart both</button><button id="slow">Half speed</button><main></main>
+<button id="play">Restart all</button><button id="slow">Half speed</button><main></main>
 <script>
 const runs=DATA;
-for(const id of ['left','right'])for(const label of Object.keys(runs))document.getElementById(id).add(new Option(label,label));
+for(const id of ['left','right','third'])for(const label of Object.keys(runs))document.getElementById(id).add(new Option(label,label));
 document.getElementById('right').selectedIndex=Math.min(1,Object.keys(runs).length-1);
+document.getElementById('third').selectedIndex=Math.min(2,Object.keys(runs).length-1);
+document.getElementById('three').checked=Object.keys(runs).length>=3;
 for(const c of [...new Map(Object.values(runs).flatMap(r=>r.cases).map(c=>[c.name,c])).values()])for(const id of ['motion','rightMotion'])document.getElementById(id).add(new Option(c.name,c.name));
-function show(){const main=document.querySelector('main');main.replaceChildren();for(const id of ['left','right']){const label=document.getElementById(id).value;const c=document.getElementById(id==='right'&&document.getElementById('independent').checked?'rightMotion':'motion').value;const v=document.getElementById('view').value;const article=document.createElement('article');const title=document.createElement('h2');title.textContent=label+' / '+v+' / '+c;article.append(title);if(runs[label].cases.some(x=>x.name===c&&x.available===false)){const note=document.createElement('small');note.textContent='Unavailable in this build; the recorded slot is idle.';article.append(note);}if(!runs[label].cases.some(x=>x.name===c)){const p=document.createElement('p');p.textContent='Unavailable in this run';article.append(p);main.append(article);continue;}const video=document.createElement('video');video.controls=true;video.loop=true;video.muted=true;video.src=runs[label].path+'/'+v+'-'+c+'.mp4';article.append(video);const image=document.createElement('img');image.src=runs[label].path+'/'+v+'-'+c+'.jpg';image.alt=title.textContent+' contact sheet';article.append(image);main.append(article);}}
-for(const s of document.querySelectorAll('select'))s.onchange=show;document.getElementById('independent').onchange=()=>{document.getElementById('rightMotion').disabled=!document.getElementById('independent').checked;show();};
+function show(){const main=document.querySelector('main');main.replaceChildren();for(const id of document.getElementById('three').checked?['left','right','third']:['left','right']){const label=document.getElementById(id).value;const c=document.getElementById(id==='right'&&document.getElementById('independent').checked?'rightMotion':'motion').value;const v=document.getElementById('view').value;const article=document.createElement('article');const title=document.createElement('h2');title.textContent=label+' / '+v+' / '+c;article.append(title);if(runs[label].cases.some(x=>x.name===c&&x.available===false)){const note=document.createElement('small');note.textContent='Unavailable in this build; the recorded slot is idle.';article.append(note);}if(!runs[label].cases.some(x=>x.name===c)){const p=document.createElement('p');p.textContent='Unavailable in this run';article.append(p);main.append(article);continue;}const video=document.createElement('video');video.controls=true;video.loop=true;video.muted=true;video.src=runs[label].path+'/'+v+'-'+c+'.mp4';article.append(video);const image=document.createElement('img');image.src=runs[label].path+'/'+v+'-'+c+'.jpg';image.alt=title.textContent+' contact sheet';article.append(image);main.append(article);}}
+for(const s of document.querySelectorAll('select'))s.onchange=show;document.getElementById('three').onchange=show;document.getElementById('independent').onchange=()=>{document.getElementById('rightMotion').disabled=!document.getElementById('independent').checked;show();};
 document.getElementById('play').onclick=()=>{for(const v of document.querySelectorAll('video')){v.currentTime=0;v.play();}};
 document.getElementById('slow').onclick=()=>{for(const v of document.querySelectorAll('video'))v.playbackRate=v.playbackRate===.5?1:.5;};show();
 </script>'''.replace('DATA', json.dumps(data).replace('<', '\\u003c'))
