@@ -1,5 +1,6 @@
 using System;
 using Godot;
+using Propane.Core;
 
 namespace Propane.Dev.UnitTests;
 
@@ -15,7 +16,7 @@ public partial class TestRunner : Node
         {
             if (WorldBuildTests.RunProcessMode(this))
             {
-                GetTree().Quit();
+                ShutdownGuard.Quit(GetTree());
                 return;
             }
             WorldBuildTests.Register(this);
@@ -37,7 +38,7 @@ public partial class TestRunner : Node
             GD.Print($"[unit] FAIL suite setup: {e}");
         }
         GD.Print($"[unit] {tests} tests, {failures} failures");
-        GetTree().Quit(failures == 0 ? 0 : 1);
+        ShutdownGuard.Quit(GetTree(), failures == 0 ? 0 : 1);
     }
 
     public void Run(string name, Action test)

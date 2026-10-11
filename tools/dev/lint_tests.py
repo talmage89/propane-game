@@ -43,19 +43,26 @@ if [[ "${0##*/}" == godot && "$*" == *--hash-world-plan=* ]]; then printf '[worl
         commands = log.read_text().splitlines()
         require(bool(commands) and commands[0] == "dotnet format Propane.sln --verify-no-changes", "format must run first", result.stdout)
         if failure == "none":
-            checkers = ["check_scores_tests.py", "compare_vents_tests.py", "compare_tank_paths_tests.py"]
-            scenes = ["unit_tests.tscn", "movement_tests.tscn", "menu_test.tscn -- --scenario=gamepad",
+            checkers = ["check_world_tests.py", "check_scores_tests.py", "compare_vents_tests.py", "compare_tank_paths_tests.py"]
+            scenes = ["shutdown_tests.tscn", "shutdown_tests.tscn -- --paused --window-close --repeat-quit",
+                      "unit_tests.tscn", "blast_query_tests.tscn", "gather_range.tscn",
+                      "gather_range.tscn -- --scenario=grant-races", "game_test.tscn -- --scenario=gather",
+                      "movement_tests.tscn", "bot_navigation_course.tscn -- --seeds=5", "menu_test.tscn -- --scenario=gamepad",
                       "menu_test.tscn -- --scenario=devices", "player_range.tscn -- --scenario=grip --grip-sweep --assert-grip",
-                      "player_range.tscn -- --scenario=ragdoll --assert-grip", "generator_tests.tscn -- --seeds=100", "platform_tests.tscn"]
+                      "player_range.tscn -- --scenario=ragdoll --assert-grip", "player_range.tscn -- --scenario=feet --assert-feet",
+                      "player_range.tscn -- --scenario=feet --feet-corrections", "player_range.tscn -- --scenario=feet-events",
+                      "player_range.tscn -- --scenario=movement", "player_range.tscn -- --scenario=motion",
+                      "generator_tests.tscn -- --seeds=100", "platform_tests.tscn"]
             first_scene = 3 + len(checkers)
             first_world = first_scene + len(scenes)
-            require(result.returncode == 0 and len(commands) == first_world + 3, "check did not run every expected tool call", result.stdout)
+            require(result.returncode == 0 and len(commands) == first_world + 12, "check did not run every expected tool call", result.stdout)
             require("-warnaserror" in commands[1] and "--no-incremental" in commands[1], "lint must rebuild with warnings as errors")
             require(commands[2].startswith("dotnet build ") and commands[first_scene].startswith("godot --headless "), "tests ran before lint")
             require(commands[3:first_scene] == [f"python3 -B tools/dev/{checker}" for checker in checkers], "check skipped checker regressions")
             require(all(scene in command for scene, command in zip(scenes, commands[first_scene:first_world])), "check skipped a regression scene")
-            require("--write-world-plan=" in commands[first_world] and
-                    all("--hash-world-plan=" in command for command in commands[first_world + 1:]), "check skipped separate-process world builds")
+            require(all("--write-world-plan=" in commands[index] and
+                        all("--hash-world-plan=" in command for command in commands[index + 1:index + 3])
+                        for index in range(first_world, len(commands), 3)), "check skipped separate-process world builds")
         else:
             require(result.returncode != 0 and len(commands) == (1 if failure == "format" else 2), "lint failure did not stop check", result.stdout)
     print("PASS: parallel make check orders lint before tests and stops on formatter/build failures")

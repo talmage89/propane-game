@@ -37,9 +37,12 @@ check: lint ## Run lint, then the tests
 	@$(MAKE) --no-print-directory test
 
 test: build ## Run all headless regression suites and separate-process world tests (as CI does)
+	python3 -B tools/dev/check_world_tests.py
 	python3 -B tools/dev/check_scores_tests.py
 	python3 -B tools/dev/compare_vents_tests.py
 	python3 -B tools/dev/compare_tank_paths_tests.py
+	"$(GODOT)" --headless --path . res://scenes/dev/shutdown_tests.tscn
+	"$(GODOT)" --headless --path . res://scenes/dev/shutdown_tests.tscn -- --paused --window-close --repeat-quit
 	"$(GODOT)" --headless --path . res://scenes/dev/unit_tests.tscn
 	"$(GODOT)" --headless --path . --fixed-fps 60 res://scenes/dev/blast_query_tests.tscn
 	"$(GODOT)" --headless --path . --fixed-fps 60 res://scenes/dev/gather_range.tscn

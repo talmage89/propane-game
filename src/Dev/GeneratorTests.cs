@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Godot;
+using Propane.Core;
 using Propane.World;
 using Propane.World.Plan;
 
@@ -26,7 +27,7 @@ public partial class GeneratorTests : Node
         catch (Exception error)
         {
             GD.PushError(error.ToString());
-            GetTree().Quit(1);
+            ShutdownGuard.Quit(GetTree(), 1);
         }
     }
 
@@ -81,7 +82,7 @@ public partial class GeneratorTests : Node
             GD.Print($"[tests] FAIL {kind}: {n}");
         }
         GD.Print(failures == 0 ? "[tests] ALL PASSED" : $"[tests] {failures} FAILURES");
-        GetTree().Quit(failures == 0 ? 0 : 1);
+        ShutdownGuard.Quit(GetTree(), failures == 0 ? 0 : 1);
     }
 
     private void Check(int seed, string what, bool ok, string detail = "")

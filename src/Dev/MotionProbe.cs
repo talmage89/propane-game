@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using Godot;
+using Propane.Core;
 using Propane.Player;
 
 namespace Propane.Dev;
@@ -133,6 +134,6 @@ public partial class MotionProbe : SkeletonModifier3D
             file.StoreString(csv.ToString());
         }
         Active = false;
-        if (assert && failed) { GD.PushError("[motion] FAIL rotation continuity or creep aim steadiness"); GetTree().Quit(1); }
+        if (assert && failed) { GD.PushError("[motion] FAIL rotation continuity or creep aim steadiness"); ShutdownGuard.Quit(GetTree(), 1); }
     }
 }

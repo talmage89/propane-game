@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Linq;
 using Godot;
+using Propane.Core;
 using Propane.Net;
 
 namespace Propane.Dev;
@@ -36,7 +37,7 @@ public partial class PlatformTests : Node
             CultureInfo.CurrentCulture = culture;
         }
         GD.Print(failures == 0 ? "[platformtests] ALL PASSED (9 checks)" : $"[platformtests] {failures} FAILURES");
-        GetTree().Quit(failures == 0 ? 0 : 1);
+        ShutdownGuard.Quit(GetTree(), failures == 0 ? 0 : 1);
     }
 
     private void Check(string name, bool passed)
