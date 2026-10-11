@@ -5,6 +5,10 @@ namespaces, `var` locals and System usings first. Inline statements and switch-c
 layout. Long expressions are not reflowed. Expression bodies and naming remain editor suggestions rather than
 build warnings. Run `dotnet format Propane.sln` to apply the baseline.
 
+`make lint` verifies formatting, then performs a full build with warnings as errors. A previous incremental build
+cannot hide warnings. `make check` runs lint before the generator tests, including with `make -j`. It stops on a
+lint failure. Both tasks appear in `make`'s help listing.
+
 `Propane.csproj` pins analysis to .NET 10's default rules, with the recommended Reliability, Usage and Security
 sets. Nullability is enabled. CA1001 additionally checks ownership of disposable fields; CA2007 requires explicit
 async context capture. `UpdateCheck` keeps Godot's main-thread context when it updates menu nodes.
@@ -25,3 +29,4 @@ Seven class-specific CA1001 suppressions preserve current lifetimes, with the re
 `python3 tools/dev/lint_tests.py` proves the gate rejects nullable dereferences, disposable-field ownership,
 implicit async context, ValueTask misuse, and whitespace and style drift. It also checks corrected code passes.
 The fixtures compile in an isolated temporary project; they never run or modify game sources.
+The script also stubs the external tools to verify `make -j4 check` runs in order and stops at either lint failure.

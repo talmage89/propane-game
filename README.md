@@ -36,6 +36,8 @@ Requires Godot 4.7.2 (.NET edition) and the .NET 10 SDK.
 - Editor: open `project.godot` and press Play (F5).
 - Command line: `make run`. `make` lists the other tasks (tests, a local server, bots, releases); they find Godot on
   `PATH` (`godot-mono` or `godot`) or in `/Applications`, or set `GODOT` to its binary.
+- Quality gate: `make lint` verifies C# formatting and rebuilds with warnings as errors. `make check` runs lint,
+  then `make test`. Run it before submitting a change.
 
 [docs/code-quality.md](docs/code-quality.md) describes the formatting and analyzer baseline and its regression
 checks. The gate follows the existing code's style and checks correctness without API design or naming churn.

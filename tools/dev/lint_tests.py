@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Check that the quality gate rejects representative mistakes, in an isolated scratch project."""
+import os
 import pathlib
 import shutil
 import subprocess
@@ -17,6 +18,36 @@ def run(directory, *arguments):
 def require(condition, message, output=""):
     if not condition:
         raise SystemExit(f"FAIL: {message}\n{output}")
+
+
+def check_make_order(scratch):
+    # Stub only the external tools: exercise the real Makefile, including parallel make and failures.
+    stub = """#!/usr/bin/env bash
+set -euo pipefail
+printf '%s %s\\n' "${0##*/}" "$*" >> "$COMMAND_LOG"
+if [[ "${0##*/}" == dotnet && "$1" == format && "$PROBE_FAIL" == format ]]; then exit 1; fi
+if [[ "${0##*/}" == dotnet && "$*" == *-warnaserror* && "$PROBE_FAIL" == build ]]; then exit 1; fi
+"""
+    for name in ("dotnet", "godot"):
+        path = scratch / name
+        path.write_text(stub)
+        path.chmod(0o755)
+    log = scratch / "commands.log"
+    environment = dict(os.environ, PATH=f"{scratch}:{os.environ['PATH']}", GODOT=str(scratch / "godot"), COMMAND_LOG=str(log))
+    for failure in ("none", "format", "build"):
+        log.write_text("")
+        environment["PROBE_FAIL"] = failure
+        result = subprocess.run(["make", "-j4", "check"], cwd=ROOT, env=environment,
+                                text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        commands = log.read_text().splitlines()
+        require(bool(commands) and commands[0] == "dotnet format Propane.sln --verify-no-changes", "format must run first", result.stdout)
+        if failure == "none":
+            require(result.returncode == 0 and len(commands) == 4, "check did not finish in four tool calls", result.stdout)
+            require("-warnaserror" in commands[1] and "--no-incremental" in commands[1], "lint must rebuild with warnings as errors")
+            require(commands[2].startswith("dotnet build ") and commands[3].startswith("godot --headless "), "tests ran before lint")
+        else:
+            require(result.returncode != 0 and len(commands) == (1 if failure == "format" else 2), "lint failure did not stop check", result.stdout)
+    print("PASS: parallel make check orders lint before tests and stops on formatter/build failures")
 
 
 def main():
@@ -70,6 +101,7 @@ public static class Formatting
         code, output = run(scratch, "dotnet", "build", "Probe.csproj", "-nologo", "-v", "quiet", "-warnaserror")
         require(code == 0, "corrected code did not pass", output)
         print("PASS: whitespace and style drift fail; corrected code passes formatting and build")
+        check_make_order(scratch)
 
 
 if __name__ == "__main__":

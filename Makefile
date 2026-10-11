@@ -12,7 +12,7 @@ PORT ?= $(if $(SLOT),$(shell echo $$((24680 + $(SLOT)))),24680)
 SERVER ?= 127.0.0.1:$(PORT)
 
 .DEFAULT_GOAL := help
-.PHONY: help setup run build test server bots bots-stop package deploy release-patch release-minor release-major
+.PHONY: help setup run build lint check test server bots bots-stop package deploy release-patch release-minor release-major
 
 help: ## List the tasks
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN { FS = ":.*## " } { printf "  make %-14s %s\n", $$1, $$2 }'
@@ -27,6 +27,14 @@ run: build ## Play from source
 
 build: ## Compile the C# code
 	dotnet build Propane.sln -c Debug -nologo -v quiet
+
+lint: ## Check C# formatting and compile with warnings as errors
+	dotnet format Propane.sln --verify-no-changes
+	dotnet build Propane.sln -c Debug --no-restore --no-incremental -nologo -v quiet -warnaserror
+
+# A recipe keeps lint before test even when make runs with -j.
+check: lint ## Run lint, then the tests
+	@$(MAKE) --no-print-directory test
 
 test: build ## Run the generator tests (as CI does before a release)
 	"$(GODOT)" --headless --path . res://scenes/dev/generator_tests.tscn -- --seeds=100
