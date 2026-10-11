@@ -65,8 +65,10 @@ public sealed class LocomotionPose
     {
         var t = Tuning.Current;
         var blend = dt / Mathf.Max(t.GaitBlendTime, 0.001f);
-        Walk = Mathf.MoveToward(Walk, gait == PlayerGait.Creep ? 1 : 0, blend);
-        Sprint = Mathf.MoveToward(Sprint, gait == PlayerGait.Sprint ? 1 : 0, blend);
+        var walk = gait == PlayerGait.Creep ? 1 : 1 - Mathf.SmoothStep(0, t.RunSpeed, speed);
+        var sprint = gait == PlayerGait.Sprint ? Mathf.SmoothStep(0, t.SprintSpeed, speed) : 0;
+        Walk = Mathf.MoveToward(Walk, walk, blend);
+        Sprint = Mathf.MoveToward(Sprint, sprint, blend);
         var moving = Mathf.Clamp(speed / Mathf.Max(t.AnimationIdleSpeed, 0.001f), 0, 1);
         Moving = Mathf.MoveToward(Moving, moving, dt / t.LocomotionSettleTime);
         if (supported)

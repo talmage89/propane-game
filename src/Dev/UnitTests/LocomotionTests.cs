@@ -10,6 +10,7 @@ public static class LocomotionTests
     public static void Register(TestRunner runner)
     {
         runner.Run("locomotion keeps phase across gaits and stops", Phase);
+        runner.Run("locomotion blends synchronized gaits over actual speed", SpeedBlend);
         runner.Run("locomotion latches jump across physics/render rates", Jump);
         runner.Run("locomotion handles remote takeoff without a jumping snapshot", RemoteJump);
         runner.Run("locomotion scales landing and allows immediate movement", Landing);
@@ -57,6 +58,25 @@ public static class LocomotionTests
         pose.ObservePhysics(State(PlayerSupport.Airborne), -4);
         pose.Update(6, PlayerGait.Default, 1f / 60);
         TestRunner.Assert(pose.Jump == JumpPose.Falling, "fall does not follow velocity");
+    }
+
+    private static void SpeedBlend()
+    {
+        var pose = new LocomotionPose();
+        void Settle(float speed, PlayerGait gait)
+        {
+            for (var i = 0; i < 30; i++) pose.Update(speed, gait, 1f / 60);
+        }
+        Settle(Tuning.Current.RunSpeed / 2, PlayerGait.Default);
+        TestRunner.Assert(pose.Walk > 0 && pose.Walk < 1 && pose.Sprint == 0, "slow default motion does not blend walk and jog");
+        Settle(Tuning.Current.RunSpeed, PlayerGait.Default);
+        TestRunner.Assert(pose.Walk == 0, "full default speed does not reach jog");
+        Settle(Tuning.Current.SprintSpeed / 2, PlayerGait.Sprint);
+        TestRunner.Assert(pose.Sprint > 0 && pose.Sprint < 1, "slow sprint motion does not blend its gait");
+        Settle(Tuning.Current.SprintSpeed, PlayerGait.Sprint);
+        TestRunner.Assert(pose.Sprint == 1, "full sprint speed does not reach sprint");
+        Settle(Tuning.Current.CreepSpeed, PlayerGait.Creep);
+        TestRunner.Assert(pose.Walk == 1 && pose.Sprint == 0, "resolved creep lost its walk presentation");
     }
 
     private static void RemoteJump()
