@@ -1,7 +1,7 @@
 # Animation review
 
 This is the acceptance harness for the authored directional rifle redo. Production animation, movement rules,
-rigs and assets are unchanged. Use it again after A4 changes aim and cameras. Visual thresholds are pending until
+rigs and assets are unchanged. The fixture attaches a local view for A4's separated camera ownership. Visual thresholds are pending until
 that redo; numerical checks support the owner's rendered review, not replace it.
 
 ## Controller review

@@ -59,6 +59,9 @@ public partial class AnimationReview : Node3D
         var environment = new VoidEnvironment();
         AddChild(environment);
         AddChild(player);
+#if !PROPANE_REVIEW_RELEASE
+        LocalView.Attach(player, this).Hud.ShowHud(false);
+#endif
         player.InputOverride = input;
         player.Fired += _ => { if (CaseAt(input.Now).Name == "burst") burstShots++; };
 #if !PROPANE_REVIEW_RELEASE

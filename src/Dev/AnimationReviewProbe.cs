@@ -36,7 +36,12 @@ public partial class AnimationReviewProbe : SkeletonModifier3D
             var pelvis = bones.GetBoneGlobalPose(bones.FindBone("pelvis"));
             var forward = bones.GlobalBasis * pelvis.Basis * bones.GetBoneGlobalRest(bones.FindBone("pelvis")).Basis.Inverse() * Vector3.Back;
             var hipYaw = Mathf.Atan2(-forward.X, -forward.Z);
-            var yaw = Mathf.RadToDeg(Mathf.Wrap(hipYaw - Mathf.DegToRad(Player.Aim.Yaw), -Mathf.Pi, Mathf.Pi));
+#if PROPANE_REVIEW_RELEASE
+            var aimYaw = Player.CameraRig.Yaw;
+#else
+            var aimYaw = Player.Aim.Yaw;
+#endif
+            var yaw = Mathf.RadToDeg(Mathf.Wrap(hipYaw - Mathf.DegToRad(aimYaw), -Mathf.Pi, Mathf.Pi));
             var rifle = Player.GetNode<Rifle>("Rifle");
             var toHead = (bones.GlobalTransform * bones.GetBoneGlobalPose(bones.FindBone("Head"))).AffineInverse() * rifle.GlobalTransform;
             var head = float.PositiveInfinity;
