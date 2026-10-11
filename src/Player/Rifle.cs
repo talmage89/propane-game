@@ -29,11 +29,9 @@ public partial class Rifle : Node3D
     private const float BoltCatchReached = 1.84f;
     private const float EmptyReturnStart = 1.95f;
     private const float EmptyReturnEnd = 2.3f;
-    /// <summary>Share of the clip's magazine travel below the well that is kept: the mannequin's arms are short.</summary>
-    private const float MagazineTravel = 0.5f;
 
-    /// <summary>Where the left hand holds the magazine, in the magazine's frame (origin at its top).</summary>
-    private static readonly Vector3 MagazineGrip = new(0, -0.1f, -0.012f);
+    /// <summary>Live contact point in the magazine's frame (origin at its top).</summary>
+    private static Vector3 MagazineGrip => new(0, -Tuning.Current.RifleMagazineGripDown, Tuning.Current.RifleMagazineGripBack);
 
     /// <summary>Where the left palm meets the bolt catch, beside it on the receiver's left side.</summary>
     private static readonly Vector3 BoltCatchSlap = new(-0.012f, -0.012f, 0.004f);
@@ -73,6 +71,15 @@ public partial class Rifle : Node3D
 
     /// <summary>Where the left hand belongs in rifle space: the foregrip, or the magazine and bolt catch mid-reload.</summary>
     public Vector3 LeftHandLocal { get; private set; }
+
+    /// <summary>Support contact frame follows the moving magazine, blended back to the foregrip.</summary>
+    public Basis LeftGripBasis { get; private set; } = Basis.Identity;
+    public bool ReloadFromEmpty => reloadClip == "ReloadEmpty";
+    public float MagazineHold { get; private set; }
+    public float SupportHold { get; private set; } = 1f;
+    public float BoltHold { get; private set; }
+    public Transform3D MagazinePose { get; private set; }
+    public bool MagazineVisible { get; private set; } = true;
 
     /// <summary>The textured material of the rifle and its dropped magazines.</summary>
     public static StandardMaterial3D BodyMaterial => bodyMaterial ??= CreateBodyMaterial();
@@ -119,6 +126,7 @@ public partial class Rifle : Node3D
         animations.CallbackModeProcess = AnimationMixer.AnimationCallbackModeProcess.Manual;
         Pose("Idle", 0);
         LeftHandLocal = ForegripLocal.Origin;
+        MagazinePose = MagazineLocal();
 
         flashMaterial = new ShaderMaterial { Shader = GD.Load<Shader>("res://shaders/fx_glow.gdshader") };
         flashMaterial.SetShaderParameter("dot_texture", FxLibrary.SoftDotTexture);
@@ -196,8 +204,9 @@ public partial class Rifle : Node3D
             // The clip swaps magazines a hand's length below the well; the mannequin's shorter reach carries the
             // fresh one from nearer in. (The old one drops as a body of its own, so its fall is not shown.)
             var rest = skeleton.GetBoneRest(magazineBone).Origin;
-            skeleton.SetBonePosePosition(magazineBone, rest + (skeleton.GetBonePosePosition(magazineBone) - rest) * MagazineTravel);
+            skeleton.SetBonePosePosition(magazineBone, rest + (skeleton.GetBonePosePosition(magazineBone) - rest) * Tuning.Current.RifleMagazineTravel);
             var magazine = MagazineLocal();
+            MagazinePose = magazine;
             if (starting)
             {
                 lastMagazinePosition = GlobalTransform * magazine.Origin;
@@ -225,9 +234,15 @@ public partial class Rifle : Node3D
             }
             clipTime = Mathf.Min(clipTime + delta, ClipLength(clip));
             Pose(clip, clipTime);
+            MagazinePose = MagazineLocal();
             LeftHandLocal = ForegripLocal.Origin;
+            LeftGripBasis = Basis.Identity;
+            MagazineHold = 0;
+            BoltHold = 0;
+            SupportHold = 1;
         }
         // The magazine is part of the skinned mesh: collapsing its bone hides it.
+        MagazineVisible = !magazineHidden;
         if (magazineHidden)
         {
             skeleton.SetBonePoseScale(magazineBone, Vector3.One * 0.0001f);
@@ -245,14 +260,26 @@ public partial class Rifle : Node3D
         float back;
         if (fromEmpty)
         {
-            task = magazine.Lerp(boltCatchLocal, Mathf.SmoothStep(SeatedTime, BoltCatchReached, t));
+            var boltReach = Mathf.SmoothStep(SeatedTime, BoltCatchReached, t);
+            task = magazine.Lerp(boltCatchLocal, boltReach) + Vector3.Left *
+                (Tuning.Current.RifleBoltApproachClearance * Mathf.Sin(Mathf.Pi * boltReach));
             back = Mathf.SmoothStep(EmptyReturnStart, EmptyReturnEnd, t);
         }
         else
         {
             back = Mathf.SmoothStep(SeatedTime, ReturnEnd, t);
         }
-        return ForegripLocal.Origin.Lerp(task, reach * (1f - back));
+        var contact = reach * (1f - back);
+        MagazineHold = contact * (fromEmpty ? 1f - Mathf.SmoothStep(SeatedTime, BoltCatchReached, t) : 1f);
+        BoltHold = contact - MagazineHold;
+        SupportHold = (1 - contact) * (1 - contact) + MagazineHold * MagazineHold;
+        LeftGripBasis = new Basis(Quaternion.Identity.Slerp(MagazinePose.Basis.Orthonormalized().GetRotationQuaternion(), MagazineHold));
+        // Leave the magazine on its outside before turning the wrist or returning to the foregrip.
+        // A straight lerp dragged the thumb through the seated magazine and the receiver.
+        // Approach the foregrip from below: lateral clearance eases out sooner so already curled
+        // fingertips do not sweep sideways through the grip on the last part of the return.
+        var clearance = Tuning.Current.RifleReloadClearance * Mathf.Sin(Mathf.Pi * contact);
+        return ForegripLocal.Origin.Lerp(task, contact) + Vector3.Down * clearance + Vector3.Left * (clearance * contact);
     }
 
     /// <summary>The magazine's transform in rifle space (origin at its top), as the current pose has it.</summary>
