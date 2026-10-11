@@ -169,13 +169,14 @@ public static class GatherTests
     private sealed class MatchFixture : IDisposable
     {
         private readonly ServerTests.Fixture server = new();
-        private readonly NetClient client = new();
+        private readonly NetClient client;
         public Match Match { get; }
         public int Id => server.Id;
         public MatchFixture(TestRunner runner)
         {
+            client = new NetClient(PacketTransports.CreateClient(), server.Clock);
             client.Handle(MessageCodec.Encode(new NetMessage(Msg.Welcome, 0, 0, new WelcomeMessage(3, null)), true));
-            Match = new Match { Net = client, Setup = server.Setup };
+            Match = new Match { Net = client, Setup = server.Setup, Clock = server.Clock };
             runner.AddChild(Match);
         }
         public void Receive(Msg type, object payload) => Match.OnMessage(new NetMessage(type, Id, 2, payload));

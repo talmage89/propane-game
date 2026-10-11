@@ -118,7 +118,8 @@ public static class AppearanceTests
         runner.Run("appearance/server accepts duplicate colors through roster match and standings", () =>
         {
             var appearance = new AppearanceRecord(12, 34, 56);
-            var server = new LobbyServer();
+            var clock = new ManualClock();
+            var server = new LobbyServer(PacketTransports.CreateServer(), clock);
             try
             {
                 var packets = new System.Collections.Generic.List<NetMessage>();
@@ -144,8 +145,9 @@ public static class AppearanceTests
                 var setup = packets.Select(p => p.Payload).OfType<MatchSetup>().First();
                 TestRunner.Assert(setup.Players.All(p => p.Player.Appearance == updated), "MatchStart lost appearance");
                 foreach (var peer in new[] { 2, 3 }) { server.OnReceived(peer, new NetWriter(Msg.Loaded, setup.Id).ToArray()); }
-                server.AdvanceMatches(MonotonicClock.Now); server.AdvanceMatches(MonotonicClock.Now);
-                server.AdvanceMatches(MonotonicClock.Now + 20);
+                server.AdvanceMatches(clock.Seconds); server.AdvanceMatches(clock.Seconds);
+                clock.Seconds += 20;
+                server.AdvanceMatches(clock.Seconds);
                 TestRunner.Assert(packets.Select(p => p.Payload).OfType<System.Collections.Generic.IReadOnlyList<Standing>>().First().All(p => p.Appearance == updated), "standings lost appearance");
             }
             finally { server.Free(); }

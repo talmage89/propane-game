@@ -72,6 +72,20 @@ The import job populates the cache before the matrix starts; each partition rest
 its checkout's resource index. A cache miss safely imports from source. Imports must succeed; caches never replace
 compilation or assertions. Editor setup remains shared with release, whose tool cache is unchanged.
 
+## Deterministic unit time
+
+Network unit tests use a per-fixture `ManualClock`; message receipt, ping estimates, sample timestamps and phase
+advancement share that clock. `Match.Clock` defaults to `MonotonicClock.Instance` and can be injected before the
+node enters the tree, like the existing client and server clocks. Production uses the same process-relative time
+as before. The server's gather deadline also uses its injected clock.
+
+Tests advance time explicitly, including expiry before a phase tick. Do not sample wall time around a message and
+then correct at the earlier sample: receipt can occur later, making the correction age negative. Under CPU load,
+that used to extrapolate the authority test's observer backward far enough to fail its exact pose assertion.
+The observer test now asserts its receipt timestamp and corrects at the same manual instant, after an explicit
+30-second pause. Relay timestamp assertions now check exact clamped times; the gather deadline test checks
+acceptance before and refusal exactly at expiry. No tolerance or retry masks scheduling delays.
+
 ## Adding a suite
 
 For a unit suite, add a static class in `src/Dev/UnitTests`, mark it `[UnitSuite]`, and expose
