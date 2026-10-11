@@ -550,7 +550,7 @@ public partial class NetTest : Node
         }
         if (gathering && Once(40, dt))
         {
-            ScenarioAssert(gatherShields.Count == 2 && gatherGlides.Count == 2, "gather: did not observe both drop shields and glides");
+            ScenarioAssert(gatherShields.Count == 2 && gatherGlides.Count == 2, $"gather: did not observe both drop shields and glides (shields {gatherShields.Count}, glides {gatherGlides.Count})");
             ScenarioAssert(gatherPositions.Count == 2 && match.LiveTanks.Where(IsDrop).All(t =>
                 gatherPositions.TryGetValue(t.NetId, out var position) && position.DistanceTo(t.GlobalPosition) <= 0.006f && t.AtRest), "gather: final pile unstable");
             scenarioPassed = !scenarioFailed;

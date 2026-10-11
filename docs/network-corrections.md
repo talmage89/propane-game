@@ -237,3 +237,17 @@ Two regressions failed before (210 tests/two failures, `gather-queue-before.log`
 (210 tests/zero failures, `gather-queue-after.log`): body sync continues applying the resting owner
 through a lease without erasing a real predicted push, and the production queue preserves that
 target. Builds were warning-free. Logs live in ignored `build/net-assert-artifacts/`.
+
+The accepted lease exposed a second issue in the extra native scenario: the owner acquired and
+settled both drops, but the observer counted only one glide. `/tmp/nas-gather-queue-repeat` traced
+`20100000` epoch 2 receiving rest sequence 2 while gathering at 97084.716883, immediately after the
+glide began. Godot can sleep a frozen body even though the gather owner animates its transform.
+The new required initial publication therefore produced a premature rest; Match correctly treated
+that packet as the end of gathering. A glide and that rest could arrive in one poll, hiding the glide
+entirely from a rendered observer. Body sync now treats `Gathering` as moving for publication, and
+only publishes rest after actual completion. No gather eligibility or animation rules changed.
+The frozen-body regression failed before (211 tests/one failure, `gather-freeze-before.log`),
+checking both motion during the frozen glide and final rest after completion.
+Afterward the suite passed all 211 tests (`gather-freeze-after.log`) and the seed-23 native scenario
+passed its gameplay assertions on both peers (`/tmp/nas-gather-freeze-after`). The diagnostic
+assertion now prints shield/glide counts if it fails, without changing its criteria.

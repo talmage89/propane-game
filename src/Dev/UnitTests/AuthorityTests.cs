@@ -61,6 +61,21 @@ public static class AuthorityTests
             TestRunner.Assert(f.Match.Bodies.Get(Id) is { ClaimPending: true, HasTarget: true, TargetRest: true },
                 "production authority queue discarded the gather rest target");
         });
+        runner.Run("authority/frozen gather motion never publishes a premature rest", () =>
+        {
+            using var f = new MatchFixture(runner);
+            var tank = f.Match.LiveTanks.Single(t => t.NetId == Id);
+            var entry = f.Match.Bodies.Get(Id)!;
+            tank.BeginGather();
+            tank.Sleeping = true; // Native frozen bodies can sleep while the owner moves their transform.
+            var flight = f.Match.Bodies.Collect(.1);
+            TestRunner.Assert(flight.Moving.Contains(entry) && !flight.Rested.Contains(entry),
+                "frozen glide published a rest that ends observer gathering");
+            tank.EndGather();
+            tank.Sleeping = true;
+            var settled = f.Match.Bodies.Collect(.1);
+            TestRunner.Assert(settled.Rested.Contains(entry), "actual gather completion lost its final rest");
+        });
         runner.Run("authority/solid geometry cannot trap a fresh observer across a wall", () =>
         {
             using var body = new BodyFixture(runner.World.Root);

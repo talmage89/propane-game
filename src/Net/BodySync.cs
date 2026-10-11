@@ -383,7 +383,9 @@ public sealed class BodySync
             {
                 continue;
             }
-            var awake = !entry.Body.Sleeping;
+            // Native frozen gather bodies can sleep while their owner animates the transform.
+            // A rest packet ends gather presentation on receivers, so publish motion until completion.
+            var awake = !entry.Body.Sleeping || entry.Body is Tank.PropaneTank { Gathering: true };
             if (entry.Owner == Me && !entry.ClaimPending)
             {
                 if (awake && (entry.PublishRequired || (entry.IsTank ? sendTanks : sendCars)))
