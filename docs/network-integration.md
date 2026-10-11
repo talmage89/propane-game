@@ -126,3 +126,17 @@ pair grids and 1.95 s longest episode. Three synthetic regressions also prove th
 post-retirement vent positions cannot extend the trajectory, live final motion
 still fails at its original bound, missing completion/later trajectory data fail,
 and exact completion identities/resting errors still fail. All 23 comparer tests pass.
+
+## Six-player admission fixture
+
+The initial six-bot attempt timed out without a match: the sixth bot received
+"That lobby is full." `--tune.MaxPlayers=6` reached neither Main's server entry nor
+its lobby admission; only the dev client scenes applied command-line tuners.
+Debug server startup now applies its explicit overrides before listening. Release
+startup and every default remain unchanged. The native `server_tuning_tests`
+fixture uses the production Main entry without calling DevArgs.Setup itself:
+before the fix it fails at advertised capacity 5, afterward it advertises 6 and
+passes. It runs in `make test`, and the gate proof includes its invocation.
+The repeated six-bot/90-second 120/30/3 soak passes: 1,997 grids, 1,228,329 body
+pairs, zero unobserved pair grids, final rest/moving drift 0/0.267 m, longest
+episode 0.85 s, and all six score audits agree. Subsequent builds have zero warnings/errors.
