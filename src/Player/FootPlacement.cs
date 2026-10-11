@@ -407,9 +407,10 @@ public partial class FootPlacement : SkeletonModifier3D
     private bool HasGround(Vector3 position, out Vector3 ground, out Vector3 normal)
     {
         var t = Tuning.Current;
-        var ray = PhysicsRayQueryParameters3D.Create(position + Vector3.Up * t.FootProbeUp,
+        // Each player samples several native queries per frame; release the temporary query and results now.
+        using var ray = PhysicsRayQueryParameters3D.Create(position + Vector3.Up * t.FootProbeUp,
             position - Vector3.Up * t.FootProbeDown, Layers.World | Layers.Floor);
-        var hit = Player.GetWorld3D().DirectSpaceState.IntersectRay(ray);
+        using var hit = Player.GetWorld3D().DirectSpaceState.IntersectRay(ray);
         ground = hit.Count > 0 ? (Vector3)hit["position"] : position;
         normal = hit.Count > 0 ? (Vector3)hit["normal"] : Vector3.Up;
         return hit.Count > 0;
