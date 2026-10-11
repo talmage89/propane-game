@@ -568,7 +568,7 @@ public partial class Match : Node3D
             if (bodies.Get(state.Id) is not { } entry || entry.Owner != sender || entry.Epoch != state.Epoch ||
                 state.Sequence <= entry.LastGatherSequence || entry.Body is not PropaneTank tank || tank.State != PropaneTank.TankState.Intact) { continue; }
             entry.LastGatherSequence = state.Sequence;
-            bodies.OnState(sender, state, message.Phase == GatherPhase.Settled, NetTransport.Now);
+            bodies.OnState(sender, state, message.Phase == GatherPhase.Settled, MonotonicClock.Now);
             if (message.Phase == GatherPhase.Glide) { tank.BeginGather(); }
             else
             {

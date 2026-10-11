@@ -644,7 +644,7 @@ public partial class LobbyServer : Node
                 return;
             case GatherMessage gather:
                 if (!match.Tanks.Gather(client.Id, match.HostId, gather,
-                    lobby.Phase == LobbyPhase.Playing && NetTransport.Now < match.PhaseEnds)) { return; }
+                    lobby.Phase == LobbyPhase.Playing && MonotonicClock.Now < match.PhaseEnds)) { return; }
                 break;
             case BodyStatesMessage states:
                 match.Tanks.ValidateBodies(states.Bodies.Select(b => b.Id));

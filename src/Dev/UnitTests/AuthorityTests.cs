@@ -443,7 +443,7 @@ public static class AuthorityTests
             var entry = f.Match.Bodies.Get(Id)!;
             entry.Sequence = 1;
             Send(f.Server, 2, Msg.BodyRest, new BodyRestMessage(Id, tank.GlobalTransform, 1, entry.Epoch, 1));
-            f.Server.Server.AdvanceMatches(NetTransport.Now + 20);
+            f.Server.Server.AdvanceMatches(MonotonicClock.Now + 20);
             f.Server.Packets.Clear();
             tank.Detonate();
             tank.Free();
