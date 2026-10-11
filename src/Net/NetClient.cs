@@ -10,7 +10,7 @@ namespace Propane.Net;
 public sealed record LobbySummary(int Id, string CreatorName, int Players, LobbyServer.LobbyPhase Phase);
 
 /// <summary>A player in a lobby or match.</summary>
-public sealed record PlayerProfile(int Id, string Name, int Color);
+public sealed record PlayerProfile(int Id, string Name, AppearanceRecord Appearance);
 
 /// <summary>The lobby the player is in, as the server last described it.</summary>
 public sealed record LobbyInfo(int Id, int CreatorId, float MatchLength, LobbyServer.LobbyPhase Phase, IReadOnlyList<PlayerProfile> Members);
@@ -19,7 +19,7 @@ public sealed record LobbyInfo(int Id, int CreatorId, float MatchLength, LobbySe
 public sealed record MatchSetup(int Id, byte[] Plan, int HostId, bool CreatorDebug, float Length, Godot.Collections.Dictionary Tuning, IReadOnlyList<(PlayerProfile Player, int Spawn)> Players);
 
 /// <summary>A final standing, from the server.</summary>
-public sealed record Standing(int Id, string Name, int Color, int Score, bool Present);
+public sealed record Standing(int Id, string Name, AppearanceRecord Appearance, int Score, bool Present);
 
 /// <summary>
 /// The client's connection to the server: connects and introduces itself, follows the lobby list and the lobby it is
@@ -59,7 +59,7 @@ public partial class NetClient : Node
 
     public string PlayerName { get; private set; } = "Player";
 
-    public int Color { get; private set; }
+    public AppearanceRecord Appearance { get; private set; } = AppearanceRecord.FromPalette(0);
 
     public IReadOnlyList<LobbySummary> Lobbies { get; private set; } = Array.Empty<LobbySummary>();
 
@@ -117,7 +117,7 @@ public partial class NetClient : Node
     {
         if (connection == server)
         {
-            Send(new NetWriter(Msg.Hello).Int((int)Dev.DevArgs.GetFloat("fake-protocol", Protocol.Version)).String(BuildInfo.GameVersion).String(BuildInfo.Build).String(PlayerName).Int(Color).Bool(OS.IsDebugBuild()));
+            Send(new NetWriter(Msg.Hello).Int((int)Dev.DevArgs.GetFloat("fake-protocol", Protocol.Version)).String(BuildInfo.GameVersion).String(BuildInfo.Build).String(PlayerName).Int(Appearance.LegacyIndex).Bool(OS.IsDebugBuild()).Appearance(Appearance));
         }
     }
 
@@ -141,11 +141,13 @@ public partial class NetClient : Node
         transport.Close();
     }
 
-    public void Connect(string address, int port, string name, int color)
+    public void Connect(string address, int port, string name, int color) => Connect(address, port, name, AppearanceRecord.FromPalette(color));
+
+    public void Connect(string address, int port, string name, AppearanceRecord appearance)
     {
         Disconnect();
         PlayerName = Protocol.CleanName(name);
-        Color = color;
+        Appearance = appearance;
         lastMatchId = 0;
         LastDisconnect = null;
         RejectedBy = null;
@@ -219,13 +221,13 @@ public partial class NetClient : Node
         LobbyChanged?.Invoke();
     }
 
-    public void SetProfile(string name, int color)
+    public void SetProfile(string name, AppearanceRecord appearance)
     {
         PlayerName = Protocol.CleanName(name);
-        Color = color;
+        Appearance = appearance;
         if (State == Status.Connected)
         {
-            Send(new NetWriter(Msg.SetProfile).String(PlayerName).Int(Color));
+            Send(new NetWriter(Msg.SetProfile).String(PlayerName).Appearance(Appearance));
         }
     }
 
@@ -268,7 +270,7 @@ public partial class NetClient : Node
                     break;
                 case LobbyInfo lobby:
                     var me = lobby.Members.FirstOrDefault(m => m.Id == MyId);
-                    if (me != null) { Color = me.Color; PlayerName = me.Name; }
+                    if (me != null) { Appearance = me.Appearance; PlayerName = me.Name; }
                     Lobby = me != null ? lobby : null;
                     if (Lobby == null) { inbox.Clear(); }
                     LobbyChanged?.Invoke();

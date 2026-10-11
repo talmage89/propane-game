@@ -78,17 +78,30 @@ public partial class NetTest : Node
                 net.JoinLobby(lobby.Id);
             }
         };
+        if (DevArgs.Get("scenario") == "appearance")
+        {
+            appearanceMenus = new UI.Menus { Net = net, Visible = false };
+            AddChild(appearanceMenus);
+        }
         net.LobbyChanged += () =>
         {
             if (net.Lobby is { } lobby)
             {
-                Log($"lobby {lobby.Id}: {string.Join(", ", lobby.Members.Select(m => $"{m.Name}/{Protocol.ColorNames[m.Color]}"))}, {lobby.Phase}");
+                Log($"lobby {lobby.Id}: {string.Join(", ", lobby.Members.Select(m => $"{m.Name}/{m.Appearance.Color.ToHtml(false)}"))}, {lobby.Phase}");
+                if (DevArgs.Get("scenario") == "appearance" && lobby.Phase == LobbyServer.LobbyPhase.Waiting && lobby.Members.Count == players)
+                {
+                    CheckAppearances(lobby.Members);
+                    appearanceMenus!.Show(UI.Menus.Screen.Lobby);
+                    GetTree().CreateTimer(0.15).Timeout += () => director.Screenshot($"{net.PlayerName}_appearance_lobby");
+                }
                 TryStartMatch();
             }
         };
         net.NoticeReceived += text => Log($"notice: {text}");
         net.MatchStarting += async setup =>
         {
+            appearanceMenus?.Show(UI.Menus.Screen.None);
+            if (DevArgs.Get("scenario") == "appearance") { CheckAppearances(setup.Players.Select(p => p.Player)); }
             var delay = DevArgs.GetFloat("match-delay", 0);
             if (delay > 0)
             {
@@ -104,7 +117,7 @@ public partial class NetTest : Node
             match = new Match { Name = "Match", Net = net, Setup = setup };
             match.Finished += () =>
             {
-                if (DevArgs.Get("scenario") is "duel" or "pickup" or "drop-refusal" or "puncture-race" or "gather")
+                if (DevArgs.Get("scenario") is "duel" or "pickup" or "drop-refusal" or "puncture-race" or "appearance" or "gather")
                 {
                     ScenarioAssert(scenarioPassed, "scenario ended before all assertions passed");
                 }
@@ -148,12 +161,16 @@ public partial class NetTest : Node
             clock = 0;
             duelTime = -1;
             gatherPositions.Clear();
+            gatherShields.Clear();
+            gatherGlides.Clear();
             duelInput = new ScriptedInput();
             duelTank = null;
             duelBlastAt = duelThrowAt = -1;
             pickupTakenAt = -1;
             pickupMovedAway = false;
             scenarioPassed = scenarioFailed = false;
+            appearanceTime = -1;
+            appearanceDropped = appearanceGlowChecked = appearanceResultsChecked = false;
             // Movement proof is per match, just like the duel/pickup assertions on a reused connection.
             movementCamera = null;
             remoteFeet = null;
@@ -168,8 +185,9 @@ public partial class NetTest : Node
         };
         var name = DevArgs.Get("name") ?? (role == "host" ? "HostBot" : $"Bot{OS.GetProcessId() % 1000}");
         var color = (int)DevArgs.GetFloat("color", role == "host" ? 0 : 1);
+        var appearance = DevArgs.Get("appearance") is { } hex ? ParseAppearance(hex) : AppearanceRecord.FromPalette(color);
         // Give a hosted server a moment to open its port.
-        GetTree().CreateTimer(DevArgs.Get("host-server") != null ? 0.3 : 0.05).Timeout += () => net.Connect(address, port, name, color);
+        GetTree().CreateTimer(DevArgs.Get("host-server") != null ? 0.3 : 0.05).Timeout += () => net.Connect(address, port, name, appearance);
     }
 
     private void TryStartMatch()
@@ -211,6 +229,10 @@ public partial class NetTest : Node
         if (DevArgs.Get("scenario") is "duel" or "drop-refusal" or "gather")
         {
             Duel(match, dt);
+        }
+        else if (DevArgs.Get("scenario") == "appearance")
+        {
+            AppearanceScenario(match, dt);
         }
         else if (DevArgs.Get("scenario") == "puncture-race")
         {
@@ -286,10 +308,10 @@ public partial class NetTest : Node
             raceCamera = new Camera3D { Current = true, Fov = 55 };
             match.AddChild(raceCamera);
         }
-        if (raceTick == 180 && net.Color < 2)
+        if (raceTick == 180 && (int)DevArgs.GetFloat("color", role == "host" ? 0 : 1) < 2)
         {
             ScenarioAssert(tank.State == PropaneTank.TankState.Intact && match.Bodies.Get(id)!.Epoch == 1, "race: contender received a puncture before its simultaneous contact");
-            var normal = net.Color == 0 ? Vector3.Right : Vector3.Left;
+            var normal = role == "host" ? Vector3.Right : Vector3.Left;
             var hole = PropaneTank.LocalCenter + normal * 0.15f;
             tank.TakeShot(tank.ToGlobal(hole), tank.GlobalBasis * normal, -(tank.GlobalBasis * normal));
             Log($"race contact tick {raceTick} hole {Vector(tank.HoleLocal)} swirl {tank.SwirlSign}");
@@ -336,6 +358,8 @@ public partial class NetTest : Node
     private static string Vector(Vector3 v) => FormattableString.Invariant($"{v.X:R},{v.Y:R},{v.Z:R}");
 
     private readonly Dictionary<uint, Vector3> gatherPositions = new();
+    private readonly HashSet<uint> gatherShields = new();
+    private readonly HashSet<uint> gatherGlides = new();
     private float duelTime = -1;
     private ScriptedInput duelInput = new();
     private uint? duelTank;
@@ -380,6 +404,37 @@ public partial class NetTest : Node
         var host = role == "host";
         var refusal = DevArgs.Get("scenario") == "drop-refusal";
         var gathering = DevArgs.Get("scenario") == "gather";
+        if (gathering)
+        {
+            var dropper = match.Setup.Players.Single(p => p.Player.Id != match.Bodies.Host).Player;
+            foreach (var tank in match.LiveTanks.Where(IsDrop))
+            {
+                var mesh = tank.GetNode<MeshInstance3D>("Mesh");
+                var glow = mesh.GetInstanceShaderParameter("shield_color").AsColor();
+                if (tank.Invulnerable && glow.A > 0)
+                {
+                    ScenarioAssert(!tank.Gathering && new Color(glow, 1) == dropper.Appearance.Color,
+                        "gather: shielded drop gathered or lost accepted appearance");
+                    gatherShields.Add(tank.NetId);
+                }
+                if (!tank.Gathering) { continue; }
+                ScenarioAssert(!tank.Invulnerable && glow.A == 0 && mesh.GetInstanceShaderParameter("shield_contrast").AsColor().A == 0 &&
+                    mesh.GetInstanceShaderParameter("gather_shimmer").AsSingle() == Tuning.Current.GatherShimmer,
+                    "gather: expired shield glow/contrast remained or shimmer missing");
+                if (host)
+                {
+                    var camera = player.CameraRig.Camera;
+                    player.CameraRig.ProcessMode = ProcessModeEnum.Disabled;
+                    var center = tank.GlobalTransform * PropaneTank.LocalCenter;
+                    camera.LookAtFromPosition(center + new Vector3(1.5f, 1, 2), center);
+                    if (gatherGlides.Count == 0)
+                    {
+                        GetTree().CreateTimer(0.2).Timeout += () => director.Screenshot("gather_host_shimmer");
+                    }
+                }
+                gatherGlides.Add(tank.NetId);
+            }
+        }
         if (gathering && Once(3.7f, dt))
         {
             // Leave the spilled tanks alone; the creator must acquire the dropper's entire group.
@@ -393,15 +448,18 @@ public partial class NetTest : Node
             {
                 gatherPositions[tank.NetId] = tank.GlobalPosition;
                 ScenarioAssert(match.Bodies.Get(tank.NetId)?.Owner == match.Bodies.Host, "gather: dropper retained ownership");
+                ScenarioAssert(tank.GetNode<MeshInstance3D>("Mesh").GetInstanceShaderParameter("gather_shimmer").AsSingle() == 0,
+                    "gather: settled drop retained shimmer");
                 Log($"gather final {tank.NetId:x} {tank.GlobalPosition}");
             }
         }
         if (gathering && Once(40, dt))
         {
+            ScenarioAssert(gatherShields.Count == 2 && gatherGlides.Count == 2, "gather: did not observe both drop shields and glides");
             ScenarioAssert(gatherPositions.Count == 2 && match.LiveTanks.Where(IsDrop).All(t =>
                 gatherPositions.TryGetValue(t.NetId, out var position) && position.DistanceTo(t.GlobalPosition) <= 0.006f && t.AtRest), "gather: final pile unstable");
             scenarioPassed = !scenarioFailed;
-            if (scenarioPassed) { Log("gather: assertions passed; two drops acquired, settled and stable on this client"); }
+            if (scenarioPassed) { Log("gather: assertions passed; two accepted-color shields expired; both drops shimmered, acquired, settled and stable on this client"); }
             director.Screenshot($"gather_{role}_settled");
         }
         if (gathering && host && duelTime is > 18 and < 32 && Mathf.PosMod(duelTime, 1) < dt)

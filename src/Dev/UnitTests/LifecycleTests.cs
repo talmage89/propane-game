@@ -76,7 +76,7 @@ public static class LifecycleTests
                 Feed(client, Msg.MatchGo, new FloatMessage(90));
                 Feed(client, Msg.Score, new ScoreMessage(2, 1, 1));
                 Feed(client, Msg.Authority, ProtocolTests.Fixtures().Single(f => f.Type == Msg.Authority).Payload);
-                Feed(client, Msg.MatchEnd, new[] { new Standing(2, "Test", 1, 1, true) });
+                Feed(client, Msg.MatchEnd, new[] { new Standing(2, "Test", AppearanceRecord.FromPalette(1), 1, true) });
                 TestRunner.Assert(delivered.Count == 0, "events dispatched before attachment");
                 Action<NetMessage> receiver = m => delivered.Add(m.Type);
                 TestRunner.Assert(client.AttachMatch(7, receiver), "current scene could not attach");

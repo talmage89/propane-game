@@ -149,7 +149,7 @@ public partial class MenuNavigation : Node
         }
         if (!wasActive)
         {
-            Configure();
+            Configure(FocusKey());
             wasActive = true;
         }
         EnsureFocus();
@@ -231,6 +231,11 @@ public partial class MenuNavigation : Node
         var owner = GetViewport().GuiGetFocusOwner();
         if (owner == null)
         {
+            return;
+        }
+        if (direction.X != 0 && owner is HSlider slider)
+        {
+            slider.Value += direction.X * slider.Step;
             return;
         }
         if (direction.X != 0 && Key(owner) == "match_length")

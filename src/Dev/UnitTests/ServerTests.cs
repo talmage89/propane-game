@@ -54,11 +54,10 @@ public static class ServerTests
         runner.Run("server/drop counts cannot raise scores or exceed bank and tuner", () =>
         {
             using var f = new Fixture();
-            f.Reject(new NetWriter(Msg.Drop, f.Id).Byte(0).Int(-1).Int(0).ToArray());
-            f.Reject(new NetWriter(Msg.Drop, f.Id).Byte(0).Int(0).Int(0).ToArray());
+            f.Reject(new NetWriter(Msg.Drop, f.Id).Byte(0).Int(-1).ToArray());
+            f.Reject(new NetWriter(Msg.Drop, f.Id).Byte(0).Int(0).ToArray());
             f.Reject(f.Drop(Enumerable.Range(0, 5).Select(i => DropBody(0, i)).ToArray()));
             f.Reject(f.Drop(new[] { DropBody(0, 0), DropBody(0, 1) }, reason: 0));
-            f.Reject(f.Drop(new[] { DropBody(0, 0) }, color: 1));
             f.Receive(f.Drop(new[] { DropBody(0, 0) }));
             f.AssertScore(2, 3, -1);
         });
@@ -172,7 +171,7 @@ public static class ServerTests
             TestRunner.Assert(f.Packets.Any(p => p.Peer == 3 && p.Message.Payload is PlayerLeftMessage { Player: 2, Host: 3 }),
                 "creator departure did not identify the successor");
             f.Packets.Clear();
-            f.Receive(f.Drop(new[] { DropBody(1, 0) }, color: 1), peer: 3);
+            f.Receive(f.Drop(new[] { DropBody(1, 0) }), peer: 3);
             f.AssertScore(3, 3, -1);
             f.Server.AdvanceMatches(MonotonicClock.Now + 20);
             var standings = f.Packets.Select(p => p.Message.Payload).OfType<IReadOnlyList<Standing>>().Single();
@@ -307,7 +306,7 @@ public static class ServerTests
                 TestRunner.Assert(Packets.Count == 0, $"invalid {(bytes.Length > 0 ? ((Msg)bytes[0]).ToString() : "empty")} mutated or relayed {Packets.Count} packets");
             }
         }
-        public byte[] Drop(IReadOnlyList<BodyState> tanks, byte reason = 1, int color = 0) => MessageCodec.Encode(new NetMessage(Msg.Drop, Id, 0, new DropMessage(reason, color, tanks)), false);
+        public byte[] Drop(IReadOnlyList<BodyState> tanks, byte reason = 1) => MessageCodec.Encode(new NetMessage(Msg.Drop, Id, 0, new DropMessage(reason, tanks)), false);
         public void AssertScore(int player, int score, int delta) => TestRunner.Assert(Packets.Any(p => p.Message.Payload is ScoreMessage s &&
             s.Player == player && s.Score == score && s.Delta == delta), $"expected score {score}, delta {delta}");
         public void Dispose() { Server.Free(); Tuning.Dispose(); }

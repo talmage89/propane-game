@@ -14,15 +14,15 @@ public static class ProtocolTests
 {
     public static IReadOnlyList<NetMessage> Fixtures()
     {
-        var profile = new PlayerProfile(2, "Test", 1);
+        var profile = new PlayerProfile(2, "Test", AppearanceRecord.FromPalette(1));
         var body = new BodyState(BodySync.MapTankId(0), Transform3D.Identity, new Vector3(1, 2, 3), Vector3.Zero);
         using var tuning = new Tuning();
         var snapshot = tuning.Snapshot();
         return new NetMessage[]
         {
-            Packet(Msg.Hello, new HelloMessage(Protocol.Version, BuildInfo.GameVersion, "test", "Test", 1, true)),
+            Packet(Msg.Hello, new HelloMessage(Protocol.Version, BuildInfo.GameVersion, "test", "Test", 1, true, AppearanceRecord.FromPalette(1))),
             Packet(Msg.CreateLobby, new EmptyMessage()), Packet(Msg.JoinLobby, new IntMessage(1)), Packet(Msg.LeaveLobby, new EmptyMessage()),
-            Packet(Msg.SetProfile, new ProfileMessage("Test", 1)), Packet(Msg.SetMatchLength, new FloatMessage(90)),
+            Packet(Msg.SetProfile, new ProfileMessage("Test", AppearanceRecord.FromPalette(1))), Packet(Msg.SetMatchLength, new FloatMessage(90)),
             Packet(Msg.StartMatch, snapshot), Packet(Msg.Loaded, new EmptyMessage()), Packet(Msg.ClaimPickup, new IntMessage(0)),
             Packet(Msg.Ping, new TimeMessage(1)), Packet(Msg.Welcome, new WelcomeMessage(2, BuildInfo.GameVersion)),
             Packet(Msg.Rejected, new RejectedMessage("Update", "0.3.0")),
@@ -32,7 +32,7 @@ public static class ProtocolTests
             Packet(Msg.Countdown, new FloatMessage(4)), Packet(Msg.MatchGo, new FloatMessage(90)), Packet(Msg.Clock, new FloatMessage(42)),
             Packet(Msg.Score, new ScoreMessage(2, 3, -1)), Packet(Msg.Notice, new TextMessage("Test")),
             Packet(Msg.PickupTaken, new PickupMessage(0, 2)), Packet(Msg.PickupRespawn, new IntMessage(0)),
-            Packet(Msg.MatchEnd, new[] { new Standing(2, "Test", 1, 3, true) }), Packet(Msg.PlayerLeft, new PlayerLeftMessage(3, 2)),
+            Packet(Msg.MatchEnd, new[] { new Standing(2, "Test", AppearanceRecord.FromPalette(1), 3, true) }), Packet(Msg.PlayerLeft, new PlayerLeftMessage(3, 2)),
             Packet(Msg.Pong, new PongMessage(1, 2)),
             Packet(Msg.DropRefused, new DropRefusedMessage(new[] { BodySync.DropTankId(0, 0) })),
             Packet(Msg.Authority, new AuthorityMessage(2, 1, ClaimRefusal.None,
@@ -45,7 +45,7 @@ public static class ProtocolTests
             Packet(Msg.Puncture, new PunctureMessage(body.Id, body.Transform, body.Linear, body.Angular, Vector3.One, Vector3.Up, -1)),
             Packet(Msg.Explode, new ExplodeMessage(body.Id, Vector3.One)), Packet(Msg.Claim, new ClaimMessage(1, new[] { body })),
             Packet(Msg.BodyStates, new BodyStatesMessage(1, new[] { body with { Sequence = 1 } })), Packet(Msg.BodyRest, new BodyRestMessage(body.Id, body.Transform, 1)),
-            Packet(Msg.Drop, new DropMessage(1, 1, new[] { body with { Id = BodySync.DropTankId(0, 0) } })),
+            Packet(Msg.Drop, new DropMessage(1, new[] { body with { Id = BodySync.DropTankId(0, 0) } })),
             Packet(Msg.Ragdoll, new RagdollMessage(Vector3.One, Vector3.Up, Vector3.Right)), Packet(Msg.GetUp, new GetUpMessage(Vector3.One, 1)),
             Packet(Msg.Gather, new GatherMessage(GatherPhase.Glide, new[] { body with { Sequence = 1 } })),
             Packet(Msg.TuningSet, new TuningMessage(nameof(Tuning.BlastRadius), 5f)),
@@ -137,7 +137,7 @@ public static class ProtocolTests
         {
             var bad = new[]
             {
-                new NetWriter(Msg.Drop, 7).Byte(0).Int(-1).Int(1).ToArray(),
+                new NetWriter(Msg.Drop, 7).Byte(0).Int(-1).ToArray(),
                 new NetWriter(Msg.Explode, 7).UInt(0).Vec3(Vector3.One).ToArray(),
                 new NetWriter(Msg.Explode, 7).UInt(BodySync.MapTankId(0)).Vec3(new Vector3(float.NaN, 0, 0)).ToArray(),
                 new NetWriter(Msg.GetUp, 7).Vec3(Vector3.Zero).Float(float.PositiveInfinity).ToArray(),
@@ -191,7 +191,8 @@ public static class ProtocolTests
             // Every prefix is incomplete, except the explicitly backward-compatible handshake suffixes.
             for (var length = 0; length < encoded.Length; length++)
             {
-                if (fixture.Type == Msg.Welcome && length == 5 || fixture.Type == Msg.Rejected && length == 8) { continue; }
+                if (fixture.Type == Msg.Welcome && length == 5 || fixture.Type == Msg.Rejected && length == 8 ||
+                    fixture.Type == Msg.Hello && length == encoded.Length - 9) { continue; }
                 TestRunner.Throws<Exception>(() => MessageCodec.Decode(encoded[..length], fromServer));
             }
             if (fixture.Type is not (Msg.Hello or Msg.Welcome or Msg.Rejected))

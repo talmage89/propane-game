@@ -30,7 +30,11 @@ public partial class MenuGamepadTest : Node
         AddChild(capture);
         try
         {
-            if (DevArgs.Get("scenario") == "devices")
+            if (DevArgs.Get("scenario") == "mouse")
+            {
+                await MouseAppearance().ConfigureAwait(true);
+            }
+            else if (DevArgs.Get("scenario") == "devices")
             {
                 await Devices().ConfigureAwait(true);
             }
@@ -97,12 +101,38 @@ public partial class MenuGamepadTest : Node
         await Shot("06_lobby_name").ConfigureAwait(true);
         await Press(JoyButton.A).ConfigureAwait(true);
         Check(MenuNavigation.Key(Focus).StartsWith("color_", StringComparison.Ordinal), "name confirmation advances to colors");
-        var originalColor = Net.Color;
-        await Navigate($"color_{(originalColor + 1) % Protocol.PlayerColors.Length}").ConfigureAwait(true);
+        var originalColor = Net.Appearance;
+        await Navigate($"color_{(originalColor.LegacyIndex + 1) % Protocol.PlayerColors.Length}").ConfigureAwait(true);
         var colorKey = MenuNavigation.Key(Focus);
         await Press(JoyButton.A).ConfigureAwait(true);
-        await Wait(() => Net.Lobby!.Members.Single(m => m.Id == Net.MyId).Color != originalColor, "color update acknowledged").ConfigureAwait(true);
+        await Wait(() => Net.Lobby!.Members.Single(m => m.Id == Net.MyId).Appearance != originalColor, "preset update acknowledged").ConfigureAwait(true);
         CheckFocus(colorKey);
+        // Cancel is transactional; a separate Apply sends/persists the exact preview bytes.
+        await Navigate("custom_color").ConfigureAwait(true);
+        await Press(JoyButton.A).ConfigureAwait(true);
+        CheckFocus("rgb_red");
+        var before = Net.Appearance;
+        await Press(JoyButton.DpadLeft).ConfigureAwait(true);
+        await Press(JoyButton.B).ConfigureAwait(true);
+        Check(Net.Appearance == before && PlayerSettings.Appearance == before, "cancel leaves accepted/saved appearance alone");
+        CheckFocus("custom_color");
+        await Press(JoyButton.A).ConfigureAwait(true);
+        await Press(JoyButton.DpadLeft).ConfigureAwait(true);
+        await Press(JoyButton.DpadDown).ConfigureAwait(true);
+        CheckFocus("rgb_green");
+        await Axis(JoyAxis.LeftX, 1).ConfigureAwait(true);
+        await Press(JoyButton.DpadDown).ConfigureAwait(true);
+        CheckFocus("rgb_blue");
+        await Press(JoyButton.DpadLeft).ConfigureAwait(true);
+        var selected = Main.FindChildren("*", "CanvasLayer", owned: false).OfType<AppearancePicker>().Single().Selected;
+        Check(selected != before && !Protocol.PlayerColors.Any(c => AppearanceRecord.FromColor(c) == selected), "joypad selects a custom color");
+        await Shot("07_custom_color_preview").ConfigureAwait(true);
+        await Navigate("Use color").ConfigureAwait(true);
+        await Press(JoyButton.A).ConfigureAwait(true);
+        await Wait(() => Net.Lobby!.Members.Single(m => m.Id == Net.MyId).Appearance == selected, "custom color acknowledged").ConfigureAwait(true);
+        Check(PlayerSettings.Appearance == selected, "custom record saved");
+        CheckSample(Menus, Net.MyId, selected, "lobby renders custom color");
+        CheckFocus("custom_color");
         await Shot("07_lobby_color").ConfigureAwait(true);
         await Navigate("match_length").ConfigureAwait(true);
         var length = Net.Lobby!.MatchLength;
@@ -138,7 +168,7 @@ public partial class MenuGamepadTest : Node
         }
         var fixture = new NetClient { Name = "BrowserFixture" };
         AddChild(fixture);
-        fixture.Connect("127.0.0.1", Menus.HostPort, "Menu fixture", (Net.Color + 1) % Protocol.PlayerColors.Length);
+        fixture.Connect("127.0.0.1", Menus.HostPort, "Menu fixture", (Net.Appearance.LegacyIndex + 1) % Protocol.PlayerColors.Length);
         await Wait(() => fixture.State == NetClient.Status.Connected, "fixture connected").ConfigureAwait(true);
         fixture.CreateLobby();
         await Wait(() => fixture.Lobby != null, "fixture lobby created").ConfigureAwait(true);
@@ -150,7 +180,7 @@ public partial class MenuGamepadTest : Node
         Check(scroll.ScrollVertical > 0 && scroll.GetGlobalRect().Encloses(Focus.GetGlobalRect().Grow(3)), "last lobby scrolls fully into view");
         await Shot("09_browser_join").ConfigureAwait(true);
         // A server list refresh must retain this exact lobby, not another row with the same Join label.
-        fixture.SetProfile("Updated fixture", fixture.Color);
+        fixture.SetProfile("Updated fixture", fixture.Appearance);
         await Wait(() => Net.Lobbies.Any(l => l.Id == fixture.Lobby!.Id && l.CreatorName == "Updated fixture"), "browser list refresh acknowledged").ConfigureAwait(true);
         CheckFocus(joinKey);
         scroll = Menus.FindChildren("*", "ScrollContainer", owned: false).OfType<ScrollContainer>().Single();
@@ -159,9 +189,8 @@ public partial class MenuGamepadTest : Node
         await Wait(() => Menus.Current == Menus.Screen.Lobby && Net.Lobby!.CreatorId == fixture.MyId, "A joins selected lobby").ConfigureAwait(true);
         CheckFocus("Name");
         await Shot("10_guest_lobby").ConfigureAwait(true);
-        // Taken swatches must be skipped by navigation.
-        var taken = $"color_{fixture.Color}";
-        Check(!Reachable().ContainsKey(taken), "taken color is not a focus target");
+        Check(Enumerable.Range(0, Protocol.PlayerColors.Length).All(i => Reachable().ContainsKey($"color_{i}")),
+            "all preset colors remain available with other players in the lobby");
         await Press(JoyButton.B).ConfigureAwait(true);
         await Wait(() => Menus.Current == Menus.Screen.Browser, "B leaves guest lobby").ConfigureAwait(true);
         await Navigate(joinKey).ConfigureAwait(true);
@@ -182,6 +211,8 @@ public partial class MenuGamepadTest : Node
         await Press(JoyButton.A).ConfigureAwait(true);
         await Wait(() => Main.HasNode("Match"), "solo debug match started").ConfigureAwait(true);
         await Frames(180).ConfigureAwait(true);
+        Check(Main.GetNode<Match>("Match").Player.BodyColor == selected.Color, "match character renders custom color");
+        await Shot("11_custom_character").ConfigureAwait(true);
         await Press(JoyButton.Start).ConfigureAwait(true);
         await Wait(() => Main.GetNode<MatchMenu>("Match/Menu").Visible, "Start opens match menu").ConfigureAwait(true);
         CheckFocus("Resume");
@@ -197,6 +228,21 @@ public partial class MenuGamepadTest : Node
         await Press(JoyButton.A).ConfigureAwait(true);
         await Wait(() => Menus.Current == Menus.Screen.Browser && !Main.HasNode("Match"), "leave match returns to browser").ConfigureAwait(true);
         await Shot("12_after_match").ConfigureAwait(true);
+        // Drive the real server to results; assertions inspect the actual MatchEnd UI, not a fabricated standing.
+        await Navigate("Create lobby").ConfigureAwait(true);
+        await Press(JoyButton.A).ConfigureAwait(true);
+        await Wait(() => Net.Lobby != null, "results lobby created").ConfigureAwait(true);
+        await Navigate("Start match").ConfigureAwait(true);
+        await Press(JoyButton.A).ConfigureAwait(true);
+        await Wait(() => Main.HasNode("Match") && Main.GetNode<Match>("Match").IsPlaying, "results match playing").ConfigureAwait(true);
+        Main.GetNode<LobbyServer>("HostedServer").AdvanceMatches(MonotonicClock.Now + 2000);
+        await Wait(() => Main.GetNode<Match>("Match").IsOver, "server ended real match").ConfigureAwait(true);
+        var actualResults = Main.GetNode<ResultsScreen>("Match/Results");
+        CheckSample(actualResults, Net.MyId, selected, "real results render custom color");
+        await Shot("12_custom_results").ConfigureAwait(true);
+        Net.LeaveLobby();
+        // The match's results timer owns scene cleanup; keep the next independent overlay test isolated.
+        await Wait(() => !Main.HasNode("Match"), "results match cleaned up").ConfigureAwait(true);
         await Press(JoyButton.B).ConfigureAwait(true);
         await Wait(() => Menus.Current == Menus.Screen.Connect, "B disconnects").ConfigureAwait(true);
         await Press(JoyButton.B).ConfigureAwait(true);
@@ -206,7 +252,7 @@ public partial class MenuGamepadTest : Node
         Menus.Show(Menus.Screen.None);
         var results = new ResultsScreen();
         AddChild(results);
-        results.Show(new[] { new Standing(1, "Player", 0, 7, true), new Standing(2, "Other", 1, 3, true) }, 1, 10);
+        results.Show(new[] { new Standing(1, "Player", AppearanceRecord.FromPalette(0), 7, true), new Standing(2, "Other", AppearanceRecord.FromPalette(1), 3, true) }, 1, 10);
         await Frames().ConfigureAwait(true);
         Check(results.IsAncestorOf(Focus), "results own focus");
         await Shot("13_results").ConfigureAwait(true);
@@ -243,6 +289,87 @@ public partial class MenuGamepadTest : Node
         await ToSignal(GetTree().CreateTimer(0.2), SceneTreeTimer.SignalName.Timeout);
         CheckFocus("Quit");
         await Shot("14_main_repeat").ConfigureAwait(true);
+    }
+
+    private void CheckSample(Node screen, int player, AppearanceRecord appearance, string outcome)
+    {
+        var key = player.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        Check(screen.FindChildren("*", "ColorRect", owned: false).OfType<ColorRect>()
+            .Any(c => c.HasMeta("appearance_player") && c.GetMeta("appearance_player").AsString() == key && c.Color == appearance.Color), outcome);
+    }
+
+    private async Task MouseAppearance()
+    {
+        await Frames().ConfigureAwait(true);
+        await Click("Multiplayer").ConfigureAwait(true);
+        await Click("Host on this computer").ConfigureAwait(true);
+        await Wait(() => Menus.Current == Menus.Screen.Browser, "mouse opened host browser").ConfigureAwait(true);
+        await Click("Create lobby").ConfigureAwait(true);
+        await Wait(() => Net.Lobby != null, "mouse created lobby").ConfigureAwait(true);
+        await Click("custom_color").ConfigureAwait(true);
+        var slider = Main.FindChildren("*", "HSlider", owned: false).OfType<HSlider>().Single(s => MenuNavigation.Key(s) == "rgb_red");
+        var before = slider.Value;
+        await MouseClick(slider.GetGlobalRect().Position + new Vector2(slider.Size.X * 0.25f, slider.Size.Y / 2)).ConfigureAwait(true);
+        Check(slider.Value != before, "mouse changes RGB channel");
+        var field = Main.FindChildren("*", "LineEdit", owned: false).OfType<LineEdit>().Single(f => f.PlaceholderText == "Hex color (RRGGBB)");
+        await MouseClick(field.GetGlobalRect().GetCenter()).ConfigureAwait(true);
+        await TypeHex("12ABEF").ConfigureAwait(true);
+        var custom = new AppearanceRecord(0x12, 0xab, 0xef);
+        var picker = Main.FindChildren("*", "CanvasLayer", owned: false).OfType<AppearancePicker>().Single();
+        Check(picker.Selected == custom, "keyboard hex entry changes preview to exact bytes");
+        await Shot("01_mouse_custom_preview").ConfigureAwait(true);
+        foreach (var hexColor in new[] { "000000", "FFFFFF", "0000FF", "080C10" })
+        {
+            await TypeHex(hexColor).ConfigureAwait(true);
+            Check(picker.Selected.Color.ToHtml(false).ToUpperInvariant() == hexColor, $"extreme preview retains selected bytes: expected {hexColor}, got {picker.Selected.Color.ToHtml(false)}, focus {MenuNavigation.Key(Focus)}");
+            await Shot($"01_mouse_preview_{hexColor}").ConfigureAwait(true);
+        }
+        await TypeHex("12ABEF").ConfigureAwait(true);
+        await Click("Use color").ConfigureAwait(true);
+        await Wait(() => Net.Lobby!.Members.Single(m => m.Id == Net.MyId).Appearance == custom, "mouse custom color acknowledged").ConfigureAwait(true);
+        CheckSample(Menus, Net.MyId, custom, "mouse lobby renders custom color");
+        Check(PlayerSettings.Appearance == custom, "mouse custom color saved");
+        await Shot("02_mouse_custom_lobby").ConfigureAwait(true);
+        await Click("Start match").ConfigureAwait(true);
+        await Wait(() => Main.HasNode("Match") && Main.GetNode<Match>("Match").IsPlaying, "mouse solo match playing").ConfigureAwait(true);
+        Check(Main.GetNode<Match>("Match").Player.BodyColor == custom.Color, "mouse match character renders custom color");
+        await Shot("03_mouse_custom_character").ConfigureAwait(true);
+        Main.GetNode<LobbyServer>("HostedServer").AdvanceMatches(MonotonicClock.Now + 2000);
+        await Wait(() => Main.GetNode<Match>("Match").IsOver, "mouse real match ended").ConfigureAwait(true);
+        CheckSample(Main.GetNode<ResultsScreen>("Match/Results"), Net.MyId, custom, "mouse results render custom color");
+        await Shot("04_mouse_custom_results").ConfigureAwait(true);
+    }
+
+    private async Task TypeHex(string text)
+    {
+        var field = Main.FindChildren("*", "LineEdit", owned: false).OfType<LineEdit>().Single(f => f.PlaceholderText == "Hex color (RRGGBB)");
+        await MouseClick(field.GetGlobalRect().GetCenter()).ConfigureAwait(true);
+        Input.ParseInputEvent(new InputEventKey { Keycode = Key.A, PhysicalKeycode = Key.A, CtrlPressed = true, Pressed = true });
+        Input.ParseInputEvent(new InputEventKey { Keycode = Key.A, PhysicalKeycode = Key.A, CtrlPressed = true, Pressed = false });
+        foreach (var c in text)
+        {
+            Input.ParseInputEvent(new InputEventKey { Keycode = (Key)c, Unicode = c, Pressed = true });
+            Input.ParseInputEvent(new InputEventKey { Keycode = (Key)c, Unicode = c, Pressed = false });
+        }
+        Input.ParseInputEvent(new InputEventKey { Keycode = Key.Enter, Pressed = true });
+        Input.ParseInputEvent(new InputEventKey { Keycode = Key.Enter, Pressed = false });
+        await Frames().ConfigureAwait(true);
+    }
+
+    private async Task Click(string key)
+    {
+        var control = Main.FindChildren("*", "Button", owned: false).OfType<Button>()
+            .Single(b => b.IsVisibleInTree() && !b.Disabled && MenuNavigation.Key(b) == key);
+        await MouseClick(control.GetGlobalRect().GetCenter()).ConfigureAwait(true);
+    }
+
+    private async Task MouseClick(Vector2 position)
+    {
+        GetViewport().PushInput(new InputEventMouseMotion { Position = position, GlobalPosition = position, Relative = Vector2.One }, true);
+        GetViewport().PushInput(new InputEventMouseButton { Position = position, GlobalPosition = position, ButtonIndex = MouseButton.Left, Pressed = true }, true);
+        await Frames(1).ConfigureAwait(true);
+        GetViewport().PushInput(new InputEventMouseButton { Position = position, GlobalPosition = position, ButtonIndex = MouseButton.Left, Pressed = false }, true);
+        await Frames().ConfigureAwait(true);
     }
 
     private async Task Devices()
@@ -400,7 +527,7 @@ public partial class MenuGamepadTest : Node
                      })
             {
                 // Left/right on match length adjusts the value instead of following a neighbor.
-                if (MenuNavigation.Key(next.Control) == "match_length" && button is JoyButton.DpadLeft or JoyButton.DpadRight) { continue; }
+                if ((MenuNavigation.Key(next.Control) == "match_length" || next.Control is HSlider) && button is JoyButton.DpadLeft or JoyButton.DpadRight) { continue; }
                 var control = next.Control.GetNodeOrNull<Control>(neighbor);
                 if (control != null) { queue.Enqueue((control, next.Path.Append(button).ToList())); }
             }

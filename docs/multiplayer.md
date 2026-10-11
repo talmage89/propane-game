@@ -42,6 +42,39 @@ clears the buffer; a new MatchStart invalidates the old queue and receiver, and 
 new queue. The inbox is capped at 4096 packets and 4 MiB of wire data; exceeding it disconnects with an explicit
 loading-buffer message rather than continuing with missing events.
 
+## Appearance
+
+The lobby accepts any opaque sRGB color, including duplicates and near-duplicates. Eight presets remain available;
+**Custom color** offers a character preview, byte-accurate RGB sliders and six-digit hex entry. A gamepad selects
+channels with up/down and adjusts with left/right or the left stick. Apply sends and saves the preview's exact
+bytes; Cancel leaves the accepted choice alone. Settings store the same record as the network. An old saved
+palette index migrates once, only when no appearance record exists; a corrupt saved record uses a safe preset.
+
+`AppearanceRecord` is immutable. `AppearanceCodec` is the only serializer, shared by settings, Hello, SetProfile,
+LobbyState, MatchStart and MatchEnd/standings. The server accepts the requested appearance without substituting
+colors and freezes each profile at match start, including profiles retained after departure. Characters, score
+tags, lobby/results samples and dropped-tank glow use that accepted profile. Names/ranks/scores remain separate
+identifiers when colors repeat; color has no team meaning.
+
+Wire version 1 is enclosed by a little-endian int32 byte length (maximum 1024). Its header is version, red, green,
+blue and optional-slot count, all uint8. Each slot is a uint8 tag, little-endian uint16 payload length, then payload.
+There are at most 16 slots, each at most 64 bytes. Tags 1–5 reserve model/skin, outfit, hat, gun skin and bullet skin;
+they hold nonempty ASCII catalog ids using letters, digits, underscores and hyphens, never asset paths. Known
+slots round trip; unknown optional tags are skipped, leaving the base presentation. Duplicate/zero tags, invalid
+ids, unsupported record versions, excess lengths/counts and truncated/trailing records are rejected. Cosmetic
+catalog resolution, ownership checks and assets are future work; all optional cosmetics render the base today.
+Adding an optional slot within these bounds does not change a containing message's shape.
+
+Hello retains its existing protocol/version/build/name/palette-index/debug prefix and appends the record. A
+compatible Hello without the record uses its valid legacy palette index. A custom color sends the nearest preset
+as that fallback, while preserving its exact RGB bytes in the record. Incompatible builds are rejected before
+interpreting extensions. Welcome and Rejected are unchanged.
+
+Readability is presentation only: score tags select a contrasting outline, and lobby/results swatches have a dark
+frame. Near-black/white bodies gain a subtle rim and shield glow gains neutral contrast support. The Appearance
+tuners control these treatments; all eight presets keep their existing character/glow presentation. Stored and
+accepted colors are never modified by contrast handling.
+
 ## Changes from single player in a match
 
 - **Hitstop** is off. It changes `Engine.TimeScale`, which also slows the physics and would make the clients drift apart.
@@ -91,8 +124,9 @@ and string limits apply inside the plan, and starts must agree with the player a
 - The victim's client decides whether a blast ragdolls them, because it knows exactly where they were.
 - The victim's client spawns the dropped tanks and owns them until another player interacts with them.
 
-A drop must contain unique, unused ids from that player's spawn slot, use that player's match color, and fit both
-their bank and the drop reason's tuner. The server refuses the whole batch if any entry is invalid. Scoring, spilling and authority transitions happen only while the server's clock is playing. A late lifecycle prediction is refused and restored to the last authoritative state. Known exploded body ids may appear in late snapshots or claims, which clients
+A drop must contain unique, unused ids from that player's spawn slot and fit both their bank and the drop reason's
+tuner. Its glow uses the dropper's accepted match appearance; Drop contains no color field. The server refuses the
+whole batch if any entry is invalid. Scoring, spilling and authority transitions happen only while the server's clock is playing. A late lifecycle prediction is refused and restored to the last authoritative state. Known exploded body ids may appear in late snapshots or claims, which clients
 ignore; body ids that never existed are refused. A client missing a server-accepted tank still plays its reported
 blast, including throws, without running a chain or claiming credit locally.
 
@@ -165,6 +199,14 @@ observers freeze gravity while following that stream, and the reliable completio
 membership. Presentation has separate sequence tracking so newer disposable motion cannot hide a reliable start
 or rewind a newer pose. Handoffs and ordered final body rests release frozen observers, and stale epochs cannot
 finish an abandoned pile.
+
+The drop shield glow expires before a tank becomes eligible to gather. Gather shimmer adds to shield emission and
+contrast without replacing them; each effect clears only its own shader parameters. The presentation-only
+`gather_range.tscn -- --scenario=appearance` fixture forces both on custom/black/white tanks with amplified shimmer,
+checks independent completion and expiry, and captures their coexistence with `--capture-dir=DIR`. It does not change
+gather eligibility. Run this fixture without `--fixed-fps`: shield expiry uses wall time. The network gather scenario
+checks accepted drop colors, shield expiry, glide shimmer and its cleanup on both clients, and captures a close-up
+from the host.
 
 Blast shape queries page past full 512-result pages by excluding returned bodies. Large piles cannot silently truncate
 pushes or chain contacts; `scenes/dev/blast_query_tests.tscn` checks 1,100 bodies and duplicate shapes.
@@ -336,6 +378,8 @@ Details settled while building, within the decisions above:
 | `net_bots.sh -n 2 -l 10 -- --match-delay=26` | Builds after the server's loading timeout and Go; the ready log must already say `playing True`. Use `--matches=2` without the delay to exercise another round on the same connection. |
 | `godot res://scenes/dev/menu_test.tscn -- --capture-dir=DIR` | Clicks through every menu, a solo match, leaving it, and single player and back. |
 | `menu_test.tscn -- --scenario=gamepad --capture-dir=DIR` | Joypad-only navigation, name/address defaults, hosting, browsing and joining, color and match length, single-player pause/resume, a solo debug match, overlays and results. Asserts focus and outcomes; also runs headlessly in `make test`, using the checkout's hosting port. |
+| `menu_test.tscn -- --scenario=mouse --capture-dir=DIR` | Actual mouse/keyboard color entry, exact preview/accepted/saved bytes, lobby sample, solo debug character and real server results. Runs headlessly in `make test`. |
+| `net_bots.sh -n 3 -w 3 -l 10 -o OUT -s "--start-score=8" -c 12ABEF,12ABEF,F6F6F6 -- --scenario=appearance --capture-dir=DIR` | Duplicate custom colors plus near-white through lobby, MatchStart, local/remote bodies, accepted drop glow and real results; every client asserts consistency. Screenshots use bot-name prefixes. Repeat with `000000,0000FF,FFFFFF` for dark/saturated/white contrast. |
 | `menu_test.tscn -- --scenario=devices --capture-dir=DIR` | Live device-aware controls and reload hints, keyboard pause, mouse Resume, disconnect repeat cancellation and focus recovery. Also runs headlessly in `make test`. |
 | `menu_test.tscn -- --scenario=update --update-check --fake-version=0.0.9 --capture-dir=DIR` | The offer of a newer release, and a newer server (`-- --server --port=24993 --fake-version=9.9.0`) asking for an update. |
 | `menu_test.tscn -- --scenario=rejection --server-address=127.0.0.1:24993 --capture-dir=DIR` | Run against `-- --server --port=24993 --fake-version=9.9.0`. Asserts the typed application rejection, exact version-mismatch message and download button in the real connection UI; exits nonzero on failure. |
@@ -348,6 +392,11 @@ allow at least `PickupRespawnTime + PickupRevealTime * 1.2 + 6` seconds. Both sc
 or the match ends before all checks complete. These assertions also run headlessly.
 
 Results, 2026-10-09: with three bots under 120 ms round trip, 30 ms jitter and 3% loss, every bot agreed on which tanks existed and their states throughout; resting tanks matched exactly and venting tanks to within about half a meter. The same held through the Docker server on another machine, over the LAN and over a VPN. When the match's creator left mid-match, the others played on in step. A client with a different protocol was turned away with a message.
+
+Protocol 2 also changes **Hello** (trailing appearance record), **SetProfile**, **LobbyState**, **MatchStart** and
+**MatchEnd** (one appearance record in each profile/standing), and **Drop** (removes the redundant palette index).
+Appearance adds shared presentation tuners. It keeps the unreleased `Protocol.Version` at 2; the next release must
+be minor. Welcome and Rejected retain their existing layouts.
 
 Protocol 2 adds the reliable `Gather` relay, authority request IDs, grouped epoch grants, per-body publication
 sequences and canonical/refused lifecycle reconciliation, as well as match ids, scalar tuning, timestamps on final

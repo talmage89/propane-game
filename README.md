@@ -52,10 +52,10 @@ the window to recapture it after switching away.
 ## Multiplayer
 
 Choose Multiplayer, type your name and the server's address (`host` or `host:port`, UDP port 24680 by default), then
-create a lobby or join one. Everyone picks a name and color in the lobby, and whoever created it sets the match
-length and starts. **Host on this computer** runs a server inside your game instead; the lobby then shows the
-addresses friends can use. Versions with the same major and minor number play together (0.2.0 with 0.2.5); the
-server turns away others and says which version it needs.
+create a lobby or join one. Everyone picks a name and any color in the lobby (duplicates are allowed), and whoever
+created it sets the match length and starts. **Host on this computer** runs a server inside your game instead; the
+lobby then shows the addresses friends can use. Versions with the same major and minor number play together
+(0.2.0 with 0.2.5); the server turns away others and says which version it needs.
 
 To play against bots, create a lobby and run `make bots SERVER=host[:port]` (from source; `make bots-stop` stops them).
 Starting the game with `-- --connect=host[:port]` skips straight to that server's lobbies.
@@ -86,6 +86,11 @@ then plays with every patch of that minor version.
 Aim cancels sprint. Releasing aim with sprint still held restores sprint's target speed on that physics tick,
 including after firing. Jumping drops effective aim in the air; held aim returns on landing. Reload owns the weapon
 and suppresses aim/fire while leaving the selected movement gait free.
+
+The lobby keeps eight quick color presets. **Custom color** opens a character preview with RGB sliders and hex
+entry; the choice is saved between runs, and old saved palette choices migrate automatically. With a gamepad,
+up/down selects a channel and left/right or the left stick adjusts it; **Use color** saves and **Cancel** keeps
+the previous choice.
 
 Menus work with D-pad or left stick, A / Cross to confirm, and B / Circle to go back. Start / Options opens and
 closes pause or the match menu. Left / right changes the focused match length; disabled choices are skipped.
@@ -204,6 +209,9 @@ $GODOT --resolution 1280x720 res://scenes/dev/release_test.tscn -- --windowed --
 # Official export templates disallow scene overrides. The same test runs in an untouched archive with
 # ./Propane.x86_64 -- --release-test --capture-dir=/tmp/release (Propane.exe on Windows).
 # Add --scenario=network --connect=host:port --name=Tester to test against another client on a source server.
+
+# Custom color with actual mouse/keyboard input: preview, lobby, solo debug character and server results.
+$GODOT res://scenes/dev/menu_test.tscn -- --scenario=mouse --capture-dir=/tmp/menu-color
 
 # The real game with a scripted player. Scenarios: loop (default), clear (destroys every tank), ragdoll, shoot,
 # tour (camera in tight spots), spots (visits each tank), settle (fails on tank drift >6 mm or rotation >0.5 degrees),

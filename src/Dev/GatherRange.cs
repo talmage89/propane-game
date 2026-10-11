@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Godot;
 using Propane.Core;
+using Propane.Net;
 using Propane.Tank;
 using Propane.World;
 
@@ -39,6 +40,7 @@ public partial class GatherRange : Node3D
         floor.AddChild(new CollisionShape3D { Shape = new BoxShape3D { Size = new Vector3(80, 0.2f, 60) }, Position = new Vector3(0, -0.1f, 0) });
         floor.AddChild(new MeshInstance3D { Mesh = new PlaneMesh { Size = new Vector2(80, 60), Material = new StandardMaterial3D { AlbedoColor = new Color(0.6f, 0.65f, 0.6f) } } });
         AddChild(floor);
+        if (DevArgs.Get("scenario") == "appearance") { Appearance(camera); return; }
         if (DevArgs.Get("scenario") == "grant-races") { GrantRaces(); return; }
         Tuning.Current.GatherDelay = 2;
         Tuning.Current.GatherScanInterval = 0.1f;
@@ -140,6 +142,69 @@ public partial class GatherRange : Node3D
     private void Require(bool condition, string message)
     {
         if (!condition) { GD.PushError($"[gather] FAIL {message}"); GetTree().Quit(1); throw new InvalidOperationException(message); }
+    }
+
+    /// <summary>
+    /// Force both presentation effects directly; production gathering excludes shielded tanks. Check that stopping
+    /// either effect preserves the other, using custom, black and white appearances and the actual tank material.
+    /// </summary>
+    private void Appearance(Camera3D camera)
+    {
+        var colors = new[] { new AppearanceRecord(18, 171, 239), new AppearanceRecord(0, 0, 0), new AppearanceRecord(255, 255, 255) };
+        Tuning.Current.DropInvulnerableTime = 1;
+        Tuning.Current.GatherShimmer = 1;
+        camera.LookAtFromPosition(new Vector3(0, 1.7f, 1.8f), new Vector3(0, 1.2f, 0));
+        foreach (var (appearance, index) in colors.Select((color, i) => (color, i)))
+        {
+            var tank = AddTank(new Vector3((index - 1) * 0.6f, 1, 0));
+            tank.MakeInvulnerable(Tuning.Current.DropInvulnerableTime, appearance.Color);
+            tank.BeginGather();
+        }
+        var director = new CaptureDirector { QuitAfter = 2 }; AddChild(director);
+        director.At(0.2f, () =>
+        {
+            foreach (var (tank, index) in tanks.Select((tank, i) => (tank, i)))
+            {
+                var mesh = tank.GetNode<MeshInstance3D>("Mesh");
+                var glow = mesh.GetInstanceShaderParameter("shield_color").AsColor();
+                var contrast = mesh.GetInstanceShaderParameter("shield_contrast").AsColor();
+                Require(tank.Invulnerable && tank.Gathering && glow.A > 0 && new Color(glow, 1) == colors[index].Color,
+                    "gather start lost the drop appearance or shield");
+                Require(mesh.GetInstanceShaderParameter("gather_shimmer").AsSingle() == Tuning.Current.GatherShimmer,
+                    "gather shimmer missing alongside shield");
+                Require(index == 0 ? contrast.A == 0 : contrast.A > 0, "extreme-color shield contrast missing");
+            }
+            GD.Print("[gather appearance] PASS custom/black/white glow, contrast and shimmer coexist");
+        });
+        director.ShotAt(0.3f, "00_glow_and_shimmer");
+        director.At(0.4f, () =>
+        {
+            foreach (var tank in tanks)
+            {
+                var mesh = tank.GetNode<MeshInstance3D>("Mesh");
+                var glow = mesh.GetInstanceShaderParameter("shield_color").AsColor();
+                var contrast = mesh.GetInstanceShaderParameter("shield_contrast").AsColor();
+                tank.EndGather();
+                Require(tank.Invulnerable && !tank.Gathering && glow.A > 0 && mesh.GetInstanceShaderParameter("shield_color").AsColor() == glow &&
+                    mesh.GetInstanceShaderParameter("shield_contrast").AsColor() == contrast &&
+                    mesh.GetInstanceShaderParameter("gather_shimmer").AsSingle() == 0, "gather end erased the shield or kept shimmer");
+                tank.BeginGather();
+            }
+            GD.Print("[gather appearance] PASS gather completion preserves active shield");
+        });
+        director.At(1.4f, () =>
+        {
+            foreach (var tank in tanks)
+            {
+                var mesh = tank.GetNode<MeshInstance3D>("Mesh");
+                Require(!tank.Invulnerable && tank.Gathering && mesh.GetInstanceShaderParameter("shield_color").AsColor().A == 0 &&
+                    mesh.GetInstanceShaderParameter("shield_contrast").AsColor().A == 0 &&
+                    mesh.GetInstanceShaderParameter("gather_shimmer").AsSingle() == Tuning.Current.GatherShimmer,
+                    "shield expiry erased shimmer or retained glow/contrast");
+            }
+            GD.Print("[gather appearance] PASS shield expiry preserves active shimmer");
+        });
+        director.ShotAt(1.5f, "01_shimmer_after_shield");
     }
 
     private void GrantRaces()

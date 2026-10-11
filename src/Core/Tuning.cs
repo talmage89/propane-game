@@ -593,6 +593,18 @@ public partial class Tuning : Resource
     [Export(PropertyHint.Range, "0.1,5,0.05")] public float ScorePopupTime { get; set; } = 1.4f;
     [Export(PropertyHint.Range, "0.1,5,0.05")] public float HitDirectionTime { get; set; } = 1.2f;
 
+    // ---------------------------------------------------------------- Multiplayer: appearance
+    [ExportGroup("Appearance")]
+    /// <summary>Linear luminance limits; presets stay between them and keep their existing materials/glow.</summary>
+    [Export(PropertyHint.Range, "0.001,0.15,0.001")] public float AppearanceDarkThreshold { get; set; } = 0.04f;
+    [Export(PropertyHint.Range, "0.65,0.99,0.01")] public float AppearanceLightThreshold { get; set; } = 0.8f;
+    [Export(PropertyHint.Range, "0.1,0.3,0.01")] public float AppearanceTagThreshold { get; set; } = 0.18f;
+    [Export(PropertyHint.Range, "0,1,0.01")] public float AppearanceBodyContrast { get; set; } = 0.45f;
+    [Export(PropertyHint.Range, "1,8,0.1")] public float AppearanceRimPower { get; set; } = 3f;
+    [Export(PropertyHint.Range, "0,1,0.01")] public float AppearanceGlowContrast { get; set; } = 0.4f;
+    [Export(PropertyHint.Range, "0,2,0.05")] public float AppearancePreviewAmbient { get; set; } = 0.35f;
+    [Export(PropertyHint.Range, "0,2,0.05")] public float AppearancePreviewLight { get; set; } = 0.8f;
+
     // ---------------------------------------------------------------- Multiplayer: network
     [ExportGroup("Network")]
     [Export(PropertyHint.Range, "5,120,1")] public float PlayerSendRate { get; set; } = 30f;

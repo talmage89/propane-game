@@ -75,6 +75,8 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
     private Godot.Collections.Array<Rid> shotExclude = new();
     private Color bodyColor = new(0.92f, 0.44f, 0.16f);
     private StandardMaterial3D? bodyMaterial;
+    private ShaderMaterial? bodyRim;
+    private (Color Color, Color Edge, float Strength, float Power)? bodyContrast;
     private byte staggers;
     private byte remoteStaggers;
     private bool hasRemoteState;
@@ -120,6 +122,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
             if (bodyMaterial != null)
             {
                 bodyMaterial.AlbedoColor = value;
+                UpdateBodyContrast();
             }
         }
     }
@@ -348,6 +351,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
     {
         var dt = (float)delta;
         var tuning = Tuning.Current;
+        UpdateBodyContrast();
         var planar = feet.SamplePlanarVelocity(dt);
         animator.UpdateLocomotion(ResolvedState.Active ? planar.Length() : 0f, dt, ResolvedState.Gait);
 
@@ -971,9 +975,27 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
 
     private static Vector3 Forward(float yaw) => new(-Mathf.Sin(yaw), 0, -Mathf.Cos(yaw));
 
+    private void UpdateBodyContrast()
+    {
+        if (bodyMaterial == null) { return; }
+        var strength = AppearanceContrast.Strength(bodyColor) * Tuning.Current.AppearanceBodyContrast;
+        var edge = AppearanceContrast.Edge(bodyColor);
+        var power = Tuning.Current.AppearanceRimPower;
+        var next = (bodyColor, edge, strength, power);
+        if (bodyContrast == next) { return; }
+        bodyContrast = next;
+        if (strength <= 0) { bodyMaterial.NextPass = null; return; }
+        bodyRim ??= new ShaderMaterial { Shader = GD.Load<Shader>("res://shaders/appearance_rim.gdshader") };
+        bodyRim.SetShaderParameter("edge_color", edge);
+        bodyRim.SetShaderParameter("strength", strength);
+        bodyRim.SetShaderParameter("rim_power", power);
+        bodyMaterial.NextPass = bodyRim;
+    }
+
     private void StyleMannequin()
     {
         var body = bodyMaterial = new StandardMaterial3D { AlbedoColor = bodyColor, Roughness = 0.5f, Metallic = 0.0f };
+        UpdateBodyContrast();
         var joints = new StandardMaterial3D { AlbedoColor = new Color(0.13f, 0.13f, 0.14f), Roughness = 0.6f, Metallic = 0.2f };
         foreach (var mesh in GameAssets.MeshInstances(model))
         {

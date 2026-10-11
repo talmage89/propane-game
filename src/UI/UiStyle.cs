@@ -59,6 +59,24 @@ public static class UiStyle
         ExpandMarginBottom = 3,
     };
 
+    /// <summary>A framed color sample remains visible on the light menu panels, even when it is white.</summary>
+    public static Control ColorSample(Color color, int size, string? key = null)
+    {
+        var frame = new PanelContainer { CustomMinimumSize = new Vector2(size, size), SizeFlagsVertical = Control.SizeFlags.ShrinkCenter };
+        frame.AddThemeStyleboxOverride("panel", new StyleBoxFlat
+        {
+            BgColor = Ink,
+            ContentMarginLeft = 1,
+            ContentMarginTop = 1,
+            ContentMarginRight = 1,
+            ContentMarginBottom = 1,
+        });
+        var sample = new ColorRect { Color = color, MouseFilter = Control.MouseFilterEnum.Ignore };
+        if (key != null) { sample.SetMeta("appearance_player", key); }
+        frame.AddChild(sample);
+        return frame;
+    }
+
     public static Label Text(string text, int size, Color? color = null, HorizontalAlignment align = HorizontalAlignment.Left)
     {
         var label = new Label { Text = text, HorizontalAlignment = align };

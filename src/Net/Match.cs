@@ -215,7 +215,7 @@ public partial class Match : Node3D
                 {
                     Name = "Player",
                     PeerId = me,
-                    BodyColor = Protocol.PlayerColor(profile.Color),
+                    BodyColor = profile.Appearance.Color,
                     Ammo = AmmoState.Starting(),
                     InputLocked = true,
                 };
@@ -229,7 +229,7 @@ public partial class Match : Node3D
                     Name = $"Remote_{profile.Id}",
                     IsRemote = true,
                     PeerId = profile.Id,
-                    BodyColor = Protocol.PlayerColor(profile.Color),
+                    BodyColor = profile.Appearance.Color,
                 };
                 AddChild(body);
                 body.Teleport(position, spawn.Yaw + Mathf.Pi);
@@ -417,7 +417,7 @@ public partial class Match : Node3D
                 continue;
             }
             var scale = tuning.ScoreTagScale * Mathf.Lerp(1.15f, 0.6f, Mathf.Clamp(distance / Mathf.Max(tuning.ScoreTagRange, 1f), 0, 1));
-            tags.Add(new ScoreTag(camera.UnprojectPosition(at), scores.GetValueOrDefault(remote.Profile.Id), Protocol.PlayerColor(remote.Profile.Color), scale));
+            tags.Add(new ScoreTag(camera.UnprojectPosition(at), scores.GetValueOrDefault(remote.Profile.Id), remote.Profile.Appearance.Color, scale));
         }
         return tags;
     }
@@ -856,9 +856,8 @@ public partial class Match : Node3D
             return;
         }
         var tuning = Tuning.Current;
-        var color = profiles[me].Color;
         var rng = new RandomNumberGenerator();
-        var w = new NetWriter(Msg.Drop, Setup.Id).Byte((byte)reason).Int(count).Int(color);
+        var w = new NetWriter(Msg.Drop, Setup.Id).Byte((byte)reason).Int(count);
         var start = rng.RandfRange(0, Mathf.Tau);
         var safeFrom = player.IsRagdolled ? player.PelvisPosition + Vector3.Up * 0.2f : player.GlobalPosition + Vector3.Up * 0.9f;
         for (var i = 0; i < count; i++)
@@ -875,7 +874,7 @@ public partial class Match : Node3D
             var transform = new Transform3D(new Basis(Vector3.Up, rng.RandfRange(0, Mathf.Tau)), position);
             var id = BodySync.DropTankId(mySlot, dropCounter++);
             dropPredictions.Add(id);
-            SpawnDroppedTank(id, me, color, transform, velocity, spin);
+            SpawnDroppedTank(id, me, transform, velocity, spin);
             w.UInt(id).Transform(transform).Vec3(velocity).Vec3(spin).UInt(1).UInt(0);
         }
         Send(w);
@@ -900,7 +899,7 @@ public partial class Match : Node3D
         return wanted;
     }
 
-    private void SpawnDroppedTank(uint id, int owner, int color, Transform3D transform, Vector3 velocity, Vector3 spin)
+    private void SpawnDroppedTank(uint id, int owner, Transform3D transform, Vector3 velocity, Vector3 spin)
     {
         if (tanks.ContainsKey(id) || exploded.Contains(id))
         {
@@ -913,7 +912,7 @@ public partial class Match : Node3D
         tank.GlobalTransform = transform;
         tank.LinearVelocity = velocity;
         tank.AngularVelocity = spin;
-        tank.MakeInvulnerable(Tuning.Current.DropInvulnerableTime, Protocol.PlayerColor(color));
+        tank.MakeInvulnerable(Tuning.Current.DropInvulnerableTime, profiles[owner].Appearance.Color);
         Track(tank, owner);
     }
 
@@ -1106,7 +1105,7 @@ public partial class Match : Node3D
                 break;
             case DropMessage drop:
                 if (sender == me) { dropPredictions.Accepted(drop.Tanks.Select(t => t.Id)); }
-                foreach (var body in drop.Tanks) { SpawnDroppedTank(body.Id, sender, drop.Color, body.Transform, body.Linear, body.Angular); }
+                foreach (var body in drop.Tanks) { SpawnDroppedTank(body.Id, sender, body.Transform, body.Linear, body.Angular); }
                 break;
             case RagdollMessage ragdoll:
                 remote?.Body.RemoteRagdoll(ragdoll.Position, ragdoll.Velocity, ragdoll.Spin);
