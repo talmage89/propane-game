@@ -319,3 +319,106 @@ sleeps the owner, additionally verifying the final reliable rest instead of inde
 results. This only changes the dev fixture. Builds were warning-free.
 The completed flight/rest fixture passed (`/tmp/nas-rotate-rest`): 600 grids, peak rest/moving
 0.014/1.140 m, final 0/0 m, no above-tolerance episodes or missing grids, and matching scores.
+
+Before the upright-pile merge and extra gather/lane fixes, the integrated `266d990` series
+`/tmp/nas-proof-final-fault-{1..8}` and `/tmp/nas-proof-final-clean-{1..4}` passed every tank/score
+check, with zero invalid captures. Fault longest episodes were 0.85/0.90/0.70/0.70/0.65/1.00/1.25/0.85 s;
+clean were 0.70/0.45/0.30/1.15 s. Fault final motion peaked at 0.342 m, clean at 0.088 m.
+This historical series is retained, not substituted for verification after the subsequent merges.
+
+## Final rotated-lane gate
+
+Merged dev `21a2ac2` in `2eff30d`; `make setup` passed with zero warnings/errors.
+`TMPDIR="$PWD/build/net-assert-artifacts/tmp" make check` passed on this revision
+(`rotated-check.log`): format verification, warning-as-error compilation, 213 unit tests with
+zero failures, 20 comparer tests (0.272 s), three launcher tests (0.567 s), the existing physics/menu/input
+fixtures, upright stand/topple/gather checks, bounded generation sweeps, and separate-process
+world hashes for all four formations. The malformed-packet unit intentionally logs a runtime
+warning; it is not a compiler warning. No test-full deep sweep or non-Linux native run was attempted.
+
+## Final soak results and residual
+
+The final code revision is `2eff30d` (only documentation/calibration comments follow it). Commands:
+
+```sh
+tools/dev/net_bots.sh -n 4 -l 90 -t faults -s '--tank-authority-trace' -o OUT -- --melee-start --digest-every=0.5 --net-lag=120 --net-jitter=30 --net-loss=3 --tank-authority-trace --tank-motion-trace
+tools/dev/net_bots.sh -n 4 -l 90 -t clean -s '--tank-authority-trace' -o OUT -- --melee-start --digest-every=0.5 --tank-authority-trace --tank-motion-trace
+```
+
+`OUT` is `/tmp/nas-rotated-fault-N` or `/tmp/nas-rotated-clean-N`; the corresponding launcher
+outputs are in ignored `build/net-assert-artifacts/nas-rotated-*-run.txt`. Fault 1 also used
+`-w 1 --capture-dir=OUT/shots --shot-every=30`. Faults 9/10 added `--net-throttle-trace` at both
+ends. Each comparison used the original thresholds, including final motion 0.50 m for faults
+and 0.35 m for clean. Every capture was valid, with zero unobserved pair grids; every score audit
+agreed and conserved the bank. Nine faulted soaks passed, plus all four clean ones. **The target
+of all passing was not reached:** fault 7 failed only the final moving bound.
+
+| Run | Result | Rest / moving peak (m) | Final rest / moving (m) | Longest episode (s) |
+|---|---|---:|---:|---:|
+| Fault 1 | PASS | 0.108 / 16.772 | 0.001 / 0.265 | 1.65 |
+| Fault 2 | PASS | 0.015 / 8.782 | 0.000 / 0.171 | 0.85 |
+| Fault 3 | PASS | 0.116 / 5.779 | 0.000 / 0.256 | 0.85 |
+| Fault 4 | PASS | 0.067 / 10.512 | 0.001 / 0.153 | 1.30 |
+| Fault 5 | PASS | 0.102 / 6.634 | 0.001 / 0.187 | 1.55 |
+| Fault 6 | PASS | 0.093 / 4.475 | 0.001 / 0.274 | 0.45 |
+| Fault 7 | FAIL | 0.212 / 15.162 | 0.000 / 0.531 | 1.60 |
+| Fault 8 | PASS | 0.052 / 10.324 | 0.000 / 0.288 | 0.85 |
+| Fault 9 | PASS | 0.063 / 12.646 | 0.000 / 0.152 | 1.70 |
+| Fault 10 | PASS | 0.022 / 6.409 | 0.000 / 0.054 | 0.70 |
+| Clean 1 | PASS | 0.058 / 3.455 | 0.000 / 0.094 | 0.35 |
+| Clean 2 | PASS | 0.100 / 3.483 | 0.001 / 0.052 | 0.55 |
+| Clean 3 | PASS | 0.019 / 4.568 | 0.000 / 0.070 | 0.35 |
+| Clean 4 | PASS | 0.023 / 2.460 | 0.000 / 0.060 | 0.25 |
+
+Fault 7's drop `2000000a` remained venting/moving at the end: owner Bot1, epoch 2, sequence 367.
+At time 99973.966010 its speed was 2.293 m/s and spin 28 rad/s. Bot2/3 had sequence 364,
+receipt silence 0.053 s and sampling age about 0.23 s; all targets were present, claims were
+resolved, and no solid barrier was detected. Final positional differences were 0.504/0.531 m
+against Bot1. During the shared results interval, this body's 1176 pair samples had median
+0.166 m, p95 0.403 m, p99 0.504 m and peak 0.655 m. None exceeded the 3 m moving limit for
+2 s, and final intact/resting tanks agreed. This is a different, rarer residual than discarded
+rests or correction starvation: fresh physics tracking of a slowly translating, rapidly spinning
+vent on the floor. Finite prediction/blend under nonlinear contact is the likely explanation;
+that attribution is an inference, not an isolated proof of the contact dynamics. The strict
+0.50 m final bound remains unchanged. Investigating that residual or calibrating a distinct
+terminal active-vent budget is follow-up work, not silently folded into the noise tolerance.
+
+No sustained resting, lifecycle or moving-window failure remained in this final series. Maximum
+final resting drift was 0.001 m; longest fault episode 1.70 s (17.6% settle-window margin), clean
+0.55 s (172.7% margin). Moving p99 across runs peaked at 2.340 m faulted (28.2% margin under
+3 m) and 1.141 m clean (119.1% under 2.5 m). Maximum canonical delay was 1.160 s faulted and
+0.265 s clean. The original fault-9 capture lacked owner/sequence tracing, so its exact 5.9 m
+mechanism cannot be assigned retrospectively; traced reproductions established the corrected
+freshness, clamp, obstacle and delivery mechanisms. Increasing the general moving or resting
+thresholds was unnecessary.
+
+The final gather check passed too: `tools/dev/net_bots.sh -n 2 -l 45 -s '--start-score=8'
+-o /tmp/nas-rotated-gather -- --scenario=gather --tune.DropScatter=.2 --tune.DropToss=1
+--tune.FixedSeed=23 --net-lag=120 --net-jitter=30 --net-loss=3`: 1099 grids, rest/moving peaks
+0.007/0.527 m, final 0/0 m, longest 0.20 s, no missing grids and bank 14 on both peers.
+
+The controlled physical failure also remained detectable on final code:
+`tools/dev/net_bots.sh -n 2 -l 35 -s '--start-score=5' -o /tmp/nas-nudge-final --
+--scenario=melee --tank-check-nudge=Bot2` exited 1 as expected. Both bots exited normally,
+but intact/resting `10000000` differed by 2.000 m for 19.20 s. Eventual final agreement was
+0/0 m and the score audit still conserved 10 initial - 5 spills = 5 banked. The 20 Python tests
+also cover synthetic sustained/final divergences, transients, passes and invalid evidence.
+
+Personally inspected final fault-1 `shots/Bot1_030.0.png` (shouldered rifle, suburb and HUD)
+and `Bot1_060.0.png` (remote players, fire/smoke, broken fences, bank/ammo HUD). Earlier
+faulted captures and frames remain recorded above. Visual inspection verifies rendering;
+simultaneous logs establish body agreement.
+
+Compatibility: no application message fields, Hello/Welcome/Rejected shapes, gameplay rules
+or tuner defaults changed in this package. Production replication and ENet channel use changed;
+Protocol.Version remains the unreleased 2, as instructed. Older implementations can decode the
+same payloads but do not provide the new correction guarantees. Dev-only fault/trace/probe
+flags remain outside gameplay. Native silent-peer detection is now 20–30 s to cover legitimate
+construction stalls; that changes disconnect latency. Each protected Match integration is isolated:
+`f30e21a`, `49bcb71`, `7d8b6f9`, `2eb194e`, `e75ad19`. No edits were made to PlayerCharacter,
+Main, Game or PlayerInput; upstream changes, including upright construction, came through dev merges.
+Linux/same-machine verification only; macOS, Windows, stock Ubuntu CI execution and cross-machine
+capture alignment were not verified. No push or merge into dev/main was performed.
+After the final documentation/calibration-comment update, `python3 -B tools/dev/compare_tanks_tests.py`
+passed 20 tests in 0.174 s and `python3 -B tools/dev/net_bots_tests.py` passed three in 0.414 s.
+`bash -n tools/dev/net_bots.sh` and `git diff --check` passed. There were no further behavioral changes.

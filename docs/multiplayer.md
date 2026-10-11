@@ -315,9 +315,8 @@ The server is the game itself started with `-- --server` (and `--headless`). It 
 ENet for production; the unit suites inject an in-memory loopback with a manual monotonic clock. Gameplay sends
 `ReliableOrdered`, three `ReliableBodyStates` lanes, `UnreliablePlayerPoses` or `UnreliableBodyStates`, never backend
 channel numbers. ENet keeps control and disposable traffic on channel zero; reliable body checkpoints rotate per
-body through channels one to three
-so their retransmission cannot block lifecycle/control delivery. Ordering is per connection and reliable class,
-with no ordering across classes. On receive, the adapter uses native reliability/channel for checkpoints and the
+body through channels one to three, so a checkpoint retry cannot block control. Ordering is per connection and
+reliable class, with no ordering across classes. On receive, the adapter uses native reliability/channel for checkpoints and the
 existing type byte to distinguish disposable body states. Epoch/sequence validation handles overtaking motion.
 No application packet layout, player id, tuner or gameplay rule changed. Protocol 2 remains unreleased.
 
