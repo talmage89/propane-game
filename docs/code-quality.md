@@ -74,9 +74,9 @@ compilation or assertions. Editor setup remains shared with release, whose tool 
 
 ## Deterministic unit time
 
-Network unit tests use a per-fixture `ManualClock`; message receipt, ping estimates, sample timestamps and phase
-advancement share that clock. `Match.Clock` defaults to `MonotonicClock.Instance` and can be injected before the
-node enters the tree, like the existing client and server clocks. Production uses the same process-relative time
+Time-sensitive network unit tests use manual clocks. Server and match fixtures share a `ManualClock` for message
+receipt, ping estimates, sample timestamps and phase advancement. `Match.Clock` defaults to `MonotonicClock.Instance`
+and can be injected before the node enters the tree, like the existing client and server clocks. Production uses the same process-relative time
 as before. The server's gather deadline also uses its injected clock.
 
 Tests advance time explicitly, including expiry before a phase tick. Do not sample wall time around a message and
@@ -85,6 +85,35 @@ that used to extrapolate the authority test's observer backward far enough to fa
 The observer test now asserts its receipt timestamp and corrects at the same manual instant, after an explicit
 30-second pause. Relay timestamp assertions now check exact clamped times; the gather deadline test checks
 acceptance before and refusal exactly at expiry. No tolerance or retry masks scheduling delays.
+
+### Loaded regression proof
+
+The October 2026 regression repeated
+`godot-mono --headless --path . res://scenes/dev/unit_tests.tscn` with eight concurrent processes on 12 available
+CPUs. Additional Python processes ran `while True: pass` throughout each batch. Every child's exit status, named
+assertion failures, final test count and suite BEGIN markers were checked; a successful parent alone is insufficient.
+
+| Code | Runs | CPU hogs | Assertion failures | Native crashes |
+| --- | --- | --- | --- | --- |
+| Before manual time | 300 | 4 | 8 | 1 |
+| After manual time | 300 | 4 | 0 | 0 |
+| After manual time, added load | 300 | 6 | 0 | 0 |
+
+All eight assertion failures were `authority/new canonical vent reconciles an intact observer (moving True)`.
+Each fixed run completed all 13 suites and 190 tests (189 before the additional gather deadline assertion).
+The baseline's separate signal-11 crash interrupted ProtocolTests, with a Godot `propagate_notification()` caller-thread
+error; this change does not diagnose or fix that engine crash. The baseline consequently has 299 complete suite runs.
+
+A full `/tmp` truncated 16 baseline logs whose recorded child exits were zero. Those incomplete records were
+retained and replaced with 16 additional baseline invocations; all assertion failures and the native crash remain
+in the reported 300 records. No failed assertion was retried or discarded. Proof logs were then stored under ignored
+`build/wpflaky-proof/`, along with the repetition driver and validated summaries.
+
+The added-load batch used an isolated copy matching all 305 committed source, scene and project-setting files,
+excluding preexisting unrelated shutdown edits. `make check` passed both there and in the working checkout.
+The rendered three-client puncture race also passed with 120 ms lag, 30 ms jitter and 3% loss: canonical vent
+comparison covered 1,658 trajectory pairs (median/p95/max separation 0.104/0.246/0.390 m), and all score audits agreed.
+Four captured frames were reviewed, showing the tank venting, tipping and tumbling.
 
 ## Adding a suite
 
