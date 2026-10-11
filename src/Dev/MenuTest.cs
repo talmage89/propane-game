@@ -34,6 +34,26 @@ public partial class MenuTest : Node
         }
         var director = new CaptureDirector { QuitAfter = 40f };
         AddChild(director);
+        if (DevArgs.Get("scenario") == "rejection")
+        {
+            director.QuitAfter = 8f;
+            director.At(1f, () => Press("Multiplayer"));
+            director.At(2f, () => main.GetNode<UI.Menus>("Menus").ConnectTo(
+                DevArgs.Get("server-address") ?? "127.0.0.1:24993", "Tester"));
+            director.ShotAt(5f, "01_version_rejected");
+            director.At(6f, () =>
+            {
+                var client = main.GetNode<Net.NetClient>("Net");
+                var detail = client.LastDisconnect?.Detail;
+                var expected = $"This server runs Propane 9.9.x; you have {Net.BuildInfo.GameVersion}. Update Propane to play here.";
+                var passed = client.State == Net.NetClient.Status.Offline && client.LastDisconnect?.Kind == Net.DisconnectKind.ApplicationRejected &&
+                    client.RejectedBy == "9.9.0" && detail == expected && HasText(GetTree().Root, expected) &&
+                    FindButton(GetTree().Root, "Download Propane 9.9.x") != null;
+                GD.Print($"[menutest] version rejection UI: {passed}, reason: {detail}");
+                if (!passed) { GetTree().Quit(1); }
+            });
+            return;
+        }
         if (DevArgs.Get("scenario") == "update")
         {
             director.QuitAfter = 8f;
@@ -90,6 +110,12 @@ public partial class MenuTest : Node
             }
             GD.Print("[menutest] PASS: returned to main menu");
         });
+    }
+
+    private static bool HasText(Node node, string text)
+    {
+        if (node is Label label && label.Text == text) { return true; }
+        return node.GetChildren().Any(child => HasText(child, text));
     }
 
     private void Press(string text)

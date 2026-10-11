@@ -310,6 +310,7 @@ Details settled while building, within the decisions above:
 | `menu_test.tscn -- --scenario=gamepad --capture-dir=DIR` | Joypad-only navigation, name/address defaults, hosting, browsing and joining, color and match length, single-player pause/resume, a solo debug match, overlays and results. Asserts focus and outcomes; also runs headlessly in `make test`, using the checkout's hosting port. |
 | `menu_test.tscn -- --scenario=devices --capture-dir=DIR` | Live device-aware controls and reload hints, keyboard pause, mouse Resume, disconnect repeat cancellation and focus recovery. Also runs headlessly in `make test`. |
 | `menu_test.tscn -- --scenario=update --update-check --fake-version=0.0.9 --capture-dir=DIR` | The offer of a newer release, and a newer server (`-- --server --port=24993 --fake-version=9.9.0`) asking for an update. |
+| `menu_test.tscn -- --scenario=rejection --server-address=127.0.0.1:24993 --capture-dir=DIR` | Run against `-- --server --port=24993 --fake-version=9.9.0`. Asserts the typed application rejection, exact version-mismatch message and download button in the real connection UI; exits nonzero on failure. |
 
 The duel needs two players, `--start-score=8`, default tank-bank tuners and at least 15 seconds of play. It checks
 that three player hits spill exactly two tanks through the grace period, then follows one dropped tank continuously
