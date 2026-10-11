@@ -12,10 +12,16 @@ public partial class ShutdownTests : Node
 {
     private ShutdownWitness? witness;
 
-    public override void _Ready()
+    public override void _Ready() => Callable.From(Run).CallDeferred();
+
+    private void Run()
     {
         var tree = GetTree();
         witness = new ShutdownWitness { Tree = tree };
+        var state = witness.State;
+        var sibling = new Node { Name = "ShutdownLaterSibling" };
+        sibling.TreeExiting += () => state.LaterSiblingExited = true;
+        tree.Root.AddChild(sibling);
         if (DevArgs.Get("paused") != null)
         {
             tree.Paused = true;
@@ -48,6 +54,8 @@ public partial class ShutdownTests : Node
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static void MakeGarbage(ShutdownTestState state)
     {
+        state.SceneSawSiblingExit = state.LaterSiblingExited;
+        state.DeletedAtPhysicsFrame = Engine.GetPhysicsFrames();
         for (var i = 0; i < 10000; i++)
         {
             state.Garbage.Add(new WeakReference<GodotObject>(new BoxShape3D()));
@@ -75,5 +83,8 @@ public sealed class ShutdownTestState
 {
     public readonly List<WeakReference<GodotObject>> Garbage = new();
     public bool SceneDeleted;
+    public bool LaterSiblingExited;
+    public bool SceneSawSiblingExit;
+    public ulong DeletedAtPhysicsFrame;
     public int Finalized;
 }

@@ -24,13 +24,14 @@ public partial class ShutdownWitness : Node
                 alive++;
             }
         }
-        if (!State.SceneDeleted || Volatile.Read(ref State.Finalized) != 1 || alive != 0)
+        var physicsAdvanced = Engine.GetPhysicsFrames() > State.DeletedAtPhysicsFrame;
+        if (!State.SceneDeleted || !State.SceneSawSiblingExit || !physicsAdvanced || Volatile.Read(ref State.Finalized) != 1 || alive != 0)
         {
-            GD.PushError($"[shutdown] FAIL scene deleted {State.SceneDeleted}, finalizers {State.Finalized}, live wrappers {alive}");
+            GD.PushError($"[shutdown] FAIL scene deleted {State.SceneDeleted}, reverse order {State.SceneSawSiblingExit}, physics advanced {physicsAdvanced}, finalizers {State.Finalized}, live wrappers {alive}");
             // Final teardown is already running: set its failure status directly.
             Tree.Quit(1);
             return;
         }
-        GD.Print($"[shutdown] PASS scene destroyed and {State.Garbage.Count} wrappers collected; finalizer drained");
+        GD.Print($"[shutdown] PASS reverse teardown, scene destroyed and {State.Garbage.Count} wrappers collected; finalizer drained, physics advanced");
     }
 }

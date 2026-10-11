@@ -115,6 +115,21 @@ The rendered three-client puncture race also passed with 120 ms lag, 30 ms jitte
 comparison covered 1,658 trajectory pairs (median/p95/max separation 0.104/0.246/0.390 m), and all score audits agreed.
 Four captured frames were reviewed, showing the tank venting, tipping and tumbling.
 
+## Scene-thread assertions
+
+The core and standalone unit runners install `TestThreadGuard` before running assertions. It checks the managed
+thread at unit entry and listens for Godot's native scene-thread rejection diagnostics, including calls from CLR
+finalizers. A violation prints `[thread] FAIL`, the originating thread and managed caller stack, then exits 1.
+It bypasses native teardown on this failure path: a worker cannot safely free the scene, and native atexit cleanup
+while the tree is live produces unrelated errors. Successful tests still quit through `ShutdownGuard`.
+`check_test_threads.py` launches separate managed-entry, native-node and CLR-finalizer violations and requires exit 1
+and the expected caller, so a lost logger, a swallowed assertion or a signal termination fails the gate.
+
+A root `propagate_notification()` caller-thread error immediately before a signal report does not alone identify
+an application scene-thread call. Godot's Linux [signal handler](https://github.com/godotengine/godot/blob/ed1daf0bf/platform/linuxbsd/crash_handler_linuxbsd.cpp#L107)
+sends `NOTIFICATION_CRASH` to the tree before printing the report; the tree propagates that notification to the root
+on the signaling thread. Keep the original signal and caller evidence when diagnosing such an error.
+
 ## Adding a suite
 
 For a unit suite, add a static class in `src/Dev/UnitTests`, mark it `[UnitSuite]`, and expose

@@ -14,5 +14,7 @@
     <AnalysisLevelUsage>10.0-recommended</AnalysisLevelUsage>
     <AnalysisLevelSecurity>10.0-recommended</AnalysisLevelSecurity>
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <!-- build/ holds release output, logs and scratch copies of the project; never compile them. -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);build/**</DefaultItemExcludes>
   </PropertyGroup>
 </Project>
