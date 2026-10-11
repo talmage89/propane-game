@@ -48,15 +48,10 @@ public partial class PlayerRange : Node3D
         }
 
         var scenario = DevArgs.Get("scenario") ?? "stances";
-        var director = new CaptureDirector { QuitAfter = DevArgs.GetFloat("quit", scenario == "grip" ? 15.2f : 10f) };
+        var director = new CaptureDirector { QuitAfter = DevArgs.GetFloat("quit", scenario == "grip" ? (DevArgs.Get("grip-sweep") != null ? 39.2f : 15.2f) : 10f) };
+        GripProbe? grip = null;
         if (DevArgs.Get("grip-metrics") != null || DevArgs.Get("assert-grip") != null)
-        {
-            var bones = player.FindChildren("*", "Skeleton3D", owned: false).OfType<Skeleton3D>()
-                .Single(s => s.FindBone("hand_l") >= 0);
-            var grip = new GripProbe { Player = player };
-            bones.AddChild(grip);
-            director.At(director.QuitAfter - 0.1f, grip.Finish);
-        }
+            grip = GripProbe.Attach(player, scenario == "grip");
         switch (scenario)
         {
             case "creep":
@@ -103,6 +98,48 @@ public partial class PlayerRange : Node3D
                     director.ShotAt(t, label);
                 }
 
+                if (DevArgs.Get("grip-sweep") != null)
+                {
+                    // Extend the same inputs through pitch changes in every hold and firing at both limits.
+                    director.At(15.2f, () => player.Ammo = new AmmoState { Magazine = 30, Reserve = 90 });
+                    script.Hold(15.2f, 17.8f, new PlayerIntent { Aim = true });
+                    script.Hold(16, 16.4f, new PlayerIntent { FireHeld = true });
+                    script.Hold(17, 17.4f, new PlayerIntent { FireHeld = true });
+                    script.Hold(20, 23, new PlayerIntent { Move = Vector2.Down });
+                    script.Hold(23, 26, new PlayerIntent { Move = Vector2.Down, Sprint = true });
+                    director.At(26, () => player.Ammo = new AmmoState { Magazine = 30, Reserve = 90 });
+                    script.Hold(26, 28.9f, new PlayerIntent { FireHeld = true });
+                    script.Hold(29, 32, new PlayerIntent { Move = Vector2.Down, Sprint = true });
+                    script.Reload(29.5f);
+                    foreach (var start in new[] { 15.7f, 18f, 20.5f, 23.5f, 26.5f })
+                    {
+                        director.At(start, () => player.CameraRig.SetOrientation(0, -75));
+                        director.At(start + 1, () => player.CameraRig.SetOrientation(0, 45));
+                    }
+                    director.At(29, () => player.CameraRig.SetOrientation(0, -10));
+                    director.At(33.2f, () =>
+                    {
+                        player.CameraRig.SetOrientation(0, -75);
+                        player.Ammo = new AmmoState { Magazine = 0, Reserve = 90 };
+                    });
+                    script.Reload(33.5f);
+                    director.At(36.2f, () =>
+                    {
+                        player.CameraRig.SetOrientation(0, 45);
+                        player.Ammo = new AmmoState { Magazine = 5, Reserve = 90 };
+                    });
+                    script.Reload(36.5f);
+                    foreach (var (t, label) in new (float, string)[]
+                    {
+                        (16.04f, "aim_down_fire"), (17.04f, "aim_up_fire"),
+                        (18.6f, "carry_down"), (19.6f, "carry_up"), (21.1f, "run_down"), (22.1f, "run_up"),
+                        (24.1f, "sprint_down"), (25.1f, "sprint_up"), (27.1f, "ready_down_fire"), (28.1f, "ready_up_fire"),
+                        (30.3f, "sprint_reload"), (31.8f, "sprint_return"), (34.5f, "reload_down"), (37.3f, "reload_up"),
+                    })
+                    {
+                        director.ShotAt(t, label);
+                    }
+                }
                 break;
             case "stances":
                 AddTank(new Vector3(1.5f, 0, -9f));
@@ -182,6 +219,8 @@ public partial class PlayerRange : Node3D
                 }
                 break;
         }
+        // Scenarios such as creep set their own duration; finish diagnostics against that final duration.
+        if (grip != null) director.At(director.QuitAfter - 0.1f, grip.Finish);
         // Ready sorts the complete timeline, including diagnostics and pitch changes.
         AddChild(director);
     }

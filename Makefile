@@ -38,6 +38,8 @@ check: lint ## Run lint, then the tests
 
 test: build ## Run the headless regression tests (as CI does)
 	"$(GODOT)" --headless --path . res://scenes/dev/movement_tests.tscn
+	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/player_range.tscn -- --scenario=grip --grip-sweep --assert-grip
+	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/player_range.tscn -- --scenario=ragdoll --assert-grip
 	"$(GODOT)" --headless --path . res://scenes/dev/generator_tests.tscn -- --seeds=100
 	"$(GODOT)" --headless --path . res://scenes/dev/platform_tests.tscn
 
