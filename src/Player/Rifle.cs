@@ -200,13 +200,8 @@ public partial class Rifle : Node3D
                 magazineDropped = false;
             }
             reloadTime = reload * ClipLength(reloadClip!);
-            Pose(reloadClip!, reloadTime);
-            // The clip swaps magazines a hand's length below the well; the mannequin's shorter reach carries the
-            // fresh one from nearer in. (The old one drops as a body of its own, so its fall is not shown.)
-            var rest = skeleton.GetBoneRest(magazineBone).Origin;
-            skeleton.SetBonePosePosition(magazineBone, rest + (skeleton.GetBonePosePosition(magazineBone) - rest) * Tuning.Current.RifleMagazineTravel);
-            var magazine = MagazineLocal();
-            MagazinePose = magazine;
+            PreviewReloadContact(reload);
+            var magazine = MagazinePose;
             if (starting)
             {
                 lastMagazinePosition = GlobalTransform * magazine.Origin;
@@ -218,7 +213,6 @@ public partial class Rifle : Node3D
             }
             magazineHidden = magazineDropped && reloadTime < FreshMagazineTime;
             lastMagazinePosition = GlobalTransform * magazine.Origin;
-            LeftHandLocal = ReloadHand(reloadClip == "ReloadEmpty", reloadTime, magazine * MagazineGrip);
         }
         else
         {
@@ -247,6 +241,28 @@ public partial class Rifle : Node3D
         {
             skeleton.SetBonePoseScale(magazineBone, Vector3.One * 0.0001f);
         }
+    }
+
+    /// <summary>Sample presentation contacts without spawning a magazine or advancing the rifle's state.
+    /// The rig can retry a bounded reload phase on its curved clearance path before committing Animate.</summary>
+    public void PreviewReloadContact(float progress)
+    {
+        if (progress <= 0)
+        {
+            LeftHandLocal = ForegripLocal.Origin;
+            LeftGripBasis = Basis.Identity;
+            MagazineHold = BoltHold = 0;
+            SupportHold = 1;
+            return;
+        }
+        var name = reloadClip ?? (boltLocked ? "ReloadEmpty" : "Reload");
+        var time = progress * ClipLength(name);
+        Pose(name, time);
+        // Keep this identical for trial and committed poses: contacts follow the visible magazine.
+        var rest = skeleton.GetBoneRest(magazineBone).Origin;
+        skeleton.SetBonePosePosition(magazineBone, rest + (skeleton.GetBonePosePosition(magazineBone) - rest) * Tuning.Current.RifleMagazineTravel);
+        MagazinePose = MagazineLocal();
+        LeftHandLocal = ReloadHand(name == "ReloadEmpty", time, MagazinePose * MagazineGrip);
     }
 
     /// <summary>

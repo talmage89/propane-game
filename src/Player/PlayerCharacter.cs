@@ -57,8 +57,13 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
     public PlayerState ResolvedState { get; private set; }
 
     private static StateTuning ResolverTuning(Tuning t) => new(t.RunSpeed, t.SprintSpeed, t.CreepSpeed,
-        t.CoyoteTime, t.JumpBufferTime, t.ReadyHoldTime, t.SprintForwardThreshold);
+        t.CoyoteTime, t.JumpBufferTime, t.ReadyHoldTime, t.SprintForwardThreshold,
+        t.MeleeWindup, t.MeleeActive, t.MeleeRecovery, t.MeleeCooldown, t.MeleeLungeSpeed);
 
+    private readonly MeleeContact meleeContact = new();
+    private readonly SphereShape3D meleeShape = new();
+    private uint meleeSwing;
+    private Vector3 meleeDirection;
     private float facingYaw;
     private float aimAmount;
     private float sprintAmount;
@@ -135,13 +140,18 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
     /// <summary>The player fired (this game's player only).</summary>
     public event Action<ShotReport>? Fired;
 
-    /// <summary>A blast threw the player: where they stood, and the launch velocity and spin of the ragdoll.</summary>
+    public event Action<uint, Vector3>? MeleeStarted;
+    public event Action<MeleeHit>? MeleeHit;
+    public float MeleeProgress => IsRemote ? remoteState.Melee : ResolvedState.MeleeProgress;
+    public bool CanMelee => state == State.Active && IsOnFloor() && resolver.CanMelee;
+
+    /// <summary>A blast or melee strike threw the player: where they stood, and the ragdoll's launch velocity/spin.</summary>
     public event Action<Vector3, Vector3, Vector3>? Ragdolled;
 
     /// <summary>The ragdoll settled and the get-up began: the standing position and facing it gets up to.</summary>
     public event Action<Vector3, float>? GotUp;
 
-    /// <summary>The player walked into a loose body and pushed it.</summary>
+    /// <summary>The player pushed a loose body by walking into it or striking it.</summary>
     public event Action<RigidBody3D>? PushedBody;
 
     /// <summary>Replaces keyboard and mouse, for scripted tests.</summary>
@@ -320,15 +330,24 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         var lifecycle = state == State.Active ? PlayerLifecycle.Active
             : state == State.GettingUp ? PlayerLifecycle.GettingUp : PlayerLifecycle.Ragdoll;
         ResolvedState = resolver.Resolve(new StateIntent(intent.Move.X, intent.Move.Y, intent.Sprint,
-                intent.Aim, intent.JumpPressed, intent.FirePressed || (tuning.FullAuto && intent.FireHeld)),
+                intent.Aim, intent.JumpPressed, intent.FirePressed || (tuning.FullAuto && intent.FireHeld), intent.MeleePressed),
             new StatePhysics(lifecycle, IsOnFloor(), Ammo?.Reloading ?? false, staggerTimer > 0,
                 fireCooldown <= 0 && (Ammo == null || Ammo.Magazine > 0)), ResolverTuning(tuning), dt);
 
         switch (state)
         {
             case State.Active:
+                if (ResolvedState.MeleeStarted)
+                {
+                    Ammo?.CancelReload();
+                    meleeContact.Begin();
+                    meleeSwing++;
+                    meleeDirection = Forward(Mathf.DegToRad(CameraRig.Yaw));
+                    MeleeStarted?.Invoke(meleeSwing, meleeDirection);
+                }
                 UpdateAim();
                 UpdateMovement(dt);
+                if (ResolvedState.MeleePhase == MeleePhase.Active) UpdateMeleeContact();
                 UpdateShooting(dt);
                 break;
             case State.Ragdoll:
@@ -360,9 +379,10 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         rig.AimAmount = aimAmount;
         rig.SprintAmount = sprintAmount;
         rig.ReadyAmount = readyAmount;
-        rig.Reload = IsRemote ? remoteState.Reload : Ammo?.ReloadProgress ?? 0f;
-        rig.AdvanceReload(dt, IsRemote);
-        rifle.Animate(dt, rig.Reload);
+        rig.Reload = ResolvedState.Weapon == WeaponAction.Melee ? 0 : IsRemote ? remoteState.Reload : Ammo?.ReloadProgress ?? 0f;
+        rig.MeleeProgress = IsRemote ? remoteState.Melee : ResolvedState.MeleeProgress;
+        rig.Melee = ResolvedState.Weapon == WeaponAction.Melee;
+        rig.AdvanceReload(dt, IsRemote, rig.Melee);
         if (IsRemote)
         {
             return;
@@ -407,6 +427,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         var speed = resolved.TargetSpeed;
         var control = staggerTimer > 0 ? tuning.StaggerMoveControl : 1f;
         staggerTimer -= dt;
+        if (resolved.Weapon == WeaponAction.Melee) wish = meleeDirection * resolved.MoveY;
         var target = wish * speed;
         var velocity = Velocity;
         var planar = new Vector3(velocity.X, 0, velocity.Z);
@@ -459,7 +480,11 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         var tuning = Tuning.Current;
         var aimYaw = Mathf.DegToRad(CameraRig.Yaw);
         float targetYaw;
-        if (ready)
+        if (ResolvedState.Weapon == WeaponAction.Melee)
+        {
+            targetYaw = Mathf.Atan2(-meleeDirection.X, -meleeDirection.Z);
+        }
+        else if (ready)
         {
             if (wish.LengthSquared() > tuning.FacingInputThreshold * tuning.FacingInputThreshold)
             {
@@ -518,6 +543,11 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
 
     private void UpdateAim()
     {
+        if (ResolvedState.Weapon == WeaponAction.Melee)
+        {
+            aimTarget = GlobalPosition + Vector3.Up * Tuning.Current.MeleeContactHeight + meleeDirection * Tuning.Current.ShotRange;
+            return;
+        }
         var camera = CameraRig.Camera;
         var origin = camera.GlobalPosition;
         var forward = -camera.GlobalBasis.Z;
@@ -537,7 +567,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
     private void PrepareCombat(float dt)
     {
         fireCooldown -= dt;
-        if (state == State.Active && Ammo != null &&
+        if (state == State.Active && ResolvedState.Weapon != WeaponAction.Melee && Ammo != null &&
             (intent.ReloadPressed || (intent.FirePressed && Ammo.Magazine <= 0)))
         {
             Ammo.StartReload();
@@ -664,6 +694,64 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         return (basis * new Vector3(r * Mathf.Cos(phi), r * Mathf.Sin(phi), z)).Normalized();
     }
 
+    // ------------------------------------------------------------------ Melee
+
+    private void UpdateMeleeContact()
+    {
+        var t = Tuning.Current;
+        var origin = GlobalPosition + Vector3.Up * t.MeleeContactHeight;
+        meleeShape.Radius = t.MeleeRange;
+        var query = new PhysicsShapeQueryParameters3D
+        {
+            Shape = meleeShape,
+            Transform = new Transform3D(Basis.Identity, origin),
+            CollisionMask = Layers.Pushable | Layers.Player | Layers.Ragdoll,
+            Exclude = shotExclude.Duplicate(),
+        };
+        var space = GetWorld3D().DirectSpaceState;
+        foreach (var hit in Blast.QueryAll(space, query))
+        {
+            var collider = hit["collider"].As<GodotObject>();
+            var victim = Owning(collider);
+            var body = collider as RigidBody3D;
+            if (victim == this || victim == null && (body == null || body.Freeze && body is not PropaneTank { Gathering: true })) continue;
+            var target = victim?.BlastTargetPosition ?? (body is PropaneTank tank
+                ? tank.GlobalTransform * PropaneTank.LocalCenter : body!.GlobalPosition);
+            var obstruction = space.IntersectRay(PhysicsRayQueryParameters3D.Create(origin, target, Layers.ShotMask, shotExclude));
+            if (obstruction.Count > 0)
+            {
+                var blocker = obstruction["collider"].As<GodotObject>();
+                if (victim != null ? Owning(blocker) != victim : blocker != collider) continue;
+                // Reach the struck surface, so a nearby bumper can be shoved even when the car's center is far.
+                target = obstruction["position"].AsVector3();
+            }
+            if (!MeleeContact.InArc(target - origin, meleeDirection, t.MeleeRange, t.MeleeHalfAngleDegrees)) continue;
+            if (!meleeContact.TryHit((victim as GodotObject ?? collider).GetInstanceId())) continue;
+            if (victim != null)
+            {
+                if (!victim.IsRemote) victim.ReceiveMelee(meleeDirection);
+            }
+            else
+            {
+                if (body is PropaneTank pushedTank) pushedTank.Disturb();
+                body!.ApplyCentralImpulse(meleeDirection * t.MeleePropImpulse);
+                PushedBody?.Invoke(body);
+            }
+            MeleeHit?.Invoke(new MeleeHit(meleeSwing, victim ?? collider));
+        }
+    }
+
+    /// <summary>The victim owns knockdown and the ordinary Ragdolled event/drop. Already down bodies receive a push,
+    /// never a second drop from the same knockdown. Remote copies wait for their owner's Ragdoll event.</summary>
+    public void ReceiveMelee(Vector3 direction)
+    {
+        if (IsRemote || state is State.Capturing or State.GettingUp) return;
+        var t = Tuning.Current;
+        var launch = direction * t.MeleeLaunchSpeed + Vector3.Up * t.MeleeLaunchLift;
+        if (state == State.Ragdoll) { ragdoll.Push(launch); return; }
+        BeginRagdoll(Velocity + launch, Vector3.Up.Cross(direction) * t.MeleeSpin);
+    }
+
     // ------------------------------------------------------------------ Blasts and ragdoll
 
     public void ReceiveBlast(BlastInfo blast)
@@ -712,7 +800,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         state = State.Ragdoll;
         // A blast can arrive between our ticks. Drop control/presentation immediately so neither snapshots nor
         // the returning rig inherit an aimed or sprinting pose from before the throw.
-        resolver.Reset();
+        resolver.Interrupt();
         ResolvedState = new PlayerState(PlayerLifecycle.Ragdoll, PlayerSupport.Airborne, PlayerGait.Default,
             WeaponAction.Carry, 0, 0, 0, intent.Aim, false, false);
         aimAmount = sprintAmount = readyAmount = 0;
@@ -843,6 +931,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         Gait = ResolvedState.Gait,
         Support = ResolvedState.Support,
         Weapon = ResolvedState.Weapon,
+        Melee = ResolvedState.MeleeProgress,
         State = state switch
         {
             State.Active => PlayerNetState.Mode.Active,

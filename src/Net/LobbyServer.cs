@@ -65,6 +65,7 @@ public partial class LobbyServer : Node
         public readonly Dictionary<int, int> Slots = new();
         public readonly Dictionary<int, (int Gained, int LostToHits, int LostToThrows)> Stats = new();
         public readonly HashSet<int> Loaded = new();
+        public readonly Dictionary<int, MeleeValidation> Melee = new();
         public int HostId;
         public double PhaseEnds;
         public double NextClock;
@@ -640,6 +641,21 @@ public partial class LobbyServer : Node
             case BodyRestMessage rest:
                 match.Tanks.ValidateBodies(new[] { rest.Id });
                 if (!match.Tanks.Update(client.Id, new BodyState(rest.Id, rest.Transform, Vector3.Zero, Vector3.Zero, rest.Epoch, rest.Sequence), rest: true)) { return; }
+                break;
+            case MeleeStartMessage strike:
+                if (lobby.Phase != LobbyPhase.Playing || clock.Seconds >= match.PhaseEnds) return;
+                if (!match.Melee.TryGetValue(client.Id, out var melee)) match.Melee[client.Id] = melee = new MeleeValidation();
+                if (!melee.Start(strike, clock.Seconds, match.Tuning)) return;
+                break;
+            case MeleeContactMessage contact:
+                if (lobby.Phase != LobbyPhase.Playing || clock.Seconds >= match.PhaseEnds ||
+                    contact.Victim != 0 && (!match.Players.Contains(contact.Victim) || contact.Victim == client.Id) ||
+                    contact.PropIndex >= 0 && !match.LooseProps.Contains(contact.PropIndex))
+                {
+                    return;
+                }
+
+                if (!match.Melee.TryGetValue(client.Id, out var swing) || !swing.Contact(contact, clock.Seconds, match.Tuning)) return;
                 break;
             case ShotMessage shot:
                 if (shot.Victim != 0 && (!match.Players.Contains(shot.Victim) || shot.Victim == client.Id) ||

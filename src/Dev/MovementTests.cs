@@ -45,6 +45,7 @@ public partial class MovementTests : Node
             ResolverTests();
             padIntentMode = false;
             InputTests();
+            MeleeInputTests();
             SnapshotTests();
             PauseTests();
             await FacadeTests().ConfigureAwait(true);
@@ -270,6 +271,34 @@ public partial class MovementTests : Node
         gameplayEnabled = false;
         intent = device.Read();
         Check(intent.Move == Vector2.Zero && !intent.FireHeld && intent.LookStick == Vector2.Zero, "menus suppress gameplay");
+    }
+
+    private void MeleeInputTests()
+    {
+        gameplayEnabled = true;
+        device.Reset();
+        foreach (var e in new InputEvent[]
+        {
+            new InputEventKey { PhysicalKeycode = Key.F, Pressed = true, ShiftPressed = true },
+            new InputEventMouseButton { ButtonIndex = MouseButton.Xbutton1, Pressed = true },
+            new InputEventMouseButton { ButtonIndex = MouseButton.Xbutton2, Pressed = true },
+            new InputEventJoypadButton { ButtonIndex = JoyButton.RightStick, Pressed = true },
+        })
+        {
+            Send(e);
+            Check(device.Read().MeleePressed && !device.Read().MeleePressed, $"melee press/consume {e.GetClass()}");
+            device.Reset();
+            Check(!device.Read().MeleePressed, "held melee repressed after reset");
+            var released = (InputEvent)e.Duplicate();
+            switch (released)
+            {
+                case InputEventKey key: key.Pressed = false; break;
+                case InputEventMouseButton mouse: mouse.Pressed = false; break;
+                case InputEventJoypadButton pad: pad.Pressed = false; break;
+            }
+            Send(released);
+            device.Read();
+        }
     }
 
     private sealed class TestInput : IPlayerInputSource

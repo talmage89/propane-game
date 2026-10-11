@@ -25,6 +25,8 @@ public sealed record PickupMessage(int Index, int Player);
 public sealed record PlayerLeftMessage(int Player, int Host);
 public sealed record PongMessage(double Sent, double ServerTime);
 public sealed record PlayerStateMessage(double Time, PlayerNetState State);
+public sealed record MeleeStartMessage(uint Swing, Vector3 Direction);
+public sealed record MeleeContactMessage(uint Swing, int Victim, int PropIndex);
 public sealed record ShotMessage(Vector3 End, Vector3 Normal, Vector3 Direction, byte Impact, int Victim, int PropIndex);
 public sealed record PunctureMessage(uint Id, Transform3D Transform, Vector3 Linear, Vector3 Angular, Vector3 Hole, Vector3 Normal, float Swirl, uint Epoch = 1, uint Request = 1, uint Cause = 0);
 public sealed record ExplodeMessage(uint Id, Vector3 Center, uint Epoch = 1, uint Request = 1, uint Cause = 0);
@@ -91,6 +93,8 @@ public static class MessageCodec
             Msg.Authority => ReadAuthority(r),
             Msg.PlayerState => ReadPlayerState(r),
             Msg.Shot => ReadShot(r),
+            Msg.MeleeStart => new MeleeStartMessage(Id(r.UInt()), HorizontalNormal(r)),
+            Msg.MeleeContact => ReadMeleeContact(r),
             Msg.Puncture => ReadPuncture(r),
             Msg.Explode => new ExplodeMessage(Id(r.UInt()), Vector(r), Id(r.UInt()), Id(r.UInt()), r.UInt()),
             Msg.Claim => ReadClaim(r),
@@ -163,9 +167,11 @@ public static class MessageCodec
                 w.Double(p.Time).Vec3(s.Position).Vec3(s.Velocity).Float(s.Yaw).Vec3(s.AimTarget)
                     .Byte(ToByte(s.Aim)).Byte(ToByte(s.Sprint)).Byte(ToByte(s.Ready)).Byte(ToByte(s.Reload))
                     .Byte((byte)((s.Grounded ? 1 : 0) | ((byte)s.State << 1)))
-                    .Vec3(s.PelvisPosition).Vec3(s.PelvisVelocity).Byte(s.Staggers)
+                    .Vec3(s.PelvisPosition).Vec3(s.PelvisVelocity).Byte(s.Staggers).Byte(ToByte(s.Melee))
                     .Byte((byte)s.Gait).Byte((byte)s.Support).Byte((byte)s.Weapon);
                 break;
+            case MeleeStartMessage p: w.UInt(p.Swing).Vec3(p.Direction); break;
+            case MeleeContactMessage p: w.UInt(p.Swing).Int(p.Victim).Int(p.PropIndex); break;
             case ShotMessage p: w.Vec3(p.End).Vec3(p.Normal).Vec3(p.Direction).Byte(p.Impact).Int(p.Victim).Int(p.PropIndex); break;
             case PunctureMessage p:
                 w.UInt(p.Id).Transform(p.Transform).Vec3(p.Linear).Vec3(p.Angular).Vec3(p.Hole).Vec3(p.Normal).Float(p.Swirl).UInt(p.Epoch).UInt(p.Request).UInt(p.Cause); break;
@@ -263,11 +269,26 @@ public static class MessageCodec
         };
         var flags = Range(r.Byte(), 0, 5);
         state.Grounded = (flags & 1) != 0; state.State = (PlayerNetState.Mode)(flags >> 1);
-        state.PelvisPosition = Vector(r); state.PelvisVelocity = Vector(r); state.Staggers = r.Byte();
+        state.PelvisPosition = Vector(r); state.PelvisVelocity = Vector(r); state.Staggers = r.Byte(); state.Melee = r.Byte() / 255f;
         state.Gait = (PlayerGait)Range(r.Byte(), (int)PlayerGait.Default, (int)PlayerGait.Creep);
         state.Support = (PlayerSupport)Range(r.Byte(), (int)PlayerSupport.Grounded, (int)PlayerSupport.Landing);
         state.Weapon = (WeaponAction)Range(r.Byte(), (int)WeaponAction.Carry, (int)WeaponAction.Melee);
         return new PlayerStateMessage(time, state);
+    }
+
+    private static Vector3 HorizontalNormal(NetReader r)
+    {
+        var direction = Normal(r);
+        if (Mathf.Abs(direction.Y) > 0.001f) throw new InvalidDataException("nonhorizontal melee direction");
+        return direction;
+    }
+
+    private static MeleeContactMessage ReadMeleeContact(NetReader r)
+    {
+        var contact = new MeleeContactMessage(Id(r.UInt()), Nonnegative(r.Int()), Range(r.Int(), -1, int.MaxValue));
+        if (contact.Victim == 0 ? contact.PropIndex < 0 : contact.PropIndex != -1)
+            throw new InvalidDataException("melee contact needs exactly one target");
+        return contact;
     }
 
     private static ShotMessage ReadShot(NetReader r)

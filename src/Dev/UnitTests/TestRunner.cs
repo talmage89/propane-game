@@ -29,6 +29,7 @@ public partial class TestRunner : Node
             LocomotionTests.Register(this);
             GatherTests.Register(this);
             RecoilTests.Register(this);
+            MeleeTests.Register(this);
         }
         catch (Exception e)
         {

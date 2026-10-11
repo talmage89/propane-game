@@ -17,6 +17,7 @@ public static class InputSetup
     public const string Jump = "jump";
     public const string Fire = "fire";
     public const string Aim = "aim";
+    public const string Melee = "melee";
     public const string NewSuburb = "new_suburb";
     /// <summary>Reload in a match, where R does not make a new suburb.</summary>
     public const string Reload = "reload";
@@ -40,6 +41,8 @@ public static class InputSetup
         Bind(ToggleFullscreen, Key(Godot.Key.F11), new InputEventKey { PhysicalKeycode = Godot.Key.Enter, AltPressed = true });
         Bind(Fire, new InputEventMouseButton { ButtonIndex = MouseButton.Left }, Axis(JoyAxis.TriggerRight, 1));
         Bind(Aim, new InputEventMouseButton { ButtonIndex = MouseButton.Right }, Axis(JoyAxis.TriggerLeft, 1));
+        Bind(Melee, Key(Godot.Key.F), new InputEventMouseButton { ButtonIndex = MouseButton.Xbutton1 },
+            new InputEventMouseButton { ButtonIndex = MouseButton.Xbutton2 }, Button(JoyButton.RightStick));
         Bind(LookLeft, Axis(JoyAxis.RightX, -1));
         Bind(LookRight, Axis(JoyAxis.RightX, 1));
         Bind(LookUp, Axis(JoyAxis.RightY, -1));

@@ -17,6 +17,7 @@ public struct PlayerIntent
     /// <summary>The fire button is down (for automatic fire).</summary>
     public bool FireHeld;
     public bool ReloadPressed;
+    public bool MeleePressed;
     /// <summary>Mouse displacement in screen pixels, consumed once per tick.</summary>
     public Vector2 Look;
     /// <summary>Stick direction after deadzone, before response curve; a rate, not displacement.</summary>
@@ -41,6 +42,8 @@ public sealed class DeviceInput : IPlayerInputSource
     private bool jump;
     private bool fire;
     private bool reload;
+    private bool melee;
+    private bool meleeDown;
     private bool jumpDown;
     private bool fireDown;
     private bool reloadDown;
@@ -49,7 +52,7 @@ public sealed class DeviceInput : IPlayerInputSource
     public void Reset()
     {
         look = Vector2.Zero;
-        jump = fire = reload = false;
+        jump = fire = reload = melee = false;
         SynchronizeHeldActions();
     }
 
@@ -58,6 +61,7 @@ public sealed class DeviceInput : IPlayerInputSource
         jumpDown = Input.IsActionPressed(InputSetup.Jump);
         fireDown = Input.IsActionPressed(InputSetup.Fire);
         reloadDown = Input.IsActionPressed(InputSetup.Reload);
+        meleeDown = Input.IsActionPressed(InputSetup.Melee);
     }
 
     public void Accumulate(InputEvent @event)
@@ -71,6 +75,7 @@ public sealed class DeviceInput : IPlayerInputSource
         AccumulatePress(@event, InputSetup.Jump, enabled, ref jumpDown, ref jump);
         AccumulatePress(@event, InputSetup.Fire, enabled, ref fireDown, ref fire);
         AccumulatePress(@event, InputSetup.Reload, enabled, ref reloadDown, ref reload);
+        AccumulatePress(@event, InputSetup.Melee, enabled, ref meleeDown, ref melee);
     }
 
     private static void AccumulatePress(InputEvent e, string action, bool enabled, ref bool down, ref bool pressed)
@@ -95,6 +100,7 @@ public sealed class DeviceInput : IPlayerInputSource
             FirePressed = captured && fire,
             FireHeld = captured && Input.IsActionPressed(InputSetup.Fire),
             ReloadPressed = captured && reload,
+            MeleePressed = captured && melee,
             Look = captured ? look : Vector2.Zero,
             LookStick = captured ? Input.GetVector(InputSetup.LookLeft, InputSetup.LookRight,
                 InputSetup.LookUp, InputSetup.LookDown, Tuning.Current.StickDeadzone) : Vector2.Zero,
@@ -103,6 +109,7 @@ public sealed class DeviceInput : IPlayerInputSource
         jump = false;
         fire = false;
         reload = false;
+        melee = false;
         // UI can consume a release before _UnhandledInput sees it. Resynchronize at the physics sample so
         // returning to gameplay does not lose the next press; pending edges above are still consumed once.
         SynchronizeHeldActions();

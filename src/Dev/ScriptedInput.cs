@@ -8,18 +8,20 @@ namespace Propane.Dev;
 public sealed class ScriptedInput : IPlayerInputSource
 {
     private readonly List<(float Start, float End, PlayerIntent Intent)> holds = new();
-    private readonly List<(float Time, bool Fire, bool Jump, bool Reload)> presses = new();
+    private readonly List<(float Time, bool Fire, bool Jump, bool Reload, bool Melee)> presses = new();
     private readonly List<(float Start, float End, Vector2 PerSecond)> looks = new();
     private float time;
     private int nextPress;
 
     public void Hold(float start, float end, PlayerIntent intent) => holds.Add((start, end, intent));
 
-    public void Fire(float time) => presses.Add((time, true, false, false));
+    public void Fire(float time) => presses.Add((time, true, false, false, false));
 
-    public void Jump(float time) => presses.Add((time, false, true, false));
+    public void Jump(float time) => presses.Add((time, false, true, false, false));
 
-    public void Reload(float time) => presses.Add((time, false, false, true));
+    public void Reload(float time) => presses.Add((time, false, false, true, false));
+
+    public void Melee(float time) => presses.Add((time, false, false, false, true));
 
     /// <summary>Mouse movement in pixels per second over an interval.</summary>
     public void Look(float start, float end, Vector2 pixelsPerSecond) => looks.Add((start, end, pixelsPerSecond));
@@ -57,6 +59,7 @@ public sealed class ScriptedInput : IPlayerInputSource
             intent.FirePressed |= presses[nextPress].Fire;
             intent.JumpPressed |= presses[nextPress].Jump;
             intent.ReloadPressed |= presses[nextPress].Reload;
+            intent.MeleePressed |= presses[nextPress].Melee;
             nextPress++;
         }
         LastRead = intent;

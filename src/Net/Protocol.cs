@@ -56,6 +56,8 @@ public enum Msg : byte
     GetUp,
     TuningSet,
     Gather,
+    MeleeStart,
+    MeleeContact,
 }
 
 public static class Protocol
@@ -71,7 +73,7 @@ public static class Protocol
 
     public const int MaxNameLength = 16;
 
-    public static bool IsRelay(Msg type) => type is >= Msg.PlayerState and <= Msg.Gather;
+    public static bool IsRelay(Msg type) => type is >= Msg.PlayerState and <= Msg.MeleeContact;
 
     public static bool IsMatch(Msg type) => IsRelay(type) || type is Msg.Loaded or Msg.ClaimPickup or Msg.MatchStart or
         Msg.Countdown or Msg.MatchGo or Msg.Clock or Msg.Score or Msg.PickupTaken or Msg.PickupRespawn or Msg.MatchEnd or Msg.PlayerLeft or Msg.DropRefused or Msg.Authority;
