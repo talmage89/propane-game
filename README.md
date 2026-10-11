@@ -208,6 +208,12 @@ $GODOT res://scenes/dev/soak.tscn
 
 # Tank close-ups (scenarios: full, vent, blast, look), the character and rifle rig, the world kit, map overviews.
 $GODOT --fixed-fps 60 res://scenes/dev/tank_range.tscn -- --capture-dir=/tmp/t --scenario=blast
+# Gathering: separate close groups, isolated single, frozen vent, shielded drop, house/player clearance,
+# shot/bump/blast interruption and settled-pile stability. These and the following probes run in make test.
+$GODOT --fixed-fps 60 res://scenes/dev/gather_range.tscn -- --capture-dir=/tmp/gather
+$GODOT --headless --fixed-fps 60 res://scenes/dev/gather_range.tscn -- --scenario=grant-races
+# A real single-player rifle blast knocks intact tanks loose, then they gather; seed 23 fixes the clear road fixture.
+$GODOT --fixed-fps 60 res://scenes/dev/game_test.tscn -- --scenario=gather --tune.FixedSeed=23 --capture-dir=/tmp/gather-game
 # Formation close-up and stability: Rows, Square, Triangular, Cluster; --count defaults to 14.
 # --awake tests contact settling; --chain=fresh requires intact neighbors in range to puncture and keep venting.
 # --chain=primed first punctures each tank, then requires venting neighbors in range to detonate after the fuse.
