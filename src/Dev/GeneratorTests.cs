@@ -194,20 +194,25 @@ public partial class GeneratorTests : Node
             var spacing = new Vector3(tuning.PileSpacing, tuning.PileLayerHeight, tuning.PileDepthSpacing);
             foreach (var n in new[] { 0, 1, 2, 4, 5, 6, 9, 10, 14, 16, 20, 30, 64, 128 })
             {
-                var transforms = World.Plan.PileBuilder.Build(formation, n, spacing);
+                var transforms = World.Plan.PileBuilder.Build(formation, n, spacing, tuning.PileUprightLayerHeight);
                 Check(n, "formation count", transforms.Count == n);
-                Check(n, "formation deterministic", transforms.SequenceEqual(World.Plan.PileBuilder.Build(formation, n, spacing)));
+                Check(n, "formation deterministic", transforms.SequenceEqual(World.Plan.PileBuilder.Build(formation, n, spacing, tuning.PileUprightLayerHeight)));
                 CheckChainConnections(n, transforms.Select(t => t * PileBuilder.LocalCenter).ToArray());
+                var upright = formation is PileFormation.Square or PileFormation.Triangular;
+                var rise = upright ? tuning.PileUprightLayerHeight : spacing.Y;
+                var baseHeight = upright ? 0 : PileBuilder.Radius;
                 if (formation == PileFormation.Square && n >= 5 || formation == PileFormation.Triangular && n >= 4)
-                    Check(n, "pyramid has an upper tier", transforms.Any(t => t.Origin.Y > PileBuilder.Radius + 0.001f), $"{formation} {n}");
+                    Check(n, "pyramid has an upper tier", transforms.Any(t => t.Origin.Y > 0.001f), $"{formation} {n}");
                 foreach (var t in transforms)
                 {
                     Check(n, "formation finite", t.Origin.IsFinite() && t.Basis.X.IsFinite() && t.Origin.Y >= 0);
                     Check(n, "formation above ground", geometry.Bottom(t) >= -0.001f);
-                    if (formation != PileFormation.Cluster && t.Origin.Y > World.Plan.PileBuilder.Radius + 0.001f)
+                    Check(n, "formation orientation", upright || formation == PileFormation.Cluster
+                        ? t.Basis.Y.IsEqualApprox(Vector3.Up) : t.Basis.Y.IsEqualApprox(Vector3.Back), formation.ToString());
+                    if (formation != PileFormation.Cluster && t.Origin.Y > baseHeight + 0.001f)
                     {
                         Check(n, "formation supported by two tanks", transforms.Count(b =>
-                            Mathf.Abs(t.Origin.Y - b.Origin.Y - spacing.Y) < 0.0001f && geometry.Overlaps(t, b, -0.005f)) >= 2, $"{formation} {t.Origin}");
+                            Mathf.Abs(t.Origin.Y - b.Origin.Y - rise) < 0.0001f && geometry.Overlaps(t, b, -0.005f)) >= 2, $"{formation} {t.Origin}");
                     }
                 }
                 for (var i = 0; i < transforms.Count; i++)

@@ -131,9 +131,11 @@ can edit. In a downloaded build, Save writes the player's own `tuning.tres` in t
 `~/.local/share/godot/app_userdata/Propane` on Linux), which then takes precedence. **Defaults** restores the values
 in code. `FixedSeed` (World group) replays one suburb; 0 picks a random one.
 
-Tank piles use weighted formations in both modes: side-laid rows, square tiers, triangular tiers, and upright tight
-clusters. The **Tank Piles** tuners control weights and spacing. Each upper tier is placed only after its supports;
+Tank piles use weighted formations in both modes: side-laid rows, upright square and triangular tiers, and upright
+tight clusters. The **Tank Piles** tuners control weights and spacing. Each upper tier is placed only after its supports;
 cramped sites use smaller whole formations. Pyramids stand on clear ground rather than moving pickup beds.
+Upright tiers span two collars below, using `PileUprightLayerHeight`; rows retain `PileLayerHeight`.
+[Upright pile trials](docs/upright-piles.md) describes the contacts and stability proof.
 Rifle hits puncture, then detonate. A blast within `ChainRadius` acts as a shot: an intact neighbor punctures and
 keeps venting and moving; an already-venting neighbor detonates after its `ChainFuseMin`/`ChainFuseMax` fuse.
 

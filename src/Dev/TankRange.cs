@@ -132,7 +132,7 @@ public partial class TankRange : Node3D
         AddChild(ground);
         var tuning = world.Tuning;
         var transforms = PileBuilder.Build(formation, (int)DevArgs.GetFloat("count", 14),
-            new Vector3(tuning.PileSpacing, tuning.PileLayerHeight, tuning.PileDepthSpacing));
+            new Vector3(tuning.PileSpacing, tuning.PileLayerHeight, tuning.PileDepthSpacing), tuning.PileUprightLayerHeight);
         foreach (var transform in transforms)
         {
             var tank = PropaneTank.Create(world);
