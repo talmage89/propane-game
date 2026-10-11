@@ -45,7 +45,7 @@ public partial class Match : Node3D
 
     private const float RevealMaxRadius = 320f;
     private const float MaterializeShare = 0.58f;
-    private const int StatesPerMessage = 20;
+    private const int StatesPerMessage = Protocol.MaxBodyStates;
     private const float TagRefresh = 1f / 30f;
 
     private sealed class Remote
@@ -88,7 +88,7 @@ public partial class Match : Node3D
     private List<Vector3> tankGroups = new();
     private double graceUntil;
     private int dropCounter;
-    private int unconfirmedDrops;
+    private readonly DropPredictions dropPredictions = new();
     private bool ammoFullShown;
     private string noticeText = "";
     private float noticeLeft;
@@ -212,7 +212,7 @@ public partial class Match : Node3D
         environment.Follow = player.CameraRig.Camera;
         player.Fired += OnFired;
         player.Ragdolled += OnRagdolled;
-        player.GotUp += (root, yaw) => Send(new NetWriter(Msg.GetUp).Vec3(root).Float(yaw));
+        player.GotUp += (root, yaw) => Send(new NetWriter(Msg.GetUp, Setup.Id).Vec3(root).Float(yaw));
         player.PushedBody += body => Claim(new[] { body });
 
         for (var i = 0; i < plan.AmmoSpots.Count; i++)
@@ -234,10 +234,10 @@ public partial class Match : Node3D
         menu.ResumeRequested += CloseMenu;
         menu.LeaveRequested += () => LeaveRequested?.Invoke();
         AddChild(menu);
-        if (OS.IsDebugBuild())
+        if (OS.IsDebugBuild() && Setup.CreatorDebug && Setup.HostId == me)
         {
-            tuningPanel = new TuningPanel { Name = "Tuning", Note = "Changes apply to everyone in the match" };
-            tuningPanel.ValueChanged += (name, value) => Send(new NetWriter(Msg.TuningSet).String(name).Bytes(GD.VarToBytes(value)));
+            tuningPanel = new TuningPanel { Name = "Tuning", Note = "Changes apply to everyone in the match", UseDeclaredRanges = true };
+            tuningPanel.ValueChanged += (name, value) => Send(new NetWriter(Msg.TuningSet, Setup.Id).String(name).Scalar(value));
             AddChild(tuningPanel);
         }
 
@@ -248,17 +248,18 @@ public partial class Match : Node3D
         Warmup.Run(this, new Vector3(0, -400f, 0));
 
         Blast.LocalBlast += OnLocalBlast;
-        Net.MatchMessage += OnMessage;
         CaptureMouse(true);
         ShowNotice("Waiting for everyone to arrive", 30f);
-        Send(new NetWriter(Msg.Loaded));
+        // Loaded is sent after the handoff: Countdown, Go or even End may already be waiting in the inbox.
+        Net.AttachMatch(Setup.Id, OnMessage);
+        Send(new NetWriter(Msg.Loaded, Setup.Id));
         GD.Print($"[match] seed {plan.Seed}: {plan.Lots.Count} lots, {plan.Tanks.Count} tanks, {pickups.Count} pickups, {Setup.Players.Count} players, host {Setup.HostId}, me {me}");
     }
 
     public override void _ExitTree()
     {
         Blast.LocalBlast -= OnLocalBlast;
-        Net.MatchMessage -= OnMessage;
+        Net.DetachMatch(Setup.Id, OnMessage);
         Tuning.EndMatch();
         RenderingServer.GlobalShaderParameterSet("reveal_radius", 100000f);
         Engine.TimeScale = 1.0;
@@ -301,6 +302,8 @@ public partial class Match : Node3D
                 {
                     endLeft = float.MaxValue;
                     Finished?.Invoke();
+                    // Finished may remove this scene immediately; its viewport and world are then unavailable.
+                    return;
                 }
                 break;
         }
@@ -457,7 +460,7 @@ public partial class Match : Node3D
     {
         // This player punctured it, so it is theirs: everyone starts the same vent from this exact state.
         Claim(new[] { tank }, force: true);
-        Send(new NetWriter(Msg.Puncture).UInt(tank.NetId).Transform(tank.GlobalTransform).Vec3(tank.LinearVelocity).Vec3(tank.AngularVelocity)
+        Send(new NetWriter(Msg.Puncture, Setup.Id).UInt(tank.NetId).Transform(tank.GlobalTransform).Vec3(tank.LinearVelocity).Vec3(tank.AngularVelocity)
             .Vec3(tank.HoleLocal).Vec3(tank.HoleNormalLocal).Float(tank.SwirlSign));
     }
 
@@ -469,7 +472,7 @@ public partial class Match : Node3D
         if (!tank.DetonatedRemotely)
         {
             // This player set it off (a shot, or a chain from one): the point is claimed with the explosion.
-            Send(new NetWriter(Msg.Explode).UInt(tank.NetId).Vec3(tank.GlobalTransform * PropaneTank.LocalCenter));
+            Send(new NetWriter(Msg.Explode, Setup.Id).UInt(tank.NetId).Vec3(tank.GlobalTransform * PropaneTank.LocalCenter));
         }
     }
 
@@ -495,7 +498,7 @@ public partial class Match : Node3D
         {
             return;
         }
-        var w = new NetWriter(Msg.Claim).UShort((ushort)ids.Count);
+        var w = new NetWriter(Msg.Claim, Setup.Id).UShort((ushort)ids.Count);
         foreach (var id in ids)
         {
             w.UInt(id);
@@ -544,12 +547,12 @@ public partial class Match : Node3D
                     break;
             }
         }
-        Send(new NetWriter(Msg.Shot).Vec3(shot.End).Vec3(shot.Normal).Vec3(shot.Direction).Byte((byte)impact).Int(victim).Int(propIndex));
+        Send(new NetWriter(Msg.Shot, Setup.Id).Vec3(shot.End).Vec3(shot.Normal).Vec3(shot.Direction).Byte((byte)impact).Int(victim).Int(propIndex));
     }
 
     private void OnRagdolled(Vector3 at, Vector3 velocity, Vector3 spin)
     {
-        Send(new NetWriter(Msg.Ragdoll).Vec3(at).Vec3(velocity).Vec3(spin));
+        Send(new NetWriter(Msg.Ragdoll, Setup.Id).Vec3(at).Vec3(velocity).Vec3(spin));
         // Thrown: the bank spills where the player stood, whoever's blast it was.
         DropTanks(Tuning.Current.RagdollDropCount, DropReason.Ragdoll, at + Vector3.Up * 0.35f, Vector3.Zero);
     }
@@ -591,16 +594,15 @@ public partial class Match : Node3D
         {
             return;
         }
-        var count = Mathf.Min(wanted, Mathf.Max(0, MyScore - unconfirmedDrops));
+        var count = Mathf.Min(wanted, Mathf.Max(0, MyScore - dropPredictions.UnconfirmedCount));
         if (count <= 0)
         {
             return;
         }
-        unconfirmedDrops += count;
         var tuning = Tuning.Current;
         var color = profiles[me].Color;
         var rng = new RandomNumberGenerator();
-        var w = new NetWriter(Msg.Drop).Byte((byte)reason).Int(count).Int(color);
+        var w = new NetWriter(Msg.Drop, Setup.Id).Byte((byte)reason).Int(count).Int(color);
         var start = rng.RandfRange(0, Mathf.Tau);
         var safeFrom = player.IsRagdolled ? player.PelvisPosition + Vector3.Up * 0.2f : player.GlobalPosition + Vector3.Up * 0.9f;
         for (var i = 0; i < count; i++)
@@ -616,6 +618,7 @@ public partial class Match : Node3D
             var spin = new Vector3(rng.RandfRange(-1, 1), rng.RandfRange(-1, 1), rng.RandfRange(-1, 1)) * 2f;
             var transform = new Transform3D(new Basis(Vector3.Up, rng.RandfRange(0, Mathf.Tau)), position);
             var id = BodySync.DropTankId(mySlot, dropCounter++);
+            dropPredictions.Add(id);
             SpawnDroppedTank(id, me, color, transform, velocity, spin);
             w.UInt(id).Transform(transform).Vec3(velocity).Vec3(spin);
         }
@@ -689,7 +692,7 @@ public partial class Match : Node3D
             }
             // It vanishes here at once; the server decides who gets the rounds if two players reach it together.
             pickup.ClaimPending = true;
-            Net.Send(new NetWriter(Msg.ClaimPickup).Int(pickup.Index));
+            Net.Send(new NetWriter(Msg.ClaimPickup, Setup.Id).Int(pickup.Index));
         }
         if (!near)
         {
@@ -703,11 +706,8 @@ public partial class Match : Node3D
 
     private void SendPlayerState(double now)
     {
-        var s = player.CaptureNetState();
-        var flags = (byte)((s.Grounded ? 1 : 0) | ((byte)s.State << 1));
-        Send(new NetWriter(Msg.PlayerState).Double(now).Vec3(s.Position).Vec3(s.Velocity).Float(s.Yaw).Vec3(s.AimTarget)
-            .Byte(ToByte(s.Aim)).Byte(ToByte(s.Sprint)).Byte(ToByte(s.Ready)).Byte(ToByte(s.Reload)).Byte(flags)
-            .Vec3(s.PelvisPosition).Vec3(s.PelvisVelocity).Byte(s.Staggers).Byte((byte)s.Gait).Byte((byte)s.Support).Byte((byte)s.Weapon), reliable: false);
+        var message = new NetMessage(Msg.PlayerState, Setup.Id, 0, new PlayerStateMessage(now, player.CaptureNetState()));
+        Net.Send(MessageCodec.Encode(message, fromServer: false), reliable: false);
     }
 
     private void SendBodies(float dt, double now)
@@ -716,7 +716,7 @@ public partial class Match : Node3D
         for (var start = 0; start < moving.Count; start += StatesPerMessage)
         {
             var batch = moving.Skip(start).Take(StatesPerMessage).ToList();
-            var w = new NetWriter(Msg.BodyStates).Double(now).UShort((ushort)batch.Count);
+            var w = new NetWriter(Msg.BodyStates, Setup.Id).Double(now).UShort((ushort)batch.Count);
             foreach (var entry in batch)
             {
                 w.UInt(entry.Id).Transform(entry.Body.GlobalTransform).Vec3(entry.Body.LinearVelocity).Vec3(entry.Body.AngularVelocity);
@@ -725,261 +725,161 @@ public partial class Match : Node3D
         }
         foreach (var entry in rested)
         {
-            Send(new NetWriter(Msg.BodyRest).UInt(entry.Id).Transform(entry.Body.GlobalTransform));
+            Send(new NetWriter(Msg.BodyRest, Setup.Id).UInt(entry.Id).Transform(entry.Body.GlobalTransform).Double(now));
         }
     }
 
-    private static byte ToByte(float v) => (byte)Mathf.Clamp(Mathf.RoundToInt(v * 255f), 0, 255);
-
-    private static float FromByte(byte b) => b / 255f;
-
     // ------------------------------------------------------------------ Receiving
 
-    private void OnMessage(Msg type, NetReader r)
+    private void OnMessage(NetMessage message)
     {
-        if (Protocol.IsRelay(type))
+        if (Protocol.IsRelay(message.Type))
         {
-            OnRelay(type, r.Int(), r);
+            OnRelay(message.Sender, message.Payload);
             return;
         }
         var tuning = Tuning.Current;
-        switch (type)
+        switch (message.Type)
         {
             case Msg.Countdown:
                 phase = Phase.Countdown;
-                countdownLeft = r.Float();
+                countdownLeft = ((FloatMessage)message.Payload).Value;
                 ShowNotice("", 0);
                 break;
             case Msg.MatchGo:
                 phase = Phase.Playing;
-                timeLeft = r.Float();
+                timeLeft = ((FloatMessage)message.Payload).Value;
                 player.InputLocked = false;
                 matchHud.ShowCountdown("GO");
                 break;
             case Msg.Clock:
-                if (phase == Phase.Playing)
-                {
-                    timeLeft = r.Float();
-                }
+                if (phase == Phase.Playing) { timeLeft = ((FloatMessage)message.Payload).Value; }
                 break;
             case Msg.Score:
-            {
-                var id = r.Int();
-                var score = r.Int();
-                var delta = r.Int();
-                scores[id] = score;
-                if (id == me)
+                var update = (ScoreMessage)message.Payload;
+                scores[update.Player] = update.Score;
+                if (update.Player == me)
                 {
-                    matchHud.SetScore(score, delta > 0);
-                    if (delta > 0)
-                    {
-                        matchHud.AddScorePopup(delta);
-                    }
-                    else if (delta < 0)
-                    {
-                        unconfirmedDrops = Mathf.Max(0, unconfirmedDrops + delta);
-                    }
+                    matchHud.SetScore(update.Score, update.Delta > 0);
+                    if (update.Delta > 0) { matchHud.AddScorePopup(update.Delta); }
+                    else if (update.Delta < 0) { dropPredictions.ScoreConfirmed(update.Delta); }
                 }
                 break;
-            }
+            case Msg.DropRefused:
+                foreach (var id in dropPredictions.Refused(((DropRefusedMessage)message.Payload).Ids))
+                {
+                    if (!tanks.Remove(id, out var refused)) { continue; }
+                    bodies.Remove(id);
+                    refused.Punctured -= OnTankPunctured;
+                    refused.Detonated -= OnTankDetonated;
+                    refused.QueueFree();
+                }
+                break;
             case Msg.PickupTaken:
-            {
-                var index = r.Int();
-                var by = r.Int();
-                if (index >= 0 && index < pickups.Count)
-                {
-                    pickups[index].Take();
-                }
-                if (by == me && player.Ammo != null)
-                {
-                    matchHud.AddAmmoPopup(player.Ammo.AddReserve(tuning.PickupAmount));
-                }
+                var take = (PickupMessage)message.Payload;
+                if (take.Index < pickups.Count) { pickups[take.Index].Take(); }
+                if (take.Player == me && player.Ammo != null) { matchHud.AddAmmoPopup(player.Ammo.AddReserve(tuning.PickupAmount)); }
                 break;
-            }
             case Msg.PickupRespawn:
-            {
-                var index = r.Int();
-                if (index >= 0 && index < pickups.Count)
-                {
-                    pickups[index].Reveal(tuning.PickupRevealTime);
-                }
+                var index = ((IntMessage)message.Payload).Value;
+                if (index < pickups.Count) { pickups[index].Reveal(tuning.PickupRevealTime); }
                 break;
-            }
             case Msg.MatchEnd:
-            {
-                var standings = new List<Standing>();
-                for (int i = 0, n = r.Int(); i < n; i++)
-                {
-                    standings.Add(new Standing(r.Int(), r.String(), r.Int(), r.Int(), r.Bool()));
-                }
+                var standings = (IReadOnlyList<Standing>)message.Payload;
                 phase = Phase.Ended;
                 timeLeft = 0;
                 player.InputLocked = true;
                 endLeft = tuning.ResultsTime;
                 results.Show(standings, me, tuning.ResultsTime);
                 break;
-            }
             case Msg.PlayerLeft:
-            {
-                var id = r.Int();
-                var host = r.Int();
-                if (remotes.Remove(id, out var remote))
+                var left = (PlayerLeftMessage)message.Payload;
+                if (remotes.Remove(left.Player, out var remote))
                 {
                     remote.Body.QueueFree();
                     ShowNotice($"{remote.Profile.Name} left the match", 3f);
                 }
-                bodies.OwnerLeft(id, host);
+                bodies.OwnerLeft(left.Player, left.Host);
                 break;
-            }
         }
     }
 
-    private void OnRelay(Msg type, int sender, NetReader r)
+    private void OnRelay(int sender, object payload)
     {
         var now = NetTransport.Now;
         var remote = remotes.GetValueOrDefault(sender);
-        switch (type)
+        switch (payload)
         {
-            case Msg.PlayerState:
-            {
-                var time = r.Double();
-                var s = new PlayerNetState
-                {
-                    Position = r.Vec3(),
-                    Velocity = r.Vec3(),
-                    Yaw = r.Float(),
-                    AimTarget = r.Vec3(),
-                    Aim = FromByte(r.Byte()),
-                    Sprint = FromByte(r.Byte()),
-                    Ready = FromByte(r.Byte()),
-                    Reload = FromByte(r.Byte()),
-                };
-                var flags = r.Byte();
-                s.Grounded = (flags & 1) != 0;
-                s.State = (PlayerNetState.Mode)((flags >> 1) & 3);
-                s.PelvisPosition = r.Vec3();
-                s.PelvisVelocity = r.Vec3();
-                s.Staggers = r.Byte();
-                s.Gait = (PlayerGait)r.Byte();
-                s.Support = (PlayerSupport)r.Byte();
-                s.Weapon = (WeaponAction)r.Byte();
-                remote?.Buffer.Add(time, s, now);
+            case PlayerStateMessage state:
+                remote?.Buffer.Add(state.Time, state.State, now);
                 break;
-            }
-            case Msg.Shot:
-            {
-                var end = r.Vec3();
-                var normal = r.Vec3();
-                var direction = r.Vec3();
-                var impact = (Impact)r.Byte();
-                var victim = r.Int();
-                var propIndex = r.Int();
-                remote?.Body.RemoteShot(end);
+            case ShotMessage shot:
+                remote?.Body.RemoteShot(shot.End);
+                var impact = (Impact)shot.Impact;
                 if (impact.HasFlag(Impact.Hit))
                 {
-                    ImpactEffect.Spawn(end, normal, impact.HasFlag(Impact.Metal), impact.HasFlag(Impact.Decal));
+                    ImpactEffect.Spawn(shot.End, shot.Normal, impact.HasFlag(Impact.Metal), impact.HasFlag(Impact.Decal));
                 }
-                if (propIndex >= 0 && looseProps.TryGetValue(propIndex, out var prop) && IsInstanceValid(prop) && !prop.Freeze)
+                if (shot.PropIndex >= 0 && looseProps.TryGetValue(shot.PropIndex, out var prop) && IsInstanceValid(prop) && !prop.Freeze)
                 {
-                    prop.ApplyImpulse(direction * Tuning.Current.BulletImpulse, end - prop.GlobalPosition);
+                    prop.ApplyImpulse(shot.Direction * Tuning.Current.BulletImpulse, shot.End - prop.GlobalPosition);
                 }
-                if (victim == me && remote != null)
+                if (shot.Victim == me && remote != null)
                 {
-                    LastHitTime = NetTransport.Now;
+                    LastHitTime = now;
                     LastHitBy = sender;
                     OnHitByShot(remote.Body.GlobalPosition + Vector3.Up * 1.4f);
                 }
                 break;
-            }
-            case Msg.Puncture:
-            {
-                var id = r.UInt();
-                var transform = r.Transform();
-                var linear = r.Vec3();
-                var angular = r.Vec3();
-                var hole = r.Vec3();
-                var holeNormal = r.Vec3();
-                var swirl = r.Float();
-                if (tanks.TryGetValue(id, out var tank) && IsInstanceValid(tank) && tank.State == PropaneTank.TankState.Intact)
+            case PunctureMessage puncture:
+                if (tanks.TryGetValue(puncture.Id, out var tank) && IsInstanceValid(tank) && tank.State == PropaneTank.TankState.Intact)
                 {
-                    BodySync.Snap(tank, transform, linear, angular);
-                    tank.PunctureRemote(hole, holeNormal, swirl);
+                    BodySync.Snap(tank, puncture.Transform, puncture.Linear, puncture.Angular);
+                    tank.PunctureRemote(puncture.Hole, puncture.Normal, puncture.Swirl);
                 }
                 break;
-            }
-            case Msg.Explode:
-            {
-                var id = r.UInt();
-                var center = r.Vec3();
-                if (exploded.Contains(id))
+            case ExplodeMessage explosion:
+                if (exploded.Contains(explosion.Id)) { break; }
+                if (tanks.TryGetValue(explosion.Id, out var known) && IsInstanceValid(known))
                 {
-                    break;
-                }
-                if (tanks.TryGetValue(id, out var tank) && IsInstanceValid(tank))
-                {
-                    tank.DetonateRemote(center);
+                    known.DetonateRemote(explosion.Center);
                 }
                 else
                 {
-                    // A tank this game never had (or lost track of): the explosion still happens here.
-                    exploded.Add(id);
+                    // The server accepted an existing tank that this client lost track of. Honor the sender's
+                    // observed blast (including throws), but never run a chain or claim credit here. Only the
+                    // server ledger awards points; arbitrary unknown ids never reach this path through the server.
+                    exploded.Add(explosion.Id);
+                    var center = explosion.Center;
                     var ground = GetWorld3D().DirectSpaceState.IntersectRay(PhysicsRayQueryParameters3D.Create(center, center + Vector3.Down * 30f, Layers.World | Layers.Floor));
                     ExplosionEffect.Create(center, ground.Count > 0 ? ground["position"].AsVector3().Y : 0f);
                     Blast.Detonate(this, center, null, chain: false);
                 }
                 break;
-            }
-            case Msg.Claim:
-            {
-                var ids = new List<uint>();
-                for (int i = 0, n = r.UShort(); i < n; i++)
-                {
-                    ids.Add(r.UInt());
-                }
-                bodies.OnClaim(sender, ids);
+            case ClaimMessage claim:
+                bodies.OnClaim(sender, claim.Ids);
                 break;
-            }
-            case Msg.BodyStates:
-            {
-                var time = r.Double();
-                for (int i = 0, n = r.UShort(); i < n; i++)
-                {
-                    bodies.OnState(sender, time, r.UInt(), r.Transform(), r.Vec3(), r.Vec3(), now);
-                }
+            case BodyStatesMessage states:
+                foreach (var body in states.Bodies) { bodies.OnState(sender, states.Time, body.Id, body.Transform, body.Linear, body.Angular, now); }
                 break;
-            }
-            case Msg.BodyRest:
-                bodies.OnRest(sender, r.UInt(), r.Transform(), now);
+            case BodyRestMessage rest:
+                bodies.OnRest(sender, rest.Time, rest.Id, rest.Transform, now);
                 break;
-            case Msg.Drop:
-            {
-                r.Byte();
-                var count = r.Int();
-                var color = r.Int();
-                for (var i = 0; i < count; i++)
-                {
-                    SpawnDroppedTank(r.UInt(), sender, color, r.Transform(), r.Vec3(), r.Vec3());
-                }
+            case DropMessage drop:
+                if (sender == me) { dropPredictions.Accepted(drop.Tanks.Select(t => t.Id)); }
+                foreach (var body in drop.Tanks) { SpawnDroppedTank(body.Id, sender, drop.Color, body.Transform, body.Linear, body.Angular); }
                 break;
-            }
-            case Msg.Ragdoll:
-                remote?.Body.RemoteRagdoll(r.Vec3(), r.Vec3(), r.Vec3());
+            case RagdollMessage ragdoll:
+                remote?.Body.RemoteRagdoll(ragdoll.Position, ragdoll.Velocity, ragdoll.Spin);
                 break;
-            case Msg.GetUp:
-                remote?.Body.RemoteGetUp(r.Vec3(), r.Float());
+            case GetUpMessage getUp:
+                remote?.Body.RemoteGetUp(getUp.Position, getUp.Yaw);
                 break;
-            case Msg.TuningSet:
-            {
-                var name = r.String();
-                var value = GD.BytesToVar(r.Bytes());
-                Tuning.Current.Apply(new Godot.Collections.Dictionary { [name] = value });
+            case TuningMessage tune:
+                Tuning.Current.Apply(new Godot.Collections.Dictionary { [tune.Name] = tune.Value });
                 tuningPanel?.Refresh();
-                if (remote != null)
-                {
-                    ShowNotice($"{remote.Profile.Name} changed {name}", 2.5f);
-                }
+                if (remote != null) { ShowNotice($"{remote.Profile.Name} changed {tune.Name}", 2.5f); }
                 break;
-            }
         }
     }
 }

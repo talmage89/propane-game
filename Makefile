@@ -36,10 +36,13 @@ lint: ## Check C# formatting and compile with warnings as errors
 check: lint ## Run lint, then the tests
 	@$(MAKE) --no-print-directory test
 
-test: build ## Run the headless regression tests (as CI does)
+test: build ## Run all headless regression suites and separate-process world tests (as CI does)
+	python3 -B tools/dev/check_scores_tests.py
+	"$(GODOT)" --headless --path . res://scenes/dev/unit_tests.tscn
 	"$(GODOT)" --headless --path . res://scenes/dev/movement_tests.tscn
 	"$(GODOT)" --headless --path . res://scenes/dev/generator_tests.tscn -- --seeds=100
 	"$(GODOT)" --headless --path . res://scenes/dev/platform_tests.tscn
+	tools/dev/check_world.sh
 
 server: build ## Run a multiplayer server here (PORT, default 24680, or this worktree's)
 	"$(GODOT)" --headless --path . -- --server --port=$(PORT)

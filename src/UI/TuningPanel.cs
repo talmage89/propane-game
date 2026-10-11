@@ -21,6 +21,9 @@ public partial class TuningPanel : CanvasLayer
     /// <summary>Shown in the header: in a match, changes apply to everyone.</summary>
     public string Note { get; set; } = "";
 
+    /// <summary>Network matches enforce the declared range, including hints that allow larger local values.</summary>
+    public bool UseDeclaredRanges { get; set; }
+
     public override void _Ready()
     {
         Layer = 20;
@@ -114,7 +117,7 @@ public partial class TuningPanel : CanvasLayer
                 list.AddChild(ToggleRow(name));
                 continue;
             }
-            var (min, max, step) = ParseRange(entry["hint_string"].AsString(), type == Variant.Type.Int);
+            var (min, max, step) = ParseRange(entry["hint_string"].AsString(), type == Variant.Type.Int, UseDeclaredRanges);
             var row = new HBoxContainer();
             row.AddThemeConstantOverride("separation", 8);
             var label = UiStyle.Text(Pretty(name), 16);
@@ -199,13 +202,13 @@ public partial class TuningPanel : CanvasLayer
         status.Text = "Defaults restored (not saved yet)";
     }
 
-    private static (double, double, double) ParseRange(string hint, bool isInt)
+    private static (double, double, double) ParseRange(string hint, bool isInt, bool bounded)
     {
         var parts = hint.Split(',');
         if (parts.Length >= 2 && double.TryParse(parts[0], out var min) && double.TryParse(parts[1], out var max))
         {
             var step = parts.Length >= 3 && double.TryParse(parts[2], out var s) ? s : (isInt ? 1 : 0.01);
-            if (System.Array.Exists(parts, p => p.Trim() == "or_greater"))
+            if (!bounded && System.Array.Exists(parts, p => p.Trim() == "or_greater"))
             {
                 max *= 2;
             }

@@ -668,7 +668,7 @@ public sealed class SuburbGenerator
             list.Add((t0, t1));
         }
 
-        foreach (var (key, intervals) in lines)
+        foreach (var (key, intervals) in lines.OrderBy(entry => entry.Key))
         {
             var merged = Union(intervals);
             if (cuts.TryGetValue(key, out var holes))

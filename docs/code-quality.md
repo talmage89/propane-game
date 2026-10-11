@@ -17,7 +17,7 @@ CA2000 (local disposal) and CA2213 (field disposal) are outside this baseline: t
 reference-counted lifetimes as ordinary CLR disposal. Excluding Godot-derived classes also hides CLR leaks inside
 those classes, so there are no such exclusions. These rules need an engine-aware ownership policy before they
 can be useful here. Disposable resources in new code still need an explicit lifetime.
-The CA2213 trial also flagged `CaptureDirector`'s Process and BlockingCollection; their disposal remains
+The CA2213 trial also flagged `CaptureDirector`'s Process and BlockingCollection; their disposal and shutdown lifetimes remain
 a separate audit item rather than being changed as part of the gate.
 
 Seven class-specific CA1001 suppressions preserve current lifetimes, with the reason beside each declaration:
@@ -31,7 +31,9 @@ Seven class-specific CA1001 suppressions preserve current lifetimes, with the re
 `python3 tools/dev/lint_tests.py` proves the gate rejects nullable dereferences, disposable-field ownership,
 implicit async context, ValueTask misuse, and whitespace and style drift. It also checks corrected code passes.
 The fixtures compile in an isolated temporary project; they never run or modify game sources.
-The script also stubs the external tools to verify `make -j4 check` runs in order and stops at either lint failure.
+The script also stubs the external tools to verify `make -j4 check` runs lint before every regression suite
+(score checker, unit, movement, 100-seed generator, platform and separate-process world builds) and stops at either
+lint failure. The probe supplies world hashes so this ordering check does not run the real game.
 It checks that Godot setup reuses a valid cached editor and stops on a download failure.
 
 `.github/workflows/ci.yml` runs asset import, `make lint` and `make test` on every push to `dev` and every pull

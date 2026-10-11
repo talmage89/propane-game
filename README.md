@@ -78,7 +78,7 @@ then plays with every patch of that minor version.
 | Right click (hold) | Left trigger (hold) | Aim and creep: upright shouldered walk (1.6 m/s), tight spread; camera stays put |
 | R | X / Square | New suburb (single player); reload (multiplayer) |
 | Esc | — | Pause and show the controls (a match keeps running) |
-| F1 or ` | — | Tuning panel (live sliders; in a match, debug builds only, and it changes everyone's values) |
+| F1 or ` | — | Tuning panel (live sliders; in a match, the creator's debug build only, and it changes everyone's values) |
 | F11 or Alt+Enter | — | Fullscreen |
 
 Aim cancels sprint. Releasing aim with sprint still held restores sprint's target speed on that physics tick,
@@ -147,6 +147,10 @@ $GODOT --headless res://scenes/dev/movement_tests.tscn
 # suburbs with player starts, ammo spots and the plan's encoding. Exits 1 on failure.
 $GODOT --headless res://scenes/dev/generator_tests.tscn -- --seeds=200
 
+# Plain C# assertion suites; make test runs these, the generator, and two separate builds of one saved plan.
+$GODOT --headless res://scenes/dev/unit_tests.tscn
+tools/dev/check_world.sh
+
 # Platform download URLs and recorder arguments, including Windows paths and non-English locales. Exits 1 on failure.
 $GODOT --headless res://scenes/dev/platform_tests.tscn
 
@@ -187,11 +191,13 @@ $GODOT res://scenes/dev/menu_test.tscn -- --capture-dir=/tmp/m
 # Logs go to build/net (-o picks another directory).
 GODOT=$GODOT tools/dev/net_bots.sh -n 3 -l 60 -- --net-lag=120 --net-jitter=30 --net-loss=3
 tools/dev/compare_tanks.py build/net/bot*.log
+tools/dev/check_scores.py build/net/server.log build/net/bot*.log
 ```
 
 `net_test.tscn` scenarios: bots playing (default), `duel` (hits, drops and a thrown player, filmed from both sides),
 `pickup` (an ammo can taken and returning), and `movement` (remote creep, sprint, jumping and held-aim landing,
-with assertions and labeled frames). [docs/multiplayer.md](docs/multiplayer.md) lists the commands.
+with assertions and labeled frames), and `drop-refusal` (rolling back a refused predicted drop).
+[docs/multiplayer.md](docs/multiplayer.md) lists the commands.
 
 The creep probe reports median and 75th-percentile horizontal foot/toe drift for adjacent samples within 3 cm of
 each bone's minimum height, after two seconds of settling. These are near-floor proxies for planted contacts;

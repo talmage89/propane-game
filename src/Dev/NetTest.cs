@@ -82,32 +82,45 @@ public partial class NetTest : Node
             if (net.Lobby is { } lobby)
             {
                 Log($"lobby {lobby.Id}: {string.Join(", ", lobby.Members.Select(m => $"{m.Name}/{Protocol.ColorNames[m.Color]}"))}, {lobby.Phase}");
-                if (role == "host" && net.IsCreator && !started && lobby.Members.Count >= players && lobby.Phase == LobbyServer.LobbyPhase.Waiting)
-                {
-                    started = true;
-                    net.SetMatchLength(DevArgs.GetFloat("length", 60));
-                    GetTree().CreateTimer(0.5).Timeout += net.StartMatch;
-                }
+                TryStartMatch();
             }
         };
         net.NoticeReceived += text => Log($"notice: {text}");
-        net.MatchStarting += setup =>
+        net.MatchStarting += async setup =>
         {
-            match?.QueueFree();
+            var delay = DevArgs.GetFloat("match-delay", 0);
+            if (delay > 0)
+            {
+                Log($"delaying match {setup.Id} construction by {delay} s");
+                await ToSignal(GetTree().CreateTimer(delay), SceneTreeTimer.SignalName.Timeout);
+                if (net.ActiveMatchId != setup.Id || net.State != NetClient.Status.Connected) { return; }
+            }
+            if (match != null)
+            {
+                RemoveChild(match);
+                match.QueueFree();
+            }
             match = new Match { Name = "Match", Net = net, Setup = setup };
             match.Finished += () =>
             {
+                if (DevArgs.Get("scenario") is "duel" or "pickup" or "drop-refusal")
+                {
+                    ScenarioAssert(scenarioPassed, "scenario ended before all assertions passed");
+                }
                 if (DevArgs.Get("scenario") == "movement" && role == "host" && !movementProved)
                 {
                     GD.PushError("[net movement] FAIL match ended before movement proof completed");
                     GetTree().Quit(1);
                     return;
                 }
-                Log($"finished; final scores {ScoreLine()}");
+                Log($"finished match {match.Setup.Id}; final scores {ScoreLine()}");
+                RemoveChild(match);
                 match.QueueFree();
                 match = null;
                 matches++;
-                started = false;
+                started = matches >= matchesWanted;
+                // Lobby Waiting may have arrived before this client's results timer finished.
+                TryStartMatch();
                 if (matches >= matchesWanted)
                 {
                     GetTree().CreateTimer(1.0).Timeout += () => GetTree().Quit();
@@ -116,12 +129,36 @@ public partial class NetTest : Node
             AddChild(match);
             match.Player.InputOverride = bot;
             clock = 0;
-            Log($"match starting with {setup.Players.Count} players");
+            duelTime = -1;
+            duelInput = new ScriptedInput();
+            duelTank = null;
+            duelBlastAt = duelThrowAt = -1;
+            pickupTakenAt = -1;
+            pickupMovedAway = false;
+            scenarioPassed = scenarioFailed = false;
+            // Movement proof is per match, just like the duel/pickup assertions on a reused connection.
+            movementCamera = null;
+            sawRemoteCreep = sawRemoteSprint = sawRemoteAir = sawRemoteRestoredAim = movementProved = false;
+            capturedCreep = capturedSprint = capturedLanding = capturedRelease = false;
+            remoteGait = PlayerGait.Default;
+            remoteGaitTime = 0;
+            Log($"match {setup.Id} ready with {setup.Players.Count} players; playing {match.IsPlaying}, over {match.IsOver}");
         };
         var name = DevArgs.Get("name") ?? (role == "host" ? "HostBot" : $"Bot{OS.GetProcessId() % 1000}");
         var color = (int)DevArgs.GetFloat("color", role == "host" ? 0 : 1);
         // Give a hosted server a moment to open its port.
         GetTree().CreateTimer(DevArgs.Get("host-server") != null ? 0.3 : 0.05).Timeout += () => net.Connect(address, port, name, color);
+    }
+
+    private void TryStartMatch()
+    {
+        if (role == "host" && net.IsCreator && !started && matches < matchesWanted &&
+            net.Lobby is { Phase: LobbyServer.LobbyPhase.Waiting } lobby && lobby.Members.Count >= players)
+        {
+            started = true;
+            net.SetMatchLength(DevArgs.GetFloat("length", 60));
+            GetTree().CreateTimer(0.5).Timeout += net.StartMatch;
+        }
     }
 
     public override void _PhysicsProcess(double delta)
@@ -139,7 +176,7 @@ public partial class NetTest : Node
             var name = tune[..split];
             var value = float.Parse(tune[(split + 1)..], System.Globalization.CultureInfo.InvariantCulture);
             Tuning.Current.Set(name, value);
-            net.Send(new NetWriter(Msg.TuningSet).String(name).Bytes(GD.VarToBytes(value)));
+            net.Send(new NetWriter(Msg.TuningSet, match.Setup.Id).String(name).Scalar(value));
             Log($"sent tuning {name} = {value}");
         }
         var leaveAt = DevArgs.GetFloat("leave-at", -1);
@@ -149,7 +186,7 @@ public partial class NetTest : Node
             GetTree().Quit();
             return;
         }
-        if (DevArgs.Get("scenario") == "duel")
+        if (DevArgs.Get("scenario") is "duel" or "drop-refusal")
         {
             Duel(match, dt);
         }
@@ -190,7 +227,16 @@ public partial class NetTest : Node
     }
 
     private float duelTime = -1;
-    private readonly ScriptedInput duelInput = new();
+    private ScriptedInput duelInput = new();
+    private uint? duelTank;
+    private float duelShotLeft;
+    private float duelBlastAt = -1;
+    private float duelThrowAt = -1;
+    private bool scenarioPassed;
+    private bool scenarioFailed;
+    private int duelInitialScore;
+    private float pickupTakenAt = -1;
+    private bool pickupMovedAway;
 
     /// <summary>
     /// A scripted close-up of the tank bank: the host shoots the other player (dropping tanks behind them, with the
@@ -208,6 +254,7 @@ public partial class NetTest : Node
         {
             duelTime = 0;
             player.InputOverride = duelInput;
+            player.Ragdolled += (_, _, _) => duelThrowAt = duelTime;
             if (role == "host")
             {
                 // Shouldered, for a tight spread.
@@ -221,6 +268,42 @@ public partial class NetTest : Node
         var shooterSpot = World.Suburb.ToWorld(mid - road.Direction * 7f, 0.05f);
         var victimSpot = World.Suburb.ToWorld(mid + road.Direction * 7f, 0.05f);
         var host = role == "host";
+        var refusal = DevArgs.Get("scenario") == "drop-refusal";
+        if (Once(0.8f, dt)) { duelInitialScore = match.MyScore; }
+        if (refusal && host && Once(2.55f, dt))
+        {
+            // The second victim hit is already in flight. With 120 ms lag, this creator change reaches the server
+            // before the victim's old-count Drop, while reliable order delivers Shot before TuningSet to the victim.
+            Tuning.Current.HitDropCount = 0;
+            net.Send(new NetWriter(Msg.TuningSet, match.Setup.Id).String(nameof(Tuning.HitDropCount)).Scalar(0));
+        }
+        if (Once(3.5f, dt))
+        {
+            var victimId = host ? match.RemoteBodies.First().PeerId : net.MyId;
+            ScenarioAssert(match.Scores[victimId] == (refusal ? 7 : 6) && match.LiveTanks.Count(IsDrop) == (refusal ? 1 : 2),
+                refusal ? "drop-refusal: rejected prediction changed the bank or left a phantom tank" : "duel: three hits must spill exactly two tanks (one hit inside grace)");
+            if (refusal)
+            {
+                scenarioPassed = !scenarioFailed;
+                director.Screenshot($"{(host ? "shooter" : "victim")}_drop_refused");
+                if (scenarioPassed) { Log("drop-refusal: assertions passed"); }
+            }
+        }
+        if (!refusal && Once(14f, dt))
+        {
+            ScenarioAssert(host ? duelBlastAt >= 0 && match.MyScore > duelInitialScore : duelThrowAt >= 0 && match.MyScore <= 1,
+                host ? "duel: dropped tank never detonated and scored" : "duel: blast never threw the victim and spilled five tanks");
+            scenarioPassed = !scenarioFailed;
+            if (scenarioPassed) { Log("duel: assertions passed"); }
+        }
+        var eventAt = host ? duelBlastAt : duelThrowAt;
+        if (eventAt >= 0)
+        {
+            foreach (var offset in new[] { 0.15f, 0.8f, 1.8f })
+            {
+                if (Once(eventAt + offset, dt)) { director.Screenshot($"{(host ? "shooter_blast" : "victim_throw")}_{offset:0.00}"); }
+            }
+        }
         if (Once(0.2f, dt))
         {
             var mine = host ? shooterSpot : victimSpot;
@@ -263,22 +346,34 @@ public partial class NetTest : Node
         {
             director.Screenshot($"shooter_{duelTime:00.0}");
         }
-        // Then the dropped tanks: once to puncture, once to set off.
-        foreach (var t in new[] { 4.0f, 4.6f })
+        if (refusal) { return; }
+        // Drops keep moving under lag. Follow one tank every frame, retrying until its detonation is observed;
+        // a fixed aim/fire gap used to miss the first shot and puncture a different tank with the second.
+        if (duelTime >= 4f && duelBlastAt < 0)
         {
-            if (Once(t - 0.3f, dt))
+            if (duelTank == null)
             {
-                var dropped = match.LiveTanks.Where(k => k.NetId >= BodySync.DropTankBase && k.NetId < BodySync.CarBase)
+                var dropped = match.LiveTanks.Where(IsDrop).Where(k => !k.Invulnerable)
                     .OrderBy(k => k.GlobalPosition.DistanceTo(player.GlobalPosition)).FirstOrDefault();
                 if (dropped != null)
                 {
-                    AimAt(player, dropped.GlobalTransform * PropaneTank.LocalCenter);
-                    Log($"duel: aiming at dropped tank {dropped.NetId:x} {dropped.State} invulnerable {dropped.Invulnerable}");
+                    duelTank = dropped.NetId;
+                    duelShotLeft = 0.3f; // Let the rifle align before the first shot.
+                    dropped.Detonated += _ => duelBlastAt = duelTime;
+                    Log($"duel: tracking dropped tank {dropped.NetId:x}");
                 }
             }
-            if (Once(t, dt))
+            var target = match.LiveTanks.FirstOrDefault(k => k.NetId == duelTank);
+            if (target != null)
             {
-                duelInput.Fire(duelInput.Now + 0.001f);
+                AimAt(player, target.GlobalTransform * PropaneTank.LocalCenter);
+                duelShotLeft -= dt;
+                if (duelShotLeft <= 0 && !target.Invulnerable)
+                {
+                    duelShotLeft = 0.4f;
+                    duelInput.Fire(duelInput.Now + 0.001f);
+                    Log($"duel: shot at tracked tank {target.NetId:x} {target.State}");
+                }
             }
         }
         foreach (var t in new[] { 4.3f, 4.75f, 5.2f, 6.5f })
@@ -319,32 +414,54 @@ public partial class NetTest : Node
         {
             AimAt(player, pickup.GlobalPosition + Vector3.Up * 0.3f);
             director.Screenshot("pickup_0_before");
-            duelInput.Hold(duelInput.Now, duelInput.Now + 0.55f, new PlayerIntent { Move = new Vector2(0, 1f) });
+            duelInput.Hold(duelInput.Now, duelInput.Now + 5f, new PlayerIntent { Move = new Vector2(0, 1f) });
         }
-        if (Once(1.2f, dt))
-        {
-            player.Teleport(player.GlobalPosition + new Vector3(3f, 0, 0), player.FacingYaw);
-        }
-        if (Once(1.4f, dt))
+        if (duelTime >= 0.6f && !pickupMovedAway)
         {
             AimAt(player, pickup.GlobalPosition + Vector3.Up * 0.3f);
-        }
-        foreach (var t in new[] { 1.5f, 2.5f })
-        {
-            if (Once(t, dt))
+            if (pickup.ClaimPending || !pickup.Available)
             {
-                director.Screenshot($"pickup_1_taken_{t:0.0}");
+                // Stop only after actually reaching the can, and move out before it can respawn. The old fixed
+                // walking interval could end short of the take radius, yet still capture a "taken" frame.
+                pickupMovedAway = true;
+                duelInput = new ScriptedInput();
+                player.InputOverride = duelInput;
+                player.Teleport(pickup.GlobalPosition + new Vector3(3.5f, 0.05f, 0), player.FacingYaw);
+                AimAt(player, pickup.GlobalPosition + Vector3.Up * 0.3f);
+            }
+        }
+        if (!pickup.Available && pickupTakenAt < 0)
+        {
+            pickupTakenAt = duelTime;
+            ScenarioAssert(player.Ammo!.Reserve == 10 + Tuning.Current.PickupAmount,
+                "pickup: can did not add its rounds exactly once");
+        }
+        if (Once(5f, dt)) { ScenarioAssert(pickupTakenAt >= 0, "pickup: player never took the can"); }
+        if (pickupTakenAt < 0) { return; }
+        foreach (var offset in new[] { 0.15f, 1f })
+        {
+            if (Once(pickupTakenAt + offset, dt))
+            {
+                director.Screenshot($"pickup_1_taken_{offset:0.00}");
                 Log($"pickup available {pickup.Available}, ammo {player.Ammo!.Magazine}/{player.Ammo.Reserve}");
+                ScenarioAssert(!pickup.Available && player.Ammo.Reserve == 10 + Tuning.Current.PickupAmount,
+                    "pickup: can returned early or changed ammo while absent");
             }
         }
         var respawn = Tuning.Current.PickupRespawnTime;
         var reveal = Tuning.Current.PickupRevealTime;
         foreach (var f in new[] { 0.15f, 0.4f, 0.65f, 0.9f, 1.2f })
         {
-            var t = 1.0f + respawn + reveal * f;
+            var t = pickupTakenAt + respawn + reveal * f;
             if (Once(t, dt))
             {
                 director.Screenshot($"pickup_2_reveal_{f:0.00}");
+                if (f == 1.2f)
+                {
+                    ScenarioAssert(pickup.Available, "pickup: can did not respawn");
+                    scenarioPassed = !scenarioFailed;
+                    if (scenarioPassed) { Log("pickup: assertions passed"); }
+                }
             }
         }
     }
@@ -499,6 +616,16 @@ public partial class NetTest : Node
     }
 
     private bool Once(float at, float dt) => duelTime >= at && duelTime - dt < at;
+
+    private static bool IsDrop(PropaneTank tank) => tank.NetId is >= BodySync.DropTankBase and < BodySync.CarBase;
+
+    private void ScenarioAssert(bool condition, string failure)
+    {
+        if (condition) { return; }
+        scenarioFailed = true;
+        GD.PushError(failure);
+        GetTree().Quit(1);
+    }
 
     private static void AimAt(PlayerCharacter player, Vector3 point)
     {
