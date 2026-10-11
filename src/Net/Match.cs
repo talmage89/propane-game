@@ -22,6 +22,9 @@ public partial class Match : Node3D
 {
     public WorldContext World { get; private set; } = null!;
 
+    /// <summary>Network time source; set before entering the tree for deterministic simulation.</summary>
+    internal IMonotonicClock Clock { get; init; } = MonotonicClock.Instance;
+
     private enum Phase
     {
         Loading,
@@ -150,7 +153,7 @@ public partial class Match : Node3D
     // Packet seam for assertion suites; production sends through the connection.
     internal Action<byte[]>? AuthoritySendOverride { get; set; }
 
-    /// <summary>When (on <see cref="MonotonicClock.Now"/>) another player's shot last hit this player, and whose it was.</summary>
+    /// <summary>When (on <see cref="Clock"/>) another player's shot last hit this player, and whose it was.</summary>
     public double LastHitTime { get; private set; } = -100;
 
     public int LastHitBy { get; private set; }
@@ -374,7 +377,7 @@ public partial class Match : Node3D
     {
         if (World is not { IsAlive: true } || World.Paused) { return; }
         var dt = (float)delta;
-        var now = MonotonicClock.Now;
+        var now = Clock.Seconds;
         foreach (var remote in remotes.Values)
         {
             if (remote.Buffer.HasData)
@@ -597,7 +600,7 @@ public partial class Match : Node3D
             if (bodies.Get(state.Id) is not { } entry || entry.Owner != sender || entry.Epoch != state.Epoch ||
                 state.Sequence <= entry.LastGatherSequence || entry.Body is not PropaneTank tank || tank.State != PropaneTank.TankState.Intact) { continue; }
             entry.LastGatherSequence = state.Sequence;
-            bodies.OnState(sender, state, message.Phase == GatherPhase.Settled, MonotonicClock.Now);
+            bodies.OnState(sender, state, message.Phase == GatherPhase.Settled, Clock.Seconds);
             if (message.Phase == GatherPhase.Glide) { tank.BeginGather(); }
             else
             {
@@ -1120,7 +1123,7 @@ public partial class Match : Node3D
 
     private void OnRelay(int sender, object payload)
     {
-        var now = MonotonicClock.Now;
+        var now = Clock.Seconds;
         var remote = remotes.GetValueOrDefault(sender);
         switch (payload)
         {

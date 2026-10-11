@@ -127,11 +127,12 @@ public static class MeleeTests
             loading.Reject(Hit(3));
             loading.Receive(new NetWriter(Msg.Loaded, loading.Id));
             loading.Receive(new NetWriter(Msg.Loaded, loading.Id), peer: 3);
-            loading.Server.AdvanceMatches(MonotonicClock.Now - 20);
+            loading.Advance();
             loading.Reject(Start(1)); // Countdown.
-            loading.Server.AdvanceMatches(MonotonicClock.Now - 20);
+            loading.Advance();
+            loading.Clock.Seconds += 20;
             loading.Reject(Start(1)); // Expired play, before the next phase tick.
-            loading.Server.AdvanceMatches(MonotonicClock.Now);
+            loading.Advance();
             loading.Reject(Start(1)); // Results.
             loading.Reject(Hit(3));
         });

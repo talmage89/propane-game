@@ -232,9 +232,12 @@ public static class AuthorityTests
                 TestRunner.Assert(tank.GlobalTransform.IsEqualApprox(moving ? current : puncture.Transform) &&
                     tank.LinearVelocity == (moving ? Vector3.One * 20 : puncture.Linear) &&
                     tank.AngularVelocity == (moving ? Vector3.One * 2 : puncture.Angular), "canonical vent rewound existing motion or failed to initialize a resting observer");
-                var now = MonotonicClock.Now;
+                // Simulate an arbitrary pause before delivery; receipt and correction share manual time.
+                f.Server.Clock.Seconds += 30;
+                var now = f.Server.Clock.Seconds;
                 f.Match.OnMessage(new NetMessage(Msg.BodyStates, f.Server.Id, 3,
                     new BodyStatesMessage(now, new[] { Pose(Id, 2, 1) })));
+                TestRunner.Assert(f.Match.Bodies.Get(Id)!.TargetReceived == now, "receipt escaped the manual clock");
                 f.Match.Bodies.Correct(now);
                 TestRunner.Assert(tank.GlobalTransform.IsEqualApprox(Pose(Id).Transform), "confirmed owner's stream did not reconcile the observer");
             });
@@ -407,7 +410,7 @@ public static class AuthorityTests
             child.FuseScheduleOverride = (_, finish) => callback = finish;
             child.ChainHit(Vector3.Zero, 0, root.BlastRequest);
             f.Match.OnLocalBlast(root.GlobalPosition, new[] { child }, root.BlastRequest);
-            f.Server.Server.AdvanceMatches(MonotonicClock.Now + 20);
+            f.Server.Advance(20);
             f.Server.Packets.Clear();
             f.Flush();
             TestRunner.Assert(callback != null && f.Match.LastAuthorityRefusal == ClaimRefusal.WrongPhase,
@@ -439,7 +442,7 @@ public static class AuthorityTests
             using var f = new MatchFixture(runner);
             var tank = f.Match.LiveTanks.Single(t => t.NetId == Id);
             tank.TakeShot(tank.ToGlobal(new Vector3(0.15f, 0.23f, 0)), tank.GlobalBasis * Vector3.Right, Vector3.Left);
-            f.Server.Server.AdvanceMatches(MonotonicClock.Now + 20);
+            f.Server.Advance(20);
             f.Server.Packets.Clear();
             f.Flush();
             TestRunner.Assert(f.Match.LastAuthorityRefusal == ClaimRefusal.WrongPhase && tank.State == PropaneTank.TankState.Intact &&
@@ -454,7 +457,7 @@ public static class AuthorityTests
             var entry = f.Match.Bodies.Get(Id)!;
             entry.Sequence = 1;
             Send(f.Server, 2, Msg.BodyRest, new BodyRestMessage(Id, tank.GlobalTransform, 1, entry.Epoch, 1));
-            f.Server.Server.AdvanceMatches(MonotonicClock.Now + 20);
+            f.Server.Advance(20);
             f.Server.Packets.Clear();
             tank.Detonate();
             tank.Free();
@@ -516,7 +519,7 @@ public static class AuthorityTests
             tank.FuseScheduleOverride = (_, finish) => callback = finish;
             tank.ChainHit(Vector3.Zero, 0, 99);
             f.Match.Claim(new[] { tank }, atomic: true);
-            f.Server.Server.AdvanceMatches(MonotonicClock.Now + 20);
+            f.Server.Advance(20);
             Send(f.Server, 3, Msg.BodyStates, new BodyStatesMessage(1, new[] { Pose(Id, 2, 7) }));
             f.Server.Packets.Clear();
             f.Match.OnMessage(new NetMessage(Msg.BodyStates, f.Server.Id, 3, new BodyStatesMessage(2, new[] { Pose(Id, 2, 8) })));
@@ -546,9 +549,9 @@ public static class AuthorityTests
         private readonly Queue<byte[]> sent = new();
         public MatchFixture(TestRunner runner, Tuning? template = null)
         {
-            client = new NetClient { Template = template ?? Tuning.SavedTemplate };
+            client = new NetClient(PacketTransports.CreateClient(), Server.Clock) { Template = template ?? Tuning.SavedTemplate };
             client.Handle(MessageCodec.Encode(new NetMessage(Msg.Welcome, 0, 0, new WelcomeMessage(2, null)), true));
-            Match = new Match { Net = client, Setup = Server.Setup, AuthoritySendOverride = sent.Enqueue };
+            Match = new Match { Net = client, Setup = Server.Setup, Clock = Server.Clock, AuthoritySendOverride = sent.Enqueue };
             runner.AddChild(Match);
         }
         public void Deliver()

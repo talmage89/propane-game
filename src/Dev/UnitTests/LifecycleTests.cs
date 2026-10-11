@@ -13,16 +13,17 @@ public static class LifecycleTests
     {
         runner.Run("lifecycle/body sampling converts to server time only after a ping", () =>
         {
-            var client = new NetClient();
+            var clock = new ManualClock();
+            var client = new NetClient(PacketTransports.CreateClient(), clock);
             try
             {
                 TestRunner.Assert(client.BodySampleTime(4) == 0, "unsynchronized sample invented a server clock");
-                var before = MonotonicClock.Now;
-                var serverTime = before + 100;
-                client.Handle(MessageCodec.Encode(new NetMessage(Msg.Pong, 0, 0, new PongMessage(before - 0.2, serverTime)), true));
-                var after = MonotonicClock.Now;
-                var stamp = client.BodySampleTime(after + 3);
-                TestRunner.Assert(stamp >= serverTime + 3.1 - 0.00001 && stamp <= serverTime + 3.1 + after - before + 0.00001,
+                var sent = clock.Seconds;
+                var serverTime = sent + 100;
+                clock.Seconds += 0.2;
+                client.Handle(MessageCodec.Encode(new NetMessage(Msg.Pong, 0, 0, new PongMessage(sent, serverTime)), true));
+                var stamp = client.BodySampleTime(clock.Seconds + 3);
+                TestRunner.Assert(Math.Abs(stamp - (serverTime + 3.1)) < 0.00001,
                     "sampling used the client's unrelated clock instead of its ping estimate");
                 client.Disconnect();
                 TestRunner.Assert(client.BodySampleTime(4) == 0 && client.ServerClockOffset == 0,
