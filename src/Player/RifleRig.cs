@@ -73,6 +73,10 @@ public partial class RifleRig : SkeletonModifier3D
     {
         var skeleton = GetSkeleton();
         if (skeleton == null || Rifle == null || !resolved) return;
+        // Physics can fire on the first tick after a reload finishes, before presentation clears its
+        // magazine/bolt contact. Fit the firing foregrip that this frame will actually render.
+        reloadPhase = reloadTarget = lastReloadPhase = 0;
+        Rifle.PreviewReloadContact(0);
         var from = skeleton.GlobalTransform;
         var shoulderR = from * (hasUpperPose ? lastShoulderR : skeleton.GetBoneGlobalPose(upperR).Origin);
         var shoulderL = from * (hasUpperPose ? lastShoulderL : skeleton.GetBoneGlobalPose(upperL).Origin);
@@ -470,6 +474,14 @@ public partial class RifleRig : SkeletonModifier3D
             s.SetBonePoseRotation(lowerL, previousBones[lowerL]);
             var oldR = from * s.GetBoneGlobalPose(lowerR).Origin;
             var oldL = from * s.GetBoneGlobalPose(lowerL).Origin;
+            // A fixed firing muzzle can put a trial torso outside arm reach while turning. Reject that
+            // trial before invoking IK; only the final trial reports a genuinely unreachable contact.
+            if (attempt < 11 && (right.Origin.DistanceTo(shoulderR) >= ArmLength(s, upperR, lowerR, handR) ||
+                left.Origin.DistanceTo(shoulderL) >= ArmLength(s, upperL, lowerL, handL)))
+            {
+                amount *= 0.5f;
+                continue;
+            }
             SolveTwoBone(s, upperR, lowerR, handR, to * right, to * oldR.Lerp(poleR, amount));
             SolveTwoBone(s, upperL, lowerL, handL, to * left, to * oldL.Lerp(poleL, amount));
             if (TrackingBarrelThisFrame && fittedAim >= 0.99f)

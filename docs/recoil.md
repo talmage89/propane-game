@@ -31,6 +31,13 @@ The existing rifle spring frequency, damping, impulse, compression and lift tune
 The camera spring uses that frequency/damping and adds only a local camera rotation. Rifle placement still supplies
 the muzzle obstruction ray, as before; presentation never rotates the primary logical ray.
 
+Local Lab bot soaks also exercise abrupt turns while firing. Shot fitting now synchronizes the visual body to
+the facing already resolved by movement, so physics fits the muzzle in the same frame that rendering uses.
+It also clears a finished reload's presentation contact before fitting the firing foregrip: physics may fire
+before rendering has advanced the last magazine/bolt pose.
+Upper-body constraint trials reject out-of-reach wrists before solving IK; the final trial retains contact
+error reporting. This fixes transient turn/contact errors without changing recoil, spread or the primary ray.
+
 ### Measured curves
 
 Each series is a real full-auto 30-round magazine, no look input, initial pitch -10 degrees, fixed 60 Hz rendering

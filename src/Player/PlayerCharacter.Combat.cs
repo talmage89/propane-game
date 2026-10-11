@@ -83,6 +83,8 @@ public partial class PlayerCharacter
         var end = hit.Count > 0 ? hit["position"].AsVector3() : start + direction * tuning.ShotRange;
 
         // The bullet really leaves the muzzle: something between the muzzle and the target blocks it first.
+        // Movement resolves facing before this shot. Fit the muzzle in the same body frame the render uses.
+        visual.Rotation = new Vector3(0, facingYaw, 0);
         rig.AlignShot(end);
         var muzzle = rifle.MuzzlePosition;
         var toEnd = end - muzzle;
