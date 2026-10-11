@@ -33,12 +33,12 @@ public partial class WorldServicesTests : Node
                 Assert(Counts() == baseline, $"world leaked on cycle {i + 1}: {baseline} -> {Counts()}");
             }
             GD.Print($"[world services] PASS two overlapping worlds, distinct tuning, events, blasts, callbacks, partial failure; 10 retirements stable at {baseline}");
-            GetTree().Quit();
+            ShutdownGuard.Quit(GetTree());
         }
         catch (Exception error)
         {
             GD.PushError($"[world services] FAIL {error}");
-            GetTree().Quit(1);
+            ShutdownGuard.Quit(GetTree(), 1);
         }
     }
 

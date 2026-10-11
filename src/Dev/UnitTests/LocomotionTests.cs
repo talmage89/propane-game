@@ -5,6 +5,7 @@ using Propane.Player;
 
 namespace Propane.Dev.UnitTests;
 
+[UnitSuite]
 public static class LocomotionTests
 {
     public static void Register(TestRunner runner)

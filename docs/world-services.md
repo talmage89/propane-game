@@ -32,7 +32,7 @@ releases views, restores presentation, and synchronously frees content and physi
 `World.Construct` uses that same path on a construction failure. Content spawn services retain their originating
 root; retiring content removes its effects and cancels source callbacks before the next suburb is built.
 
-`world_services_tests.tscn` exercises two independent physics worlds at overlapping coordinates with different
+`make test` discovers `[UnitSuite]` clock assertions and runs `world_services_tests.tscn`, which exercises two independent physics worlds at overlapping coordinates with different
 tuning. It asserts blast, event, spawn and callback isolation, survivor continuity, replacement safety, partial
 construction cleanup, and exact node/object/orphan counts across ten retirements after warming immutable caches.
 
@@ -60,5 +60,5 @@ of an event currently being dispatched; a retired receiver is skipped in a blast
 `menu_test.tscn -- --scenario=lifetime` drives the real main/pause/lobby/match buttons through ten single-player and
 ten solo-match cycles after warming immutable catalog variants and lazy UI resources. It checks exact node, object
 and orphan counts and verifies each retired world's timers and receiver registry are empty. Server-owned match
-seeds still vary; the test never alters the server's construction inputs or messages. Rendered runs capture first
+seeds still vary; the test never alters the server's construction inputs or messages. The ten-cycle sweep runs in `make test-full`. Rendered runs capture first
 and last entries plus the final browser.

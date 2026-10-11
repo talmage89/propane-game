@@ -31,7 +31,7 @@ public partial class StrideProbe : SkeletonModifier3D
             Math.Abs(new Vector2(Player.Velocity.X, Player.Velocity.Z).Length() - Player.World.Tuning.CreepSpeed) > 0.001f)
         {
             GD.PushError("[stride] FAIL missing bones or unsettled aimed movement");
-            GetTree().Quit(1);
+            ShutdownGuard.Quit(GetTree(), 1);
             return;
         }
         samples.Add((elapsed, Player.GlobalPosition,
@@ -43,7 +43,7 @@ public partial class StrideProbe : SkeletonModifier3D
         if (samples.Count < 20)
         {
             GD.PushError($"[stride] FAIL only {samples.Count} rendered samples");
-            GetTree().Quit(1);
+            ShutdownGuard.Quit(GetTree(), 1);
             return;
         }
         var csv = new StringBuilder("time,root_x,root_y,root_z,bone,x,y,z\n");
@@ -67,7 +67,7 @@ public partial class StrideProbe : SkeletonModifier3D
         if (slides.Count < 20)
         {
             GD.PushError($"[stride] FAIL only {slides.Count} near-floor sample pairs");
-            GetTree().Quit(1);
+            ShutdownGuard.Quit(GetTree(), 1);
             return;
         }
         slides.Sort();

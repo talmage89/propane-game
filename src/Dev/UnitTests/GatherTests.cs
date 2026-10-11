@@ -7,6 +7,7 @@ using static Propane.Dev.UnitTests.TestRunner;
 
 namespace Propane.Dev.UnitTests;
 
+[UnitSuite]
 public static class GatherTests
 {
     private static GatherGroups.Sample S(ulong id, float x, bool eligible = true, ulong revision = 0) => new(id, new Vector3(x, 0, 0), eligible, revision);

@@ -53,12 +53,12 @@ public partial class MenuLifetimeTest : Node
             }
             capture.Screenshot("menu_after_10");
             GD.Print($"[menu lifetime] PASS: 10 single-player cycles {single}; 10 solo-match cycles {match}; no orphans");
-            GetTree().Quit();
+            ShutdownGuard.Quit(GetTree());
         }
         catch (Exception error)
         {
             GD.PushError($"[menu lifetime] FAIL {error}");
-            GetTree().Quit(1);
+            ShutdownGuard.Quit(GetTree(), 1);
         }
     }
 

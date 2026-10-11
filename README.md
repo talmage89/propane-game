@@ -40,7 +40,8 @@ Requires Godot 4.7.2 (.NET edition) and the .NET 10 SDK.
 - Command line: `make run`. `make` lists the other tasks (tests, a local server, bots, releases); they find Godot on
   `PATH` (`godot-mono` or `godot`) or in `/Applications`, or set `GODOT` to its binary.
 - Quality gate: `make lint` verifies C# formatting and rebuilds with warnings as errors. `make check` runs lint,
-  then `make test`. Run it before submitting a change. GitHub Actions runs the same checks on pushes to `dev`
+  then `make test`. Run it before submitting a change. `tools/dev/check_world.sh` prints log tails and keeps its
+  scratch directory on failure. GitHub Actions runs the same checks on pushes to `dev`
   and every pull request.
 
 [docs/code-quality.md](docs/code-quality.md) describes the formatting and analyzer baseline and its regression
@@ -174,6 +175,12 @@ setting. These shared plan and tuner changes require the next release to be mino
 | `design` | The owner's standing decisions: the vision the game holds to. |
 | `docs` | How multiplayer works, and the README images. |
 
+`ShutdownGuard` must stay first in `project.godot`'s autoload list. Godot frees root children in reverse insertion order;
+quit through `ShutdownGuard.Quit(tree, code)`. It destroys the scene, drains managed resource finalizers and waits
+for the next physics tick to flush their queued RID frees before quitting. Its final predelete drain runs before
+the engine tears down its C# bindings and native servers. Static caches remain alive for Godot's shutdown tracker.
+[docs/shutdown.md](docs/shutdown.md) explains the lifecycle, failure mechanism and regression checks.
+
 ## Dev harnesses
 
 Each scene in `scenes/dev` is a scripted test. Arguments after `--` are read by `src/Dev/DevArgs.cs`;
@@ -185,12 +192,17 @@ including `ffmpeg.exe` on Windows; a game in a match stays in step, unlike Godot
 ```sh
 GODOT=/Applications/Godot_mono.app/Contents/MacOS/Godot
 
+# Shutdown: finalizers for resources discarded during scene destruction must finish before engine teardown.
+# Also runs in make test; --exit-code=7 checks that shutdown preserves a requested failure status.
+$GODOT --headless res://scenes/dev/shutdown_tests.tscn
+
 # Movement resolver: gait/target speed on each transition tick, lifecycle, jump buffer and coyote time;
 # injected gamepad actions and stick look.
 $GODOT --headless res://scenes/dev/movement_tests.tscn
 
 # Generator: exact determinism and encoding, authored hull overlaps and tier supports, placement and reachability,
 # all four formations, and supply/start safety at 2, 8, 16, 24 and 32 players. Exits 1 on failure.
+# make test uses bounded sweeps; make test-full retains the deep seed coverage.
 $GODOT --headless res://scenes/dev/generator_tests.tscn -- --seeds=200
 
 # Bot navigation: real picket/privacy fences, gates, bins, cars, piles, houses and touching-fence recovery.
@@ -200,7 +212,7 @@ $GODOT --fixed-fps 60 res://scenes/dev/bot_navigation_course.tscn -- --seeds=5 -
 # --baseline compares direct movement plus the old stuck recovery; --first-seed=39 --seeds=1 replays one seed.
 # --nav-log traces waypoints/replans. make test runs five seeds; docs/bot-navigation.md describes the component.
 
-# Plain C# assertion suites; make test runs these, the generator, and two separate builds of a saved plan for each formation.
+# Plain C# assertion suites; make test runs these in a shared runner and checks saved plans in two fresh processes.
 $GODOT --headless res://scenes/dev/unit_tests.tscn
 tools/dev/check_world.sh
 

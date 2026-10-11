@@ -50,6 +50,7 @@ public partial class BotNavigationCourse : Node3D, IPlayerInputSource
 
     public override void _Ready()
     {
+        DevArgs.MarkReady();
         DisplayServer.WindowSetVsyncMode(DisplayServer.VSyncMode.Disabled);
         ProcessPhysicsPriority = -10;
         DevArgs.Setup();
@@ -133,7 +134,7 @@ public partial class BotNavigationCourse : Node3D, IPlayerInputSource
         {
             GD.PushError($"[bot-course] FAIL {e}");
             SetPhysicsProcess(false);
-            GetTree().Quit(1);
+            ShutdownGuard.Quit(GetTree(), 1);
         }
     }
 
@@ -245,7 +246,7 @@ public partial class BotNavigationCourse : Node3D, IPlayerInputSource
             {
                 var rate = (float)passed / completed;
                 GD.Print($"[bot-course] success={passed}/{completed} rate={rate:0.000} mean={(times.Count > 0 ? times.Average() : 0):0.00}s stuck={stuckEvents} jumps={jumps} picket={picketCourses} privacy={privacyCourses}");
-                GetTree().Quit(DevArgs.Get("baseline") != null || rate >= 0.95f ? 0 : 1);
+                ShutdownGuard.Quit(GetTree(), DevArgs.Get("baseline") != null || rate >= 0.95f ? 0 : 1);
                 SetPhysicsProcess(false);
             }
             else { Begin(); }

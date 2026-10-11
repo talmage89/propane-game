@@ -1,4 +1,5 @@
 using Godot;
+using Propane.Core;
 
 namespace Propane.UI;
 
@@ -50,7 +51,7 @@ public partial class PauseMenu : CanvasLayer
         var resume = UiStyle.Button("Resume");
         resume.Pressed += () => ResumeRequested?.Invoke();
         var quit = UiStyle.Button("Quit");
-        quit.Pressed += () => GetTree().Quit();
+        quit.Pressed += () => ShutdownGuard.Quit(GetTree());
         buttons.AddChild(resume);
         if (MainMenuRequested != null)
         {

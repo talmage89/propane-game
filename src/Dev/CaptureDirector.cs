@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Godot;
+using Propane.Core;
 
 namespace Propane.Dev;
 
@@ -81,10 +82,7 @@ public partial class CaptureDirector : Node
         Record();
         if (QuitAfter > 0 && elapsed >= QuitAfter)
         {
-            // Finalize unused C# RefCounted wrappers before Godot shuts down their native servers.
-            System.GC.Collect();
-            System.GC.WaitForPendingFinalizers();
-            GetTree().Quit();
+            ShutdownGuard.Quit(GetTree());
         }
     }
 
@@ -196,14 +194,14 @@ public partial class CaptureDirector : Node
                 if (data.Length != width * height * 4) throw new InvalidOperationException("unexpected screenshot texture format");
                 screenshots.Add(($"{dir}/{name}.png", width, height, data));
             }
-            catch (Exception error) { GD.PushError($"[capture] FAIL {error.Message}"); GetTree().Quit(1); }
+            catch (Exception error) { GD.PushError($"[capture] FAIL {error.Message}"); ShutdownGuard.Quit(GetTree(), 1); }
             finally { screenshotPending--; }
         }));
         if (status != Error.Ok)
         {
             screenshotPending--;
             GD.PushError($"[capture] FAIL readback request: {status}");
-            GetTree().Quit(1);
+            ShutdownGuard.Quit(GetTree(), 1);
         }
     }
 
@@ -215,7 +213,7 @@ public partial class CaptureDirector : Node
             if (image.SavePng(shot.Path) != Error.Ok)
             {
                 GD.PushError($"[capture] FAIL could not save {shot.Path}");
-                GetTree()?.Quit(1);
+                if (GetTree() is { } tree) ShutdownGuard.Quit(tree, 1);
             }
             else
             {

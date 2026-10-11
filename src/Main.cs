@@ -88,7 +88,7 @@ public partial class Main : Node
         AddChild(server);
         if (!server.Start().Success)
         {
-            GetTree().Quit(1);
+            ShutdownGuard.Quit(GetTree(), 1);
         }
     }
 

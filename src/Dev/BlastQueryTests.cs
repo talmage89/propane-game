@@ -17,13 +17,14 @@ public partial class BlastQueryTests : Node3D
     {
         if (condition) { return; }
         GD.PushError($"[blast query] FAIL {message}");
-        GetTree().Quit(1);
+        ShutdownGuard.Quit(GetTree(), 1);
         throw new InvalidOperationException(message);
     }
 
     public override void _Ready()
     {
         world = new WorldContext(this, Tuning.SavedTemplate, present: true);
+        DevArgs.MarkReady();
         // More colliders than one blast page, including duplicate shapes on the same body.
         var bodies = new List<RigidBody3D>();
         for (var i = 0; i < 1100; i++)

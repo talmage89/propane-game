@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Godot;
+using Propane.Core;
 using Propane.World;
 using Propane.World.Plan;
 
@@ -22,11 +23,12 @@ public partial class GeneratorTests : Node
 
     public override void _Ready()
     {
+        DevArgs.MarkReady();
         try { RunTests(); }
         catch (Exception error)
         {
             GD.PushError(error.ToString());
-            GetTree().Quit(1);
+            ShutdownGuard.Quit(GetTree(), 1);
         }
     }
 
@@ -72,7 +74,10 @@ public partial class GeneratorTests : Node
         GD.Print($"[tests] tank groups: {groupSizes.Count / (float)count:0.0} per map, sizes " +
                  string.Join(" ", groupSizes.GroupBy(g => g).OrderBy(g => g.Key).Select(g => $"{g.Key}:{g.Count()}")));
         GD.Print("[tests] tank spots: " + string.Join(", ", reasons.OrderByDescending(r => r.Value).Select(r => $"{r.Key} {r.Value} (seed {firstSeedFor[r.Key]})")));
-        TestFormations(catalog);
+        var formationTimer = System.Diagnostics.Stopwatch.StartNew();
+        var formationCount = (int)DevArgs.GetFloat("formation-seeds", 6);
+        TestFormations(catalog, formationCount);
+        GD.Print($"[tests] forced formations: {formationCount} seeds per formation/size in {formationTimer.ElapsedMilliseconds} ms");
         // Larger matches cost far more per seed; --large-seeds (default 10) sets their sweep. make test-full runs 100.
         var largeCount = (int)DevArgs.GetFloat("large-seeds", Mathf.Min(count, 10));
         foreach (var players in new[] { 2, 8, 16, 24, 32 }) TestMatchSuburbs(players <= 2 ? count : largeCount, players, catalog);
@@ -81,7 +86,7 @@ public partial class GeneratorTests : Node
             GD.Print($"[tests] FAIL {kind}: {n}");
         }
         GD.Print(failures == 0 ? "[tests] ALL PASSED" : $"[tests] {failures} FAILURES");
-        GetTree().Quit(failures == 0 ? 0 : 1);
+        ShutdownGuard.Quit(GetTree(), failures == 0 ? 0 : 1);
     }
 
     private void Check(int seed, string what, bool ok, string detail = "")
@@ -181,7 +186,7 @@ public partial class GeneratorTests : Node
         return gap;
     }
 
-    private void TestFormations(GameCatalog catalog)
+    private void TestFormations(GameCatalog catalog, int count)
     {
         foreach (var formation in Enum.GetValues<World.Plan.PileFormation>())
         {
@@ -232,7 +237,7 @@ public partial class GeneratorTests : Node
             }));
             foreach (var mode in modes)
             {
-                for (var seed = 1; seed <= 6; seed++)
+                for (var seed = 1; seed <= count; seed++)
                 {
                     var plan = new SuburbGenerator(mode, catalog, seed).Generate();
                     Check(seed, "forced formation", plan.Tanks.All(t => t.Formation == formation));

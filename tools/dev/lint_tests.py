@@ -2,6 +2,7 @@
 """Check that the quality gate rejects representative mistakes, in an isolated scratch project."""
 import os
 import pathlib
+import re
 import shutil
 import subprocess
 import tempfile
@@ -21,44 +22,141 @@ def require(condition, message, output=""):
 
 
 def check_make_order(scratch):
-    # Stub only the external tools: exercise the real Makefile, including parallel make and failures.
+    # Stub external tools only: exercise the real Makefile and world checker under parallel make.
     stub = """#!/usr/bin/env bash
 set -euo pipefail
 printf '%s %s\\n' "${0##*/}" "$*" >> "$COMMAND_LOG"
 if [[ "${0##*/}" == dotnet && "$1" == format && "$PROBE_FAIL" == format ]]; then exit 1; fi
 if [[ "${0##*/}" == dotnet && "$*" == *-warnaserror* && "$PROBE_FAIL" == build ]]; then exit 1; fi
-if [[ "${0##*/}" == godot && "$*" == *--hash-world-plan=* ]]; then printf '[world] hash probe fences 1\\n'; fi
+if [[ "$PROBE_FAIL" != none && "$PROBE_FAIL" != format && "$PROBE_FAIL" != build && "$*" == *"$PROBE_FAIL"* ]]; then exit 1; fi
+if [[ "${0##*/}" == godot && "$*" == *--hash-world-plans=* ]]; then
+  if [[ "$PROBE_FAIL" == world-missing ]]; then exit 0; fi
+  count=0
+  if [[ -f "$WORLD_COUNT" ]]; then read -r count < "$WORLD_COUNT"; fi
+  count=$((count + 1)); printf '%s\\n' "$count" > "$WORLD_COUNT"
+  if [[ "$PROBE_FAIL" == world-second && "$count" == 2 ]]; then exit 1; fi
+  hash=probe
+  if [[ "$PROBE_FAIL" == world-diff && "$count" == 2 ]]; then hash=changed; fi
+  for formation in Rows Square Triangular Cluster; do
+    if [[ "$PROBE_FAIL" == world-partial && "$formation" == Cluster ]]; then continue; fi
+    printf '[world] hash %s fences 1 formation %s\\n' "$hash" "$formation"
+  done
+fi
 """
     for name in ("dotnet", "godot", "python3"):
         path = scratch / name
         path.write_text(stub)
         path.chmod(0o755)
     log = scratch / "commands.log"
-    environment = dict(os.environ, PATH=f"{scratch}:{os.environ['PATH']}", GODOT=str(scratch / "godot"), COMMAND_LOG=str(log))
-    for failure in ("none", "format", "build"):
+    counter = scratch / "world-count"
+    environment = dict(os.environ, PATH=f"{scratch}:{os.environ['PATH']}", GODOT=str(scratch / "godot"),
+                       COMMAND_LOG=str(log), WORLD_COUNT=str(counter), TMPDIR=str(scratch))
+    checkers = ["check_world_tests.py", "time_gate_tests.py", "check_scores_tests.py", "compare_vents_tests.py", "compare_tank_paths_tests.py"]
+    scenes = ["shutdown_tests.tscn", "shutdown_tests.tscn -- --paused --window-close --repeat-quit", "core_tests.tscn", "blast_query_tests.tscn", "gather_range.tscn",
+              "gather_range.tscn -- --scenario=grant-races",
+              "gather_range.tscn -- --scenario=appearance",
+              "game_test.tscn -- --scenario=gather --tune.FixedSeed=23",
+              "melee_range.tscn",
+              "player_range.tscn -- --scenario=melee --assert-motion --assert-grip",
+              "bot_navigation_course.tscn -- --seeds=5",
+              "menu_test.tscn -- --scenario=gamepad", "menu_test.tscn -- --scenario=devices", "menu_test.tscn -- --scenario=mouse",
+              "player_range.tscn -- --scenario=grip --grip-sweep --assert-grip --assert-motion",
+              "player_range.tscn -- --scenario=ragdoll --assert-grip --assert-motion",
+              "player_range.tscn -- --scenario=feet --assert-feet --assert-motion",
+              "player_range.tscn -- --scenario=feet --feet-corrections --assert-feet --assert-motion",
+              "player_range.tscn -- --scenario=feet-events --assert-feet --assert-grip --assert-motion",
+              "player_range.tscn -- --scenario=movement --assert-motion --assert-grip",
+              "player_range.tscn -- --scenario=motion --assert-motion --assert-grip",
+              "generator_tests.tscn -- --seeds=20 --large-seeds=3 --formation-seeds=2"]
+    probes = checkers + scenes + ["--write-world-plans=", "--hash-world-plans=", "world-diff", "world-missing", "world-partial", "world-second"]
+    for failure in ["none", "format", "build", *probes]:
         log.write_text("")
+        counter.write_text("0\n")
         environment["PROBE_FAIL"] = failure
         result = subprocess.run(["make", "-j4", "check"], cwd=ROOT, env=environment,
                                 text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         commands = log.read_text().splitlines()
         require(bool(commands) and commands[0] == "dotnet format Propane.sln --verify-no-changes", "format must run first", result.stdout)
         if failure == "none":
-            checkers = ["check_scores_tests.py", "compare_vents_tests.py", "compare_tank_paths_tests.py"]
-            scenes = ["unit_tests.tscn", "movement_tests.tscn", "menu_test.tscn -- --scenario=gamepad",
-                      "menu_test.tscn -- --scenario=devices", "player_range.tscn -- --scenario=grip --grip-sweep --assert-grip",
-                      "player_range.tscn -- --scenario=ragdoll --assert-grip", "generator_tests.tscn -- --seeds=100", "platform_tests.tscn"]
-            first_scene = 3 + len(checkers)
-            first_world = first_scene + len(scenes)
-            require(result.returncode == 0 and len(commands) == first_world + 3, "check did not run every expected tool call", result.stdout)
+            require(result.returncode == 0 and len(commands) == 3 + len(checkers) + len(scenes) + 3,
+                    "check did not run every expected tool call", result.stdout)
             require("-warnaserror" in commands[1] and "--no-incremental" in commands[1], "lint must rebuild with warnings as errors")
-            require(commands[2].startswith("dotnet build ") and commands[first_scene].startswith("godot --headless "), "tests ran before lint")
-            require(commands[3:first_scene] == [f"python3 -B tools/dev/{checker}" for checker in checkers], "check skipped checker regressions")
-            require(all(scene in command for scene, command in zip(scenes, commands[first_scene:first_world])), "check skipped a regression scene")
-            require("--write-world-plan=" in commands[first_world] and
-                    all("--hash-world-plan=" in command for command in commands[first_world + 1:]), "check skipped separate-process world builds")
+            require(commands[2].startswith("dotnet build "), "tests ran before lint")
+            for checker in checkers:
+                require(commands.count(f"python3 -B tools/dev/{checker}") == 1, f"check skipped/duplicated {checker}")
+            for scene in scenes:
+                # The default gather probe has no scenario, so distinguish it from grant-races.
+                matches = [command for command in commands if scene in command and
+                           (scene not in ("gather_range.tscn", "shutdown_tests.tscn") or " -- " not in command)]
+                require(len(matches) == 1, f"check skipped/duplicated {scene}", result.stdout)
+            require(sum("--write-world-plans=" in c for c in commands) == 1 and
+                    sum("--hash-world-plans=" in c for c in commands) == 2,
+                    "check skipped separate-process world builds", result.stdout)
+        elif failure in ("format", "build"):
+            require(result.returncode != 0 and len(commands) == (1 if failure == "format" else 2),
+                    "lint failure did not stop check", result.stdout)
         else:
-            require(result.returncode != 0 and len(commands) == (1 if failure == "format" else 2), "lint failure did not stop check", result.stdout)
-    print("PASS: parallel make check orders lint before tests and stops on formatter/build failures")
+            require(result.returncode != 0, f"parallel check ignored failure: {failure}", result.stdout)
+    print("PASS: parallel check runs every suite after lint and propagates every suite/hash failure")
+    deep = ["--scenario=melee-reloads --assert-motion --assert-grip",
+            "--seeds=200 --large-seeds=100 --formation-seeds=6",
+            "bot_navigation_course.tscn -- --seeds=100"]
+    for failure in ["none", *deep]:
+        log.write_text("")
+        counter.write_text("0\n")
+        environment["PROBE_FAIL"] = failure
+        code, output = run(ROOT, "make", "-j4", "test-full", environment=environment)
+        commands = log.read_text().splitlines()
+        if failure == "none":
+            require(code == 0 and all(any(probe in c for c in commands) for probe in deep) and
+                    any("core_tests.tscn" in c for c in commands), "test-full lost the gate or deep sweeps", output)
+        else:
+            require(code != 0, f"test-full ignored deep failure: {failure}", output)
+    print("PASS: test-full includes the gate and every deep sweep, and propagates their failures")
+
+
+
+def check_core_wiring():
+    source = (ROOT / "src/Dev/CoreTests.cs").read_text()
+    scenes = re.findall(r'"([^"\n]+)"', re.search(r"Scenes = \{([^}]+)\}", source).group(1))
+    require(len(scenes) == len(set(scenes)), "core runner duplicates a suite")
+    required = {"platform_tests": "src/Dev/PlatformTests.cs", "movement_tests": "src/Dev/MovementTests.cs",
+                "unit_tests": "src/Dev/UnitTests/TestRunner.cs"}
+    for scene, script in required.items():
+        require(scene in scenes, f"core runner skipped {scene}")
+        suite = (ROOT / script).read_text()
+        require("CoreTests.Complete(this," in suite and ".Quit(" not in suite,
+                f"{scene} bypasses runner failure propagation")
+    require(".Quit(" not in source.replace("ShutdownGuard.Quit(", ""),
+            "core runner bypasses shutdown guard")
+    require("ShutdownGuard.Quit(node.GetTree(), code)" in source, "standalone completion bypasses shutdown guard")
+    for path in (ROOT / "src/Dev").rglob("*.cs"):
+        if path.name != "ShutdownWitness.cs":
+            require(".Quit(" not in path.read_text().replace("ShutdownGuard.Quit(", ""),
+                    f"{path.name} bypasses orderly shutdown")
+    runner = (ROOT / "src/Dev/UnitTests/TestRunner.cs").read_text()
+    require("Assembly.GetTypes()" in runner and "typeof(UnitSuiteAttribute)" in runner and
+            ".Register(this)" not in runner, "unit runner must discover attributed suites")
+    for path in (ROOT / "src/Dev/UnitTests").glob("*.cs"):
+        text = path.read_text()
+        if "public static void Register(TestRunner runner)" in text:
+            require(re.search(r"\[UnitSuite(?:\(-?\d+\))?\]\s+(?:public|internal) static class", text),
+                    f"{path.name} is missing its discovery marker")
+    print("PASS: core failure/shutdown routing and unit discovery retain every suite")
+
+
+def check_ci_partitions():
+    makefile = (ROOT / "Makefile").read_text()
+    workflow = (ROOT / ".github/workflows/ci.yml").read_text()
+    local = re.search(r"^test: (.+?) ##", makefile, re.MULTILINE).group(1).split()
+    matrix = re.search(r"suite: \[([^\]]+)\]", workflow).group(1).split(",")
+    require(sorted(local) == sorted("test-" + name.strip() for name in matrix), "CI partitions differ from local test")
+    require("run: make test-${{ matrix.suite }}" in workflow and "run: make lint" in workflow,
+            "CI skipped the local targets")
+    require("needs: [lint, imports, tests]" in workflow and "if: always()" in workflow and
+            'test "$LINT" = success && test "$IMPORTS" = success && test "$TESTS" = success' in workflow,
+            "stable CI check must require every job")
+    print("PASS: CI runs the local partitions and requires every result")
 
 
 def check_installer(scratch):
@@ -83,7 +181,7 @@ def check_installer(scratch):
 
 
 def main():
-    with tempfile.TemporaryDirectory(prefix="mnet-lint-") as directory:
+    with tempfile.TemporaryDirectory(prefix="wptest-lint-") as directory:
         scratch = pathlib.Path(directory)
         shutil.copyfile(ROOT / "Propane.csproj", scratch / "Probe.csproj")
         shutil.copyfile(ROOT / ".editorconfig", scratch / ".editorconfig")
@@ -135,6 +233,8 @@ public static class Formatting
         print("PASS: whitespace and style drift fail; corrected code passes formatting and build")
         check_make_order(scratch)
         check_installer(scratch)
+        check_core_wiring()
+        check_ci_partitions()
 
 
 if __name__ == "__main__":

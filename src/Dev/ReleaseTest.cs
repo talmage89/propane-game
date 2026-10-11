@@ -1,5 +1,6 @@
 using System.Linq;
 using Godot;
+using Propane.Core;
 using Propane.Net;
 using Propane.UI;
 
@@ -85,7 +86,7 @@ public partial class ReleaseTest : Node
                 }
                 director.Screenshot("02_single_player");
                 GD.Print($"[releasetest] PASS main menu and single player ({game.Current.Plan.Tanks.Count} tanks)");
-                GetTree().Quit();
+                ShutdownGuard.Quit(GetTree());
                 stage = 99;
                 return;
             }
@@ -141,7 +142,7 @@ public partial class ReleaseTest : Node
             {
                 director.Screenshot("05_returned_to_lobby");
                 GD.Print("[releasetest] PASS cross-platform match finished and returned to lobby");
-                GetTree().Quit();
+                ShutdownGuard.Quit(GetTree());
                 stage = 99;
             }
         }
@@ -175,7 +176,7 @@ public partial class ReleaseTest : Node
     private void Fail(string reason)
     {
         GD.PushError($"[releasetest] FAIL {reason}");
-        GetTree().Quit(1);
+        ShutdownGuard.Quit(GetTree(), 1);
         stage = 99;
     }
 }

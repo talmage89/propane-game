@@ -1,5 +1,6 @@
 using System.Linq;
 using Godot;
+using Propane.Core;
 using Propane.Tank;
 
 namespace Propane.Dev;
@@ -17,6 +18,7 @@ public partial class GameTest : Node
 
     public override void _Ready()
     {
+        DevArgs.MarkReady();
         DevArgs.Setup();
         Core.DevLog.Enabled = DevArgs.Get("verbose-log") != null;
         game = new Game { PauseOnFocusLoss = false };
@@ -139,7 +141,7 @@ public partial class GameTest : Node
                 if (cleared == null || IsInstanceValid(cleared) || game.Current == null || game.InTransition || game.Current.TanksRemaining <= 0)
                 {
                     GD.PushError("[clear] FAIL cleared suburb was not retired and replaced");
-                    GetTree().Quit(1);
+                    ShutdownGuard.Quit(GetTree(), 1);
                     return;
                 }
                 GD.Print($"[clear] PASS retired cleared suburb; next suburb has {game.Current.TanksRemaining} tanks");
@@ -405,7 +407,7 @@ public partial class GameTest : Node
             }
         }
         GD.Print($"[settle] seed {suburb.Plan.Seed}: {moved} of {bodies.Count} props unsettled, {tanks} tanks moved");
-        if (tanks > 0) { GD.PushError("[settle] tanks moved before a hit"); GetTree().Quit(1); }
+        if (tanks > 0) { GD.PushError("[settle] tanks moved before a hit"); ShutdownGuard.Quit(GetTree(), 1); }
     }
 
     private void ScriptGather(CaptureDirector director)
@@ -422,7 +424,7 @@ public partial class GameTest : Node
         {
             if (condition) { return; }
             GD.PushError($"[game gather] FAIL {message}");
-            GetTree().Quit(1);
+            ShutdownGuard.Quit(GetTree(), 1);
             throw new System.InvalidOperationException(message);
         }
         director.At(3, () =>

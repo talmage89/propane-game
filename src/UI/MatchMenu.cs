@@ -1,4 +1,5 @@
 using Godot;
+using Propane.Core;
 
 namespace Propane.UI;
 
@@ -53,7 +54,7 @@ public partial class MatchMenu : CanvasLayer
         var leave = UiStyle.Button("Leave match");
         leave.Pressed += () => LeaveRequested?.Invoke();
         var quit = UiStyle.Button("Quit");
-        quit.Pressed += () => GetTree().Quit();
+        quit.Pressed += () => ShutdownGuard.Quit(GetTree());
         buttons.AddChild(resume);
         buttons.AddChild(leave);
         buttons.AddChild(quit);

@@ -20,7 +20,9 @@ git rev-parse --short HEAD >build_id.txt
 mkdir -p "$stage/game"
 log="$stage/export.log"
 if ! "$godot" --headless --path . --export-release Linux "$stage/game/Propane.x86_64" >"$log" 2>&1 || grep -q '^ERROR' "$log"; then
-  grep -A3 '^ERROR' "$log" >&2 || tail -40 "$log" >&2
+  # An earlier export error must not hide a later shutdown backtrace before scratch cleanup.
+  grep -A3 '^ERROR' "$log" >&2 || true
+  tail -40 "$log" >&2
   exit 1
 fi
 cp tools/server/Dockerfile tools/server/docker-compose.yml "$stage/"

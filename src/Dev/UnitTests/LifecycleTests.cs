@@ -6,6 +6,7 @@ using Propane.Net;
 
 namespace Propane.Dev.UnitTests;
 
+[UnitSuite]
 public static class LifecycleTests
 {
     public static void Register(TestRunner runner)

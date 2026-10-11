@@ -27,6 +27,7 @@ public partial class MovementTests : Node
     public override void _Ready()
     {
         world = new WorldContext(this, Tuning.SavedTemplate, present: true);
+        DevArgs.MarkReady();
         ProcessMode = ProcessModeEnum.Always;
         Callable.From(RunTests).CallDeferred();
     }
@@ -54,12 +55,12 @@ public partial class MovementTests : Node
             PauseTests();
             await FacadeTests().ConfigureAwait(true);
             GD.Print($"[movement-tests] PASS {checks} assertions");
-            GetTree().Quit();
+            CoreTests.Complete(this);
         }
         catch (Exception e)
         {
             GD.PushError($"[movement-tests] FAIL {e}");
-            GetTree().Quit(1);
+            CoreTests.Complete(this, 1);
         }
     }
 

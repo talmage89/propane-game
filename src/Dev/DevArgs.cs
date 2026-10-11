@@ -35,6 +35,12 @@ public static class DevArgs
     /// <summary>Common setup for dev scenes: applies any <c>--tune.Name=value</c> overrides to the live tuning.</summary>
     public static void Setup() => ApplyTuningOverrides();
 
+    /// <summary>Optional scene-entry marker for tools/dev/time_gate.py; absent during ordinary runs.</summary>
+    public static void MarkReady()
+    {
+        if (System.Environment.GetEnvironmentVariable("PROPANE_GATE_TIMING") == "1") GD.Print("[gate-timing] ready");
+    }
+
     /// <summary>Applies <c>--tune.Name=value</c> arguments to the live tuning, for trying dial values from the command line.</summary>
     private static void ApplyTuningOverrides()
     {

@@ -6,6 +6,7 @@ using static Propane.Dev.UnitTests.TestRunner;
 
 namespace Propane.Dev.UnitTests;
 
+[UnitSuite]
 public static class WorldClockTests
 {
     public static void Register(TestRunner runner)

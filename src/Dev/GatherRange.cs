@@ -32,6 +32,7 @@ public partial class GatherRange : Node3D
 
     public override void _Ready()
     {
+        DevArgs.MarkReady();
         DevArgs.Setup();
         world = new WorldContext(this, Tuning.SavedTemplate, present: true);
         DisplayServer.WindowSetVsyncMode(DisplayServer.VSyncMode.Disabled);
@@ -145,7 +146,7 @@ public partial class GatherRange : Node3D
 
     private void Require(bool condition, string message)
     {
-        if (!condition) { GD.PushError($"[gather] FAIL {message}"); GetTree().Quit(1); throw new InvalidOperationException(message); }
+        if (!condition) { GD.PushError($"[gather] FAIL {message}"); ShutdownGuard.Quit(GetTree(), 1); throw new InvalidOperationException(message); }
     }
 
     /// <summary>

@@ -1,5 +1,6 @@
 using System.Linq;
 using Godot;
+using Propane.Core;
 
 namespace Propane.Dev;
 
@@ -18,6 +19,7 @@ public partial class MenuTest : Node
 
     public override void _Ready()
     {
+        DevArgs.MarkReady();
         DevArgs.Setup();
         // A fresh settings file, so the run neither reads nor changes the player's name, color and server.
         DirAccess.RemoveAbsolute(ProjectSettings.GlobalizePath("user://menu_test_settings.cfg"));
@@ -55,7 +57,7 @@ public partial class MenuTest : Node
                     client.RejectedBy == "9.9.0" && detail == expected && HasText(GetTree().Root, expected) &&
                     FindButton(GetTree().Root, "Download Propane 9.9.x") != null;
                 GD.Print($"[menutest] version rejection UI: {passed}, reason: {detail}");
-                if (!passed) { GetTree().Quit(1); }
+                if (!passed) { ShutdownGuard.Quit(GetTree(), 1); }
             });
             return;
         }
@@ -110,7 +112,7 @@ public partial class MenuTest : Node
             if (FindButton(GetTree().Root, "Single player") == null)
             {
                 GD.PushError("[menutest] Did not return to the main menu");
-                GetTree().Quit(1);
+                ShutdownGuard.Quit(GetTree(), 1);
                 return;
             }
             GD.Print("[menutest] PASS: returned to main menu");
@@ -130,7 +132,7 @@ public partial class MenuTest : Node
         if (button == null)
         {
             GD.PushError($"[menutest] Missing button: {text}");
-            GetTree().Quit(1);
+            ShutdownGuard.Quit(GetTree(), 1);
             return;
         }
         button.EmitSignal(BaseButton.SignalName.Pressed);
@@ -148,7 +150,7 @@ public partial class MenuTest : Node
         if (index >= swatches.Count)
         {
             GD.PushError($"[menutest] Missing swatch {index}");
-            GetTree().Quit(1);
+            ShutdownGuard.Quit(GetTree(), 1);
             return;
         }
         swatches[index].EmitSignal(BaseButton.SignalName.Pressed);
