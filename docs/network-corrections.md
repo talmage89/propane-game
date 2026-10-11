@@ -32,6 +32,7 @@ Three unit regressions failed before the fix and passed afterward: initial sleep
 `--tank-trace` is optional dev logging. It reports owner, epoch, sequence, pending claim, accepted state/rest,
 correction target, sleep, position/velocity and gathering on body-sync transitions. Publish traces precede the
 caller's sequence increment, so a trace showing sequence N publishes N+1. Ordinary matches have no listener.
+Use `--tank-trace=1000000d` to restrict output to one body; tracing every settled body adds substantial logging.
 
 ## Moving correction freshness
 
@@ -50,6 +51,19 @@ arrived at Bot1 1.160–1.384 s after publication during its 3.65 s moving disag
 same stream mostly 0.142–0.262 s old. Bot1's receive interval peaked at 2.063 s. The configured two transport
 legs alone total 0.120–0.180 s; those late copies are not evidence that a 5.9 m error is ordinary flight under
 just that delay. Distance, settlement and final motion thresholds have not been increased.
+
+## Observer spin steering
+
+Body sync adds rotation-error steering to the owners angular velocity. The vent physics callback ran later
+and clamped that combined velocity to the gameplay spin limit, removing steering when the owner was already
+spinning at the limit. Fresh observer corrections now bypass this clamp; the owner and stale observers retain
+the existing limit. Vent thrust, owner physics and all tuner defaults are unchanged.
+
+The regression fails before (`/tmp/nas-spin-before.log`: vent spin limiter erased observer correction) and
+passes afterward (`build/net-assert-artifacts/spin-after.log`: 200 tests, zero failures). It also checks that
+stale copies and a newly granted owner resume the ordinary limit. The before run was interrupted after its
+failure; the after suite completed. Both builds were warning-free. Network measurement remains necessary
+to establish which moving errors this correction resolves.
 
 ## Construction stalls and native liveness
 

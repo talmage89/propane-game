@@ -33,6 +33,33 @@ public static class AuthorityTests
 
     public static void Register(TestRunner runner)
     {
+        runner.Run("authority/vent spin limit does not erase observer steering", () =>
+        {
+            using var f = new MatchFixture(runner);
+            var tank = f.Match.LiveTanks.Single(t => t.NetId == Id);
+            tank.PunctureRemote(Vector3.Zero, Vector3.Right, 1);
+            tank.GlobalTransform = new Transform3D(Basis.Identity, tank.GlobalPosition);
+            var spin = Vector3.Up * f.Match.World.Tuning.VentMaxSpin;
+            var target = new Transform3D(new Basis(Vector3.Up, .5f), tank.GlobalPosition);
+            // This fixture's host owns the initial tank; grant the observer stream explicitly.
+            f.Match.Bodies.OnAuthority(new BodyAuthority(new BodyState(Id, target, Vector3.Zero, spin, 2, 0),
+                3, TankLedger.State.Venting, false, new VentParameters(Vector3.Zero, Vector3.Right, 1), Vector3.Zero));
+            f.Match.Bodies.OnState(3, new BodyState(Id, target, Vector3.Zero, spin, 2, 1), false, 1);
+            f.Match.Bodies.Correct(1);
+            var steering = tank.AngularVelocity;
+            TestRunner.Assert(steering.Length() > spin.Length(), "fixture did not require steering beyond owner spin");
+            tank._PhysicsProcess(1.0 / 60);
+            TestRunner.Assert(tank.AngularVelocity.IsEqualApprox(steering), "vent spin limiter erased observer correction");
+            f.Match.Bodies.Correct(2);
+            tank._PhysicsProcess(1.0 / 60);
+            TestRunner.Assert(tank.AngularVelocity.Length() <= spin.Length() + .001f, "stale observer escaped the ordinary spin limit");
+            f.Match.Bodies.OnAuthority(new BodyAuthority(new BodyState(Id, target, Vector3.Zero, spin, 3, 0),
+                2, TankLedger.State.Venting, false, new VentParameters(Vector3.Zero, Vector3.Right, 1), Vector3.Zero));
+            f.Match.Bodies.Correct(3);
+            tank.AngularVelocity = steering;
+            tank._PhysicsProcess(1.0 / 60);
+            TestRunner.Assert(tank.AngularVelocity.Length() <= spin.Length() + .001f, "new owner escaped its spin limit");
+        });
         runner.Run("authority/rest remains authoritative after observer settles and drifts locally", () =>
         {
             using var body = new BodyFixture(runner);

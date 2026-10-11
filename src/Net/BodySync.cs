@@ -229,6 +229,11 @@ public sealed class BodySync
         var blend = Mathf.Max(tuning.CorrectionBlendTime, 0.02f);
         foreach (var entry in entries.Values)
         {
+            if (GodotObject.IsInstanceValid(entry.Body) && entry.Body is Tank.PropaneTank tank)
+            {
+                tank.CorrectingMotion = entry.HasTarget && !IsMine(entry) &&
+                    (entry.TargetRest || now - entry.TargetUpdated <= StaleAfter);
+            }
             if (!entry.HasTarget || IsMine(entry) || !GodotObject.IsInstanceValid(entry.Body))
             {
                 continue;

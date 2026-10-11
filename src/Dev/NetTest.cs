@@ -172,6 +172,7 @@ public partial class NetTest : Node
                 match.Bodies.Trace = (entry, reason) =>
                 {
                     if (!entry.IsTank || !IsInstanceValid(entry.Body)) { return; }
+                    if (DevArgs.Get("tank-trace") is { Length: > 0 } selected && entry.Id.ToString("x") != selected) { return; }
                     var body = entry.Body;
                     var p = body.GlobalPosition;
                     var target = entry.Target.Origin;

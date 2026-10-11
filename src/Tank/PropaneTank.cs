@@ -45,6 +45,9 @@ public partial class PropaneTank : RigidBody3D
     private float ventAge;
     private bool fuseLit;
     private float flutterPhase;
+    // Owner physics limits its spin. Observer steering also contains rotation error, which must survive
+    // until integration; clamping that combined velocity prevents the replica from catching the owner.
+    internal bool CorrectingMotion { get; set; }
     private double invulnerableUntil;
     private Color shieldColor = Colors.White;
 
@@ -319,7 +322,7 @@ public partial class PropaneTank : RigidBody3D
         var flutter = 1f + tuning.VentThrustFlutter * (0.6f * Mathf.Sin(t * 23f) + 0.4f * Mathf.Sin(t * 37f + 2f));
         var jet = GlobalBasis * jetDirectionLocal;
         ApplyForce(-jet * tuning.VentThrust * ramp * flutter, GlobalBasis * holeLocal);
-        if (AngularVelocity.LengthSquared() > tuning.VentMaxSpin * tuning.VentMaxSpin)
+        if (!CorrectingMotion && AngularVelocity.LengthSquared() > tuning.VentMaxSpin * tuning.VentMaxSpin)
         {
             AngularVelocity = AngularVelocity.LimitLength(tuning.VentMaxSpin);
         }
