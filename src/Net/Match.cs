@@ -728,7 +728,7 @@ public partial class Match : Node3D
         }
         foreach (var entry in rested)
         {
-            Send(new NetWriter(Msg.BodyRest, Setup.Id).UInt(entry.Id).Transform(entry.Body.GlobalTransform));
+            Send(new NetWriter(Msg.BodyRest, Setup.Id).UInt(entry.Id).Transform(entry.Body.GlobalTransform).Double(now));
         }
     }
 
@@ -858,7 +858,7 @@ public partial class Match : Node3D
                 foreach (var body in states.Bodies) { bodies.OnState(sender, states.Time, body.Id, body.Transform, body.Linear, body.Angular, now); }
                 break;
             case BodyRestMessage rest:
-                bodies.OnRest(sender, rest.Id, rest.Transform, now);
+                bodies.OnRest(sender, rest.Time, rest.Id, rest.Transform, now);
                 break;
             case DropMessage drop:
                 foreach (var body in drop.Tanks) { SpawnDroppedTank(body.Id, sender, drop.Color, body.Transform, body.Linear, body.Angular); }

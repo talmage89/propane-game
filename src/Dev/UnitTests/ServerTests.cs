@@ -67,7 +67,7 @@ public static class ServerTests
             f.Reject(new NetWriter(Msg.Claim, f.Id).UShort(2).UInt(BodySync.MapTankId(0)).UInt(999).ToArray());
             f.Reject(new NetWriter(Msg.Puncture, f.Id).UInt(999).Transform(Transform3D.Identity).Vec3(Vector3.Zero)
                 .Vec3(Vector3.Zero).Vec3(Vector3.One).Vec3(Vector3.Up).Float(1).ToArray());
-            f.Reject(new NetWriter(Msg.BodyRest, f.Id).UInt(999).Transform(Transform3D.Identity).ToArray());
+            f.Reject(new NetWriter(Msg.BodyRest, f.Id).UInt(999).Transform(Transform3D.Identity).Double(1).ToArray());
             f.Reject(MessageCodec.Encode(new NetMessage(Msg.BodyStates, f.Id, 0, new BodyStatesMessage(1,
                 new[] { DropBody(0, 0) with { Id = BodySync.MapTankId(0) }, DropBody(0, 1) with { Id = 999 } })), false));
             f.Reject(new NetWriter(Msg.Shot, f.Id).Vec3(Vector3.One).Vec3(Vector3.Up).Vec3(Vector3.Forward).Byte(1).Int(999).Int(-1).ToArray());
@@ -85,7 +85,7 @@ public static class ServerTests
             f.Receive(state);
             TestRunner.Assert(f.Packets.Single().Message.Payload is BodyStatesMessage, "later snapshot was permanently refused");
             f.Packets.Clear();
-            f.Receive(new NetWriter(Msg.BodyRest, f.Id).UInt(dropped.Id).Transform(dropped.Transform));
+            f.Receive(new NetWriter(Msg.BodyRest, f.Id).UInt(dropped.Id).Transform(dropped.Transform).Double(2));
             TestRunner.Assert(f.Packets.Single() is { Peer: 3, Message.Payload: BodyRestMessage }, "reliable final rest was lost");
             f.Receive(new NetWriter(Msg.Explode, f.Id).UInt(dropped.Id).Vec3(Vector3.One));
             f.Packets.Clear();

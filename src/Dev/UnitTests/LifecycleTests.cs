@@ -19,7 +19,7 @@ public static class LifecycleTests
                 var id = BodySync.MapTankId(0);
                 sync.Register(id, body, isTank: true, owner: 2);
                 // The old owner's final correction need not have finished before PlayerLeft arrives.
-                sync.OnRest(2, id, new Transform3D(Basis.Identity, Vector3.One), 1);
+                sync.OnRest(2, 10, id, new Transform3D(Basis.Identity, Vector3.One), 1);
                 sync.OwnerLeft(2, 3);
                 var (moving, rested) = sync.Collect(1);
                 TestRunner.Assert(moving.Count == 0 && rested.SingleOrDefault()?.Id == id,
@@ -45,6 +45,31 @@ public static class LifecycleTests
                     "previous owner's clock starved the new correction stream");
                 sync.OnClaim(2, new[] { id });
                 TestRunner.Assert(sync.Collect(1).Rested.SingleOrDefault()?.Id == id, "sleeping claimant omitted its final state");
+            }
+            finally { body.Free(); }
+        });
+        runner.Run("lifecycle/a delayed moving snapshot cannot supersede the final rest", () =>
+        {
+            var body = new RigidBody3D { Sleeping = true };
+            try
+            {
+                var sync = new BodySync(me: 3, host: 2);
+                var id = BodySync.MapTankId(0);
+                sync.Register(id, body, isTank: true, owner: 2);
+                sync.OnState(2, 10, id, Transform3D.Identity, Vector3.Up, Vector3.Zero, 1);
+                var rest = new Transform3D(Basis.Identity, Vector3.One);
+                sync.OnRest(2, 11, id, rest, 1.1);
+                // Sent after the last received motion, but before the rest: different channels can reorder it.
+                sync.OnState(2, 10.5, id, Transform3D.Identity, Vector3.Up, Vector3.Zero, 1.2);
+                TestRunner.Assert(sync.Get(id) is { TargetRest: true, Target.Origin: var position } && position == Vector3.One,
+                    "late unreliable motion replaced the reliable final position");
+                sync.Get(id)!.HasTarget = false; // The rest correction finished; keep its timestamp boundary.
+                sync.OnState(2, 10.75, id, Transform3D.Identity, Vector3.Up, Vector3.Zero, 2);
+                TestRunner.Assert(!sync.Get(id)!.HasTarget, "late motion resumed after the rest correction finished");
+                sync.OnState(2, 12, id, Transform3D.Identity, Vector3.Up, Vector3.Zero, 2.1);
+                TestRunner.Assert(sync.Get(id) is { HasTarget: true, TargetRest: false, LastSenderTime: 12 }, "genuine later motion was refused");
+                sync.OnRest(2, 11, id, rest, 2.2);
+                TestRunner.Assert(!sync.Get(id)!.TargetRest, "old rest froze genuinely later motion");
             }
             finally { body.Free(); }
         });

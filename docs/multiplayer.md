@@ -90,6 +90,11 @@ blast, including throws, without running a chain or claiming credit locally.
 The ledger proves existence and prevents duplicate scoring; it does not prove hits, movement, proximity or blast
 positions. Those remain decisions of the distributed client authorities.
 
+Moving and final resting body states carry the owner's timestamp. Clients compare both against one ordering
+boundary, retained after a correction finishes, so an unreliable snapshot sent before a reliable rest cannot
+resume stale motion afterward. Genuinely newer movement still wakes the copy; changing owners resets the boundary
+because sender clocks are process-local.
+
 **Left to each client:** debris, small props and fence panels play out locally from the shared blasts. Cars are synced at a low rate, because players use them as cover.
 
 **Platforms.** Mac and Linux builds of the same minor version play together (0.2.0 with 0.2.5). A version check when a player connects turns away builds of another minor version or protocol, and says which version is needed (see Versions and releases in the README).
@@ -181,7 +186,7 @@ Details settled while building, within the decisions above:
 
 Results, 2026-10-09: with three bots under 120 ms round trip, 30 ms jitter and 3% loss, every bot agreed on which tanks existed and their states throughout; resting tanks matched exactly and venting tanks to within about half a meter. The same held through the Docker server on another machine, over the LAN and over a VPN. When the match's creator left mid-match, the others played on in step. A client with a different protocol was turned away with a message.
 
-Protocol 2 adds match ids and scalar tuning, and appends the debug flag to Hello; the next release must be a minor
+Protocol 3 adds match ids, scalar tuning and timestamps on final body rests, and appends the debug flag to Hello; the next release must be a minor
 release. Every match-scoped request, event and relay carries its match id, and either side ignores a different id.
 The server ends each match with a bank audit: initial test scores + detonated map tanks + re-detonated drops - spills
 must equal total banked, including the banks of departed players retained in the final standings.

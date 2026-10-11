@@ -41,7 +41,7 @@ public sealed class BodySync
         public Vector3 TargetLinear;
         public Vector3 TargetAngular;
         public double TargetReceived;
-        public double LastSenderTime;
+        public double LastSenderTime = double.NegativeInfinity;
     }
 
     private readonly Dictionary<uint, Entry> entries = new();
@@ -117,6 +117,7 @@ public sealed class BodySync
                     // Sender clocks are process-local. A correction from the former owner must not reject the
                     // new owner's first snapshot, or keep steering the body after a claim.
                     entry.HasTarget = false;
+                    entry.LastSenderTime = double.NegativeInfinity;
                     // Even an already sleeping successor owes everyone its final position once.
                     entry.WasAwake |= owner == Me;
                 }
@@ -142,6 +143,7 @@ public sealed class BodySync
         {
             entry.Owner = newHost;
             entry.HasTarget = false;
+            entry.LastSenderTime = double.NegativeInfinity;
             entry.WasAwake |= newHost == Me;
         }
     }
@@ -153,7 +155,8 @@ public sealed class BodySync
         {
             return;
         }
-        if (entry.HasTarget && !entry.TargetRest && senderTime <= entry.LastSenderTime)
+        // Keep the ordering boundary even after a rest correction finishes or a moving target goes stale.
+        if (senderTime <= entry.LastSenderTime)
         {
             return;
         }
@@ -167,12 +170,14 @@ public sealed class BodySync
     }
 
     /// <summary>A body came to rest on its owner's side.</summary>
-    public void OnRest(int sender, uint id, Transform3D transform, double now)
+    public void OnRest(int sender, double senderTime, uint id, Transform3D transform, double now)
     {
         if (!entries.TryGetValue(id, out var entry) || entry.Owner != sender || sender == Me || entry.ClaimPending)
         {
             return;
         }
+        if (senderTime <= entry.LastSenderTime) { return; }
+        entry.LastSenderTime = senderTime;
         entry.HasTarget = true;
         entry.TargetRest = true;
         entry.Target = transform;

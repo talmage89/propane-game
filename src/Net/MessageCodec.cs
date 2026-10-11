@@ -30,7 +30,7 @@ public sealed record ExplodeMessage(uint Id, Vector3 Center);
 public sealed record ClaimMessage(IReadOnlyList<uint> Ids);
 public sealed record BodyState(uint Id, Transform3D Transform, Vector3 Linear, Vector3 Angular);
 public sealed record BodyStatesMessage(double Time, IReadOnlyList<BodyState> Bodies);
-public sealed record BodyRestMessage(uint Id, Transform3D Transform);
+public sealed record BodyRestMessage(uint Id, Transform3D Transform, double Time);
 public sealed record DropMessage(byte Reason, int Color, IReadOnlyList<BodyState> Tanks);
 public sealed record RagdollMessage(Vector3 Position, Vector3 Velocity, Vector3 Spin);
 public sealed record GetUpMessage(Vector3 Position, float Yaw);
@@ -85,7 +85,7 @@ public static class MessageCodec
             Msg.Explode => new ExplodeMessage(Id(r.UInt()), Vector(r)),
             Msg.Claim => new ClaimMessage(Unique(ReadArray(r, r.UShort(), Protocol.MaxCollection, () => Id(r.UInt()), min: 1))),
             Msg.BodyStates => new BodyStatesMessage(Time(r.Double()), ReadBodies(r, r.UShort(), Protocol.MaxBodyStates)),
-            Msg.BodyRest => new BodyRestMessage(Id(r.UInt()), Transform(r)),
+            Msg.BodyRest => new BodyRestMessage(Id(r.UInt()), Transform(r), Time(r.Double())),
             Msg.Drop => ReadDrop(r),
             Msg.Ragdoll => new RagdollMessage(Vector(r), Vector(r), Vector(r)),
             Msg.GetUp => new GetUpMessage(Vector(r), Range(r.Float(), -1_000_000, 1_000_000)),
@@ -154,7 +154,7 @@ public static class MessageCodec
             case BodyStatesMessage p:
                 w.Double(p.Time).UShort((ushort)p.Bodies.Count); foreach (var body in p.Bodies) { WriteBody(w, body); }
                 break;
-            case BodyRestMessage p: w.UInt(p.Id).Transform(p.Transform); break;
+            case BodyRestMessage p: w.UInt(p.Id).Transform(p.Transform).Double(p.Time); break;
             case DropMessage p:
                 w.Byte(p.Reason).Int(p.Tanks.Count).Int(p.Color); foreach (var body in p.Tanks) { WriteBody(w, body); }
                 break;
