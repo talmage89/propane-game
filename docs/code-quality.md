@@ -94,3 +94,4 @@ The profiler uses Python's standard library and preserves command failures, incl
 It records total gate time and every dotnet/Python/Godot invocation in JSON. With `PROPANE_GATE_TIMING=1`, dev
 scenes print a marker at the start of `_Ready`: launch-to-marker is startup, marker-to-exit is work plus shutdown.
 Runtime scenes use imported assets; cold import and restored-import index rebuilds should be timed separately.
+See [the gate timing report](test-speed.md) for the measurements and the CI estimate.
