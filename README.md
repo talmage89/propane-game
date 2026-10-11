@@ -90,6 +90,7 @@ pre-move floor contact. The accepted jump overrides contact; landing is the firs
 Held aim is intent, effective aim owns creep/spread, and recent fire only owns ready presentation. Animation uses the
 resolved gait (creep selects the walk clip), while actual velocity still accelerates toward the target. The node
 facade owns collisions, ammo and lifecycle transitions; the resolver has no scene or engine dependencies.
+A throw immediately clears weapon poses and cancels reload, so get-up cannot restore a pose from before the throw.
 
 ## Tuning
 

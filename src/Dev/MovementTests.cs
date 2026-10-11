@@ -1,7 +1,9 @@
 using System;
+using System.Threading.Tasks;
 using Godot;
 using Propane.Core;
 using Propane.Player;
+using Propane.Tank;
 
 namespace Propane.Dev;
 
@@ -19,7 +21,7 @@ public partial class MovementTests : Node
 
     public override void _Ready() => Callable.From(RunTests).CallDeferred();
 
-    private void RunTests()
+    private async void RunTests()
     {
         try
         {
@@ -30,6 +32,7 @@ public partial class MovementTests : Node
             padIntentMode = false;
             InputTests();
             SnapshotTests();
+            await FacadeTests().ConfigureAwait(true);
             GD.Print($"[movement-tests] PASS {checks} assertions");
             GetTree().Quit();
         }
@@ -241,5 +244,52 @@ public partial class MovementTests : Node
         gameplayEnabled = false;
         intent = device.Read();
         Check(intent.Move == Vector2.Zero && !intent.FireHeld && intent.LookStick == Vector2.Zero, "menus suppress gameplay");
+    }
+
+    private sealed class TestInput : IPlayerInputSource
+    {
+        public PlayerIntent Intent;
+        public PlayerIntent Read() => Intent;
+    }
+
+    private async Task FacadeTests()
+    {
+        GD.Seed(1);
+        var floor = new StaticBody3D { CollisionLayer = Layers.Floor, CollisionMask = 0 };
+        floor.AddChild(new CollisionShape3D { Shape = new WorldBoundaryShape3D() });
+        AddChild(floor);
+        var input = new TestInput { Intent = new PlayerIntent { Aim = true } };
+        var player = new PlayerCharacter { InputOverride = input };
+        AddChild(player);
+        for (var i = 0; i < 60; i++) await ToSignal(GetTree(), SceneTree.SignalName.PhysicsFrame);
+        Check(player.ResolvedState.EffectiveAim && player.AimAmount > 0.99f, "facade starts grounded and aimed");
+        player.ReceiveBlast(new BlastInfo(Vector3.Zero, Vector3.Forward, 0, 1));
+        Check(player.ResolvedState.Lifecycle == PlayerLifecycle.Ragdoll && player.AimAmount == 0 &&
+            player.CaptureNetState().Sprint == 0, "ragdoll immediately clears resolved control and weapon poses");
+        input.Intent = default;
+        for (var i = 0; i < 1200 && player.IsRagdolled; i++)
+        {
+            await ToSignal(GetTree(), SceneTree.SignalName.PhysicsFrame);
+            Check(player.AimAmount == 0, "released aim stays cleared through ragdoll/get-up");
+        }
+        Check(!player.IsRagdolled, "ragdoll/get-up fixture completes");
+        await ToSignal(GetTree(), SceneTree.SignalName.PhysicsFrame);
+        await ToSignal(GetTree(), SceneTree.SignalName.PhysicsFrame);
+        Check(!player.ResolvedState.EffectiveAim && player.AimAmount == 0, "recovery does not resurrect released aim");
+        input.Intent = new PlayerIntent { Move = Vector2.Down, Sprint = true };
+        for (var i = 0; i < 60; i++) await ToSignal(GetTree(), SceneTree.SignalName.PhysicsFrame);
+        player.Ammo = new AmmoState { Magazine = 10, Reserve = 40 };
+        input.Intent.ReloadPressed = true;
+        await ToSignal(GetTree(), SceneTree.SignalName.PhysicsFrame);
+        await ToSignal(GetTree(), SceneTree.SignalName.PhysicsFrame);
+        input.Intent.ReloadPressed = false;
+        Check(player.ResolvedState.Gait == PlayerGait.Sprint && player.CaptureNetState().Sprint > 0.99f &&
+            player.ResolvedState.Weapon == WeaponAction.Reload && player.Ammo.Reloading,
+            "facade reload leaves sprint selected and posed");
+        player.ReceiveBlast(new BlastInfo(Vector3.Zero, Vector3.Forward, 0, 1));
+        Check(player.CaptureNetState().Sprint == 0 && !player.Ammo.Reloading,
+            "ragdoll immediately clears sprint pose and cancels reload");
+        player.QueueFree();
+        floor.QueueFree();
     }
 }

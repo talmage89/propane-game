@@ -709,6 +709,14 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
     private void BeginRagdoll(Vector3 velocity, Vector3 spin)
     {
         state = State.Ragdoll;
+        // A blast can arrive between our ticks. Drop control/presentation immediately so neither snapshots nor
+        // the returning rig inherit an aimed or sprinting pose from before the throw.
+        resolver.Reset();
+        ResolvedState = new PlayerState(PlayerLifecycle.Ragdoll, PlayerSupport.Airborne, PlayerGait.Default,
+            WeaponAction.Carry, 0, 0, 0, intent.Aim, false, false);
+        aimAmount = sprintAmount = readyAmount = 0;
+        airTime = landingTimer = 0;
+        Ammo?.CancelReload();
         stateTimer = 0;
         settleTimer = 0;
         groundedTimer = 0;
