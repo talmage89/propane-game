@@ -37,6 +37,9 @@ Requires Godot 4.7.2 (.NET edition) and the .NET 10 SDK.
 - Command line: `make run`. `make` lists the other tasks (tests, a local server, bots, releases); they find Godot on
   `PATH` (`godot-mono` or `godot`) or in `/Applications`, or set `GODOT` to its binary.
 
+[docs/code-quality.md](docs/code-quality.md) describes the formatting and analyzer baseline and its regression
+checks. The gate follows the existing code's style and checks correctness without API design or naming churn.
+
 The game opens maximized on the main menu: Single player, Multiplayer or Quit. In play it captures the mouse; click
 the window to recapture it after switching away.
 

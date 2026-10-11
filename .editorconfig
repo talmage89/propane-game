@@ -30,7 +30,8 @@ csharp_style_namespace_declarations = file_scoped:warning
 csharp_prefer_braces = when_multiline:warning
 csharp_style_var_for_built_in_types = true:warning
 csharp_style_var_when_type_is_apparent = true:warning
-csharp_style_var_elsewhere = true:warning
+# Keep intentional base/interface declarations when inference would change the static type.
+csharp_style_var_elsewhere = true:silent
 
 # Short members often use =>; longer ones use blocks. Preserve both without style noise.
 csharp_style_expression_bodied_methods = when_on_single_line:silent
@@ -75,3 +76,8 @@ dotnet_naming_rule.interfaces.severity = suggestion
 dotnet_naming_symbols.interfaces.applicable_kinds = interface
 dotnet_naming_style.interface_name.required_prefix = I
 dotnet_naming_style.interface_name.capitalization = pascal_case
+
+# Check ownership of disposable fields too (a Design rule, outside the category baseline).
+dotnet_diagnostic.CA1001.severity = warning
+# Make captured async context explicit, especially for callbacks that touch Godot objects.
+dotnet_diagnostic.CA2007.severity = warning

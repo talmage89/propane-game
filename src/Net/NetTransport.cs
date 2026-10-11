@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using Godot;
 
@@ -10,6 +11,7 @@ namespace Propane.Net;
 /// packets. Used directly rather than through Godot's RPCs, so the server can route every message itself.
 /// For testing, it can hold packets back to simulate lag, jitter and loss.
 /// </summary>
+[SuppressMessage("Design", "CA1001", Justification = "Close releases the ENet connection; the RefCounted peer remains reusable for reconnects.")]
 public sealed class NetTransport
 {
     public const int ServerId = 1;

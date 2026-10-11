@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using Godot;
 using Propane.Core;
@@ -24,6 +25,7 @@ public interface IBotBrain : IPlayerInputSource
 /// - it prefers venting tanks (one shot from a point) and big piles, especially piles with another player near them;
 /// - it strafes in a fight, keeps its magazine topped up when nothing is happening, and fetches ammo when low.
 /// </summary>
+[SuppressMessage("Design", "CA1001", Justification = "rng is Godot RefCounted; keep its existing reference-counted lifetime with the brain.")]
 public sealed class Bot : IBotBrain
 {
     private const float RetargetInterval = 0.35f;
