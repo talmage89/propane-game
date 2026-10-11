@@ -139,10 +139,21 @@ public partial class MovementTests : Node
 
     private void SnapshotTests()
     {
-        var creep = new PlayerNetState { Gait = PlayerGait.Creep, Support = PlayerSupport.Grounded,
-            Weapon = WeaponAction.Aim, Grounded = true, Aim = 1 };
-        var air = new PlayerNetState { Gait = PlayerGait.Sprint, Support = PlayerSupport.Jumping,
-            Weapon = WeaponAction.Carry, Grounded = false };
+        var creep = new PlayerNetState
+        {
+            Gait = PlayerGait.Creep,
+            Support = PlayerSupport.Grounded,
+            Weapon = WeaponAction.Aim,
+            Grounded = true,
+            Aim = 1
+        };
+        var air = new PlayerNetState
+        {
+            Gait = PlayerGait.Sprint,
+            Support = PlayerSupport.Jumping,
+            Weapon = WeaponAction.Carry,
+            Grounded = false
+        };
         var mixed = PlayerNetState.Lerp(creep, air, 0.75f);
         Check(mixed.Gait == PlayerGait.Sprint && mixed.Support == PlayerSupport.Jumping,
             "snapshot interpolation preserves discrete gait/support");
