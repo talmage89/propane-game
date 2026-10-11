@@ -111,7 +111,7 @@ public partial class MenuTest : Node
         if (DevArgs.Get("quit-after") == "match")
         {
             director.ShotAt(21.8f, "15_back_to_main_before_quit");
-            director.At(22f, () => Press("Quit"));
+            QuitFromMenu(director, 22f);
             return;
         }
         SinglePlayer(director, 22f);
@@ -135,7 +135,17 @@ public partial class MenuTest : Node
             }
             GD.Print("[menutest] PASS: returned to main menu");
         });
-        if (quit) { director.At(start + 8f, () => Press("Quit")); }
+        if (quit) { QuitFromMenu(director, start + 8f); }
+    }
+
+    private void QuitFromMenu(CaptureDirector director, float time)
+    {
+        director.At(time, () => Press("Quit"));
+        director.At(time + 2f, () =>
+        {
+            GD.PushError("[menutest] FAIL main-menu Quit did not finish shutdown");
+            ShutdownGuard.Quit(GetTree(), 1);
+        });
     }
 
     private static bool HasText(Node node, string text)

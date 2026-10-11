@@ -294,6 +294,7 @@ $GODOT --fixed-fps 60 res://scenes/dev/suburb_preview.tscn -- --capture-dir=/tmp
 # Every menu screen, a solo match, and single player and back (keyboard/mouse).
 $GODOT res://scenes/dev/menu_test.tscn -- --capture-dir=/tmp/m
 # Return from single player or leave a match, then press the real main-menu Quit button.
+# Fails with exit 1 if the Quit button leaves the menu running.
 $GODOT --fixed-fps 30 res://scenes/dev/menu_test.tscn -- --quit-after=single --capture-dir=/tmp/quit-single
 $GODOT --fixed-fps 30 res://scenes/dev/menu_test.tscn -- --quit-after=match --capture-dir=/tmp/quit-match
 # Joypad events only: focus, text defaults, hosting/joining, color/length updates, pause/resume, results and repeat.
