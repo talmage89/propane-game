@@ -237,6 +237,15 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         }
     }
 
+    public override void _Notification(int what)
+    {
+        if (what == NotificationPaused || what == NotificationUnpaused ||
+            what == NotificationApplicationFocusOut || what == NotificationApplicationFocusIn)
+        {
+            (inputOverride as DeviceInput ?? deviceInput).Reset();
+        }
+    }
+
     /// <summary>Moves the player (and camera) to a spawn point, clearing any motion.</summary>
     public void Teleport(Vector3 position, float yaw)
     {

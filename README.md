@@ -84,6 +84,7 @@ and suppresses aim/fire while leaving the selected movement gait free. Menus sti
 
 Gameplay buttons and stick axes use named actions ([Godot's controller input model](https://docs.godotengine.org/en/stable/tutorials/inputs/controllers_gamepads_joysticks.html)).
 Mouse look is displacement; stick look is a rate with separate sensitivity, radial curve and deadzone tuners.
+Pause and focus changes clear pending presses and mouse motion, and resample held actions before input resumes.
 
 `src/Player/PlayerState.cs` resolves lifecycle, support, gait and weapon action once per physics tick, from intent and
 pre-move floor contact. The accepted jump overrides contact; landing is the first tick that samples contact again.

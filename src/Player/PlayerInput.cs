@@ -45,6 +45,21 @@ public sealed class DeviceInput : IPlayerInputSource
     private bool fireDown;
     private bool reloadDown;
 
+    /// <summary>Discard queued input and sample held actions when physics pauses/resumes or focus changes.</summary>
+    public void Reset()
+    {
+        look = Vector2.Zero;
+        jump = fire = reload = false;
+        SynchronizeHeldActions();
+    }
+
+    private void SynchronizeHeldActions()
+    {
+        jumpDown = Input.IsActionPressed(InputSetup.Jump);
+        fireDown = Input.IsActionPressed(InputSetup.Fire);
+        reloadDown = Input.IsActionPressed(InputSetup.Reload);
+    }
+
     public void Accumulate(InputEvent @event)
     {
         var enabled = gameplayEnabled();
@@ -90,9 +105,7 @@ public sealed class DeviceInput : IPlayerInputSource
         reload = false;
         // UI can consume a release before _UnhandledInput sees it. Resynchronize at the physics sample so
         // returning to gameplay does not lose the next press; pending edges above are still consumed once.
-        jumpDown = Input.IsActionPressed(InputSetup.Jump);
-        fireDown = Input.IsActionPressed(InputSetup.Fire);
-        reloadDown = Input.IsActionPressed(InputSetup.Reload);
+        SynchronizeHeldActions();
         return intent;
     }
 }

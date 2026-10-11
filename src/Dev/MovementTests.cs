@@ -16,15 +16,28 @@ public partial class MovementTests : Node
     private readonly DeviceInput device;
     private bool gameplayEnabled = true;
     private bool padIntentMode;
+    private bool collectInput = true;
 
     public MovementTests() => device = new DeviceInput(() => gameplayEnabled);
 
-    public override void _Ready() => Callable.From(RunTests).CallDeferred();
+    public override void _Ready()
+    {
+        ProcessMode = ProcessModeEnum.Always;
+        Callable.From(RunTests).CallDeferred();
+    }
+
+    public override void _UnhandledInput(InputEvent @event)
+    {
+        if (collectInput) device.Accumulate(@event);
+    }
 
     private async void RunTests()
     {
         try
         {
+            // ParseInputEvent represents device input arriving between ticks, as in the game.
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            Check(!Engine.IsInPhysicsFrame(), "input fixture runs between physics ticks");
             ResolverTests();
             InputSetup.Register();
             padIntentMode = true;
@@ -32,6 +45,7 @@ public partial class MovementTests : Node
             padIntentMode = false;
             InputTests();
             SnapshotTests();
+            PauseTests();
             await FacadeTests().ConfigureAwait(true);
             GD.Print($"[movement-tests] PASS {checks} assertions");
             GetTree().Quit();
@@ -173,9 +187,16 @@ public partial class MovementTests : Node
 
     private void Send(InputEvent e)
     {
+        if (e is InputEventMouse mouse) mouse.Position = new Vector2(100, 100);
         Input.ParseInputEvent(e);
         Input.FlushBufferedEvents();
-        device.Accumulate(e);
+    }
+
+    private void SendHandled(InputEvent e)
+    {
+        collectInput = false;
+        Send(e);
+        collectInput = true;
     }
 
     private void InputTests()
@@ -223,7 +244,7 @@ public partial class MovementTests : Node
         Send(new InputEventMouseMotion { ScreenRelative = new Vector2(12, -4) });
         intent = device.Read();
         Check(intent.Sprint && intent.JumpPressed && intent.ReloadPressed && intent.Aim && intent.FirePressed,
-            "keyboard/mouse actions with Shift modifier");
+            $"keyboard/mouse actions with Shift modifier: sprint={intent.Sprint} jump={intent.JumpPressed} reload={intent.ReloadPressed} aim={intent.Aim} fire={intent.FirePressed}");
         Check(intent.Look == new Vector2(12, -4) && device.Read().Look == Vector2.Zero, "mouse displacement consumed once");
         Send(new InputEventKey { PhysicalKeycode = Key.Space, Pressed = true, Echo = true, ShiftPressed = true });
         Check(!device.Read().JumpPressed, "keyboard echo is not a new jump");
@@ -236,11 +257,15 @@ public partial class MovementTests : Node
         Send(new InputEventJoypadMotion { Axis = JoyAxis.TriggerRight, AxisValue = 1 });
         Check(device.Read().FirePressed, "fresh trigger pull creates a new press");
         // A menu handled this release, so the gameplay event collector never receives it.
-        Input.ParseInputEvent(new InputEventJoypadMotion { Axis = JoyAxis.TriggerRight, AxisValue = 0 });
-        Input.FlushBufferedEvents();
+        SendHandled(new InputEventJoypadMotion { Axis = JoyAxis.TriggerRight, AxisValue = 0 });
         Check(!device.Read().FireHeld, "UI-consumed release clears the polled action");
         Send(new InputEventJoypadMotion { Axis = JoyAxis.TriggerRight, AxisValue = 1 });
         Check(device.Read().FirePressed, "press after UI-consumed release creates an edge");
+        // A paused player does not Read at all. Resume and press before the next physics sample.
+        SendHandled(new InputEventJoypadMotion { Axis = JoyAxis.TriggerRight, AxisValue = 0 });
+        device.Reset();
+        Send(new InputEventJoypadMotion { Axis = JoyAxis.TriggerRight, AxisValue = 1 });
+        Check(device.Read().FirePressed, "press after paused release works without an intervening Read");
         gameplayEnabled = false;
         intent = device.Read();
         Check(intent.Move == Vector2.Zero && !intent.FireHeld && intent.LookStick == Vector2.Zero, "menus suppress gameplay");
@@ -250,6 +275,50 @@ public partial class MovementTests : Node
     {
         public PlayerIntent Intent;
         public PlayerIntent Read() => Intent;
+    }
+
+    private void PauseTests()
+    {
+        gameplayEnabled = true;
+        foreach (var action in new[] { InputSetup.Jump, InputSetup.Fire, InputSetup.Reload }) Input.ActionRelease(action);
+        device.Reset();
+        var player = new PlayerCharacter { InputOverride = device, ProcessMode = ProcessModeEnum.Pausable };
+        AddChild(player);
+        void Buttons(bool pressed, bool handled = false)
+        {
+            InputEvent[] events =
+            {
+                new InputEventJoypadButton { ButtonIndex = JoyButton.A, Pressed = pressed },
+                new InputEventJoypadButton { ButtonIndex = JoyButton.X, Pressed = pressed },
+                new InputEventJoypadMotion { Axis = JoyAxis.TriggerRight, AxisValue = pressed ? 1 : 0 },
+            };
+            foreach (var e in events)
+            {
+                if (handled) SendHandled(e); else Send(e);
+            }
+        }
+        Buttons(true);
+        Send(new InputEventMouseMotion { ScreenRelative = new Vector2(12, -4) });
+        GetTree().Paused = true;
+        var pending = device.Read();
+        Check(!pending.JumpPressed && !pending.FirePressed && !pending.ReloadPressed && pending.Look == Vector2.Zero,
+            "pause notification discards queued presses and displacement");
+        Buttons(false, handled: true);
+        GetTree().Paused = false;
+        Buttons(true);
+        var intent = device.Read();
+        Check(intent.JumpPressed && intent.FirePressed && intent.ReloadPressed,
+            "resume notification restores all edges before the next physics tick");
+        player.Notification((int)NotificationApplicationFocusOut);
+        Buttons(false, handled: true);
+        player.Notification((int)NotificationApplicationFocusIn);
+        Buttons(true);
+        intent = device.Read();
+        Check(intent.JumpPressed && intent.FirePressed && intent.ReloadPressed,
+            "focus return restores all edges without an intervening physics sample");
+        Buttons(false);
+        device.Read();
+        player.Free();
     }
 
     private async Task FacadeTests()
