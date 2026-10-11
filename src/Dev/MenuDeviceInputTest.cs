@@ -47,6 +47,16 @@ public partial class MenuDeviceInputTest : Node
             await Wait(() => Menus.Current == Menus.Screen.Browser, "host browser").ConfigureAwait(true);
             await Activate("Create lobby").ConfigureAwait(true);
             await Wait(() => Menus.Current == Menus.Screen.Lobby, "solo lobby").ConfigureAwait(true);
+            var net = Main.GetNode<NetClient>("Net");
+            var capacity = net.Lobby!.Capacity;
+            await Activate("capacity_up", focusKey: true).ConfigureAwait(true);
+            await Wait(() => net.Lobby!.Capacity == capacity + 1, "keyboard capacity increase").ConfigureAwait(true);
+            Check(net.Lobby!.Capacity == capacity + 1, "Tab/Enter changes capacity through the real input path");
+            await FocusButton("capacity_down").ConfigureAwait(true);
+            Send(new InputEventJoypadButton { ButtonIndex = JoyButton.A, Pressed = true });
+            Send(new InputEventJoypadButton { ButtonIndex = JoyButton.A, Pressed = false });
+            await Wait(() => net.Lobby!.Capacity == capacity, "gamepad capacity decrease").ConfigureAwait(true);
+            Check(net.Lobby!.Capacity == capacity, "gamepad A changes capacity through the real input path");
             await Activate("Start match").ConfigureAwait(true);
             await Wait(() => Main.HasNode("Match") && Main.GetNode<Match>("Match").IsPlaying, "match playing").ConfigureAwait(true);
             var match = Main.GetNode<Match>("Match");
@@ -231,11 +241,11 @@ public partial class MenuDeviceInputTest : Node
         }
     }
 
-    private async Task Activate(string text)
+    private async Task Activate(string text, bool focusKey = false)
     {
         await Frames().ConfigureAwait(true);
         var button = GetTree().Root.FindChildren("*", "Button", owned: false).OfType<Button>()
-            .FirstOrDefault(b => b.Text == text && b.IsVisibleInTree() && !b.Disabled)
+            .FirstOrDefault(b => (focusKey ? MenuNavigation.Key(b) == text : b.Text == text) && b.IsVisibleInTree() && !b.Disabled)
             ?? throw new InvalidOperationException($"missing enabled button {text}");
         for (var i = 0; GetViewport().GuiGetFocusOwner() != button; i++)
         {
@@ -247,6 +257,17 @@ public partial class MenuDeviceInputTest : Node
         await Frames(1).ConfigureAwait(true);
         Send(new InputEventKey { PhysicalKeycode = Key.Enter, Keycode = Key.Enter, Pressed = false });
         await Frames().ConfigureAwait(true);
+    }
+
+    private async Task FocusButton(string key)
+    {
+        await Frames().ConfigureAwait(true);
+        for (var i = 0; MenuNavigation.Key(GetViewport().GuiGetFocusOwner()) != key; i++)
+        {
+            if (i >= 100) throw new InvalidOperationException($"cannot focus {key} with Tab");
+            TapKey(Key.Tab);
+            await Frames().ConfigureAwait(true);
+        }
     }
 
     private static void TapKey(Key physical, Key? logical = null)
