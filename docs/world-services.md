@@ -29,7 +29,8 @@ continue to use `MonotonicClock` and the server clock. Never compare those times
 Call `World.Dispose()` before freeing or replacing a facade. Cleanup invalidates first, cancels timers/deferred
 work, stops processing/physics, clears events and receiver registrations, runs stop adapters (including inbox detach and replication),
 releases views, restores presentation, and synchronously frees content and physics resources. It is idempotent.
-`World.Construct` uses that same path on a construction failure. Content spawn services retain their originating
+`World.Construct` uses that same path on a construction failure. `Suburb.Build` frees its detached subtree if
+construction fails before it can be attached to the world. Content spawn services retain their originating
 root; retiring content removes its effects and cancels source callbacks before the next suburb is built.
 
 `make test` discovers `[UnitSuite]` clock assertions and runs `world_services_tests.tscn`, which exercises two independent physics worlds at overlapping coordinates with different

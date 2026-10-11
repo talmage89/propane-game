@@ -5,6 +5,8 @@ using Propane.Core;
 using Propane.Dev.UnitTests;
 using Propane.Net;
 using Propane.Tank;
+using Propane.World;
+using Propane.World.Plan;
 using static Propane.Dev.UnitTests.TestRunner;
 
 namespace Propane.Dev;
@@ -14,8 +16,15 @@ public partial class WorldServicesTests : Node
 {
     public override async void _Ready()
     {
+        DevArgs.MarkReady();
         try
         {
+            if (DevArgs.Get("scenario") == "construction-failure")
+            {
+                ConstructionFailure();
+                ShutdownGuard.Quit(GetTree());
+                return;
+            }
             var events = new GameEvents();
             var stale = 0;
             events.Explosion += _ => events.Clear();
@@ -32,6 +41,7 @@ public partial class WorldServicesTests : Node
                 await Collect().ConfigureAwait(true);
                 Assert(Counts() == baseline, $"world leaked on cycle {i + 1}: {baseline} -> {Counts()}");
             }
+            ConstructionFailure();
             GD.Print($"[world services] PASS two overlapping worlds, distinct tuning, events, blasts, callbacks, partial failure; 10 retirements stable at {baseline}");
             ShutdownGuard.Quit(GetTree());
         }
@@ -40,6 +50,29 @@ public partial class WorldServicesTests : Node
             GD.PushError($"[world services] FAIL {error}");
             ShutdownGuard.Quit(GetTree(), 1);
         }
+    }
+
+    private void ConstructionFailure()
+    {
+        // Fail after the detached builder has created the ground and collision, before AddChild can own it.
+        _ = Catalog.Houses;
+        using var template = new Tuning();
+        using var partial = new WorldContext(this, template);
+        var before = Performance.GetMonitor(Performance.Monitor.ObjectOrphanNodeCount);
+        var plan = new SuburbPlan { Seed = 23, Bounds = new Rect2(-10, -10, 20, 20) };
+        plan.Lots.Add(new Lot
+        {
+            Bounds = new OrientedRect(Vector2.Zero, Vector2.One, 0),
+            House = new OrientedRect(Vector2.Zero, Vector2.One, 0),
+            Seed = 23,
+            HouseModel = int.MaxValue
+        });
+        Throws<ArgumentOutOfRangeException>(() => partial.Construct(() =>
+            partial.Root.AddChild(Suburb.Build(partial, plan, SuburbPlans.SinglePlayer(partial.Tuning)))));
+        Assert(!partial.IsAlive && partial.Reveal.Count == 0, "failed suburb retained world services");
+        Assert(Performance.GetMonitor(Performance.Monitor.ObjectOrphanNodeCount) == before,
+            "failed detached suburb leaked orphan nodes");
+        GD.Print("[world services] PASS detached suburb construction failure leaves no orphan nodes");
     }
 
     private async Task Exercise()

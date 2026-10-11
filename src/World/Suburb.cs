@@ -96,25 +96,35 @@ public partial class Suburb : Node3D
     /// </summary>
     public static Suburb Build(WorldContext world, SuburbPlan plan, SuburbSettings settings, bool networked = false)
     {
+        world.EnsureAlive();
         var suburb = new Suburb { Name = $"Suburb_{plan.Seed}" };
-        suburb.world = world;
-        suburb.plan = plan;
-        suburb.settings = settings;
-        suburb.StaticRoot = new Node3D { Name = "Static" };
-        suburb.DynamicRoot = new Node3D { Name = "Dynamic" };
-        suburb.AddChild(suburb.StaticRoot);
-        suburb.AddChild(suburb.DynamicRoot);
-        suburb.contentSpawn = world.ForContent(suburb.DynamicRoot);
-        suburb.BuildGround();
-        suburb.BuildRoads();
-        suburb.BuildPavings();
-        suburb.BuildHouses();
-        suburb.BuildFences();
-        suburb.BuildProps();
-        suburb.BuildTanks(networked);
-        // Debris, scorch marks and bullet holes spawned mid-transition take the suburb's current reveal tag.
-        suburb.DynamicRoot.ChildEnteredTree += node => suburb.TagForReveal(node);
-        return suburb;
+        try
+        {
+            suburb.world = world;
+            suburb.plan = plan;
+            suburb.settings = settings;
+            suburb.StaticRoot = new Node3D { Name = "Static" };
+            suburb.DynamicRoot = new Node3D { Name = "Dynamic" };
+            suburb.AddChild(suburb.StaticRoot);
+            suburb.AddChild(suburb.DynamicRoot);
+            suburb.contentSpawn = world.ForContent(suburb.DynamicRoot);
+            suburb.BuildGround();
+            suburb.BuildRoads();
+            suburb.BuildPavings();
+            suburb.BuildHouses();
+            suburb.BuildFences();
+            suburb.BuildProps();
+            suburb.BuildTanks(networked);
+            // Debris, scorch marks and bullet holes spawned mid-transition take the suburb's current reveal tag.
+            suburb.DynamicRoot.ChildEnteredTree += node => suburb.TagForReveal(node);
+            return suburb;
+        }
+        catch
+        {
+            // Until Build returns, this detached subtree is owned by the builder, not the world root.
+            suburb.Free();
+            throw;
+        }
     }
 
     /// <summary>World position of a plan point on the slab.</summary>
