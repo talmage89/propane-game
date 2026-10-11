@@ -190,8 +190,14 @@ $GODOT --fixed-fps 60 res://scenes/dev/player_range.tscn -- --scenario=creep --v
 $GODOT --fixed-fps 60 res://scenes/dev/world_lab.tscn -- --capture-dir=/tmp/w
 $GODOT --fixed-fps 60 res://scenes/dev/suburb_preview.tscn -- --capture-dir=/tmp/s
 
-# Every menu screen, a solo match, and single player and back.
+# Every menu screen, a solo match, and single player and back (keyboard/mouse).
 $GODOT res://scenes/dev/menu_test.tscn -- --capture-dir=/tmp/m
+# Joypad events only: focus, text defaults, hosting/joining, color/length updates, pause/resume, results and repeat.
+# Fails with exit 1 on a missing focus target, incorrect outcome or timeout; also runs headlessly in make test.
+# --port=<port> overrides local hosting for parallel runs (make test uses this checkout's port).
+$GODOT --fixed-fps 60 res://scenes/dev/menu_test.tscn -- --scenario=gamepad --capture-dir=/tmp/pad
+# Switch devices while paused and verify the reference and reload hints in both directions.
+$GODOT res://scenes/dev/menu_test.tscn -- --scenario=devices --capture-dir=/tmp/devices
 
 # Multiplayer: a local server and bot players under simulated lag and loss, then compare what each bot saw.
 # Logs go to build/net (-o picks another directory).

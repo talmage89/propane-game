@@ -22,9 +22,16 @@ public partial class MenuTest : Node
         // A fresh settings file, so the run neither reads nor changes the player's name, color and server.
         DirAccess.RemoveAbsolute(ProjectSettings.GlobalizePath("user://menu_test_settings.cfg"));
         Core.PlayerSettings.UseFile("user://menu_test_settings.cfg");
+        Core.PlayerSettings.Name = "Player";
         DisplayServer.WindowSetVsyncMode(DisplayServer.VSyncMode.Disabled);
         main = new Main { Name = "Main" };
         AddChild(main);
+        main.GetNode<UI.Menus>("Menus").HostPort = (int)DevArgs.GetFloat("port", Net.Protocol.DefaultPort);
+        if (DevArgs.Get("scenario") is "gamepad" or "devices")
+        {
+            AddChild(new MenuGamepadTest { Main = main });
+            return;
+        }
         var director = new CaptureDirector { QuitAfter = 40f };
         AddChild(director);
         if (DevArgs.Get("scenario") == "update")
@@ -73,14 +80,29 @@ public partial class MenuTest : Node
         director.ShotAt(27f, "16_pause");
         director.At(27.5f, () => Press("Main menu"));
         director.ShotAt(28.5f, "17_back_to_main");
-        director.At(29f, () => GD.Print($"[menutest] done; main menu showing: {FindButton(GetTree().Root, "Single player") != null}"));
+        director.At(29f, () =>
+        {
+            if (FindButton(GetTree().Root, "Single player") == null)
+            {
+                GD.PushError("[menutest] Did not return to the main menu");
+                GetTree().Quit(1);
+                return;
+            }
+            GD.Print("[menutest] PASS: returned to main menu");
+        });
     }
 
     private void Press(string text)
     {
         var button = FindButton(GetTree().Root, text);
         GD.Print($"[menutest] press {text}: {(button != null ? "found" : "MISSING")}");
-        button?.EmitSignal(BaseButton.SignalName.Pressed);
+        if (button == null)
+        {
+            GD.PushError($"[menutest] Missing button: {text}");
+            GetTree().Quit(1);
+            return;
+        }
+        button.EmitSignal(BaseButton.SignalName.Pressed);
     }
 
     private static Button? FindButton(Node root, string text) =>
@@ -92,10 +114,13 @@ public partial class MenuTest : Node
         var swatches = GetTree().Root.FindChildren("*", "Button", owned: false).OfType<Button>()
             .Where(b => b.Text.Length == 0 && b.TooltipText.Length > 0 && b.IsVisibleInTree()).ToList();
         GD.Print($"[menutest] {swatches.Count} swatches");
-        if (index < swatches.Count)
+        if (index >= swatches.Count)
         {
-            swatches[index].EmitSignal(BaseButton.SignalName.Pressed);
+            GD.PushError($"[menutest] Missing swatch {index}");
+            GetTree().Quit(1);
+            return;
         }
+        swatches[index].EmitSignal(BaseButton.SignalName.Pressed);
     }
 
     private static void SendKey(Key key)
