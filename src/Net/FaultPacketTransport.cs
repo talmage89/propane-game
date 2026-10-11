@@ -6,12 +6,13 @@ using System.Linq;
 namespace Propane.Net;
 
 /// <summary>Local test faults, in seconds; loss is a fraction of outgoing unreliable messages only.</summary>
-public sealed record PacketFaults(double Lag = 0, double Jitter = 0, double Loss = 0, double ReliableStall = 0);
+public sealed record PacketFaults(double Lag = 0, double Jitter = 0, double Loss = 0, double ReliableStall = 0, double BodyStall = 0);
 
 /// <summary>
-/// Seeded lag in both directions. Reliable order is per connection, independently in/out. ReliableStall adds a
+/// Seeded lag in both directions. Reliable order is per connection and class, independently in/out. ReliableStall adds a
 /// retransmission-like delay only to reliable traffic. Owns copied packets and bounded queues; no native memory
-/// survives a backend callback. Queued reliable sends retry backpressure without letting later reliable sends pass.
+/// survives a backend callback. Queued reliable sends retry backpressure without later sends in that lane passing.
+/// BodyStall is a test seam for checkpoint blockage without delaying control.
 /// </summary>
 public sealed class FaultPacketTransport : IPacketTransport
 {
@@ -19,7 +20,7 @@ public sealed class FaultPacketTransport : IPacketTransport
     {
         public readonly List<Pending> Incoming = new();
         public readonly List<Pending> Outgoing = new();
-        public double LastReliableIn, LastReliableOut;
+        public readonly double[] LastReliableIn = new double[2], LastReliableOut = new double[2];
         public readonly PacketCounters Counters = new();
         public bool Active = true;
         public bool Ready;
@@ -45,7 +46,8 @@ public sealed class FaultPacketTransport : IPacketTransport
     {
         if (!double.IsFinite(faults.Lag) || faults.Lag < 0 || !double.IsFinite(faults.Jitter) || faults.Jitter < 0 ||
             !double.IsFinite(faults.Loss) || faults.Loss < 0 || faults.Loss > 1 ||
-            !double.IsFinite(faults.ReliableStall) || faults.ReliableStall < 0 || maxPackets <= 0 || maxBytes <= 0)
+            !double.IsFinite(faults.ReliableStall) || faults.ReliableStall < 0 ||
+            !double.IsFinite(faults.BodyStall) || faults.BodyStall < 0 || maxPackets <= 0 || maxBytes <= 0)
         {
             throw new ArgumentOutOfRangeException(nameof(faults));
         }
@@ -73,7 +75,7 @@ public sealed class FaultPacketTransport : IPacketTransport
             state.Counters.BytesIn += bytes.Length;
             if (!Fits(state.Incoming, bytes.Length))
             {
-                if (traffic == TrafficClass.ReliableOrdered)
+                if (traffic.IsReliable())
                 {
                     Disconnect(connection, new DisconnectReason(DisconnectKind.TransportFailure,
                         "The simulated connection exceeded its reliable receive buffer. Please reconnect."));
@@ -81,7 +83,7 @@ public sealed class FaultPacketTransport : IPacketTransport
                 else { state.Counters.Drops++; }
                 return;
             }
-            state.Incoming.Add(new Pending(Delayed(traffic, ref state.LastReliableIn), ++sequence, traffic, bytes.ToArray()));
+            state.Incoming.Add(new Pending(Delayed(traffic, ref state.LastReliableIn[ReliableLane(traffic)]), ++sequence, traffic, bytes.ToArray()));
         };
     }
 
@@ -105,22 +107,24 @@ public sealed class FaultPacketTransport : IPacketTransport
         if (!Fits(state.Outgoing, bytes.Length)) { return SendResult.Backpressure; }
         state.Counters.PacketsOut++;
         state.Counters.BytesOut += bytes.Length;
-        if (traffic != TrafficClass.ReliableOrdered && random.NextDouble() < faults.Loss)
+        if (!traffic.IsReliable() && random.NextDouble() < faults.Loss)
         {
             state.Counters.Drops++;
             return SendResult.Success;
         }
-        state.Outgoing.Add(new Pending(Delayed(traffic, ref state.LastReliableOut), ++sequence, traffic, bytes.ToArray()));
+        state.Outgoing.Add(new Pending(Delayed(traffic, ref state.LastReliableOut[ReliableLane(traffic)]), ++sequence, traffic, bytes.ToArray()));
         return SendResult.Success;
     }
+
+    private static int ReliableLane(TrafficClass traffic) => traffic == TrafficClass.ReliableBodyStates ? 1 : 0;
 
     private bool Fits(List<Pending> queue, int bytes) => queue.Count < maxPackets && bytes <= maxBytes - queue.Sum(p => p.Bytes.Length);
     private double Delayed(TrafficClass traffic, ref double lastReliable)
     {
         var at = clock.Seconds + faults.Lag + random.NextDouble() * faults.Jitter;
-        if (traffic == TrafficClass.ReliableOrdered)
+        if (traffic.IsReliable())
         {
-            at = Math.Max(at + faults.ReliableStall, lastReliable);
+            at = Math.Max(at + faults.ReliableStall + (traffic == TrafficClass.ReliableBodyStates ? faults.BodyStall : 0), lastReliable);
             lastReliable = at;
         }
         return at;
@@ -134,15 +138,15 @@ public sealed class FaultPacketTransport : IPacketTransport
             foreach (var (connection, state) in states.ToArray())
             {
                 if (!state.Active) { continue; }
-                var reliableBlocked = false;
+                var reliableBlocked = new HashSet<TrafficClass>();
                 foreach (var pending in state.Outgoing.OrderBy(p => p.At).ThenBy(p => p.Sequence).ToArray())
                 {
                     if (!state.Active || pending.At > clock.Seconds) { break; }
-                    if (pending.Traffic == TrafficClass.ReliableOrdered && reliableBlocked) { continue; }
+                    if (pending.Traffic.IsReliable() && reliableBlocked.Contains(pending.Traffic)) { continue; }
                     var result = inner.Send(connection, pending.Traffic, pending.Bytes);
                     if (result == SendResult.Backpressure)
                     {
-                        if (pending.Traffic == TrafficClass.ReliableOrdered) { reliableBlocked = true; }
+                        if (pending.Traffic.IsReliable()) { reliableBlocked.Add(pending.Traffic); }
                         else { state.Outgoing.Remove(pending); state.Counters.Drops++; }
                     }
                     else if (result == SendResult.Success) { state.Outgoing.Remove(pending); }

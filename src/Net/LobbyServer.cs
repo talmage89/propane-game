@@ -95,7 +95,7 @@ public partial class LobbyServer : Node
     private int nextMatchId = 1;
 
     // Legacy handler tests bypass the connection layer; transport tests use the injected interface.
-    internal Action<int, byte[], bool>? SendOverride { get; set; }
+    internal Action<int, byte[], TrafficClass>? SendOverride { get; set; }
 
     public int Port { get; set; } = Protocol.DefaultPort;
 
@@ -675,7 +675,7 @@ public partial class LobbyServer : Node
         var traffic = message.Type switch
         {
             Msg.PlayerState => TrafficClass.UnreliablePlayerPoses,
-            Msg.BodyStates => incoming == TrafficClass.ReliableOrdered ? TrafficClass.ReliableOrdered : TrafficClass.UnreliableBodyStates,
+            Msg.BodyStates => incoming is { } delivery && delivery.IsReliable() ? delivery : TrafficClass.UnreliableBodyStates,
             _ => TrafficClass.ReliableOrdered,
         };
         foreach (var id in match.Players)
@@ -728,11 +728,11 @@ public partial class LobbyServer : Node
 
     private void Send(int peer, byte[] bytes, TrafficClass traffic = TrafficClass.ReliableOrdered)
     {
-        if (SendOverride != null) { SendOverride(peer, bytes, traffic == TrafficClass.ReliableOrdered); }
+        if (SendOverride != null) { SendOverride(peer, bytes, traffic); }
         else if (peerIds.Connection(peer) is { } connection)
         {
             var result = transport.Send(connection, traffic, bytes);
-            if (traffic == TrafficClass.ReliableOrdered && result is SendResult.Backpressure or SendResult.Oversized)
+            if (traffic.IsReliable() && result is SendResult.Backpressure or SendResult.Oversized)
             {
                 transport.Disconnect(connection, new DisconnectReason(DisconnectKind.TransportFailure,
                     $"Could not send a required message ({result}). Please reconnect."));

@@ -6,7 +6,7 @@ using Godot;
 
 namespace Propane.Net;
 
-/// <summary>ENet adapter. Channel zero and its reliability modes retain Protocol 2's wire behavior.</summary>
+/// <summary>ENet adapter. Control uses channel zero; reliable body checkpoints use an independent ordered channel.</summary>
 [SuppressMessage("Design", "CA1001", Justification = "Close releases the ENet connection; the RefCounted peer remains reusable for reconnects.")]
 public sealed class NetTransport : IPacketTransport
 {
@@ -82,6 +82,8 @@ public sealed class NetTransport : IPacketTransport
         return new OpenResult(open, open ? null : error.ToString(), (int)error);
     }
 
+    internal static int Channel(TrafficClass traffic) => traffic == TrafficClass.ReliableBodyStates ? 1 : 0;
+
     public SendResult Send(ConnectionHandle connection, TrafficClass traffic, ReadOnlyMemory<byte> bytes)
     {
         if (!open || !connected.Contains(connection)) { return SendResult.Closed; }
@@ -89,8 +91,8 @@ public sealed class NetTransport : IPacketTransport
         var id = peerIds.PeerId(connection);
         if (peer.GetPeer(id) is not { } target || target.GetState() != ENetPacketPeer.PeerState.Connected) { return SendResult.Closed; }
         peer.SetTargetPeer(id);
-        peer.TransferChannel = 0;
-        peer.TransferMode = traffic == TrafficClass.ReliableOrdered ? MultiplayerPeer.TransferModeEnum.Reliable : MultiplayerPeer.TransferModeEnum.Unreliable;
+        peer.TransferChannel = Channel(traffic);
+        peer.TransferMode = traffic.IsReliable() ? MultiplayerPeer.TransferModeEnum.Reliable : MultiplayerPeer.TransferModeEnum.Unreliable;
         var error = peer.PutPacket(bytes.ToArray());
         // Godot exposes no native send-buffer limit. Admission errors it does return still reject the send.
         if (error != Error.Ok) { return error is Error.Unconfigured or Error.InvalidParameter ? SendResult.Closed : SendResult.Backpressure; }
@@ -122,12 +124,13 @@ public sealed class NetTransport : IPacketTransport
                 {
                     var id = peer.GetPacketPeer();
                     var reliable = peer.GetPacketMode() == MultiplayerPeer.TransferModeEnum.Reliable;
+                    var channel = peer.GetPacketChannel();
                     var bytes = peer.GetPacket();
                     if (!connections.TryGetValue(id, out var connection) || !connected.Contains(connection)) { continue; }
                     var stats = counters[connection];
                     stats.PacketsIn++;
                     stats.BytesIn += bytes.Length;
-                    Packet?.Invoke(connection, reliable ? TrafficClass.ReliableOrdered :
+                    Packet?.Invoke(connection, reliable ? channel == 1 ? TrafficClass.ReliableBodyStates : TrafficClass.ReliableOrdered :
                         bytes.Length > 0 && bytes[0] == (byte)Msg.BodyStates ? TrafficClass.UnreliableBodyStates : TrafficClass.UnreliablePlayerPoses, bytes);
                 }
             }

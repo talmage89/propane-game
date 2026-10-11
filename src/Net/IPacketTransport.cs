@@ -11,6 +11,14 @@ public enum TrafficClass
     // Includes disposable ping/clock samples, which also used ENet's unreliable channel zero.
     UnreliablePlayerPoses,
     UnreliableBodyStates,
+    // Ordered independently of control: checkpoint retransmission must not block lifecycle grants.
+    ReliableBodyStates,
+}
+
+public static class TrafficReliability
+{
+    public static bool IsReliable(this TrafficClass traffic) =>
+        traffic is TrafficClass.ReliableOrdered or TrafficClass.ReliableBodyStates;
 }
 
 public enum SendResult { Success, Closed, Oversized, Backpressure }
@@ -39,8 +47,8 @@ public readonly record struct TransportDiagnostics(long PacketsIn, long BytesIn,
 /// Main-thread message transport. Every callback runs only inside Poll (including local disconnect/close).
 /// Send copies/consumes bytes before returning Success; Success means accepted, not delivered. A non-success
 /// send accepts nothing. Packet memory is borrowed for the duration of the callback: copy it before retaining.
-/// ReliableOrdered preserves send order per connection; the other classes may reorder or disappear. No ordering
-/// is promised across classes. Disconnect/Close invalidate handles immediately and discard queued packets;
+/// Each reliable class preserves send order per connection, independently; disposable classes may reorder or
+/// disappear. No ordering is promised across classes. Disconnect/Close invalidate handles immediately and discard queued packets;
 /// notifications are deferred to Poll. Diagnostics remain available through Disconnected, then expire.
 /// </summary>
 public interface IPacketTransport

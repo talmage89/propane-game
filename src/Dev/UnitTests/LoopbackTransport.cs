@@ -35,6 +35,7 @@ internal sealed class LoopbackTransport : IPacketTransport
     private double pollMs;
     public ProtocolPeerMap PeerIds { get; } = new();
     public bool BlockSends { get; set; }
+    public TrafficClass? BlockTraffic { get; set; }
     public int MaxPayloadSize { get; }
     public event Action<ConnectionHandle>? Connected;
     public event Action<ConnectionHandle, DisconnectReason>? Disconnected;
@@ -81,7 +82,7 @@ internal sealed class LoopbackTransport : IPacketTransport
         if (!links.TryGetValue(connection, out var link) || !link.Ready) { return SendResult.Closed; }
         if (bytes.Length > MaxPayloadSize) { return SendResult.Oversized; }
         var remoteQueue = link.Remote.notifications.Where(n => n.Handle == link.RemoteHandle && n.Data != null).ToArray();
-        if (BlockSends || remoteQueue.Length >= link.Remote.maxPackets || bytes.Length > link.Remote.maxBytes - remoteQueue.Sum(n => n.Data!.Length))
+        if (BlockSends || BlockTraffic == traffic || remoteQueue.Length >= link.Remote.maxPackets || bytes.Length > link.Remote.maxBytes - remoteQueue.Sum(n => n.Data!.Length))
         {
             return SendResult.Backpressure;
         }

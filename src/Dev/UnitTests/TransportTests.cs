@@ -47,6 +47,51 @@ public static class TransportTests
 
     public static void Register(TestRunner runner)
     {
+        runner.Run("transport/stalled motion checkpoints cannot delay reliable control", () =>
+        {
+            Assert(NetTransport.Channel(TrafficClass.ReliableBodyStates) != NetTransport.Channel(TrafficClass.ReliableOrdered),
+                "native checkpoints still share control retransmission ordering");
+            using var p = new Pair(new PacketFaults(BodyStall: 2, Loss: 1));
+            p.Send(1, TrafficClass.ReliableBodyStates);
+            p.Send(2);
+            p.Pump(.1);
+            Assert(p.AtServer.Select(n => n.Bytes[0]).SequenceEqual(new byte[] { 2 }), "body stall held a control message behind its checkpoint");
+            p.Pump(2);
+            Assert(p.AtServer.Select(n => n.Bytes[0]).SequenceEqual(new byte[] { 2, 1 }) &&
+                p.AtServer.Last().Traffic == TrafficClass.ReliableBodyStates, "independent reliable checkpoint disappeared under disposable loss");
+        });
+        runner.Run("transport/checkpoint backend pressure preserves each lane without blocking control", () =>
+        {
+            using var p = new Pair(new PacketFaults());
+            p.RawClient.BlockTraffic = TrafficClass.ReliableBodyStates;
+            p.Send(1, TrafficClass.ReliableBodyStates);
+            p.Send(2);
+            p.Send(3, TrafficClass.ReliableBodyStates);
+            p.Send(4);
+            p.Pump();
+            Assert(p.AtServer.Select(n => n.Bytes[0]).SequenceEqual(new byte[] { 2, 4 }), "checkpoint pressure blocked ordered control");
+            p.RawClient.BlockTraffic = null;
+            p.Pump();
+            Assert(p.AtServer.Select(n => n.Bytes[0]).SequenceEqual(new byte[] { 2, 4, 1, 3 }), "checkpoint retry reordered or lost its lane");
+        });
+        runner.Run("transport/both reliable lanes retain independent order through jitter", () =>
+        {
+            using var p = new Pair(new PacketFaults(.05, .3, Loss: 1));
+            for (byte i = 0; i < 40; i++)
+            {
+                p.Send(i);
+                p.Send((byte)(i + 100), TrafficClass.ReliableBodyStates);
+                p.Server.Send(p.ServerHandle, TrafficClass.ReliableOrdered, new byte[] { i });
+                p.Server.Send(p.ServerHandle, TrafficClass.ReliableBodyStates, new byte[] { (byte)(i + 100) });
+            }
+            p.Pump(.4);
+            var ordered = Enumerable.Range(0, 40).Select(i => (byte)i);
+            Assert(p.AtServer.Where(n => n.Traffic == TrafficClass.ReliableOrdered).Select(n => n.Bytes[0]).SequenceEqual(ordered), "control lane reordered");
+            Assert(p.AtServer.Where(n => n.Traffic == TrafficClass.ReliableBodyStates).Select(n => (byte)(n.Bytes[0] - 100)).SequenceEqual(ordered), "checkpoint lane reordered");
+            p.Pump(.4);
+            Assert(p.AtClient.Where(n => n[0] < 100).Select(n => n[0]).SequenceEqual(ordered) &&
+                p.AtClient.Where(n => n[0] >= 100).Select(n => (byte)(n[0] - 100)).SequenceEqual(ordered), "incoming lane order failed");
+        });
         runner.Run("transport/reliable order survives seeded jitter in both directions", () =>
         {
             using var p = new Pair(new PacketFaults(.05, .3));

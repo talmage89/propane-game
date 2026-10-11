@@ -200,7 +200,7 @@ public partial class NetClient : Node
     {
         if (server == null) { return SendResult.Closed; }
         var result = transport.Send(server, traffic, message);
-        if (traffic == TrafficClass.ReliableOrdered && result != SendResult.Success)
+        if (traffic.IsReliable() && result != SendResult.Success)
         {
             Drop(new DisconnectReason(DisconnectKind.TransportFailure, $"Could not send a required message ({result}). Please reconnect."));
         }

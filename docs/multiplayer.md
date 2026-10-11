@@ -308,10 +308,12 @@ The server is the game itself started with `-- --server` (and `--headless`). It 
 
 `NetClient` and `LobbyServer` accept an `IPacketTransport` before entering the tree. `PacketTransports` selects
 ENet for production; the unit suites inject an in-memory loopback with a manual monotonic clock. Gameplay sends
-`ReliableOrdered`, `UnreliablePlayerPoses` or `UnreliableBodyStates`, never backend channel numbers. ENet maps all
-three to channel zero with the original reliability modes; ping and clock samples remain disposable/unreliable.
-On receive, the legacy channel cannot distinguish the two unreliable classes; the ENet adapter recognizes body
-state messages by their existing type byte. No packet layout, player id, tuner or gameplay rule changed.
+`ReliableOrdered`, `ReliableBodyStates`, `UnreliablePlayerPoses` or `UnreliableBodyStates`, never backend channel
+numbers. ENet keeps control and disposable traffic on channel zero; reliable body checkpoints use channel one
+so their retransmission cannot block lifecycle/control delivery. Ordering is per connection and reliable class,
+with no ordering across classes. On receive, the adapter uses native reliability/channel for checkpoints and the
+existing type byte to distinguish disposable body states. Epoch/sequence validation handles overtaking motion.
+No application packet layout, player id, tuner or gameplay rule changed. Protocol 2 remains unreleased.
 
 Connection handles are opaque objects and are never reused. `ProtocolPeerMap` is the compatibility bridge between
 these handles and the existing wire player ids (still ENet peer ids). The client learns its player id from Welcome.
@@ -362,7 +364,7 @@ The contract was checked against [Steam's ISteamNetworkingSockets](https://partn
 message boundaries, send acceptance/errors, reliable ordering within a lane and connection status/end reasons fit.
 A future adapter must marshal status callbacks into Poll, release native receive messages after the borrowed callback,
 advertise its own message-size limit (not ENet's 16 MiB), and map Steam send-buffer limits to Backpressure. Use one
-reliable lane to retain today's ordering and disable Nagle to retain ENet's immediate flush. Steam can retain remote
+independent reliable control and body lanes to retain their ordering and disable Nagle to retain ENet's immediate flush. Steam can retain remote
 reason codes and queue statistics that Godot's ENet wrapper cannot. No Steam SDK, lobby, invite or relay implementation
 is included.
 

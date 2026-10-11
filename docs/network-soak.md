@@ -44,18 +44,21 @@ identities/states and intact resting positions are checked separately. The resul
 settlement time, without extending or freezing gameplay.
 
 Limits are centralized in `PROFILES`/`Limits` in `tools/dev/compare_tanks.py`. They are harness tolerances for
-the default tuning and stated faults, not new game tuners. A stronger fault schedule or very slow capture can
+the measured creator tuning and stated faults, not new game tuners. A stronger fault schedule or very slow capture can
 fail the coverage check rather than yielding a misleading comparison. `--details` prints every above-tolerance
 episode as (match, peer pair, body, kind, monotonic start, peak drift, states/classification, duration).
 
 ## Calibration, 2026-10-11
 
 Measured on Linux, Godot 4.7.2 .NET/Jolt, from dev `b907f7f`, with only this package's dev logging changes.
-Each run uses four smart bots, a requested 90-second match, `--melee-start --digest-every=0.5`, and default
+Each run uses four smart bots, a requested 90-second match, `--melee-start --digest-every=0.5`, and the debug creator’s unchanged saved
 tuning. Faulted clients add `--net-lag=120 --net-jitter=30 --net-loss=3`; the server is clean. These flags
 mean 60 ms delay each direction, 0–30 ms additional jitter and 3% outgoing unreliable loss. The default fault
 seed is 1; layouts and real-time interaction schedules vary. Other work on the shared machine can affect frame
 scheduling.
+ The saved tuning was retained throughout calibration and correction verification, including
+VentThrust 821, VentMaxSpin 28 and TankMass 30 (baked defaults 260, 12 and 17). This is a
+more forceful vent setup than a release default; none of these values was changed for a passing run.
 
 Commands (after `make build`):
 

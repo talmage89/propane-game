@@ -178,3 +178,36 @@ smoothing (205 tests, zero failures, `geometry-after-clean.log`). An intermediat
 tried moving the wall and failed its free-space check because native geometry had not updated
 within that synchronous test; the final fixture uses a separate demonstrably clear path.
 Final builds were warning-free. This adds at most one geometry ray per received moving sample.
+
+## Keeping checkpoints off the control stream
+
+The first checkpoint/barrier validation series exposed a remaining mechanism: dense captures
+with delayed canonical lifecycle delivery. `/tmp/nas-deliver-fault-1` failed only dropped tank
+`20300007`: Bot1 first vented at 93105.163823, Bot3/4 at 93105.665484/.668747, but Bot2 at
+93106.884699. Removal followed at 93106.354881, .704238, .750669 and 93107.733034 respectively.
+Final positions agreed; the continuous lifecycle episode lasted 2.55 s. In traced fault 3,
+Bot1 received canonical explosion grants for `1000000f`, `10000010` and `10000013`
+1.607/1.548/1.540 s after server publication. Six neighboring bodies disagreed across
+2.20–2.55 s episodes. Native reliable loss was nonzero; sampling was dense. Faults 2/4
+passed. This stage was stopped after four runs rather than treating those failures as noise.
+
+Checkpoints shared ENet's ordered reliable control stream. A missing checkpoint or fragment
+could hold later grants behind its retransmission. Their new `ReliableBodyStates` transport
+class now uses channel 1, separately ordered from channel-0 control. The fault decorator
+preserves independent order, loss exemption, receive overflow and retry behavior for both
+classes. The server retains the checkpoint class on relay, and required-send handling
+recognizes both reliable classes. No application message fields or handshake shape changed;
+Protocol.Version remains 2 under the unreleased-protocol instruction. Older implementations
+can decode the same payloads but lack these correction/delivery guarantees.
+
+The deterministic two-second checkpoint-stall regression failed before (206 tests, one
+failure, `build/net-assert-artifacts/lane-before.log`) and passed after (206 tests, zero
+failures, `lane-after.log`). It proves control passes a blocked checkpoint while that
+checkpoint remains reliable under 100% disposable loss. Additional regressions exercise
+independent retry and both-direction jitter ordering; server tests verify the delivery
+class survives relay. The native 100%-disposable-loss flight passed on the new channel (`/tmp/nas-stream-lanes`):
+599 grids, peak motion 0.477 m, final motion 0.137 m, zero disagreements and matching scores.
+The expanded suite passed 208 tests/zero failures (`build/net-assert-artifacts/lanes-units.log`).
+All final builds had zero warnings/errors.
+The traced capture identifies delayed canonical delivery, but does not identify the exact
+original UDP datagram responsible; attributing that datagram to a checkpoint is an inference.
