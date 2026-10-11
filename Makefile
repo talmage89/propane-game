@@ -36,8 +36,9 @@ lint: ## Check C# formatting and compile with warnings as errors
 check: lint ## Run lint, then the tests
 	@$(MAKE) --no-print-directory test
 
-test: build ## Run the generator tests (as CI does before a release)
+test: build ## Run the headless regression tests
 	"$(GODOT)" --headless --path . res://scenes/dev/generator_tests.tscn -- --seeds=100
+	"$(GODOT)" --headless --path . res://scenes/dev/platform_tests.tscn
 
 server: build ## Run a multiplayer server here (PORT, default 24680, or this worktree's)
 	"$(GODOT)" --headless --path . -- --server --port=$(PORT)
@@ -48,7 +49,7 @@ bots: build ## Add N bots to a server's first open lobby (SERVER=host[:port], de
 bots-stop: ## Stop this checkout's bots
 	tools/dev/add_bots.sh -x
 
-package: ## Build the macOS and Linux release archives here, in build/dist (needs rcodesign)
+package: ## Build the Windows, macOS and Linux release archives here, in build/dist (needs rcodesign)
 	tools/release/build.sh "$(GODOT)"
 
 deploy: ## Run the server in Docker over ssh: make deploy HOST=host DIR=dir (from main, the latest release)
