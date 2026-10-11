@@ -37,6 +37,7 @@ check: lint ## Run lint, then the tests
 	@$(MAKE) --no-print-directory test
 
 test: build ## Run unit, generator and separate-process world tests (as CI does)
+	python3 -B tools/dev/check_scores_tests.py
 	"$(GODOT)" --headless --path . res://scenes/dev/unit_tests.tscn
 	"$(GODOT)" --headless --path . res://scenes/dev/generator_tests.tscn -- --seeds=100
 	tools/dev/check_world.sh

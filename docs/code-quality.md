@@ -6,7 +6,7 @@ layout. Long expressions are not reflowed. Expression bodies and naming remain e
 build warnings. Run `dotnet format Propane.sln` to apply the baseline.
 
 `make lint` verifies formatting, then performs a full build with warnings as errors. A previous incremental build
-cannot hide warnings. `make check` runs lint before the generator tests, including with `make -j`. It stops on a
+cannot hide warnings. `make check` runs lint before the tests, including with `make -j`. It stops on a
 lint failure. Both tasks appear in `make`'s help listing.
 
 `Propane.csproj` pins analysis to .NET 10's default rules, with the recommended Reliability, Usage and Security
