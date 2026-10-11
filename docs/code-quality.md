@@ -56,7 +56,8 @@ ordinary seeds 21–100, large seeds 4–10 and forced seeds 3–6 moved to this
 `core_tests.tscn` runs platform, movement and unit scenes sequentially, prints BEGIN/PASS per suite and exits
 nonzero on failure. Those scenes also work alone: `CoreTests.Complete` routes standalone completion through `ShutdownGuard.Quit`. The consolidated runner also uses
 that guard on success, assertion failure and setup failure; no completion bypasses orderly shutdown.
-The runner frees each suite before starting the next and releases injected actions. Synchronous unit suites run
+The wiring check also rejects direct quits throughout dev harnesses, except the shutdown witness, whose assertion
+runs during final teardown. The runner frees each suite before starting the next and releases injected actions. Synchronous unit suites run
 last because they build/free worlds without advancing physics. Stateful game probes retain separate processes;
 sharing their tuning, spawn roots, network sessions and animation state would need a larger isolation contract.
 Fixed-rate headless execution advances the same scripted simulation without waiting for real time; menu network
@@ -73,7 +74,14 @@ compilation or assertions. Editor setup remains shared with release, whose tool 
 
 ## Adding a suite
 
-Add a headless command to the appropriate `test-*` recipe in `Makefile`. It automatically joins both local
+For a unit suite, add a static class in `src/Dev/UnitTests`, mark it `[UnitSuite]`, and expose
+`public static void Register(TestRunner runner)`. Register named assertions with `runner.Run`. The runner discovers
+marked classes in its own assembly and invokes them in ordinal name order; `[UnitSuite(-1)]` keeps world construction
+first. Each suite must register at least one assertion. No registration list or shared line needs editing.
+Transport assertions are now discovered directly, rather than nested under the server suite. The wiring check audits
+every unit registration method for the marker, so forgetting it fails verification. Keep suites independent of order.
+
+For a separate scene, add a headless command to the appropriate `test-*` recipe in `Makefile`. It automatically joins both local
 `make test`/`make check` and the corresponding CI job. Use a nonzero exit for every failed assertion and missing
 coverage; do not hide failures with a pipeline or `|| true`. Add the command to `check_make_order` in
 `tools/dev/lint_tests.py` so its presence and failure propagation are checked. Call `DevArgs.MarkReady()` at

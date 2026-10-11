@@ -6,6 +6,7 @@ using Propane.Net;
 namespace Propane.Dev.UnitTests;
 
 /// <summary>Contract assertions use manual time and poisoned receive buffers; never sleeps or opens a socket.</summary>
+[UnitSuite]
 public static class TransportTests
 {
     private sealed class Clock : IMonotonicClock { public double Seconds { get; set; } = 100; }

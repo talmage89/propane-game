@@ -8,11 +8,11 @@ using Propane.Net;
 namespace Propane.Dev.UnitTests;
 
 /// <summary>Exercise the production receive handler and clock with an in-memory packet sink, no sockets.</summary>
+[UnitSuite]
 public static class ServerTests
 {
     public static void Register(TestRunner runner)
     {
-        TransportTests.Register(runner);
         runner.Run("server/truncated messages never relay or mutate", () =>
         {
             using var f = new Fixture();

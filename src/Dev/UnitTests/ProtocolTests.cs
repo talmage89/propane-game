@@ -10,6 +10,7 @@ using Propane.Tank;
 
 namespace Propane.Dev.UnitTests;
 
+[UnitSuite]
 public static class ProtocolTests
 {
     public static IReadOnlyList<NetMessage> Fixtures()

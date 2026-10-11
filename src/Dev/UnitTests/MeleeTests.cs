@@ -6,6 +6,7 @@ using Propane.Player;
 
 namespace Propane.Dev.UnitTests;
 
+[UnitSuite]
 public static class MeleeTests
 {
     public static void Register(TestRunner runner)

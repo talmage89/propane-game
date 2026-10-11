@@ -11,6 +11,7 @@ using Propane.World.Plan;
 namespace Propane.Dev.UnitTests;
 
 /// <summary>Hashes the constructed world before its first physics tick, including fences, meshes and collision.</summary>
+[UnitSuite(-1)]
 public static class WorldBuildTests
 {
     public static void Register(TestRunner runner)

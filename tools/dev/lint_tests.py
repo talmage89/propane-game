@@ -124,8 +124,25 @@ def check_core_wiring():
                 "unit_tests": "src/Dev/UnitTests/TestRunner.cs"}
     for scene, script in required.items():
         require(scene in scenes, f"core runner skipped {scene}")
-        require("CoreTests.Complete(this," in (ROOT / script).read_text(), f"{scene} bypasses runner failure propagation")
-    print("PASS: core runner retains platform, movement and unit scenes with failure completion")
+        suite = (ROOT / script).read_text()
+        require("CoreTests.Complete(this," in suite and ".Quit(" not in suite,
+                f"{scene} bypasses runner failure propagation")
+    require(".Quit(" not in source.replace("ShutdownGuard.Quit(", ""),
+            "core runner bypasses shutdown guard")
+    require("ShutdownGuard.Quit(node.GetTree(), code)" in source, "standalone completion bypasses shutdown guard")
+    for path in (ROOT / "src/Dev").rglob("*.cs"):
+        if path.name != "ShutdownWitness.cs":
+            require(".Quit(" not in path.read_text().replace("ShutdownGuard.Quit(", ""),
+                    f"{path.name} bypasses orderly shutdown")
+    runner = (ROOT / "src/Dev/UnitTests/TestRunner.cs").read_text()
+    require("Assembly.GetTypes()" in runner and "typeof(UnitSuiteAttribute)" in runner and
+            ".Register(this)" not in runner, "unit runner must discover attributed suites")
+    for path in (ROOT / "src/Dev/UnitTests").glob("*.cs"):
+        text = path.read_text()
+        if "public static void Register(TestRunner runner)" in text:
+            require(re.search(r"\[UnitSuite(?:\(-?\d+\))?\]\s+(?:public|internal) static class", text),
+                    f"{path.name} is missing its discovery marker")
+    print("PASS: core failure/shutdown routing and unit discovery retain every suite")
 
 
 def check_ci_partitions():

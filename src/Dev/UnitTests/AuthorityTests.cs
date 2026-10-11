@@ -9,6 +9,7 @@ using Propane.World.Plan;
 
 namespace Propane.Dev.UnitTests;
 
+[UnitSuite]
 public static class AuthorityTests
 {
     private static readonly uint Id = BodySync.MapTankId(0);
