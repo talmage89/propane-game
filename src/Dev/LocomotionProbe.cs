@@ -15,6 +15,7 @@ public partial class LocomotionProbe : SkeletonModifier3D
     public PlayerCharacter Player { get; init; } = null!;
     public string Label { get; set; } = "";
     public bool SampleDrift { get; set; }
+    public bool SampleSeparation { get; set; }
     public bool RequireJumpPhases { get; init; }
     public bool SkipNextPose { get; set; }
     private readonly List<(string Label, double Time, Vector3 Left, Vector3 Right)> samples = new();
@@ -33,6 +34,9 @@ public partial class LocomotionProbe : SkeletonModifier3D
     private string worstLabel = "";
     private double worstTime;
     private float ankleHeightDifference;
+    private float minimumSeparation = float.PositiveInfinity;
+    private float minimumSettledSeparation = float.PositiveInfinity;
+    private Vector3 previousRoot;
 
     public static LocomotionProbe Attach(PlayerCharacter player, bool requireJumpPhases = false)
     {
@@ -49,12 +53,17 @@ public partial class LocomotionProbe : SkeletonModifier3D
         var s = GetSkeleton();
         if (s == null) return;
         if (previous.Length == 0) previous = new Quaternion[s.GetBoneCount()];
+        // The network harness teleports from a suburb spawn to its void range after snapshots arrive.
+        // Exclude that setup relocation, like scripted local teleports; ordinary 0.8 m corrections stay measured.
+        var teleported = time > 0.2 && Player.GlobalPosition.DistanceTo(previousRoot) > 10;
+        previousRoot = Player.GlobalPosition;
+        if (teleported) GD.Print($"[feet] excluded setup teleport angular sample at {time:F3}s");
         var angle = 0f;
         for (var i = 0; i < previous.Length; i++)
         {
             var q = s.GetBonePoseRotation(i);
             invalid |= !float.IsFinite(q.LengthSquared());
-            if (time > 0.2 && !SkipNextPose)
+            if (time > 0.2 && !SkipNextPose && !teleported)
             {
                 var difference = previous[i].Inverse() * q;
                 var degrees = Mathf.RadToDeg(2 * Mathf.Atan2(new Vector3(difference.X, difference.Y, difference.Z).Length(), Mathf.Abs(difference.W)));
@@ -74,7 +83,19 @@ public partial class LocomotionProbe : SkeletonModifier3D
         if (feet != null)
         {
             invalid |= Math.Abs(feet.PelvisOffset) > Tuning.Current.FootPelvisLimit + 0.00001f;
+            if (feet.AirSettled)
+            {
+                var pelvis = s.FindBone("pelvis");
+                invalid |= s.GetBoneGlobalPose(pelvis).Origin.DistanceTo(s.GetBoneGlobalRest(pelvis).Origin) > 0.00001f;
+            }
             if (time > 0.2) jumpPhases.Add(feet.Pose.Jump);
+            if (SampleSeparation)
+            {
+                var rightAxis = new Basis(Vector3.Up, Player.FacingYaw) * Vector3.Right;
+                var separation = (right - left).Dot(rightAxis);
+                minimumSeparation = Mathf.Min(minimumSeparation, separation);
+                if (feet.Settled) minimumSettledSeparation = Mathf.Min(minimumSettledSeparation, separation);
+            }
             for (var side = 0; side < 2; side++)
             {
                 var foot = side == 0 ? left : right;
@@ -150,6 +171,11 @@ public partial class LocomotionProbe : SkeletonModifier3D
         }
         failed |= episodes.Length < expectedEpisodes || !float.IsFinite(maxAngle) || !float.IsFinite(maxAngleRate) || maxAngleRate > 2400;
         failed |= assert && contacts.Count < Mathf.Max(1, expectedEpisodes);
+        if (expectedEpisodes > 0)
+        {
+            GD.Print(FormattableString.Invariant($"[feet] ankle-separation-min={minimumSeparation:F6}m settled-min={minimumSettledSeparation:F6}m"));
+            failed |= minimumSeparation < 0 || minimumSettledSeparation < Tuning.Current.FootMinimumSeparation - 0.003f;
+        }
         GD.Print(FormattableString.Invariant($"[feet] pose-max={maxAngle:F3}deg bone={worstBone} episode={worstLabel} time={worstTime:F3} episodes={episodes.Length} rate-max={maxAngleRate:F1}deg/s"));
         var directory = DevArgs.Get("capture-dir");
         if (directory != null)

@@ -37,7 +37,7 @@ snapshot travel directions that local sprint intent would not select. It does no
 
 `feet-events` uses the real local controller: creep starts/stops/backpedal/reversal, aimed turns both ways,
 default/sprint/creep transitions, moving and stationary jumps, held air aim, and stepping down over a slab, curb
-and slope. The slab is created at the terrain stage so it does not interfere with earlier movement. Teleporting to
+and slope, independent support at a slab/curb boundary, and backpedaling uphill. The slab is created at the terrain stage so it does not interfere with earlier movement. Teleporting to
 the terrain stage is excluded from the angular measurement.
 
 The final skeleton modifier writes `feet.csv` and measures the maximum local per-bone angular change across every
@@ -61,3 +61,25 @@ Baseline `b18cb08`, with the new measurement harness, near-floor median drift in
 
 Baseline matrix maximum angular change: 37.875 degrees (`calf_r`). These controlled yaw/direction measurements
 are intentionally stricter than the earlier report's controller-facing strafe measurement.
+
+## Presentation layer
+
+`LocomotionPose` retains one distance-driven stride phase across gait changes, idle transitions and jump flight.
+`CharacterAnimator` seeks the walk, jog and sprint clips to that normalized phase and blends their weights; the
+pistol torso mask and rifle solver remain intact. Physics observations latch takeoff and impact before render can
+skip a one-tick support state. Rising, apex and falling sample `Jump_Start` by vertical velocity. Landing blends
+compression into a continuing gait rather than owning movement.
+
+`FootPlacement` runs after ragdoll simulation and before the rifle rig. The feet swing toward travel-relative
+placements, retain world positions and orientations during contact, and lift before exhausting reach. Starts,
+reversals and changed stride lengths can request a corrective step. The entire swing and touchdown keep the
+ankles separated; a moving swing start cannot pass the stance ankle. Standing turns and stop settles move one
+foot at a time. Downward
+static-ground probes align soles to slopes; bounded pelvis correction keeps the leg solves reachable. All feel
+values are tuners in the Locomotion group. Teleports, air and ragdoll clear contacts. Remote phase and destinations
+use displayed displacement, so interpolation stalls do not keep running the feet against a stationary body.
+Corrections beyond `FootResetDistance` release old contacts and blend the cached lower pose into a new solve.
+When interpolated height leads the discrete support flag beyond pelvis reach, contacts release and the lower
+pose holds until support catches up. Authored air translation is removed; physics owns the character root.
+
+This adds shared tuners and therefore requires a minor release. Messages and `Protocol.Version` are unchanged.

@@ -276,7 +276,7 @@ public partial class Tuning : Resource
     [Export(PropertyHint.Range, "1,40,0.5")] public float FootPelvisSpeed { get; set; } = 12f;
     [Export(PropertyHint.Range, "0.1,2,0.01")] public float FootProbeUp { get; set; } = 0.5f;
     [Export(PropertyHint.Range, "0.1,2,0.01")] public float FootProbeDown { get; set; } = 0.65f;
-    [Export(PropertyHint.Range, "0.5,10,0.1")] public float FootResetDistance { get; set; } = 2f;
+    [Export(PropertyHint.Range, "0.1,10,0.1")] public float FootResetDistance { get; set; } = 0.5f;
     [Export(PropertyHint.Range, "-0.3,0.1,0.01")] public float LocomotionBodyLower { get; set; } = -0.08f;
     [Export(PropertyHint.Range, "0,0.1,0.001")] public float LocomotionBodyBounce { get; set; } = 0.015f;
     [Export(PropertyHint.Range, "0,0.3,0.01")] public float LandingCompression { get; set; } = 0.08f;

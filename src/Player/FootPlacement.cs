@@ -10,8 +10,10 @@ public partial class FootPlacement : SkeletonModifier3D
 {
     public PlayerCharacter Player { get; init; } = null!;
     public LocomotionPose Pose { get; init; } = null!;
-    public bool LeftPlanted => legs[0].Planted && weight >= 0.999f && resetTime <= 0;
-    public bool RightPlanted => legs[1].Planted && weight >= 0.999f && resetTime <= 0;
+    public bool Settled => weight >= 0.999f && resetTime <= 0;
+    public bool AirSettled => inAir && !Player.ResolvedState.Grounded && weight <= 0 && resetTime <= 0;
+    public bool LeftPlanted => legs[0].Planted && Settled;
+    public bool RightPlanted => legs[1].Planted && Settled;
     public Vector3 LeftAnchor => legs[0].Target.Origin;
     public Vector3 RightAnchor => legs[1].Target.Origin;
     public float ReachError { get; private set; }
@@ -46,6 +48,7 @@ public partial class FootPlacement : SkeletonModifier3D
     private int turning = -1;
     private bool wasGrounded = true;
     private bool inAir;
+    private bool heldForSupport;
     private bool wasMoving;
     private Vector3 stepLead;
     private int spine = -1;
@@ -62,8 +65,7 @@ public partial class FootPlacement : SkeletonModifier3D
         resetTime = blendPose && hasPose ? Tuning.Current.LocomotionSettleTime : 0;
         if (resetTime > 0)
         {
-            Array.Copy(lastLegRotations, resetLegRotations, lastLegRotations.Length);
-            resetPelvisPosition = lastPelvisPosition;
+            BeginPoseBlend();
         }
         if (!blendPose) hasPose = false;
         initialized = hasMotion = false;
@@ -71,7 +73,7 @@ public partial class FootPlacement : SkeletonModifier3D
         previousVelocity = lean = Vector3.Zero;
         turning = -1;
         wasGrounded = true;
-        inAir = wasMoving = false;
+        inAir = heldForSupport = wasMoving = false;
         stepLead = Vector3.Zero;
         foreach (var leg in legs) { leg.Planted = leg.Swinging = false; leg.Swing = 0; }
     }
@@ -120,15 +122,35 @@ public partial class FootPlacement : SkeletonModifier3D
             initialized = true;
         }
         previousRoot = root;
-        if (!Player.ResolvedState.Grounded)
+        // Snapshot position interpolates before its discrete support flag switches. Geometric support owns
+        // contacts here: release while the displayed body rises beyond the bounded pelvis correction.
+        var supported = Player.ResolvedState.Grounded && HasGround(root, out var rootGround, out _)
+            && root.Y - rootGround.Y <= t.FootPelvisLimit;
+        if (!supported)
         {
+            // Jump_Start animates pelvis translation as well as joint rotations. Physics owns displacement;
+            // keep the authored joint poses without shifting the torso/rig outside the character's root.
+            SetPosition(s, pelvis, s.GetBoneGlobalRest(pelvis).Origin);
             inAir = true;
             wasMoving = false;
             weight = Mathf.MoveToward(weight, 0, dt / t.TakeoffPoseTime);
             foreach (var leg in legs) { leg.Planted = false; leg.Swinging = false; }
-            if (weight > 0 && wasGrounded) BlendAir(s, weight);
+            if (Player.ResolvedState.Grounded && hasPose)
+            {
+                // Height can lead the support flag by multiple snapshots. Hold the last lower pose rather
+                // than cycling a forward gait in the air while waiting for the discrete support transition.
+                heldForSupport = true;
+                BlendAir(s, 1);
+                BlendReset(s, dt);
+                CapturePose(s);
+            }
+            else
+            {
+                heldForSupport = false;
+                if (weight > 0 && wasGrounded) BlendAir(s, weight);
+            }
             turning = -1;
-            if (weight <= 0)
+            if (weight <= 0 && !heldForSupport)
             {
                 wasGrounded = false;
                 BlendReset(s, dt);
@@ -138,6 +160,8 @@ public partial class FootPlacement : SkeletonModifier3D
         }
         if (inAir)
         {
+            if (heldForSupport) BeginPoseBlend();
+            heldForSupport = false;
             foreach (var leg in legs) { leg.Planted = false; leg.Swinging = false; }
             inAir = false;
             groundHeight = root.Y;
@@ -302,6 +326,13 @@ public partial class FootPlacement : SkeletonModifier3D
         }
     }
 
+    private void BeginPoseBlend()
+    {
+        resetTime = Tuning.Current.LocomotionSettleTime;
+        Array.Copy(lastLegRotations, resetLegRotations, lastLegRotations.Length);
+        resetPelvisPosition = lastPelvisPosition;
+    }
+
     private void CapturePose(Skeleton3D s)
     {
         for (var i = 0; i < 2; i++)
@@ -397,7 +428,7 @@ public partial class FootPlacement : SkeletonModifier3D
 
     private Transform3D SupportedGoal(Leg leg)
     {
-        var goal = leg.Goal;
+        var goal = SeparateStep(leg, leg.Goal);
         if (HasGround(goal.Origin, out var ground, out _)) goal.Origin.Y = ground.Y + Tuning.Current.FootSoleHeight;
         return goal;
     }
@@ -410,7 +441,7 @@ public partial class FootPlacement : SkeletonModifier3D
         leg.Contact = contact;
     }
 
-    private static void Swing(Leg leg, Transform3D target, Vector3 root, float progress, float lift, float dt)
+    private void Swing(Leg leg, Transform3D target, Vector3 root, float progress, float lift, float dt)
     {
         // Smooth changing destinations in the moving root frame, without delaying world travel. A support
         // change or reversal must not yank a swinging ankle sideways when the other foot lifts.
@@ -421,7 +452,21 @@ public partial class FootPlacement : SkeletonModifier3D
         start.Origin += root - leg.RootStart;
         leg.Target = start.InterpolateWith(leg.Goal, Mathf.SmoothStep(0, 1, progress));
         leg.Target.Origin += Vector3.Up * (Mathf.Sin(Mathf.Pi * progress) * lift);
+        leg.Target = SeparateStep(leg, leg.Target);
         leg.Planted = false;
+    }
+
+    private Transform3D SeparateStep(Leg leg, Transform3D step)
+    {
+        // Constrain the whole swing, not just its destination: a root-relative start can pass a stationary
+        // ankle before the destination catches up. Never move the other foot's saved stance contact.
+        var side = ReferenceEquals(leg, legs[0]) ? 0 : 1;
+        var right = new Basis(Vector3.Up, Player.FacingYaw) * Vector3.Right;
+        var gap = (step.Origin - legs[1 - side].Target.Origin).Dot(right);
+        var wanted = side == 0 ? Mathf.Min(gap, -Tuning.Current.FootMinimumSeparation)
+            : Mathf.Max(gap, Tuning.Current.FootMinimumSeparation);
+        step.Origin += right * (wanted - gap);
+        return step;
     }
 
     private static void Rotate(Skeleton3D s, int bone, Quaternion rotation)
