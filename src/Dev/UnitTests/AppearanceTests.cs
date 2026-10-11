@@ -1,0 +1,64 @@
+using System;
+using System.IO;
+using System.Linq;
+using Godot;
+using Propane.Net;
+
+namespace Propane.Dev.UnitTests;
+
+public static class AppearanceTests
+{
+    public static void Register(TestRunner runner)
+    {
+        runner.Run("appearance/opaque bytes and cosmetic ids round trip", () =>
+        {
+            foreach (var color in new[] { Colors.Black, Colors.White, Colors.Red, new Color(0.01f, 0.02f, 0.03f), new Color(0.23f, 0.67f, 0.91f) })
+            {
+                var appearance = AppearanceRecord.FromColor(color) with
+                { ModelOrSkin = "base_01", Outfit = "outfit-2", Hat = "hat3", GunSkin = "gun4", BulletSkin = "bullet5" };
+                TestRunner.Assert(AppearanceCodec.Decode(AppearanceCodec.Encode(appearance)) == appearance, "record fields changed");
+                TestRunner.Assert(appearance.WithColor(Colors.Black).Hat == appearance.Hat, "changing color discarded cosmetics");
+                TestRunner.Assert(appearance.Color.A == 1 && appearance.LegacyIndex is >= 0 and < 8, "opacity or fallback invalid");
+            }
+            var bounded = new AppearanceRecord(0, 255, 1, new string('a', 64), new string('b', 64), new string('c', 64), new string('d', 64), new string('e', 64));
+            TestRunner.Assert(AppearanceCodec.Decode(AppearanceCodec.Encode(bounded)) == bounded, "maximum catalog ids rejected");
+            var random = new Random(51);
+            for (var i = 0; i < 1000; i++)
+            {
+                var appearance = new AppearanceRecord((byte)random.Next(256), (byte)random.Next(256), (byte)random.Next(256));
+                TestRunner.Assert(AppearanceCodec.Decode(AppearanceCodec.Encode(appearance)) == appearance, "sRGB bytes changed");
+            }
+        });
+        runner.Run("appearance/unknown slots skip binary payload and keep safe defaults", () =>
+        {
+            var record = new byte[] { 1, 12, 34, 56, 3, 240, 3, 0, 255, 0, 128, 3, 3, 0, (byte)'h', (byte)'a', (byte)'t', 241, 0, 0 };
+            TestRunner.Assert(AppearanceCodec.Decode(record) == new AppearanceRecord(12, 34, 56, Hat: "hat"), "unknown slots affected known color/hat");
+            using var stream = new MemoryStream();
+            using var writer = new BinaryWriter(stream);
+            writer.Write(new byte[] { 1, 12, 34, 56, 16 });
+            for (var i = 0; i < 16; i++) { writer.Write((byte)(200 + i)); writer.Write((ushort)60); writer.Write(new byte[60]); }
+            TestRunner.Assert(AppearanceCodec.Decode(stream.ToArray()) == new AppearanceRecord(12, 34, 56), "maximum unknown slot count rejected");
+        });
+        runner.Run("appearance/reject lengths counts tags versions paths and truncation", () =>
+        {
+            var record = AppearanceCodec.Encode(new AppearanceRecord(1, 2, 3, Hat: "hat"));
+            for (var i = 0; i < record.Length; i++) { TestRunner.Throws<InvalidDataException>(() => AppearanceCodec.Decode(record[..i])); }
+            foreach (var bad in new[]
+                     {
+                         new byte[AppearanceCodec.MaxRecordBytes + 1],
+                         new byte[] { 2, 1, 2, 3, 0 }, new byte[] { 1, 1, 2, 3, 17 },
+                         new byte[] { 1, 1, 2, 3, 1, 6, 65, 0 }, new byte[] { 1, 1, 2, 3, 1, 6, 1, 0 },
+                         new byte[] { 1, 1, 2, 3, 2, 6, 0, 0, 6, 0, 0 },
+                         new byte[] { 1, 1, 2, 3, 1, 0, 0, 0 }, new byte[] { 1, 1, 2, 3, 1, 3, 0, 0 },
+                         new byte[] { 1, 1, 2, 3, 1, 3, 1, 0, 128 }, record.Append((byte)0).ToArray(),
+                     })
+            {
+                TestRunner.Throws<InvalidDataException>(() => AppearanceCodec.Decode(bad));
+            }
+            foreach (var id in new[] { "", new string('a', 65), "res://hat", "../hat", "a.b", "hat skin", "帽子" })
+            {
+                TestRunner.Throws<InvalidDataException>(() => AppearanceCodec.Encode(new AppearanceRecord(1, 2, 3, Hat: id)));
+            }
+        });
+    }
+}
