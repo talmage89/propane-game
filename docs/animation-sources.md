@@ -18,7 +18,7 @@ locomotion exists in these free archives. Marketing describes the larger librari
 
 The official catalog has two Universal Animation Libraries and Universal Base Characters. The latter contains
 compatible character meshes, not a missing directional animation set. Older Toon Shooter/modular character packs
-use other rigs; none was accepted as a same-skeleton source. No extra compatible free set covering these gaps was
+were not verified as same-skeleton sources and were not downloaded. No extra compatible free set covering these gaps was
 found. Paid editions, Mixamo and account-based services were not downloaded.
 
 | Candidate | Seconds | Proposed use / derivation |

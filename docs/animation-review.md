@@ -96,7 +96,7 @@ python3 -B tools/dev/animation_review.py --assemble-only --build UAL1=unused --b
 ```
 
 External GLBs are loaded directly, never copied into `assets/`. Animations map by bone name onto the packaged
-mannequin. Every bone rest transform must match within 0.1 mm/component; incompatible skeletons fail loudly.
+mannequin. Every bone rest position must match within 0.1 mm, and each basis vector within 0.0001; incompatible skeletons fail loudly.
 `_Loop` clips loop; one-shots hold their last pose for inspection and their sheets sample the action's own duration.
 `@reverse` is explicitly a derived playback preview. Raw previews have neither weapon nor production modifiers; their player view uses the real CameraRig on code
 defaults, and their side view has fixed framing.
