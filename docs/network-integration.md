@@ -114,6 +114,8 @@ world that no longer had replication, not an owner stream the corrector could fo
 The probe now closes its live trajectory on receipt of Waiting, or scene completion
 if that happens first. It separately records actual completion; the checker still
 requires exact IDs/states and the original 0.10 m intact resting bound there.
+Intact bodies still moving at completion also retain the original 0.50/0.35 m
+fault/clean moving bound; retirement does not exempt intact positions.
 The original 0.50/0.35 m motion bounds apply to the last common live grid. No gameplay
 timer, server retirement rule, motion predictor or tolerance changed.
 New-format captures require `tank-final` followed by `tank-completion`, and reject
@@ -247,3 +249,11 @@ same 4-bot/90-second 120/30/3 schedule. It passes 1,998 grids/342,637 body
 pairs with no unobserved grids, final drift 0/0.194 m and a 0.95-second
 longest episode; all score audits agree. This repeats the layout, not the
 real-time action schedule, so it does not establish a deterministic replay.
+
+The completion review found that the retirement comparer initially enforced
+only the resting intact position bound. A fourth synthetic retirement regression
+shows that a 0.75 m intact moving disagreement was incorrectly accepted at actual
+completion (including mixed resting/moving classification). The unchanged original
+moving bound is now applied to those intact positions too. The regression fails
+before this correction and all 24 comparer tests pass afterward. Vent motion
+after server retirement remains separate from the live, bounded trajectory.

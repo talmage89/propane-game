@@ -222,6 +222,13 @@ class TankChecks(unittest.TestCase):
         final.tanks["b"] = ("V", "M", (final.time * 20 + .75, 0, 0))
         self.assertTrue(any("final" in f for f in self.check(first, second)["failures"]))
 
+    def test_retirement_preserves_intact_moving_completion_limit(self):
+        for rest in ("R", "M"):
+            first, second = self.retired(), self.retired(.025)
+            first[1][-1].tanks["a"] = ("I", rest, (0, 0, 0))
+            second[1][-1].tanks["a"] = ("I", "M", (.75, 0, 0))
+            self.assertTrue(any("final completion" in f for f in self.check(first, second)["failures"]))
+
     def test_retirement_requires_completion_and_rejects_later_trajectory_rows(self):
         samples = self.retired()[1]
         for broken in (samples[:-1], samples[:-2] + samples[-1:], samples + [samples[-1]],

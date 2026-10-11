@@ -162,13 +162,18 @@ def compare(logs, limits=PROFILES["faults"]):
         for (pa, a), (pb, b) in combinations(enumerate(complete, 1), 2):
             for id_ in a.tanks.keys() & b.tanks.keys():
                 left, right = a.tanks[id_], b.tanks[id_]
-                if left[:2] == right[:2] == ("I", "R") and math.dist(left[2], right[2]) > limits.resting:
-                    failures.append(f"final completion match {match_id} peers {pa}/{pb} body {id_}: resting drift {math.dist(left[2], right[2]):.3f}m")
+                if left[0] == right[0] == "I":
+                    resting = left[1] == right[1] == "R"
+                    limit = limits.resting if resting else limits.final_moving
+                    distance = math.dist(left[2], right[2])
+                    if distance > limit:
+                        kind = "resting" if resting else "intact moving"
+                        failures.append(f"final completion match {match_id} peers {pa}/{pb} body {id_}: {kind} drift {distance:.3f}m")
         active = {}
         final_bad = {}
         last_tick = math.floor(end / STEP)
         # A late frame stall cannot fabricate a final trajectory. Use the last common observed instant
-        # after settlement, and independently check exact completion lifecycle/resting poses above.
+        # after settlement, and independently check exact completion lifecycle/intact poses above.
         while last_tick * STEP >= settled_end and not all(observed(ts, last_tick * STEP, limits) for ts in times):
             last_tick -= 1
         if last_tick * STEP < settled_end:
