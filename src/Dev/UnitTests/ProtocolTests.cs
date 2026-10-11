@@ -91,7 +91,7 @@ public static class ProtocolTests
             using var tuning = new Tuning();
             var before = tuning.BlastRadius;
             TestRunner.Throws<InvalidDataException>(() => tuning.Apply(new Godot.Collections.Dictionary
-                { [nameof(Tuning.BlastRadius)] = 3f, [nameof(Tuning.FireRate)] = float.NaN }));
+            { [nameof(Tuning.BlastRadius)] = 3f, [nameof(Tuning.FireRate)] = float.NaN }));
             TestRunner.Assert(tuning.BlastRadius == before, "valid prefix applied before invalid suffix");
             tuning.Apply(new Godot.Collections.Dictionary { [nameof(Tuning.BlastRadius)] = 1f });
             TestRunner.Assert(tuning.BlastRadius == 1, "lower endpoint rejected");

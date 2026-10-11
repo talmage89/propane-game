@@ -110,9 +110,11 @@ public static class MessageCodec
             case TextMessage p: w.String(p.Value); break;
             case HelloMessage p: w.Int(p.Protocol).String(p.Version).String(p.Build).String(p.Name).Int(p.Color).Bool(p.Debug); break;
             case WelcomeMessage p:
-                w.Int(p.Id); if (p.Version != null) { w.String(p.Version); } break;
+                w.Int(p.Id); if (p.Version != null) { w.String(p.Version); }
+                break;
             case RejectedMessage p:
-                w.String(p.Reason); if (p.Version != null) { w.String(p.Version); } break;
+                w.String(p.Reason); if (p.Version != null) { w.String(p.Version); }
+                break;
             case ProfileMessage p: w.String(p.Name).Int(p.Color); break;
             case Godot.Collections.Dictionary p: w.Snapshot(p); break;
             case LobbyListMessage p:
@@ -147,12 +149,15 @@ public static class MessageCodec
                 w.UInt(p.Id).Transform(p.Transform).Vec3(p.Linear).Vec3(p.Angular).Vec3(p.Hole).Vec3(p.Normal).Float(p.Swirl); break;
             case ExplodeMessage p: w.UInt(p.Id).Vec3(p.Center); break;
             case ClaimMessage p:
-                w.UShort((ushort)p.Ids.Count); foreach (var id in p.Ids) { w.UInt(id); } break;
+                w.UShort((ushort)p.Ids.Count); foreach (var id in p.Ids) { w.UInt(id); }
+                break;
             case BodyStatesMessage p:
-                w.Double(p.Time).UShort((ushort)p.Bodies.Count); foreach (var body in p.Bodies) { WriteBody(w, body); } break;
+                w.Double(p.Time).UShort((ushort)p.Bodies.Count); foreach (var body in p.Bodies) { WriteBody(w, body); }
+                break;
             case BodyRestMessage p: w.UInt(p.Id).Transform(p.Transform); break;
             case DropMessage p:
-                w.Byte(p.Reason).Int(p.Tanks.Count).Int(p.Color); foreach (var body in p.Tanks) { WriteBody(w, body); } break;
+                w.Byte(p.Reason).Int(p.Tanks.Count).Int(p.Color); foreach (var body in p.Tanks) { WriteBody(w, body); }
+                break;
             case RagdollMessage p: w.Vec3(p.Position).Vec3(p.Velocity).Vec3(p.Spin); break;
             case GetUpMessage p: w.Vec3(p.Position).Float(p.Yaw); break;
             case TuningMessage p: w.String(p.Name).Scalar(p.Value); break;
@@ -194,8 +199,17 @@ public static class MessageCodec
     private static PlayerStateMessage ReadPlayerState(NetReader r)
     {
         var time = Time(r.Double());
-        var state = new PlayerNetState { Position = Vector(r), Velocity = Vector(r), Yaw = Range(r.Float(), -1_000_000, 1_000_000),
-            AimTarget = Vector(r), Aim = r.Byte() / 255f, Sprint = r.Byte() / 255f, Ready = r.Byte() / 255f, Reload = r.Byte() / 255f };
+        var state = new PlayerNetState
+        {
+            Position = Vector(r),
+            Velocity = Vector(r),
+            Yaw = Range(r.Float(), -1_000_000, 1_000_000),
+            AimTarget = Vector(r),
+            Aim = r.Byte() / 255f,
+            Sprint = r.Byte() / 255f,
+            Ready = r.Byte() / 255f,
+            Reload = r.Byte() / 255f
+        };
         var flags = Range(r.Byte(), 0, 5);
         state.Grounded = (flags & 1) != 0; state.State = (PlayerNetState.Mode)(flags >> 1);
         state.PelvisPosition = Vector(r); state.PelvisVelocity = Vector(r); state.Staggers = r.Byte();

@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.IO;
+using System.Linq;
 using Godot;
 using Propane.Core;
 using Propane.World;
@@ -389,8 +389,15 @@ public partial class LobbyServer : Node
         }
         // Everyone plays on the creator's tuning: the baked values in a release build, the live ones in debug.
         var tuning = Tuning.FromSnapshot(snapshot);
-        var match = new MatchRun { Id = nextMatchId++, CreatorId = client.Id, CreatorDebug = client.Debug,
-            Tuning = tuning, Length = lobby.MatchLength, HostId = client.Id };
+        var match = new MatchRun
+        {
+            Id = nextMatchId++,
+            CreatorId = client.Id,
+            CreatorDebug = client.Debug,
+            Tuning = tuning,
+            Length = lobby.MatchLength,
+            HostId = client.Id
+        };
         foreach (var id in lobby.Members)
         {
             match.Slots[id] = match.Players.Count;
