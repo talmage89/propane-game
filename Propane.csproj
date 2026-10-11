@@ -5,6 +5,14 @@
     <RootNamespace>Propane</RootNamespace>
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
+    <!-- Pin the baseline to .NET 10; favor correctness over API design and style suggestions. -->
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisLevel>10.0</AnalysisLevel>
+    <!-- CA2000/CA2213 cannot distinguish scene-tree/reference-counted ownership from CLR ownership.
+         Recommended reliability plus CA1001 checks ownership without flagging engine allocations. -->
+    <AnalysisLevelReliability>10.0-recommended</AnalysisLevelReliability>
+    <AnalysisLevelUsage>10.0-recommended</AnalysisLevelUsage>
+    <AnalysisLevelSecurity>10.0-recommended</AnalysisLevelSecurity>
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
   </PropertyGroup>
 </Project>

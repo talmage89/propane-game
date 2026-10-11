@@ -36,6 +36,12 @@ Requires Godot 4.7.2 (.NET edition) and the .NET 10 SDK.
 - Editor: open `project.godot` and press Play (F5).
 - Command line: `make run`. `make` lists the other tasks (tests, a local server, bots, releases); they find Godot on
   `PATH` (`godot-mono` or `godot`) or in `/Applications`, or set `GODOT` to its binary.
+- Quality gate: `make lint` verifies C# formatting and rebuilds with warnings as errors. `make check` runs lint,
+  then `make test`. Run it before submitting a change. GitHub Actions runs the same checks on pushes to `dev`
+  and every pull request.
+
+[docs/code-quality.md](docs/code-quality.md) describes the formatting and analyzer baseline and its regression
+checks. The gate follows the existing code's style and checks correctness without API design or naming churn.
 
 The game opens maximized on the main menu: Single player, Multiplayer or Quit. In play it captures the mouse; click
 the window to recapture it after switching away.
@@ -109,7 +115,7 @@ on Linux), which then takes precedence. **Defaults** restores the values in code
 | `src/Dev`, `scenes/dev` | Test harnesses (below). |
 | `shaders` | World, tank, ground, void and effect shaders, plus the shared reveal transition. |
 | `tools/blender` | Scripts that build the assets in `assets/`. |
-| `tools/release`, `.github/workflows` | Export templates, the release build, and the CI job that publishes it. |
+| `tools/release`, `.github/workflows` | Export templates, the release build, quality checks, and release publishing. |
 | `tools/server` | The multiplayer server's Docker setup and deploy script. |
 | `tools/dev` | Multiplayer test runs with bot players, and a comparison of what each bot saw. |
 | `design` | The owner's standing decisions: the vision the game holds to. |

@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Godot;
 using Propane.Core;
 
@@ -8,6 +9,7 @@ namespace Propane.Player;
 /// time-scaled to the measured ground speed of its clip so feet do not slide. Arms and fingers take the pistol-hold
 /// pose as a base for the rifle IK. One-shots cover landing, staggering and getting up.
 /// </summary>
+[SuppressMessage("Design", "CA1001", Justification = "modelRoot owns the AnimationTree node and frees it with the character.")]
 public sealed class CharacterAnimator
 {
     // Ground speed of each clip, measured from foot contact in the character lab.
