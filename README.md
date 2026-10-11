@@ -72,7 +72,7 @@ then plays with every patch of that minor version.
 | Space | A / Cross | Jump, including while aiming |
 | Mouse | Right stick | Look |
 | Left click | Right trigger | Fire (hold for full auto; toggle it in the tuning panel) |
-| Right click (hold) | Left trigger (hold) | Aim and creep: upright shouldered walk (0.98 m/s), tight spread; camera stays put |
+| Right click (hold) | Left trigger (hold) | Aim and creep: upright shouldered walk (1.6 m/s), tight spread; camera stays put |
 | R | X / Square | New suburb (single player); reload (multiplayer) |
 | Esc | — | Pause and show the controls (a match keeps running) |
 | F1 or ` | — | Tuning panel (live sliders; in a match, debug builds only, and it changes everyone's values) |
@@ -181,6 +181,7 @@ The creep probe reports median and 75th-percentile horizontal foot/toe drift for
 each bone's minimum height, after two seconds of settling. These are near-floor proxies for planted contacts;
 they do not prove contact classification, lateral stepping or foot IK. The headless movement suite also checks
 actual facade velocity and animation playback at 0.98, 1.6, 2.2 and 2.8 m/s.
+[docs/movement.md](docs/movement.md) records the speed comparison and the default's trade-off.
 
 ## Versions and releases
 

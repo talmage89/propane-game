@@ -169,8 +169,8 @@ public partial class Tuning : Resource
     [Export(PropertyHint.Range, "0,0.9,0.01")] public float StickDeadzone { get; set; } = 0.2f;
     [Export(PropertyHint.Range, "1,20,0.1")] public float RunSpeed { get; set; } = 6f;
     [Export(PropertyHint.Range, "1,30,0.1")] public float SprintSpeed { get; set; } = 9.5f;
-    /// <summary>Upright aimed walk; 0.98 m/s matches the walk clip's measured stride.</summary>
-    [Export(PropertyHint.Range, "0.1,5,0.01")] public float CreepSpeed { get; set; } = 0.98f;
+    /// <summary>Upright aimed walk, with playback scaled from the clip's native 0.98 m/s.</summary>
+    [Export(PropertyHint.Range, "0.1,5,0.01")] public float CreepSpeed { get; set; } = 1.6f;
     [Export(PropertyHint.Range, "0,0.5,0.01")] public float CoyoteTime { get; set; } = 0.12f;
     [Export(PropertyHint.Range, "0,0.5,0.01")] public float JumpBufferTime { get; set; } = 0.12f;
     [Export(PropertyHint.Range, "0,1,0.01")] public float SprintForwardThreshold { get; set; } = 0.3f;
