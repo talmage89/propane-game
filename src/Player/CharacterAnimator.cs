@@ -6,8 +6,9 @@ namespace Propane.Player;
 
 /// <summary>
 /// Builds and drives the mannequin's AnimationTree. Locomotion is a crossfade between discrete gaits, each
-/// time-scaled to the measured ground speed of its clip so feet do not slide. Arms and fingers take the pistol-hold
-/// pose as a base for the rifle IK. One-shots cover landing, staggering and getting up.
+/// time-scaled to the measured ground speed of its clip so feet do not slide. The upper-body layer stabilizes
+/// the chest and arms for the rifle rig; procedural wrists and fingers replace the pistol hold. One-shots
+/// cover landing, staggering and getting up.
 /// </summary>
 [SuppressMessage("Design", "CA1001", Justification = "modelRoot owns the AnimationTree node and frees it with the character.")]
 public sealed class CharacterAnimator
@@ -31,6 +32,7 @@ public sealed class CharacterAnimator
 
     private static readonly string[] UpperBodyBones =
     {
+        "spine_01", "spine_02", "spine_03",
         "clavicle_l", "upperarm_l", "lowerarm_l", "hand_l", "clavicle_r", "upperarm_r", "lowerarm_r", "hand_r",
         "index_01_l", "index_02_l", "index_03_l", "middle_01_l", "middle_02_l", "middle_03_l",
         "pinky_01_l", "pinky_02_l", "pinky_03_l", "ring_01_l", "ring_02_l", "ring_03_l",
@@ -158,7 +160,7 @@ public sealed class CharacterAnimator
         root.ConnectNode("land", 0, "air");
         root.ConnectNode("land", 1, "land_clip");
 
-        // Arms and fingers from the pistol hold; the rifle IK then moves the arms but keeps the curled fingers.
+        // Stabilize the torso and arms across gaits; the rig supplies wrists and individual finger curls.
         root.AddNode("hold_clip", Clip("Pistol_Idle"), new Vector2(800, 450));
         var hold = new AnimationNodeBlend2 { FilterEnabled = true };
         foreach (var bone in UpperBodyBones)

@@ -196,11 +196,15 @@ $GODOT --fixed-fps 60 res://scenes/dev/tank_range.tscn -- --capture-dir=/tmp/t -
 $GODOT --fixed-fps 60 res://scenes/dev/tank_range.tscn -- --capture-dir=/tmp/pile --formation=Square --chain=fresh
 $GODOT --fixed-fps 60 res://scenes/dev/player_range.tscn -- --capture-dir=/tmp/p
 # Player scenarios: stances (default), reload, ragdoll, creep (two measured strides), movement (labeled gait/jump transitions),
-# sprint-repro (discovery sequence, exact-tick assertions and transition log).
+# sprint-repro (discovery sequence, exact-tick assertions and transition log), grip (all rifle contacts).
 # --view=rifleleft or rifleright follows the rifle up close.
 $GODOT --fixed-fps 60 res://scenes/dev/player_range.tscn -- --capture-dir=/tmp/p --scenario=reload --view=rifleleft
 $GODOT --fixed-fps 60 res://scenes/dev/player_range.tscn -- --capture-dir=/tmp/movement --scenario=movement --view=side
 $GODOT --headless res://scenes/dev/player_range.tscn -- --scenario=sprint-repro
+# Rifle contacts: all holds, both reloads, every gait, full pitch and recoil. Also runs in make test.
+$GODOT --headless --fixed-fps 60 res://scenes/dev/player_range.tscn -- --scenario=grip --grip-sweep --assert-grip
+# Repeat rendered with --view=rifleleft, rifleright, side and player. Writes per-frame grip.csv.
+$GODOT --fixed-fps 60 res://scenes/dev/player_range.tscn -- --scenario=grip --grip-sweep --grip-metrics --view=rifleleft --capture-dir=/tmp/grip
 # Compare aimed walk speeds from the side and the player camera (--view=player).
 # Captures 12 frames per stride and writes final world-space foot/toe samples to stride.csv.
 $GODOT --fixed-fps 60 res://scenes/dev/player_range.tscn -- --scenario=creep --view=side --tune.CreepSpeed=1.6 --capture-dir=/tmp/creep
@@ -234,6 +238,11 @@ each bone's minimum height, after two seconds of settling. These are near-floor 
 they do not prove contact classification, lateral stepping or foot IK. The headless movement suite also checks
 actual facade velocity and animation playback at 0.98, 1.6, 2.2 and 2.8 m/s.
 [docs/movement.md](docs/movement.md) records the speed comparison and the default's trade-off.
+
+The rifle probe measures final wrist position/rotation residuals, sampled skinned hand-surface penetration into
+solid rifle proxies, and right-eye distance from `Socket_Eye` while fully aimed. `--assert-grip` exits 1 on
+failures or missing scenario coverage. The sample is a regression proxy; rendered views still judge the fingers,
+shoulder pocket and cheek weld. [docs/rifle-contact.md](docs/rifle-contact.md) records calibration and limits.
 
 ## Versions and releases
 
