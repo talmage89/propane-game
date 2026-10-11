@@ -122,12 +122,13 @@ value. For example, `tools/dev/net_bots.sh -n 4 -l 90 -w 1 -- --record=/tmp/bots
 ```sh
 GODOT=/Applications/Godot_mono.app/Contents/MacOS/Godot
 
-# Generator: determinism, overlaps, tank count and placement, spawn safety, reachability, and the same for match
-# suburbs with player starts, ammo spots and the plan's encoding. Exits 1 on failure.
+# Generator: exact determinism and encoding, authored hull overlaps and tier supports, placement and reachability,
+# all four formations, and supply/start safety at 2, 8, 16, 24 and 32 players. Exits 1 on failure.
 $GODOT --headless res://scenes/dev/generator_tests.tscn -- --seeds=200
 
 # The real game with a scripted player. Scenarios: loop (default), clear (destroys every tank), ragdoll, shoot,
-# tour (camera in tight spots), spots (visits each tank), settle (props that move on their own), dissolve, menus,
+# tour (camera in tight spots), spots (visits each tank), settle (fails on tank drift >6 mm or rotation >0.5 degrees),
+# dissolve, menus,
 # readme (a chain reaction captured as frames for the README GIF; seed 23 is the one in docs/).
 $GODOT --fixed-fps 60 --resolution 1280x720 res://scenes/dev/game_test.tscn -- --capture-dir=/tmp/g --scenario=ragdoll
 
@@ -141,6 +142,7 @@ $GODOT --fixed-fps 60 res://scenes/dev/player_range.tscn -- --capture-dir=/tmp/p
 $GODOT --fixed-fps 60 res://scenes/dev/player_range.tscn -- --capture-dir=/tmp/p --scenario=reload --view=rifleleft
 $GODOT --fixed-fps 60 res://scenes/dev/world_lab.tscn -- --capture-dir=/tmp/w
 $GODOT --fixed-fps 60 res://scenes/dev/suburb_preview.tscn -- --capture-dir=/tmp/s
+# --players=16 previews a scaled match instead of single player; --formation=Square forces a formation.
 
 # Every menu screen, a solo match, and single player and back.
 $GODOT res://scenes/dev/menu_test.tscn -- --capture-dir=/tmp/m

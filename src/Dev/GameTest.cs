@@ -63,7 +63,7 @@ public partial class GameTest : Node
         }
         else if (DevArgs.Get("scenario") == "spots")
         {
-            // A free camera visits every tank as placed, to check each sits right (on the ground, in the bed...).
+            // A free camera visits each pile to check it sits on the ground and on its supporting tiers.
             var camera = new Camera3D { Fov = 60 };
             foreach (var time in new[] { 0.05f, 0.3f, 0.6f, 1f, 2f })
             {
@@ -177,6 +177,8 @@ public partial class GameTest : Node
         {
             // Every loose prop should stay exactly where the plan put it until something hits it.
             director.At(3f, ReportUnsettled);
+            director.At(10f, ReportUnsettled);
+            director.ShotAt(10.2f, "settle");
         }
         else if (DevArgs.Get("scenario") == "readme")
         {
@@ -367,8 +369,22 @@ public partial class GameTest : Node
                 GD.Print($"[settle] {start.Model} drifted {drift:0.00} m, tilted {tilt:0.0} deg at {body.GlobalPosition}");
             }
         }
-        var tanks = suburb.LiveTanks.Count(t => Mathf.RadToDeg(t.GlobalBasis.Y.AngleTo(Vector3.Up)) > 4f);
-        GD.Print($"[settle] seed {suburb.Plan.Seed}: {moved} of {bodies.Count} props unsettled, {tanks} tanks tipped");
+        var tanks = 0;
+        for (var i = 0; i < suburb.MapTanks.Count; i++)
+        {
+            var tank = suburb.MapTanks[i];
+            var placement = suburb.Plan.Tanks[i];
+            var expected = new Basis(Vector3.Up, placement.Yaw) * Basis.FromEuler(placement.Rotation);
+            var drift = tank.GlobalPosition.DistanceTo(World.Suburb.ToWorld(placement.Position, placement.Elevation));
+            var angle = tank.GlobalBasis.GetRotationQuaternion().AngleTo(expected.GetRotationQuaternion());
+            if (drift > 0.006f || angle > Mathf.DegToRad(0.5f))
+            {
+                tanks++;
+                GD.Print($"[settle] tank {i} {placement.Formation}: drift {drift:0.0000} m, rotation {Mathf.RadToDeg(angle):0.00} deg");
+            }
+        }
+        GD.Print($"[settle] seed {suburb.Plan.Seed}: {moved} of {bodies.Count} props unsettled, {tanks} tanks moved");
+        if (tanks > 0) { GD.PushError("[settle] tanks moved before a hit"); GetTree().Quit(1); }
     }
 
     private float clock;
