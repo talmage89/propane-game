@@ -707,7 +707,7 @@ public partial class Match : Node3D
         var flags = (byte)((s.Grounded ? 1 : 0) | ((byte)s.State << 1));
         Send(new NetWriter(Msg.PlayerState).Double(now).Vec3(s.Position).Vec3(s.Velocity).Float(s.Yaw).Vec3(s.AimTarget)
             .Byte(ToByte(s.Aim)).Byte(ToByte(s.Sprint)).Byte(ToByte(s.Ready)).Byte(ToByte(s.Reload)).Byte(flags)
-            .Vec3(s.PelvisPosition).Vec3(s.PelvisVelocity).Byte(s.Staggers), reliable: false);
+            .Vec3(s.PelvisPosition).Vec3(s.PelvisVelocity).Byte(s.Staggers).Byte((byte)s.Gait).Byte((byte)s.Support).Byte((byte)s.Weapon), reliable: false);
     }
 
     private void SendBodies(float dt, double now)
@@ -860,6 +860,9 @@ public partial class Match : Node3D
                 s.PelvisPosition = r.Vec3();
                 s.PelvisVelocity = r.Vec3();
                 s.Staggers = r.Byte();
+                s.Gait = (PlayerGait)r.Byte();
+                s.Support = (PlayerSupport)r.Byte();
+                s.Weapon = (WeaponAction)r.Byte();
                 remote?.Buffer.Add(time, s, now);
                 break;
             }

@@ -57,7 +57,9 @@ Every client simulates the whole suburb, so the game responds instantly. Each mo
 - *Scoring:* the server credits the point. If two players claim the same tank, the first claim wins.
 
 **Players:**
-- Each client owns its own player's movement and sends it to the others, who show it smoothed.
+- Each client owns its own player's movement and sends it to the others, who show it smoothed. Player snapshots
+  include discrete gait, support phase and weapon action alongside the blended rifle poses, so remote creep uses
+  the walk clip and remote sprint uses the sprint clip. Protocol 2 adds these three bytes; this needs a minor release.
 - The shooter's client decides whether a bullet hit a player.
 - The victim's client decides whether a blast ragdolls them, because it knows exactly where they were.
 - The victim's client spawns the dropped tanks and owns them until another player interacts with them.

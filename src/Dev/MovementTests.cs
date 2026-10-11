@@ -29,6 +29,7 @@ public partial class MovementTests : Node
             ResolverTests();
             padIntentMode = false;
             InputTests();
+            SnapshotTests();
             GD.Print($"[movement-tests] PASS {checks} assertions");
             GetTree().Quit();
         }
@@ -134,6 +135,26 @@ public partial class MovementTests : Node
         s = Tick(r, aim);
         Check(!s.Jump && s.EffectiveAim, "expired buffer lands aimed");
 
+    }
+
+    private void SnapshotTests()
+    {
+        var creep = new PlayerNetState { Gait = PlayerGait.Creep, Support = PlayerSupport.Grounded,
+            Weapon = WeaponAction.Aim, Grounded = true, Aim = 1 };
+        var air = new PlayerNetState { Gait = PlayerGait.Sprint, Support = PlayerSupport.Jumping,
+            Weapon = WeaponAction.Carry, Grounded = false };
+        var mixed = PlayerNetState.Lerp(creep, air, 0.75f);
+        Check(mixed.Gait == PlayerGait.Sprint && mixed.Support == PlayerSupport.Jumping,
+            "snapshot interpolation preserves discrete gait/support");
+        Check(mixed.Aim == 0 && mixed.Weapon == WeaponAction.Carry, "snapshot air cancels blended aim");
+        mixed = PlayerNetState.Lerp(air, creep, 0.75f);
+        Check(mixed.Gait == PlayerGait.Creep && mixed.Weapon == WeaponAction.Aim && mixed.Aim > 0,
+            "snapshot landing restores creep/aim");
+        var reload = creep;
+        reload.Weapon = WeaponAction.Reload;
+        reload.Gait = PlayerGait.Sprint;
+        mixed = PlayerNetState.Lerp(creep, reload, 0.75f);
+        Check(mixed.Gait == PlayerGait.Sprint && mixed.Aim == 0, "snapshot reload cancels aim without canceling sprint");
     }
 
     private void Send(InputEvent e)

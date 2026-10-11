@@ -61,20 +61,29 @@ then plays with every patch of that minor version.
 
 | Keyboard / mouse | Gamepad (Xbox / PlayStation) | Action |
 | --- | --- | --- |
-| W A S D | Left stick | Move |
-| Shift (hold) | Left stick click (hold) | Sprint |
-| Space | A / Cross | Jump |
+| W A S D | Left stick | Move at the default gait (6 m/s) |
+| Shift (hold) | Left stick click (hold) | Sprint forward (9.5 m/s) |
+| Space | A / Cross | Jump, including while aiming |
 | Mouse | Right stick | Look |
 | Left click | Right trigger | Fire (hold for full auto; toggle it in the tuning panel) |
-| Right click (hold) | Left trigger (hold) | Aim: rifle to the shoulder and a tight spread. The camera does not move. |
+| Right click (hold) | Left trigger (hold) | Aim and creep: upright shouldered walk (0.98 m/s), tight spread; camera stays put |
 | R | X / Square | New suburb (single player); reload (multiplayer) |
 | Esc | — | Pause and show the controls (a match keeps running) |
 | F1 or ` | — | Tuning panel (live sliders; in a match, debug builds only, and it changes everyone's values) |
 | F11 or Alt+Enter | — | Fullscreen |
 
+Aim cancels sprint. Releasing aim with sprint still held restores sprint's target speed on that physics tick,
+including after firing. Jumping drops effective aim in the air; held aim returns on landing. Reload owns the weapon
+and suppresses aim/fire while leaving the selected movement gait free. Menus still require a keyboard or mouse.
+
 Gameplay buttons and stick axes use named actions ([Godot's controller input model](https://docs.godotengine.org/en/stable/tutorials/inputs/controllers_gamepads_joysticks.html)).
 Mouse look is displacement; stick look is a rate with separate sensitivity, radial curve and deadzone tuners.
-Menus still require a keyboard or mouse.
+
+`src/Player/PlayerState.cs` resolves lifecycle, support, gait and weapon action once per physics tick, from intent and
+pre-move floor contact. The accepted jump overrides contact; landing is the first tick that samples contact again.
+Held aim is intent, effective aim owns creep/spread, and recent fire only owns ready presentation. Animation uses the
+resolved gait (creep selects the walk clip), while actual velocity still accelerates toward the target. The node
+facade owns collisions, ammo and lifecycle transitions; the resolver has no scene or engine dependencies.
 
 ## Tuning
 
