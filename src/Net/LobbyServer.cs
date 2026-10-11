@@ -578,6 +578,7 @@ public partial class LobbyServer : Node
     {
         if (client.Lobby is not { Match: { } match } lobby || !match.Players.Contains(client.Id)) { return; }
         if (lobby.Phase is not (LobbyPhase.Countdown or LobbyPhase.Playing or LobbyPhase.Results) &&
+            !(lobby.Phase == LobbyPhase.Loading && message.Type is Msg.BodyStates or Msg.BodyRest) &&
             message.Type is not (Msg.Claim or Msg.Puncture or Msg.Explode or Msg.Drop)) { return; }
         var includeSender = false;
         switch (message.Payload)

@@ -161,6 +161,17 @@ public partial class NetTest : Node
                 raceVent = canonical.Vent;
             };
             AddChild(match);
+            if (DevArgs.Get("tank-trace") != null)
+            {
+                match.Bodies.Trace = (entry, reason) =>
+                {
+                    if (!entry.IsTank || !IsInstanceValid(entry.Body)) { return; }
+                    var body = entry.Body;
+                    var p = body.GlobalPosition;
+                    var target = entry.Target.Origin;
+                    Log(FormattableString.Invariant($"tank-trace match {match.Setup.Id} time {TankCheckTime():0.000000} id {entry.Id:x} {reason} owner={entry.Owner} epoch={entry.Epoch} sequence={entry.Sequence} last={entry.LastSequence} pending={entry.ClaimPending} sleeping={body.Sleeping} target={entry.HasTarget}/{entry.TargetRest} pos={p.X:0.000},{p.Y:0.000},{p.Z:0.000} goal={target.X:0.000},{target.Y:0.000},{target.Z:0.000} speed={body.LinearVelocity.Length():0.000} goal-speed={entry.TargetLinear.Length():0.000} gather={(body as PropaneTank)?.Gathering}"));
+                };
+            }
             match.Player.InputOverride = bot;
             if (DevArgs.Get("melee-start") != null)
             {

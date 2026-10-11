@@ -70,6 +70,9 @@ public sealed class BodySync
 
     public IEnumerable<Entry> Entries => entries.Values;
 
+    // Optional dev harness observer; ordinary matches allocate no trace strings.
+    internal System.Action<Entry, string>? Trace { get; set; }
+
     public Entry? Get(uint id) => entries.GetValueOrDefault(id);
 
     public Entry? Find(GodotObject? body) => body is RigidBody3D rigid ? byInstance.GetValueOrDefault(rigid.GetInstanceId()) : null;
@@ -79,7 +82,7 @@ public sealed class BodySync
     public void Register(uint id, RigidBody3D body, bool isTank, int owner)
     {
         Remove(id);
-        var entry = new Entry { Id = id, InstanceId = body.GetInstanceId(), Body = body, IsTank = isTank, Owner = owner, WasAwake = !body.Sleeping };
+        var entry = new Entry { Id = id, InstanceId = body.GetInstanceId(), Body = body, IsTank = isTank, Owner = owner, WasAwake = !body.Sleeping, PublishRequired = owner == Me };
         entries[id] = entry;
         byInstance[body.GetInstanceId()] = entry;
     }
@@ -173,6 +176,7 @@ public sealed class BodySync
             OnState(future.Sender, future.Body, future.IsRest, future.Received);
         }
         if (entry.Latest is { } newest) { resolved = authority with { Body = newest.Body, Rest = newest.IsRest }; }
+        Trace?.Invoke(entry, $"authority owner={authority.Owner} epoch={authority.Body.Epoch} sequence={authority.Body.Sequence} rest={authority.Rest}");
         return true;
     }
 
@@ -202,6 +206,7 @@ public sealed class BodySync
         entry.TargetLinear = rest ? Vector3.Zero : state.Linear;
         entry.TargetAngular = rest ? Vector3.Zero : state.Angular;
         entry.TargetReceived = now;
+        Trace?.Invoke(entry, $"receive sender={sender} epoch={state.Epoch} sequence={state.Sequence} rest={rest} transit={transit:0.000}");
     }
 
     /// <summary>Puts a body exactly where its owner had it, moving as it was.</summary>
@@ -260,15 +265,21 @@ public sealed class BodySync
             if (error.Length() > tuning.SnapDistance)
             {
                 Snap(body, new Transform3D(new Basis(targetRotation), targetPosition), entry.TargetLinear, entry.TargetAngular);
+                Trace?.Invoke(entry, $"snap age={age:0.000} lead={lead:0.000} error={error.Length():0.000}");
             }
             else if (entry.TargetRest && (error.Length() < 0.01f && Mathf.Abs(angle) < 0.01f || age > blend * 3))
             {
-                // Settled where the owner's copy settled.
-                body.GlobalTransform = new Transform3D(new Basis(targetRotation), targetPosition);
-                body.LinearVelocity = Vector3.Zero;
-                body.AngularVelocity = Vector3.Zero;
-                body.Sleeping = true;
-                entry.HasTarget = false;
+                // A rest is the owner's last word until a newer state/epoch or a local claim replaces it.
+                // Local collision/solver drift after sleep must not silently become authoritative.
+                var pose = new Transform3D(new Basis(targetRotation), targetPosition);
+                if (!body.Sleeping || !current.IsEqualApprox(pose))
+                {
+                    body.GlobalTransform = pose;
+                    body.LinearVelocity = Vector3.Zero;
+                    body.AngularVelocity = Vector3.Zero;
+                    body.Sleeping = true;
+                    Trace?.Invoke(entry, "settle");
+                }
                 continue;
             }
             else
@@ -316,11 +327,13 @@ public sealed class BodySync
                 {
                     entry.PublishRequired = false;
                     moving.Add(entry);
+                    Trace?.Invoke(entry, "publish-moving");
                 }
                 else if (!awake && (entry.PublishRequired || entry.WasAwake))
                 {
                     entry.PublishRequired = false;
                     rested.Add(entry);
+                    Trace?.Invoke(entry, "publish-rest");
                 }
             }
             entry.WasAwake = awake;

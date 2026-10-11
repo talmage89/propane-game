@@ -115,7 +115,10 @@ and string limits apply inside the plan, and starts must agree with the player a
   An intact observer already moving from a relayed blast also keeps that motion when adopting the child vent;
   snapping to the puncture's pre-blast pose would erase the accepted push until owner publications arrive.
 - *Ownership:* whoever punctured a venting tank owns it and sends its position and velocity at a set rate. Other clients ease toward that position, and snap only if they have drifted far.
-- *Sleeping tanks:* intact tanks sleep, so they stay in sync without any messages.
+- *Sleeping tanks:* the owner publishes an initial pose and a reliable final rest when it stops. These states
+  also relay during loading and buffer until each client has built its bodies. Observers retain that resting
+  target until newer movement, an epoch change or a local predicted claim replaces it; local collisions cannot
+  permanently displace a resting copy after its owner's final publication.
 - *Detonation:* whoever detonates the first tank in a chain runs the whole chain on their client and sends each explosion with its position. Other clients play those explosions and don't run chain reactions themselves for remote blasts.
 - *Scoring:* the server credits the point only for a tank in its ledger that has not already exploded. If two players claim the same tank, the first claim wins. Map tanks are registered from the plan; client-created drops are registered atomically before being relayed. Exploded ids remain reserved for the whole match.
 

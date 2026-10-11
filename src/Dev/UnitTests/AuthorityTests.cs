@@ -33,6 +33,33 @@ public static class AuthorityTests
 
     public static void Register(TestRunner runner)
     {
+        runner.Run("authority/rest remains authoritative after observer settles and drifts locally", () =>
+        {
+            using var body = new BodyFixture(runner);
+            var sync = new BodySync(Tuning.SavedTemplate, 4, 2);
+            sync.Register(Id, body.Body, true, 2);
+            var rest = Pose(Id, 1, 1) with { Linear = Vector3.Zero, Angular = Vector3.Zero };
+            body.Body.GlobalTransform = rest.Transform;
+            body.Body.Sleeping = true;
+            sync.OnState(2, rest, true, 1);
+            sync.Correct(2);
+            TestRunner.Assert(body.Body.GlobalTransform.IsEqualApprox(rest.Transform), $"rest was not applied to observer: {body.Body.GlobalTransform} vs {rest.Transform}");
+            body.Body.GlobalPosition += Vector3.Right * .3f;
+            body.Body.Sleeping = true;
+            sync.Correct(3);
+            TestRunner.Assert(body.Body.GlobalTransform.IsEqualApprox(rest.Transform), "settled observer forgot the owner's last word");
+            sync.OnState(2, rest with { Sequence = 2, Linear = Vector3.Right }, false, 4);
+            TestRunner.Assert(sync.Get(Id) is { TargetRest: false, LastSequence: 2 }, "newer owner wake could not release rest");
+        });
+        runner.Run("authority/initial sleeping owner publishes its resting pose", () =>
+        {
+            using var body = new BodyFixture(runner);
+            body.Body.Sleeping = true;
+            var sync = new BodySync(Tuning.SavedTemplate, 2, 2);
+            sync.Register(Id, body.Body, true, 2);
+            TestRunner.Assert(sync.Collect(.01).Rested.SingleOrDefault()?.Id == Id, "initially asleep owner never sent an authoritative rest");
+            TestRunner.Assert(sync.Collect(.01).Rested.Count == 0, "unchanged sleep repeated its reliable publication");
+        });
         runner.Run("authority/match copies local bot dials beside creator tuning", () =>
         {
             using var local = new Tuning { TankMass = 7, BotRouteSpacing = 9 };
