@@ -198,13 +198,19 @@ public partial class GeneratorTests : Node
                     Check(n, "formation finite", t.Origin.IsFinite() && t.Basis.X.IsFinite() && t.Origin.Y >= 0);
                     Check(n, "formation above ground", geometry.Bottom(t) >= -0.001f);
                     if (formation != PileFormation.Cluster && t.Origin.Y > World.Plan.PileBuilder.Radius + 0.001f)
+                    {
                         Check(n, "formation supported by two tanks", transforms.Count(b =>
                             Mathf.Abs(t.Origin.Y - b.Origin.Y - spacing.Y) < 0.0001f && geometry.Overlaps(t, b, -0.005f)) >= 2, $"{formation} {t.Origin}");
+                    }
                 }
                 for (var i = 0; i < transforms.Count; i++)
+                {
                     for (var j = i + 1; j < transforms.Count; j++)
+                    {
                         if (transforms[i].Origin.DistanceTo(transforms[j].Origin) < 0.8f)
                             Check(n, "formation hulls do not intersect", !geometry.Overlaps(transforms[i], transforms[j]), $"{formation} {i}/{j}");
+                    }
+                }
             }
             var settings = SuburbPlans.SinglePlayer(tuning) with
             {
@@ -212,22 +218,27 @@ public partial class GeneratorTests : Node
                 SquareWeight = formation == PileFormation.Square ? 1 : 0,
                 TriangularWeight = formation == PileFormation.Triangular ? 1 : 0,
                 TightWeight = formation == PileFormation.Cluster ? 1 : 0,
-                ClusterSizeMin = 14, ClusterSizeMax = 14,
+                ClusterSizeMin = 14,
+                ClusterSizeMax = 14,
             };
             var modes = new[] { settings }.Concat(new[] { 2, 8, 16, 24, 32 }.Select(players => SuburbPlans.Match(tuning, players) with
             {
-                RowsWeight = settings.RowsWeight, SquareWeight = settings.SquareWeight,
-                TriangularWeight = settings.TriangularWeight, TightWeight = settings.TightWeight,
+                RowsWeight = settings.RowsWeight,
+                SquareWeight = settings.SquareWeight,
+                TriangularWeight = settings.TriangularWeight,
+                TightWeight = settings.TightWeight,
             }));
             foreach (var mode in modes)
-            for (var seed = 1; seed <= 6; seed++)
             {
-                var plan = new SuburbGenerator(mode, catalog, seed).Generate();
-                Check(seed, "forced formation", plan.Tanks.All(t => t.Formation == formation));
-                CheckTanks(seed, plan, mode);
-                CheckLots(seed, plan, mode);
-                if (mode.PlayerSpawns > 0) CheckMatchStarts(seed, plan, mode);
-                CheckReachability(seed, plan, mode);
+                for (var seed = 1; seed <= 6; seed++)
+                {
+                    var plan = new SuburbGenerator(mode, catalog, seed).Generate();
+                    Check(seed, "forced formation", plan.Tanks.All(t => t.Formation == formation));
+                    CheckTanks(seed, plan, mode);
+                    CheckLots(seed, plan, mode);
+                    if (mode.PlayerSpawns > 0) CheckMatchStarts(seed, plan, mode);
+                    CheckReachability(seed, plan, mode);
+                }
             }
         }
     }
@@ -294,11 +305,13 @@ public partial class GeneratorTests : Node
         {
             var i = pending.Dequeue();
             for (var j = 0; j < centers.Count; j++)
+            {
                 if (!reached.Contains(j) && centers[i].DistanceTo(centers[j]) <= chainRadius)
                 {
                     reached.Add(j);
                     pending.Enqueue(j);
                 }
+            }
         }
         // Connectivity is stronger than just having one close neighbor: disconnected pairs cannot share a chain.
         Check(seed, "pile connected within chain range", reached.Count == centers.Count, $"{reached.Count}/{centers.Count}");

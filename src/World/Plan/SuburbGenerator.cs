@@ -883,7 +883,11 @@ public sealed class SuburbGenerator
                     : 0.22f;
                 if (slots.Any(t => !IsClearForTank(new Vector2((t * PileBuilder.LocalCenter).X, (t * PileBuilder.LocalCenter).Z), margin) ||
                     !InsideMap(new OrientedRect(new Vector2((t * PileBuilder.LocalCenter).X, (t * PileBuilder.LocalCenter).Z), new Vector2(margin, margin), 0)) ||
-                    plan.Tanks.Any(k => k.Position.DistanceTo(new Vector2(t.Origin.X, t.Origin.Z)) < settings.PileSiteSpacing))) continue;
+                    plan.Tanks.Any(k => k.Position.DistanceTo(new Vector2(t.Origin.X, t.Origin.Z)) < settings.PileSiteSpacing)))
+                {
+                    continue;
+                }
+
                 var pile = sites.Count;
                 for (var i = 0; i < slots.Count; i++)
                 {

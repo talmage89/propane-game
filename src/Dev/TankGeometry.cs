@@ -49,7 +49,10 @@ internal sealed class TankGeometry
         if ((relative.Basis.X - Vector3.Right).LengthSquared() < 1e-8f &&
             (relative.Basis.Y - Vector3.Up).LengthSquared() < 1e-8f &&
             (relative.Basis.Z - Vector3.Back).LengthSquared() < 1e-8f)
+        {
             return translationAxes.All(axis => Mathf.Abs(relative.Origin.Dot(axis.Axis)) < axis.Width - tolerance);
+        }
+
         var pa = points.Select(p => a * p).ToArray();
         var pb = points.Select(p => b * p).ToArray();
         bool Separated(Vector3 axis)
@@ -64,8 +67,11 @@ internal sealed class TankGeometry
         }
         foreach (var axis in normals) if (Separated(a.Basis * axis) || Separated(b.Basis * axis)) return false;
         foreach (var ea in edges)
+        {
             foreach (var eb in edges)
                 if (Separated((a.Basis * ea).Cross(b.Basis * eb))) return false;
+        }
+
         return true;
     }
 

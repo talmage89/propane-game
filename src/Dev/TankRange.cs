@@ -1,6 +1,6 @@
 using System;
-using System.Linq;
 using System.Collections.Generic;
+using System.Linq;
 using Godot;
 using Propane.Core;
 using Propane.Tank;
@@ -183,9 +183,14 @@ public partial class TankRange : Node3D
                     PhysicsServer3D.BodyGetDirectState(t.GetRid()).CenterOfMass) <= Mathf.Min(tuning.ChainRadius, tuning.BlastRadius)));
                 if (!Require(inRange.Count > 0, "no neighbor in chain range")) return;
                 if (chain == "primed")
+                {
                     foreach (var tank in tanks)
+                    {
                         tank.TakeShot(tank.GlobalTransform * (PropaneTank.LocalCenter + Vector3.Right * PileBuilder.Radius),
                             tank.GlobalBasis.X, Vector3.Zero);
+                    }
+                }
+
                 punctured.Clear();
                 tanks[0].Detonate();
                 if (!Require(inRange.All(t => t.State == PropaneTank.TankState.Venting), "neighbors must vent immediately after a blast")) return;
@@ -216,7 +221,11 @@ public partial class TankRange : Node3D
                 if (!Require(detonated.SetEquals(new[] { tanks[0] }), "fresh neighbors detonated from only one blast")) return;
                 if (!Require(inRange.All(t => IsInstanceValid(t) && t.State == PropaneTank.TankState.Venting), "fresh neighbors did not keep venting")) return;
             }
-            else if (!Require(inRange.All(detonated.Contains), "a primed neighbor did not detonate after its fuse")) return;
+            else if (!Require(inRange.All(detonated.Contains), "a primed neighbor did not detonate after its fuse"))
+            {
+                return;
+            }
+
             GD.Print($"[formation] {formation} {chain}: PASS; {inRange.Count} neighbors {(chain == "fresh" ? "still venting" : "detonated after fuse")}");
         });
     }

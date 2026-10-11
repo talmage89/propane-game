@@ -41,8 +41,11 @@ public static class PileBuilder
             var side = (int)Math.Ceiling(Math.Sqrt(count)) + 1;
             var points = new List<Vector3>();
             for (var row = -side; row <= side; row++)
+            {
                 for (var col = -side; col <= side; col++)
                     points.Add(new Vector3((col + (row & 1) * 0.5f) * spacing.X, 0, row * spacing.X * Mathf.Sqrt(3f) / 2f));
+            }
+
             foreach (var p in points.OrderBy(p => p.LengthSquared()).ThenBy(p => p.Z).ThenBy(p => p.X).Take(count)) Add(p, Basis.Identity);
         }
         else
@@ -64,6 +67,7 @@ public static class PileBuilder
                 var n = width - layer;
                 var points = new List<Vector3>();
                 for (var row = 0; row < (formation == PileFormation.Rows ? 1 : n); row++)
+                {
                     for (var col = 0; col < (formation == PileFormation.Triangular ? n - row : n); col++)
                     {
                         var x = (col - (n - 1) / 2f + (formation == PileFormation.Triangular ? row * 0.5f : 0)) * spacing.X;
@@ -71,6 +75,8 @@ public static class PileBuilder
                             ? row * spacing.Z : (row + layer / 2) * spacing.Z;
                         points.Add(new Vector3(x, layer * spacing.Y, z));
                     }
+                }
+
                 foreach (var p in points.OrderBy(p => p.X * p.X + p.Z * p.Z).ThenBy(p => p.Z).ThenBy(p => p.X))
                 {
                     if (layer == 0 && reserveUpper && result.Count == count - 1) break;
