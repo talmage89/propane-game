@@ -32,3 +32,21 @@ Three unit regressions failed before the fix and passed afterward: initial sleep
 `--tank-trace` is optional dev logging. It reports owner, epoch, sequence, pending claim, accepted state/rest,
 correction target, sleep, position/velocity and gathering on body-sync transitions. Publish traces precede the
 caller's sequence increment, so a trace showing sequence N publishes N+1. Ordinary matches have no listener.
+
+## Moving correction freshness
+
+Motion targets backdate sampling time by up to 0.3 s to include transport delay in extrapolation. The same
+backdated timestamp incorrectly drove the 0.5 s silence timeout, expiring a freshly received delayed packet
+after only 0.2 s without another arrival. Sampling age and receipt freshness are now separate. Both timestamps
+survive a motion packet overtaking its reliable ownership grant; sequence/epoch ordering remains unchanged.
+
+The new delayed-motion regression, including the overtaking-grant case, failed before and passed afterward:
+`make build`, then `godot-mono --headless --path . res://scenes/dev/unit_tests.tscn` recorded 199 tests/1 failure
+in `/tmp/nas-motion-before.log` and 199 tests/0 failures in `/tmp/nas-motion-after.log`. Builds were warning-free.
+
+The baseline trace also establishes delays beyond the configured fault schedule under shared-machine load.
+Matching owner publications to received epochs/sequences on the shared monotonic clock, drop `20000000`
+arrived at Bot1 1.160–1.384 s after publication during its 3.65 s moving disagreement, while Bot3 received the
+same stream mostly 0.142–0.262 s old. Bot1's receive interval peaked at 2.063 s. The configured two transport
+legs alone total 0.120–0.180 s; those late copies are not evidence that a 5.9 m error is ordinary flight under
+just that delay. Distance, settlement and final motion thresholds have not been increased.

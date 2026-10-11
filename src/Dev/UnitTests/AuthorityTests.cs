@@ -182,6 +182,22 @@ public static class AuthorityTests
             sync.OnState(3, motion with { Sequence = 3 }, false, 6, 0);
             TestRunner.Assert(sync.Get(Id) is { LastSequence: 4, TargetRest: true }, "timestamp overrode sequence ordering");
         });
+        runner.Run("authority/motion freshness starts at receipt rather than sampling time", () =>
+        {
+            foreach (var overtakesGrant in new[] { false, true })
+            {
+                using var body = new BodyFixture(runner);
+                var sync = new BodySync(Tuning.SavedTemplate, 4, 2);
+                sync.Register(Id, body.Body, true, 2);
+                if (!overtakesGrant) { sync.OnAuthority(Grant(3, 2)); }
+                sync.OnState(3, Pose(Id, 2, 1), false, 10, .3);
+                if (overtakesGrant) { sync.OnAuthority(Grant(3, 2)); }
+                sync.Correct(10.4);
+                TestRunner.Assert(sync.Get(Id)!.HasTarget, "fresh delayed motion expired before the owner's silence timeout");
+                sync.Correct(10.51);
+                TestRunner.Assert(!sync.Get(Id)!.HasTarget, "quiet owner kept steering beyond the receipt timeout");
+            }
+        });
         runner.Run("authority/future motion survives overtaking its reliable grant", () =>
         {
             using var body = new BodyFixture();

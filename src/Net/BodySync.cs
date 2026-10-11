@@ -39,13 +39,15 @@ public sealed class BodySync
         public Transform3D Target;
         public Vector3 TargetLinear;
         public Vector3 TargetAngular;
+        // TargetReceived includes sampling transit for extrapolation; Updated measures owner silence.
         public double TargetReceived;
+        public double TargetUpdated;
         public uint Epoch = 1;
         public uint Sequence;
         public uint LastSequence;
         public uint LastGatherSequence;
         public bool PublishRequired;
-        internal (int Sender, BodyState Body, bool IsRest, double Received)? Future;
+        internal (int Sender, BodyState Body, bool IsRest, double Received, double Updated)? Future;
         internal (BodyState Body, bool IsRest)? Latest;
     }
 
@@ -173,7 +175,7 @@ public sealed class BodySync
         if (entry.Future is { } future && future.Body.Epoch <= entry.Epoch)
         {
             entry.Future = null;
-            OnState(future.Sender, future.Body, future.IsRest, future.Received);
+            OnState(future.Sender, future.Body, future.IsRest, future.Updated, future.Updated - future.Received);
         }
         if (entry.Latest is { } newest) { resolved = authority with { Body = newest.Body, Rest = newest.IsRest }; }
         Trace?.Invoke(entry, $"authority owner={authority.Owner} epoch={authority.Body.Epoch} sequence={authority.Body.Sequence} rest={authority.Rest}");
@@ -184,6 +186,7 @@ public sealed class BodySync
     public void OnState(int sender, BodyState state, bool rest, double now, double transit = 0)
     {
         if (!entries.TryGetValue(state.Id, out var entry) || state.Epoch < entry.Epoch) { return; }
+        var received = now;
         // Backdate moving targets by their estimated sampling age, bounded by our existing extrapolation limit.
         // This adjusts pose prediction only: clocks never decide which epoch or sequence wins.
         if (!rest) { now -= System.Math.Clamp(transit, 0, MaxExtrapolation); }
@@ -193,7 +196,7 @@ public sealed class BodySync
             if (entry.Future is not { } prior || state.Epoch > prior.Body.Epoch ||
                 state.Epoch == prior.Body.Epoch && state.Sequence > prior.Body.Sequence)
             {
-                entry.Future = (sender, state, rest, now);
+                entry.Future = (sender, state, rest, now, received);
             }
             return;
         }
@@ -206,6 +209,7 @@ public sealed class BodySync
         entry.TargetLinear = rest ? Vector3.Zero : state.Linear;
         entry.TargetAngular = rest ? Vector3.Zero : state.Angular;
         entry.TargetReceived = now;
+        entry.TargetUpdated = received;
         Trace?.Invoke(entry, $"receive sender={sender} epoch={state.Epoch} sequence={state.Sequence} rest={rest} transit={transit:0.000}");
     }
 
@@ -231,9 +235,10 @@ public sealed class BodySync
             }
             var body = entry.Body;
             var age = now - entry.TargetReceived;
-            if (!entry.TargetRest && age > StaleAfter)
+            if (!entry.TargetRest && now - entry.TargetUpdated > StaleAfter)
             {
                 // The owner went quiet without a rest state (lost packets): leave the body to local physics.
+                Trace?.Invoke(entry, $"stale age={age:0.000} quiet={now - entry.TargetUpdated:0.000}");
                 entry.HasTarget = false;
                 continue;
             }
