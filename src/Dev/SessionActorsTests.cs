@@ -128,8 +128,9 @@ public partial class SessionActorsTests : Node
     }
     private void Send(InputEvent e)
     {
-        // Both views see the same application event. Each assignment must filter it itself.
-        foreach (var view in views) if (GodotObject.IsInstanceValid(view)) view._Input(e);
+        // Exercise actual application-viewport delivery, including views under separate SubViewports.
+        Input.ParseInputEvent(e);
+        Input.FlushBufferedEvents();
         e.Dispose();
     }
     private async Task Run()
@@ -137,6 +138,20 @@ public partial class SessionActorsTests : Node
         await Ticks(6).ConfigureAwait(true);
         Require(views[0].CameraRig.GetWorld3D() == session.World.Physics && views[1].CameraRig.GetWorld3D() == session.World.Physics,
             "views did not share the simulation World3D");
+        var yaw = actors[0].Aim.Yaw;
+        var otherYaw = actors[1].Aim.Yaw;
+        var motion = new Vector2(80, -20);
+        Send(new InputEventMouseMotion { Relative = motion, ScreenRelative = motion });
+        await Ticks(3).ConfigureAwait(true);
+        Require(Mathf.IsEqualApprox(actors[0].Aim.Yaw, yaw - motion.X * Mathf.RadToDeg(session.World.Tuning.MouseSensitivity)) &&
+            actors[1].Aim.Yaw == otherYaw, "mouse look was duplicated or crossed device assignments");
+        yaw = actors[0].Aim.Yaw;
+        Send(new InputEventJoypadMotion { Device = 7, Axis = JoyAxis.RightX, AxisValue = 1 });
+        await Ticks(3).ConfigureAwait(true);
+        Require(actors[1].Aim.Yaw < otherYaw && actors[0].Aim.Yaw == yaw, "gamepad look did not reach only its view");
+        Send(new InputEventJoypadMotion { Device = 7, Axis = JoyAxis.RightX, AxisValue = 0 });
+        actors[0].Teleport(new Vector3(-6, .05f, 0), 0);
+        actors[1].Teleport(new Vector3(6, .05f, 0), Mathf.Pi / 2);
         Send(new InputEventKey { PhysicalKeycode = Key.W, Pressed = true });
         Send(new InputEventJoypadMotion { Device = 7, Axis = JoyAxis.LeftY, AxisValue = -1 });
         await Ticks(30).ConfigureAwait(true);
@@ -166,6 +181,8 @@ public partial class SessionActorsTests : Node
         Send(new InputEventJoypadButton { Device = 7, ButtonIndex = JoyButton.RightStick, Pressed = true });
         await Ticks(Engine.PhysicsTicksPerSecond).ConfigureAwait(true);
         Require(contacts[0] == 1 && contacts[1] == 1, "melee did not contact each actor's own forward target once");
+        Send(new InputEventKey { PhysicalKeycode = Key.F, Pressed = false });
+        Send(new InputEventJoypadButton { Device = 7, ButtonIndex = JoyButton.RightStick, Pressed = false });
         var director = new CaptureDirector(); AddChild(director);
         director.Screenshot("two_views");
         var first = actors[0];

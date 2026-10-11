@@ -309,6 +309,9 @@ $GODOT --fixed-fps 30 res://scenes/dev/menu_test.tscn -- --quit-after=match --ca
 $GODOT --fixed-fps 60 res://scenes/dev/menu_test.tscn -- --scenario=gamepad --capture-dir=/tmp/pad
 # Switch devices while paused and verify the reference and reload hints in both directions.
 $GODOT res://scenes/dev/menu_test.tscn -- --scenario=devices --capture-dir=/tmp/devices
+# Real keyboard/mouse events through the root viewport in single player and a solo match: turn, jump, melee,
+# single-click fire, R/new suburb or reload, and remapped Escape. Assertions also run headlessly in make test.
+$GODOT --fixed-fps 60 --resolution 1280x720 res://scenes/dev/menu_test.tscn -- --scenario=input --port=24681 --windowed --capture-dir="$PWD/build/input"
 
 # Multiplayer: a local server and bot players under simulated lag and loss, then compare what each bot saw.
 # Logs go to build/net (-o picks another directory).

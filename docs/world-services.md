@@ -13,6 +13,23 @@ while explicitly presenting that fixture's context.
 The presentation viewport owns the bridge in metadata. When several contexts present there, retirement restores
 the most recently presented live context, or the viewport's original world when none remain, in either teardown order.
 
+`WorldSpace` is an offscreen simulation viewport and receives no application device events. Each `LocalView`
+owns a device endpoint in the application viewport, under itself or the session facade when its camera/HUD
+render in a child viewport. `Game` and `Match` handle session shortcuts only. Primary devices accumulate unhandled
+input after UI; explicit assignments also observe handled releases to keep their cached held state accurate.
+`DeviceInput` retains capture gating and the existing pause/focus reset behavior. Closing or reassigning a view
+synchronously releases its endpoint and intent source. Do not broadcast input into simulation viewports.
+`Main`, the facades, `MenuNavigation` and `HsvColorSlider` live in the application viewport.
+
+`menu_test.tscn -- --scenario=input` injects mouse motion, key presses and complete mouse-button clicks through
+`Input.ParseInputEvent`, including menu navigation with Tab/Enter. It checks exact camera displacement, jump,
+melee, single-click fire, single-player suburb replacement, match reload and logical Escape on physical Caps Lock
+in both facades. It also checks paused input and physical/logical system shortcut bindings. This runs in
+`make test`. Headless Godot cannot capture a pointer, so that run substitutes only `DeviceInput`'s existing
+capture predicate with menu visibility; rendered runs use the default production input source and capture frames
+before/after the turn, in the jump, and with the remapped pause menu open. Gameplay keys stay physical; pause,
+tuning and fullscreen shortcuts accept both physical and logical keys to honor desktop remaps.
+
 `Tuning.SavedTemplate` is an application composition/UI accessor, never the gameplay target. Each context copies
 its template. Matches validate and copy the creator-supplied snapshot without swapping any process-wide override.
 Unexported local bot dials are copied explicitly too: they remain local and never enter the match snapshot.
@@ -123,7 +140,7 @@ clears their cached actions. Menus retain application-level keyboard/mouse and c
 viewport layout is a dev fixture, not a new shipped mode.
 
 `session_actors_tests.tscn` renders two subviewports sharing the session's `World3D`. It asserts independent device
-routing, movement yaw, camera following, shot directions, melee contacts and survivor continuity after closing one
-view. A third, camera-free actor navigates, shoots a tank twice, strikes a prop and recovers from the blast ragdoll.
+routing through `Input.ParseInputEvent`, movement yaw, camera following, shot directions, melee contacts and
+survivor continuity after closing one view. A third, camera-free actor navigates, shoots a tank twice, strikes a prop and recovers from the blast ragdoll.
 The unit suite injects failure into every factory stage and checks cancellation, adapter/node retirement order,
 completion after a throwing stop adapter and device isolation. Both run in `make test`.
