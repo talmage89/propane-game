@@ -73,7 +73,9 @@ public partial class GeneratorTests : Node
                  string.Join(" ", groupSizes.GroupBy(g => g).OrderBy(g => g.Key).Select(g => $"{g.Key}:{g.Count()}")));
         GD.Print("[tests] tank spots: " + string.Join(", ", reasons.OrderByDescending(r => r.Value).Select(r => $"{r.Key} {r.Value} (seed {firstSeedFor[r.Key]})")));
         TestFormations(catalog);
-        foreach (var players in new[] { 2, 8, 16, 24, 32 }) TestMatchSuburbs(count, players, catalog);
+        // Larger matches cost far more per seed; --large-seeds (default 10) sets their sweep. make test-full runs 100.
+        var largeCount = (int)DevArgs.GetFloat("large-seeds", Mathf.Min(count, 10));
+        foreach (var players in new[] { 2, 8, 16, 24, 32 }) TestMatchSuburbs(players <= 2 ? count : largeCount, players, catalog);
         foreach (var (kind, n) in failureKinds.OrderByDescending(k => k.Value))
         {
             GD.Print($"[tests] FAIL {kind}: {n}");

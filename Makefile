@@ -12,7 +12,7 @@ PORT ?= $(if $(SLOT),$(shell echo $$((24680 + $(SLOT)))),24680)
 SERVER ?= 127.0.0.1:$(PORT)
 
 .DEFAULT_GOAL := help
-.PHONY: help setup run build lint check test server bots bots-stop package deploy release-patch release-minor release-major
+.PHONY: help setup run build lint check test test-full server bots bots-stop package deploy release-patch release-minor release-major
 
 help: ## List the tasks
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN { FS = ":.*## " } { printf "  make %-14s %s\n", $$1, $$2 }'
@@ -48,6 +48,10 @@ test: build ## Run all headless regression suites and separate-process world tes
 	"$(GODOT)" --headless --path . res://scenes/dev/generator_tests.tscn -- --seeds=100
 	"$(GODOT)" --headless --path . res://scenes/dev/platform_tests.tscn
 	tools/dev/check_world.sh
+
+test-full: build ## Deeper sweeps than make test: 200 generator seeds, 100 per large match size, 100 navigation seeds
+	"$(GODOT)" --headless --path . res://scenes/dev/generator_tests.tscn -- --seeds=200 --large-seeds=100
+	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/bot_navigation_course.tscn -- --seeds=100
 
 server: build ## Run a multiplayer server here (PORT, default 24680, or this worktree's)
 	"$(GODOT)" --headless --path . -- --server --port=$(PORT)
