@@ -63,6 +63,45 @@ public partial class PlayerRange : Node3D
             ? MotionProbe.Attach(player, scenario == "motion") : null;
         switch (scenario)
         {
+            case "melee-reloads":
+                director.QuitAfter = 31;
+                for (var episode = 0; episode < 10; episode++)
+                {
+                    var start = episode * 3;
+                    var empty = episode >= 5;
+                    director.At(start + .05f, () => player.Ammo = new AmmoState { Magazine = empty ? 0 : 5, Reserve = 90 });
+                    script.Reload(start + .2f);
+                    script.Melee(start + .2f + (0.1f + episode % 5 * .2f) * Tuning.Current.ReloadTime);
+                    director.At(start + 2.9f, () =>
+                    {
+                        if (player.Ammo!.Reloading || player.Ammo.Magazine != (empty ? 0 : 5) || player.Ammo.Reserve != 90)
+                        {
+                            GD.PushError("[melee-reloads] FAIL canceled reload transferred ammo or remained active");
+                            GetTree().Quit(1);
+                        }
+                    });
+                }
+                break;
+            case "melee":
+                player.Ammo = new AmmoState { Magazine = 5, Reserve = 90 };
+                script.Melee(1);
+                script.Hold(2.5f, 3.4f, new PlayerIntent { Aim = true });
+                script.Melee(3);
+                script.Hold(4.5f, 5, new PlayerIntent { Move = Vector2.Down, Sprint = true });
+                script.Melee(5);
+                script.Reload(6.5f);
+                script.Melee(7);
+                director.QuitAfter = 9;
+                for (var swing = 0; swing < 4; swing++)
+                {
+                    for (var frame = 0; frame < 66; frame++)
+                    {
+                        var name = $"melee_{swing}_{frame:000}";
+                        director.At(0.9f + swing * 2 + frame / 60f, () => CaptureAfterDraw(director, name));
+                    }
+                }
+
+                break;
             case "motion":
                 player.Ammo = new AmmoState { Magazine = 30, Reserve = 90 };
                 script.Hold(0.5f, 3, new PlayerIntent { Move = Vector2.Down * 0.3f });

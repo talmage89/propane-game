@@ -45,6 +45,8 @@ test: build ## Run all headless regression suites and separate-process world tes
 	"$(GODOT)" --headless --path . --fixed-fps 60 res://scenes/dev/gather_range.tscn
 	"$(GODOT)" --headless --path . --fixed-fps 60 res://scenes/dev/gather_range.tscn -- --scenario=grant-races
 	"$(GODOT)" --headless --path . --fixed-fps 60 res://scenes/dev/game_test.tscn -- --scenario=gather --tune.FixedSeed=23
+	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/melee_range.tscn
+	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/player_range.tscn -- --scenario=melee --assert-motion --assert-grip
 	"$(GODOT)" --headless --path . res://scenes/dev/movement_tests.tscn
 	"$(GODOT)" --headless --path . --fixed-fps 60 res://scenes/dev/bot_navigation_course.tscn -- --seeds=5
 	"$(GODOT)" --headless --path . res://scenes/dev/menu_test.tscn -- --scenario=gamepad --port=$(PORT)
@@ -61,6 +63,7 @@ test: build ## Run all headless regression suites and separate-process world tes
 	tools/dev/check_world.sh
 
 test-full: build ## Deeper sweeps than make test: 200 generator seeds, 100 per large match size, 100 navigation seeds
+	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/player_range.tscn -- --scenario=melee-reloads --assert-motion --assert-grip
 	"$(GODOT)" --headless --path . res://scenes/dev/generator_tests.tscn -- --seeds=200 --large-seeds=100
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/bot_navigation_course.tscn -- --seeds=100
 

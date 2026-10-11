@@ -89,6 +89,7 @@ public struct PlayerNetState
     public float Sprint;
     public float Ready;
     public float Reload;
+    public float Melee;
     public bool Grounded;
     public PlayerGait Gait;
     public PlayerSupport Support;
@@ -114,6 +115,9 @@ public struct PlayerNetState
         s.Sprint = Mathf.Lerp(a.Sprint, b.Sprint, t);
         s.Ready = Mathf.Lerp(a.Ready, b.Ready, t);
         s.Reload = Mathf.Lerp(a.Reload, b.Reload, t);
+        // Do not interpolate across a new swing or its release; that would rewind/skew the contact pose.
+        s.Melee = a.Weapon == WeaponAction.Melee && b.Weapon == WeaponAction.Melee && b.Melee >= a.Melee
+            ? Mathf.Lerp(a.Melee, b.Melee, t) : s.Melee;
         s.PelvisPosition = a.PelvisPosition.Lerp(b.PelvisPosition, t);
         s.PelvisVelocity = a.PelvisVelocity.Lerp(b.PelvisVelocity, t);
         return s;

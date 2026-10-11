@@ -141,3 +141,25 @@ guard, and also failed state coverage when loading/capture stalls skipped the sh
 The passing rendered proof uses state screenshots rather than claiming a smooth 60 Hz multiplayer recording.
 Local comparisons still render every fixed 60 Hz frame. A full temporary filesystem interrupted one local
 capture attempt; those frames were regenerated and all final PNGs and GIF frames checked.
+
+
+## Rifle-butt strike (R6)
+
+The resolver supplies melee progress to the rifle rig, locally and in snapshots. Windup turns the rifle across the
+body; the active arc brings the stock forward, with torso twist and forward lean. Recovery blends back to the
+current carry/ready pose. The normal coherent upper-pose solve retains both wrist targets and projects the rifle
+into both arms' reach. Melee has a separate angular response tuner (1200 degrees/s by default) beneath the existing
+1500 degrees/s final-pose test bound. It skips the extra carry smoothing so that the stock turn follows contact.
+
+A canceled reload needs one presentation exception: its support hand may still be returning from the magazine or
+bolt during windup. Early reloads retrace their clearance path; late reloads finish the hand return. Ammo cancellation
+is immediate and transfers no rounds. The rig bounds the visual reload phase together with the candidate upper pose;
+`Rifle.PreviewReloadContact` samples the curved clearance path without magazine-drop side effects. Only the accepted
+phase advances the rifle visual. Interpolating wrist frames instead cuts through the receiver; snapping reload to
+zero exceeds the angular bound. The grip probe requires the support hand back at the foregrip for active contact
+and recovery, including ten early/late cancellation fixtures across both clips.
+
+`player_range --scenario=melee` strikes from carry, aim, sprint and reload and captures every 60 Hz frame around each
+strike. Use `--view=side` or `--view=player` with `--assert-grip --assert-motion`. The headless deeper sweep is
+`--scenario=melee-reloads` (in `make test-full`). Existing grip, movement, motion and get-up regression suites still
+apply to the shared solver. Network reproduction and the wire changes are in [multiplayer](multiplayer.md#melee-r6-unreleased-protocol-2).

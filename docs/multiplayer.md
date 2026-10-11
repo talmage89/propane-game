@@ -356,3 +356,32 @@ changes share one unreleased protocol bump; the next release must be a minor rel
 event and relay carries its match id, and either side ignores a different id.
 The server ends each match with a bank audit: initial test scores + detonated map tanks + re-detonated drops - spills
 must equal total banked, including the banks of departed players retained in the final standings.
+
+## Melee (R6, unreleased Protocol 2)
+
+F, either mouse thumb button, or right-stick click starts a grounded rifle-butt strike. The resolver owns the
+0.24 s windup, 0.16 s contact window and 0.4 s recovery, followed by a 0.65 s cooldown. It cancels sprint and reload,
+suppresses aim, fire and jumping, and selects a forward lunge during windup/contact and a stop during recovery.
+The direction is latched from camera yaw at acceptance. Ground loss or a throw cancels contact; the cooldown survives
+that interruption. Held movement/aim/sprint resume when recovery ends. All timings, geometry, launch/shove impulses
+and pose values are in the **Melee** tuning group.
+
+The attacker's client queries a sphere throughout the contact window and clips candidates to its forward sector
+(default 1.65 m reach, 50-degree half-angle). A ray to the candidate must reach its surface without hitting another
+collider. Multiple capsule/bone/prop shapes share one swing key. Every victim/body can be struck once per swing.
+A tank receives only disturbance and a shove, including cancellation of gathering: melee never calls its shot,
+puncture, chain or detonation path. Synced tanks/cars use the existing claim and body-state publication path; loose
+props receive a relayed shove.
+
+`MeleeStart` carries a monotonically increasing swing id and horizontal direction; `MeleeContact` carries that id,
+exactly one player or loose-prop target. Both are reliable and ordered. The server validates
+play/deadline, membership, known targets, increasing ids, receipt-clock cooldown, contact expiry and unique targets.
+Its per-swing contact cap bounds message rate. `MeleeRelayGrace` allows receipt jitter to compress consecutive starts
+and extends contact expiry; it cannot admit starts faster than the cooldown itself. The server runs no hit physics.
+The victim applies the launch through the existing ragdoll path, sends Ragdoll/GetUp, and predicts the ordinary
+five-tank drop. A zero-bank victim still falls; an already-down victim receives a push without starting another drop.
+Bullets remain able to hit ragdolls.
+
+PlayerState gains one byte of normalized melee progress, before gait/support/weapon. Remote poses consume that
+progress; interpolation cannot rewind across a new swing or release. Protocol.Version stays **2** as directed for
+this unreleased development protocol. These two messages, snapshot field and shared tuners require a **minor release**.

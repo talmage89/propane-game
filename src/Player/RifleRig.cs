@@ -33,6 +33,8 @@ public partial class RifleRig : SkeletonModifier3D
     private Vector3[] previousPositions = null!, desiredPositions = null!;
     private int[] upperBones = null!;
     private Transform3D lastRifle, lastChest;
+    private float lastReloadPhase;
+    private bool meleeReloadForward, hadMelee;
     private bool hasUpperPose;
     private float lastFitAim;
     private float reloadTarget, reloadPhase;
@@ -42,6 +44,8 @@ public partial class RifleRig : SkeletonModifier3D
     /// <summary>Unclamped wrist targets, for final-pose contact diagnostics.</summary>
     public Transform3D RightTarget { get; private set; }
     public Transform3D LeftTarget { get; private set; }
+    public float ForegripResidual => Rifle == null ? 0 : LeftTarget.Origin.DistanceTo(
+        LeftHandTransform(Rifle.GlobalTransform, Rifle.ForegripLocal.Origin, Basis.Identity).Origin);
 
     /// <summary>Right-eye landmark in the mannequin head frame (meters).</summary>
     public static Vector3 EyePosition(Skeleton3D skeleton) =>
@@ -67,6 +71,9 @@ public partial class RifleRig : SkeletonModifier3D
     /// <summary>Live spring displacement, including accumulation during a burst.</summary>
     public float Recoil => recoil.Position;
 
+    public bool Melee { get; set; }
+    public float MeleeProgress { get; set; }
+
     public void Kick() => recoil.Kick(Tuning.Current.RifleRecoilFrequency, Tuning.Current.RifleRecoilImpulse);
 
     /// <summary>Reload progress 0..1: the rifle cants in while the left hand swaps the magazine. 0 when not reloading.</summary>
@@ -74,8 +81,18 @@ public partial class RifleRig : SkeletonModifier3D
 
     /// <summary>Snapshots may skip reload progress or its last frames. Finish the visual hand return at a
     /// bounded rate before releasing carry; local ammo/state timing stays authoritative and immediate.</summary>
-    public void AdvanceReload(float dt, bool remote)
+    public void AdvanceReload(float dt, bool remote, bool melee = false)
     {
+        // Cancel ammo immediately; early reloads retrace contact, late ones finish the hand return during windup.
+        // Snapping an off-grip left hand directly to the foregrip defeats the coherent pose bound.
+        if (melee)
+        {
+            if (!hadMelee) meleeReloadForward = reloadPhase > 0.5f;
+            hadMelee = true;
+            reloadPhase = Mathf.MoveToward(reloadPhase, meleeReloadForward ? 1 : 0, dt * Tuning.Current.MeleeReloadReturnSpeed);
+            return;
+        }
+        hadMelee = false;
         if (!remote) { reloadPhase = reloadTarget; return; }
         if (Weight <= 0.001f) { reloadPhase = 0; return; }
         var target = reloadTarget > 0 ? reloadTarget : reloadPhase > 0 ? 1 : 0;
@@ -120,10 +137,13 @@ public partial class RifleRig : SkeletonModifier3D
             CacheBones(skeleton);
             hasUpperPose = false;
             lastFitAim = aimBlend;
+            lastReloadPhase = 0;
+            Rifle.Animate((float)delta, 0);
             // Ragdolling or getting up: RifleHandFollow keeps the rifle in the right hand.
             return;
         }
 
+        Rifle.PreviewReloadContact(Reload);
         previousBones ??= new Quaternion[skeleton.GetBoneCount()];
         if (!hasStance)
         {
@@ -157,6 +177,13 @@ public partial class RifleRig : SkeletonModifier3D
         var lateral = Mathf.Sin(Pose.Phase * Mathf.Tau);
         var bounce = Mathf.Cos(Pose.Phase * Mathf.Tau * 2);
         var kick = recoil.Position * Weight;
+        var total = tuning.MeleeWindup + tuning.MeleeActive + tuning.MeleeRecovery;
+        var elapsed = MeleeProgress * total;
+        var windup = Mathf.SmoothStep(0, tuning.MeleeWindup, elapsed);
+        var contact = Mathf.SmoothStep(tuning.MeleeWindup, tuning.MeleeWindup + tuning.MeleeActive, elapsed);
+        var recover = Mathf.SmoothStep(tuning.MeleeWindup + tuning.MeleeActive, total, elapsed);
+        var meleeWeight = Melee ? windup * (1 - recover) : 0;
+        var meleeYaw = Mathf.Lerp(tuning.MeleeWindupYawDegrees, tuning.MeleeStrikeYawDegrees, contact);
 
         // 1. Torso: yaw toward the aim point, pitch partly with it.
         var flatAim = new Vector3(aimDir.X, 0, aimDir.Z);
@@ -168,7 +195,9 @@ public partial class RifleRig : SkeletonModifier3D
         var pitch = Mathf.Asin(Mathf.Clamp(aimDir.Y, -1, 1));
         var pitchShare = Mathf.Lerp(tuning.RifleHipPitchShare, tuning.RifleAimPitchShare, AimAmount) * (1f - SprintAmount * tuning.RifleSprintPitchSuppression);
         var aimRight = flatAim.LengthSquared() > 0.0001f ? flatAim.Normalized().Cross(Vector3.Up).Normalized() : right;
-        var torsoRotation = new Quaternion(aimDir, Mathf.DegToRad(tuning.RifleTorsoSwayDegrees) * lateral * sway)
+        var torsoRotation = new Quaternion(right, -Mathf.DegToRad(tuning.MeleeTorsoLeanDegrees) * meleeWeight)
+            * new Quaternion(Vector3.Up, Mathf.DegToRad(tuning.MeleeTorsoTwistDegrees) * (1 - 2 * contact) * meleeWeight)
+            * new Quaternion(aimDir, Mathf.DegToRad(tuning.RifleTorsoSwayDegrees) * lateral * sway)
             * new Quaternion(aimRight, pitch * pitchShare - Mathf.DegToRad(tuning.RifleRecoilLiftDegrees) * kick * tuning.RifleRecoilTorsoShare)
             * new Quaternion(Vector3.Up, yaw);
         var lowerSpine = skeleton.GetBoneGlobalPose(spine[0]);
@@ -240,6 +269,17 @@ public partial class RifleRig : SkeletonModifier3D
         var stance = hip.InterpolateWith(aimed, Mathf.SmoothStep(0, 1, AimAmount));
         stance = stance.InterpolateWith(port, Mathf.SmoothStep(0, 1, SprintAmount));
 
+        if (meleeWeight > 0)
+        {
+            // Rotate the muzzle back across the body so the stock leads the outward arc. Both wrist targets
+            // stay rigidly attached; the same reachable placement and coherent pose bound solve the strike.
+            var strikeDir = CarryDirection(forward, right, tuning.MeleePitchDegrees, meleeYaw);
+            var strikeBasis = Basis.LookingAt(strikeDir, Vector3.Up).Rotated(strikeDir, Mathf.DegToRad(tuning.MeleeRollDegrees));
+            var center = shoulder + forward * tuning.MeleeRifleForward - Vector3.Up * tuning.MeleeRifleDown;
+            var strike = new Transform3D(strikeBasis, center);
+            stance = stance.InterpolateWith(strike, meleeWeight);
+        }
+
         // Reload: the rifle comes in front of the chest, pointing across the body and canted over, with the magazine
         // well where the left hand can work it.
         var reloadWeight = Reload > 0 ? Mathf.SmoothStep(0, tuning.RifleReloadBlendFraction, Reload) * (1f - Mathf.SmoothStep(1f - tuning.RifleReloadBlendFraction, 1f, Reload)) : 0f;
@@ -260,7 +300,7 @@ public partial class RifleRig : SkeletonModifier3D
             + chestRight * (lateral * tuning.RifleSwaySide * sway)
             + chestUp * (bounce * tuning.RifleSwayUp * sway)
             + chestForward * (bounce * tuning.RifleSwayForward * sway));
-        if (hasStance)
+        if (hasStance && !Melee)
         {
             stance = (fromSkeleton * previousStance).InterpolateWith(stance, Mathf.Lerp(1 - Mathf.Exp(-tuning.RifleMotionResponse * (float)delta), 1, AimAmount));
         }
@@ -307,6 +347,7 @@ public partial class RifleRig : SkeletonModifier3D
             reportedContactFailure = true;
             GD.PushError($"[rifle] contact failure: right={rightError:F6}m left={leftError:F6}m weight={Weight:F3}");
         }
+        Rifle.Animate((float)delta, Reload);
         PoseFingers(skeleton);
         for (var f = 0; f < 10; f++)
             for (var j = 0; j < 3; j++) LimitBone(skeleton, fingers[f, j], (float)delta);
@@ -328,12 +369,16 @@ public partial class RifleRig : SkeletonModifier3D
         {
             lastRifle = handoffRifle;
             lastChest = startChest;
+            lastReloadPhase = Reload;
             hasUpperPose = true;
         }
-        var limit = Mathf.DegToRad(Tuning.Current.PoseAngularSpeed) * dt;
+        var limit = Mathf.DegToRad(Melee ? Tuning.Current.MeleePoseAngularSpeed : Tuning.Current.PoseAngularSpeed) * dt;
         var amount = 1f;
         var proposedAim = aimBlend;
         var fittedAim = proposedAim;
+        var releasingReload = Reload == 0 && !Melee && lastReloadPhase > 0 || Melee && meleeReloadForward;
+        var proposedReload = releasingReload ? 1 : Reload;
+        var fittedReload = proposedReload;
         for (var attempt = 0; attempt < 12; attempt++)
         {
             foreach (var bone in upperBones)
@@ -351,6 +396,10 @@ public partial class RifleRig : SkeletonModifier3D
             var shoulderR = from * s.GetBoneGlobalPose(upperR).Origin;
             var shoulderL = from * s.GetBoneGlobalPose(upperL).Origin;
             var margin = Tuning.Current.RifleReachMargin * Weight * Weight;
+            // Bound reload progress with the coherent pose. Sampling the authored curved contact path keeps
+            // the hand clear of the receiver; interpolating wrist frames would cut across that clearance.
+            fittedReload = Mathf.Lerp(lastReloadPhase, proposedReload, amount);
+            Rifle!.PreviewReloadContact(fittedReload);
             rifle = ReachablePlacement(rifle, shoulderR, shoulderL,
                 ArmLength(s, upperR, lowerR, handR) - margin, ArmLength(s, upperL, lowerL, handL) - margin,
                 Rifle!.LeftHandLocal, Rifle.LeftGripBasis, leftStart.Origin, Weight);
@@ -377,6 +426,8 @@ public partial class RifleRig : SkeletonModifier3D
             if (largest <= limit) break;
             amount *= 0.5f;
         }
+        reloadPhase = lastReloadPhase = releasingReload && fittedReload >= 1 ? 0 : fittedReload;
+        if (releasingReload && fittedReload >= 1) meleeReloadForward = false;
         lastRifle = to * Rifle!.GlobalTransform;
         lastChest = s.GetBoneGlobalPose(spine[2]);
         aimBlend = lastFitAim = fittedAim;

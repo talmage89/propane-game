@@ -78,6 +78,7 @@ then plays with every patch of that minor version.
 | Mouse | Right stick | Look |
 | Left click | Right trigger | Fire (hold for full auto; toggle it in the tuning panel) |
 | Right click (hold) | Left trigger (hold) | Aim and creep: upright shouldered walk (1.6 m/s), tight spread; camera stays put |
+| F or either mouse thumb button | Right stick click (R3) | Rifle-butt strike: grounded lunge and knockdown; shoves tanks intact |
 | R | X / Square | New suburb (single player); reload (multiplayer) |
 | Esc | Start / Options | Pause and show the controls (a match keeps running) |
 | F1 or ` | — | Tuning panel (live sliders; in a match, the creator's debug build only, and it changes everyone's values) |
@@ -85,7 +86,9 @@ then plays with every patch of that minor version.
 
 Aim cancels sprint. Releasing aim with sprint still held restores sprint's target speed on that physics tick,
 including after firing. Jumping drops effective aim in the air; held aim returns on landing. Reload owns the weapon
-and suppresses aim/fire while leaving the selected movement gait free.
+and suppresses aim/fire while leaving the selected movement gait free. Melee cancels sprint/reload, suppresses
+jump/aim/fire, lunges forward through windup/contact, and stops during recovery before its cooldown. Right-stick
+click puts melee under the looking thumb while leaving movement and the aim/fire triggers available.
 
 Menus work with D-pad or left stick, A / Cross to confirm, and B / Circle to go back. Start / Options opens and
 closes pause or the match menu. Left / right changes the focused match length; disabled choices are skipped.
@@ -227,6 +230,12 @@ $GODOT --fixed-fps 60 res://scenes/dev/game_test.tscn -- --scenario=gather --tun
 # --chain=primed first punctures each tank, then requires venting neighbors in range to detonate after the fuse.
 $GODOT --fixed-fps 60 res://scenes/dev/tank_range.tscn -- --capture-dir=/tmp/pile --formation=Square --chain=fresh
 $GODOT --fixed-fps 60 res://scenes/dev/player_range.tscn -- --capture-dir=/tmp/p
+# Melee: wall occlusion, one hit per swing, and an intact tank/loose prop shoved by the real collision path.
+$GODOT --headless --fixed-fps 60 res://scenes/dev/melee_range.tscn
+# Four strikes from carry/aim/sprint/reload, with final grip and rotation assertions; side or player view.
+$GODOT --fixed-fps 60 res://scenes/dev/player_range.tscn -- --scenario=melee --view=side --assert-grip --assert-motion --capture-dir=/tmp/wpmelee-side
+# Deeper cancellation sweep of both reloads (also in make test-full).
+$GODOT --headless --fixed-fps 60 res://scenes/dev/player_range.tscn -- --scenario=melee-reloads --assert-grip --assert-motion
 # Motion: all gaits, hip/aimed bursts, walking reload and get-up into run, captured at 60 Hz.
 $GODOT --fixed-fps 60 res://scenes/dev/player_range.tscn -- --scenario=motion --view=side --assert-motion --assert-grip --capture-dir=/tmp/motion
 # Player scenarios: stances (default), reload, ragdoll, creep (two measured strides), movement (labeled gait/jump transitions),

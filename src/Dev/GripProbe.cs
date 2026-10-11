@@ -83,6 +83,12 @@ public partial class GripProbe : SkeletonModifier3D
                 reachMargin = Mathf.Min(reachMargin, upper.DistanceTo(lower) + lower.DistanceTo(wrist) - upper.DistanceTo(wrist));
             }
         }
+        var meleeTime = Player.MeleeProgress * (Tuning.Current.MeleeWindup + Tuning.Current.MeleeActive + Tuning.Current.MeleeRecovery);
+        if (Player.ResolvedState.Weapon == WeaponAction.Melee && meleeTime >= Tuning.Current.MeleeWindup && rig.ForegripResidual > 0.003f)
+        {
+            failed = true;
+            GD.PushError($"[grip] FAIL support hand not back on foregrip during contact/recovery: {rig.ForegripResidual:F6} m");
+        }
         var values = new[]
         {
             right.Origin.DistanceTo(rig.RightTarget.Origin), left.Origin.DistanceTo(rig.LeftTarget.Origin),

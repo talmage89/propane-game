@@ -31,6 +31,7 @@ public partial class ControlsReference : VBoxContainer
                      ("W A S D", "Left stick", "Move"), ("Shift", "Left stick click", "Sprint"),
                      ("Space", "A / Cross", "Jump"), ("Mouse", "Right stick", "Look"),
                      ("Left click", "Right trigger", "Fire"), ("Right click", "Left trigger", "Aim (tighter spread)"),
+                     ("F / mouse thumb", "Right stick click", "Rifle-butt strike"),
                      ("R", "X / Square", Match ? "Reload" : "New suburb"), ("Esc", "Start / Options", "Resume / pause"),
                  })
         {

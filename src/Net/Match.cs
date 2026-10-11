@@ -244,6 +244,8 @@ public partial class Match : Node3D
         player.Fired += OnFired;
         player.Ragdolled += OnRagdolled;
         player.GotUp += (root, yaw) => Send(new NetWriter(Msg.GetUp, Setup.Id).Vec3(root).Float(yaw));
+        player.MeleeStarted += (swing, direction) => Send(new NetWriter(Msg.MeleeStart, Setup.Id).UInt(swing).Vec3(direction));
+        player.MeleeHit += OnMeleeHit;
         player.PushedBody += body => Claim(new[] { body });
 
         for (var i = 0; i < plan.AmmoSpots.Count; i++)
@@ -806,6 +808,26 @@ public partial class Match : Node3D
         Send(new NetWriter(Msg.Shot, Setup.Id).Vec3(shot.End).Vec3(shot.Normal).Vec3(shot.Direction).Byte((byte)impact).Int(victim).Int(propIndex));
     }
 
+    private readonly Dictionary<int, MeleeStartMessage> remoteMelee = new();
+
+    private void OnMeleeHit(MeleeHit hit)
+    {
+        var victim = 0;
+        var propIndex = -1;
+        if (hit.Collider is PlayerCharacter { IsRemote: true } target)
+        {
+            victim = target.PeerId;
+            matchHud.ShowHitMarker();
+        }
+        else if (hit.Collider is RigidBody3D body && bodies.Find(body) == null && body.HasMeta(Suburb.PlanIndexMeta))
+        {
+            propIndex = body.GetMeta(Suburb.PlanIndexMeta).AsInt32();
+        }
+        // Tanks and synced cars already took the impulse and use the ordinary ownership/state path.
+        if (victim != 0 || propIndex >= 0)
+            Send(new NetWriter(Msg.MeleeContact, Setup.Id).UInt(hit.Swing).Int(victim).Int(propIndex));
+    }
+
     private void OnRagdolled(Vector3 at, Vector3 velocity, Vector3 spin)
     {
         Send(new NetWriter(Msg.Ragdoll, Setup.Id).Vec3(at).Vec3(velocity).Vec3(spin));
@@ -1073,6 +1095,24 @@ public partial class Match : Node3D
         {
             case PlayerStateMessage state:
                 remote?.Buffer.Add(state.Time, state.State, now);
+                break;
+            case MeleeStartMessage strike:
+                remoteMelee[sender] = strike;
+                break;
+            case MeleeContactMessage contact:
+                if (!remoteMelee.TryGetValue(sender, out var swing) || swing.Swing != contact.Swing) break;
+                if (contact.Victim == me)
+                {
+                    LastHitTime = now;
+                    LastHitBy = sender;
+                    player.ReceiveMelee(swing.Direction);
+                    if (remote != null) matchHud.AddHitDirection(remote.Body.GlobalPosition);
+                }
+                else if (contact.PropIndex >= 0 && looseProps.TryGetValue(contact.PropIndex, out var pushed) && IsInstanceValid(pushed) && !pushed.Freeze)
+                {
+                    pushed.ApplyCentralImpulse(swing.Direction * Tuning.Current.MeleePropImpulse);
+                }
+
                 break;
             case ShotMessage shot:
                 remote?.Body.RemoteShot(shot.End);
