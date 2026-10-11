@@ -139,7 +139,7 @@ public partial class GatherRange : Node3D
 
     private void Require(bool condition, string message)
     {
-        if (!condition) { GD.PushError($"[gather] FAIL {message}"); GetTree().Quit(1); throw new InvalidOperationException(message); }
+        if (!condition) { GD.PushError($"[gather] FAIL {message}"); ShutdownGuard.Quit(GetTree(), 1); throw new InvalidOperationException(message); }
     }
 
     private void GrantRaces()

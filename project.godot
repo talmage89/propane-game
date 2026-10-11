@@ -18,6 +18,11 @@ config/features=PackedStringArray("4.7", "C#", "Forward Plus")
 config/icon="res://icon.svg"
 run/flush_stdout_on_print=true
 
+[autoload]
+
+; First means last to be freed, after scene resources have become collectible.
+ShutdownGuard="*res://src/Core/ShutdownGuard.cs"
+
 [display]
 
 window/size/viewport_width=1920

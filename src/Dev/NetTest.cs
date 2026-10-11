@@ -68,7 +68,7 @@ public partial class NetTest : Node
             }
             if (status == NetClient.Status.Offline && reason != null)
             {
-                GetTree().Quit(2);
+                ShutdownGuard.Quit(GetTree(), 2);
             }
         };
         net.LobbiesChanged += () =>
@@ -111,7 +111,7 @@ public partial class NetTest : Node
                 if (DevArgs.Get("scenario") == "movement" && role == "host" && !movementProved)
                 {
                     GD.PushError("[net movement] FAIL match ended before movement proof completed");
-                    GetTree().Quit(1);
+                    ShutdownGuard.Quit(GetTree(), 1);
                     return;
                 }
                 if (bot is Bot smart)
@@ -128,7 +128,7 @@ public partial class NetTest : Node
                 TryStartMatch();
                 if (matches >= matchesWanted)
                 {
-                    GetTree().CreateTimer(1.0).Timeout += () => GetTree().Quit();
+                    GetTree().CreateTimer(1.0).Timeout += () => ShutdownGuard.Quit(GetTree());
                 }
             };
             raceTick = raceSamples = 0;
@@ -205,7 +205,7 @@ public partial class NetTest : Node
         if (leaveAt > 0 && clock >= leaveAt)
         {
             Log("leaving the match on purpose");
-            GetTree().Quit();
+            ShutdownGuard.Quit(GetTree());
             return;
         }
         if (DevArgs.Get("scenario") is "duel" or "drop-refusal" or "gather")
@@ -770,14 +770,14 @@ public partial class NetTest : Node
             if (DevArgs.Get("assert-motion") != null && (!sawRemoteReload || remoteMotion?.RecoilFrames < 10))
             {
                 GD.PushError("[net movement] FAIL missing remote reload or recoil");
-                GetTree().Quit(1);
+                ShutdownGuard.Quit(GetTree(), 1);
                 return;
             }
             if (!sawRemoteCreep || !sawRemoteSprint || !sawRemoteAir || !sawRemoteRestoredAim ||
                 !capturedCreep || !capturedSprint || !capturedLanding || !capturedRelease)
             {
                 GD.PushError("[net movement] FAIL missing remote gait/support");
-                GetTree().Quit(1);
+                ShutdownGuard.Quit(GetTree(), 1);
                 return;
             }
             Log("[net movement] PASS remote creep, sprint, air aim suppression, restored landing aim, bursts and walking reload");
@@ -801,7 +801,7 @@ public partial class NetTest : Node
         if (condition) { return; }
         scenarioFailed = true;
         GD.PushError(failure);
-        GetTree().Quit(1);
+        ShutdownGuard.Quit(GetTree(), 1);
     }
 
     private static void AimAt(PlayerCharacter player, Vector3 point)

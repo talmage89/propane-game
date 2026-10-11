@@ -45,7 +45,7 @@ public partial class GripProbe : SkeletonModifier3D
         {
             failed = true;
             GD.PushError($"[grip] FAIL sampling: {error}");
-            GetTree().Quit(1);
+            ShutdownGuard.Quit(GetTree(), 1);
         }
     }
 
@@ -293,6 +293,6 @@ public partial class GripProbe : SkeletonModifier3D
             file.StoreString(csv.ToString());
         }
         Active = false;
-        if (assert && failed) GetTree().Quit(1);
+        if (assert && failed) ShutdownGuard.Quit(GetTree(), 1);
     }
 }

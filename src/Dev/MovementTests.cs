@@ -49,12 +49,12 @@ public partial class MovementTests : Node
             PauseTests();
             await FacadeTests().ConfigureAwait(true);
             GD.Print($"[movement-tests] PASS {checks} assertions");
-            GetTree().Quit();
+            ShutdownGuard.Quit(GetTree());
         }
         catch (Exception e)
         {
             GD.PushError($"[movement-tests] FAIL {e}");
-            GetTree().Quit(1);
+            ShutdownGuard.Quit(GetTree(), 1);
         }
     }
 

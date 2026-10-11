@@ -108,7 +108,7 @@ public partial class SuburbPreview : Node3D
                     return;
                 }
                 GD.PushError("No clear camera position for the pile close-up.");
-                GetTree().Quit(1);
+                ShutdownGuard.Quit(GetTree(), 1);
             });
             director.ShotAt(4.0f, $"{seed}_05_tank");
         }

@@ -216,7 +216,7 @@ public partial class Menus : CanvasLayer
         multi.Pressed += () => Show(Net.State == NetClient.Status.Connected ? Net.Lobby != null ? Screen.Lobby : Screen.Browser : Screen.Connect);
         layout.AddChild(multi);
         var quit = UiStyle.Button("Quit");
-        quit.Pressed += () => GetTree().Quit();
+        quit.Pressed += () => ShutdownGuard.Quit(GetTree());
         layout.AddChild(quit);
         if (Updates?.Latest is { } latest)
         {

@@ -132,7 +132,7 @@ public partial class LocomotionProbe : SkeletonModifier3D
         if (DevArgs.Get("assert-feet") != null && Math.Abs(delta - 0.12f) > 0.003f)
         {
             GD.PushError("[feet terrain] FAIL feet do not adapt independently to slab/curb support");
-            GetTree().Quit(1);
+            ShutdownGuard.Quit(GetTree(), 1);
         }
     }
 
@@ -142,7 +142,7 @@ public partial class LocomotionProbe : SkeletonModifier3D
         if (DevArgs.Get("assert-feet") != null && (turnLifts[0] < 2 || turnLifts[1] < 2))
         {
             GD.PushError("[feet turn] FAIL standing turns did not lift both feet");
-            GetTree().Quit(1);
+            ShutdownGuard.Quit(GetTree(), 1);
         }
     }
 
@@ -199,6 +199,6 @@ public partial class LocomotionProbe : SkeletonModifier3D
             file.StoreString(csv.ToString());
         }
         Active = false;
-        if (assert && failed) { GD.PushError("[feet] FAIL coverage, contact drift, residual or pose continuity"); GetTree().Quit(1); }
+        if (assert && failed) { GD.PushError("[feet] FAIL coverage, contact drift, residual or pose continuity"); ShutdownGuard.Quit(GetTree(), 1); }
     }
 }

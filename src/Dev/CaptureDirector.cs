@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Godot;
+using Propane.Core;
 
 namespace Propane.Dev;
 
@@ -72,10 +73,7 @@ public partial class CaptureDirector : Node
         Record();
         if (QuitAfter > 0 && elapsed >= QuitAfter)
         {
-            // Finalize unused C# RefCounted wrappers before Godot shuts down their native servers.
-            System.GC.Collect();
-            System.GC.WaitForPendingFinalizers();
-            GetTree().Quit();
+            ShutdownGuard.Quit(GetTree());
         }
     }
 

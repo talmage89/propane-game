@@ -163,6 +163,12 @@ setting. These shared plan and tuner changes require the next release to be mino
 | `design` | The owner's standing decisions: the vision the game holds to. |
 | `docs` | How multiplayer works, and the README images. |
 
+`ShutdownGuard` must stay first in `project.godot`'s autoload list. Godot frees root children in reverse insertion order;
+quit through `ShutdownGuard.Quit(tree, code)`. It destroys the scene, drains managed resource finalizers and waits
+for the next physics tick to flush their queued RID frees before quitting. Its final predelete drain runs before
+the engine tears down its C# bindings and native servers. Static caches remain alive for Godot's shutdown tracker.
+[docs/shutdown.md](docs/shutdown.md) explains the lifecycle, failure mechanism and regression checks.
+
 ## Dev harnesses
 
 Each scene in `scenes/dev` is a scripted test. Arguments after `--` are read by `src/Dev/DevArgs.cs`;
@@ -173,6 +179,10 @@ including `ffmpeg.exe` on Windows; a game in a match stays in step, unlike Godot
 
 ```sh
 GODOT=/Applications/Godot_mono.app/Contents/MacOS/Godot
+
+# Shutdown: finalizers for resources discarded during scene destruction must finish before engine teardown.
+# Also runs in make test; --exit-code=7 checks that shutdown preserves a requested failure status.
+$GODOT --headless res://scenes/dev/shutdown_tests.tscn
 
 # Movement resolver: gait/target speed on each transition tick, lifecycle, jump buffer and coyote time;
 # injected gamepad actions and stick look.
