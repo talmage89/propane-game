@@ -25,6 +25,7 @@ public partial class TestRunner : Node
             LifecycleTests.Register(this);
             NavigationTests.Register(this);
             AuthorityTests.Register(this);
+            LocomotionTests.Register(this);
         }
         catch (Exception e)
         {

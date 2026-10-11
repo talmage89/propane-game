@@ -225,7 +225,6 @@ public partial class Tuning : Resource
     [Export(PropertyHint.Range, "0,30,0.5")] public float GroundKnockbackFriction { get; set; } = 15f;
     [Export(PropertyHint.Range, "0,10,0.1")] public float AirKnockbackFriction { get; set; } = 1.5f;
     [Export(PropertyHint.Range, "0,2,0.05")] public float LandingMinAirTime { get; set; } = 0.3f;
-    [Export(PropertyHint.Range, "0,3,0.05")] public float LandingPoseTime { get; set; } = 1f;
     [Export(PropertyHint.Range, "0,1,0.01")] public float LandingTraumaPerSecond { get; set; } = 0.15f;
     [Export(PropertyHint.Range, "0,1,0.01")] public float LandingTraumaMax { get; set; } = 0.25f;
     [Export(PropertyHint.Range, "0,120,1")] public float CombatSpineTwistDegrees { get; set; } = 70f;
@@ -247,6 +246,52 @@ public partial class Tuning : Resource
     [Export(PropertyHint.Range, "0.2,10,0.1")] public float RagdollMinTime { get; set; } = 1.4f;
     /// <summary>Longest the ragdoll lies on the ground before getting up anyway; time in the air never counts.</summary>
     [Export(PropertyHint.Range, "0.5,20,0.1")] public float RagdollMaxTime { get; set; } = 6f;
+
+    // ---------------------------------------------------------------- Locomotion presentation
+    [ExportGroup("Locomotion")]
+    [Export(PropertyHint.Range, "0.05,1,0.01")] public float LocomotionSettleTime { get; set; } = 0.18f;
+    [Export(PropertyHint.Range, "0.5,4,0.01")] public float WalkStrideLength { get; set; } = 1.34f;
+    [Export(PropertyHint.Range, "0.5,6,0.01")] public float JogStrideLength { get; set; } = 2.4f;
+    [Export(PropertyHint.Range, "0.5,8,0.01")] public float SprintStrideLength { get; set; } = 4.2f;
+    [Export(PropertyHint.Range, "0.2,0.7,0.01")] public float WalkContactFraction { get; set; } = 0.52f;
+    [Export(PropertyHint.Range, "0.2,0.7,0.01")] public float JogContactFraction { get; set; } = 0.4f;
+    [Export(PropertyHint.Range, "0.2,0.7,0.01")] public float SprintContactFraction { get; set; } = 0.23f;
+    [Export(PropertyHint.Range, "0.01,0.4,0.01")] public float WalkFootLift { get; set; } = 0.09f;
+    [Export(PropertyHint.Range, "0.01,0.5,0.01")] public float JogFootLift { get; set; } = 0.18f;
+    [Export(PropertyHint.Range, "0.01,0.6,0.01")] public float SprintFootLift { get; set; } = 0.24f;
+    [Export(PropertyHint.Range, "5,90,1")] public float TurnStepDegrees { get; set; } = 24f;
+    [Export(PropertyHint.Range, "0.05,1,0.01")] public float TurnStepTime { get; set; } = 0.22f;
+    [Export(PropertyHint.Range, "1,40,0.5")] public float FootStepTargetSpeed { get; set; } = 18f;
+    [Export(PropertyHint.Range, "0.05,0.4,0.01")] public float FootMinimumSeparation { get; set; } = 0.12f;
+    [Export(PropertyHint.Range, "0.01,0.4,0.01")] public float FootLateralStepThreshold { get; set; } = 0.2f;
+    [Export(PropertyHint.Range, "0.001,0.1,0.001")] public float FootGroundTolerance { get; set; } = 0.025f;
+    [Export(PropertyHint.Range, "0.1,2,0.01")] public float FootKneePoleForward { get; set; } = 1f;
+    [Export(PropertyHint.Range, "0.1,1,0.01")] public float FootKneePoleHeight { get; set; } = 0.5f;
+    [Export(PropertyHint.Range, "0.2,0.7,0.01")] public float FootContactRadius { get; set; } = 0.45f;
+    [Export(PropertyHint.Range, "0.05,0.6,0.01")] public float FootSettleDistance { get; set; } = 0.18f;
+    [Export(PropertyHint.Range, "0.05,0.4,0.01")] public float FootHalfWidth { get; set; } = 0.11f;
+    [Export(PropertyHint.Range, "0.01,0.2,0.001")] public float FootSoleHeight { get; set; } = 0.104f;
+    [Export(PropertyHint.Range, "0.01,0.5,0.01")] public float FootPelvisLimit { get; set; } = 0.22f;
+    [Export(PropertyHint.Range, "0.01,0.2,0.001")] public float FootReachMargin { get; set; } = 0.035f;
+    [Export(PropertyHint.Range, "1,40,0.5")] public float FootPelvisSpeed { get; set; } = 12f;
+    [Export(PropertyHint.Range, "0.1,2,0.01")] public float FootProbeUp { get; set; } = 0.5f;
+    [Export(PropertyHint.Range, "0.1,2,0.01")] public float FootProbeDown { get; set; } = 0.65f;
+    [Export(PropertyHint.Range, "0.1,10,0.1")] public float FootResetDistance { get; set; } = 0.5f;
+    [Export(PropertyHint.Range, "-0.3,0.1,0.01")] public float LocomotionBodyLower { get; set; } = -0.08f;
+    [Export(PropertyHint.Range, "0,0.1,0.001")] public float LocomotionBodyBounce { get; set; } = 0.015f;
+    [Export(PropertyHint.Range, "0,0.3,0.01")] public float LandingCompression { get; set; } = 0.08f;
+    [Export(PropertyHint.Range, "0,30,0.5")] public float LocomotionLeanDegrees { get; set; } = 5f;
+    [Export(PropertyHint.Range, "0.05,0.4,0.01")] public float TakeoffPoseTime { get; set; } = 0.12f;
+    [Export(PropertyHint.Range, "0,1,0.01")] public float TakeoffClipStart { get; set; } = 0.14f;
+    [Export(PropertyHint.Range, "0.1,10,0.1")] public float TakeoffClipSpeed { get; set; } = 2.5f;
+    [Export(PropertyHint.Range, "0,1.3,0.01")] public float JumpRiseClipTime { get; set; } = 0.3f;
+    [Export(PropertyHint.Range, "0,1.3,0.01")] public float JumpApexClipTime { get; set; } = 0.7f;
+    [Export(PropertyHint.Range, "0,1.3,0.01")] public float JumpFallClipTime { get; set; } = 1.2f;
+    [Export(PropertyHint.Range, "0.1,20,0.1")] public float JumpSampleBlendSpeed { get; set; } = 4f;
+    [Export(PropertyHint.Range, "0.1,5,0.1")] public float JumpApexSpeed { get; set; } = 1.2f;
+    [Export(PropertyHint.Range, "0.05,1,0.01")] public float LandingSettleTime { get; set; } = 0.24f;
+    [Export(PropertyHint.Range, "1,30,0.1")] public float LandingFullImpactSpeed { get; set; } = 8f;
+    [Export(PropertyHint.Range, "0,1,0.01")] public float LandingClipTime { get; set; } = 0.2f;
 
     // ---------------------------------------------------------------- Camera
     [ExportGroup("Camera")]

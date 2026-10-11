@@ -155,6 +155,8 @@ public partial class NetTest : Node
             scenarioPassed = scenarioFailed = false;
             // Movement proof is per match, just like the duel/pickup assertions on a reused connection.
             movementCamera = null;
+            remoteFeet = null;
+            remoteGrip = null;
             sawRemoteCreep = sawRemoteSprint = sawRemoteAir = sawRemoteRestoredAim = movementProved = false;
             capturedCreep = capturedSprint = capturedLanding = capturedRelease = false;
             remoteGait = PlayerGait.Default;
@@ -601,6 +603,7 @@ public partial class NetTest : Node
 
     private Camera3D? movementCamera;
     private GripProbe? remoteGrip;
+    private LocomotionProbe? remoteFeet;
     private bool sawRemoteCreep;
     private bool sawRemoteSprint;
     private bool sawRemoteAir;
@@ -643,6 +646,11 @@ public partial class NetTest : Node
         if (other == null) return;
         if (remoteGrip == null && (DevArgs.Get("grip-metrics") != null || DevArgs.Get("assert-grip") != null))
             remoteGrip = GripProbe.Attach(other);
+        // The spawn-to-void relocation also replaces the aim target and body yaw. Measure the movement
+        // sequence after that controlled staging has settled; the matrix measures ordinary corrections.
+        if (remoteFeet == null && duelTime >= 1 && (DevArgs.Get("feet-metrics") != null || DevArgs.Get("assert-feet") != null))
+            remoteFeet = LocomotionProbe.Attach(other);
+        if (remoteFeet != null) remoteFeet.Label = other.ResolvedState.Gait.ToString();
         var focus = other.GlobalPosition + Vector3.Up;
         var offset = new Vector3(4, 0.5f, -1.5f);
         var view = DevArgs.Get("view");
@@ -712,6 +720,7 @@ public partial class NetTest : Node
         {
             movementProved = true;
             remoteGrip?.Finish();
+            remoteFeet?.Finish();
             if (!sawRemoteCreep || !sawRemoteSprint || !sawRemoteAir || !sawRemoteRestoredAim ||
                 !capturedCreep || !capturedSprint || !capturedLanding || !capturedRelease)
             {

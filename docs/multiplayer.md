@@ -85,6 +85,8 @@ and string limits apply inside the plan, and starts must agree with the player a
 - Each client owns its own player's movement and sends it to the others, who show it smoothed. Player snapshots
   include discrete gait, support phase and weapon action alongside the blended rifle poses, so remote creep uses
   the walk clip and remote sprint uses the sprint clip. Protocol 2 adds these three bytes; this needs a minor release.
+  Gaits share a distance-driven phase based on displayed motion. Feet retain world contacts on static ground,
+  releasing and blending after support changes or snapshot corrections; foot positions are not sent.
 - The shooter's client decides whether a bullet hit a player.
 - The victim's client decides whether a blast ragdolls them, because it knows exactly where they were.
 - The victim's client spawns the dropped tanks and owns them until another player interacts with them.

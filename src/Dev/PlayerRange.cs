@@ -17,6 +17,7 @@ public partial class PlayerRange : Node3D
     private readonly ScriptedInput script = new();
     private PlayerCharacter player = null!;
     private Camera3D? observer;
+    private CameraRig? reviewCamera;
     private string view = "player";
 
     public override void _Ready()
@@ -35,32 +36,93 @@ public partial class PlayerRange : Node3D
         var env = new VoidEnvironment();
         AddChild(env);
 
-        player = new PlayerCharacter { Name = "Player" };
+        var scenario = DevArgs.Get("scenario") ?? "stances";
+        player = new PlayerCharacter { Name = "Player", IsRemote = scenario == "feet" };
         AddChild(player);
         player.InputOverride = script;
         env.Follow = player;
 
-        view = DevArgs.Get("view") ?? "player";
-        if (view != "player")
+        view = DevArgs.Get("view") ?? (scenario == "feet" ? "side" : "player");
+        if (view == "player" && player.IsRemote)
+        {
+            reviewCamera = new CameraRig { Name = "ReviewCamera" };
+            AddChild(reviewCamera);
+            reviewCamera.SetOrientation(0, -10);
+        }
+        else if (view != "player")
         {
             observer = new Camera3D { Fov = 40, Current = true };
             AddChild(observer);
         }
 
-        var scenario = DevArgs.Get("scenario") ?? "stances";
         var director = new CaptureDirector { QuitAfter = DevArgs.GetFloat("quit", scenario == "grip" ? (DevArgs.Get("grip-sweep") != null ? 39.2f : 15.2f) : 10f) };
         GripProbe? grip = null;
         if (DevArgs.Get("grip-metrics") != null || DevArgs.Get("assert-grip") != null)
             grip = GripProbe.Attach(player, scenario == "grip");
         switch (scenario)
         {
+            case "feet-events":
+                var events = LocomotionProbe.Attach(player, true);
+                var timing = JumpTimingProbe.Attach(player, true);
+                events.Label = "events";
+                script.Hold(0.5f, 2, new PlayerIntent { Move = Vector2.Down, Aim = true });
+                script.Hold(2.3f, 4.3f, new PlayerIntent { Move = Vector2.Up, Aim = true });
+                script.Hold(4.3f, 6, new PlayerIntent { Move = Vector2.Right, Aim = true });
+                script.Hold(6.3f, 8.3f, new PlayerIntent { Aim = true });
+                // A half-turn exceeds both the controller's standing twist and the feet's turn threshold.
+                var turnLook = Mathf.Pi / Tuning.Current.MouseSensitivity / 1.2f;
+                script.Look(6.5f, 7.7f, new Vector2(turnLook, 0));
+                script.Look(7.7f, 8.9f, new Vector2(-turnLook, 0));
+                director.At(6.5f, () => events.SampleTurns = true);
+                director.At(8.3f, () => { events.SampleTurns = false; events.AssertTurns(); });
+                script.Hold(8.5f, 13.5f, new PlayerIntent { Move = Vector2.Down });
+                script.Hold(9.2f, 10.3f, new PlayerIntent { Sprint = true });
+                script.Hold(10.3f, 11.4f, new PlayerIntent { Aim = true });
+                script.Hold(11.4f, 13.5f, new PlayerIntent { Aim = true });
+                script.Jump(11.6f);
+                script.Jump(14.5f);
+                script.Hold(16, 19.5f, new PlayerIntent { Move = Vector2.Down, Aim = true });
+                // Walk down from a slab onto a curb, ramp and void floor. Character physics stays untouched.
+                director.At(15.7f, () =>
+                {
+                    AddFootSurface(new Vector3(0, 0.12f, -3), new Vector3(3, 0.24f, 6));
+                    AddFootSurface(new Vector3(0, 0.06f, -6.4f), new Vector3(3, 0.12f, 0.8f));
+                    AddFootSurface(new Vector3(0, 0.03f, -7.3f), new Vector3(3, 0.12f, 1), 6);
+                });
+                director.At(15.8f, () => { player.Teleport(new Vector3(0, 0.24f, -4.5f), 0); events.SkipNextPose = true; });
+                director.At(19.7f, () => { player.Teleport(new Vector3(0.05f, 0.24f, -6), Mathf.Pi / 2); events.SkipNextPose = true; });
+                director.At(20.35f, events.AssertSplitSupport);
+                director.At(20.6f, () => { player.Teleport(new Vector3(0, 0, -8.5f), Mathf.Pi / 2); events.SkipNextPose = true; });
+                script.Hold(20.7f, 21.5f, new PlayerIntent { Aim = true });
+                script.Look(20.7f, 21.5f, new Vector2(Mathf.Pi / 2 / Tuning.Current.MouseSensitivity / 0.8f, 0));
+                script.Hold(21.6f, 24.5f, new PlayerIntent { Move = Vector2.Up, Aim = true });
+                director.QuitAfter = 25;
+                for (var frame = 0; frame < 25 * 12; frame++)
+                {
+                    var label = $"event_{frame:000}";
+                    director.At(frame / 12f, () => CaptureAfterDraw(director, label));
+                }
+                director.At(24.9f, () => { events.Finish(); timing.Finish(); });
+                break;
+            case "feet":
+                var feet = LocomotionProbe.Attach(player);
+                AddChild(new LocomotionMatrix { Player = player, Probe = feet });
+                director.QuitAfter = LocomotionMatrix.Episodes * LocomotionMatrix.EpisodeTime + 0.1f;
+                for (var episode = 0; episode < LocomotionMatrix.Episodes; episode++)
+                {
+                    for (var frame = 0; frame < 25; frame++)
+                    {
+                        var label = $"{(PlayerGait)(episode / 8)}_{episode % 8 * 45:000}_{frame:00}";
+                        director.At(episode * LocomotionMatrix.EpisodeTime + 1.033333f + frame / 15f, () => CaptureAfterDraw(director, label));
+                    }
+                }
+                director.At(director.QuitAfter - 0.05f, () => feet.Finish(24));
+                break;
             case "creep":
                 // Two full strides after acceleration and gait/rig blends settle; 12 frames per stride.
                 var skeleton = player.FindChildren("*", "Skeleton3D", owned: false).OfType<Skeleton3D>()
                     .Single(s => s.FindBone("foot_l") >= 0);
-                var animation = player.FindChildren("*", "AnimationPlayer", owned: false).OfType<AnimationPlayer>()
-                    .Single(p => p.HasAnimation("Walk"));
-                var period = (float)animation.GetAnimation("Walk").Length * 0.98f / Tuning.Current.CreepSpeed;
+                var period = Tuning.Current.WalkStrideLength / Tuning.Current.CreepSpeed;
                 var end = 2f + period * 2;
                 script.Hold(0.25f, end + 0.5f, new PlayerIntent { Move = Vector2.Down, Aim = true });
                 var stride = new StrideProbe { Player = player, SampleFrom = 2f, SampleUntil = end };
@@ -72,7 +134,7 @@ public partial class PlayerRange : Node3D
                 }
                 director.At(end + 0.1f, stride.Finish);
                 director.QuitAfter = end + 0.3f;
-                GD.Print($"[creep] speed={Tuning.Current.CreepSpeed:0.00} clip-scale={Tuning.Current.CreepSpeed / 0.98f:0.000} stride={period:0.000}s");
+                GD.Print($"[creep] speed={Tuning.Current.CreepSpeed:0.00} stride-length={Tuning.Current.WalkStrideLength:0.000}m stride={period:0.000}s");
                 break;
             case "grip":
                 player.Ammo = new AmmoState { Magazine = 3, Reserve = 60 };
@@ -236,6 +298,11 @@ public partial class PlayerRange : Node3D
 
     public override void _Process(double delta)
     {
+        if (reviewCamera != null)
+        {
+            reviewCamera.Target = player.GlobalPosition + Vector3.Up * Tuning.Current.CameraHeight;
+            return;
+        }
         if (observer == null)
         {
             return;
@@ -263,6 +330,19 @@ public partial class PlayerRange : Node3D
             offset = new Basis(Vector3.Up, player.FacingYaw) * new Vector3(0.8f * side, 0.2f, -0.45f);
         }
         observer.LookAtFromPosition(focus + offset, focus);
+    }
+
+    private void AddFootSurface(Vector3 position, Vector3 size, float slope = 0)
+    {
+        var body = new StaticBody3D { Position = position, CollisionLayer = Layers.World, CollisionMask = 0 };
+        body.RotationDegrees = new Vector3(slope, 0, 0);
+        body.AddChild(new CollisionShape3D { Shape = new BoxShape3D { Size = size } });
+        body.AddChild(new MeshInstance3D
+        {
+            Mesh = new BoxMesh { Size = size },
+            MaterialOverride = new StandardMaterial3D { AlbedoColor = new Color(0.42f, 0.47f, 0.52f) },
+        });
+        AddChild(body);
     }
 
     private readonly System.Collections.Generic.List<PropaneTank> tanks = new();
