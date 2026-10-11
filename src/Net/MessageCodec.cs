@@ -14,10 +14,10 @@ public sealed record IntMessage(int Value);
 public sealed record FloatMessage(float Value);
 public sealed record TimeMessage(double Value);
 public sealed record TextMessage(string Value);
-public sealed record HelloMessage(int Protocol, string Version, string Build, string Name, int Color, bool Debug);
+public sealed record HelloMessage(int Protocol, string Version, string Build, string Name, int Color, bool Debug, AppearanceRecord Appearance);
 public sealed record WelcomeMessage(int Id, string? Version);
 public sealed record RejectedMessage(string Reason, string? Version);
-public sealed record ProfileMessage(string Name, int Color);
+public sealed record ProfileMessage(string Name, AppearanceRecord Appearance);
 public sealed record LobbyListMessage(int Capacity, IReadOnlyList<LobbySummary> Lobbies);
 public sealed record ScoreMessage(int Player, int Score, int Delta);
 public sealed record PickupMessage(int Index, int Player);
@@ -35,7 +35,7 @@ public sealed record AuthorityMessage(int Peer, uint Request, ClaimRefusal Reaso
 public sealed record BodyState(uint Id, Transform3D Transform, Vector3 Linear, Vector3 Angular, uint Epoch = 1, uint Sequence = 0);
 public sealed record BodyStatesMessage(double Time, IReadOnlyList<BodyState> Bodies);
 public sealed record BodyRestMessage(uint Id, Transform3D Transform, double Time, uint Epoch = 1, uint Sequence = 1);
-public sealed record DropMessage(byte Reason, int Color, IReadOnlyList<BodyState> Tanks);
+public sealed record DropMessage(byte Reason, IReadOnlyList<BodyState> Tanks);
 public sealed record DropRefusedMessage(IReadOnlyList<uint> Ids);
 public sealed record RagdollMessage(Vector3 Position, Vector3 Velocity, Vector3 Spin);
 public sealed record GetUpMessage(Vector3 Position, float Yaw);
@@ -65,7 +65,7 @@ public static class MessageCodec
             Msg.Hello => ReadHello(r),
             Msg.CreateLobby or Msg.LeaveLobby or Msg.Loaded => new EmptyMessage(),
             Msg.JoinLobby => new IntMessage(Positive(r.Int())),
-            Msg.SetProfile => new ProfileMessage(r.String(), ColorIndex(r.Int())),
+            Msg.SetProfile => new ProfileMessage(r.String(), r.Appearance()),
             Msg.SetMatchLength => new FloatMessage(Range(r.Float(), 10, 3600)),
             Msg.StartMatch => r.Snapshot(),
             Msg.ClaimPickup => new IntMessage(Nonnegative(r.Int())),
@@ -82,7 +82,7 @@ public static class MessageCodec
             Msg.PickupTaken => new PickupMessage(Nonnegative(r.Int()), Positive(r.Int())),
             Msg.PickupRespawn => new IntMessage(Nonnegative(r.Int())),
             Msg.MatchEnd => ReadArray(r, r.Int(), Protocol.PlayerColors.Length, () =>
-                new Standing(Positive(r.Int()), r.String(), ColorIndex(r.Int()), Nonnegative(r.Int()), r.Bool()), min: 1),
+                new Standing(Positive(r.Int()), r.String(), r.Appearance(), Nonnegative(r.Int()), r.Bool()), min: 1),
             Msg.PlayerLeft => new PlayerLeftMessage(Positive(r.Int()), Positive(r.Int())),
             Msg.Pong => new PongMessage(Time(r.Double()), Time(r.Double())),
             Msg.DropRefused => new DropRefusedMessage(Unique(ReadArray(r, r.UShort(), Protocol.MaxCollection, () => Id(r.UInt()), min: 1))),
@@ -116,14 +116,14 @@ public static class MessageCodec
             case FloatMessage p: w.Float(p.Value); break;
             case TimeMessage p: w.Double(p.Value); break;
             case TextMessage p: w.String(p.Value); break;
-            case HelloMessage p: w.Int(p.Protocol).String(p.Version).String(p.Build).String(p.Name).Int(p.Color).Bool(p.Debug); break;
+            case HelloMessage p: w.Int(p.Protocol).String(p.Version).String(p.Build).String(p.Name).Int(p.Color).Bool(p.Debug).Appearance(p.Appearance); break;
             case WelcomeMessage p:
                 w.Int(p.Id); if (p.Version != null) { w.String(p.Version); }
                 break;
             case RejectedMessage p:
                 w.String(p.Reason); if (p.Version != null) { w.String(p.Version); }
                 break;
-            case ProfileMessage p: w.String(p.Name).Int(p.Color); break;
+            case ProfileMessage p: w.String(p.Name).Appearance(p.Appearance); break;
             case Godot.Collections.Dictionary p: w.Snapshot(p); break;
             case LobbyListMessage p:
                 w.Int(p.Capacity).Int(p.Lobbies.Count);
@@ -141,7 +141,7 @@ public static class MessageCodec
             case PickupMessage p: w.Int(p.Index).Int(p.Player); break;
             case IReadOnlyList<Standing> p:
                 w.Int(p.Count);
-                foreach (var player in p) { w.Int(player.Id).String(player.Name).Int(player.Color).Int(player.Score).Bool(player.Present); }
+                foreach (var player in p) { w.Int(player.Id).String(player.Name).Appearance(player.Appearance).Int(player.Score).Bool(player.Present); }
                 break;
             case PlayerLeftMessage p: w.Int(p.Player).Int(p.Host); break;
             case PongMessage p: w.Double(p.Sent).Double(p.ServerTime); break;
@@ -176,7 +176,7 @@ public static class MessageCodec
                 break;
             case BodyRestMessage p: w.UInt(p.Id).Transform(p.Transform).Double(p.Time).UInt(p.Epoch).UInt(p.Sequence); break;
             case DropMessage p:
-                w.Byte(p.Reason).Int(p.Tanks.Count).Int(p.Color); foreach (var body in p.Tanks) { WriteBody(w, body); }
+                w.Byte(p.Reason).Int(p.Tanks.Count); foreach (var body in p.Tanks) { WriteBody(w, body); }
                 break;
             case DropRefusedMessage p:
                 w.UShort((ushort)p.Ids.Count); foreach (var id in p.Ids) { w.UInt(id); }
@@ -192,7 +192,14 @@ public static class MessageCodec
     private static HelloMessage ReadHello(NetReader r)
     {
         var protocol = r.Int(); var version = r.String(); var build = r.String(); var name = r.String(); var color = ColorIndex(r.Int());
-        return new HelloMessage(protocol, version, build, name, color, protocol == Protocol.Version ? r.Bool() : !r.AtEnd && r.Bool());
+        // Do not interpret extensions from an incompatible build: it must still receive a useful Rejected.
+        if (BuildInfo.Mismatch(protocol, version) != null)
+        {
+            return new HelloMessage(protocol, version, build, name, color, false, AppearanceRecord.FromPalette(color));
+        }
+        var debug = r.Bool();
+        var appearance = r.AtEnd ? AppearanceRecord.FromPalette(color) : r.Appearance();
+        return new HelloMessage(protocol, version, build, name, color, debug, appearance);
     }
 
     private static LobbyListMessage ReadLobbyList(NetReader r) => new(Range(r.Int(), 1, Protocol.PlayerColors.Length),
@@ -222,7 +229,7 @@ public static class MessageCodec
         return new MatchSetup(matchId, plan, host, debug, length, tuning, players);
     }
 
-    private static PlayerProfile ReadProfile(NetReader r) => new(Positive(r.Int()), r.String(), ColorIndex(r.Int()));
+    private static PlayerProfile ReadProfile(NetReader r) => new(Positive(r.Int()), r.String(), r.Appearance());
 
     private static PlayerStateMessage ReadPlayerState(NetReader r)
     {
@@ -264,8 +271,8 @@ public static class MessageCodec
 
     private static DropMessage ReadDrop(NetReader r)
     {
-        var reason = (byte)Range(r.Byte(), 0, 1); var count = r.Int(); var color = ColorIndex(r.Int());
-        return new DropMessage(reason, color, ReadBodies(r, count, Protocol.MaxCollection));
+        var reason = (byte)Range(r.Byte(), 0, 1); var count = r.Int();
+        return new DropMessage(reason, ReadBodies(r, count, Protocol.MaxCollection));
     }
 
     private static BodyState[] ReadBodies(NetReader r, int count, int max)
@@ -328,7 +335,7 @@ public static class MessageCodec
         var origin = Vector(r);
         return new Transform3D(new Basis(r.Quat()), origin);
     }
-    private static NetWriter WriteProfile(NetWriter w, PlayerProfile p) => w.Int(p.Id).String(p.Name).Int(p.Color);
+    private static NetWriter WriteProfile(NetWriter w, PlayerProfile p) => w.Int(p.Id).String(p.Name).Appearance(p.Appearance);
     private static BodyState ReadBody(NetReader r) => new(Id(r.UInt()), Transform(r), Vector(r), Vector(r), Id(r.UInt()), r.UInt());
     private static void WriteBody(NetWriter w, BodyState p) => w.UInt(p.Id).Transform(p.Transform).Vec3(p.Linear).Vec3(p.Angular).UInt(p.Epoch).UInt(p.Sequence);
 

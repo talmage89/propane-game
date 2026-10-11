@@ -97,11 +97,11 @@ public partial class MenuGamepadTest : Node
         await Shot("06_lobby_name").ConfigureAwait(true);
         await Press(JoyButton.A).ConfigureAwait(true);
         Check(MenuNavigation.Key(Focus).StartsWith("color_", StringComparison.Ordinal), "name confirmation advances to colors");
-        var originalColor = Net.Color;
-        await Navigate($"color_{(originalColor + 1) % Protocol.PlayerColors.Length}").ConfigureAwait(true);
+        var originalColor = Net.Appearance;
+        await Navigate($"color_{(originalColor.LegacyIndex + 1) % Protocol.PlayerColors.Length}").ConfigureAwait(true);
         var colorKey = MenuNavigation.Key(Focus);
         await Press(JoyButton.A).ConfigureAwait(true);
-        await Wait(() => Net.Lobby!.Members.Single(m => m.Id == Net.MyId).Color != originalColor, "color update acknowledged").ConfigureAwait(true);
+        await Wait(() => Net.Lobby!.Members.Single(m => m.Id == Net.MyId).Appearance != originalColor, "color update acknowledged").ConfigureAwait(true);
         CheckFocus(colorKey);
         await Shot("07_lobby_color").ConfigureAwait(true);
         await Navigate("match_length").ConfigureAwait(true);
@@ -138,7 +138,7 @@ public partial class MenuGamepadTest : Node
         }
         var fixture = new NetClient { Name = "BrowserFixture" };
         AddChild(fixture);
-        fixture.Connect("127.0.0.1", Menus.HostPort, "Menu fixture", (Net.Color + 1) % Protocol.PlayerColors.Length);
+        fixture.Connect("127.0.0.1", Menus.HostPort, "Menu fixture", (Net.Appearance.LegacyIndex + 1) % Protocol.PlayerColors.Length);
         await Wait(() => fixture.State == NetClient.Status.Connected, "fixture connected").ConfigureAwait(true);
         fixture.CreateLobby();
         await Wait(() => fixture.Lobby != null, "fixture lobby created").ConfigureAwait(true);
@@ -150,7 +150,7 @@ public partial class MenuGamepadTest : Node
         Check(scroll.ScrollVertical > 0 && scroll.GetGlobalRect().Encloses(Focus.GetGlobalRect().Grow(3)), "last lobby scrolls fully into view");
         await Shot("09_browser_join").ConfigureAwait(true);
         // A server list refresh must retain this exact lobby, not another row with the same Join label.
-        fixture.SetProfile("Updated fixture", fixture.Color);
+        fixture.SetProfile("Updated fixture", fixture.Appearance);
         await Wait(() => Net.Lobbies.Any(l => l.Id == fixture.Lobby!.Id && l.CreatorName == "Updated fixture"), "browser list refresh acknowledged").ConfigureAwait(true);
         CheckFocus(joinKey);
         scroll = Menus.FindChildren("*", "ScrollContainer", owned: false).OfType<ScrollContainer>().Single();
@@ -159,9 +159,8 @@ public partial class MenuGamepadTest : Node
         await Wait(() => Menus.Current == Menus.Screen.Lobby && Net.Lobby!.CreatorId == fixture.MyId, "A joins selected lobby").ConfigureAwait(true);
         CheckFocus("Name");
         await Shot("10_guest_lobby").ConfigureAwait(true);
-        // Taken swatches must be skipped by navigation.
-        var taken = $"color_{fixture.Color}";
-        Check(!Reachable().ContainsKey(taken), "taken color is not a focus target");
+        Check(Enumerable.Range(0, Protocol.PlayerColors.Length).All(i => Reachable().ContainsKey($"color_{i}")),
+            "all preset colors remain available with other players in the lobby");
         await Press(JoyButton.B).ConfigureAwait(true);
         await Wait(() => Menus.Current == Menus.Screen.Browser, "B leaves guest lobby").ConfigureAwait(true);
         await Navigate(joinKey).ConfigureAwait(true);
@@ -206,7 +205,7 @@ public partial class MenuGamepadTest : Node
         Menus.Show(Menus.Screen.None);
         var results = new ResultsScreen();
         AddChild(results);
-        results.Show(new[] { new Standing(1, "Player", 0, 7, true), new Standing(2, "Other", 1, 3, true) }, 1, 10);
+        results.Show(new[] { new Standing(1, "Player", AppearanceRecord.FromPalette(0), 7, true), new Standing(2, "Other", AppearanceRecord.FromPalette(1), 3, true) }, 1, 10);
         await Frames().ConfigureAwait(true);
         Check(results.IsAncestorOf(Focus), "results own focus");
         await Shot("13_results").ConfigureAwait(true);

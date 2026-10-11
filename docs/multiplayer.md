@@ -42,6 +42,32 @@ clears the buffer; a new MatchStart invalidates the old queue and receiver, and 
 new queue. The inbox is capped at 4096 packets and 4 MiB of wire data; exceeding it disconnects with an explicit
 loading-buffer message rather than continuing with missing events.
 
+## Appearance
+
+The lobby accepts any opaque sRGB color, including duplicates and near-duplicates. Eight presets remain available.
+Settings store the same record as the network. An old saved palette index migrates once, only when no appearance
+record exists; a corrupt saved record uses a safe preset.
+
+`AppearanceRecord` is immutable. `AppearanceCodec` is the only serializer, shared by settings, Hello, SetProfile,
+LobbyState, MatchStart and MatchEnd/standings. The server accepts the requested appearance without substituting
+colors and freezes each profile at match start, including profiles retained after departure. Characters, score
+tags, lobby/results samples and dropped-tank glow use that accepted profile. Names/ranks/scores remain separate
+identifiers when colors repeat; color has no team meaning.
+
+Wire version 1 is enclosed by a little-endian int32 byte length (maximum 1024). Its header is version, red, green,
+blue and optional-slot count, all uint8. Each slot is a uint8 tag, little-endian uint16 payload length, then payload.
+There are at most 16 slots, each at most 64 bytes. Tags 1–5 reserve model/skin, outfit, hat, gun skin and bullet skin;
+they hold nonempty ASCII catalog ids using letters, digits, underscores and hyphens, never asset paths. Known
+slots round trip; unknown optional tags are skipped, leaving the base presentation. Duplicate/zero tags, invalid
+ids, unsupported record versions, excess lengths/counts and truncated/trailing records are rejected. Cosmetic
+catalog resolution, ownership checks and assets are future work; all optional cosmetics render the base today.
+Adding an optional slot within these bounds does not change a containing message's shape.
+
+Hello retains its existing protocol/version/build/name/palette-index/debug prefix and appends the record. A
+compatible Hello without the record uses its valid legacy palette index. A custom color sends the nearest preset
+as that fallback, while preserving its exact RGB bytes in the record. Incompatible builds are rejected before
+interpreting extensions. Welcome and Rejected are unchanged.
+
 ## Changes from single player in a match
 
 - **Hitstop** is off. It changes `Engine.TimeScale`, which also slows the physics and would make the clients drift apart.
@@ -91,8 +117,9 @@ and string limits apply inside the plan, and starts must agree with the player a
 - The victim's client decides whether a blast ragdolls them, because it knows exactly where they were.
 - The victim's client spawns the dropped tanks and owns them until another player interacts with them.
 
-A drop must contain unique, unused ids from that player's spawn slot, use that player's match color, and fit both
-their bank and the drop reason's tuner. The server refuses the whole batch if any entry is invalid. Scoring, spilling and authority transitions happen only while the server's clock is playing. A late lifecycle prediction is refused and restored to the last authoritative state. Known exploded body ids may appear in late snapshots or claims, which clients
+A drop must contain unique, unused ids from that player's spawn slot and fit both their bank and the drop reason's
+tuner. Its glow uses the dropper's accepted match appearance; Drop contains no color field. The server refuses the
+whole batch if any entry is invalid. Scoring, spilling and authority transitions happen only while the server's clock is playing. A late lifecycle prediction is refused and restored to the last authoritative state. Known exploded body ids may appear in late snapshots or claims, which clients
 ignore; body ids that never existed are refused. A client missing a server-accepted tank still plays its reported
 blast, including throws, without running a chain or claiming credit locally.
 
@@ -322,6 +349,10 @@ allow at least `PickupRespawnTime + PickupRevealTime * 1.2 + 6` seconds. Both sc
 or the match ends before all checks complete. These assertions also run headlessly.
 
 Results, 2026-10-09: with three bots under 120 ms round trip, 30 ms jitter and 3% loss, every bot agreed on which tanks existed and their states throughout; resting tanks matched exactly and venting tanks to within about half a meter. The same held through the Docker server on another machine, over the LAN and over a VPN. When the match's creator left mid-match, the others played on in step. A client with a different protocol was turned away with a message.
+
+Protocol 2 also changes **Hello** (trailing appearance record), **SetProfile**, **LobbyState**, **MatchStart** and
+**MatchEnd** (one appearance record in each profile/standing), and **Drop** (removes the redundant palette index).
+It keeps the unreleased `Protocol.Version` at 2; the next release must be minor. Welcome and Rejected retain their existing layouts.
 
 Protocol 2 adds authority request IDs, grouped epoch grants, per-body publication sequences and canonical/refused
 lifecycle reconciliation, as well as match ids, scalar tuning, timestamps on final body rests, drop refusal replies and discrete player

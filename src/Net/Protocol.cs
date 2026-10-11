@@ -80,7 +80,7 @@ public static class Protocol
     public const int MaxCollection = 4096;
     public const int MaxBodyStates = 20;
 
-    /// <summary>Player colors, picked in the lobby. Bright and far apart, readable against grass, roads and the void.</summary>
+    /// <summary>Quick presets and legacy Hello fallback; players may choose any opaque sRGB color.</summary>
     public static readonly Color[] PlayerColors =
     {
         new(0.92f, 0.44f, 0.16f), // orange
@@ -159,9 +159,9 @@ public sealed class NetWriter
 
     public NetWriter Quat(Quaternion q) { writer.Write(q.X); writer.Write(q.Y); writer.Write(q.Z); writer.Write(q.W); return this; }
 
-    public NetWriter Color(Color c) { writer.Write(c.R); writer.Write(c.G); writer.Write(c.B); writer.Write(c.A); return this; }
-
     public NetWriter Bytes(byte[] v) { writer.Write(v.Length); writer.Write(v); return this; }
+
+    public NetWriter Appearance(AppearanceRecord appearance) => Bytes(AppearanceCodec.Encode(appearance));
 
     public NetWriter Transform(Transform3D t) => Vec3(t.Origin).Quat(t.Basis.Orthonormalized().GetRotationQuaternion());
 
@@ -260,8 +260,6 @@ public sealed class NetReader
         return q.Normalized();
     }
 
-    public Color Color() => new(Float(), Float(), Float(), Float());
-
     public Variant Scalar() => (Variant.Type)Byte() switch
     {
         Variant.Type.Bool => Bool(),
@@ -290,10 +288,12 @@ public sealed class NetReader
         return count;
     }
 
-    public byte[] Bytes()
+    public AppearanceRecord Appearance() => AppearanceCodec.Decode(Bytes(AppearanceCodec.MaxRecordBytes));
+
+    public byte[] Bytes(int maxLength = Protocol.MaxPacketBytes)
     {
         var length = reader.ReadInt32();
-        if (length < 0 || length > reader.BaseStream.Length - reader.BaseStream.Position)
+        if (length < 0 || length > maxLength || length > Remaining)
         {
             throw new InvalidDataException("bad byte array length");
         }

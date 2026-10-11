@@ -52,7 +52,7 @@ the window to recapture it after switching away.
 ## Multiplayer
 
 Choose Multiplayer, type your name and the server's address (`host` or `host:port`, UDP port 24680 by default), then
-create a lobby or join one. Everyone picks a name and color in the lobby, and whoever created it sets the match
+create a lobby or join one. Everyone picks a name and color in the lobby (duplicates are allowed), and whoever created it sets the match
 length and starts. **Host on this computer** runs a server inside your game instead; the lobby then shows the
 addresses friends can use. Versions with the same major and minor number play together (0.2.0 with 0.2.5); the
 server turns away others and says which version it needs.

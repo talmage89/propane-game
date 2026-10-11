@@ -82,7 +82,7 @@ public partial class ResultsScreen : CanvasLayer
             var place = UiStyle.Text($"{rank}", 32, UiStyle.SoftInk);
             place.CustomMinimumSize = new Vector2(40, 0);
             row.AddChild(place);
-            row.AddChild(new ColorRect { Color = Protocol.PlayerColor(s.Color), CustomMinimumSize = new Vector2(26, 26), SizeFlagsVertical = Control.SizeFlags.ShrinkCenter });
+            row.AddChild(new ColorRect { Color = s.Appearance.Color, CustomMinimumSize = new Vector2(26, 26), SizeFlagsVertical = Control.SizeFlags.ShrinkCenter });
             var name = UiStyle.Text(s.Name + (s.Id == me ? "  (you)" : "") + (s.Present ? "" : "  (left)"), 32, s.Present ? UiStyle.Ink : UiStyle.SoftInk);
             name.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
             if (s.Score == best)

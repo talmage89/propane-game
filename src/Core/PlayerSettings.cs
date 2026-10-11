@@ -1,4 +1,6 @@
+using System.IO;
 using Godot;
+using Propane.Net;
 
 namespace Propane.Core;
 
@@ -26,6 +28,7 @@ public static class PlayerSettings
     public static void UseFile(string settingsPath)
     {
         path = settingsPath;
+        file?.Dispose();
         file = null;
     }
 
@@ -35,10 +38,29 @@ public static class PlayerSettings
         set => Set("player", "name", value);
     }
 
-    public static int Color
+    /// <summary>The wire record, persisted unchanged. A saved palette index migrates only if no record exists.</summary>
+    public static AppearanceRecord? Appearance
     {
-        get => File.GetValue("player", "color", -1).AsInt32();
-        set => Set("player", "color", value);
+        get
+        {
+            if (File.HasSectionKey("player", "appearance"))
+            {
+                var value = File.GetValue("player", "appearance");
+                if (value.VariantType != Variant.Type.PackedByteArray) { return null; }
+                try { return AppearanceCodec.Decode(value.AsByteArray()); }
+                catch (InvalidDataException) { return null; }
+            }
+            var legacy = File.GetValue("player", "color", -1);
+            if (legacy.VariantType != Variant.Type.Int || legacy.AsInt64() < 0 || legacy.AsInt64() >= Protocol.PlayerColors.Length) { return null; }
+            var migrated = AppearanceRecord.FromPalette(legacy.AsInt32());
+            Appearance = migrated;
+            return migrated;
+        }
+        set
+        {
+            if (value == null) { throw new System.ArgumentNullException(nameof(value)); }
+            Set("player", "appearance", AppearanceCodec.Encode(value));
+        }
     }
 
     /// <summary>The last server, as "host" or "host:port".</summary>

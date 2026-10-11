@@ -82,7 +82,7 @@ public partial class NetTest : Node
         {
             if (net.Lobby is { } lobby)
             {
-                Log($"lobby {lobby.Id}: {string.Join(", ", lobby.Members.Select(m => $"{m.Name}/{Protocol.ColorNames[m.Color]}"))}, {lobby.Phase}");
+                Log($"lobby {lobby.Id}: {string.Join(", ", lobby.Members.Select(m => $"{m.Name}/{m.Appearance.Color.ToHtml(false)}"))}, {lobby.Phase}");
                 TryStartMatch();
             }
         };
@@ -283,10 +283,10 @@ public partial class NetTest : Node
             raceCamera = new Camera3D { Current = true, Fov = 55 };
             match.AddChild(raceCamera);
         }
-        if (raceTick == 180 && net.Color < 2)
+        if (raceTick == 180 && (int)DevArgs.GetFloat("color", role == "host" ? 0 : 1) < 2)
         {
             ScenarioAssert(tank.State == PropaneTank.TankState.Intact && match.Bodies.Get(id)!.Epoch == 1, "race: contender received a puncture before its simultaneous contact");
-            var normal = net.Color == 0 ? Vector3.Right : Vector3.Left;
+            var normal = role == "host" ? Vector3.Right : Vector3.Left;
             var hole = PropaneTank.LocalCenter + normal * 0.15f;
             tank.TakeShot(tank.ToGlobal(hole), tank.GlobalBasis * normal, -(tank.GlobalBasis * normal));
             Log($"race contact tick {raceTick} hole {Vector(tank.HoleLocal)} swirl {tank.SwirlSign}");

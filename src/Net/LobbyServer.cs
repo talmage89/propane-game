@@ -34,7 +34,7 @@ public partial class LobbyServer : Node
         public int Id;
         public ConnectionHandle? Connection;
         public string Name = "Player";
-        public int Color;
+        public AppearanceRecord Appearance = AppearanceRecord.FromPalette(0);
         public bool Welcomed;
         public bool Debug;
         public Lobby? Lobby;
@@ -56,7 +56,7 @@ public partial class LobbyServer : Node
     {
         public readonly List<int> Players = new();
         public readonly Dictionary<int, int> Scores = new();
-        public readonly Dictionary<int, (string Name, int Color)> Profiles = new();
+        public readonly Dictionary<int, (string Name, AppearanceRecord Appearance)> Profiles = new();
         public int Id;
         public int CreatorId;
         public bool CreatorDebug;
@@ -218,7 +218,7 @@ public partial class LobbyServer : Node
                     break;
                 case Msg.SetProfile:
                     var profile = (ProfileMessage)message.Payload;
-                    if (client.Lobby == null || client.Lobby.Phase == LobbyPhase.Waiting) { SetProfile(client, profile.Name, profile.Color); }
+                    if (client.Lobby == null || client.Lobby.Phase == LobbyPhase.Waiting) { SetProfile(client, profile.Name, profile.Appearance); }
                     break;
                 case Msg.SetMatchLength:
                     if (client.Lobby is { Phase: LobbyPhase.Waiting } lobby && lobby.CreatorId == client.Id)
@@ -256,7 +256,7 @@ public partial class LobbyServer : Node
             return;
         }
         client.Name = Protocol.CleanName(hello.Name);
-        client.Color = hello.Color;
+        client.Appearance = hello.Appearance;
         client.Debug = hello.Debug;
         client.Welcomed = true;
         Send(client.Id, new NetWriter(Msg.Welcome).Int(client.Id).String(BuildInfo.GameVersion), traffic: TrafficClass.ReliableOrdered);
@@ -311,7 +311,6 @@ public partial class LobbyServer : Node
     {
         lobby.Members.Add(client.Id);
         client.Lobby = lobby;
-        client.Color = FreeColor(lobby, client.Color, client.Id);
         SendLobbyState(lobby);
         BroadcastLobbyList();
     }
@@ -360,34 +359,15 @@ public partial class LobbyServer : Node
         BroadcastLobbyList();
     }
 
-    private void SetProfile(Client client, string name, int color)
+    private void SetProfile(Client client, string name, AppearanceRecord appearance)
     {
         client.Name = Protocol.CleanName(name);
-        client.Color = client.Lobby != null ? FreeColor(client.Lobby, Mathf.PosMod(color, Protocol.PlayerColors.Length), client.Id)
-            : Mathf.PosMod(color, Protocol.PlayerColors.Length);
+        client.Appearance = appearance;
         if (client.Lobby != null)
         {
             SendLobbyState(client.Lobby);
             BroadcastLobbyList();
         }
-    }
-
-    /// <summary>The wanted color if nobody else in the lobby has it, otherwise the first free one.</summary>
-    private int FreeColor(Lobby lobby, int wanted, int self)
-    {
-        var taken = lobby.Members.Where(id => id != self && clients.ContainsKey(id)).Select(id => clients[id].Color).ToHashSet();
-        if (!taken.Contains(wanted))
-        {
-            return wanted;
-        }
-        for (var i = 0; i < Protocol.PlayerColors.Length; i++)
-        {
-            if (!taken.Contains(i))
-            {
-                return i;
-            }
-        }
-        return wanted;
     }
 
     private void SendLobbyState(Lobby lobby)
@@ -397,7 +377,7 @@ public partial class LobbyServer : Node
         foreach (var id in lobby.Members)
         {
             var member = clients.GetValueOrDefault(id);
-            w.Int(id).String(member?.Name ?? "?").Int(member?.Color ?? 0);
+            w.Int(id).String(member?.Name ?? "?").Appearance(member?.Appearance ?? AppearanceRecord.FromPalette(0));
         }
         var bytes = w.ToArray();
         foreach (var id in lobby.Members)
@@ -454,7 +434,7 @@ public partial class LobbyServer : Node
             match.Slots[id] = match.Players.Count;
             match.Players.Add(id);
             match.Scores[id] = StartScore;
-            match.Profiles[id] = (clients[id].Name, clients[id].Color);
+            match.Profiles[id] = (clients[id].Name, clients[id].Appearance);
         }
 
         var started = Time.GetTicksMsec();
@@ -477,7 +457,7 @@ public partial class LobbyServer : Node
         for (var i = 0; i < match.Players.Count; i++)
         {
             var id = match.Players[i];
-            w.Int(id).String(match.Profiles[id].Name).Int(match.Profiles[id].Color).Int(i);
+            w.Int(id).String(match.Profiles[id].Name).Appearance(match.Profiles[id].Appearance).Int(i);
         }
         var bytes = w.ToArray();
         foreach (var id in match.Players)
@@ -547,7 +527,7 @@ public partial class LobbyServer : Node
                     var w = new NetWriter(Msg.MatchEnd, match.Id).Int(match.Scores.Count);
                     foreach (var (id, score) in match.Scores.OrderByDescending(s => s.Value))
                     {
-                        w.Int(id).String(match.Profiles[id].Name).Int(match.Profiles[id].Color).Int(score).Bool(match.Players.Contains(id));
+                        w.Int(id).String(match.Profiles[id].Name).Appearance(match.Profiles[id].Appearance).Int(score).Bool(match.Players.Contains(id));
                     }
                     Broadcast(match, w);
                     var spills = match.Stats.Values.Sum(st => st.LostToHits + st.LostToThrows);
@@ -618,9 +598,9 @@ public partial class LobbyServer : Node
                 try
                 {
                     var limit = drop.Reason == 1 ? match.Tuning.RagdollDropCount : match.Tuning.HitDropCount;
-                    if (lobby.Phase != LobbyPhase.Playing || clock.Seconds >= match.PhaseEnds || drop.Tanks.Count > limit || drop.Tanks.Count > match.Scores[client.Id] || drop.Color != match.Profiles[client.Id].Color)
+                    if (lobby.Phase != LobbyPhase.Playing || clock.Seconds >= match.PhaseEnds || drop.Tanks.Count > limit || drop.Tanks.Count > match.Scores[client.Id])
                     {
-                        throw new InvalidDataException("drop outside play, exceeds bank/tuner or has wrong color");
+                        throw new InvalidDataException("drop outside play or exceeds bank/tuner");
                     }
                     match.Tanks.RegisterDrops(match.Slots[client.Id], client.Id, drop.Tanks);
                 }

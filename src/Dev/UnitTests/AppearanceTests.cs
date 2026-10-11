@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Linq;
 using Godot;
+using Propane.Core;
 using Propane.Net;
 
 namespace Propane.Dev.UnitTests;
@@ -59,6 +60,82 @@ public static class AppearanceTests
             {
                 TestRunner.Throws<InvalidDataException>(() => AppearanceCodec.Encode(new AppearanceRecord(1, 2, 3, Hat: id)));
             }
+            var oversized = new NetWriter(Msg.SetProfile).String("Test").Bytes(new byte[1025]).ToArray();
+            TestRunner.Throws<InvalidDataException>(() => MessageCodec.Decode(oversized, false));
+        });
+        runner.Run("appearance/Hello preserves old prefix and falls back without extension", () =>
+        {
+            for (var index = 0; index < Protocol.PlayerColors.Length; index++)
+            {
+                var prefix = new NetWriter(Msg.Hello).Int(Protocol.Version).String(BuildInfo.GameVersion).String("test").String("Test").Int(index).Bool(true);
+                var prefixBytes = prefix.ToArray();
+                var legacy = (HelloMessage)MessageCodec.Decode(prefixBytes, false).Payload;
+                TestRunner.Assert(legacy.Appearance == AppearanceRecord.FromPalette(index), "legacy palette fallback lost");
+                var appearance = new AppearanceRecord(12, 34, 56);
+                var extended = prefix.Appearance(appearance).ToArray();
+                TestRunner.Assert(extended.AsSpan(0, prefixBytes.Length).SequenceEqual(prefixBytes), "Hello prefix changed");
+                TestRunner.Assert(((HelloMessage)MessageCodec.Decode(extended, false).Payload).Appearance == appearance, "extension lost");
+            }
+            // Even a malformed extension on an incompatible build must reach version rejection untouched.
+            var incompatible = new NetWriter(Msg.Hello).Int(999).String(BuildInfo.GameVersion).String("test").String("Test").Int(1).Byte(255).Int(-1);
+            TestRunner.Assert(((HelloMessage)MessageCodec.Decode(incompatible.ToArray(), false).Payload).Protocol == 999, "incompatible extension interpreted");
+        });
+        runner.Run("appearance/settings migrate once and persist the same record", () =>
+        {
+            DirAccess.MakeDirRecursiveAbsolute(ProjectSettings.GlobalizePath("res://build"));
+            var path = $"res://build/appearance-settings-{Guid.NewGuid():N}.cfg";
+            using var config = new ConfigFile();
+            config.SetValue("player", "color", 4);
+            TestRunner.Assert(config.Save(path) == Error.Ok, "fixture save failed");
+            PlayerSettings.UseFile(path);
+            TestRunner.Assert(PlayerSettings.Appearance == AppearanceRecord.FromPalette(4), "palette did not migrate");
+            using var reread = new ConfigFile();
+            TestRunner.Assert(reread.Load(path) == Error.Ok && reread.HasSectionKey("player", "appearance"), "migration was not saved");
+            var custom = new AppearanceRecord(12, 34, 56);
+            PlayerSettings.Appearance = custom;
+            PlayerSettings.UseFile(path);
+            TestRunner.Assert(PlayerSettings.Appearance == custom, "old index overwrote custom record");
+            reread.Load(path);
+            reread.SetValue("player", "appearance", new byte[] { 255 });
+            reread.Save(path);
+            PlayerSettings.UseFile(path);
+            TestRunner.Assert(PlayerSettings.Appearance == null, "corrupt record was accepted or re-migrated");
+            PlayerSettings.UseFile("user://settings.cfg");
+        });
+        runner.Run("appearance/server accepts duplicate colors through roster match and standings", () =>
+        {
+            var appearance = new AppearanceRecord(12, 34, 56);
+            var server = new LobbyServer();
+            try
+            {
+                var packets = new System.Collections.Generic.List<NetMessage>();
+                server.SendOverride = (_, bytes, _) => packets.Add(MessageCodec.Decode(bytes, true));
+                for (var peer = 2; peer <= 3; peer++)
+                {
+                    server.OnConnected(peer);
+                    server.OnReceived(peer, new NetWriter(Msg.Hello).Int(Protocol.Version).String(BuildInfo.GameVersion).String("test")
+                        .String($"Player{peer}").Int(0).Bool(true).Appearance(appearance).ToArray());
+                }
+                server.OnReceived(2, new NetWriter(Msg.CreateLobby).ToArray());
+                server.OnReceived(3, new NetWriter(Msg.JoinLobby).Int(1).ToArray());
+                TestRunner.Assert(packets.Select(p => p.Payload).OfType<LobbyInfo>().Last().Members.All(p => p.Appearance == appearance), "join substituted duplicate color");
+                var updated = appearance with { Red = 13 };
+                for (var peer = 2; peer <= 3; peer++)
+                {
+                    server.OnReceived(peer, new NetWriter(Msg.SetProfile).String($"Player{peer}").Appearance(updated).ToArray());
+                }
+                TestRunner.Assert(packets.Select(p => p.Payload).OfType<LobbyInfo>().Last().Members.All(p => p.Appearance == updated), "update substituted duplicate color");
+                using var tuning = new Tuning { CountdownTime = 0, ResultsTime = 1 };
+                server.OnReceived(2, new NetWriter(Msg.SetMatchLength).Float(10).ToArray());
+                server.OnReceived(2, new NetWriter(Msg.StartMatch).Snapshot(tuning.Snapshot()).ToArray());
+                var setup = packets.Select(p => p.Payload).OfType<MatchSetup>().First();
+                TestRunner.Assert(setup.Players.All(p => p.Player.Appearance == updated), "MatchStart lost appearance");
+                foreach (var peer in new[] { 2, 3 }) { server.OnReceived(peer, new NetWriter(Msg.Loaded, setup.Id).ToArray()); }
+                server.AdvanceMatches(MonotonicClock.Now); server.AdvanceMatches(MonotonicClock.Now);
+                server.AdvanceMatches(MonotonicClock.Now + 20);
+                TestRunner.Assert(packets.Select(p => p.Payload).OfType<System.Collections.Generic.IReadOnlyList<Standing>>().First().All(p => p.Appearance == updated), "standings lost appearance");
+            }
+            finally { server.Free(); }
         });
     }
 }

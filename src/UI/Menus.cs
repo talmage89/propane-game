@@ -300,7 +300,7 @@ public partial class Menus : CanvasLayer
         PlayerSettings.Server = text;
         SaveName(name);
         message = "";
-        Net.Connect(host, port, Protocol.CleanName(name), DefaultColor());
+        Net.Connect(host, port, Protocol.CleanName(name), DefaultAppearance());
     }
 
     // ------------------------------------------------------------------ Lobby browser
@@ -392,7 +392,7 @@ public partial class Menus : CanvasLayer
         {
             var row = new HBoxContainer();
             row.AddThemeConstantOverride("separation", 12);
-            row.AddChild(new ColorRect { Color = Protocol.PlayerColor(member.Color), CustomMinimumSize = new Vector2(20, 20), SizeFlagsVertical = Control.SizeFlags.ShrinkCenter });
+            row.AddChild(new ColorRect { Color = member.Appearance.Color, CustomMinimumSize = new Vector2(20, 20), SizeFlagsVertical = Control.SizeFlags.ShrinkCenter });
             var label = UiStyle.Text(member.Name + (member.Id == Net.MyId ? "  (you)" : ""), 20);
             label.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
             row.AddChild(label);
@@ -410,19 +410,18 @@ public partial class Menus : CanvasLayer
         var name = nameField = UiStyle.Field(Net.PlayerName, "Name");
         name.MaxLength = Protocol.MaxNameLength;
         name.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
-        name.TextSubmitted += text => SetProfile(text, Net.Color);
+        name.TextSubmitted += text => SetProfile(text, Net.Appearance);
         name.FocusExited += () =>
         {
             if (!rebuilding && IsInstanceValid(name) && Protocol.CleanName(name.Text) != Net.PlayerName)
             {
-                SetProfile(name.Text, Net.Color);
+                SetProfile(name.Text, Net.Appearance);
             }
         };
         profile.AddChild(name);
         layout.AddChild(profile);
         var colors = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.Center };
         colors.AddThemeConstantOverride("separation", 8);
-        var taken = lobby.Members.Where(m => m.Id != Net.MyId).Select(m => m.Color).ToHashSet();
         for (var i = 0; i < Protocol.PlayerColors.Length; i++)
         {
             var index = i;
@@ -430,18 +429,17 @@ public partial class Menus : CanvasLayer
             {
                 CustomMinimumSize = new Vector2(40, 40),
                 FocusMode = Control.FocusModeEnum.All,
-                TooltipText = Protocol.ColorNames[i] + (taken.Contains(i) ? " (taken)" : ""),
-                Disabled = taken.Contains(i),
+                TooltipText = Protocol.ColorNames[i],
             };
             swatch.SetMeta("focus_key", $"color_{i}");
             swatch.AddThemeStyleboxOverride("focus", UiStyle.Focus());
-            var mine = Net.Color == i;
-            foreach (var state in new[] { "normal", "hover", "pressed", "disabled" })
+            var mine = Net.Appearance.Color == AppearanceRecord.FromPalette(i).Color;
+            foreach (var state in new[] { "normal", "hover", "pressed" })
             {
                 var color = Protocol.PlayerColor(i);
                 swatch.AddThemeStyleboxOverride(state, new StyleBoxFlat
                 {
-                    BgColor = state == "disabled" ? new Color(color, 0.25f) : state == "hover" ? color.Lightened(0.15f) : color,
+                    BgColor = state == "hover" ? color.Lightened(0.15f) : color,
                     BorderColor = UiStyle.Ink,
                     BorderWidthBottom = mine ? 3 : 0,
                     BorderWidthTop = mine ? 3 : 0,
@@ -453,7 +451,7 @@ public partial class Menus : CanvasLayer
                     CornerRadiusBottomRight = 20,
                 });
             }
-            swatch.Pressed += () => SetProfile(nameField?.Text ?? Net.PlayerName, index);
+            swatch.Pressed += () => SetProfile(nameField?.Text ?? Net.PlayerName, Net.Appearance.WithColor(Protocol.PlayerColor(index)));
             colors.AddChild(swatch);
         }
         layout.AddChild(colors);
@@ -555,11 +553,11 @@ public partial class Menus : CanvasLayer
         button?.EmitSignal(BaseButton.SignalName.Pressed);
     }
 
-    private void SetProfile(string name, int color)
+    private void SetProfile(string name, AppearanceRecord appearance)
     {
         SaveName(name);
-        PlayerSettings.Color = color;
-        Net.SetProfile(name, color);
+        PlayerSettings.Appearance = appearance;
+        Net.SetProfile(name, appearance);
     }
 
     // ------------------------------------------------------------------ Helpers
@@ -614,10 +612,9 @@ public partial class Menus : CanvasLayer
         return Protocol.CleanName(user.Length > 0 ? char.ToUpperInvariant(user[0]) + user[1..] : "Player");
     }
 
-    private static int DefaultColor()
+    private static AppearanceRecord DefaultAppearance()
     {
-        var saved = PlayerSettings.Color;
-        return saved >= 0 ? saved : (int)(GD.Randi() % Protocol.PlayerColors.Length);
+        return PlayerSettings.Appearance ?? AppearanceRecord.FromPalette((int)(GD.Randi() % Protocol.PlayerColors.Length));
     }
 
     private static void SaveName(string name) => PlayerSettings.Name = Protocol.CleanName(name);

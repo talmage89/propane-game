@@ -191,8 +191,7 @@ public partial class Main : Node
         var addresses = IP.GetLocalAddresses().Where(a => a.Contains('.') && !a.StartsWith("127.") && !a.StartsWith("169.254.")).ToList();
         menus.HostingNote = $"Hosting here. Others connect to {(addresses.Count > 0 ? string.Join(" or ", addresses.Select(a => $"{a}:{port}")) : $"this computer's address, port {port}")}" +
                             " (UDP; from outside your network, forward the port).";
-        var color = PlayerSettings.Color;
-        net.Connect("127.0.0.1", port, PlayerSettings.Name, color >= 0 ? color : 0);
+        net.Connect("127.0.0.1", port, PlayerSettings.Name, PlayerSettings.Appearance ?? AppearanceRecord.FromPalette(0));
     }
 
     private async void OnMatchStarting(MatchSetup setup)
