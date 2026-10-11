@@ -170,6 +170,11 @@ public sealed class NetTransport : IPacketTransport
         if (!counters.TryGetValue(connection, out var stats)) { return default; }
         var target = open && connected.Contains(connection) ? peer.GetPeer(peerIds.PeerId(connection)) : null;
         return stats.Snapshot(pollMs, rtt: target?.GetStatistic(ENetPacketPeer.PeerStatistic.RoundTripTime) ?? 0,
-            nativeLoss: target == null ? null : target.GetStatistic(ENetPacketPeer.PeerStatistic.PacketLoss) / ENetPacketPeer.PacketLossScale);
+            nativeLoss: target == null ? null : target.GetStatistic(ENetPacketPeer.PeerStatistic.PacketLoss) / ENetPacketPeer.PacketLossScale) with
+        {
+            NativeThrottle = target?.GetStatistic(ENetPacketPeer.PeerStatistic.PacketThrottle) / ENetPacketPeer.PacketThrottleScale,
+            NativeThrottleLimit = target?.GetStatistic(ENetPacketPeer.PeerStatistic.PacketThrottleLimit) / ENetPacketPeer.PacketThrottleScale,
+            NativeRttVariance = target?.GetStatistic(ENetPacketPeer.PeerStatistic.RoundTripTimeVariance)
+        };
     }
 }

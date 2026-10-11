@@ -185,6 +185,7 @@ the scenes render; the physical offset is established by scene mutation and simu
 these camera views.
 
 Linux on this machine only: macOS, stock Ubuntu CI execution and cross-machine alignment were not verified.
-The probe explicitly requires same-machine clients. Ownership/collision causes of the observed disagreements
-remain unverified and need a separate package. Shared messages, construction, tanks, tuners and
-`Protocol.Version` (2) are unchanged; this is dev logging, verification and documentation only.
+The probe explicitly requires same-machine clients. At the end of the original assertion package, the
+ownership/collision causes remained unverified; that package changed dev logging, verification and documentation
+only. The subsequent [correction investigation](network-corrections.md) records replication fixes and their
+verification. Message shapes, suburb construction, tuner defaults and `Protocol.Version` (2) remain unchanged.

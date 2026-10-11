@@ -158,6 +158,10 @@ Moving batches use sampling timestamps on the sender's ping-estimated server clo
 the existing 0.3 s extrapolation window; zero means no ping yet and falls back to relay time. Receivers use their
 own server clock estimate to include both transport legs in bounded motion extrapolation. This also survives
 motion overtaking its grant. Rest settling uses receipt time; clocks never order states.
+The reliable canonical grant/refusal supplies an observer correction target before the owner publishes again;
+an overtaking newer publication keeps its sampling and receipt times. Motion expires after 0.5 s without a
+receipt, independently of sampling transit. Venting observers retain rotation-error steering through the spin
+limiter while corrections are fresh; owners and stale observers keep the ordinary gameplay spin limit.
 
 `Claim` requests carry expected epochs and proposed poses for the complete group. The server validates every member
 before granting any, so later grouped interactions can include bodies already owned without a partial handoff.
@@ -326,6 +330,9 @@ notices remain notices on an otherwise live connection. `NetClient.LastDisconnec
 and does not distinguish an established peer timeout from a remote close: these report `TransportFailure` with an
 unavailable code. A failed connection/Hello deadline reports `Timeout`. Local reasons and open errors keep any known
 code. Supporting more precise ENet remote reasons would require a lower-level adapter and is deferred.
+Both native endpoints use a 20 s minimum/30 s maximum ACK timeout so a construction stall within the server's
+20 s loading grace does not disconnect a healthy builder. Explicit disconnects remain immediate; a silent
+failed endpoint can take 20–30 s to detect.
 
 `NetClient.Diagnostics` exposes the local connection counters; server logs include per-connection payload
 packets/bytes accepted out and received in, RTT, managed queue
@@ -359,7 +366,7 @@ is included.
 Details settled while building, within the decisions above:
 
 - **Remote players** are full copies of the character (animation, rifle, ragdoll) driven by the states their own game sends. A thrown player's ragdoll falls on its own on every screen, steered after the real one; it gets up where the real one got up. Shots hit other players' bodies and limbs. Players pass through each other.
-- **Ownership** goes to whoever last disturbed a body (a shot, a puncture, a blast, a push, a drop); the match's creator owns everything nobody has touched, and a player's bodies pass to the creator (or the next player) if they leave. Claims go through the server as atomic groups with expected epochs; accepted grants are broadcast in one order. A handoff clears the former owner's correction target and sequence boundary. The new owner sends its final state even if its copy was already asleep, so nobody is left correcting toward the former owner forever.
+- **Ownership** goes to whoever last disturbed a body (a shot, a puncture, a blast, a push, a drop); the match's creator owns everything nobody has touched, and a player's bodies pass to the creator (or the next player) if they leave. Claims go through the server as atomic groups with expected epochs; accepted grants are broadcast in one order. A handoff resets the sequence boundary and supplies the new canonical observer target. The new owner sends its final state even if its copy was already asleep, so nobody is left correcting toward the former owner forever.
 - **Dropped tanks** glow in the dropper's color while they ignore bullets and chain reactions.
 - **Tuning in a match:** everyone plays on the creator's values: the baked ones in a release build, the creator's live ones in a debug build. Only that original creator's debug build gets F1 and may change the match's values. Hosting succession does not transfer this permission. Hello appends a debug-build flag, captured at match start; this is a client capability declaration, not remote build attestation. Tuning crosses the wire as named bool/int/float scalars, with exact exported types and inclusive declared ranges checked before applying the whole snapshot or a change. `FixedSeed` accepts the full int32 range. Each match owns a separate validated tuning instance; it never replaces the application saved template. The panel targets that match instance, and Save also updates the application template for future worlds.
 - **Starting values** (all tuners): 20 base tanks plus 4 per player; pile limits of 5–12 plus floor(0.25 × players), near the central 40 m; a 190 m base map plus 4 m per player, with clear starts at least 12 m apart; a 30-round magazine, 60 in reserve, at most 150, a 1.6 s reload; 3 base ammo cans plus 1 per player, of 30 rounds that come back after 20 s; a 2:30 match after a 4 s countdown; results for 10 s.
@@ -473,4 +480,6 @@ including strikes while repositioning for tanks, followed by ordinary navigation
 final standings agreed: 20 map gains + 34 drop gains - 50 spills = 4 banked. The 407 tank comparisons ended with
 identical ids/states and at most 0.165 m drift. During active chains the diagnostic reported transient differences
 up to five states and 5.862 m drift; it is a
-comparison report, not a threshold assertion. Those transients converged; this package does not revise body sync.
+comparison report, not a threshold assertion. Those transients converged in the original melee package.
+The later [tank assertion and correction work](network-corrections.md) adds automatic failure checks and fixes
+the replication causes identified by repeated soaks.

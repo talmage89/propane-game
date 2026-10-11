@@ -32,7 +32,8 @@ public readonly record struct OpenResult(bool Success, string? Detail = null, in
 /// </summary>
 public readonly record struct TransportDiagnostics(long PacketsIn, long BytesIn, long PacketsOut, long BytesOut,
     double RoundTripMilliseconds, int QueuedPackets, long QueuedBytes, long Drops, double PollMilliseconds,
-    long? NativeQueueBytes = null, double? NativeLoss = null);
+    long? NativeQueueBytes = null, double? NativeLoss = null, double? NativeThrottle = null,
+    double? NativeThrottleLimit = null, double? NativeRttVariance = null);
 
 /// <summary>
 /// Main-thread message transport. Every callback runs only inside Poll (including local disconnect/close).

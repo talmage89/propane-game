@@ -189,6 +189,12 @@ public sealed class FaultPacketTransport : IPacketTransport
         return state.Counters.Snapshot(pollMs, queues.Count() + backend.QueuedPackets,
             queues.Sum(p => (long)p.Bytes.Length) + backend.QueuedBytes,
             backend.RoundTripMilliseconds + faults.Lag * 2000, backend.NativeLoss) with
-        { Drops = state.Counters.Drops + backend.Drops, NativeQueueBytes = backend.NativeQueueBytes };
+        {
+            Drops = state.Counters.Drops + backend.Drops,
+            NativeQueueBytes = backend.NativeQueueBytes,
+            NativeThrottle = backend.NativeThrottle,
+            NativeThrottleLimit = backend.NativeThrottleLimit,
+            NativeRttVariance = backend.NativeRttVariance
+        };
     }
 }

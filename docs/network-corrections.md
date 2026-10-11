@@ -117,3 +117,13 @@ target blacklisting is unchanged. The new freed-tank/live-target regression fail
 (`build/net-assert-artifacts/bot-after-clean.log`: 202 tests, zero failures, no leaked node). The initial
 fixture failed compilation because required world/spawn fields were omitted; it now uses the tank factory.
 Both final before/after builds were warning-free.
+
+## Optional native motion diagnostics
+
+`--tank-authority-trace` records server/receiver grants with the shared monotonic clock.
+`--tank-motion-trace` records awake tank correction targets and native throttle/RTT at 4 Hz;
+`--net-throttle-trace` raises the server's native diagnostic cadence to 4 Hz. These are opt-in
+probes, including geometry rays; ordinary matches do not perform those diagnostic queries.
+In `/tmp/nas-throttle-1`, native packet throttle reached 0.125, permitting only one in eight
+disposable packets before the additional configured 3% fault loss. Reliable packet loss statistics
+do not measure that suppression. The second traced run still failed a 2.05 s moving episode.
