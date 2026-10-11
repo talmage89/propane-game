@@ -11,6 +11,7 @@ namespace Propane.UI;
 /// </summary>
 public partial class TuningPanel : CanvasLayer
 {
+    public required Tuning Target { get; init; }
     private readonly List<(string Property, Range Slider, Label Value, bool IsInt)> rows = new();
     private readonly List<(string Property, CheckButton Toggle)> toggles = new();
     private Label status = null!;
@@ -84,7 +85,7 @@ public partial class TuningPanel : CanvasLayer
 
     private void Populate(VBoxContainer list)
     {
-        var tuning = Tuning.Current;
+        var tuning = Target;
         // A group heading is only added once a slider follows it, which skips Resource's own built-in group.
         string? pendingGroup = null;
         foreach (var entry in tuning.GetPropertyList())
@@ -139,7 +140,7 @@ public partial class TuningPanel : CanvasLayer
             slider.ValueChanged += v =>
             {
                 var set = isInt ? Variant.From((int)v) : Variant.From((float)v);
-                Tuning.Current.Set(property, set);
+                Target.Set(property, set);
                 value.Text = Format(v, isInt);
                 ValueChanged?.Invoke(property, set);
             };
@@ -160,7 +161,7 @@ public partial class TuningPanel : CanvasLayer
         var toggle = new CheckButton { FocusMode = Control.FocusModeEnum.None };
         toggle.Toggled += on =>
         {
-            Tuning.Current.Set(property, on);
+            Target.Set(property, on);
             ValueChanged?.Invoke(property, on);
         };
         row.AddChild(label);
@@ -174,11 +175,11 @@ public partial class TuningPanel : CanvasLayer
     {
         foreach (var (property, toggle) in toggles)
         {
-            toggle.SetPressedNoSignal(Tuning.Current.Get(property).AsBool());
+            toggle.SetPressedNoSignal(Target.Get(property).AsBool());
         }
         foreach (var (property, slider, value, isInt) in rows)
         {
-            var v = Tuning.Current.Get(property).AsDouble();
+            var v = Target.Get(property).AsDouble();
             slider.SetValueNoSignal(v);
             value.Text = Format(v, isInt);
         }
@@ -186,16 +187,16 @@ public partial class TuningPanel : CanvasLayer
 
     private void Save()
     {
-        var error = Tuning.SaveCurrent();
+        var error = Tuning.SaveTemplate(Target);
         status.Text = error == Error.Ok ? $"Saved {Tuning.FilePath} at {Time.GetTimeStringFromSystem()}" : $"Save failed: {error}";
     }
 
     private void ResetToDefaults()
     {
-        var defaults = new Tuning();
+        using var defaults = new Tuning();
         foreach (var property in rows.Select(r => r.Property).Concat(toggles.Select(t => t.Property)))
         {
-            Tuning.Current.Set(property, defaults.Get(property));
+            Target.Set(property, defaults.Get(property));
             ValueChanged?.Invoke(property, defaults.Get(property));
         }
         Refresh();

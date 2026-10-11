@@ -12,19 +12,14 @@ public static class Blast
     private const int MaxQueryResults = 512;
 
     /// <summary>
-    /// Raised after a blast this game set off (not another player's, which arrives with <c>chain</c> off), with the
-    /// rigid bodies it pushed, so a match can take charge of them.
-    /// </summary>
-    public static event System.Action<Vector3, IReadOnlyList<RigidBody3D>, uint>? LocalBlast;
-
-    /// <summary>
     /// Pushes bodies, throws blast receivers and, when <paramref name="chain"/> is on, sets off tanks in chain range.
     /// </summary>
-    public static void Detonate(Node3D context, Vector3 center, PropaneTank? source, bool chain = true)
+    public static void Detonate(WorldContext world, Vector3 center, PropaneTank? source, bool chain = true)
     {
-        var tuning = Tuning.Current;
+        world.EnsureAlive();
+        var tuning = world.Tuning;
         var radius = tuning.BlastRadius;
-        var space = context.GetWorld3D().DirectSpaceState;
+        var space = world.Physics.DirectSpaceState;
         var rng = new RandomNumberGenerator();
         var exclude = new Godot.Collections.Array<Rid>();
         if (source != null)
@@ -55,12 +50,10 @@ public static class Blast
             }
         }
 
-        foreach (var node in context.GetTree().GetNodesInGroup(IBlastReceiver.Group))
+        foreach (var receiver in new List<IBlastReceiver>(world.BlastReceivers))
         {
-            if (node is not IBlastReceiver receiver)
-            {
-                continue;
-            }
+            if (!world.IsAlive) { return; }
+            if (!world.IsRegistered(receiver)) { continue; }
             var target = receiver.BlastTargetPosition;
             var distance = center.DistanceTo(target);
             var reach = Mathf.Max(radius, Mathf.Max(tuning.RagdollRadius, tuning.StaggerRadius));
@@ -76,10 +69,10 @@ public static class Blast
             receiver.ReceiveBlast(new BlastInfo(center, PushDirection(center, target, tuning, rng), distance, falloff));
         }
 
-        GameEvents.RaiseExplosion(center);
+        world.Events.RaiseExplosion(center);
         if (chain)
         {
-            LocalBlast?.Invoke(center, pushed, source?.BlastRequest ?? 0);
+            world.Events.RaiseLocalBlast(center, pushed, source?.BlastRequest ?? 0);
         }
     }
 

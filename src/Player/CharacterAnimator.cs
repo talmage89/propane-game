@@ -12,7 +12,8 @@ namespace Propane.Player;
 [SuppressMessage("Design", "CA1001", Justification = "modelRoot owns the AnimationTree node and frees it with the character.")]
 public sealed class CharacterAnimator
 {
-    public LocomotionPose Pose { get; } = new();
+    public LocomotionPose Pose { get; }
+    private readonly Tuning tuning;
     private readonly AnimationPlayer player;
     private const string Air = "parameters/air/blend_amount";
     private const string Hold = "parameters/hold/blend_amount";
@@ -34,8 +35,10 @@ public sealed class CharacterAnimator
 
     private readonly AnimationTree tree;
 
-    public CharacterAnimator(AnimationPlayer player, Node3D modelRoot, string skeletonPath)
+    public CharacterAnimator(Tuning tuning, AnimationPlayer player, Node3D modelRoot, string skeletonPath)
     {
+        this.tuning = tuning;
+        Pose = new LocomotionPose(tuning);
         this.player = player;
         tree = new AnimationTree
         {
@@ -69,7 +72,7 @@ public sealed class CharacterAnimator
         tree.Set(Air, Pose.Air);
         // Jump_Start contains an authored anticipation before its push. Start at the push on the accepted
         // physics jump, then use that clip's extension/tuck as the velocity falls through rising/apex/falling.
-        var t = Tuning.Current;
+        var t = tuning;
         if (takeoffs != Pose.Takeoffs)
         {
             takeoffs = Pose.Takeoffs;

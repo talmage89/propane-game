@@ -10,6 +10,8 @@ namespace Propane.Tank;
 /// <summary>One detector and glide runner for both modes. Only granting a lease and publishing presentation differ.</summary>
 public partial class TankGather : Node3D
 {
+    public required WorldContext World { get; init; }
+
     private sealed class Flight
     {
         public required PropaneTank Tank;
@@ -36,7 +38,7 @@ public partial class TankGather : Node3D
     public override void _PhysicsProcess(double delta)
     {
         var dt = (float)delta;
-        var tuning = Tuning.Current;
+        var tuning = World.Tuning;
         foreach (var flight in flights.ToArray())
         {
             var tank = flight.Tank;
@@ -95,7 +97,7 @@ public partial class TankGather : Node3D
             Grant(members, owns =>
             {
                 foreach (var id in pendingIds) { pending.Remove(id); }
-                if (!IsInsideTree() || !Enabled() || owns == null || members.Where((t, i) => !IsInstanceValid(t) || !Eligible(t) || t.Disturbance != revisions[i] || !owns(t)).Any()) { return; }
+                if (!World.IsAlive || !IsInstanceValid(this) || !IsInsideTree() || !Enabled() || owns == null || members.Where((t, i) => !IsInstanceValid(t) || !Eligible(t) || t.Disturbance != revisions[i] || !owns(t)).Any()) { return; }
                 // Revalidate after network latency: actors and obstacles may have moved while the grant was pending.
                 if (!SameGroup(members) || !Validate(members, targets)) { return; }
                 var exclude = Exclude(members);
@@ -121,7 +123,7 @@ public partial class TankGather : Node3D
 
     private bool SameGroup(IReadOnlyList<PropaneTank> members)
     {
-        var tuning = Tuning.Current;
+        var tuning = World.Tuning;
         var current = new GatherGroups().Advance(Tanks().Where(IsInstanceValid).Select(t =>
             new GatherGroups.Sample(t.GetInstanceId(), t.GlobalTransform * PropaneTank.LocalCenter, Eligible(t), t.Disturbance)),
             tuning.GatherRadius, tuning.GatherMinimum, 0, 0);
@@ -155,7 +157,7 @@ public partial class TankGather : Node3D
 
     private Transform3D[]? Plan(IReadOnlyList<PropaneTank> members)
     {
-        var tuning = Tuning.Current;
+        var tuning = World.Tuning;
         // An upright cluster has no dependent upper supports: interrupting one member cannot strand another.
         var local = PileBuilder.Build(PileFormation.Cluster, members.Count,
             new Vector3(tuning.PileSpacing, tuning.PileLayerHeight, tuning.PileDepthSpacing));
@@ -175,14 +177,14 @@ public partial class TankGather : Node3D
 
     private Vector3? Ground(Vector3 at)
     {
-        var tuning = Tuning.Current;
+        var tuning = World.Tuning;
         var hit = GroundHit(at);
         return hit.Count > 0 && hit["normal"].AsVector3().Y >= tuning.GatherGroundNormal ? hit["position"].AsVector3() : null;
     }
 
     private Godot.Collections.Dictionary GroundHit(Vector3 at)
     {
-        var reach = Tuning.Current.GatherGroundRay;
+        var reach = World.Tuning.GatherGroundRay;
         return GetWorld3D().DirectSpaceState.IntersectRay(PhysicsRayQueryParameters3D.Create(
             at + Vector3.Up * reach, at + Vector3.Down * reach, Layers.Floor));
     }
@@ -190,7 +192,7 @@ public partial class TankGather : Node3D
     private bool Validate(IReadOnlyList<PropaneTank> members, IReadOnlyList<Transform3D> targets)
     {
         var exclude = Exclude(members);
-        var tuning = Tuning.Current;
+        var tuning = World.Tuning;
         var space = GetWorld3D().DirectSpaceState;
         for (var i = 0; i < members.Count; i++)
         {
@@ -220,7 +222,7 @@ public partial class TankGather : Node3D
     {
         var query = new PhysicsShapeQueryParameters3D
         {
-            Shape = new SphereShape3D { Radius = Mathf.Sqrt(PileBuilder.Height * PileBuilder.Height / 4 + PileBuilder.Radius * PileBuilder.Radius) + Tuning.Current.GatherClearance },
+            Shape = new SphereShape3D { Radius = Mathf.Sqrt(PileBuilder.Height * PileBuilder.Height / 4 + PileBuilder.Radius * PileBuilder.Radius) + World.Tuning.GatherClearance },
             Transform = new Transform3D(Basis.Identity, from),
             Motion = to - from,
             Exclude = exclude,

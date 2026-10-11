@@ -57,7 +57,7 @@ public static class DevArgs
                 GD.PushError($"[dev] no tuning value named {key[5..]}");
                 continue;
             }
-            property.SetValue(Core.Tuning.Current, System.Convert.ChangeType(value, property.PropertyType, System.Globalization.CultureInfo.InvariantCulture));
+            property.SetValue(Core.Tuning.SavedTemplate, System.Convert.ChangeType(value, property.PropertyType, System.Globalization.CultureInfo.InvariantCulture));
             GD.Print($"[dev] tuning {key[5..]} = {value}");
         }
     }

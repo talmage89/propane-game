@@ -1,13 +1,33 @@
 using System;
+using System.Collections.Generic;
 using Godot;
 
 namespace Propane.Core;
 
-/// <summary>Game-wide notifications, so effects and UI can react without references to their sources.</summary>
-public static class GameEvents
+/// <summary>Notifications confined to one world's lifetime.</summary>
+public sealed class GameEvents
 {
-    /// <summary>A tank exploded at a world position.</summary>
-    public static event Action<Vector3>? Explosion;
+    private bool closed;
+    public event Action<Vector3>? Explosion;
+    public event Action<Vector3, IReadOnlyList<RigidBody3D>, uint>? LocalBlast;
 
-    public static void RaiseExplosion(Vector3 position) => Explosion?.Invoke(position);
+    public void RaiseExplosion(Vector3 position)
+    {
+        if (closed || Explosion == null) { return; }
+        foreach (Action<Vector3> callback in Explosion.GetInvocationList())
+        {
+            if (closed) { break; }
+            callback(position);
+        }
+    }
+    public void RaiseLocalBlast(Vector3 position, IReadOnlyList<RigidBody3D> pushed, uint cause)
+    {
+        if (closed || LocalBlast == null) { return; }
+        foreach (Action<Vector3, IReadOnlyList<RigidBody3D>, uint> callback in LocalBlast.GetInvocationList())
+        {
+            if (closed) { break; }
+            callback(position, pushed, cause);
+        }
+    }
+    internal void Clear() { closed = true; Explosion = null; LocalBlast = null; }
 }

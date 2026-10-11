@@ -11,6 +11,9 @@ namespace Propane.Dev;
 /// <summary>Headless assertion suite for controller precedence and gameplay actions. Exits 1 on any failure.</summary>
 public partial class MovementTests : Node
 {
+    private WorldContext world = null!;
+    public override void _ExitTree() => world.Dispose();
+
     private const float Dt = 1f / 120;
     private readonly StateTuning tuning = new(6, 9.5f, 0.98f, 0.12f, 0.12f, 1.3f, 0.3f);
     private int checks;
@@ -19,10 +22,11 @@ public partial class MovementTests : Node
     private bool padIntentMode;
     private bool collectInput = true;
 
-    public MovementTests() => device = new DeviceInput(() => gameplayEnabled);
+    public MovementTests() => device = new DeviceInput(Tuning.SavedTemplate, () => gameplayEnabled);
 
     public override void _Ready()
     {
+        world = new WorldContext(this, Tuning.SavedTemplate, present: true);
         DevArgs.MarkReady();
         ProcessMode = ProcessModeEnum.Always;
         Callable.From(RunTests).CallDeferred();
@@ -313,8 +317,8 @@ public partial class MovementTests : Node
         gameplayEnabled = true;
         foreach (var action in new[] { InputSetup.Jump, InputSetup.Fire, InputSetup.Reload }) Input.ActionRelease(action);
         device.Reset();
-        var player = new PlayerCharacter { InputOverride = device, ProcessMode = ProcessModeEnum.Pausable };
-        AddChild(player);
+        var player = new PlayerCharacter { World = world, InputOverride = device };
+        world.Root.AddChild(player);
         void Buttons(bool pressed, bool handled = false)
         {
             InputEvent[] events =
@@ -330,12 +334,12 @@ public partial class MovementTests : Node
         }
         Buttons(true);
         Send(new InputEventMouseMotion { ScreenRelative = new Vector2(12, -4) });
-        GetTree().Paused = true;
+        world.SetPaused(true);
         var pending = device.Read();
         Check(!pending.JumpPressed && !pending.FirePressed && !pending.ReloadPressed && pending.Look == Vector2.Zero,
             "pause notification discards queued presses and displacement");
         Buttons(false, handled: true);
-        GetTree().Paused = false;
+        world.SetPaused(false);
         Buttons(true);
         var intent = device.Read();
         Check(intent.JumpPressed && intent.FirePressed && intent.ReloadPressed,
@@ -354,22 +358,22 @@ public partial class MovementTests : Node
 
     private async Task FacadeTests()
     {
-        GD.Seed(1);
+        world.Random.Seed = 1;
         var floor = new StaticBody3D { CollisionLayer = Layers.Floor, CollisionMask = 0 };
         floor.AddChild(new CollisionShape3D { Shape = new WorldBoundaryShape3D() });
         AddChild(floor);
         var input = new TestInput { Intent = new PlayerIntent { Aim = true } };
-        var player = new PlayerCharacter { InputOverride = input };
+        var player = new PlayerCharacter { World = world, InputOverride = input };
         AddChild(player);
         for (var i = 0; i < 60; i++) await ToSignal(GetTree(), SceneTree.SignalName.PhysicsFrame);
         Check(player.ResolvedState.EffectiveAim && player.AimAmount > 0.99f, "facade starts grounded and aimed");
         var feet = player.FindChildren("*", "Skeleton3D", owned: false).OfType<Skeleton3D>()
             .Single(s => s.FindBone("foot_l") >= 0).GetNode<FootPlacement>("Feet");
-        var creepSpeed = Tuning.Current.CreepSpeed;
+        var creepSpeed = world.Tuning.CreepSpeed;
         input.Intent.Move = Vector2.Down;
         foreach (var speed in new[] { 0.98f, 1.6f, 2.2f, 2.8f })
         {
-            Tuning.Current.CreepSpeed = speed;
+            world.Tuning.CreepSpeed = speed;
             for (var i = 0; i < 60; i++) await ToSignal(GetTree(), SceneTree.SignalName.PhysicsFrame);
             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
@@ -380,7 +384,7 @@ public partial class MovementTests : Node
             Check(Math.Abs(feet.Pose.Phase - phase) > 0.00001f && feet.Pose.Walk > 0.99f,
                 $"creep stride keeps advancing at {speed} m/s");
         }
-        Tuning.Current.CreepSpeed = creepSpeed;
+        world.Tuning.CreepSpeed = creepSpeed;
         input.Intent.Move = Vector2.Zero;
         player.ReceiveBlast(new BlastInfo(Vector3.Zero, Vector3.Forward, 0, 1));
         Check(player.ResolvedState.Lifecycle == PlayerLifecycle.Ragdoll && player.AimAmount == 0 &&
@@ -397,7 +401,7 @@ public partial class MovementTests : Node
         Check(!player.ResolvedState.EffectiveAim && player.AimAmount == 0, "recovery does not resurrect released aim");
         input.Intent = new PlayerIntent { Move = Vector2.Down, Sprint = true };
         for (var i = 0; i < 60; i++) await ToSignal(GetTree(), SceneTree.SignalName.PhysicsFrame);
-        player.Ammo = new AmmoState { Magazine = 10, Reserve = 40 };
+        player.Ammo = new AmmoState { Tuning = world.Tuning, Magazine = 10, Reserve = 40 };
         input.Intent.ReloadPressed = true;
         await ToSignal(GetTree(), SceneTree.SignalName.PhysicsFrame);
         await ToSignal(GetTree(), SceneTree.SignalName.PhysicsFrame);

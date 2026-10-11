@@ -90,7 +90,8 @@ public static class WorldBuildTests
 
     private static string BuildHash(Node root, SuburbPlan plan, SuburbSettings settings)
     {
-        var suburb = Suburb.Build(plan, settings, networked: true);
+        using var world = new WorldContext(root, Tuning.SavedTemplate, present: true);
+        var suburb = Suburb.Build(world, plan, settings, networked: true);
         root.AddChild(suburb);
         using var stream = new MemoryStream();
         using var writer = new BinaryWriter(stream);

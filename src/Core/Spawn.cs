@@ -2,33 +2,40 @@ using Godot;
 
 namespace Propane.Core;
 
-/// <summary>
-/// Where transient things (debris, decals, effects) are parented. Debris and scorch marks belong to the current suburb
-/// so they disappear with it; short-lived effects go to a separate effects root.
-/// </summary>
-public static class Spawn
+/// <summary>A world/content factory. Durable debris follows its originating content; effects follow the world.</summary>
+public sealed class Spawn
 {
-    private static Node3D? worldRoot;
-    private static Node3D? effectsRoot;
+    private readonly WorldContext world;
+    public Node3D ContentRoot { get; }
 
-    public static void SetWorldRoot(Node3D root) => worldRoot = root;
-
-    public static void SetEffectsRoot(Node3D root) => effectsRoot = root;
-
-    /// <summary>Adds a node that should live as long as the current suburb.</summary>
-    public static T InWorld<T>(T node) where T : Node
+    internal Spawn(WorldContext world, Node3D content)
     {
-        (worldRoot ?? effectsRoot)!.AddChild(node);
+        this.world = world;
+        ContentRoot = content;
+    }
+
+    public T InWorld<T>(T node) where T : Node
+    {
+        world.EnsureAlive();
+        ContentRoot.AddChild(node);
+        world.Reveal.Track(node);
         return node;
     }
 
-    /// <summary>Adds a short-lived effect that frees itself.</summary>
-    public static T Effect<T>(T node) where T : Node
+    public T Effect<T>(T node) where T : Node
     {
-        (effectsRoot ?? worldRoot)!.AddChild(node);
+        world.EnsureAlive();
+        world.EffectsRoot.AddChild(node);
+        world.RecordEffect(node, ContentRoot);
+        world.Reveal.Track(node);
         return node;
     }
 
-    /// <summary>Moves an existing node under the effects root, keeping where it is, so it outlives its parent.</summary>
-    public static void Detach(Node3D node) => node.Reparent(effectsRoot ?? worldRoot, keepGlobalTransform: true);
+    public void Detach(Node3D node)
+    {
+        world.EnsureAlive();
+        node.Reparent(world.EffectsRoot, keepGlobalTransform: true);
+        world.RecordEffect(node, ContentRoot);
+        world.Reveal.Track(node);
+    }
 }

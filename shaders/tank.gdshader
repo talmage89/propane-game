@@ -9,17 +9,17 @@ uniform sampler2D normal_texture : hint_normal, filter_linear_mipmap_anisotropic
 uniform sampler2D orm_texture : hint_default_white, filter_linear_mipmap_anisotropic;
 uniform float normal_strength = 1.0;
 // Soot from nearby blasts darkens the tank.
-instance uniform float soot = 0.0;
+instance uniform float soot : instance_index(0) = 0.0;
 // A freshly dropped tank glows at its rim in the dropper's color while it ignores bullets (alpha is the strength).
-instance uniform vec4 shield_color : source_color = vec4(1.0, 1.0, 1.0, 0.0);
+instance uniform vec4 shield_color : source_color, instance_index(1) = vec4(1.0, 1.0, 1.0, 0.0);
 // Neutral support for black emission; a dark edge separates white glow from the white void.
-instance uniform vec4 shield_contrast : source_color = vec4(0.0);
+instance uniform vec4 shield_contrast : source_color, instance_index(2) = vec4(0.0);
 
 // Construct scan while gathering; zero strength leaves the ordinary tank material.
-instance uniform float gather_shimmer = 0.0;
-instance uniform float gather_speed = 4.0;
-instance uniform float gather_bands = 18.0;
-instance uniform float gather_sharpness = 6.0;
+instance uniform float gather_shimmer : instance_index(3) = 0.0;
+instance uniform float gather_speed : instance_index(4) = 4.0;
+instance uniform float gather_bands : instance_index(5) = 18.0;
+instance uniform float gather_sharpness : instance_index(6) = 6.0;
 
 varying vec3 world_pos;
 

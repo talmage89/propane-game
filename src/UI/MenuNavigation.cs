@@ -57,7 +57,7 @@ public partial class MenuNavigation : Node
         switch (e)
         {
             case InputEventJoypadButton { Pressed: true }:
-            case InputEventJoypadMotion motion when Mathf.Abs(motion.AxisValue) > Tuning.Current.StickDeadzone:
+            case InputEventJoypadMotion motion when Mathf.Abs(motion.AxisValue) > Tuning.SavedTemplate.StickDeadzone:
                 Gamepad = true;
                 break;
             case InputEventKey { Pressed: true }:

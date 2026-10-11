@@ -8,12 +8,11 @@ namespace Propane.Fx;
 public static class ImpactEffect
 {
     private const int MaxDecals = 96;
-    private static readonly Queue<Decal> Decals = new();
 
-    public static void Spawn(Vector3 point, Vector3 normal, bool metal, bool leaveDecal)
+    public static void Spawn(WorldContext world, Vector3 point, Vector3 normal, bool metal, bool leaveDecal)
     {
         var root = new Node3D { Name = "Impact" };
-        Core.Spawn.Effect(root);
+        world.Spawn.Effect(root);
         root.GlobalPosition = point + normal * 0.02f;
         root.Basis = BasisAlong(normal);
 
@@ -56,23 +55,23 @@ public static class ImpactEffect
             root.AddChild(dustParticles);
         }
 
-        root.GetTree().CreateTimer(1.5f, processAlways: false).Timeout += root.QueueFree;
+        world.Schedule(root, 1.5f, root.QueueFree);
 
         if (leaveDecal)
         {
-            AddDecal(point, normal);
+            AddDecal(world, point, normal);
         }
     }
 
-    private static void AddDecal(Vector3 point, Vector3 normal)
+    private static void AddDecal(WorldContext world, Vector3 point, Vector3 normal)
     {
-        while (Decals.Count > 0 && !GodotObject.IsInstanceValid(Decals.Peek()))
+        while (world.Decals.Count > 0 && !GodotObject.IsInstanceValid(world.Decals.Peek()))
         {
-            Decals.Dequeue();
+            world.Decals.Dequeue();
         }
-        if (Decals.Count >= MaxDecals)
+        if (world.Decals.Count >= MaxDecals)
         {
-            Decals.Dequeue().QueueFree();
+            world.Decals.Dequeue().QueueFree();
         }
         var along = BasisAlong(normal);
         // Decals project along local -Y, so point +Y out of the surface.
@@ -84,10 +83,10 @@ public static class ImpactEffect
             UpperFade = 0.2f,
             LowerFade = 0.2f,
         };
-        Core.Spawn.InWorld(decal);
+        world.Spawn.InWorld(decal);
         decal.GlobalTransform = new Transform3D(new Basis(along.Column0, along.Column2, -along.Column1), point);
-        decal.RotateObjectLocal(Vector3.Up, (float)GD.RandRange(0, Mathf.Tau));
-        Decals.Enqueue(decal);
+        decal.RotateObjectLocal(Vector3.Up, world.Random.RandfRange(0, Mathf.Tau));
+        world.Decals.Enqueue(decal);
     }
 
     /// <summary>A basis whose +Z is <paramref name="forward"/>.</summary>

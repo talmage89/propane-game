@@ -15,6 +15,9 @@ public sealed class SnapshotBuffer
     private const int MaxSnapshots = 64;
     private const double MaxExtrapolation = 0.2;
 
+    private readonly Tuning tuning;
+    public SnapshotBuffer(Tuning tuning) => this.tuning = tuning;
+
     private readonly List<(double Time, PlayerNetState State)> snapshots = new();
     private double offset;
     private bool hasOffset;
@@ -49,7 +52,7 @@ public sealed class SnapshotBuffer
     /// <summary>The state to show now.</summary>
     public PlayerNetState Sample(double localNow)
     {
-        var renderTime = localNow + offset - Tuning.Current.InterpolationDelay;
+        var renderTime = localNow + offset - tuning.InterpolationDelay;
         var count = snapshots.Count;
         if (count == 1 || renderTime <= snapshots[0].Time)
         {

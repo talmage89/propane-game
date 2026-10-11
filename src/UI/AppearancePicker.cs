@@ -13,6 +13,9 @@ public partial class AppearancePicker : CanvasLayer
     public event Action<AppearanceRecord>? Applied;
     public event Action? Closed;
     public AppearanceRecord Selected { get; private set; } = AppearanceRecord.FromPalette(0);
+    private WorldContext previewWorld = null!;
+    public override void _ExitTree() => previewWorld.Dispose();
+
     private PlayerCharacter preview = null!;
     private Label colorText = null!;
     private LineEdit hex = null!;
@@ -47,9 +50,10 @@ public partial class AppearancePicker : CanvasLayer
             MouseFilter = Control.MouseFilterEnum.Ignore,
         };
         layout.AddChild(viewportContainer);
-        var viewport = new SubViewport { Size = new Vector2I(540, 170), OwnWorld3D = true, TransparentBg = true };
+        var viewport = new SubViewport { Size = new Vector2I(540, 170), TransparentBg = true };
         viewportContainer.AddChild(viewport);
-        viewport.AddChild(new WorldEnvironment
+        previewWorld = new WorldContext(viewport, Tuning.SavedTemplate, present: true);
+        previewWorld.Root.AddChild(new WorldEnvironment
         {
             Environment = new Godot.Environment
             {
@@ -57,16 +61,16 @@ public partial class AppearancePicker : CanvasLayer
                 BackgroundColor = new Color(0.8f, 0.82f, 0.85f),
                 AmbientLightSource = Godot.Environment.AmbientSource.Color,
                 AmbientLightColor = Colors.White,
-                AmbientLightEnergy = Tuning.Current.AppearancePreviewAmbient,
+                AmbientLightEnergy = previewWorld.Tuning.AppearancePreviewAmbient,
                 TonemapMode = Godot.Environment.ToneMapper.Filmic,
             },
         });
-        viewport.AddChild(new DirectionalLight3D { RotationDegrees = new Vector3(-35, -25, 0), LightEnergy = Tuning.Current.AppearancePreviewLight });
-        preview = new PlayerCharacter { Name = "Preview", IsRemote = true, BodyColor = Selected.Color };
-        viewport.AddChild(preview);
+        previewWorld.Root.AddChild(new DirectionalLight3D { RotationDegrees = new Vector3(-35, -25, 0), LightEnergy = previewWorld.Tuning.AppearancePreviewLight });
+        preview = new PlayerCharacter { World = previewWorld, Name = "Preview", IsRemote = true, BodyColor = Selected.Color };
+        previewWorld.Root.AddChild(preview);
         preview.SetPhysicsProcess(false);
         var camera = new Camera3D { Position = new Vector3(2, 1.5f, -4), Projection = Camera3D.ProjectionType.Orthogonal, Size = 2.4f };
-        viewport.AddChild(camera);
+        previewWorld.AddView(viewport, camera, followsPause: true);
         camera.LookAt(new Vector3(0, 1, 0));
         var current = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.Center };
         current.AddThemeConstantOverride("separation", 12);

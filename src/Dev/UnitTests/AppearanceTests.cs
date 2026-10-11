@@ -35,13 +35,13 @@ public static class AppearanceTests
         {
             foreach (var preset in Protocol.PlayerColors)
             {
-                TestRunner.Assert(AppearanceContrast.Strength(preset) == 0 && AppearanceContrast.ScoreOutline(preset) != Colors.White,
+                TestRunner.Assert(AppearanceContrast.Strength(preset, Tuning.SavedTemplate) == 0 && AppearanceContrast.ScoreOutline(preset, Tuning.SavedTemplate) != Colors.White,
                     "preset presentation changed");
             }
-            TestRunner.Assert(Mathf.IsEqualApprox(AppearanceContrast.Strength(Colors.Black), 1) && Mathf.IsEqualApprox(AppearanceContrast.Strength(Colors.White), 1),
+            TestRunner.Assert(Mathf.IsEqualApprox(AppearanceContrast.Strength(Colors.Black, Tuning.SavedTemplate), 1) && Mathf.IsEqualApprox(AppearanceContrast.Strength(Colors.White, Tuning.SavedTemplate), 1),
                 "extremes have no contrast edge");
-            TestRunner.Assert(AppearanceContrast.ScoreOutline(Colors.Black) == Colors.White && AppearanceContrast.ScoreOutline(Colors.Blue) == Colors.White &&
-                AppearanceContrast.ScoreOutline(Colors.White) != Colors.White, "score outline cannot contrast with its text");
+            TestRunner.Assert(AppearanceContrast.ScoreOutline(Colors.Black, Tuning.SavedTemplate) == Colors.White && AppearanceContrast.ScoreOutline(Colors.Blue, Tuning.SavedTemplate) == Colors.White &&
+                AppearanceContrast.ScoreOutline(Colors.White, Tuning.SavedTemplate) != Colors.White, "score outline cannot contrast with its text");
         });
         runner.Run("appearance/unknown slots skip binary payload and keep safe defaults", () =>
         {

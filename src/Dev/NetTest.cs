@@ -233,7 +233,7 @@ public partial class NetTest : Node
             var split = tune.IndexOf('=');
             var name = tune[..split];
             var value = float.Parse(tune[(split + 1)..], System.Globalization.CultureInfo.InvariantCulture);
-            Tuning.Current.Set(name, value);
+            match.World.Tuning.Set(name, value);
             net.Send(new NetWriter(Msg.TuningSet, match.Setup.Id).String(name).Scalar(value));
             Log($"sent tuning {name} = {value}");
         }
@@ -350,7 +350,7 @@ public partial class NetTest : Node
         if (raceVent == null) { return; }
         ScenarioAssert(tank.HoleLocal == raceVent.Hole && tank.HoleNormalLocal == raceVent.Normal && tank.SwirlSign == raceVent.Swirl,
             "race: contender retained different canonical vent parameters");
-        var lean = raceVent.Normal.Rotated(Vector3.Up, Mathf.DegToRad(Tuning.Current.VentSwirlDegrees) * raceVent.Swirl).Normalized();
+        var lean = raceVent.Normal.Rotated(Vector3.Up, Mathf.DegToRad(match.World.Tuning.VentSwirlDegrees) * raceVent.Swirl).Normalized();
         ScenarioAssert(tank.JetDirectionLocal.IsEqualApprox(lean), "race: jet lean differs from canonical vent");
         var entry = match.Bodies.Get(id)!;
         if (entry.Owner != net.MyId && entry.HasTarget)
@@ -358,7 +358,7 @@ public partial class NetTest : Node
             var lead = (float)Math.Clamp(MonotonicClock.Now - entry.TargetReceived, 0, 0.3);
             var drift = tank.GlobalPosition.DistanceTo(entry.Target.Origin + entry.TargetLinear * lead);
             raceWorst = Mathf.Max(raceWorst, drift);
-            ScenarioAssert(drift <= Tuning.Current.SnapDistance + 0.5f, $"race: trajectory escaped owner corrections ({drift:0.000} m)");
+            ScenarioAssert(drift <= match.World.Tuning.SnapDistance + 0.5f, $"race: trajectory escaped owner corrections ({drift:0.000} m)");
         }
         if (raceTick % 6 == 0)
         {
@@ -433,16 +433,26 @@ public partial class NetTest : Node
             {
                 var mesh = tank.GetNode<MeshInstance3D>("Mesh");
                 var glow = mesh.GetInstanceShaderParameter("shield_color").AsColor();
-                if (tank.Invulnerable && glow.A > 0)
+                if (tank.Invulnerable)
                 {
-                    ScenarioAssert(!tank.Gathering && new Color(glow, 1) == dropper.Appearance.Color,
-                        "gather: shielded drop gathered or lost accepted appearance");
-                    gatherShields.Add(tank.NetId);
+                    ScenarioAssert(!tank.Gathering, "gather: shielded drop gathered");
+                    // The dummy renderer cannot read back shader instance uniforms.
+                    if (DisplayServer.GetName() == "headless") { gatherShields.Add(tank.NetId); }
+                    else if (glow.A > 0)
+                    {
+                        ScenarioAssert(new Color(glow, 1) == dropper.Appearance.Color,
+                            "gather: shielded drop lost accepted appearance");
+                        gatherShields.Add(tank.NetId);
+                    }
                 }
                 if (!tank.Gathering) { continue; }
-                ScenarioAssert(!tank.Invulnerable && glow.A == 0 && mesh.GetInstanceShaderParameter("shield_contrast").AsColor().A == 0 &&
-                    mesh.GetInstanceShaderParameter("gather_shimmer").AsSingle() == Tuning.Current.GatherShimmer,
-                    "gather: expired shield glow/contrast remained or shimmer missing");
+                ScenarioAssert(!tank.Invulnerable, "gather: invulnerable drop entered glide");
+                if (DisplayServer.GetName() != "headless")
+                {
+                    ScenarioAssert(glow.A == 0 && mesh.GetInstanceShaderParameter("shield_contrast").AsColor().A == 0 &&
+                        mesh.GetInstanceShaderParameter("gather_shimmer").AsSingle() == match.World.Tuning.GatherShimmer,
+                        "gather: expired shield glow/contrast remained or shimmer missing");
+                }
                 if (host)
                 {
                     var camera = player.CameraRig.Camera;
@@ -451,7 +461,7 @@ public partial class NetTest : Node
                     camera.LookAtFromPosition(center + new Vector3(1.5f, 1, 2), center);
                     if (gatherGlides.Count == 0)
                     {
-                        GetTree().CreateTimer(0.2).Timeout += () => director.Screenshot("gather_host_shimmer");
+                        GetTree().CreateTimer(0.2).Timeout += () => director.ScreenshotAsync("gather_host_shimmer");
                     }
                 }
                 gatherGlides.Add(tank.NetId);
@@ -470,8 +480,11 @@ public partial class NetTest : Node
             {
                 gatherPositions[tank.NetId] = tank.GlobalPosition;
                 ScenarioAssert(match.Bodies.Get(tank.NetId)?.Owner == match.Bodies.Host, "gather: dropper retained ownership");
-                ScenarioAssert(tank.GetNode<MeshInstance3D>("Mesh").GetInstanceShaderParameter("gather_shimmer").AsSingle() == 0,
-                    "gather: settled drop retained shimmer");
+                if (DisplayServer.GetName() != "headless")
+                {
+                    ScenarioAssert(tank.GetNode<MeshInstance3D>("Mesh").GetInstanceShaderParameter("gather_shimmer").AsSingle() == 0,
+                        "gather: settled drop retained shimmer");
+                }
                 Log($"gather final {tank.NetId:x} {tank.GlobalPosition}");
             }
         }
@@ -481,21 +494,26 @@ public partial class NetTest : Node
             ScenarioAssert(gatherPositions.Count == 2 && match.LiveTanks.Where(IsDrop).All(t =>
                 gatherPositions.TryGetValue(t.NetId, out var position) && position.DistanceTo(t.GlobalPosition) <= 0.006f && t.AtRest), "gather: final pile unstable");
             scenarioPassed = !scenarioFailed;
-            if (scenarioPassed) { Log("gather: assertions passed; two accepted-color shields expired; both drops shimmered, acquired, settled and stable on this client"); }
-            director.Screenshot($"gather_{role}_settled");
+            if (scenarioPassed)
+            {
+                Log(DisplayServer.GetName() == "headless"
+                    ? "gather: gameplay assertions passed; both shields expired and drops acquired, settled and stable"
+                    : "gather: assertions passed; two accepted-color shields expired; both drops shimmered, acquired, settled and stable on this client");
+            }
+            director.ScreenshotAsync($"gather_{role}_settled");
         }
         if (gathering && host && duelTime is > 18 and < 32 && Mathf.PosMod(duelTime, 1) < dt)
         {
             var drops = match.LiveTanks.Where(IsDrop).ToArray();
             if (drops.Length > 0) { AimAt(player, drops[0].GlobalTransform * PropaneTank.LocalCenter); }
-            director.Screenshot($"gather_{role}_{duelTime:00}");
+            director.ScreenshotAsync($"gather_{role}_{duelTime:00}");
         }
         if (Once(0.8f, dt)) { duelInitialScore = match.MyScore; }
         if (refusal && host && Once(2.55f, dt))
         {
             // The second victim hit is already in flight. With 120 ms lag, this creator change reaches the server
             // before the victim's old-count Drop, while reliable order delivers Shot before TuningSet to the victim.
-            Tuning.Current.HitDropCount = 0;
+            match.World.Tuning.HitDropCount = 0;
             net.Send(new NetWriter(Msg.TuningSet, match.Setup.Id).String(nameof(Tuning.HitDropCount)).Scalar(0));
         }
         if (Once(3.5f, dt))
@@ -654,7 +672,7 @@ public partial class NetTest : Node
         if (!pickup.Available && pickupTakenAt < 0)
         {
             pickupTakenAt = duelTime;
-            ScenarioAssert(player.Ammo!.Reserve == 10 + Tuning.Current.PickupAmount,
+            ScenarioAssert(player.Ammo!.Reserve == 10 + match.World.Tuning.PickupAmount,
                 "pickup: can did not add its rounds exactly once");
         }
         if (Once(5f, dt)) { ScenarioAssert(pickupTakenAt >= 0, "pickup: player never took the can"); }
@@ -665,12 +683,12 @@ public partial class NetTest : Node
             {
                 director.Screenshot($"pickup_1_taken_{offset:0.00}");
                 Log($"pickup available {pickup.Available}, ammo {player.Ammo!.Magazine}/{player.Ammo.Reserve}");
-                ScenarioAssert(!pickup.Available && player.Ammo.Reserve == 10 + Tuning.Current.PickupAmount,
+                ScenarioAssert(!pickup.Available && player.Ammo.Reserve == 10 + match.World.Tuning.PickupAmount,
                     "pickup: can returned early or changed ammo while absent");
             }
         }
-        var respawn = Tuning.Current.PickupRespawnTime;
-        var reveal = Tuning.Current.PickupRevealTime;
+        var respawn = match.World.Tuning.PickupRespawnTime;
+        var reveal = match.World.Tuning.PickupRevealTime;
         foreach (var f in new[] { 0.15f, 0.4f, 0.65f, 0.9f, 1.2f })
         {
             var t = pickupTakenAt + respawn + reveal * f;
@@ -744,7 +762,7 @@ public partial class NetTest : Node
         duelInput.Advance(dt);
         var attacker = victim ? other : player;
         var target = victim ? player : other;
-        var origin = new Vector3(Tuning.Current.MpMapSizeBase + Tuning.Current.MpMapSizePerPlayer * match.RemoteBodies.Count() + 30, 0.05f, 0);
+        var origin = new Vector3(match.World.Tuning.MpMapSizeBase + match.World.Tuning.MpMapSizePerPlayer * match.RemoteBodies.Count() + 30, 0.05f, 0);
         if (Once(.25f, dt) || Once(10.5f, dt))
         {
             player.Teleport(origin + (victim ? Vector3.Forward * 1.8f : Vector3.Zero), victim ? Mathf.Pi : 0);
@@ -875,13 +893,13 @@ public partial class NetTest : Node
         var speed = new Vector2(other.Velocity.X, other.Velocity.Z).Length();
         remoteGaitTime = remoteGait == state.Gait ? remoteGaitTime + dt : 0;
         remoteGait = state.Gait;
-        if (!sawRemoteCreep && state.Gait == PlayerGait.Creep && state.EffectiveAim && Math.Abs(speed - Tuning.Current.CreepSpeed) < 0.15f)
+        if (!sawRemoteCreep && state.Gait == PlayerGait.Creep && state.EffectiveAim && Math.Abs(speed - match.World.Tuning.CreepSpeed) < 0.15f)
         {
             sawRemoteCreep = true;
             CaptureRemoteFrame("remote_00_creep");
             Log($"remote creep: {state.Support}/{state.Weapon} speed={speed:0.00}");
         }
-        if (!sawRemoteSprint && state.Gait == PlayerGait.Sprint && speed > Tuning.Current.SprintSpeed - 0.15f)
+        if (!sawRemoteSprint && state.Gait == PlayerGait.Sprint && speed > match.World.Tuning.SprintSpeed - 0.15f)
         {
             sawRemoteSprint = true;
             CaptureRemoteFrame("remote_01_sprint");
@@ -1000,7 +1018,7 @@ public partial class NetTest : Node
             }
         }
         var self = match.Player;
-        Log($"tuning BlastRadius {Tuning.Current.BlastRadius} PickupRespawnTime {Tuning.Current.PickupRespawnTime}");
+        Log($"tuning BlastRadius {match.World.Tuning.BlastRadius} PickupRespawnTime {match.World.Tuning.PickupRespawnTime}");
         Log($"perf fps {Engine.GetFramesPerSecond():0} process {Performance.GetMonitor(Performance.Monitor.TimeProcess) * 1000:0.0} ms physics {Performance.GetMonitor(Performance.Monitor.TimePhysicsProcess) * 1000:0.0} ms bodies {Performance.GetMonitor(Performance.Monitor.Physics3DActiveObjects)}");
         Log($"digest clock {match.TimeLeft:0.0} me {self.GlobalPosition.X:0.0},{self.GlobalPosition.Z:0.0}{(self.IsRagdolled ? "R" : "")} ammo {self.Ammo?.Magazine}/{self.Ammo?.Reserve} scores {ScoreLine()} remotes {remotes}");
         Log($"tanks clock {match.TimeLeft:0.0} n {match.LiveTanks.Count()}{tanks}");

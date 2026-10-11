@@ -61,19 +61,20 @@ public partial class MenuGamepadTest : Node
         await Wait(() => Main.HasNode("Game"), "single player opened").ConfigureAwait(true);
         CheckMouse(Input.MouseModeEnum.Captured);
         await Press(JoyButton.Start).ConfigureAwait(true);
-        await Wait(() => GetTree().Paused, "Start pauses single player").ConfigureAwait(true);
+        await Wait(() => Main.HasNode("Game") && Main.GetNode<Game>("Game").World.Paused, "Start pauses single player").ConfigureAwait(true);
+        Check(!GetTree().Paused, "world pause leaves application processing active");
         CheckFocus("Resume");
         Check(Labels().Contains("Left stick"), "pause shows gamepad controls");
         await Shot("02_pause").ConfigureAwait(true);
         await Press(JoyButton.A).ConfigureAwait(true);
-        Check(!GetTree().Paused, "A confirms Resume");
+        Check(!(Main.HasNode("Game") && Main.GetNode<Game>("Game").World.Paused), "A confirms Resume");
         CheckMouse(Input.MouseModeEnum.Captured);
         await Press(JoyButton.Start).ConfigureAwait(true);
         await Press(JoyButton.B).ConfigureAwait(true);
-        Check(!GetTree().Paused, "B resumes single player");
+        Check(!(Main.HasNode("Game") && Main.GetNode<Game>("Game").World.Paused), "B resumes single player");
         await Press(JoyButton.Start).ConfigureAwait(true);
         await Press(JoyButton.Start).ConfigureAwait(true);
-        Check(!GetTree().Paused, "Start closes pause");
+        Check(!(Main.HasNode("Game") && Main.GetNode<Game>("Game").World.Paused), "Start closes pause");
         await Press(JoyButton.Start).ConfigureAwait(true);
         await Navigate("Main menu").ConfigureAwait(true);
         await Press(JoyButton.A).ConfigureAwait(true);
@@ -166,19 +167,19 @@ public partial class MenuGamepadTest : Node
         await Navigate("match_length").ConfigureAwait(true);
         var length = Net.Lobby!.MatchLength;
         await Axis(JoyAxis.LeftX, 1).ConfigureAwait(true);
-        await Wait(() => Net.Lobby!.MatchLength == length + Tuning.Current.MatchLengthStep, "stick right increases match length").ConfigureAwait(true);
+        await Wait(() => Net.Lobby!.MatchLength == length + Tuning.SavedTemplate.MatchLengthStep, "stick right increases match length").ConfigureAwait(true);
         CheckFocus("match_length");
         await Press(JoyButton.DpadLeft).ConfigureAwait(true);
         await Wait(() => Net.Lobby!.MatchLength == length, "D-pad left decreases match length").ConfigureAwait(true);
         CheckFocus("match_length");
-        while (Net.Lobby!.MatchLength > Tuning.Current.MatchLengthMin)
+        while (Net.Lobby!.MatchLength > Tuning.SavedTemplate.MatchLengthMin)
         {
-            var shorter = Mathf.Max(Tuning.Current.MatchLengthMin, Net.Lobby.MatchLength - Tuning.Current.MatchLengthStep);
+            var shorter = Mathf.Max(Tuning.SavedTemplate.MatchLengthMin, Net.Lobby.MatchLength - Tuning.SavedTemplate.MatchLengthStep);
             await Press(JoyButton.DpadLeft).ConfigureAwait(true);
             await Wait(() => Net.Lobby!.MatchLength == shorter, "shorter length acknowledged").ConfigureAwait(true);
         }
         await Press(JoyButton.DpadLeft).ConfigureAwait(true);
-        Check(Net.Lobby!.MatchLength == Tuning.Current.MatchLengthMin, "length clamps at minimum");
+        Check(Net.Lobby!.MatchLength == Tuning.SavedTemplate.MatchLengthMin, "length clamps at minimum");
         CheckFocus("match_length");
         Check(!Reachable().ContainsKey("−"), "disabled shorter button is skipped");
         await Shot("08_lobby_length").ConfigureAwait(true);
@@ -460,7 +461,7 @@ public partial class MenuGamepadTest : Node
         await Press(JoyButton.A).ConfigureAwait(true);
         await Wait(() => Main.HasNode("Game"), "single player opened").ConfigureAwait(true);
         await Press(JoyButton.Start).ConfigureAwait(true);
-        Check(GetTree().Paused && Labels().Contains("Left stick"), "gamepad pause reference");
+        Check(Main.HasNode("Game") && Main.GetNode<Game>("Game").World.Paused && Labels().Contains("Left stick"), "gamepad pause reference");
         Check(Labels().Contains("Right stick click") && !Labels().Contains("F / mouse thumb"), "gamepad melee reference");
         Input.ParseInputEvent(new InputEventKey { Keycode = Key.Tab, PhysicalKeycode = Key.Tab, Pressed = true });
         Input.ParseInputEvent(new InputEventKey { Keycode = Key.Tab, PhysicalKeycode = Key.Tab, Pressed = false });
@@ -480,12 +481,12 @@ public partial class MenuGamepadTest : Node
         await Axis(JoyAxis.RightX, 0.3f).ConfigureAwait(true);
         Check(MenuNavigation.Gamepad && Labels().Contains("Left stick"), "right stick activity above the gameplay deadzone changes prompts");
         await Press(JoyButton.B).ConfigureAwait(true);
-        Check(!GetTree().Paused, "B resumes after switching devices");
+        Check(!(Main.HasNode("Game") && Main.GetNode<Game>("Game").World.Paused), "B resumes after switching devices");
 
         Input.ParseInputEvent(new InputEventKey { Keycode = Key.Escape, PhysicalKeycode = Key.Escape, Pressed = true });
         Input.ParseInputEvent(new InputEventKey { Keycode = Key.Escape, PhysicalKeycode = Key.Escape, Pressed = false });
         await Frames().ConfigureAwait(true);
-        Check(GetTree().Paused && Labels().Contains("W A S D"), "Esc still opens keyboard pause");
+        Check(Main.HasNode("Game") && Main.GetNode<Game>("Game").World.Paused && Labels().Contains("W A S D"), "Esc still opens keyboard pause");
         var resume = Main.FindChildren("*", "Button", owned: false).OfType<Button>().Single(b => b.Text == "Resume" && b.IsVisibleInTree());
         var position = resume.GetGlobalRect().GetCenter();
         GetViewport().PushInput(new InputEventMouseMotion { Position = position, GlobalPosition = position, Relative = Vector2.One }, true);
@@ -493,12 +494,12 @@ public partial class MenuGamepadTest : Node
         await Frames(1).ConfigureAwait(true);
         GetViewport().PushInput(new InputEventMouseButton { Position = position, GlobalPosition = position, ButtonIndex = MouseButton.Left, Pressed = false }, true);
         await Frames().ConfigureAwait(true);
-        Check(!GetTree().Paused, "mouse still clicks Resume");
+        Check(!(Main.HasNode("Game") && Main.GetNode<Game>("Game").World.Paused), "mouse still clicks Resume");
         await Press(JoyButton.RightShoulder).ConfigureAwait(true);
 
-        var hud = new MatchHud();
+        var hud = new MatchHud { World = Main.GetNode<Game>("Game").World };
         AddChild(hud);
-        var ammo = new AmmoState { Magazine = 0, Reserve = 1 };
+        var ammo = new AmmoState { Tuning = Tuning.SavedTemplate, Magazine = 0, Reserve = 1 };
         hud.SetAmmo(ammo);
         Check(Labels().Contains("X / SQUARE TO RELOAD"), "gamepad reload hint");
         Input.ParseInputEvent(new InputEventMouseMotion { Relative = Vector2.One });

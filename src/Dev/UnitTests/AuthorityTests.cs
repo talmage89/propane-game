@@ -33,10 +33,20 @@ public static class AuthorityTests
 
     public static void Register(TestRunner runner)
     {
+        runner.Run("authority/match copies local bot dials beside creator tuning", () =>
+        {
+            using var local = new Tuning { TankMass = 7, BotRouteSpacing = 9 };
+            using var fixture = new MatchFixture(runner, local);
+            var tuning = fixture.Match.World.Tuning;
+            TestRunner.Assert(tuning.TankMass == fixture.Server.Setup.Tuning["TankMass"].AsSingle() && tuning.BotRouteSpacing == 9,
+                "local brain dials were lost or local gameplay tuning overrode the creator");
+            local.BotRouteSpacing = 15;
+            TestRunner.Assert(tuning.BotRouteSpacing == 9 && local.TankMass == 7, "match tuning retained its application template");
+        });
         runner.Run("authority/predicted explosions can retire already freed body entries", () =>
         {
             var body = new RigidBody3D();
-            var sync = new BodySync(2, 2);
+            var sync = new BodySync(Tuning.SavedTemplate, 2, 2);
             sync.Register(Id, body, true, 2);
             body.Free();
             sync.Remove(Id);
@@ -58,7 +68,7 @@ public static class AuthorityTests
         {
             using var mine = new BodyFixture(runner);
             using var other = new BodyFixture(runner);
-            var sync = new BodySync(2, 2);
+            var sync = new BodySync(Tuning.SavedTemplate, 2, 2);
             sync.Register(Id, mine.Body, true, 2);
             sync.Register(Other, other.Body, true, 3);
             sync.Get(Other)!.ClaimPending = true;
@@ -107,7 +117,7 @@ public static class AuthorityTests
         runner.Run("authority/epoch ordering survives A to B to A with delayed rests and wakes", () =>
         {
             using var body = new BodyFixture();
-            var sync = new BodySync(4, 2);
+            var sync = new BodySync(Tuning.SavedTemplate, 4, 2);
             sync.Register(Id, body.Body, true, 2);
             sync.OnState(2, Pose(Id, 1, 100), true, 1);
             sync.OnAuthority(Grant(3, 2));
@@ -127,7 +137,7 @@ public static class AuthorityTests
         runner.Run("authority/correction includes bounded relay transit through an overtaken grant", () =>
         {
             using var body = new BodyFixture(runner);
-            var sync = new BodySync(4, 2);
+            var sync = new BodySync(Tuning.SavedTemplate, 4, 2);
             sync.Register(Id, body.Body, true, 2);
             var motion = Pose(Id, 2, 1) with { Linear = Vector3.Right * 10, Angular = Vector3.Zero };
             sync.OnState(3, motion, false, 2, 0.1);
@@ -148,7 +158,7 @@ public static class AuthorityTests
         runner.Run("authority/future motion survives overtaking its reliable grant", () =>
         {
             using var body = new BodyFixture();
-            var sync = new BodySync(4, 2);
+            var sync = new BodySync(Tuning.SavedTemplate, 4, 2);
             sync.Register(Id, body.Body, true, 2);
             sync.OnState(3, Pose(Id, 2, 2), true, 1);
             sync.OnState(3, Pose(Id, 2, 1), false, 2);
@@ -164,15 +174,15 @@ public static class AuthorityTests
             {
                 var effects = new Node3D();
                 runner.AddChild(effects);
-                Spawn.SetEffectsRoot(effects);
-                Spawn.SetWorldRoot(effects);
+
+                runner.World.SetContentRoot(effects);
                 var ledger = Ledger();
                 var replies = order.Select(peer => ledger.Puncture(peer, Puncture(peer), true)).ToArray();
                 TestRunner.Assert(replies[0].Reason == ClaimRefusal.None && replies.Skip(1).All(r => r.Reason == ClaimRefusal.StaleEpoch), "first contender did not win alone");
                 var canonical = replies[0].Bodies.Single();
                 foreach (var peer in order)
                 {
-                    var tank = PropaneTank.Create();
+                    var tank = PropaneTank.Create(runner.World);
                     tank.NetId = Id;
                     runner.AddChild(tank);
                     try
@@ -184,7 +194,7 @@ public static class AuthorityTests
                         var vent = canonical.Vent!;
                         tank.PunctureRemote(vent.Hole, vent.Normal, vent.Swirl);
                         TestRunner.Assert(tank.HoleLocal == vent.Hole && tank.HoleNormalLocal == vent.Normal && tank.SwirlSign == vent.Swirl, "loser kept its local vent");
-                        var lean = vent.Normal.Rotated(Vector3.Up, Mathf.DegToRad(Tuning.Current.VentSwirlDegrees) * vent.Swirl).Normalized();
+                        var lean = vent.Normal.Rotated(Vector3.Up, Mathf.DegToRad(Tuning.SavedTemplate.VentSwirlDegrees) * vent.Swirl).Normalized();
                         TestRunner.Assert(tank.JetDirectionLocal.IsEqualApprox(lean), "canonical lean differs");
                         TestRunner.Assert(tank.GlobalTransform.IsEqualApprox(transform) && tank.LinearVelocity == Vector3.One * 3 && tank.AngularVelocity == Vector3.One * 2, "adoption changed current motion");
                     }
@@ -261,10 +271,10 @@ public static class AuthorityTests
         {
             var effects = new Node3D();
             runner.AddChild(effects);
-            Spawn.SetEffectsRoot(effects);
-            Spawn.SetWorldRoot(effects);
+
+            runner.World.SetContentRoot(effects);
             var callbacks = new List<Action>();
-            var tank = PropaneTank.Create();
+            var tank = PropaneTank.Create(runner.World);
             tank.FuseScheduleOverride = (_, callback) => callbacks.Add(callback);
             effects.AddChild(tank);
             var detonations = 0;
@@ -531,11 +541,12 @@ public static class AuthorityTests
     private sealed class MatchFixture : IDisposable
     {
         public readonly ServerTests.Fixture Server = new();
-        private readonly NetClient client = new();
+        private readonly NetClient client;
         public readonly Match Match;
         private readonly Queue<byte[]> sent = new();
-        public MatchFixture(TestRunner runner)
+        public MatchFixture(TestRunner runner, Tuning? template = null)
         {
+            client = new NetClient { Template = template ?? Tuning.SavedTemplate };
             client.Handle(MessageCodec.Encode(new NetMessage(Msg.Welcome, 0, 0, new WelcomeMessage(2, null)), true));
             Match = new Match { Net = client, Setup = Server.Setup, AuthoritySendOverride = sent.Enqueue };
             runner.AddChild(Match);
@@ -550,6 +561,6 @@ public static class AuthorityTests
         {
             while (sent.TryDequeue(out var packet)) { Server.Receive(packet); Deliver(); }
         }
-        public void Dispose() { Match.Free(); client.Free(); Server.Dispose(); }
+        public void Dispose() { Match.World.Dispose(); Match.Free(); client.Free(); Server.Dispose(); }
     }
 }

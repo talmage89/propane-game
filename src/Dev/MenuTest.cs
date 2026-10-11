@@ -29,6 +29,11 @@ public partial class MenuTest : Node
         main = new Main { Name = "Main" };
         AddChild(main);
         main.GetNode<UI.Menus>("Menus").HostPort = (int)DevArgs.GetFloat("port", Net.Protocol.DefaultPort);
+        if (DevArgs.Get("scenario") == "lifetime")
+        {
+            AddChild(new MenuLifetimeTest { Main = main });
+            return;
+        }
         if (DevArgs.Get("scenario") is "gamepad" or "devices" or "mouse")
         {
             AddChild(new MenuGamepadTest { Main = main });

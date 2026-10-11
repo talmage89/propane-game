@@ -27,7 +27,7 @@ public static class GatherTests
         });
         runner.Run("gather/vents and shielded drops excluded by production eligibility", () =>
         {
-            var tank = PropaneTank.Create();
+            var tank = PropaneTank.Create(runner.World);
             runner.AddChild(tank);
             tank.Sleeping = true;
             Assert(TankGather.Eligible(tank), "loose resting intact tank excluded");
@@ -41,12 +41,12 @@ public static class GatherTests
         });
         runner.Run("gather/rest revision catches slow drift and motion between detector scans", () =>
         {
-            var tank = PropaneTank.Create();
+            var tank = PropaneTank.Create(runner.World);
             runner.AddChild(tank);
             tank.Sleeping = true;
             tank._PhysicsProcess(1.0 / 60);
             var revision = tank.Disturbance;
-            tank.GlobalPosition += Vector3.Right * Core.Tuning.Current.GatherRestDistance * 2;
+            tank.GlobalPosition += Vector3.Right * runner.World.Tuning.GatherRestDistance * 2;
             tank._PhysicsProcess(1.0 / 60);
             Assert(tank.Disturbance > revision, "slow drift retained the group clock");
             revision = tank.Disturbance;
@@ -59,7 +59,7 @@ public static class GatherTests
             Assert(tank.Disturbance > revision && TankGather.Eligible(tank), "brief motion between scans retained the clock");
             tank.MarkPile();
             Assert(!tank.Loose, "pile tank classified loose");
-            tank.GlobalPosition += Vector3.Right * Core.Tuning.Current.GatherPileTolerance * 2;
+            tank.GlobalPosition += Vector3.Right * runner.World.Tuning.GatherPileTolerance * 2;
             Assert(tank.Loose, "knocked-out tank retained pile membership");
             tank.GlobalTransform = tank.PilePose!.Value;
             Assert(!tank.Loose, "tank back in its original pile remained loose");
@@ -179,6 +179,6 @@ public static class GatherTests
             runner.AddChild(Match);
         }
         public void Receive(Msg type, object payload) => Match.OnMessage(new NetMessage(type, Id, 2, payload));
-        public void Dispose() { Match.Free(); client.Free(); server.Dispose(); }
+        public void Dispose() { Match.World.Dispose(); Match.Free(); client.Free(); server.Dispose(); }
     }
 }

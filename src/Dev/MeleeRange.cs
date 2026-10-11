@@ -10,6 +10,9 @@ namespace Propane.Dev;
 /// <summary>Real collision proof: repeated active samples, a wall, a loose tank and a prop.</summary>
 public partial class MeleeRange : Node3D
 {
+    private WorldContext world = null!;
+    public override void _ExitTree() => world.Dispose();
+
     private readonly ScriptedInput input = new();
     private PlayerCharacter attacker = null!;
     private PlayerCharacter victim = null!;
@@ -27,13 +30,13 @@ public partial class MeleeRange : Node3D
     {
         DevArgs.MarkReady();
         DevArgs.Setup();
+        world = new WorldContext(this, Tuning.SavedTemplate, present: true);
         ProcessPhysicsPriority = -10;
         InputSetup.Register();
         AddChild(new VoidEnvironment());
-        var effects = new Node3D(); AddChild(effects); Spawn.SetEffectsRoot(effects);
-        var dynamic = new Node3D(); AddChild(dynamic); Spawn.SetWorldRoot(dynamic);
-        attacker = new PlayerCharacter { InputOverride = input }; AddChild(attacker);
-        victim = new PlayerCharacter { InputLocked = true, Position = new Vector3(0, 0, -1.45f) }; AddChild(victim);
+        var dynamic = new Node3D(); AddChild(dynamic); world.SetContentRoot(dynamic);
+        attacker = new PlayerCharacter { World = world, InputOverride = input }; AddChild(attacker);
+        victim = new PlayerCharacter { World = world, InputLocked = true, Position = new Vector3(0, 0, -1.45f) }; AddChild(victim);
         attacker.CameraRig.Camera.Current = true;
         victim.Ragdolled += (_, _, _) => throws++;
         attacker.MeleeHit += hit =>
@@ -76,7 +79,7 @@ public partial class MeleeRange : Node3D
             {
                 Require(playerHits == 1 && throws == 1 && victim.IsRagdolled, "active samples must hit/throw victim exactly once");
                 attacker.Teleport(new Vector3(6, 0, 0), 0);
-                tank = new PropaneTank { Position = new Vector3(5.6f, .02f, -1.35f) }; AddChild(tank);
+                tank = new PropaneTank { World = world, ContentSpawn = world.Spawn, Position = new Vector3(5.6f, .02f, -1.35f) }; AddChild(tank);
                 prop = new RigidBody3D { Mass = 10, Position = new Vector3(6.5f, .5f, -1.35f), CollisionLayer = Layers.Props, CollisionMask = Layers.DynamicMask };
                 prop.AddChild(new CollisionShape3D { Shape = new BoxShape3D { Size = Vector3.One * .4f } }); AddChild(prop);
             }

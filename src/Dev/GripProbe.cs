@@ -59,12 +59,12 @@ public partial class GripProbe : SkeletonModifier3D
         if (rig.Weight <= 0.001f || time < 0.1) return;
         var right = (bones.GlobalTransform * bones.GetBoneGlobalPose(bones.FindBone("hand_r"))).Orthonormalized();
         var left = (bones.GlobalTransform * bones.GetBoneGlobalPose(bones.FindBone("hand_l"))).Orthonormalized();
-        var eye = RifleRig.EyePosition(bones);
+        var eye = RifleRig.EyePosition(bones, Player.World.Tuning);
         var blends = new Vector3(rig.AimAmount, rig.ReadyAmount, rig.SprintAmount);
         if (count > 0)
         {
             var change = (blends - previousBlends).Abs();
-            var limit = Tuning.Current.RifleStanceBlendSpeed * (float)(time - previousSampleTime) + 0.00001f;
+            var limit = Player.World.Tuning.RifleStanceBlendSpeed * (float)(time - previousSampleTime) + 0.00001f;
             if (change.X > limit || change.Y > limit || change.Z > limit)
             {
                 failed = true;
@@ -83,8 +83,8 @@ public partial class GripProbe : SkeletonModifier3D
                 reachMargin = Mathf.Min(reachMargin, upper.DistanceTo(lower) + lower.DistanceTo(wrist) - upper.DistanceTo(wrist));
             }
         }
-        var meleeTime = Player.MeleeProgress * (Tuning.Current.MeleeWindup + Tuning.Current.MeleeActive + Tuning.Current.MeleeRecovery);
-        if (Player.ResolvedState.Weapon == WeaponAction.Melee && meleeTime >= Tuning.Current.MeleeWindup && rig.ForegripResidual > 0.003f)
+        var meleeTime = Player.MeleeProgress * (Player.World.Tuning.MeleeWindup + Player.World.Tuning.MeleeActive + Player.World.Tuning.MeleeRecovery);
+        if (Player.ResolvedState.Weapon == WeaponAction.Melee && meleeTime >= Player.World.Tuning.MeleeWindup && rig.ForegripResidual > 0.003f)
         {
             failed = true;
             GD.PushError($"[grip] FAIL support hand not back on foregrip during contact/recovery: {rig.ForegripResidual:F6} m");
@@ -287,7 +287,7 @@ public partial class GripProbe : SkeletonModifier3D
                 }
             }
         }
-        failed |= !float.IsFinite(reachMargin) || reachMargin < Tuning.Current.RifleReachMargin - 0.0005f;
+        failed |= !float.IsFinite(reachMargin) || reachMargin < Player.World.Tuning.RifleReachMargin - 0.0005f;
         GD.Print(FormattableString.Invariant($"[grip] minimum reach margin={reachMargin:F6}m"));
         GD.Print(FormattableString.Invariant($"[grip] {(assert && failed ? "FAIL" : assert ? "PASS" : "MEASURED")} frames={count} right={maxima[0]:F6}m left={maxima[1]:F6}m rotation={maxima[2]:F4}/{maxima[3]:F4}deg penetration={maxima[4]:F6}m eye={maxima[5]:F6}m settled-eye={settledEye:F6}m"));
         GD.Print($"[grip] worst penetration time={worstTime:F6} bone={worstBone} point={worstPoint}");

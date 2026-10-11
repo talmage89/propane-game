@@ -10,6 +10,8 @@ namespace Propane.Player;
 /// </summary>
 public partial class PoseBlend : SkeletonModifier3D
 {
+    public required WorldContext World { get; init; }
+
     private Transform3D[]? captured;
     private bool captureRequested;
     private bool blending;
@@ -125,7 +127,7 @@ public partial class PoseBlend : SkeletonModifier3D
         }
         var initialized = previous != null;
         previous ??= new Quaternion[count];
-        var limit = Mathf.DegToRad(Tuning.Current.PoseAngularSpeed) * dt;
+        var limit = Mathf.DegToRad(World.Tuning.PoseAngularSpeed) * dt;
         for (var i = 0; i < count; i++)
         {
             var target = skeleton.GetBonePoseRotation(i).Normalized();
@@ -137,7 +139,8 @@ public partial class PoseBlend : SkeletonModifier3D
                 if (angle > limit) target = previous[i].Slerp(target, limit / angle);
                 skeleton.SetBonePoseRotation(i, target);
             }
-            previous[i] = target;
+            // Repeated tiny blends can accumulate roundoff; Inverse requires a unit quaternion next frame.
+            previous[i] = target.Normalized();
         }
     }
 }

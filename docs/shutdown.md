@@ -4,6 +4,8 @@ Use `ShutdownGuard.Quit(tree, exitCode)` for game and harness exits. The first a
 
 1. Defer cleanup until the current callback returns, then free the scene and other root children.
 2. Collect unreachable managed wrappers and wait for their finalizers while Godot's native services still exist.
+   Collect and wait a second time: a native query can retain a shape wrapper until the query's finalizer releases it.
+   One collection leaves that second wave for engine shutdown.
 3. Wait for a physics tick to flush RID frees queued by finalizers on the CLR thread, then quit with the requested
    status. A successful duplicate request cannot overwrite a failure.
 4. Drain again at the guard's predelete notification, before C# language shutdown. Godot destroys root children in
@@ -44,9 +46,11 @@ historical crash had this cause.
 
 ## Regression checks
 
-`shutdown_tests.tscn` creates 20,000 resource wrappers during scene destruction. A test-only witness checks that
+`shutdown_tests.tscn` creates 20,002 resource wrappers during scene destruction, including a query that natively retains
+its shape. A test-only witness checks that
 all weak targets have disappeared and a managed finalizer has completed before final engine teardown. Failures set
-exit 1. Collecting before scene destruction fails this test. `make test` also exercises a paused window-close request
+exit 1. Collecting before scene destruction or draining only one wave fails this test.
+`make test` also exercises a paused window-close request
 and duplicate quit requests.
 
 ```sh

@@ -5,7 +5,7 @@ render_mode unshaded, blend_add, depth_draw_never, cull_disabled, shadows_disabl
 #include "res://shaders/reveal.gdshaderinc"
 
 uniform vec4 color : source_color = vec4(1.0, 0.8, 0.3, 1.0);
-instance uniform float strength = 1.0;
+instance uniform float strength : instance_index(0) = 1.0;
 
 varying vec3 world_pos;
 

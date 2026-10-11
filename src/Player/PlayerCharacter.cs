@@ -15,6 +15,8 @@ namespace Propane.Player;
 /// </summary>
 public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
 {
+    public required WorldContext World { get; init; }
+
     private enum State
     {
         Active,
@@ -48,7 +50,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
     private PoseBlend poseBlend = null!;
     private Rifle rifle = null!;
     private CollisionShape3D capsule = null!;
-    private readonly DeviceInput deviceInput = new();
+    private DeviceInput deviceInput = null!;
     private IPlayerInputSource? inputOverride;
     private PlayerIntent intent;
     private readonly PlayerStateResolver resolver = new();
@@ -165,7 +167,8 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
 
     public override void _Ready()
     {
-        AddToGroup(IBlastReceiver.Group);
+        deviceInput = new DeviceInput(World.Tuning);
+        World.Register(this);
         CollisionLayer = Layers.Player;
         // A remote player only stands where its own game puts it; it is here to be seen and shot.
         CollisionMask = IsRemote ? 0 : Layers.PlayerMask;
@@ -191,7 +194,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         skeleton = model.FindChildren("*", "Skeleton3D", owned: false).OfType<Skeleton3D>().First();
         StyleMannequin();
 
-        rifle = new Rifle { Name = "Rifle", TopLevel = true };
+        rifle = new Rifle { World = World, Name = "Rifle", TopLevel = true };
         AddChild(rifle);
         if (Ammo != null || IsRemote)
         {
@@ -203,21 +206,21 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         skeleton.AddChild(ragdoll);
         ragdoll.Build(skeleton);
         var player = model.FindChildren("*", "AnimationPlayer", owned: false).OfType<AnimationPlayer>().First();
-        animator = new CharacterAnimator(player, model, model.GetPathTo(skeleton));
+        animator = new CharacterAnimator(World.Tuning, player, model, model.GetPathTo(skeleton));
         animator.Initialize();
-        poseBlend = new PoseBlend { Name = "PoseBlend" };
+        poseBlend = new PoseBlend { World = World, Name = "PoseBlend" };
         skeleton.AddChild(poseBlend);
         feet = new FootPlacement { Name = "Feet", Player = this, Pose = animator.Pose };
         skeleton.AddChild(feet);
-        rig = new RifleRig { Name = "RifleRig", Rifle = rifle, Pose = animator.Pose };
+        rig = new RifleRig { World = World, Name = "RifleRig", Rifle = rifle, Pose = animator.Pose };
         skeleton.AddChild(rig);
         handFollow = new RifleHandFollow { Name = "RifleHandFollow", Rifle = rifle, Rig = rig, Blend = poseBlend };
         skeleton.AddChild(handFollow);
 
         if (!IsRemote)
         {
-            CameraRig = new CameraRig { Name = "CameraRig" };
-            AddChild(CameraRig);
+            CameraRig = new CameraRig { World = World, Name = "CameraRig" };
+            World.AddView(World.ViewRoot, CameraRig, followsPause: true);
             CameraRig.Exclude.Add(GetRid());
         }
         shotExclude.Add(GetRid());
@@ -235,7 +238,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         if (!IsRemote)
         {
             CameraRig.SetOrientation(Mathf.RadToDeg(facingYaw), -10f);
-            CameraRig.Target = GlobalPosition + Vector3.Up * Tuning.Current.CameraHeight;
+            CameraRig.Target = GlobalPosition + Vector3.Up * World.Tuning.CameraHeight;
         }
         aimTarget = GlobalPosition + Forward(facingYaw) * 20f;
         Rotation = Vector3.Zero;
@@ -250,9 +253,12 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         }
     }
 
+    public override void _ExitTree() => World.Unregister(this);
+
     public override void _Notification(int what)
     {
         if (what == NotificationPaused || what == NotificationUnpaused ||
+            what == NotificationDisabled || what == NotificationEnabled ||
             what == NotificationApplicationFocusOut || what == NotificationApplicationFocusIn)
         {
             (inputOverride as DeviceInput ?? deviceInput).Reset();
@@ -280,7 +286,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
             return;
         }
         CameraRig.SetOrientation(Mathf.RadToDeg(yaw), -10f);
-        CameraRig.Target = position + Vector3.Up * Tuning.Current.CameraHeight;
+        CameraRig.Target = position + Vector3.Up * World.Tuning.CameraHeight;
         CameraRig.Snap();
     }
 
@@ -326,7 +332,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         }
 
         PrepareCombat(dt);
-        var tuning = Tuning.Current;
+        var tuning = World.Tuning;
         var lifecycle = state == State.Active ? PlayerLifecycle.Active
             : state == State.GettingUp ? PlayerLifecycle.GettingUp : PlayerLifecycle.Ragdoll;
         ResolvedState = resolver.Resolve(new StateIntent(intent.Move.X, intent.Move.Y, intent.Sprint,
@@ -369,7 +375,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
     public override void _Process(double delta)
     {
         var dt = (float)delta;
-        var tuning = Tuning.Current;
+        var tuning = World.Tuning;
         UpdateBodyContrast();
         var planar = feet.SamplePlanarVelocity(dt);
         animator.UpdateLocomotion(ResolvedState.Active ? planar.Length() : 0f, dt, ResolvedState.Gait);
@@ -406,7 +412,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
 
     private void UpdateMovement(float dt)
     {
-        var tuning = Tuning.Current;
+        var tuning = World.Tuning;
         var grounded = ResolvedState.Grounded;
 
         var cameraYaw = Mathf.DegToRad(CameraRig.Yaw);
@@ -477,7 +483,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
 
     private void UpdateFacing(float dt, Vector3 wish, bool ready)
     {
-        var tuning = Tuning.Current;
+        var tuning = World.Tuning;
         var aimYaw = Mathf.DegToRad(CameraRig.Yaw);
         float targetYaw;
         if (ResolvedState.Weapon == WeaponAction.Melee)
@@ -545,16 +551,16 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
     {
         if (ResolvedState.Weapon == WeaponAction.Melee)
         {
-            aimTarget = GlobalPosition + Vector3.Up * Tuning.Current.MeleeContactHeight + meleeDirection * Tuning.Current.ShotRange;
+            aimTarget = GlobalPosition + Vector3.Up * World.Tuning.MeleeContactHeight + meleeDirection * World.Tuning.ShotRange;
             return;
         }
         var camera = CameraRig.Camera;
         var origin = camera.GlobalPosition;
         var forward = -camera.GlobalBasis.Z;
         var start = origin + forward * Mathf.Max(0, (GlobalPosition + Vector3.Up * 1.4f - origin).Dot(forward));
-        var query = PhysicsRayQueryParameters3D.Create(start, start + forward * Tuning.Current.ShotRange, Layers.ShotMask, shotExclude);
+        var query = PhysicsRayQueryParameters3D.Create(start, start + forward * World.Tuning.ShotRange, Layers.ShotMask, shotExclude);
         var hit = GetWorld3D().DirectSpaceState.IntersectRay(query);
-        aimTarget = hit.Count > 0 ? hit["position"].AsVector3() : start + forward * Tuning.Current.ShotRange;
+        aimTarget = hit.Count > 0 ? hit["position"].AsVector3() : start + forward * World.Tuning.ShotRange;
         // Never aim at something right behind or inside the character.
         var chest = GlobalPosition + Vector3.Up * 1.35f;
         if ((aimTarget - chest).Dot(forward) < 2f)
@@ -576,7 +582,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
 
     private void UpdateShooting(float dt)
     {
-        var tuning = Tuning.Current;
+        var tuning = World.Tuning;
         bloom = Mathf.MoveToward(bloom, 0, tuning.BloomRecovery * dt);
         var moving = Mathf.Clamp(new Vector2(Velocity.X, Velocity.Z).Length() / Mathf.Max(tuning.RunSpeed, 0.1f), 0, 1.5f);
         // Logical aim is suppressed immediately at takeoff/reload, independent of presentation blending.
@@ -602,7 +608,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
 
     private void Fire(float spreadDegrees)
     {
-        var tuning = Tuning.Current;
+        var tuning = World.Tuning;
         var camera = CameraRig.Camera;
         var origin = camera.GlobalPosition;
         var forward = -camera.GlobalBasis.Z;
@@ -627,7 +633,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         }
 
         rifle.Fire(lastRound: Ammo is { Magazine: 0 });
-        Spawn.Effect(Tracer.Create(muzzle, end));
+        World.Spawn.Effect(Tracer.Create(muzzle, end));
 
         if (DevLog.Enabled)
         {
@@ -647,18 +653,18 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         {
             case PropaneTank tank:
                 tank.TakeShot(end, normal, shotDir);
-                ImpactEffect.Spawn(end, normal, metal: true, leaveDecal: false);
+                ImpactEffect.Spawn(World, end, normal, metal: true, leaveDecal: false);
                 break;
             case PlayerCharacter or PhysicalBone3D:
                 // Another player: no decal on a person.
-                ImpactEffect.Spawn(end, normal, metal: false, leaveDecal: false);
+                ImpactEffect.Spawn(World, end, normal, metal: false, leaveDecal: false);
                 break;
             case RigidBody3D { Freeze: false } body:
                 body.ApplyImpulse(shotDir * tuning.BulletImpulse, end - body.GlobalPosition);
-                ImpactEffect.Spawn(end, normal, metal: body is DebrisBody, leaveDecal: false);
+                ImpactEffect.Spawn(World, end, normal, metal: body is DebrisBody, leaveDecal: false);
                 break;
             default:
-                ImpactEffect.Spawn(end, normal, metal: false, leaveDecal: true);
+                ImpactEffect.Spawn(World, end, normal, metal: false, leaveDecal: true);
                 break;
         }
         Fired?.Invoke(new ShotReport(muzzle, end, normal, shotDir, collider, true));
@@ -679,7 +685,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         return null;
     }
 
-    private static Vector3 RandomInCone(Vector3 axis, float halfAngle)
+    private Vector3 RandomInCone(Vector3 axis, float halfAngle)
     {
         if (halfAngle <= 0.00001f)
         {
@@ -687,8 +693,8 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         }
         // Uniform over the cone's solid angle.
         var cosMax = Mathf.Cos(halfAngle);
-        var z = (float)GD.RandRange(cosMax, 1.0);
-        var phi = (float)GD.RandRange(0, Mathf.Tau);
+        var z = World.Random.RandfRange(cosMax, 1.0f);
+        var phi = World.Random.RandfRange(0, Mathf.Tau);
         var r = Mathf.Sqrt(1 - z * z);
         var basis = ImpactEffect.BasisAlong(axis);
         return (basis * new Vector3(r * Mathf.Cos(phi), r * Mathf.Sin(phi), z)).Normalized();
@@ -698,7 +704,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
 
     private void UpdateMeleeContact()
     {
-        var t = Tuning.Current;
+        var t = World.Tuning;
         var origin = GlobalPosition + Vector3.Up * t.MeleeContactHeight;
         meleeShape.Radius = t.MeleeRange;
         var query = new PhysicsShapeQueryParameters3D
@@ -746,7 +752,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
     public void ReceiveMelee(Vector3 direction)
     {
         if (IsRemote || state is State.Capturing or State.GettingUp) return;
-        var t = Tuning.Current;
+        var t = World.Tuning;
         var launch = direction * t.MeleeLaunchSpeed + Vector3.Up * t.MeleeLaunchLift;
         if (state == State.Ragdoll) { ragdoll.Push(launch); return; }
         BeginRagdoll(Velocity + launch, Vector3.Up.Cross(direction) * t.MeleeSpin);
@@ -756,7 +762,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
 
     public void ReceiveBlast(BlastInfo blast)
     {
-        var tuning = Tuning.Current;
+        var tuning = World.Tuning;
         var push = tuning.BlastSpeed * blast.Falloff * tuning.PlayerKnockback;
         switch (state)
         {
@@ -781,7 +787,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
             var launch = flat * speed * 0.8f + Vector3.Up * Mathf.Min(speed * 0.45f, MaxRagdollLift);
             // Feet are swept out from under the body: it pitches backward away from the blast.
             var tumbleAxis = flat.LengthSquared() > 0.0001f ? Vector3.Up.Cross(flat).Normalized() : Vector3.Right;
-            var spin = tumbleAxis * (float)GD.RandRange(2.5, 4.5) + Vector3.Up * (float)GD.RandRange(-2.0, 2.0);
+            var spin = tumbleAxis * World.Random.RandfRange(2.5f, 4.5f) + Vector3.Up * World.Random.RandfRange(-2.0f, 2.0f);
             BeginRagdoll(Velocity + launch, spin);
         }
         else if (blast.Distance < tuning.StaggerRadius)
@@ -825,7 +831,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
 
     private void UpdateRagdoll(float dt)
     {
-        var tuning = Tuning.Current;
+        var tuning = World.Tuning;
         stateTimer += dt;
         settleTimer = ragdoll.AverageSpeed() < RagdollSettleSpeed ? settleTimer + dt : 0;
         if (DevLog.Enabled && Engine.GetPhysicsFrames() % 12 == 0)
@@ -903,7 +909,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         animator.SetHoldWeight(rigIn);
         if (!IsRemote)
         {
-            Velocity = new Vector3(0, Velocity.Y - Tuning.Current.PlayerGravity * dt, 0);
+            Velocity = new Vector3(0, Velocity.Y - World.Tuning.PlayerGravity * dt, 0);
             MoveAndSlide();
         }
         if (stateTimer >= duration)
@@ -978,14 +984,14 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
     public void RemoteShot(Vector3 end)
     {
         rifle.Fire();
-        Spawn.Effect(Tracer.Create(rifle.MuzzlePosition, end));
+        World.Spawn.Effect(Tracer.Create(rifle.MuzzlePosition, end));
         rig.Kick();
         readyAmount = 1f;
     }
 
     private void UpdateRemote(float dt)
     {
-        var tuning = Tuning.Current;
+        var tuning = World.Tuning;
         if (state != State.Active)
         {
             ResolvedState = new PlayerState(state == State.GettingUp ? PlayerLifecycle.GettingUp : PlayerLifecycle.Ragdoll,
@@ -1067,9 +1073,9 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
     private void UpdateBodyContrast()
     {
         if (bodyMaterial == null) { return; }
-        var strength = AppearanceContrast.Strength(bodyColor) * Tuning.Current.AppearanceBodyContrast;
-        var edge = AppearanceContrast.Edge(bodyColor);
-        var power = Tuning.Current.AppearanceRimPower;
+        var strength = AppearanceContrast.Strength(bodyColor, World.Tuning) * World.Tuning.AppearanceBodyContrast;
+        var edge = AppearanceContrast.Edge(bodyColor, World.Tuning);
+        var power = World.Tuning.AppearanceRimPower;
         var next = (bodyColor, edge, strength, power);
         if (bodyContrast == next) { return; }
         bodyContrast = next;

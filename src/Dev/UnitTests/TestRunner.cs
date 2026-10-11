@@ -2,17 +2,22 @@ using System;
 using System.Linq;
 using System.Reflection;
 using Godot;
+using Propane.Core;
 
 namespace Propane.Dev.UnitTests;
 
 /// <summary>Small assertion runner: suites register named actions; every failure is printed and exits nonzero.</summary>
 public partial class TestRunner : Node
 {
+    public WorldContext World { get; private set; } = null!;
+    public override void _ExitTree() => World.Dispose();
+
     private int tests;
     private int failures;
 
     public override void _Ready()
     {
+        World = new WorldContext(this, Tuning.SavedTemplate, present: true);
         DevArgs.MarkReady();
         try
         {
@@ -52,6 +57,7 @@ public partial class TestRunner : Node
     public void Run(string name, Action test)
     {
         tests++;
+        World.SetContentRoot(World.Root);
         try
         {
             test();

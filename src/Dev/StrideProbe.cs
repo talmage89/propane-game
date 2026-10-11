@@ -28,7 +28,7 @@ public partial class StrideProbe : SkeletonModifier3D
         if (skeleton == null) return;
         if (indices.Length == 0) indices = Bones.Select(skeleton.FindBone).ToArray();
         if (indices.Any(i => i < 0) || !Player.ResolvedState.EffectiveAim || !Player.ResolvedState.Grounded ||
-            Math.Abs(new Vector2(Player.Velocity.X, Player.Velocity.Z).Length() - Tuning.Current.CreepSpeed) > 0.001f)
+            Math.Abs(new Vector2(Player.Velocity.X, Player.Velocity.Z).Length() - Player.World.Tuning.CreepSpeed) > 0.001f)
         {
             GD.PushError("[stride] FAIL missing bones or unsettled aimed movement");
             ShutdownGuard.Quit(GetTree(), 1);
@@ -72,7 +72,7 @@ public partial class StrideProbe : SkeletonModifier3D
         }
         slides.Sort();
         distances.Sort();
-        GD.Print(FormattableString.Invariant($"[stride] PASS speed={Tuning.Current.CreepSpeed:F2} frames={samples.Count} near-floor-pairs={slides.Count} slide-median={slides[slides.Count / 2]:F3}m/s p75={slides[slides.Count * 3 / 4]:F3}m/s median-frame-drift={distances[distances.Count / 2] * 1000:F2}mm"));
+        GD.Print(FormattableString.Invariant($"[stride] PASS speed={Player.World.Tuning.CreepSpeed:F2} frames={samples.Count} near-floor-pairs={slides.Count} slide-median={slides[slides.Count / 2]:F3}m/s p75={slides[slides.Count * 3 / 4]:F3}m/s median-frame-drift={distances[distances.Count / 2] * 1000:F2}mm"));
         var directory = DevArgs.Get("capture-dir");
         if (directory == null) return;
         DirAccess.MakeDirRecursiveAbsolute(directory);

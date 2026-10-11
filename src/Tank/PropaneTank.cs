@@ -11,6 +11,8 @@ namespace Propane.Tank;
 /// </summary>
 public partial class PropaneTank : RigidBody3D
 {
+    public required WorldContext World { get; init; }
+
     public enum TankState
     {
         Intact,
@@ -19,7 +21,7 @@ public partial class PropaneTank : RigidBody3D
     }
 
     /// <summary>Center of the vessel in the tank's local frame (origin is the center of the foot ring).</summary>
-    public static readonly Vector3 LocalCenter = World.Plan.PileBuilder.LocalCenter;
+    public static readonly Vector3 LocalCenter = Propane.World.Plan.PileBuilder.LocalCenter;
 
     private const float ShellRadius = 0.156f;
     private const float HoleDecalSize = 0.07f;
@@ -28,6 +30,7 @@ public partial class PropaneTank : RigidBody3D
     private Transform3D? pilePose;
     private Transform3D? restPose;
 
+    public required Spawn ContentSpawn { get; init; }
     private VentJet? vent;
     private Decal? holeDecal;
     private uint fuseGeneration;
@@ -88,15 +91,15 @@ public partial class PropaneTank : RigidBody3D
     /// <summary>Before the caller queues authority or applies its impulse/lifecycle change.</summary>
     public event Action<PropaneTank>? Disturbed;
 
-    public bool AtRest => Sleeping || (LinearVelocity.Length() <= Tuning.Current.GatherRestSpeed &&
-        AngularVelocity.Length() <= Tuning.Current.GatherRestSpin);
+    public bool AtRest => Sleeping || (LinearVelocity.Length() <= World.Tuning.GatherRestSpeed &&
+        AngularVelocity.Length() <= World.Tuning.GatherRestSpin);
 
     public bool Loose
     {
         get
         {
             if (pilePose is not { } pose) { return true; }
-            var tuning = Tuning.Current;
+            var tuning = World.Tuning;
             return (GlobalTransform * LocalCenter).DistanceTo(pose * LocalCenter) > tuning.GatherPileTolerance ||
                 GlobalBasis.GetRotationQuaternion().AngleTo(pose.Basis.GetRotationQuaternion()) > Mathf.DegToRad(tuning.GatherPileAngle);
         }
@@ -133,7 +136,7 @@ public partial class PropaneTank : RigidBody3D
 
     private void UpdateGatherShimmer()
     {
-        var tuning = Tuning.Current;
+        var tuning = World.Tuning;
         mesh.SetInstanceShaderParameter("gather_shimmer", tuning.GatherShimmer);
         mesh.SetInstanceShaderParameter("gather_speed", tuning.GatherShimmerSpeed);
         mesh.SetInstanceShaderParameter("gather_bands", tuning.GatherShimmerBands);
@@ -141,11 +144,13 @@ public partial class PropaneTank : RigidBody3D
     }
 
     /// <summary>Instantiates a ready-to-place tank.</summary>
-    public static PropaneTank Create() => new() { Name = "PropaneTank" };
+    public static PropaneTank Create(WorldContext world, Spawn? spawn = null) =>
+        new() { Name = "PropaneTank", World = world, ContentSpawn = spawn ?? world.Spawn };
 
     public override void _Ready()
     {
-        Mass = Tuning.Current.TankMass;
+        World.Reveal.Track(this);
+        Mass = World.Tuning.TankMass;
         CollisionLayer = Layers.Tanks;
         CollisionMask = Layers.DynamicMask;
         ContinuousCd = true;
@@ -160,7 +165,7 @@ public partial class PropaneTank : RigidBody3D
         AddChild(mesh);
         GameAssets.ApplyTankMaterials(mesh);
         // In a match every copy of a tank flutters alike, so the copies drift apart less.
-        flutterPhase = NetId != 0 ? NetId % 997 * 0.1f : GD.Randf() * 100f;
+        flutterPhase = NetId != 0 ? NetId % 997 * 0.1f : World.Random.Randf() * 100f;
         SetProcess(false);
         if (pilePose != null) { pilePose = GlobalTransform; }
     }
@@ -189,8 +194,8 @@ public partial class PropaneTank : RigidBody3D
         var pulse = 0.65f + 0.35f * Mathf.Sin((float)Now * 18f);
         var fade = Mathf.Clamp(left / 0.25f, 0, 1) * pulse;
         mesh.SetInstanceShaderParameter("shield_color", new Color(shieldColor, fade));
-        mesh.SetInstanceShaderParameter("shield_contrast", new Color(AppearanceContrast.Edge(shieldColor),
-            AppearanceContrast.Strength(shieldColor) * Tuning.Current.AppearanceGlowContrast * fade));
+        mesh.SetInstanceShaderParameter("shield_contrast", new Color(AppearanceContrast.Edge(shieldColor, World.Tuning),
+            AppearanceContrast.Strength(shieldColor, World.Tuning) * World.Tuning.AppearanceGlowContrast * fade));
     }
 
     /// <summary>
@@ -207,7 +212,7 @@ public partial class PropaneTank : RigidBody3D
         switch (State)
         {
             case TankState.Intact:
-                Puncture(point, normal, GD.Randf() < 0.5f ? -1f : 1f);
+                Puncture(point, normal, World.Random.Randf() < 0.5f ? -1f : 1f);
                 ApplyImpulse(shotDirection * PunctureKick, point - GlobalPosition);
                 Punctured?.Invoke(this);
                 return true;
@@ -265,24 +270,24 @@ public partial class PropaneTank : RigidBody3D
         if (State == TankState.Intact)
         {
             var (point, normal) = SurfaceFacing(blastCenter);
-            Puncture(point, normal, GD.Randf() < 0.5f ? -1f : 1f);
+            Puncture(point, normal, World.Random.Randf() < 0.5f ? -1f : 1f);
             Punctured?.Invoke(this);
             return;
         }
         fuseLit = true;
-        var tuning = Tuning.Current;
+        var tuning = World.Tuning;
         var closeness = Mathf.Clamp(distance / Mathf.Max(tuning.ChainRadius, 0.01f), 0, 1);
-        var fuse = Mathf.Lerp(tuning.ChainFuseMin, tuning.ChainFuseMax, closeness) * (float)GD.RandRange(0.85, 1.15);
+        var fuse = Mathf.Lerp(tuning.ChainFuseMin, tuning.ChainFuseMax, closeness) * World.Random.RandfRange(0.85f, 1.15f);
         var generation = ++fuseGeneration;
         void FinishFuse()
         {
-            if (IsInstanceValid(this) && generation == fuseGeneration && fuseLit)
+            if (World.IsAlive && IsInstanceValid(this) && generation == fuseGeneration && fuseLit)
             {
                 Detonate();
             }
         }
         if (FuseScheduleOverride != null) { FuseScheduleOverride(fuse, FinishFuse); }
-        else { GetTree().CreateTimer(fuse, processAlways: false, processInPhysics: true).Timeout += FinishFuse; }
+        else { World.Schedule(this, fuse, FinishFuse); }
     }
 
     public override void _PhysicsProcess(double delta)
@@ -290,7 +295,7 @@ public partial class PropaneTank : RigidBody3D
         if (Gathering) { UpdateGatherShimmer(); }
         if (State == TankState.Intact && !Gathering)
         {
-            var idleTuning = Tuning.Current;
+            var idleTuning = World.Tuning;
             if (!AtRest)
             {
                 if (restPose != null) { Disturbance++; restPose = null; }
@@ -307,7 +312,7 @@ public partial class PropaneTank : RigidBody3D
         {
             return;
         }
-        var tuning = Tuning.Current;
+        var tuning = World.Tuning;
         ventAge += (float)delta;
         var ramp = tuning.VentThrustRampTime > 0 ? Mathf.Clamp(ventAge / tuning.VentThrustRampTime, 0, 1) : 1f;
         var t = ventAge + flutterPhase;
@@ -349,16 +354,18 @@ public partial class PropaneTank : RigidBody3D
         var groundY = GroundHeightBelow(center);
 
         vent?.Extinguish();
-        ExplosionEffect.Create(center, groundY);
+        ExplosionEffect.Create(World, center, groundY, ContentSpawn);
         SpawnDebris(center);
         SpawnScorch(new Vector3(center.X, groundY, center.Z));
         // The match assigns/sends the causal request before children emit their lifecycle requests.
         Detonated?.Invoke(this);
-        Blast.Detonate(this, center, this, chain);
+        Blast.Detonate(World, center, this, chain);
         QueueFree();
     }
 
-    private static double Now => Time.GetTicksUsec() / 1_000_000.0;
+    private double Now => World.Clock.Now;
+
+    public override void _ExitTree() => CancelChainFuse();
 
     private void Puncture(Vector3 point, Vector3 normal, float swirl) =>
         PunctureLocal(ToLocal(point), (GlobalBasis.Inverse() * normal).Normalized(), swirl);
@@ -374,10 +381,10 @@ public partial class PropaneTank : RigidBody3D
         // A torn hole rarely vents straight out: lean the jet around the tank's axis so its thrust has a
         // tangential part. Upright, that spins the tank; lying down, it rolls and pinwheels across the ground.
         swirlSign = swirl < 0 ? -1f : 1f;
-        jetDirectionLocal = holeNormalLocal.Rotated(Vector3.Up, Mathf.DegToRad(Tuning.Current.VentSwirlDegrees) * swirlSign).Normalized();
+        jetDirectionLocal = holeNormalLocal.Rotated(Vector3.Up, Mathf.DegToRad(World.Tuning.VentSwirlDegrees) * swirlSign).Normalized();
 
         var holeBasis = BasisFacing(jetDirectionLocal);
-        vent = new VentJet { Name = "VentJet", Transform = new Transform3D(holeBasis, holeLocal) };
+        vent = new VentJet { World = World, ContentSpawn = ContentSpawn, Name = "VentJet", Transform = new Transform3D(holeBasis, holeLocal) };
         AddChild(vent);
 
         // Bullet hole decal: a decal projects along its local -Y, so point +Y out of the surface.
@@ -429,13 +436,13 @@ public partial class PropaneTank : RigidBody3D
 
     private void SpawnDebris(Vector3 center)
     {
-        var tuning = Tuning.Current;
+        var tuning = World.Tuning;
         var rng = new RandomNumberGenerator();
         var inherited = LinearVelocity;
         foreach (var piece in GameAssets.Debris)
         {
-            var body = DebrisBody.Create(piece);
-            Spawn.InWorld(body);
+            var body = DebrisBody.Create(World, piece);
+            ContentSpawn.InWorld(body);
             body.GlobalTransform = GlobalTransform;
             var pieceCenter = GlobalTransform * piece.Centroid;
             var outward = pieceCenter - center;
@@ -446,9 +453,9 @@ public partial class PropaneTank : RigidBody3D
         }
     }
 
-    private static void SpawnScorch(Vector3 groundPoint)
+    private void SpawnScorch(Vector3 groundPoint)
     {
-        var size = Tuning.Current.ScorchSize;
+        var size = World.Tuning.ScorchSize;
         if (size <= 0)
         {
             return;
@@ -464,8 +471,8 @@ public partial class PropaneTank : RigidBody3D
             NormalFade = 0.2f,
             AlbedoMix = 1f,
         };
-        Spawn.InWorld(decal);
+        ContentSpawn.InWorld(decal);
         decal.GlobalPosition = groundPoint;
-        decal.RotateY((float)GD.RandRange(0, Mathf.Tau));
+        decal.RotateY(World.Random.RandfRange(0, Mathf.Tau));
     }
 }

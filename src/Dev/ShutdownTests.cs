@@ -54,6 +54,10 @@ public partial class ShutdownTests : Node
             state.Garbage.Add(new WeakReference<GodotObject>(new StandardMaterial3D()));
         }
         _ = new FinalizerWitness(state);
+        // The native query retains the shape's managed wrapper until the query finalizer releases it.
+        var nested = new SphereShape3D();
+        state.Garbage.Add(new WeakReference<GodotObject>(nested));
+        state.Garbage.Add(new WeakReference<GodotObject>(new PhysicsShapeQueryParameters3D { Shape = nested }));
         state.SceneDeleted = true;
     }
 

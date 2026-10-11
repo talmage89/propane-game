@@ -66,18 +66,3 @@ textures/default_filters/anisotropic_filtering_level=3
 environment/ssil/quality=1
 anti_aliasing/quality/msaa_3d=2
 anti_aliasing/quality/use_debanding=true
-
-[shader_globals]
-
-reveal_center={
-"type": "vec3",
-"value": Vector3(0, 0, 0)
-}
-reveal_radius={
-"type": "float",
-"value": 100000.0
-}
-reveal_glow={
-"type": "color",
-"value": Color(0.35, 0.75, 1, 1)
-}

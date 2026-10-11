@@ -383,7 +383,7 @@ public partial class Menus : CanvasLayer
         {
             return;
         }
-        var tuning = Tuning.Current;
+        var tuning = Net.Template;
         var creator = lobby.Members.FirstOrDefault(m => m.Id == lobby.CreatorId);
         layout.AddChild(UiStyle.Title($"{(creator?.Name ?? "?").ToUpperInvariant()}'S LOBBY", 34));
         layout.AddChild(UiStyle.Text(lobby.Phase == LobbyServer.LobbyPhase.Waiting ? $"{lobby.Members.Count} of {Net.LobbyCapacity} players" : "A match is on",
@@ -549,7 +549,7 @@ public partial class Menus : CanvasLayer
         {
             return;
         }
-        var tuning = Tuning.Current;
+        var tuning = Net.Template;
         var seconds = Mathf.Clamp(lobby.MatchLength + direction * Mathf.Max(tuning.MatchLengthStep, 1f),
             tuning.MatchLengthMin, tuning.MatchLengthMax);
         if (seconds != lobby.MatchLength)

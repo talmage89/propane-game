@@ -11,7 +11,7 @@ public partial class DebrisBody : RigidBody3D
     private MeshInstance3D mesh = null!;
     private float age;
 
-    public static DebrisBody Create(DebrisPiece piece)
+    public static DebrisBody Create(WorldContext world, DebrisPiece piece)
     {
         var body = new DebrisBody
         {
@@ -30,7 +30,7 @@ public partial class DebrisBody : RigidBody3D
         body.AddChild(body.mesh);
         GameAssets.ApplyTankMaterials(body.mesh);
         body.mesh.SetInstanceShaderParameter("heat", 1f);
-        body.mesh.SetInstanceShaderParameter("soot", (float)GD.RandRange(0.3, 0.6));
+        body.mesh.SetInstanceShaderParameter("soot", world.Random.RandfRange(0.3f, 0.6f));
         return body;
     }
 

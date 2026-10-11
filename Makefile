@@ -50,11 +50,13 @@ test-core: build ## Run checker, platform, movement and unit assertions
 	"$(GODOT)" --headless --path . res://scenes/dev/shutdown_tests.tscn -- --paused --window-close --repeat-quit
 
 test-behavior: build ## Run isolated physics, navigation, menu, grip and feet probes
+	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/world_services_tests.tscn
 	"$(GODOT)" --headless --path . --fixed-fps 60 res://scenes/dev/blast_query_tests.tscn
 	"$(GODOT)" --headless --path . --fixed-fps 60 res://scenes/dev/gather_range.tscn
 	"$(GODOT)" --headless --path . --fixed-fps 60 res://scenes/dev/gather_range.tscn -- --scenario=grant-races
 	"$(GODOT)" --headless --path . res://scenes/dev/gather_range.tscn -- --scenario=appearance
 	"$(GODOT)" --headless --path . --fixed-fps 60 res://scenes/dev/game_test.tscn -- --scenario=gather --tune.FixedSeed=23
+	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/game_test.tscn -- --scenario=clear --quit=32 --tune.FixedSeed=23
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/melee_range.tscn
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/player_range.tscn -- --scenario=melee --assert-motion --assert-grip
 	"$(GODOT)" --headless --path . --fixed-fps 60 res://scenes/dev/bot_navigation_course.tscn -- --seeds=5
@@ -76,6 +78,7 @@ test-world: build ## Compare all formations built in two fresh processes
 	tools/dev/check_world.sh
 
 test-full: test ## Run the gate plus deep sweeps
+	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/menu_test.tscn -- --scenario=lifetime --port=$(PORT)
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/player_range.tscn -- --scenario=melee-reloads --assert-motion --assert-grip
 	"$(GODOT)" --headless --path . res://scenes/dev/generator_tests.tscn -- --seeds=200 --large-seeds=100 --formation-seeds=6
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/bot_navigation_course.tscn -- --seeds=100

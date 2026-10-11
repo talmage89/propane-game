@@ -26,10 +26,10 @@ public partial class LocomotionMatrix : Node
         var gait = (PlayerGait)(index / 8);
         var direction = index % 8;
         var angle = direction * Mathf.Tau / 8;
-        var speed = gait == PlayerGait.Creep ? Tuning.Current.CreepSpeed : gait == PlayerGait.Sprint ? Tuning.Current.SprintSpeed : Tuning.Current.RunSpeed;
+        var speed = gait == PlayerGait.Creep ? Player.World.Tuning.CreepSpeed : gait == PlayerGait.Sprint ? Player.World.Tuning.SprintSpeed : Player.World.Tuning.RunSpeed;
         var localTime = time % EpisodeTime;
         var target = localTime < 0.25f || localTime > EpisodeTime - 0.25f ? Vector3.Zero : new Vector3(Mathf.Sin(angle), 0, -Mathf.Cos(angle)) * speed;
-        velocity = velocity.MoveToward(target, Tuning.Current.Acceleration * dt);
+        velocity = velocity.MoveToward(target, Player.World.Tuning.Acceleration * dt);
         position += velocity * dt;
         // Reproducible interpolation corrections in both directions. A saved contact must release rather
         // than drag the old foot through an unreachable solve, and the new joint pose must blend in.

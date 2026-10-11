@@ -150,6 +150,8 @@ limits gain `floor(MpPileSizePerPlayer × players)`. `MpStartSpacing` is a hard 
 invalid settings fail generation instead of placing players on top of one another. The lobby cap remains a separate
 setting. These shared plan and tuner changes require the next release to be minor (`Protocol.Version` is 2).
 
+[World services](docs/world-services.md) documents scoped ownership, cleanup, and simulation/network clock boundaries.
+
 ## Layout
 
 | Path | Contents |
@@ -214,6 +216,14 @@ $GODOT --fixed-fps 60 res://scenes/dev/bot_navigation_course.tscn -- --seeds=5 -
 $GODOT --headless res://scenes/dev/unit_tests.tscn
 tools/dev/check_world.sh
 
+# Scoped worlds: overlapping physics/tuning, events/spawns/callbacks, pause/reveal/hitstop and leak-free teardown.
+$GODOT --headless --fixed-fps 60 res://scenes/dev/world_services_tests.tscn
+# Clear/replace proof: shooting sequence, finish remaining fixture tanks, assert automatic replacement.
+$GODOT --fixed-fps 60 res://scenes/dev/game_test.tscn -- --scenario=clear --quit=32 --capture-dir=/tmp/clear
+# Real menu lifetime: ten single-player and ten solo-match retirements with exact node/object/orphan counts.
+$GODOT --headless --fixed-fps 60 res://scenes/dev/menu_test.tscn -- --scenario=lifetime
+$GODOT --fixed-fps 60 res://scenes/dev/menu_test.tscn -- --scenario=lifetime --capture-dir=/tmp/menu-lifetime
+
 # Blast-query completeness: 1,100 rigid bodies and duplicate collision shapes; asserts every body is pushed.
 $GODOT --headless --fixed-fps 60 res://scenes/dev/blast_query_tests.tscn
 
@@ -245,7 +255,8 @@ $GODOT --fixed-fps 60 res://scenes/dev/tank_range.tscn -- --capture-dir=/tmp/t -
 # shot/bump/blast interruption and settled-pile stability. These and the following probes run in make test.
 $GODOT --fixed-fps 60 res://scenes/dev/gather_range.tscn -- --capture-dir=/tmp/gather
 $GODOT --headless --fixed-fps 60 res://scenes/dev/gather_range.tscn -- --scenario=grant-races
-# A real single-player rifle blast knocks intact tanks loose, then they gather; seed 23 fixes the clear road fixture.
+# A real single-player rifle blast knocks intact tanks loose, then they gather; seed 23 fixes the road fixture.
+# Once the knock is proven, the fixture removes random blast fragments so departure paths stay clear.
 $GODOT --fixed-fps 60 res://scenes/dev/game_test.tscn -- --scenario=gather --tune.FixedSeed=23 --capture-dir=/tmp/gather-game
 # Formation close-up and stability: Rows, Square, Triangular, Cluster; --count defaults to 14.
 # --awake tests contact settling; --chain=fresh requires intact neighbors in range to puncture and keep venting.

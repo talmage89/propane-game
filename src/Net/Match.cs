@@ -20,6 +20,8 @@ namespace Propane.Net;
 /// </summary>
 public partial class Match : Node3D
 {
+    public WorldContext World { get; private set; } = null!;
+
     private enum Phase
     {
         Loading,
@@ -52,7 +54,7 @@ public partial class Match : Node3D
     {
         public required PlayerProfile Profile;
         public required PlayerCharacter Body;
-        public readonly SnapshotBuffer Buffer = new();
+        public required SnapshotBuffer Buffer;
     }
 
     private sealed record AuthorityRequest(Msg Type, uint Request, uint Cause, uint[] Ids, object Payload)
@@ -155,24 +157,30 @@ public partial class Match : Node3D
 
     public override void _Ready()
     {
-        Tuning.UseForMatch(Tuning.FromSnapshot(Setup.Tuning));
+        using var tuning = Tuning.FromSnapshot(Setup.Tuning);
+        tuning.CopyLocalTunersFrom(Net.Template);
+        World = new WorldContext(this, tuning, networked: true, present: true);
+        World.OnStopping(StopReplication);
+        World.Construct(BuildWorld);
+    }
+
+    private void BuildWorld()
+    {
         InputSetup.Register();
         _ = GameAssets.Debris;
         ExplosionEffect.Preload();
         me = Net.MyId;
 
         environment = new VoidEnvironment { Name = "Void" };
-        AddChild(environment);
-        effects = new Node3D { Name = "Effects" };
-        AddChild(effects);
-        Spawn.SetEffectsRoot(effects);
+        World.Root.AddChild(environment);
+        effects = World.EffectsRoot;
 
         plan = PlanCodec.Decode(Setup.Plan);
-        var settings = SuburbPlans.Match(Tuning.Current, Setup.Players.Count);
-        suburb = Suburb.Build(plan, settings, networked: true);
-        AddChild(suburb);
-        Spawn.SetWorldRoot(suburb.DynamicRoot);
-        bodies = new BodySync(me, Setup.HostId);
+        var settings = SuburbPlans.Match(World.Tuning, Setup.Players.Count);
+        suburb = Suburb.Build(World, plan, settings, networked: true);
+        World.Root.AddChild(suburb);
+        World.SetContentRoot(suburb.DynamicRoot);
+        bodies = new BodySync(World.Tuning, me, Setup.HostId);
 
         var mapTanks = suburb.MapTanks;
         for (var i = 0; i < mapTanks.Count; i++)
@@ -194,6 +202,7 @@ public partial class Match : Node3D
 
         gather = new TankGather
         {
+            World = World,
             Name = "Gather",
             Tanks = () => LiveTanks,
             Enabled = () => IsPlaying && bodies.Host == me,
@@ -213,27 +222,29 @@ public partial class Match : Node3D
                 mySlot = slot;
                 player = new PlayerCharacter
                 {
+                    World = World,
                     Name = "Player",
                     PeerId = me,
                     BodyColor = profile.Appearance.Color,
-                    Ammo = AmmoState.Starting(),
+                    Ammo = AmmoState.Starting(World.Tuning),
                     InputLocked = true,
                 };
-                AddChild(player);
+                World.Root.AddChild(player);
                 player.Teleport(position, spawn.Yaw + Mathf.Pi);
             }
             else
             {
                 var body = new PlayerCharacter
                 {
+                    World = World,
                     Name = $"Remote_{profile.Id}",
                     IsRemote = true,
                     PeerId = profile.Id,
                     BodyColor = profile.Appearance.Color,
                 };
-                AddChild(body);
+                World.Root.AddChild(body);
                 body.Teleport(position, spawn.Yaw + Mathf.Pi);
-                remotes[profile.Id] = new Remote { Profile = profile, Body = body };
+                remotes[profile.Id] = new Remote { Profile = profile, Body = body, Buffer = new SnapshotBuffer(World.Tuning) };
             }
         }
         if (player == null)
@@ -257,30 +268,30 @@ public partial class Match : Node3D
         }
 
         hud = new Hud { Name = "Hud" };
-        AddChild(hud);
+        World.AddView(this, hud);
         hud.ShowTankCount(false);
-        matchHud = new MatchHud { Name = "MatchHud" };
-        AddChild(matchHud);
+        matchHud = new MatchHud { World = World, Name = "MatchHud" };
+        World.AddView(this, matchHud);
         results = new ResultsScreen { Name = "Results" };
-        AddChild(results);
+        World.AddView(this, results);
         menu = new MatchMenu { Name = "Menu" };
         menu.ResumeRequested += CloseMenu;
-        menu.LeaveRequested += () => LeaveRequested?.Invoke();
-        AddChild(menu);
+        menu.LeaveRequested += () => World.Defer(() => LeaveRequested?.Invoke(), whilePaused: true);
+        World.AddView(this, menu);
         if (OS.IsDebugBuild() && Setup.CreatorDebug && Setup.HostId == me)
         {
-            tuningPanel = new TuningPanel { Name = "Tuning", Note = "Changes apply to everyone in the match", UseDeclaredRanges = true };
+            tuningPanel = new TuningPanel { Target = World.Tuning, Name = "Tuning", Note = "Changes apply to everyone in the match", UseDeclaredRanges = true };
             tuningPanel.ValueChanged += (name, value) => Send(new NetWriter(Msg.TuningSet, Setup.Id).String(name).Scalar(value));
-            AddChild(tuningPanel);
+            World.AddView(this, tuningPanel);
         }
 
         // The suburb materializes around the player, as in single player.
         suburb.SetRevealSide(1f);
-        RenderingServer.GlobalShaderParameterSet("reveal_center", player.GlobalPosition);
-        RenderingServer.GlobalShaderParameterSet("reveal_radius", 0f);
-        Warmup.Run(this, new Vector3(0, -400f, 0));
+        World.Reveal.Center = player.GlobalPosition;
+        World.Reveal.Radius = 0f;
+        Warmup.Run(World, World.Root, new Vector3(0, -400f, 0));
 
-        Blast.LocalBlast += OnLocalBlast;
+        World.Events.LocalBlast += OnLocalBlast;
         CaptureMouse(true);
         ShowNotice("Waiting for everyone to arrive", 30f);
         // Loaded is sent after the handoff: Countdown, Go or even End may already be waiting in the inbox.
@@ -289,31 +300,44 @@ public partial class Match : Node3D
         GD.Print($"[match] seed {plan.Seed}: {plan.Lots.Count} lots, {plan.Tanks.Count} tanks, {pickups.Count} pickups, {Setup.Players.Count} players, host {Setup.HostId}, me {me}");
     }
 
-    public override void _ExitTree()
+    public override void _ExitTree() => World?.Dispose();
+
+    private void StopReplication()
     {
-        Blast.LocalBlast -= OnLocalBlast;
         Net.DetachMatch(Setup.Id, OnMessage);
-        Tuning.EndMatch();
-        RenderingServer.GlobalShaderParameterSet("reveal_radius", 100000f);
-        Engine.TimeScale = 1.0;
+        foreach (var tank in tanks.Values.Where(IsInstanceValid))
+        {
+            tank.Punctured -= OnTankPunctured;
+            tank.Detonated -= OnTankDetonated;
+        }
+        bodies?.Clear();
+        remotes.Clear();
+        tanks.Clear();
+        looseProps.Clear();
+        pickups.Clear();
+        pendingAuthority.Clear();
+        outgoingAuthority.Clear();
+        pendingBodies.Clear();
+        gatherRequests.Clear();
     }
 
     // ------------------------------------------------------------------ Frame
 
     public override void _Process(double delta)
     {
+        if (World is not { IsAlive: true } || World.Paused) { return; }
         var dt = (float)delta;
-        var tuning = Tuning.Current;
+        var tuning = World.Tuning;
         if (revealing)
         {
             revealTime += dt;
             var t = Mathf.Clamp(revealTime / Mathf.Max(tuning.TransitionTime * MaterializeShare, 0.01f), 0, 1);
-            RenderingServer.GlobalShaderParameterSet("reveal_radius", Mathf.Lerp(0f, RevealMaxRadius, t * t));
+            World.Reveal.Radius = Mathf.Lerp(0f, RevealMaxRadius, t * t);
             if (t >= 1f)
             {
                 revealing = false;
                 suburb.SetRevealSide(0f);
-                RenderingServer.GlobalShaderParameterSet("reveal_radius", 100000f);
+                World.Reveal.Radius = 100000f;
             }
         }
 
@@ -334,8 +358,8 @@ public partial class Match : Node3D
                 if (endLeft <= 0)
                 {
                     endLeft = float.MaxValue;
-                    Finished?.Invoke();
-                    // Finished may remove this scene immediately; its viewport and world are then unavailable.
+                    World.Defer(() => Finished?.Invoke(), whilePaused: true);
+                    // Navigation runs after this native node notification returns.
                     return;
                 }
                 break;
@@ -348,6 +372,7 @@ public partial class Match : Node3D
 
     public override void _PhysicsProcess(double delta)
     {
+        if (World is not { IsAlive: true } || World.Paused) { return; }
         var dt = (float)delta;
         var now = MonotonicClock.Now;
         foreach (var remote in remotes.Values)
@@ -362,7 +387,7 @@ public partial class Match : Node3D
         sendTimer -= dt;
         if (sendTimer <= 0)
         {
-            sendTimer += 1f / Mathf.Max(Tuning.Current.PlayerSendRate, 1f);
+            sendTimer += 1f / Mathf.Max(World.Tuning.PlayerSendRate, 1f);
             sendTimer = Mathf.Max(sendTimer, 0);
             SendPlayerState(now);
         }
@@ -372,7 +397,7 @@ public partial class Match : Node3D
 
     private void UpdateHud(float dt)
     {
-        var tuning = Tuning.Current;
+        var tuning = World.Tuning;
         var camera = player.CameraRig.Camera;
         var viewportHeight = GetViewport().GetVisibleRect().Size.Y;
         var radius = Mathf.Tan(Mathf.DegToRad(player.SpreadDegrees)) / Mathf.Tan(Mathf.DegToRad(camera.Fov / 2f)) * viewportHeight / 2f;
@@ -402,8 +427,8 @@ public partial class Match : Node3D
     private List<ScoreTag> ScoreTags(Camera3D camera)
     {
         var tags = new List<ScoreTag>();
-        var tuning = Tuning.Current;
-        var space = GetWorld3D().DirectSpaceState;
+        var tuning = World.Tuning;
+        var space = World.Physics.DirectSpaceState;
         var from = camera.GlobalPosition;
         foreach (var remote in remotes.Values)
         {
@@ -428,6 +453,7 @@ public partial class Match : Node3D
 
     public override void _UnhandledInput(InputEvent @event)
     {
+        if (World is not { IsAlive: true }) { return; }
         if (@event.IsActionPressed(InputSetup.Pause))
         {
             if (tuningPanel?.Visible == true)
@@ -522,6 +548,7 @@ public partial class Match : Node3D
 
     internal void OnLocalBlast(Vector3 center, IReadOnlyList<RigidBody3D> pushed, uint cause)
     {
+        if (!World.IsAlive) { return; }
         Claim(pushed, cause);
         // Child punctures are queued during ChainHit, before the blast applies its impulse/spin.
         // Flush even if every pushed body is already owned or pending and Claim has nothing to send.
@@ -708,7 +735,7 @@ public partial class Match : Node3D
             {
                 var pilePose = tank?.PilePose;
                 if (tank != null && IsInstanceValid(tank) && !tank.IsQueuedForDeletion()) { tank.QueueFree(); }
-                tank = PropaneTank.Create();
+                tank = PropaneTank.Create(World);
                 tank.NetId = id;
                 suburb.AddTank(tank);
                 if (pilePose is { } pose) { tank.MarkPile(pose); }
@@ -758,9 +785,9 @@ public partial class Match : Node3D
             tanks.Remove(id);
             bodies.Remove(id);
             exploded.Add(id);
-            var ground = GetWorld3D().DirectSpaceState.IntersectRay(PhysicsRayQueryParameters3D.Create(center, center + Vector3.Down * 30f, Layers.World | Layers.Floor));
-            ExplosionEffect.Create(center, ground.Count > 0 ? ground["position"].AsVector3().Y : 0f);
-            Blast.Detonate(this, center, null, chain: false);
+            var ground = World.Physics.DirectSpaceState.IntersectRay(PhysicsRayQueryParameters3D.Create(center, center + Vector3.Down * 30f, Layers.World | Layers.Floor));
+            ExplosionEffect.Create(World, center, ground.Count > 0 ? ground["position"].AsVector3().Y : 0f);
+            Blast.Detonate(World, center, null, chain: false);
         }
     }
 
@@ -832,19 +859,20 @@ public partial class Match : Node3D
     {
         Send(new NetWriter(Msg.Ragdoll, Setup.Id).Vec3(at).Vec3(velocity).Vec3(spin));
         // Thrown: the bank spills where the player stood, whoever's blast it was.
-        DropTanks(Tuning.Current.RagdollDropCount, DropReason.Ragdoll, at + Vector3.Up * 0.35f, Vector3.Zero);
+        DropTanks(World.Tuning.RagdollDropCount, DropReason.Ragdoll, at + Vector3.Up * 0.35f, Vector3.Zero);
     }
 
     /// <summary>Another player's shot hit this player.</summary>
     private void OnHitByShot(Vector3 shooterPosition)
     {
         matchHud.AddHitDirection(shooterPosition);
-        var now = MonotonicClock.Now;
+        // The victim owns this gameplay grace; wire timestamps and interpolation remain monotonic.
+        var now = World.Clock.Now;
         if (phase != Phase.Playing || now < graceUntil)
         {
             return;
         }
-        var tuning = Tuning.Current;
+        var tuning = World.Tuning;
         graceUntil = now + tuning.HitGraceTime;
         Vector3 origin;
         Vector3 away;
@@ -877,7 +905,7 @@ public partial class Match : Node3D
         {
             return;
         }
-        var tuning = Tuning.Current;
+        var tuning = World.Tuning;
         var rng = new RandomNumberGenerator();
         var w = new NetWriter(Msg.Drop, Setup.Id).Byte((byte)reason).Int(count);
         var start = rng.RandfRange(0, Mathf.Tau);
@@ -905,7 +933,7 @@ public partial class Match : Node3D
     /// <summary>Pulls a drop point back toward a known clear point if a wall or prop is in the way, and keeps it above the ground.</summary>
     private Vector3 SafeDropPoint(Vector3 clear, Vector3 wanted)
     {
-        var space = GetWorld3D().DirectSpaceState;
+        var space = World.Physics.DirectSpaceState;
         var mask = Layers.World | Layers.Props | Layers.Floor;
         var hit = space.IntersectRay(PhysicsRayQueryParameters3D.Create(clear, wanted, mask));
         if (hit.Count > 0)
@@ -927,14 +955,14 @@ public partial class Match : Node3D
         {
             return;
         }
-        var tank = PropaneTank.Create();
+        var tank = PropaneTank.Create(World);
         tank.NetId = id;
         tank.Name = $"Dropped_{id:x}";
         suburb.AddTank(tank);
         tank.GlobalTransform = transform;
         tank.LinearVelocity = velocity;
         tank.AngularVelocity = spin;
-        tank.MakeInvulnerable(Tuning.Current.DropInvulnerableTime, profiles[owner].Appearance.Color);
+        tank.MakeInvulnerable(World.Tuning.DropInvulnerableTime, profiles[owner].Appearance.Color);
         Track(tank, owner);
     }
 
@@ -958,7 +986,7 @@ public partial class Match : Node3D
                 continue;
             }
             near = true;
-            if (player.Ammo.Reserve >= Tuning.Current.MaxReserve)
+            if (player.Ammo.Reserve >= World.Tuning.MaxReserve)
             {
                 if (!ammoFullShown)
                 {
@@ -979,7 +1007,10 @@ public partial class Match : Node3D
 
     // ------------------------------------------------------------------ Sending
 
-    private void Send(NetWriter message, TrafficClass traffic = TrafficClass.ReliableOrdered) => Net.Send(message, traffic);
+    private void Send(NetWriter message, TrafficClass traffic = TrafficClass.ReliableOrdered)
+    {
+        if (World.IsAlive) { Net.Send(message, traffic); }
+    }
 
     private void SendPlayerState(double now)
     {
@@ -1011,12 +1042,13 @@ public partial class Match : Node3D
 
     internal void OnMessage(NetMessage message)
     {
+        if (!World.IsAlive) { return; }
         if (Protocol.IsRelay(message.Type))
         {
             OnRelay(message.Sender, message.Payload);
             return;
         }
-        var tuning = Tuning.Current;
+        var tuning = World.Tuning;
         switch (message.Type)
         {
             case Msg.Authority:
@@ -1109,7 +1141,7 @@ public partial class Match : Node3D
                 }
                 else if (contact.PropIndex >= 0 && looseProps.TryGetValue(contact.PropIndex, out var pushed) && IsInstanceValid(pushed) && !pushed.Freeze)
                 {
-                    pushed.ApplyCentralImpulse(swing.Direction * Tuning.Current.MeleePropImpulse);
+                    pushed.ApplyCentralImpulse(swing.Direction * World.Tuning.MeleePropImpulse);
                 }
 
                 break;
@@ -1118,11 +1150,11 @@ public partial class Match : Node3D
                 var impact = (Impact)shot.Impact;
                 if (impact.HasFlag(Impact.Hit))
                 {
-                    ImpactEffect.Spawn(shot.End, shot.Normal, impact.HasFlag(Impact.Metal), impact.HasFlag(Impact.Decal));
+                    ImpactEffect.Spawn(World, shot.End, shot.Normal, impact.HasFlag(Impact.Metal), impact.HasFlag(Impact.Decal));
                 }
                 if (shot.PropIndex >= 0 && looseProps.TryGetValue(shot.PropIndex, out var prop) && IsInstanceValid(prop) && !prop.Freeze)
                 {
-                    prop.ApplyImpulse(shot.Direction * Tuning.Current.BulletImpulse, shot.End - prop.GlobalPosition);
+                    prop.ApplyImpulse(shot.Direction * World.Tuning.BulletImpulse, shot.End - prop.GlobalPosition);
                 }
                 if (shot.Victim == me && remote != null)
                 {
@@ -1154,7 +1186,7 @@ public partial class Match : Node3D
                 remote?.Body.RemoteGetUp(getUp.Position, getUp.Yaw);
                 break;
             case TuningMessage tune:
-                Tuning.Current.Apply(new Godot.Collections.Dictionary { [tune.Name] = tune.Value });
+                World.Tuning.Apply(new Godot.Collections.Dictionary { [tune.Name] = tune.Value });
                 tuningPanel?.Refresh();
                 if (remote != null) { ShowNotice($"{remote.Profile.Name} changed {tune.Name}", 2.5f); }
                 break;

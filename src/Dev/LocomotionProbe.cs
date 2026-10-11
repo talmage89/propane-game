@@ -84,7 +84,7 @@ public partial class LocomotionProbe : SkeletonModifier3D
         if (SampleDrift && feet?.Settled != false) samples.Add((Label, time, left, right));
         if (feet != null)
         {
-            invalid |= Math.Abs(feet.PelvisOffset) > Tuning.Current.FootPelvisLimit + 0.00001f;
+            invalid |= Math.Abs(feet.PelvisOffset) > Player.World.Tuning.FootPelvisLimit + 0.00001f;
             if (feet.AirSettled)
             {
                 var pelvis = s.FindBone("pelvis");
@@ -103,7 +103,7 @@ public partial class LocomotionProbe : SkeletonModifier3D
                 var foot = side == 0 ? left : right;
                 var anchor = side == 0 ? feet.LeftAnchor : feet.RightAnchor;
                 var planted = side == 0 ? feet.LeftPlanted : feet.RightPlanted;
-                if (SampleTurns && !planted && foot.Y - Player.GlobalPosition.Y > Tuning.Current.FootSoleHeight + Tuning.Current.WalkFootLift * 0.5f)
+                if (SampleTurns && !planted && foot.Y - Player.GlobalPosition.Y > Player.World.Tuning.FootSoleHeight + Player.World.Tuning.WalkFootLift * 0.5f)
                     turnLifts[side]++;
                 if (planted)
                 {
@@ -188,7 +188,7 @@ public partial class LocomotionProbe : SkeletonModifier3D
         if (expectedEpisodes > 0)
         {
             GD.Print(FormattableString.Invariant($"[feet] ankle-separation-min={minimumSeparation:F6}m settled-min={minimumSettledSeparation:F6}m"));
-            failed |= minimumSeparation < 0 || minimumSettledSeparation < Tuning.Current.FootMinimumSeparation - 0.003f;
+            failed |= minimumSeparation < 0 || minimumSettledSeparation < Player.World.Tuning.FootMinimumSeparation - 0.003f;
         }
         GD.Print(FormattableString.Invariant($"[feet] pose-max={maxAngle:F3}deg bone={worstBone} episode={worstLabel} time={worstTime:F3} episodes={episodes.Length} rate-max={maxAngleRate:F1}deg/s"));
         var directory = DevArgs.Get("capture-dir");

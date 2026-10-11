@@ -9,6 +9,8 @@ public enum JumpPose { Ground, Takeoff, Rising, Apex, Falling, Landing }
 /// the one-tick jump/landing events; render updates only interpolate presentation, never movement.</summary>
 public sealed class LocomotionPose
 {
+    private readonly Tuning tuning;
+    public LocomotionPose(Tuning tuning) => this.tuning = tuning;
     public int Takeoffs { get; private set; }
     public float Phase { get; private set; }
     public float Walk { get; private set; }
@@ -19,9 +21,9 @@ public sealed class LocomotionPose
     public float Impact { get; private set; }
     public float TakeoffTime { get; private set; }
     public JumpPose Jump { get; private set; }
-    public float Stride => Mathf.Lerp(Mathf.Lerp(Tuning.Current.JogStrideLength, Tuning.Current.WalkStrideLength, Walk), Tuning.Current.SprintStrideLength, Sprint);
-    public float Contact => Mathf.Lerp(Mathf.Lerp(Tuning.Current.JogContactFraction, Tuning.Current.WalkContactFraction, Walk), Tuning.Current.SprintContactFraction, Sprint);
-    public float Lift => Mathf.Lerp(Mathf.Lerp(Tuning.Current.JogFootLift, Tuning.Current.WalkFootLift, Walk), Tuning.Current.SprintFootLift, Sprint);
+    public float Stride => Mathf.Lerp(Mathf.Lerp(tuning.JogStrideLength, tuning.WalkStrideLength, Walk), tuning.SprintStrideLength, Sprint);
+    public float Contact => Mathf.Lerp(Mathf.Lerp(tuning.JogContactFraction, tuning.WalkContactFraction, Walk), tuning.SprintContactFraction, Sprint);
+    public float Lift => Mathf.Lerp(Mathf.Lerp(tuning.JogFootLift, tuning.WalkFootLift, Walk), tuning.SprintFootLift, Sprint);
     private bool supported = true;
     private bool wasJumping;
     private float vertical;
@@ -47,20 +49,20 @@ public sealed class LocomotionPose
             // Accepted rebounds can skip the observed grounded tick. Jumping is authoritative; remote
             // snapshots may hold it across several ticks or omit it entirely.
             if ((state.Support == PlayerSupport.Jumping && !wasJumping) ||
-                (supported && verticalVelocity > Tuning.Current.JumpApexSpeed))
+                (supported && verticalVelocity > tuning.JumpApexSpeed))
             {
                 Takeoffs++;
                 landingTime = 0;
                 lowestVelocity = 0;
-                takeoffLeft = Tuning.Current.TakeoffPoseTime;
+                takeoffLeft = tuning.TakeoffPoseTime;
                 TakeoffTime = 0;
             }
             lowestVelocity = Mathf.Min(lowestVelocity, verticalVelocity);
         }
         else if (!supported)
         {
-            Impact = Mathf.Clamp(-lowestVelocity / Tuning.Current.LandingFullImpactSpeed, 0, 1);
-            landingTime = Tuning.Current.LandingSettleTime;
+            Impact = Mathf.Clamp(-lowestVelocity / tuning.LandingFullImpactSpeed, 0, 1);
+            landingTime = tuning.LandingSettleTime;
             lowestVelocity = 0;
         }
         supported = state.Grounded;
@@ -70,7 +72,7 @@ public sealed class LocomotionPose
 
     public void Update(float speed, PlayerGait gait, float dt)
     {
-        var t = Tuning.Current;
+        var t = tuning;
         var blend = dt / Mathf.Max(t.GaitBlendTime, 0.001f);
         var walk = gait == PlayerGait.Creep ? 1 : 1 - Mathf.SmoothStep(0, t.RunSpeed, speed);
         var sprint = gait == PlayerGait.Sprint ? Mathf.SmoothStep(0, t.SprintSpeed, speed) : 0;

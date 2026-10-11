@@ -4,7 +4,7 @@ shader_type spatial;
 #include "res://shaders/reveal.gdshaderinc"
 
 uniform vec4 albedo_color : source_color = vec4(0.035, 0.03, 0.028, 1.0);
-instance uniform float heat = 0.0;
+instance uniform float heat : instance_index(0) = 0.0;
 
 varying vec3 world_pos;
 varying vec3 local_pos;
