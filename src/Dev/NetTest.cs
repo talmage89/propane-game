@@ -102,6 +102,10 @@ public partial class NetTest : Node
             match = new Match { Name = "Match", Net = net, Setup = setup };
             match.Finished += () =>
             {
+                if (DevArgs.Get("scenario") == "duel")
+                {
+                    ScenarioAssert(scenarioPassed, "scenario ended before all assertions passed");
+                }
                 Log($"finished match {match.Setup.Id}; final scores {ScoreLine()}");
                 RemoveChild(match);
                 match.QueueFree();
@@ -118,6 +122,11 @@ public partial class NetTest : Node
             AddChild(match);
             match.Player.InputOverride = bot;
             clock = 0;
+            duelTime = -1;
+            duelInput = new ScriptedInput();
+            duelTank = null;
+            duelBlastAt = duelThrowAt = -1;
+            scenarioPassed = scenarioFailed = false;
             Log($"match {setup.Id} ready with {setup.Players.Count} players; playing {match.IsPlaying}, over {match.IsOver}");
         };
         var name = DevArgs.Get("name") ?? (role == "host" ? "HostBot" : $"Bot{OS.GetProcessId() % 1000}");
@@ -199,7 +208,14 @@ public partial class NetTest : Node
     }
 
     private float duelTime = -1;
-    private readonly ScriptedInput duelInput = new();
+    private ScriptedInput duelInput = new();
+    private uint? duelTank;
+    private float duelShotLeft;
+    private float duelBlastAt = -1;
+    private float duelThrowAt = -1;
+    private bool scenarioPassed;
+    private bool scenarioFailed;
+    private int duelInitialScore;
 
     /// <summary>
     /// A scripted close-up of the tank bank: the host shoots the other player (dropping tanks behind them, with the
@@ -217,6 +233,7 @@ public partial class NetTest : Node
         {
             duelTime = 0;
             player.InputOverride = duelInput;
+            player.Ragdolled += (_, _, _) => duelThrowAt = duelTime;
             if (role == "host")
             {
                 // Shouldered, for a tight spread.
@@ -230,6 +247,28 @@ public partial class NetTest : Node
         var shooterSpot = World.Suburb.ToWorld(mid - road.Direction * 7f, 0.05f);
         var victimSpot = World.Suburb.ToWorld(mid + road.Direction * 7f, 0.05f);
         var host = role == "host";
+        if (Once(0.8f, dt)) { duelInitialScore = match.MyScore; }
+        if (Once(3.5f, dt))
+        {
+            var victimId = host ? match.RemoteBodies.First().PeerId : net.MyId;
+            ScenarioAssert(match.Scores[victimId] == 6 && match.LiveTanks.Count(IsDrop) == 2,
+                "duel: three hits must spill exactly two tanks (one hit inside grace)");
+        }
+        if (Once(14f, dt))
+        {
+            ScenarioAssert(host ? duelBlastAt >= 0 && match.MyScore > duelInitialScore : duelThrowAt >= 0 && match.MyScore <= 1,
+                host ? "duel: dropped tank never detonated and scored" : "duel: blast never threw the victim and spilled five tanks");
+            scenarioPassed = !scenarioFailed;
+            if (scenarioPassed) { Log("duel: assertions passed"); }
+        }
+        var eventAt = host ? duelBlastAt : duelThrowAt;
+        if (eventAt >= 0)
+        {
+            foreach (var offset in new[] { 0.15f, 0.8f, 1.8f })
+            {
+                if (Once(eventAt + offset, dt)) { director.Screenshot($"{(host ? "shooter_blast" : "victim_throw")}_{offset:0.00}"); }
+            }
+        }
         if (Once(0.2f, dt))
         {
             var mine = host ? shooterSpot : victimSpot;
@@ -272,22 +311,33 @@ public partial class NetTest : Node
         {
             director.Screenshot($"shooter_{duelTime:00.0}");
         }
-        // Then the dropped tanks: once to puncture, once to set off.
-        foreach (var t in new[] { 4.0f, 4.6f })
+        // Drops keep moving under lag. Follow one tank every frame, retrying until its detonation is observed;
+        // a fixed aim/fire gap used to miss the first shot and puncture a different tank with the second.
+        if (duelTime >= 4f && duelBlastAt < 0)
         {
-            if (Once(t - 0.3f, dt))
+            if (duelTank == null)
             {
-                var dropped = match.LiveTanks.Where(k => k.NetId >= BodySync.DropTankBase && k.NetId < BodySync.CarBase)
+                var dropped = match.LiveTanks.Where(IsDrop).Where(k => !k.Invulnerable)
                     .OrderBy(k => k.GlobalPosition.DistanceTo(player.GlobalPosition)).FirstOrDefault();
                 if (dropped != null)
                 {
-                    AimAt(player, dropped.GlobalTransform * PropaneTank.LocalCenter);
-                    Log($"duel: aiming at dropped tank {dropped.NetId:x} {dropped.State} invulnerable {dropped.Invulnerable}");
+                    duelTank = dropped.NetId;
+                    duelShotLeft = 0.3f; // Let the rifle align before the first shot.
+                    dropped.Detonated += _ => duelBlastAt = duelTime;
+                    Log($"duel: tracking dropped tank {dropped.NetId:x}");
                 }
             }
-            if (Once(t, dt))
+            var target = match.LiveTanks.FirstOrDefault(k => k.NetId == duelTank);
+            if (target != null)
             {
-                duelInput.Fire(duelInput.Now + 0.001f);
+                AimAt(player, target.GlobalTransform * PropaneTank.LocalCenter);
+                duelShotLeft -= dt;
+                if (duelShotLeft <= 0 && !target.Invulnerable)
+                {
+                    duelShotLeft = 0.4f;
+                    duelInput.Fire(duelInput.Now + 0.001f);
+                    Log($"duel: shot at tracked tank {target.NetId:x} {target.State}");
+                }
             }
         }
         foreach (var t in new[] { 4.3f, 4.75f, 5.2f, 6.5f })
@@ -388,6 +438,16 @@ public partial class NetTest : Node
     }
 
     private bool Once(float at, float dt) => duelTime >= at && duelTime - dt < at;
+
+    private static bool IsDrop(PropaneTank tank) => tank.NetId is >= BodySync.DropTankBase and < BodySync.CarBase;
+
+    private void ScenarioAssert(bool condition, string failure)
+    {
+        if (condition) { return; }
+        scenarioFailed = true;
+        GD.PushError(failure);
+        GetTree().Quit(1);
+    }
 
     private static void AimAt(PlayerCharacter player, Vector3 point)
     {

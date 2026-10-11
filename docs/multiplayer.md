@@ -184,6 +184,11 @@ Details settled while building, within the decisions above:
 | `godot res://scenes/dev/menu_test.tscn -- --capture-dir=DIR` | Clicks through every menu, a solo match, leaving it, and single player and back. |
 | `menu_test.tscn -- --scenario=update --update-check --fake-version=0.0.9 --capture-dir=DIR` | The offer of a newer release, and a newer server (`-- --server --port=24993 --fake-version=9.9.0`) asking for an update. |
 
+The duel needs two players, `--start-score=8`, default tank-bank tuners and at least 15 seconds of play. It checks
+that three player hits spill exactly two tanks through the grace period, then follows one dropped tank continuously
+and retries missed shots until it explodes. Blast and throw captures are timed from the observed events, so lag does
+not move them out of frame. It exits nonzero if a stage fails or the match ends before all checks complete. The assertions also run headlessly.
+
 Results, 2026-10-09: with three bots under 120 ms round trip, 30 ms jitter and 3% loss, every bot agreed on which tanks existed and their states throughout; resting tanks matched exactly and venting tanks to within about half a meter. The same held through the Docker server on another machine, over the LAN and over a VPN. When the match's creator left mid-match, the others played on in step. A client with a different protocol was turned away with a message.
 
 Protocol 3 adds match ids, scalar tuning and timestamps on final body rests, and appends the debug flag to Hello; the next release must be a minor
