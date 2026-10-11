@@ -60,8 +60,14 @@ sharing their tuning, spawn roots, network sessions and animation state would ne
 Fixed-rate headless execution advances the same scripted simulation without waiting for real time; menu network
 waits still have their existing wall-clock deadlines.
 
-CI runs `make check` on Ubuntu 24.04 with .NET 10 and Godot 4.7.2 .NET.
-The same four partitions are available independently for diagnosis.
+CI runs lint independently, then the four test partitions in parallel after an import job. A final `check` job
+requires every result to succeed, keeping a stable branch-protection check. This is the same union as local
+`make check`; locally lint finishes before any suite starts, even with `make -j`. Parallel make shares one build
+and propagates failures from any partition. CI and release share .NET 10/Godot 4.7.2 .NET setup.
+CI caches `.godot/imported`, keyed by Godot version, project settings and all asset bytes/import settings.
+The import job populates the cache before the matrix starts; each partition restores it and runs import to rebuild
+its checkout's resource index. A cache miss safely imports from source. Imports must succeed; caches never replace
+compilation or assertions. Editor setup remains shared with release, whose tool cache is unchanged.
 
 ## Adding a suite
 
@@ -73,7 +79,8 @@ name to `CoreTests.Scenes`, complete through `CoreTests.Complete`, and check its
 both alone and consolidated. Keep synchronous unit tests last.
 
 Keep bounded regression seeds in the gate, and put deeper repetitions in `test-full` while retaining every
-assertion kind and required fixture in the gate. If adding a new partition, update `test` dependencies. Run `python3 tools/dev/lint_tests.py`, `make check` and the relevant deep sweep before submitting.
+assertion kind and required fixture in the gate. If adding a new partition, update `test` dependencies and the CI
+matrix together. Run `python3 tools/dev/lint_tests.py`, `make check` and the relevant deep sweep before submitting.
 
 Measure rather than guessing:
 

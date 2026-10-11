@@ -36,7 +36,7 @@ lint: ## Check C# formatting and compile with warnings as errors
 check: lint ## Run lint, then the tests
 	@$(MAKE) --no-print-directory test
 
-# The gate is the union of these partitions. Shared build runs once, even with make -j.
+# These same partitions run as separate CI jobs. Shared build runs once, even with make -j.
 test: test-core test-behavior test-generator test-world ## Run the fast headless gate (the same suites as CI)
 
 test-core: build ## Run checker, platform, movement and unit assertions

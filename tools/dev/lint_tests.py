@@ -118,6 +118,20 @@ def check_core_wiring():
     print("PASS: core runner retains platform, movement and unit scenes with failure completion")
 
 
+def check_ci_partitions():
+    makefile = (ROOT / "Makefile").read_text()
+    workflow = (ROOT / ".github/workflows/ci.yml").read_text()
+    local = re.search(r"^test: (.+?) ##", makefile, re.MULTILINE).group(1).split()
+    matrix = re.search(r"suite: \[([^\]]+)\]", workflow).group(1).split(",")
+    require(sorted(local) == sorted("test-" + name.strip() for name in matrix), "CI partitions differ from local test")
+    require("run: make test-${{ matrix.suite }}" in workflow and "run: make lint" in workflow,
+            "CI skipped the local targets")
+    require("needs: [lint, imports, tests]" in workflow and "if: always()" in workflow and
+            'test "$LINT" = success && test "$IMPORTS" = success && test "$TESTS" = success' in workflow,
+            "stable CI check must require every job")
+    print("PASS: CI runs the local partitions and requires every result")
+
+
 def check_installer(scratch):
     # A download failure must propagate; a valid cache must not attempt a download.
     curl = scratch / "curl"
@@ -193,6 +207,7 @@ public static class Formatting
         check_make_order(scratch)
         check_installer(scratch)
         check_core_wiring()
+        check_ci_partitions()
 
 
 if __name__ == "__main__":
