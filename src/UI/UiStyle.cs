@@ -40,6 +40,25 @@ public static class UiStyle
         ShadowSize = 18,
     };
 
+    /// <summary>Orange outline is distinct from the dark border of the selected color.</summary>
+    public static StyleBoxFlat Focus() => new()
+    {
+        BgColor = new Color(0, 0, 0, 0),
+        BorderColor = Accent,
+        BorderWidthTop = 3,
+        BorderWidthBottom = 3,
+        BorderWidthLeft = 3,
+        BorderWidthRight = 3,
+        CornerRadiusTopLeft = 8,
+        CornerRadiusTopRight = 8,
+        CornerRadiusBottomLeft = 8,
+        CornerRadiusBottomRight = 8,
+        ExpandMarginLeft = 3,
+        ExpandMarginRight = 3,
+        ExpandMarginTop = 3,
+        ExpandMarginBottom = 3,
+    };
+
     public static Label Text(string text, int size, Color? color = null, HorizontalAlignment align = HorizontalAlignment.Left)
     {
         var label = new Label { Text = text, HorizontalAlignment = align };
@@ -86,8 +105,9 @@ public static class UiStyle
 
     public static Button Button(string text)
     {
-        var button = new Button { Text = text, FocusMode = Control.FocusModeEnum.None, CustomMinimumSize = new Vector2(0, 42) };
+        var button = new Button { Text = text, FocusMode = Control.FocusModeEnum.All, CustomMinimumSize = new Vector2(0, 42) };
         button.AddThemeFontSizeOverride("font_size", 18);
+        button.AddThemeStyleboxOverride("focus", Focus());
         foreach (var (state, color) in new[] { ("normal", new Color(0.88f, 0.89f, 0.91f)), ("hover", new Color(0.82f, 0.84f, 0.87f)), ("pressed", new Color(0.75f, 0.77f, 0.8f)), ("disabled", new Color(0.93f, 0.93f, 0.94f)) })
         {
             button.AddThemeStyleboxOverride(state, new StyleBoxFlat
@@ -101,7 +121,7 @@ public static class UiStyle
                 ContentMarginRight = 14,
             });
         }
-        foreach (var name in new[] { "font_color", "font_hover_color", "font_pressed_color" })
+        foreach (var name in new[] { "font_color", "font_hover_color", "font_pressed_color", "font_focus_color", "font_hover_pressed_color" })
         {
             button.AddThemeColorOverride(name, Ink);
         }

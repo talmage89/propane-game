@@ -22,7 +22,7 @@ public partial class ResultsScreen : CanvasLayer
         var center = new CenterContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
         center.SetAnchorsPreset(Control.LayoutPreset.FullRect);
         AddChild(center);
-        var panel = new PanelContainer();
+        var panel = new FocusPanel { FocusMode = Control.FocusModeEnum.All };
         panel.AddThemeStyleboxOverride("panel", UiStyle.Panel(0.96f));
         center.AddChild(panel);
         var layout = new VBoxContainer { CustomMinimumSize = new Vector2(720, 0) };
@@ -39,6 +39,7 @@ public partial class ResultsScreen : CanvasLayer
         layout.AddChild(new HSeparator());
         footer = UiStyle.Text("", 19, UiStyle.SoftInk, HorizontalAlignment.Center);
         layout.AddChild(footer);
+        AddChild(new MenuNavigation { Screen = this, Root = panel });
     }
 
     public override void _Process(double delta)
@@ -96,5 +97,23 @@ public partial class ResultsScreen : CanvasLayer
         }
         left = seconds;
         Visible = true;
+    }
+
+    // Results are read-only and return on the server's timer. Focus the standings without adding a local exit.
+    private partial class FocusPanel : PanelContainer
+    {
+        public override void _Ready()
+        {
+            FocusEntered += QueueRedraw;
+            FocusExited += QueueRedraw;
+        }
+
+        public override void _Draw()
+        {
+            if (HasFocus())
+            {
+                DrawStyleBox(UiStyle.Focus(), new Rect2(Vector2.Zero, Size));
+            }
+        }
     }
 }
