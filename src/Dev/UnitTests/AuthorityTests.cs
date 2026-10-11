@@ -33,6 +33,21 @@ public static class AuthorityTests
 
     public static void Register(TestRunner runner)
     {
+        runner.Run("authority/reliable grant steers observers before owner publications", () =>
+        {
+            using var body = new BodyFixture(runner);
+            var sync = new BodySync(Tuning.SavedTemplate, 4, 2);
+            sync.Register(Id, body.Body, true, 2);
+            body.Body.GlobalPosition = Vector3.One * 20;
+            sync.OnAuthority(Grant(3, 2), 0);
+            sync.Correct(0);
+            TestRunner.Assert(body.Body.GlobalTransform.IsEqualApprox(Pose(Id).Transform), "grant did not supply an observer correction before owner motion");
+            var rest = Grant(2, 3) with { Rest = true };
+            sync.OnAuthority(rest, 0);
+            sync.Correct(1);
+            TestRunner.Assert(body.Body.GlobalTransform.IsEqualApprox(rest.Body.Transform) && sync.Get(Id) is { HasTarget: true, TargetRest: true },
+                "resting handoff lost the new owner's last word");
+        });
         runner.Run("authority/vent spin limit does not erase observer steering", () =>
         {
             using var f = new MatchFixture(runner);

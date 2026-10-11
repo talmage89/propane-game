@@ -65,6 +65,24 @@ stale copies and a newly granted owner resume the ordinary limit. The before run
 failure; the after suite completed. Both builds were warning-free. Network measurement remains necessary
 to establish which moving errors this correction resolves.
 
+## Reliable authority as correction evidence
+
+Body sync cached a reliable canonical grant/refusal but did not install it as an observer target. If the
+new owner had not received its grant or had a pending exploded prediction, observers continued local blast
+flight until disposable publications arrived. Faulted run `/tmp/nas-fix-fault-1` shows `1000000e`: Bot1
+received epoch 2 at 87998.221, but the new owner Bot2 first published at 87999.686. Bot1 first accepted
+motion at 88000.763, after drifting 14.336 m from that target. The canonical grant itself was unused.
+
+Reliable authority now supplies an observer target immediately. A newer publication that overtook the
+grant retains its original sampling/receipt times; older refusals cannot rewind that publication. Resting
+authority remains an anchor. Owners continue their predicted trajectory. Match passes its existing receipt
+clock at two call sites, isolated in a separate commit for the parallel restructuring package. No packet
+changes are needed.
+
+The regression, covering moving and resting handoffs before any owner publication, failed before
+(`build/net-assert-artifacts/grant-before.log`: 201 tests, one failure) and passed after
+(`build/net-assert-artifacts/grant-after.log`: 201 tests, zero failures). Both builds were warning-free.
+
 ## Construction stalls and native liveness
 
 A second mechanism invalidated whole runs: native peers disconnected while a valid builder was stalled.

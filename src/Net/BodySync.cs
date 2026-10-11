@@ -147,14 +147,16 @@ public sealed class BodySync
         entry.Body.LinearVelocity, entry.Body.AngularVelocity, entry.Epoch, entry.Sequence);
 
     /// <summary>Server-ordered authority. Even the same peer's next grant starts a separate sequence space.</summary>
-    public bool OnAuthority(BodyAuthority authority) => OnAuthority(authority, out _);
+    public bool OnAuthority(BodyAuthority authority, double? now = null) => OnAuthority(authority, out _, now);
 
-    public bool OnAuthority(BodyAuthority authority, out BodyAuthority resolved)
+    public bool OnAuthority(BodyAuthority authority, out BodyAuthority resolved, double? now = null)
     {
         resolved = authority;
         // A publication orders motion, not lifecycle. A newer same-epoch pose must not hide a refusal.
         if (!entries.TryGetValue(authority.Body.Id, out var entry) || authority.Body.Epoch < entry.Epoch) { return false; }
-        if (authority.Body.Epoch > entry.Epoch)
+        var newEpoch = authority.Body.Epoch > entry.Epoch;
+        var priorSequence = entry.LastSequence;
+        if (newEpoch)
         {
             entry.Epoch = authority.Body.Epoch;
             entry.Sequence = 0;
@@ -178,6 +180,14 @@ public sealed class BodySync
             OnState(future.Sender, future.Body, future.IsRest, future.Updated, future.Updated - future.Received);
         }
         if (entry.Latest is { } newest) { resolved = authority with { Body = newest.Body, Rest = newest.IsRest }; }
+        // The reliable grant/refusal is already canonical evidence. Do not wait for the new owner's
+        // disposable stream before correcting an observer. An overtaking newer publication keeps its age.
+        if (entry.Owner != Me && resolved.Body.Sequence == authority.Body.Sequence &&
+            (newEpoch || authority.Body.Sequence > priorSequence || !entry.HasTarget))
+        {
+            var received = now ?? MonotonicClock.Now;
+            SetTarget(entry, resolved.Body, resolved.Rest, received, received);
+        }
         Trace?.Invoke(entry, $"authority owner={authority.Owner} epoch={authority.Body.Epoch} sequence={authority.Body.Sequence} rest={authority.Rest}");
         return true;
     }
@@ -203,14 +213,19 @@ public sealed class BodySync
         if (entry.Owner != sender || sender == Me || state.Sequence <= entry.LastSequence) { return; }
         entry.LastSequence = state.Sequence;
         entry.Latest = (state, rest);
+        SetTarget(entry, state, rest, now, received);
+        Trace?.Invoke(entry, $"receive sender={sender} epoch={state.Epoch} sequence={state.Sequence} rest={rest} transit={transit:0.000}");
+    }
+
+    private static void SetTarget(Entry entry, BodyState state, bool rest, double sampled, double received)
+    {
         entry.HasTarget = true;
         entry.TargetRest = rest;
         entry.Target = state.Transform;
         entry.TargetLinear = rest ? Vector3.Zero : state.Linear;
         entry.TargetAngular = rest ? Vector3.Zero : state.Angular;
-        entry.TargetReceived = now;
+        entry.TargetReceived = sampled;
         entry.TargetUpdated = received;
-        Trace?.Invoke(entry, $"receive sender={sender} epoch={state.Epoch} sequence={state.Sequence} rest={rest} transit={transit:0.000}");
     }
 
     /// <summary>Puts a body exactly where its owner had it, moving as it was.</summary>
