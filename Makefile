@@ -44,6 +44,7 @@ test: build ## Run all headless regression suites and separate-process world tes
 	"$(GODOT)" --headless --path . --fixed-fps 60 res://scenes/dev/blast_query_tests.tscn
 	"$(GODOT)" --headless --path . --fixed-fps 60 res://scenes/dev/gather_range.tscn
 	"$(GODOT)" --headless --path . --fixed-fps 60 res://scenes/dev/gather_range.tscn -- --scenario=grant-races
+	"$(GODOT)" --headless --path . res://scenes/dev/gather_range.tscn -- --scenario=appearance
 	"$(GODOT)" --headless --path . --fixed-fps 60 res://scenes/dev/game_test.tscn -- --scenario=gather --tune.FixedSeed=23
 	"$(GODOT)" --headless --path . res://scenes/dev/movement_tests.tscn
 	"$(GODOT)" --headless --path . --fixed-fps 60 res://scenes/dev/bot_navigation_course.tscn -- --seeds=5

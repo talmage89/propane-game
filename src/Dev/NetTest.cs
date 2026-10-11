@@ -161,6 +161,8 @@ public partial class NetTest : Node
             clock = 0;
             duelTime = -1;
             gatherPositions.Clear();
+            gatherShields.Clear();
+            gatherGlides.Clear();
             duelInput = new ScriptedInput();
             duelTank = null;
             duelBlastAt = duelThrowAt = -1;
@@ -356,6 +358,8 @@ public partial class NetTest : Node
     private static string Vector(Vector3 v) => FormattableString.Invariant($"{v.X:R},{v.Y:R},{v.Z:R}");
 
     private readonly Dictionary<uint, Vector3> gatherPositions = new();
+    private readonly HashSet<uint> gatherShields = new();
+    private readonly HashSet<uint> gatherGlides = new();
     private float duelTime = -1;
     private ScriptedInput duelInput = new();
     private uint? duelTank;
@@ -400,6 +404,37 @@ public partial class NetTest : Node
         var host = role == "host";
         var refusal = DevArgs.Get("scenario") == "drop-refusal";
         var gathering = DevArgs.Get("scenario") == "gather";
+        if (gathering)
+        {
+            var dropper = match.Setup.Players.Single(p => p.Player.Id != match.Bodies.Host).Player;
+            foreach (var tank in match.LiveTanks.Where(IsDrop))
+            {
+                var mesh = tank.GetNode<MeshInstance3D>("Mesh");
+                var glow = mesh.GetInstanceShaderParameter("shield_color").AsColor();
+                if (tank.Invulnerable && glow.A > 0)
+                {
+                    ScenarioAssert(!tank.Gathering && new Color(glow, 1) == dropper.Appearance.Color,
+                        "gather: shielded drop gathered or lost accepted appearance");
+                    gatherShields.Add(tank.NetId);
+                }
+                if (!tank.Gathering) { continue; }
+                ScenarioAssert(!tank.Invulnerable && glow.A == 0 && mesh.GetInstanceShaderParameter("shield_contrast").AsColor().A == 0 &&
+                    mesh.GetInstanceShaderParameter("gather_shimmer").AsSingle() == Tuning.Current.GatherShimmer,
+                    "gather: expired shield glow/contrast remained or shimmer missing");
+                if (host)
+                {
+                    var camera = player.CameraRig.Camera;
+                    player.CameraRig.ProcessMode = ProcessModeEnum.Disabled;
+                    var center = tank.GlobalTransform * PropaneTank.LocalCenter;
+                    camera.LookAtFromPosition(center + new Vector3(1.5f, 1, 2), center);
+                    if (gatherGlides.Count == 0)
+                    {
+                        GetTree().CreateTimer(0.2).Timeout += () => director.Screenshot("gather_host_shimmer");
+                    }
+                }
+                gatherGlides.Add(tank.NetId);
+            }
+        }
         if (gathering && Once(3.7f, dt))
         {
             // Leave the spilled tanks alone; the creator must acquire the dropper's entire group.
@@ -413,15 +448,18 @@ public partial class NetTest : Node
             {
                 gatherPositions[tank.NetId] = tank.GlobalPosition;
                 ScenarioAssert(match.Bodies.Get(tank.NetId)?.Owner == match.Bodies.Host, "gather: dropper retained ownership");
+                ScenarioAssert(tank.GetNode<MeshInstance3D>("Mesh").GetInstanceShaderParameter("gather_shimmer").AsSingle() == 0,
+                    "gather: settled drop retained shimmer");
                 Log($"gather final {tank.NetId:x} {tank.GlobalPosition}");
             }
         }
         if (gathering && Once(40, dt))
         {
+            ScenarioAssert(gatherShields.Count == 2 && gatherGlides.Count == 2, "gather: did not observe both drop shields and glides");
             ScenarioAssert(gatherPositions.Count == 2 && match.LiveTanks.Where(IsDrop).All(t =>
                 gatherPositions.TryGetValue(t.NetId, out var position) && position.DistanceTo(t.GlobalPosition) <= 0.006f && t.AtRest), "gather: final pile unstable");
             scenarioPassed = !scenarioFailed;
-            if (scenarioPassed) { Log("gather: assertions passed; two drops acquired, settled and stable on this client"); }
+            if (scenarioPassed) { Log("gather: assertions passed; two accepted-color shields expired; both drops shimmered, acquired, settled and stable on this client"); }
             director.Screenshot($"gather_{role}_settled");
         }
         if (gathering && host && duelTime is > 18 and < 32 && Mathf.PosMod(duelTime, 1) < dt)

@@ -200,6 +200,14 @@ membership. Presentation has separate sequence tracking so newer disposable moti
 or rewind a newer pose. Handoffs and ordered final body rests release frozen observers, and stale epochs cannot
 finish an abandoned pile.
 
+The drop shield glow expires before a tank becomes eligible to gather. Gather shimmer adds to shield emission and
+contrast without replacing them; each effect clears only its own shader parameters. The presentation-only
+`gather_range.tscn -- --scenario=appearance` fixture forces both on custom/black/white tanks with amplified shimmer,
+checks independent completion and expiry, and captures their coexistence with `--capture-dir=DIR`. It does not change
+gather eligibility. Run this fixture without `--fixed-fps`: shield expiry uses wall time. The network gather scenario
+checks accepted drop colors, shield expiry, glide shimmer and its cleanup on both clients, and captures a close-up
+from the host.
+
 Blast shape queries page past full 512-result pages by excluding returned bodies. Large piles cannot silently truncate
 pushes or chain contacts; `scenes/dev/blast_query_tests.tscn` checks 1,100 bodies and duplicate shapes.
 
