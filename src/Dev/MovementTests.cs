@@ -221,6 +221,12 @@ public partial class MovementTests : Node
         Check(!device.Read().FireHeld, "last device release clears fire action");
         Send(new InputEventJoypadMotion { Axis = JoyAxis.TriggerRight, AxisValue = 1 });
         Check(device.Read().FirePressed, "fresh trigger pull creates a new press");
+        // A menu handled this release, so the gameplay event collector never receives it.
+        Input.ParseInputEvent(new InputEventJoypadMotion { Axis = JoyAxis.TriggerRight, AxisValue = 0 });
+        Input.FlushBufferedEvents();
+        Check(!device.Read().FireHeld, "UI-consumed release clears the polled action");
+        Send(new InputEventJoypadMotion { Axis = JoyAxis.TriggerRight, AxisValue = 1 });
+        Check(device.Read().FirePressed, "press after UI-consumed release creates an edge");
         gameplayEnabled = false;
         intent = device.Read();
         Check(intent.Move == Vector2.Zero && !intent.FireHeld && intent.LookStick == Vector2.Zero, "menus suppress gameplay");

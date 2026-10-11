@@ -88,6 +88,11 @@ public sealed class DeviceInput : IPlayerInputSource
         jump = false;
         fire = false;
         reload = false;
+        // UI can consume a release before _UnhandledInput sees it. Resynchronize at the physics sample so
+        // returning to gameplay does not lose the next press; pending edges above are still consumed once.
+        jumpDown = Input.IsActionPressed(InputSetup.Jump);
+        fireDown = Input.IsActionPressed(InputSetup.Fire);
+        reloadDown = Input.IsActionPressed(InputSetup.Reload);
         return intent;
     }
 }
