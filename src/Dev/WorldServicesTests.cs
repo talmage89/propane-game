@@ -20,6 +20,12 @@ public partial class WorldServicesTests : Node
         DevArgs.MarkReady();
         try
         {
+            if (DevArgs.Get("scenario") == "single-player-hitstop")
+            {
+                SinglePlayerHitstop();
+                ShutdownGuard.Quit(GetTree());
+                return;
+            }
             if (DevArgs.Get("scenario") == "presentation-lifetime")
             {
                 PresentationLifetime();
@@ -51,6 +57,7 @@ public partial class WorldServicesTests : Node
             ConstructionFailure();
             PresentationLifetime();
             TuningPanelIsolation();
+            SinglePlayerHitstop();
             GD.Print($"[world services] PASS two overlapping worlds, distinct tuning, events, blasts, callbacks, partial failure; 10 retirements stable at {baseline}");
             ShutdownGuard.Quit(GetTree());
         }
@@ -114,6 +121,24 @@ public partial class WorldServicesTests : Node
         Assert(a.Tuning.TankMass == 13 && b.Tuning.TankMass == 7 && template.TankMass == 7,
             "tuning panel edited another world or the future-world template");
         GD.Print("[world services] PASS tuning slider edits only its explicit world target");
+    }
+
+    private void SinglePlayerHitstop()
+    {
+        using var template = new Tuning { FixedSeed = 23, HitstopDuration = 1, HitstopTimeScale = 0.1f };
+        var game = new Game { Template = template, PauseOnFocusLoss = false };
+        AddChild(game);
+        var hitstop = game.GetNode<Propane.Fx.Hitstop>("Hitstop");
+        try
+        {
+            game.World.Events.RaiseExplosion(game.Player.GlobalPosition);
+            Assert(Engine.TimeScale < 0.11, "single-player explosion did not acquire the presentation lease");
+            game.World.Dispose();
+            Assert(Engine.TimeScale == 1 && !GodotObject.IsInstanceValid(hitstop),
+                "world retirement retained single-player hitstop or its lease");
+        }
+        finally { game.Free(); }
+        GD.Print("[world services] PASS real single-player explosion acquires hitstop and world retirement releases it");
     }
 
     private void ConstructionFailure()

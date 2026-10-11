@@ -38,7 +38,9 @@ root; retiring content removes its effects and cancels source callbacks before t
 
 `make test` discovers `[UnitSuite]` clock assertions and runs `world_services_tests.tscn`, which exercises two
 independent physics worlds at overlapping coordinates with different tuning. It asserts blast, event, spawn and callback isolation, survivor continuity, replacement safety, partial
-construction cleanup, tuning-panel target isolation, and exact node/object/orphan counts across ten retirements after warming immutable caches.
+construction cleanup, tuning-panel target isolation, and exact node/object/orphan counts across ten retirements after
+warming immutable caches. A real single-player explosion also verifies hitstop admission and synchronous retirement
+of its presentation node and engine time-scale lease.
 
 `World.SetPaused` disables the simulation root and calls `PhysicsServer3D.SpaceSetActive` for that world's space.
 Tracked cameras follow the pause; menus and the always-processing driver stay active. Connection polling remains

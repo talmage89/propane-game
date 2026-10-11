@@ -93,7 +93,7 @@ public partial class Game : Node3D
         environment.Follow = player.CameraRig.Camera;
 
         hitstop = new Hitstop { World = World, Name = "Hitstop", Focus = player };
-        AddChild(hitstop);
+        World.AddView(this, hitstop);
         hud = new Hud { Name = "Hud" };
         World.AddView(this, hud);
         tuningPanel = new TuningPanel { Target = World.Tuning, Name = "Tuning" };
