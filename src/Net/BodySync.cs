@@ -112,6 +112,14 @@ public sealed class BodySync
         {
             if (entries.TryGetValue(id, out var entry))
             {
+                if (entry.Owner != owner)
+                {
+                    // Sender clocks are process-local. A correction from the former owner must not reject the
+                    // new owner's first snapshot, or keep steering the body after a claim.
+                    entry.HasTarget = false;
+                    // Even an already sleeping successor owes everyone its final position once.
+                    entry.WasAwake |= owner == Me;
+                }
                 entry.Owner = owner;
                 if (owner == Me)
                 {
@@ -134,6 +142,7 @@ public sealed class BodySync
         {
             entry.Owner = newHost;
             entry.HasTarget = false;
+            entry.WasAwake |= newHost == Me;
         }
     }
 

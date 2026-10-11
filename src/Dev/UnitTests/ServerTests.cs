@@ -73,6 +73,39 @@ public static class ServerTests
             f.Reject(new NetWriter(Msg.Shot, f.Id).Vec3(Vector3.One).Vec3(Vector3.Up).Vec3(Vector3.Forward).Byte(1).Int(999).Int(-1).ToArray());
             f.Reject(new NetWriter(Msg.Shot, f.Id).Vec3(Vector3.One).Vec3(Vector3.Up).Vec3(Vector3.Forward).Byte(1).Int(0).Int(int.MaxValue).ToArray());
         });
+        runner.Run("server/drop registration recovers an early snapshot and preserves the final rest", () =>
+        {
+            using var f = new Fixture();
+            var dropped = DropBody(0, 0);
+            var state = MessageCodec.Encode(new NetMessage(Msg.BodyStates, f.Id, 0,
+                new BodyStatesMessage(1, new[] { DropBody(0, 1) with { Id = BodySync.MapTankId(0) }, dropped })), false);
+            f.Reject(state); // Unreliable can overtake Drop: refuse the whole batch, without changing the ledger.
+            f.Receive(f.Drop(new[] { dropped }));
+            f.Packets.Clear();
+            f.Receive(state);
+            TestRunner.Assert(f.Packets.Single().Message.Payload is BodyStatesMessage, "later snapshot was permanently refused");
+            f.Packets.Clear();
+            f.Receive(new NetWriter(Msg.BodyRest, f.Id).UInt(dropped.Id).Transform(dropped.Transform));
+            TestRunner.Assert(f.Packets.Single() is { Peer: 3, Message.Payload: BodyRestMessage }, "reliable final rest was lost");
+            f.Receive(new NetWriter(Msg.Explode, f.Id).UInt(dropped.Id).Vec3(Vector3.One));
+            f.Packets.Clear();
+            f.Receive(state); // A late tombstone in a mixed batch must not starve the remaining moving bodies.
+            TestRunner.Assert(f.Packets.Single().Message.Payload is BodyStatesMessage, "exploded id poisoned a later batch");
+        });
+        runner.Run("server/creator departure preserves slots, banks and the new host", () =>
+        {
+            using var f = new Fixture();
+            f.Server.OnDisconnected(2);
+            TestRunner.Assert(f.Packets.Any(p => p.Peer == 3 && p.Message.Payload is PlayerLeftMessage { Player: 2, Host: 3 }),
+                "creator departure did not identify the successor");
+            f.Packets.Clear();
+            f.Receive(f.Drop(new[] { DropBody(1, 0) }, color: 1), peer: 3);
+            f.AssertScore(3, 3, -1);
+            f.Server.AdvanceMatches(NetTransport.Now + 20);
+            var standings = f.Packets.Select(p => p.Message.Payload).OfType<IReadOnlyList<Standing>>().Single();
+            TestRunner.Assert(standings.Any(s => s is { Id: 2, Score: 4, Present: false }) &&
+                standings.Any(s => s is { Id: 3, Score: 3, Present: true }), "departure erased a bank or renumbered a spawn slot");
+        });
         runner.Run("server/tuning requires original debug creator", () =>
         {
             using var f = new Fixture();

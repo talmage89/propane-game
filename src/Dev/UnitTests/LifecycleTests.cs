@@ -10,6 +10,44 @@ public static class LifecycleTests
 {
     public static void Register(TestRunner runner)
     {
+        runner.Run("lifecycle/sleeping bodies publish a final state after their owner leaves", () =>
+        {
+            var body = new RigidBody3D { Sleeping = true };
+            try
+            {
+                var sync = new BodySync(me: 3, host: 2);
+                var id = BodySync.MapTankId(0);
+                sync.Register(id, body, isTank: true, owner: 2);
+                // The old owner's final correction need not have finished before PlayerLeft arrives.
+                sync.OnRest(2, id, new Transform3D(Basis.Identity, Vector3.One), 1);
+                sync.OwnerLeft(2, 3);
+                var (moving, rested) = sync.Collect(1);
+                TestRunner.Assert(moving.Count == 0 && rested.SingleOrDefault()?.Id == id,
+                    "new owner went quiet while the other copies could still be correcting");
+                TestRunner.Assert(sync.Get(id) is { Owner: 3, HasTarget: false }, "old owner still corrects the successor");
+                TestRunner.Assert(sync.Collect(1).Rested.Count == 0, "handoff repeatedly sends rest");
+            }
+            finally { body.Free(); }
+        });
+        runner.Run("lifecycle/claims start a fresh owner's correction stream", () =>
+        {
+            var body = new RigidBody3D { Sleeping = true };
+            try
+            {
+                var sync = new BodySync(me: 2, host: 3);
+                var id = BodySync.MapTankId(0);
+                sync.Register(id, body, isTank: true, owner: 3);
+                sync.OnState(3, 100, id, Transform3D.Identity, Vector3.Zero, Vector3.Zero, 1);
+                sync.OnClaim(4, new[] { id });
+                // Sender times use each process's uptime. A new owner can have a lower timestamp.
+                sync.OnState(4, 2, id, new Transform3D(Basis.Identity, Vector3.One), Vector3.Up, Vector3.Zero, 1.1);
+                TestRunner.Assert(sync.Get(id) is { Owner: 4, LastSenderTime: 2, Target.Origin: var position } && position == Vector3.One,
+                    "previous owner's clock starved the new correction stream");
+                sync.OnClaim(2, new[] { id });
+                TestRunner.Assert(sync.Collect(1).Rested.SingleOrDefault()?.Id == id, "sleeping claimant omitted its final state");
+            }
+            finally { body.Free(); }
+        });
         runner.Run("lifecycle/buffer through Go and End until the match exists", () =>
         {
             var client = Client();
