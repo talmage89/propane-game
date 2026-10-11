@@ -1,0 +1,354 @@
+using System;
+using System.Linq;
+using System.Threading.Tasks;
+using Godot;
+using Propane.Bots;
+using Propane.Core;
+using Propane.Lab;
+using Propane.Player;
+using Propane.Tank;
+using Propane.UI;
+using static Propane.Dev.UnitTests.TestRunner;
+
+namespace Propane.Dev;
+
+/// <summary>Real Lab sessions: retirement, fixture counts, session-only tuning, local banks and player-camera frames.</summary>
+public partial class LabTest : Node
+{
+    private CaptureDirector capture = null!;
+    private Tuning template = null!;
+    public override async void _Ready()
+    {
+        DevArgs.MarkReady();
+        capture = new CaptureDirector(); AddChild(capture);
+        template = Tuning.LoadBaked();
+        template.FixedSeed = 23;
+        template.LabStackCount = 32;
+        try
+        {
+            switch (DevArgs.Get("scenario") ?? "lifetime")
+            {
+                case "frames": await FramesReview().ConfigureAwait(true); break;
+                case "rules": await BankRules().ConfigureAwait(true); break;
+                case "duel": await Duel().ConfigureAwait(true); break;
+                case "soak": await Duel(soak: true).ConfigureAwait(true); break;
+                case "measure": await Measure().ConfigureAwait(true); break;
+                default: await Lifetime().ConfigureAwait(true); break;
+            }
+            template.Dispose();
+            GD.Print("[lab] PASS");
+            ShutdownGuard.Quit(GetTree());
+        }
+        catch (Exception error)
+        {
+            GD.PushError($"[lab] FAIL {error}");
+            ShutdownGuard.Quit(GetTree(), 1);
+        }
+    }
+
+    private LabSession Enter(LabScenario scenario, LabEnvironment environment)
+    {
+        var lab = new LabSession
+        {
+            Scenario = scenario,
+            EnvironmentKind = environment,
+            Template = template,
+            PauseOnFocusLoss = false,
+            TestRandomSeed = (ulong)DevArgs.GetFloat("effects-seed", 23),
+            Name = "Lab"
+        };
+        AddChild(lab);
+        Assert(lab.Initialized, $"{scenario.Id}/{environment} initialization");
+        return lab;
+    }
+
+    private async Task Lifetime()
+    {
+        using var snapshot = template.Snapshot();
+        Assert(!snapshot.ContainsKey(nameof(Tuning.LabStackCount)) && !snapshot.ContainsKey(nameof(Tuning.LabBotSkill)),
+            "Lab dials entered a shared tuning snapshot");
+        foreach (var scenario in LabScenarios.All)
+        {
+            foreach (var environment in scenario.Environments)
+            {
+                await Cycle(scenario, environment).ConfigureAwait(true);
+                await Collect().ConfigureAwait(true);
+                await Cycle(scenario, environment).ConfigureAwait(true);
+                await Collect().ConfigureAwait(true);
+                var baseline = Counts();
+                for (var cycle = 1; cycle <= (int)DevArgs.GetFloat("cycles", 10); cycle++)
+                {
+                    await Cycle(scenario, environment).ConfigureAwait(true);
+                    await Collect().ConfigureAwait(true);
+                    Assert(Counts() == baseline, $"{scenario.Id}/{environment} cycle {cycle}: {baseline} -> {Counts()}");
+                }
+                GD.Print($"[lab lifetime] {scenario.Id}/{environment}: {(int)DevArgs.GetFloat("cycles", 10)} entry/reset/exit cycles stable {baseline}");
+            }
+        }
+    }
+
+    private async Task Cycle(LabScenario scenario, LabEnvironment environment)
+    {
+        var lab = Enter(scenario, environment);
+        var tankCount = lab.LiveTanks.Count();
+        Assert(tankCount > 0, "fixture has no tanks");
+        Assert(!lab.World.Networked && lab.Session.Actors.Count == (scenario.Banking ? 2 : 1), "local actors/world");
+        Assert(lab.Opponent?.View == null, "bot acquired a camera");
+        if (scenario.Id == "stack") Assert(tankCount == template.LabStackCount && lab.LiveTanks.All(t => t.Transform.Basis.Y.Dot(Vector3.Up) > .99f), "upright stack count");
+        if (scenario.Id == "range") Assert(tankCount == 12, "range fixture count");
+        lab.World.Tuning.RunSpeed = 7;
+        lab.World.Tuning.LabRangeStep = 15;
+        Assert(template.RunSpeed != 7 && template.LabRangeStep == 10, "Lab edited template");
+        await Frames(8).ConfigureAwait(true);
+        var retired = lab.Session;
+        lab.RequestReset();
+        await Frames(6).ConfigureAwait(true);
+        Assert(lab.ResetCount == 1 && lab.Session != retired, "reset did not replace session");
+        Assert(!retired.IsAlive && retired.Actors.Count == 0 && retired.World.Clock.PendingCount == 0 &&
+            retired.World.BlastReceivers.Count == 0, "reset left old services live");
+        Assert(lab.World.Tuning.RunSpeed == 7 && lab.World.Tuning.LabRangeStep == 15, "reset lost session tuning");
+        Assert(lab.LiveTanks.Count() == tankCount, "reset lost fixtures");
+        retired = lab.Session;
+        lab.Session.Dispose(); lab.Free();
+        Assert(!retired.IsAlive && retired.Actors.Count == 0 && retired.World.BlastReceivers.Count == 0, "exit retained services");
+    }
+
+    private async Task FramesReview()
+    {
+        template.LabStackCount = Tuning.LabStackMaximum;
+        var main = new Main { SavedTuning = template };
+        AddChild(main);
+        await Frames(60).ConfigureAwait(true);
+        Press("Lab");
+        await Frames(12).ConfigureAwait(true);
+        capture.Screenshot("lab_menu");
+        Press("Huge stack");
+        await Frames(12).ConfigureAwait(true);
+        capture.Screenshot("stack_options");
+        main.Free();
+        foreach (var scenario in LabScenarios.All)
+        {
+            foreach (var environment in scenario.Environments)
+            {
+                var lab = Enter(scenario, environment);
+                await Frames(60).ConfigureAwait(true);
+                if (lab.TuningPanel.Visible)
+                {
+                    capture.Screenshot($"{scenario.Id}_{environment}_panel");
+                    lab.SetMenu(false);
+                }
+                await Frames(30).ConfigureAwait(true);
+                capture.Screenshot($"{scenario.Id}_{environment}_player");
+                lab.SetMenu(true);
+                await Frames(8).ConfigureAwait(true);
+                capture.Screenshot($"{scenario.Id}_{environment}_controls");
+                lab.Session.Dispose(); lab.Free();
+                await Collect().ConfigureAwait(true);
+            }
+        }
+    }
+
+    private async Task Duel(bool soak = false)
+    {
+        var lab = Enter(LabScenarios.Get("duel"), DevArgs.Get("environment") == "suburb" ? LabEnvironment.Suburb : LabEnvironment.Void);
+        if (soak) lab.Bank!.AttachBot(lab.Player);
+        else lab.Player.InputOverride = new ScriptedPlayer(lab);
+        // The scripted player taps visible tanks through the actor intent/aim path; neither bank is granted.
+        var seconds = (int)DevArgs.GetFloat("seconds", soak ? 180 : 45);
+        var frame = 0;
+        while (lab.Bank!.IsPlaying && lab.World.Clock.Now < seconds)
+        {
+            Assert(frame++ < seconds * 120, "duel simulation stalled");
+            await Frames(1).ConfigureAwait(true);
+        }
+        var bank = lab.Bank!;
+        GD.Print($"[lab duel] seconds={seconds} simulation={lab.World.Clock.Now:F3} banked={bank.BankedTotal} spilled={bank.SpilledTotal} hits={bank.Hits} you={bank.Scores[1]} bot={bank.Scores[2]} earned_you={bank.Earned[1]} earned_bot={bank.Earned[2]} live={lab.LiveTanks.Count()}");
+        Assert(bank.BankedTotal > 0 && bank.Earned[2] > 0, "banking bot earned no bank");
+        Assert(bank.Scores.Values.Sum() + lab.LiveTanks.Count() == bank.InitialSupply, "bank conservation");
+        Assert(lab.Opponent!.View == null && !lab.World.Networked, "duel needs camera/network");
+        capture.Screenshot(soak ? "duel_soak_end" : "duel_bot_bank");
+        lab.Session.Dispose(); lab.Free();
+    }
+
+    private async Task BankRules()
+    {
+        template.LabDuelPiles = 2;
+        template.LabDuelPileCount = 1;
+        template.LabDuelSeconds = 30;
+        template.PickupRespawnTime = .1f;
+        var lab = Enter(LabScenarios.Get("duel"), LabEnvironment.Void);
+        var bot = lab.Opponent!;
+        bot.InputOverride = new IdleInput();
+        lab.Player.InputOverride = new IdleInput();
+        lab.Player.Teleport(new Vector3(0, .05f, 18), 0);
+        bot.Teleport(new Vector3(4, .05f, 18), Mathf.Pi / 2);
+        var tanks = lab.LiveTanks.ToArray();
+        tanks[0].Position = Vector3.Zero;
+        tanks[1].Position = new Vector3(.5f, 0, 0);
+        foreach (var tank in tanks) tank.Freeze = true;
+        lab.Player.InputOverride = new IdleInput(aim: true);
+        await Frames(60).ConfigureAwait(true);
+        // Reproduce the first physics shot after ammo becomes ready, with the prior render's bolt pose.
+        var rig = lab.Player.FindChildren("*", owned: false).OfType<RifleRig>().Single();
+        Assert(rig.AimAmount >= .999f, "post-reload contact fixture must be fully aimed");
+        var rifle = rig.Rifle!;
+        var skeleton = rig.GetParent();
+        var parentAdvance = new ShotParentProbe { Rig = rig };
+        skeleton.AddChild(parentAdvance);
+        skeleton.MoveChild(parentAdvance, rig.GetIndex());
+        var contacts = new ShotParentProbe { Rig = rig, Source = parentAdvance };
+        skeleton.AddChild(contacts);
+        rig.Reload = .8f;
+        rig.AdvanceReload(0, remote: false);
+        rifle.PreviewReloadContact(.8f);
+        var firedWithForegrip = false;
+        void CheckFiringContact(ShotReport shot)
+        {
+            Assert(rig.Reload == 0 && rifle.MagazineHold == 0 && rifle.BoltHold == 0,
+                "first post-reload shot fitted an obsolete magazine/bolt contact");
+            firedWithForegrip = true;
+            parentAdvance.Pending = true;
+        }
+        lab.Player.ShotImpacting += CheckFiringContact;
+        await FireAt(lab.Player, () => tanks[0].GlobalTransform * PropaneTank.LocalCenter).ConfigureAwait(true);
+        lab.Player.ShotImpacting -= CheckFiringContact;
+        Assert(firedWithForegrip, "post-reload firing contact was not exercised");
+        Assert(contacts.Samples == 1, "animation-parent firing contacts were not checked");
+        Assert(tanks[0].State == PropaneTank.TankState.Venting && lab.Bank!.Scores[1] == 0, "first shot must puncture, not bank");
+        await FireAt(lab.Player, () => tanks[1].GlobalTransform * PropaneTank.LocalCenter).ConfigureAwait(true);
+        Assert(tanks[1].State == PropaneTank.TankState.Venting, "second fixture did not puncture");
+        await FireAt(lab.Player, () => tanks[0].GlobalTransform * PropaneTank.LocalCenter).ConfigureAwait(true);
+        await Frames(90).ConfigureAwait(true);
+        Assert(lab.Bank!.Scores[1] == 2 && !lab.LiveTanks.Any(), "root and delayed chain must credit the shooter");
+        lab.Player.InputOverride = new IdleInput();
+        await FireAt(bot, () => lab.Player.GlobalPosition + Vector3.Up * 1.2f).ConfigureAwait(true);
+        var afterHit = lab.Bank.Scores[1];
+        Assert(afterHit == Mathf.Max(0, 2 - lab.World.Tuning.HitDropCount) && lab.LiveTanks.All(t => t.Invulnerable), "hit spill/count/shield");
+        await FireAt(bot, () => lab.Player.GlobalPosition + Vector3.Up * 1.2f).ConfigureAwait(true);
+        Assert(lab.Bank.Scores[1] == afterHit, "hit grace allowed a second spill");
+        bot.InputOverride = new IdleInput();
+        lab.Player.ReceiveMelee(Vector3.Forward);
+        var afterMelee = lab.Bank.Scores[1];
+        Assert(afterMelee == Mathf.Max(0, afterHit - lab.World.Tuning.RagdollDropCount), "melee/ragdoll spill");
+        lab.Player.ReceiveMelee(Vector3.Forward);
+        Assert(lab.Bank.Scores[1] == afterMelee, "already down player spilled twice");
+        Assert(lab.Bank.Scores.Values.Sum() + lab.LiveTanks.Count() == lab.Bank.InitialSupply, "bank conservation after spills");
+        bot.Ammo!.Reserve = 0;
+        bot.Teleport(lab.Bank.Pickups[0].GlobalPosition, 0);
+        await Frames(2).ConfigureAwait(true);
+        Assert(bot.Ammo.Reserve == lab.World.Tuning.PickupAmount && !lab.Bank.Pickups[0].Available, "local pickup admission");
+        bot.Teleport(new Vector3(4, .05f, 18), 0);
+        await Frames(20).ConfigureAwait(true);
+        Assert(lab.Bank.Pickups[0].Available, "local ammo did not respawn");
+        lab.SetMenu(true);
+        var clock = lab.Bank.TimeLeft;
+        await Frames(30).ConfigureAwait(true);
+        Assert(lab.Bank.TimeLeft == clock, "pause advanced bank clock");
+        lab.SetMenu(false);
+        await Frames(30 * 60).ConfigureAwait(true);
+        Assert(!lab.Bank.IsPlaying && lab.World.Paused && lab.Overlay.MenuVisible, "clock did not end/freeze duel");
+        lab.Session.Dispose(); lab.Free();
+        GD.Print("[lab rules] PASS two-shot/chain attribution, hit grace, shielded spill, melee, conservation, ammo respawn, pause and round end");
+    }
+
+    private static async Task FireAt(PlayerCharacter actor, Func<Vector3> point)
+    {
+        actor.InputOverride = new OneShot(actor, point);
+        for (var i = 0; i < 15; i++) await actor.ToSignal(actor.GetTree(), SceneTree.SignalName.ProcessFrame);
+        actor.InputOverride = new IdleInput();
+    }
+
+    private sealed class IdleInput(bool aim = false) : IPlayerInputSource { public PlayerIntent Read() => new() { Aim = aim }; }
+    private sealed class OneShot(PlayerCharacter actor, Func<Vector3> point) : IPlayerInputSource
+    {
+        private readonly BotAim aim = new();
+        private bool fired;
+        public PlayerIntent Read()
+        {
+            if (fired) return new PlayerIntent { Aim = true };
+            aim.Track(actor, point(), 1f / Engine.PhysicsTicksPerSecond, 1, smooth: false);
+            fired = true;
+            return new PlayerIntent { Aim = true, FirePressed = true };
+        }
+    }
+
+    private async Task Measure()
+    {
+        var count = (int)DevArgs.GetFloat("count", Tuning.LabStackMaximum);
+        Assert(count >= Tuning.LabStackMinimum && count <= 1024, "measurement count must be 24..1024");
+        template.LabStackCount = Math.Min(count, Tuning.LabStackMaximum);
+        // Profile beyond the product ceiling through the registry callback, using the same fixture builder.
+        var scenario = LabScenarios.Get("stack") with { Setup = lab => { lab.World.Tuning.LabStackCount = count; lab.BuildStack(); } };
+        var lab = Enter(scenario, LabEnvironment.Void);
+        RenderingServer.ViewportSetMeasureRenderTime(GetViewport().GetViewportRid(), true);
+        await Frames(180).ConfigureAwait(true);
+        var phase = DevArgs.Get("phase") ?? "idle";
+        if (phase == "blast")
+        {
+            var target = lab.LiveTanks.First();
+            target.TakeShot(target.GlobalPosition + Vector3.Up * .2f, Vector3.Back, Vector3.Forward);
+            target.TakeShot(target.GlobalPosition + Vector3.Up * .2f, Vector3.Back, Vector3.Forward);
+        }
+        else if (phase == "chain")
+        {
+            foreach (var tank in lab.LiveTanks.ToArray())
+                tank.TakeShot(tank.GlobalPosition + Vector3.Up * .2f, Vector3.Back, Vector3.Forward);
+            lab.LiveTanks.First().Detonate();
+        }
+        var samples = new System.Collections.Generic.List<double>();
+        var gpu = new System.Collections.Generic.List<double>();
+        var process = new System.Collections.Generic.List<double>();
+        var physics = new System.Collections.Generic.List<double>();
+        var last = Time.GetTicksUsec();
+        for (var i = 0; i < 600; i++)
+        {
+            await Frames(1).ConfigureAwait(true);
+            var now = Time.GetTicksUsec(); samples.Add((now - last) / 1000d); last = now;
+            gpu.Add(RenderingServer.ViewportGetMeasuredRenderTimeGpu(GetViewport().GetViewportRid()));
+            process.Add(Performance.GetMonitor(Performance.Monitor.TimeProcess) * 1000);
+            physics.Add(Performance.GetMonitor(Performance.Monitor.TimePhysicsProcess) * 1000);
+        }
+        samples.Sort(); gpu.Sort(); process.Sort(); physics.Sort();
+        GD.Print($"[lab measure] tanks={count} phase={phase} live={lab.LiveTanks.Count()} median_ms={samples[300]:F3} p95_ms={samples[570]:F3} max_ms={samples[^1]:F3} gpu_p95_ms={gpu[570]:F3} process_p95_ms={process[570]:F3} physics_p95_ms={physics[570]:F3}");
+        capture.Screenshot($"stack_{count}");
+        lab.Session.Dispose(); lab.Free();
+    }
+
+    private sealed class ScriptedPlayer(LabSession lab) : IPlayerInputSource
+    {
+        private readonly BotAim aim = new();
+        private PropaneTank? target;
+        private float cooldown;
+        public PlayerIntent Read()
+        {
+            if (!lab.Bank!.IsPlaying) return default;
+            cooldown -= 1f / 60;
+            if (target == null || !IsInstanceValid(target) || target.State == PropaneTank.TankState.Exploded)
+                target = lab.LiveTanks.OrderBy(t => t.GlobalPosition.DistanceSquaredTo(lab.Player.GlobalPosition)).FirstOrDefault();
+            if (target == null) return default;
+            aim.Track(lab.Player, target.GlobalTransform * PropaneTank.LocalCenter, 1f / 60, 1, smooth: false);
+            var fire = cooldown <= 0;
+            if (fire) cooldown = .25f;
+            return new PlayerIntent { Aim = true, FirePressed = fire, ReloadPressed = lab.Player.Ammo!.Magazine == 0 };
+        }
+    }
+
+    private void Press(string text)
+    {
+        var button = GetTree().Root.FindChildren("*", "Button", owned: false).OfType<Button>()
+            .FirstOrDefault(b => b.IsVisibleInTree() && b.Text == text && !b.Disabled);
+        Assert(button != null, $"missing button {text}");
+        button!.EmitSignal(BaseButton.SignalName.Pressed);
+    }
+    private async Task Collect()
+    {
+        await Frames(3).ConfigureAwait(true);
+        for (var i = 0; i < 3; i++) { GC.Collect(); GC.WaitForPendingFinalizers(); await Frames(3).ConfigureAwait(true); }
+    }
+    private (int, int, int) Counts() => (GetTree().GetNodeCount(), (int)Performance.GetMonitor(Performance.Monitor.ObjectCount),
+        (int)Performance.GetMonitor(Performance.Monitor.ObjectOrphanNodeCount));
+    private async Task Frames(int count = 3)
+    {
+        for (var i = 0; i < count; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+    }
+}

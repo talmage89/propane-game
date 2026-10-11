@@ -53,7 +53,8 @@ its Protocol 2 dev adapter. The factory and session retain ordered teardown on r
 15-second scripted duel. It requires a success marker, exit 0 and no engine warnings/errors. `--full` performs
 10 entry/reset/exit cycles for all six pairs and 180-second bot-versus-bot soaks in both environments. Both are
 wired into `make test` / `make test-full`. `menu_test --scenario=input` also injects real keyboard, mouse and
-controller events through Lab menus, movement/combat, reset and tuning. The local rules probe also asserts firing
+controller events through Lab menus, movement/combat, reset, local tuning dials and Defaults without template edits.
+The local rules probe also asserts firing
 foregrip contacts after a stale reload pose and after animation and body frames advance between shot fitting and rendering.
 Fixtures, captures, soaks and measurements load the game's baked tuning rather than C# defaults.
 

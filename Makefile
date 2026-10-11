@@ -51,6 +51,7 @@ test-core: build ## Run checker, platform, movement and unit assertions
 	"$(GODOT)" --headless --path . res://scenes/dev/shutdown_tests.tscn -- --paused --window-close --repeat-quit
 
 test-behavior: build ## Run isolated physics, navigation, menu, grip and feet probes
+	GODOT="$(GODOT)" python3 -B tools/dev/check_lab.py
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/session_actors_tests.tscn
 	python3 -B tools/dev/animation_review_tests.py
 	@mkdir -p build/animation-review-gate
@@ -91,6 +92,7 @@ test-world: build ## Compare all formations built in two fresh processes
 	tools/dev/check_world.sh
 
 test-full: test ## Run the gate plus deep sweeps
+	GODOT="$(GODOT)" python3 -B tools/dev/check_lab.py --full
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/upright_pile_tests.tscn -- --deep --awake
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/menu_test.tscn -- --scenario=lifetime --port=$(PORT)
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/player_range.tscn -- --scenario=melee-reloads --assert-motion --assert-grip
