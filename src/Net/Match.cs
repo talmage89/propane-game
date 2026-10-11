@@ -56,7 +56,7 @@ public partial class Match : Node3D
     private const int StatesPerMessage = Protocol.MaxBodyStates;
     private const float TagRefresh = 1f / 30f;
 
-    private sealed record AuthorityRequest(Msg Type, uint Request, uint Cause, uint[] Ids, object Payload)
+    private sealed record AuthorityRequest(Msg Type, uint Request, uint Cause, uint[] Ids, object Payload, int ActorId = 0, uint LifeId = 0)
     {
         public readonly Dictionary<uint, uint> Expected = new();
     }
@@ -79,7 +79,7 @@ public partial class Match : Node3D
     private Node3D effects = null!;
     private Suburb suburb = null!;
     private SuburbPlan plan = null!;
-    private PlayerCharacter player => Session.OwnedActors.Single().Character;
+    private PlayerCharacter player => Session.OwnedActors.FirstOrDefault(a => profiles[a.Character.ActorId].Kind == ActorKind.Human)?.Character ?? Session.OwnedActors.First().Character;
     private BodySync bodies = null!;
     private TankGather gather = null!;
     private readonly HashSet<uint> gatherRequests = new();
@@ -98,7 +98,6 @@ public partial class Match : Node3D
     private float endLeft;
     private float groupRefresh;
     private List<Vector3> tankGroups = new();
-    private bool ammoFullShown;
     private string noticeText = "";
     private float noticeLeft;
 
@@ -118,7 +117,7 @@ public partial class Match : Node3D
 
     public Suburb Suburb => suburb;
 
-    public int MyScore => scores.GetValueOrDefault(me);
+    public int MyScore => scores.GetValueOrDefault(player.ActorId);
 
     public IReadOnlyDictionary<int, int> Scores => scores;
 
@@ -237,12 +236,12 @@ public partial class Match : Node3D
         }
         bodies.Correct(now);
 
-        player.Runtime.SendTimer -= dt;
-        if (player.Runtime.SendTimer <= 0)
+        foreach (var owned in Session.OwnedActors)
         {
-            player.Runtime.SendTimer += 1f / Mathf.Max(World.Tuning.PlayerSendRate, 1f);
-            player.Runtime.SendTimer = Mathf.Max(player.Runtime.SendTimer, 0);
-            SendPlayerState(now);
+            owned.SendTimer -= dt;
+            if (owned.SendTimer > 0) continue;
+            owned.SendTimer = Mathf.Max(0, owned.SendTimer + 1f / Mathf.Max(World.Tuning.PlayerSendRate, 1f));
+            SendPlayerState(owned.Character, now);
         }
         SendBodies(dt, now);
         CheckPickups();
@@ -284,7 +283,7 @@ public partial class Match : Node3D
         var tuning = World.Tuning;
         var space = World.Physics.DirectSpaceState;
         var from = camera.GlobalPosition;
-        foreach (var remote in RemoteActors)
+        foreach (var remote in Session.Actors.Where(a => a.Character != player))
         {
             var at = remote.Character.TagPosition;
             var distance = from.DistanceTo(at);
@@ -298,7 +297,7 @@ public partial class Match : Node3D
                 continue;
             }
             var scale = tuning.ScoreTagScale * Mathf.Lerp(1.15f, 0.6f, Mathf.Clamp(distance / Mathf.Max(tuning.ScoreTagRange, 1f), 0, 1));
-            tags.Add(new ScoreTag(camera.UnprojectPosition(at), scores.GetValueOrDefault(remote.Character.PeerId), profiles[remote.Character.PeerId].Appearance.Color, scale));
+            tags.Add(new ScoreTag(camera.UnprojectPosition(at), scores.GetValueOrDefault(remote.Character.ActorId), profiles[remote.Character.ActorId].Appearance.Color, scale));
         }
         return tags;
     }
@@ -378,7 +377,7 @@ public partial class Match : Node3D
         var puncture = new PunctureMessage(tank.NetId, tank.GlobalTransform, tank.LinearVelocity, tank.AngularVelocity,
             tank.HoleLocal, tank.HoleNormalLocal, tank.SwirlSign, Request: request, Cause: tank.ChainCause);
         QueueAuthority(new AuthorityRequest(Msg.Puncture, request, tank.ChainCause, new[] { tank.NetId },
-            puncture));
+            puncture, tank.CauseActorId, Actor(tank.CauseActorId)?.LifeId ?? 0));
     }
 
     private void OnTankDetonated(PropaneTank tank)
@@ -397,7 +396,7 @@ public partial class Match : Node3D
         var explosion = new ExplodeMessage(tank.NetId, tank.GlobalTransform * PropaneTank.LocalCenter,
             Request: request, Cause: tank.ChainCause);
         QueueAuthority(new AuthorityRequest(Msg.Explode, request, tank.ChainCause, new[] { tank.NetId },
-            explosion));
+            explosion, tank.CauseActorId, Actor(tank.CauseActorId)?.LifeId ?? 0));
     }
 
     internal void OnLocalBlast(Vector3 center, IReadOnlyList<RigidBody3D> pushed, uint cause)
@@ -440,7 +439,7 @@ public partial class Match : Node3D
     {
         if (!IsPlaying || bodies.Host != me || bodies.Get(tank.NetId) is not { } entry || entry.Owner != me || entry.ClaimPending ||
             tank.State != PropaneTank.TankState.Intact) { return; }
-        var state = BodySync.Capture(entry) with { Sequence = ++entry.Sequence };
+        var state = BodySync.Capture(entry) with { Sequence = checked(++entry.Sequence) };
         Net.Send(MessageCodec.Encode(new NetMessage(Msg.Gather, Setup.Id, 0, new GatherMessage(phase, new[] { state })), fromServer: false));
     }
 
@@ -512,7 +511,9 @@ public partial class Match : Node3D
                 ClaimMessage p => p with { Bodies = p.Bodies.Select(c => (CurrentProposal(c.Id) ?? c) with { Epoch = request.Expected[c.Id] }).ToArray() },
                 _ => throw new InvalidOperationException("unknown authority request"),
             };
-            var bytes = MessageCodec.Encode(new NetMessage(request.Type, Setup.Id, 0, payload), fromServer: false);
+            var actor = Actor(request.ActorId);
+            var action = actor != null ? checked(++actor.Runtime.ActionSequence) : 0;
+            var bytes = MessageCodec.Encode(new NetMessage(request.Type, Setup.Id, 0, payload, request.ActorId, request.LifeId, action), fromServer: false);
             if (AuthoritySendOverride != null) { AuthoritySendOverride(bytes); }
             else { Net.Send(bytes); }
         }
@@ -647,7 +648,7 @@ public partial class Match : Node3D
 
     // ------------------------------------------------------------------ This player's actions
 
-    private void OnFired(ShotReport shot)
+    private void OnFired(PlayerCharacter actor, ShotReport shot)
     {
         var impact = Impact.None;
         var victim = 0;
@@ -661,10 +662,10 @@ public partial class Match : Node3D
                     impact |= Impact.Metal;
                     break;
                 case PlayerCharacter or PhysicalBone3D:
-                    if (PlayerCharacter.Owning(shot.Collider) is { IsRemote: true } hitPlayer)
+                    if (PlayerCharacter.Owning(shot.Collider) is { } hitPlayer && hitPlayer != actor)
                     {
-                        victim = hitPlayer.PeerId;
-                        matchHud.ShowHitMarker();
+                        victim = hitPlayer.ActorId;
+                        if (actor == player) matchHud.ShowHitMarker();
                     }
                     break;
                 case RigidBody3D { Freeze: false } body:
@@ -686,19 +687,20 @@ public partial class Match : Node3D
                     break;
             }
         }
-        Send(new NetWriter(Msg.Shot, Setup.Id).Vec3(shot.End).Vec3(shot.Normal).Vec3(shot.Direction).Byte((byte)impact).Int(victim).Int(propIndex));
+        SendActor(actor, Msg.Shot, new ShotMessage(shot.End, shot.Normal, shot.Direction, (byte)impact, victim, propIndex,
+            Actor(victim)?.LifeId ?? 1), predict: true);
     }
 
     private readonly Dictionary<int, MeleeStartMessage> remoteMelee = new();
 
-    private void OnMeleeHit(MeleeHit hit)
+    private void OnMeleeHit(PlayerCharacter actor, MeleeHit hit)
     {
         var victim = 0;
         var propIndex = -1;
-        if (hit.Collider is PlayerCharacter { IsRemote: true } target)
+        if (hit.Collider is PlayerCharacter target && target != actor)
         {
-            victim = target.PeerId;
-            matchHud.ShowHitMarker();
+            victim = target.ActorId;
+            if (actor == player) matchHud.ShowHitMarker();
         }
         else if (hit.Collider is RigidBody3D body && bodies.Find(body) == null && body.HasMeta(Suburb.PlanIndexMeta))
         {
@@ -706,64 +708,64 @@ public partial class Match : Node3D
         }
         // Tanks and synced cars already took the impulse and use the ordinary ownership/state path.
         if (victim != 0 || propIndex >= 0)
-            Send(new NetWriter(Msg.MeleeContact, Setup.Id).UInt(hit.Swing).Int(victim).Int(propIndex));
+            SendActor(actor, Msg.MeleeContact, new MeleeContactMessage(hit.Swing, victim, propIndex, Actor(victim)?.LifeId ?? 1), predict: true);
     }
 
-    private void OnRagdolled(Vector3 at, Vector3 velocity, Vector3 spin)
+    private void OnRagdolled(PlayerCharacter actor, Vector3 at, Vector3 velocity, Vector3 spin)
     {
-        Send(new NetWriter(Msg.Ragdoll, Setup.Id).Vec3(at).Vec3(velocity).Vec3(spin));
+        Send(ActorWriter(Msg.Ragdoll, actor).Vec3(at).Vec3(velocity).Vec3(spin));
         // Thrown: the bank spills where the player stood, whoever's blast it was.
-        DropTanks(World.Tuning.RagdollDropCount, DropReason.Ragdoll, at + Vector3.Up * 0.35f, Vector3.Zero);
+        DropTanks(actor, World.Tuning.RagdollDropCount, DropReason.Ragdoll, at + Vector3.Up * 0.35f, Vector3.Zero);
     }
 
     /// <summary>Another player's shot hit this player.</summary>
-    private void OnHitByShot(Vector3 shooterPosition)
+    private void OnHitByShot(PlayerCharacter victim, Vector3 shooterPosition)
     {
-        matchHud.AddHitDirection(shooterPosition);
+        if (victim == player) matchHud.AddHitDirection(shooterPosition);
         // The victim owns this gameplay grace; wire timestamps and interpolation remain monotonic.
         var now = World.Clock.Now;
-        if (phase != Phase.Playing || now < player.Runtime.GraceUntil)
+        if (phase != Phase.Playing || now < victim.Runtime.GraceUntil)
         {
             return;
         }
         var tuning = World.Tuning;
-        player.Runtime.GraceUntil = now + tuning.HitGraceTime;
+        victim.Runtime.GraceUntil = now + tuning.HitGraceTime;
         Vector3 origin;
         Vector3 away;
-        if (player.IsRagdolled)
+        if (victim.IsRagdolled)
         {
-            origin = player.PelvisPosition + Vector3.Up * 0.3f;
+            origin = victim.PelvisPosition + Vector3.Up * 0.3f;
             away = Vector3.Zero;
         }
         else
         {
-            var back = -new Vector3(-Mathf.Sin(player.FacingYaw), 0, -Mathf.Cos(player.FacingYaw));
-            origin = player.GlobalPosition + Vector3.Up * 0.45f + back * tuning.HitDropDistance;
+            var back = -new Vector3(-Mathf.Sin(victim.FacingYaw), 0, -Mathf.Cos(victim.FacingYaw));
+            origin = victim.GlobalPosition + Vector3.Up * 0.45f + back * tuning.HitDropDistance;
             away = back;
         }
-        DropTanks(tuning.HitDropCount, DropReason.Hit, origin, away);
+        DropTanks(victim, tuning.HitDropCount, DropReason.Hit, origin, away);
     }
 
     /// <summary>
     /// Spills up to <paramref name="wanted"/> banked tanks around a point (never more than this player has banked),
     /// owned by this player and shielded for a moment, and tells everyone.
     /// </summary>
-    private void DropTanks(int wanted, DropReason reason, Vector3 origin, Vector3 away)
+    private void DropTanks(PlayerCharacter actor, int wanted, DropReason reason, Vector3 origin, Vector3 away)
     {
         if (phase != Phase.Playing)
         {
             return;
         }
-        var count = Mathf.Min(wanted, Mathf.Max(0, MyScore - player.Runtime.DropPredictions.UnconfirmedCount));
+        var count = Mathf.Min(wanted, Mathf.Max(0, scores.GetValueOrDefault(actor.ActorId) - actor.Runtime.DropPredictions.UnconfirmedCount));
         if (count <= 0)
         {
             return;
         }
         var tuning = World.Tuning;
         var rng = new RandomNumberGenerator();
-        var w = new NetWriter(Msg.Drop, Setup.Id).Byte((byte)reason).Int(count);
+        var w = ActorWriter(Msg.Drop, actor).Byte((byte)reason).Int(count);
         var start = rng.RandfRange(0, Mathf.Tau);
-        var safeFrom = player.IsRagdolled ? player.PelvisPosition + Vector3.Up * 0.2f : player.GlobalPosition + Vector3.Up * 0.9f;
+        var safeFrom = actor.IsRagdolled ? actor.PelvisPosition + Vector3.Up * 0.2f : actor.GlobalPosition + Vector3.Up * 0.9f;
         for (var i = 0; i < count; i++)
         {
             // Spread on a sunflower spiral, so any number lands evenly within the scatter radius.
@@ -776,9 +778,9 @@ public partial class Match : Node3D
             var velocity = outward * tuning.DropToss + Vector3.Up * tuning.DropToss * 0.6f;
             var spin = new Vector3(rng.RandfRange(-1, 1), rng.RandfRange(-1, 1), rng.RandfRange(-1, 1)) * 2f;
             var transform = new Transform3D(new Basis(Vector3.Up, rng.RandfRange(0, Mathf.Tau)), position);
-            var id = BodySync.DropTankId(player.Runtime.SpawnSlot, player.Runtime.DropCounter++);
-            player.Runtime.DropPredictions.Add(id);
-            SpawnDroppedTank(id, me, transform, velocity, spin);
+            var id = BodySync.DropTankId(actor.Runtime.AllocationSlot, actor.Runtime.DropCounter++);
+            actor.Runtime.DropPredictions.Add(id);
+            SpawnDroppedTank(id, actor.ActorId, transform, velocity, spin);
             w.UInt(id).Transform(transform).Vec3(velocity).Vec3(spin).UInt(1).UInt(0);
         }
         Send(w);
@@ -817,16 +819,20 @@ public partial class Match : Node3D
         tank.LinearVelocity = velocity;
         tank.AngularVelocity = spin;
         tank.MakeInvulnerable(World.Tuning.DropInvulnerableTime, profiles[owner].Appearance.Color);
-        Track(tank, owner);
+        Track(tank, profiles[owner].OwnerPeerId);
     }
 
     private void CheckPickups()
     {
-        if (phase != Phase.Playing || player.IsRagdolled || player.Ammo == null)
+        foreach (var actor in Session.OwnedActors) CheckPickups(actor.Character);
+    }
+    private void CheckPickups(PlayerCharacter actor)
+    {
+        if (phase != Phase.Playing || actor.IsRagdolled || actor.Ammo == null)
         {
             return;
         }
-        var position = player.GlobalPosition;
+        var position = actor.GlobalPosition;
         var near = false;
         foreach (var pickup in pickups)
         {
@@ -840,22 +846,22 @@ public partial class Match : Node3D
                 continue;
             }
             near = true;
-            if (player.Ammo.Reserve >= World.Tuning.MaxReserve)
+            if (actor.Ammo.Reserve >= World.Tuning.MaxReserve)
             {
-                if (!ammoFullShown)
+                if (!actor.Runtime.AmmoFullShown)
                 {
-                    ammoFullShown = true;
-                    matchHud.AddAmmoPopup(0);
+                    actor.Runtime.AmmoFullShown = true;
+                    if (actor == player) matchHud.AddAmmoPopup(0);
                 }
                 continue;
             }
             // It vanishes here at once; the server decides who gets the rounds if two players reach it together.
             pickup.ClaimPending = true;
-            Net.Send(new NetWriter(Msg.ClaimPickup, Setup.Id).Int(pickup.Index));
+            Net.Send(ActorWriter(Msg.ClaimPickup, actor).Int(pickup.Index));
         }
         if (!near)
         {
-            ammoFullShown = false;
+            actor.Runtime.AmmoFullShown = false;
         }
     }
 
@@ -866,10 +872,10 @@ public partial class Match : Node3D
         if (World.IsAlive) { Net.Send(message, traffic); }
     }
 
-    private void SendPlayerState(double now)
+    private void SendPlayerState(PlayerCharacter actor, double now)
     {
-        player.Runtime.ReplicationSequence++;
-        var message = new NetMessage(Msg.PlayerState, Setup.Id, 0, new PlayerStateMessage(now, player.CaptureNetState()));
+        var sequence = checked(++actor.Runtime.ReplicationSequence);
+        var message = new NetMessage(Msg.PlayerState, Setup.Id, 0, new PlayerStateMessage(now, actor.CaptureNetState()), actor.ActorId, actor.LifeId, sequence);
         Net.Send(MessageCodec.Encode(message, fromServer: false), TrafficClass.UnreliablePlayerPoses);
     }
 
@@ -900,7 +906,7 @@ public partial class Match : Node3D
         if (!World.IsAlive) { return; }
         if (Protocol.IsRelay(message.Type))
         {
-            OnRelay(message.Sender, message.Payload);
+            OnRelay(message);
             return;
         }
         var tuning = World.Tuning;
@@ -917,7 +923,7 @@ public partial class Match : Node3D
             case Msg.MatchGo:
                 phase = Phase.Playing;
                 timeLeft = ((FloatMessage)message.Payload).Value;
-                player.InputLocked = false;
+                foreach (var actor in Session.OwnedActors) actor.Character.InputLocked = false;
                 matchHud.ShowCountdown("GO");
                 break;
             case Msg.Clock:
@@ -926,15 +932,16 @@ public partial class Match : Node3D
             case Msg.Score:
                 var update = (ScoreMessage)message.Payload;
                 scores[update.Player] = update.Score;
-                if (update.Player == me)
+                if (update.Player == player.ActorId)
                 {
                     matchHud.SetScore(update.Score, update.Delta > 0);
                     if (update.Delta > 0) { matchHud.AddScorePopup(update.Delta); }
-                    else if (update.Delta < 0) { player.Runtime.DropPredictions.ScoreConfirmed(update.Delta); }
                 }
+                if (update.Delta < 0 && Actor(update.Player) is { IsRemote: false } scored)
+                    scored.Runtime.DropPredictions.ScoreConfirmed(update.Delta);
                 break;
             case Msg.DropRefused:
-                foreach (var id in player.Runtime.DropPredictions.Refused(((DropRefusedMessage)message.Payload).Ids))
+                foreach (var id in Session.OwnedActors.SelectMany(a => a.DropPredictions.Refused(((DropRefusedMessage)message.Payload).Ids)))
                 {
                     if (!tanks.Remove(id, out var refused)) { continue; }
                     bodies.Remove(id);
@@ -946,7 +953,11 @@ public partial class Match : Node3D
             case Msg.PickupTaken:
                 var take = (PickupMessage)message.Payload;
                 if (take.Index < pickups.Count) { pickups[take.Index].Take(); }
-                if (take.Player == me && player.Ammo != null) { matchHud.AddAmmoPopup(player.Ammo.AddReserve(tuning.PickupAmount)); }
+                if (Actor(take.Player) is { IsRemote: false, Ammo: { } ammo })
+                {
+                    var added = ammo.AddReserve(tuning.PickupAmount);
+                    if (take.Player == player.ActorId) matchHud.AddAmmoPopup(added);
+                }
                 break;
             case Msg.PickupRespawn:
                 var index = ((IntMessage)message.Payload).Value;
@@ -957,46 +968,65 @@ public partial class Match : Node3D
                 phase = Phase.Ended;
                 foreach (var tank in LiveTanks) { tank.EndGather(); }
                 timeLeft = 0;
-                player.InputLocked = true;
+                foreach (var actor in Session.OwnedActors) actor.Character.InputLocked = true;
                 endLeft = tuning.ResultsTime;
-                results.Show(standings, me, tuning.ResultsTime);
+                results.Show(standings, player.ActorId, tuning.ResultsTime);
                 break;
             case Msg.PlayerLeft:
                 var left = (PlayerLeftMessage)message.Payload;
-                var remote = RemoteActors.FirstOrDefault(actor => actor.Character.PeerId == left.Player);
-                if (remote != null)
+                foreach (var departing in Session.Actors.Where(a => a.Character.OwnerPeerId == left.Player).ToArray())
                 {
-                    var name = profiles[remote.Character.PeerId].Name;
-                    Session.RemoveActor(remote);
-                    ShowNotice($"{name} left the match", 3f);
+                    ShowNotice($"{profiles[departing.Character.ActorId].Name} left the match", 3f);
+                    Session.RemoveActor(departing);
                 }
                 bodies.Host = left.Host;
                 break;
         }
     }
 
-    private void OnRelay(int sender, object payload)
+    private PlayerCharacter? Actor(int id) => Session.Actors.FirstOrDefault(a => a.Character.ActorId == id)?.Character;
+    private NetWriter ActorWriter(Msg type, PlayerCharacter actor) =>
+        new(type, Setup.Id, actor.ActorId, actor.LifeId, checked(++actor.Runtime.ActionSequence));
+    private readonly Dictionary<(int Actor, Msg Type), (uint Life, uint Action)> receivedActions = new();
+    private void SendActor(PlayerCharacter actor, Msg type, object payload, bool predict = false)
+    {
+        var message = new NetMessage(type, Setup.Id, me, payload, actor.ActorId, actor.LifeId, checked(++actor.Runtime.ActionSequence));
+        if (predict) OnRelay(message);
+        Net.Send(MessageCodec.Encode(message, false));
+    }
+    private void OnRelay(NetMessage message)
     {
         var now = Clock.Seconds;
-        var remote = RemoteActors.FirstOrDefault(actor => actor.Character.PeerId == sender);
+        var sender = message.Sender;
+        var payload = message.Payload;
+        var source = Actor(message.ActorId);
+        if (Protocol.IsActorMessage(message.Type))
+        {
+            if (source == null || source.OwnerPeerId != sender || source.LifeId != message.LifeId) return;
+            var key = (message.ActorId, message.Type);
+            var previous = receivedActions.GetValueOrDefault(key);
+            if (previous.Life == message.LifeId && message.ActionId <= previous.Action) return;
+            receivedActions[key] = (message.LifeId, message.ActionId);
+        }
+        var remote = source is { IsRemote: true } ? source.Runtime : null;
         switch (payload)
         {
             case PlayerStateMessage state:
                 remote?.Snapshots?.Add(state.Time, state.State, now);
                 break;
             case MeleeStartMessage strike:
-                remoteMelee[sender] = strike;
+                remoteMelee[message.ActorId] = strike;
                 break;
             case MeleeContactMessage contact:
-                if (!remoteMelee.TryGetValue(sender, out var swing) || swing.Swing != contact.Swing) break;
-                if (contact.Victim == me)
+                if (!remoteMelee.TryGetValue(message.ActorId, out var swing) || swing.Swing != contact.Swing) break;
+                if (Actor(contact.Victim) is { IsRemote: false } victim && victim.LifeId == contact.VictimLifeId)
                 {
-                    player.Runtime.LastHitTime = now;
-                    player.Runtime.LastHitBy = sender;
-                    player.ReceiveMelee(swing.Direction);
-                    if (remote != null) matchHud.AddHitDirection(remote.Character.GlobalPosition);
+                    victim.Runtime.LastHitTime = now;
+                    victim.Runtime.LastHitBy = message.ActorId;
+                    victim.ReceiveMelee(swing.Direction);
+                    if (victim == player && source != null) matchHud.AddHitDirection(source.GlobalPosition);
                 }
-                else if (contact.PropIndex >= 0 && looseProps.TryGetValue(contact.PropIndex, out var pushed) && IsInstanceValid(pushed) && !pushed.Freeze)
+                else if (sender != me && contact.PropIndex >= 0 && looseProps.TryGetValue(contact.PropIndex, out var pushed) && IsInstanceValid(pushed) && !pushed.Freeze)
                 {
                     pushed.ApplyCentralImpulse(swing.Direction * World.Tuning.MeleePropImpulse);
                 }
@@ -1005,19 +1035,19 @@ public partial class Match : Node3D
             case ShotMessage shot:
                 remote?.Character.RemoteShot(shot.End);
                 var impact = (Impact)shot.Impact;
-                if (impact.HasFlag(Impact.Hit))
+                if (sender != me && impact.HasFlag(Impact.Hit))
                 {
                     ImpactEffect.Spawn(World, shot.End, shot.Normal, impact.HasFlag(Impact.Metal), impact.HasFlag(Impact.Decal));
                 }
-                if (shot.PropIndex >= 0 && looseProps.TryGetValue(shot.PropIndex, out var prop) && IsInstanceValid(prop) && !prop.Freeze)
+                if (sender != me && shot.PropIndex >= 0 && looseProps.TryGetValue(shot.PropIndex, out var prop) && IsInstanceValid(prop) && !prop.Freeze)
                 {
                     prop.ApplyImpulse(shot.Direction * World.Tuning.BulletImpulse, shot.End - prop.GlobalPosition);
                 }
-                if (shot.Victim == me && remote != null)
+                if (Actor(shot.Victim) is { IsRemote: false } hitVictim && hitVictim.LifeId == shot.VictimLifeId && source != null)
                 {
-                    player.Runtime.LastHitTime = now;
-                    player.Runtime.LastHitBy = sender;
-                    OnHitByShot(remote.Character.GlobalPosition + Vector3.Up * 1.4f);
+                    hitVictim.Runtime.LastHitTime = now;
+                    hitVictim.Runtime.LastHitBy = message.ActorId;
+                    OnHitByShot(hitVictim, source.GlobalPosition + Vector3.Up * 1.4f);
                 }
                 break;
             case BodyStatesMessage states:
@@ -1033,8 +1063,8 @@ public partial class Match : Node3D
                 ReceiveGather(sender, gathering);
                 break;
             case DropMessage drop:
-                if (sender == me) { player.Runtime.DropPredictions.Accepted(drop.Tanks.Select(t => t.Id)); }
-                foreach (var body in drop.Tanks) { SpawnDroppedTank(body.Id, sender, body.Transform, body.Linear, body.Angular); }
+                if (source is { IsRemote: false }) source.Runtime.DropPredictions.Accepted(drop.Tanks.Select(t => t.Id));
+                foreach (var body in drop.Tanks) { SpawnDroppedTank(body.Id, message.ActorId, body.Transform, body.Linear, body.Angular); }
                 break;
             case RagdollMessage ragdoll:
                 remote?.Character.RemoteRagdoll(ragdoll.Position, ragdoll.Velocity, ragdoll.Spin);
@@ -1045,7 +1075,7 @@ public partial class Match : Node3D
             case TuningMessage tune:
                 World.Tuning.Apply(new Godot.Collections.Dictionary { [tune.Name] = tune.Value });
                 tuningPanel?.Refresh();
-                if (remote != null) { ShowNotice($"{profiles[remote.Character.PeerId].Name} changed {tune.Name}", 2.5f); }
+                if (remote != null) { ShowNotice($"{profiles[remote.Character.ActorId].Name} changed {tune.Name}", 2.5f); }
                 break;
         }
     }

@@ -9,7 +9,12 @@ using Propane.Tank;
 
 namespace Propane.Net;
 
-public sealed record NetMessage(Msg Type, int MatchId, int Sender, object Payload);
+public sealed record NetMessage(Msg Type, int MatchId, int Sender, object Payload, int ActorId = 0, uint LifeId = 0, uint ActionId = 0);
+public sealed record AddActorMessage(uint RequestId, ActorKind Kind, string Name, AppearanceRecord Appearance, ControllerConfig Config);
+public sealed record UpdateActorMessage(uint RequestId, int ActorId, string Name, AppearanceRecord Appearance, ControllerConfig Config);
+public sealed record RemoveActorMessage(uint RequestId, int ActorId);
+public sealed record RosterStateMessage(int LobbyId, uint Revision, IReadOnlyList<PlayerProfile> Actors);
+public sealed record ActorRequestResultMessage(uint RequestId, bool Accepted, uint Revision, string Reason);
 public sealed record EmptyMessage;
 public sealed record IntMessage(int Value);
 public sealed record FloatMessage(float Value);
@@ -26,14 +31,14 @@ public sealed record PlayerLeftMessage(int Player, int Host);
 public sealed record PongMessage(double Sent, double ServerTime);
 public sealed record PlayerStateMessage(double Time, PlayerNetState State);
 public sealed record MeleeStartMessage(uint Swing, Vector3 Direction);
-public sealed record MeleeContactMessage(uint Swing, int Victim, int PropIndex);
-public sealed record ShotMessage(Vector3 End, Vector3 Normal, Vector3 Direction, byte Impact, int Victim, int PropIndex);
+public sealed record MeleeContactMessage(uint Swing, int Victim, int PropIndex, uint VictimLifeId = 1);
+public sealed record ShotMessage(Vector3 End, Vector3 Normal, Vector3 Direction, byte Impact, int Victim, int PropIndex, uint VictimLifeId = 1);
 public sealed record PunctureMessage(uint Id, Transform3D Transform, Vector3 Linear, Vector3 Angular, Vector3 Hole, Vector3 Normal, float Swirl, uint Epoch = 1, uint Request = 1, uint Cause = 0);
 public sealed record ExplodeMessage(uint Id, Vector3 Center, uint Epoch = 1, uint Request = 1, uint Cause = 0);
 public sealed record ClaimMessage(uint Request, IReadOnlyList<BodyState> Bodies, uint Cause = 0);
-public enum ClaimRefusal : byte { None, StaleEpoch, Exploded, WrongPhase, Lifecycle, Cause, UnknownBody }
+public enum ClaimRefusal : byte { None, StaleEpoch, Exploded, WrongPhase, Lifecycle, Cause, UnknownBody, DuplicateRequest }
 public sealed record VentParameters(Vector3 Hole, Vector3 Normal, float Swirl);
-public sealed record BodyAuthority(BodyState Body, int Owner, TankLedger.State State, bool Rest, VentParameters? Vent, Vector3 Center);
+public sealed record BodyAuthority(BodyState Body, int Owner, TankLedger.State State, bool Rest, VentParameters? Vent, Vector3 Center, int CauseActorId = 0);
 public sealed record AuthorityMessage(int Peer, uint Request, ClaimRefusal Reason, IReadOnlyList<BodyAuthority> Bodies);
 public sealed record BodyState(uint Id, Transform3D Transform, Vector3 Linear, Vector3 Angular, uint Epoch = 1, uint Sequence = 0);
 public sealed record BodyStatesMessage(double Time, IReadOnlyList<BodyState> Bodies);
@@ -56,13 +61,16 @@ public static class MessageCodec
         if (data.Length == 0 || data.Length > Protocol.MaxPacketBytes) { throw new InvalidDataException("bad packet size"); }
         var type = (Msg)data[0];
         var relay = Protocol.IsRelay(type);
-        if (!(fromServer ? type is >= Msg.Welcome and <= Msg.Authority || relay : type is >= Msg.Hello and <= Msg.Ping || relay))
+        if (!(fromServer ? type is >= Msg.Welcome and <= Msg.ActorRequestResult || relay : type is >= Msg.Hello and <= Msg.RemoveActor || relay))
         {
             throw new InvalidDataException($"unknown or wrong-direction message {(byte)type}");
         }
         if (fromServer && type is Msg.Claim or Msg.Puncture or Msg.Explode) { throw new InvalidDataException("authority requests cannot be relayed"); }
         var r = new NetReader(data);
         var matchId = Protocol.IsMatch(type) ? Positive(r.Int()) : 0;
+        var actor = Protocol.IsActorMessage(type) ? Positive(r.Int()) : 0;
+        var life = Protocol.IsActorMessage(type) ? Id(r.UInt()) : 0;
+        var action = Protocol.IsActorMessage(type) ? Id(r.UInt()) : 0;
         var sender = relay && fromServer ? Positive(r.Int()) : 0;
         object payload = type switch
         {
@@ -70,6 +78,12 @@ public static class MessageCodec
             Msg.CreateLobby or Msg.LeaveLobby or Msg.Loaded => new EmptyMessage(),
             Msg.JoinLobby => new IntMessage(Positive(r.Int())),
             Msg.SetProfile => new ProfileMessage(r.String(), r.Appearance()),
+            Msg.SetCapacity => new IntMessage(Range(r.Int(), 2, Protocol.TestedActorCeiling)),
+            Msg.AddActor => ReadAddActor(r),
+            Msg.UpdateActor => new UpdateActorMessage(Id(r.UInt()), Positive(r.Int()), r.String(), r.Appearance(), ReadController(r)),
+            Msg.RemoveActor => new RemoveActorMessage(Id(r.UInt()), Positive(r.Int())),
+            Msg.RosterState => new RosterStateMessage(Positive(r.Int()), Id(r.UInt()), ReadProfiles(r)),
+            Msg.ActorRequestResult => new ActorRequestResultMessage(Id(r.UInt()), r.Bool(), Id(r.UInt()), r.String()),
             Msg.SetMatchLength => new FloatMessage(Range(r.Float(), 10, 3600)),
             Msg.StartMatch => r.Snapshot(),
             Msg.ClaimPickup => new IntMessage(Nonnegative(r.Int())),
@@ -85,7 +99,7 @@ public static class MessageCodec
             Msg.Notice => new TextMessage(r.String()),
             Msg.PickupTaken => new PickupMessage(Nonnegative(r.Int()), Positive(r.Int())),
             Msg.PickupRespawn => new IntMessage(Nonnegative(r.Int())),
-            Msg.MatchEnd => ReadArray(r, r.Int(), Protocol.PlayerColors.Length, () =>
+            Msg.MatchEnd => ReadArray(r, r.Int(), Protocol.MaxWireActors, () =>
                 new Standing(Positive(r.Int()), r.String(), r.Appearance(), Nonnegative(r.Int()), r.Bool()), min: 1),
             Msg.PlayerLeft => new PlayerLeftMessage(Positive(r.Int()), Positive(r.Int())),
             Msg.Pong => new PongMessage(Time(r.Double()), Time(r.Double())),
@@ -109,15 +123,23 @@ public static class MessageCodec
         };
         // These three handshakes may gain trailing fields, even across incompatible protocols.
         if (type is not (Msg.Hello or Msg.Welcome or Msg.Rejected)) { r.End(); }
-        return new NetMessage(type, matchId, sender, payload);
+        return new NetMessage(type, matchId, sender, payload, actor, life, action);
     }
 
     public static byte[] Encode(NetMessage message, bool fromServer)
     {
-        var w = new NetWriter(message.Type, message.MatchId);
+        var w = new NetWriter(message.Type, message.MatchId, message.ActorId, message.LifeId, message.ActionId);
         if (Protocol.IsRelay(message.Type) && fromServer) { w.Int(message.Sender); }
         switch (message.Payload)
         {
+            case AddActorMessage p: w.UInt(p.RequestId).Byte((byte)p.Kind).String(p.Name).Appearance(p.Appearance); WriteController(w, p.Config); break;
+            case UpdateActorMessage p: w.UInt(p.RequestId).Int(p.ActorId).String(p.Name).Appearance(p.Appearance); WriteController(w, p.Config); break;
+            case RemoveActorMessage p: w.UInt(p.RequestId).Int(p.ActorId); break;
+            case RosterStateMessage p:
+                w.Int(p.LobbyId).UInt(p.Revision).Int(p.Actors.Count);
+                foreach (var actor in p.Actors) WriteProfile(w, actor);
+                break;
+            case ActorRequestResultMessage p: w.UInt(p.RequestId).Bool(p.Accepted).UInt(p.Revision).String(p.Reason); break;
             case EmptyMessage: break;
             case IntMessage p: w.Int(p.Value); break;
             case FloatMessage p: w.Float(p.Value); break;
@@ -134,14 +156,18 @@ public static class MessageCodec
             case Godot.Collections.Dictionary p: w.Snapshot(p); break;
             case LobbyListMessage p:
                 w.Int(p.Capacity).Int(p.Lobbies.Count);
-                foreach (var lobby in p.Lobbies) { w.Int(lobby.Id).String(lobby.CreatorName).Int(lobby.Players).Byte((byte)lobby.Phase); }
+                foreach (var lobby in p.Lobbies) { w.Int(lobby.Id).String(lobby.CreatorName).Int(lobby.Players).Byte((byte)lobby.Phase).Int(lobby.Capacity); }
                 break;
             case LobbyInfo p:
-                w.Int(p.Id).Int(p.CreatorId).Float(p.MatchLength).Byte((byte)p.Phase).Int(p.Members.Count);
+                w.Int(p.Id).Int(p.CreatorId).Float(p.MatchLength).Byte((byte)p.Phase).Int(p.Capacity).UInt(p.RosterRevision).Int(p.Peers.Count);
+                foreach (var peer in p.Peers) w.Int(peer);
+                w.Int(p.Members.Count);
                 foreach (var player in p.Members) { WriteProfile(w, player); }
                 break;
             case MatchSetup p:
-                w.Bytes(p.Plan).Int(p.HostId).Bool(p.CreatorDebug).Float(p.Length).Snapshot(p.Tuning).Int(p.Players.Count);
+                w.Bytes(p.Plan).Int(p.HostId).Bool(p.CreatorDebug).Float(p.Length).Snapshot(p.Tuning).UInt(p.RosterRevision).Int(p.CreatorId).Int(p.Peers.Count);
+                foreach (var peer in p.Peers) w.Int(peer.PeerId).Bool(peer.DebugTuning);
+                w.Int(p.Players.Count);
                 foreach (var (player, spawn) in p.Players) { WriteProfile(w, player).Int(spawn); }
                 break;
             case ScoreMessage p: w.Int(p.Player).Int(p.Score).Int(p.Delta); break;
@@ -159,7 +185,7 @@ public static class MessageCodec
                     WriteBody(w, authority.Body);
                     w.Int(authority.Owner).Byte((byte)authority.State).Bool(authority.Rest).Bool(authority.Vent != null);
                     if (authority.Vent is { } vent) { w.Vec3(vent.Hole).Vec3(vent.Normal).Float(vent.Swirl); }
-                    w.Vec3(authority.Center);
+                    w.Vec3(authority.Center).Int(authority.CauseActorId);
                 }
                 break;
             case PlayerStateMessage p:
@@ -171,8 +197,8 @@ public static class MessageCodec
                     .Byte((byte)s.Gait).Byte((byte)s.Support).Byte((byte)s.Weapon);
                 break;
             case MeleeStartMessage p: w.UInt(p.Swing).Vec3(p.Direction); break;
-            case MeleeContactMessage p: w.UInt(p.Swing).Int(p.Victim).Int(p.PropIndex); break;
-            case ShotMessage p: w.Vec3(p.End).Vec3(p.Normal).Vec3(p.Direction).Byte(p.Impact).Int(p.Victim).Int(p.PropIndex); break;
+            case MeleeContactMessage p: w.UInt(p.Swing).Int(p.Victim).Int(p.PropIndex).UInt(p.VictimLifeId); break;
+            case ShotMessage p: w.Vec3(p.End).Vec3(p.Normal).Vec3(p.Direction).Byte(p.Impact).Int(p.Victim).Int(p.PropIndex).UInt(p.VictimLifeId); break;
             case PunctureMessage p:
                 w.UInt(p.Id).Transform(p.Transform).Vec3(p.Linear).Vec3(p.Angular).Vec3(p.Hole).Vec3(p.Normal).Float(p.Swirl).UInt(p.Epoch).UInt(p.Request).UInt(p.Cause); break;
             case ExplodeMessage p: w.UInt(p.Id).Vec3(p.Center).UInt(p.Epoch).UInt(p.Request).UInt(p.Cause); break;
@@ -224,34 +250,72 @@ public static class MessageCodec
         return new HelloMessage(protocol, version, build, name, color, debug, appearance);
     }
 
-    private static LobbyListMessage ReadLobbyList(NetReader r) => new(Range(r.Int(), 1, Protocol.PlayerColors.Length),
-        ReadArray(r, r.Int(), 64, () => new LobbySummary(Positive(r.Int()), r.String(), Range(r.Int(), 1, Protocol.PlayerColors.Length), Phase(r.Byte()))));
+    private static LobbyListMessage ReadLobbyList(NetReader r) => new(Range(r.Int(), 2, Protocol.TestedActorCeiling),
+        ReadArray(r, r.Int(), 64, () => new LobbySummary(Positive(r.Int()), r.String(), Range(r.Int(), 0, Protocol.MaxWireActors), Phase(r.Byte()), Range(r.Int(), 2, Protocol.TestedActorCeiling))));
 
     private static LobbyInfo ReadLobby(NetReader r)
     {
         var id = Positive(r.Int()); var creator = Positive(r.Int()); var length = Range(r.Float(), 10, 3600); var phase = Phase(r.Byte());
-        var members = ReadArray(r, r.Int(), Protocol.PlayerColors.Length, () => ReadProfile(r), min: 1);
+        var capacity = Range(r.Int(), 2, Protocol.TestedActorCeiling); var revision = Id(r.UInt());
+        var peers = Unique(ReadArray(r, r.Int(), Protocol.MaxWirePeers, () => Positive(r.Int()), min: 1));
+        var members = ReadProfiles(r);
         Unique(members.Select(p => p.Id).ToArray());
-        if (!members.Any(p => p.Id == creator)) { throw new InvalidDataException("creator missing from lobby"); }
-        return new LobbyInfo(id, creator, length, phase, members);
+        if (!peers.Contains(creator) || members.Any(p => !peers.Contains(p.OwnerPeerId))) { throw new InvalidDataException("creator missing from lobby"); }
+        return new LobbyInfo(id, creator, length, phase, members, capacity, revision) { Peers = peers };
     }
 
     private static MatchSetup ReadSetup(NetReader r, int matchId)
     {
         var plan = r.Bytes(); var host = Positive(r.Int()); var debug = r.Bool(); var length = Range(r.Float(), 10, 3600); var tuning = r.Snapshot();
-        var players = ReadArray(r, r.Int(), Protocol.PlayerColors.Length, () => (ReadProfile(r), Range(r.Int(), 0, Protocol.PlayerColors.Length - 1)), min: 1);
+        var revision = Id(r.UInt()); var creator = Positive(r.Int());
+        var peers = ReadArray(r, r.Int(), Protocol.MaxWirePeers, () => new PeerCapabilities(Positive(r.Int()), r.Bool()), min: 1);
+        Unique(peers.Select(p => p.PeerId).ToArray());
+        var players = ReadArray(r, r.Int(), Protocol.MaxWireActors, () => (ReadProfile(r), Range(r.Int(), 0, Protocol.MaxWireActors - 1)), min: 1);
         Unique(players.Select(p => p.Item1.Id).ToArray());
         Unique(players.Select(p => p.Item2).ToArray());
-        if (!players.Any(p => p.Item1.Id == host)) { throw new InvalidDataException("host missing from match"); }
+        if (!players.Any(p => p.Item1.OwnerPeerId == host && p.Item1.Kind == ActorKind.Human)) { throw new InvalidDataException("host missing from match"); }
+        Unique(players.Select(p => p.Item1.AllocationSlot).ToArray());
+        if (players.Any(p => !p.Item1.Present || !peers.Any(peer => peer.PeerId == p.Item1.OwnerPeerId)) ||
+            !peers.Any(p => p.PeerId == creator) || peers.Any(p => p.DebugTuning && (p.PeerId != creator || !debug)))
+            throw new InvalidDataException("invalid frozen capabilities or actor ownership");
         var decoded = PlanCodec.Decode(plan);
         if (decoded.Spawns.Count != players.Length || players.Any(p => p.Item2 >= decoded.Spawns.Count))
         {
             throw new InvalidDataException("match players and plan starts disagree");
         }
-        return new MatchSetup(matchId, plan, host, debug, length, tuning, players);
+        return new MatchSetup(matchId, plan, host, debug, length, tuning, players) { RosterRevision = revision, CreatorId = creator, Peers = peers };
     }
 
-    private static PlayerProfile ReadProfile(NetReader r) => new(Positive(r.Int()), r.String(), r.Appearance());
+    private static PlayerProfile ReadProfile(NetReader r)
+    {
+        var actor = Positive(r.Int()); var owner = Positive(r.Int()); var kind = (ActorKind)Range(r.Byte(), 0, 1);
+        var name = r.String(); var appearance = r.Appearance(); var config = ReadController(r);
+        var present = r.Bool(); var slot = Range(r.Int(), 0, BodySync.MaxAllocationSlots - 1); var life = Id(r.UInt());
+        if (!config.ValidFor(kind)) throw new InvalidDataException("controller does not match actor kind");
+        return new(actor, name, appearance) { OwnerPeerId = owner, Kind = kind, ControllerConfig = config,
+            Present = present, AllocationSlot = slot, LifeId = life };
+    }
+    private static PlayerProfile[] ReadProfiles(NetReader r)
+    {
+        var profiles = ReadArray(r, r.Int(), Protocol.MaxWireActors, () => ReadProfile(r));
+        Unique(profiles.Select(p => p.Id).ToArray());
+        Unique(profiles.Select(p => p.AllocationSlot).ToArray());
+        return profiles;
+    }
+    private static ControllerConfig ReadController(NetReader r)
+    {
+        var config = new ControllerConfig(r.Byte(), (ControllerKind)Range(r.Byte(), 0, 1), (byte)Range(r.Byte(), 0, 2));
+        if (config.Version != 1) throw new InvalidDataException("unsupported controller version");
+        return config;
+    }
+    private static void WriteController(NetWriter w, ControllerConfig config) => w.Byte(config.Version).Byte((byte)config.Kind).Byte(config.Difficulty);
+    private static AddActorMessage ReadAddActor(NetReader r)
+    {
+        var request = Id(r.UInt()); var kind = (ActorKind)Range(r.Byte(), 0, 1);
+        var name = r.String(); var appearance = r.Appearance(); var config = ReadController(r);
+        if (!config.ValidFor(kind)) throw new InvalidDataException("controller does not match actor kind");
+        return new(request, kind, name, appearance, config);
+    }
 
     private static PlayerStateMessage ReadPlayerState(NetReader r)
     {
@@ -285,7 +349,7 @@ public static class MessageCodec
 
     private static MeleeContactMessage ReadMeleeContact(NetReader r)
     {
-        var contact = new MeleeContactMessage(Id(r.UInt()), Nonnegative(r.Int()), Range(r.Int(), -1, int.MaxValue));
+        var contact = new MeleeContactMessage(Id(r.UInt()), Nonnegative(r.Int()), Range(r.Int(), -1, int.MaxValue), Id(r.UInt()));
         if (contact.Victim == 0 ? contact.PropIndex < 0 : contact.PropIndex != -1)
             throw new InvalidDataException("melee contact needs exactly one target");
         return contact;
@@ -294,7 +358,7 @@ public static class MessageCodec
     private static ShotMessage ReadShot(NetReader r)
     {
         var end = Vector(r); var normal = Normal(r, allowZero: true); var direction = Normal(r);
-        return new ShotMessage(end, normal, direction, (byte)Range(r.Byte(), 0, 7), Nonnegative(r.Int()), Range(r.Int(), -1, int.MaxValue));
+        return new ShotMessage(end, normal, direction, (byte)Range(r.Byte(), 0, 7), Nonnegative(r.Int()), Range(r.Int(), -1, int.MaxValue), Id(r.UInt()));
     }
 
     private static PunctureMessage ReadPuncture(NetReader r) => new(Id(r.UInt()), Transform(r), Vector(r), Vector(r), Vector(r), Normal(r), Swirl(r), Id(r.UInt()), Id(r.UInt()), r.UInt());
@@ -372,7 +436,12 @@ public static class MessageCodec
         var origin = Vector(r);
         return new Transform3D(new Basis(r.Quat()), origin);
     }
-    private static NetWriter WriteProfile(NetWriter w, PlayerProfile p) => w.Int(p.Id).String(p.Name).Appearance(p.Appearance);
+    internal static NetWriter WriteProfile(NetWriter w, PlayerProfile p)
+    {
+        w.Int(p.Id).Int(p.OwnerPeerId).Byte((byte)p.Kind).String(p.Name).Appearance(p.Appearance);
+        WriteController(w, p.ControllerConfig);
+        return w.Bool(p.Present).Int(p.AllocationSlot).UInt(p.LifeId);
+    }
     private static BodyState ReadBody(NetReader r) => new(Id(r.UInt()), Transform(r), Vector(r), Vector(r), Id(r.UInt()), r.UInt());
     private static void WriteBody(NetWriter w, BodyState p) => w.UInt(p.Id).Transform(p.Transform).Vec3(p.Linear).Vec3(p.Angular).UInt(p.Epoch).UInt(p.Sequence);
 
@@ -386,13 +455,13 @@ public static class MessageCodec
 
     private static AuthorityMessage ReadAuthority(NetReader r)
     {
-        var peer = Positive(r.Int()); var request = r.UInt(); var reason = (ClaimRefusal)Range(r.Byte(), 0, (int)ClaimRefusal.UnknownBody);
+        var peer = Positive(r.Int()); var request = r.UInt(); var reason = (ClaimRefusal)Range(r.Byte(), 0, (int)ClaimRefusal.DuplicateRequest);
         var bodies = ReadArray(r, r.UShort(), Protocol.MaxCollection, () =>
         {
             var body = ReadBody(r); var owner = Positive(r.Int()); var state = (TankLedger.State)Range(r.Byte(), 0, (int)TankLedger.State.Exploded);
             var rest = r.Bool(); VentParameters? vent = r.Bool() ? new(Vector(r), Normal(r), Swirl(r)) : null;
             if (state == TankLedger.State.Venting && vent == null) { throw new InvalidDataException("missing canonical vent"); }
-            return new BodyAuthority(body, owner, state, rest, vent, Vector(r));
+            return new BodyAuthority(body, owner, state, rest, vent, Vector(r), Nonnegative(r.Int()));
         });
         Unique(bodies.Select(b => b.Body.Id).ToArray());
         return new AuthorityMessage(peer, request, reason, bodies);

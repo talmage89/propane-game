@@ -27,6 +27,10 @@ public sealed class ActorRuntime : IDisposable
     public double LastHitTime { get; set; } = -100;
     public int LastHitBy { get; set; }
     public int SpawnSlot { get; set; }
+    public int AllocationSlot { get; set; }
+    public uint LifeId { get; set; } = 1;
+    public uint ActionSequence { get; set; }
+    public bool AmmoFullShown { get; set; }
     public int DropCounter { get; set; }
     public DropPredictions DropPredictions { get; } = new();
     public SnapshotBuffer? Snapshots => (IntentSource as ReplicatedIntent)?.Snapshots;

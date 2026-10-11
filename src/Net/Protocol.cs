@@ -23,6 +23,10 @@ public enum Msg : byte
     Loaded,
     ClaimPickup,
     Ping,
+    SetCapacity,
+    AddActor,
+    UpdateActor,
+    RemoveActor,
 
     // Server to client.
     Welcome = 32,
@@ -42,6 +46,8 @@ public enum Msg : byte
     Pong,
     DropRefused,
     Authority,
+    RosterState,
+    ActorRequestResult,
 
     // Match traffic. Authority requests are resolved by the server; the other messages are relayed.
     PlayerState = 64,
@@ -72,6 +78,11 @@ public static class Protocol
     public const int DefaultPort = 24680;
 
     public const int MaxNameLength = 16;
+    public const int TestedActorCeiling = 16;
+    public const int MaxWireActors = 64;
+    public const int MaxWirePeers = 64;
+    public static bool IsActorMessage(Msg type) => type is Msg.PlayerState or Msg.Shot or Msg.MeleeStart or
+        Msg.MeleeContact or Msg.Puncture or Msg.Explode or Msg.Drop or Msg.Ragdoll or Msg.GetUp or Msg.ClaimPickup;
 
     public static bool IsRelay(Msg type) => type is >= Msg.PlayerState and <= Msg.MeleeContact;
 
@@ -127,7 +138,7 @@ public sealed class NetWriter
     private readonly MemoryStream stream = new();
     private readonly BinaryWriter writer;
 
-    public NetWriter(Msg type, int matchId = 0)
+    public NetWriter(Msg type, int matchId = 0, int actorId = 0, uint lifeId = 0, uint actionId = 0)
     {
         writer = new BinaryWriter(stream, Encoding.UTF8);
         writer.Write((byte)type);
@@ -135,6 +146,12 @@ public sealed class NetWriter
         {
             if (matchId <= 0) { throw new ArgumentOutOfRangeException(nameof(matchId)); }
             writer.Write(matchId);
+        }
+        if (Protocol.IsActorMessage(type))
+        {
+            writer.Write(actorId);
+            writer.Write(lifeId);
+            writer.Write(actionId);
         }
     }
 

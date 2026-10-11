@@ -17,7 +17,7 @@ public static class ServerTests
         runner.Run("server/truncated messages never relay or mutate", () =>
         {
             using var f = new Fixture();
-            foreach (var fixture in ProtocolTests.Fixtures().Where(p => p.Type is <= Msg.Ping || Protocol.IsRelay(p.Type)))
+            foreach (var fixture in ProtocolTests.Fixtures().Where(p => p.Type is <= Msg.RemoveActor || Protocol.IsRelay(p.Type)))
             {
                 var bytes = MessageCodec.Encode(fixture with { MatchId = Protocol.IsMatch(fixture.Type) ? f.Id : 0 }, false);
                 f.Reject(bytes[..^1]);
@@ -102,8 +102,8 @@ public static class ServerTests
             f.Reject(new NetWriter(Msg.BodyRest, f.Id).UInt(999).Transform(Transform3D.Identity).Double(1).UInt(1).UInt(1).ToArray());
             f.Reject(MessageCodec.Encode(new NetMessage(Msg.BodyStates, f.Id, 0, new BodyStatesMessage(1,
                 new[] { DropBody(0, 0) with { Id = BodySync.MapTankId(0), Sequence = 1 }, DropBody(0, 1) with { Id = 999, Sequence = 1 } })), false));
-            f.Reject(new NetWriter(Msg.Shot, f.Id).Vec3(Vector3.One).Vec3(Vector3.Up).Vec3(Vector3.Forward).Byte(1).Int(999).Int(-1).ToArray());
-            f.Reject(new NetWriter(Msg.Shot, f.Id).Vec3(Vector3.One).Vec3(Vector3.Up).Vec3(Vector3.Forward).Byte(1).Int(0).Int(int.MaxValue).ToArray());
+            f.Reject(new NetWriter(Msg.Shot, f.Id).Vec3(Vector3.One).Vec3(Vector3.Up).Vec3(Vector3.Forward).Byte(1).Int(999).Int(-1).UInt(1).ToArray());
+            f.Reject(new NetWriter(Msg.Shot, f.Id).Vec3(Vector3.One).Vec3(Vector3.Up).Vec3(Vector3.Forward).Byte(1).Int(0).Int(int.MaxValue).UInt(1).ToArray());
         });
         runner.Run("server/motion bounds future sample timestamps to the relay clock", () =>
         {
@@ -184,8 +184,8 @@ public static class ServerTests
             f.AssertScore(3, 3, -1);
             f.Advance(20);
             var standings = f.Packets.Select(p => p.Message.Payload).OfType<IReadOnlyList<Standing>>().Single();
-            TestRunner.Assert(standings.Any(s => s is { Id: 2, Score: 4, Present: false }) &&
-                standings.Any(s => s is { Id: 3, Score: 3, Present: true }), "departure erased a bank or renumbered a spawn slot");
+            TestRunner.Assert(standings.Any(s => s is { Id: 1, Score: 4, Present: false }) &&
+                standings.Any(s => s is { Id: 2, Score: 3, Present: true }), "departure erased a bank or renumbered a spawn slot");
         });
         runner.Run("server/a drop refused after a tuning change gets an explicit reply", () =>
         {
@@ -261,7 +261,7 @@ public static class ServerTests
         public readonly int Id;
         public readonly MatchSetup Setup;
 
-        public Fixture(bool debug = true, bool playing = true)
+        public Fixture(bool debug = true, bool playing = true, int bots = 0)
         {
             Server = new LobbyServer(PacketTransports.CreateServer(), Clock) { StartScore = 4 };
             Server.SendOverride = (peer, bytes, _) => Packets.Add((peer, MessageCodec.Decode(bytes, true)));
@@ -273,6 +273,12 @@ public static class ServerTests
             }
             Receive(new NetWriter(Msg.CreateLobby));
             Receive(new NetWriter(Msg.JoinLobby).Int(1), peer: 3);
+            for (var i = 0; i < bots; i++)
+            {
+                Receive(MessageCodec.Encode(new NetMessage(Msg.AddActor, 0, 0,
+                new AddActorMessage((uint)i + 1, ActorKind.Bot, $"Bot{i}", AppearanceRecord.FromPalette(i), ControllerConfig.Bot)), false));
+            }
+
             Receive(new NetWriter(Msg.SetMatchLength).Float(10));
             Receive(new NetWriter(Msg.StartMatch).Snapshot(Tuning.Snapshot()));
             Setup = Packets.Select(p => p.Message.Payload).OfType<MatchSetup>().First();
@@ -295,10 +301,27 @@ public static class ServerTests
         }
 
         public void Receive(NetWriter packet, int peer = 2) => Receive(packet.ToArray(), peer);
-        public void Receive(byte[] packet, int peer = 2) => Server.OnReceived(peer, packet);
+        private readonly Dictionary<int, uint> actions = new();
+        public int ActorId(int peer) => Setup.Players.First(p => p.Player.OwnerPeerId == peer).Player.Id;
+        public void Receive(byte[] packet, int peer = 2) => Server.OnReceived(peer, Prepare(packet, peer));
+        private byte[] Prepare(byte[] packet, int peer)
+        {
+            // Legacy payload probes use this fixture's default owner. Production and spoof tests send explicit ids.
+            if (Setup != null && Setup.Players.Any(p => p.Player.OwnerPeerId == peer) && packet.Length >= 17 && Protocol.IsActorMessage((Msg)packet[0]) && BitConverter.ToInt32(packet, 5) == 0)
+            {
+                packet = packet.ToArray();
+                BitConverter.GetBytes(ActorId(peer)).CopyTo(packet, 5);
+                BitConverter.GetBytes(1u).CopyTo(packet, 9);
+                var action = actions.GetValueOrDefault(peer) + 1;
+                actions[peer] = action;
+                BitConverter.GetBytes(action).CopyTo(packet, 13);
+            }
+            return packet;
+        }
         public void Reject(byte[] bytes, int peer = 2)
         {
             Packets.Clear();
+            bytes = Prepare(bytes, peer);
             Receive(bytes, peer);
             if (Packets.Count == 1 && Packets[0] is { Message.Payload: AuthorityMessage { Reason: not ClaimRefusal.None } authority } && Packets[0].Peer == peer)
             {
@@ -325,7 +348,7 @@ public static class ServerTests
         }
         public byte[] Drop(IReadOnlyList<BodyState> tanks, byte reason = 1) => MessageCodec.Encode(new NetMessage(Msg.Drop, Id, 0, new DropMessage(reason, tanks)), false);
         public void AssertScore(int player, int score, int delta) => TestRunner.Assert(Packets.Any(p => p.Message.Payload is ScoreMessage s &&
-            s.Player == player && s.Score == score && s.Delta == delta), $"expected score {score}, delta {delta}");
+            s.Player == ActorId(player) && s.Score == score && s.Delta == delta), $"expected score {score}, delta {delta}");
         public void Dispose() { Server.Free(); Tuning.Dispose(); }
     }
 }

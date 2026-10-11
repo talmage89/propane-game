@@ -8,6 +8,7 @@ namespace Propane.Net;
 public sealed class IdentitySequence(int first = 1, int ceiling = int.MaxValue)
 {
     private long next = first > 0 && first <= ceiling ? first : throw new ArgumentOutOfRangeException(nameof(first));
+    public bool Available => next <= ceiling;
     public int Allocate() => next <= ceiling ? (int)next++ : throw new InvalidOperationException("identity space exhausted");
 }
 
@@ -44,6 +45,7 @@ public sealed class ParticipantRoster
     {
         if (peer <= 0 || !config.ValidFor(kind)) throw new ArgumentException("invalid actor owner or controller");
         var revision = checked(Revision + 1);
+        if (!actors.Available || !slots.Available) throw new InvalidOperationException("identity space exhausted");
         var slot = slots.Allocate() - 1;
         var actor = new ActorRecord(actors.Allocate(), peer, kind, Protocol.CleanName(name), appearance, config, true, slot, 1);
         records.Add(actor.ActorId, actor);

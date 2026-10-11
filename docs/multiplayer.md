@@ -477,3 +477,52 @@ final standings agreed: 20 map gains + 34 drop gains - 50 spills = 4 banked. The
 identical ids/states and at most 0.165 m drift. During active chains the diagnostic reported transient differences
 up to five states and 5.862 m drift; it is a
 comparison report, not a threshold assertion. Those transients converged; this package does not revise body sync.
+
+## Participants (A6, unreleased Protocol 2)
+
+A connection handle stays inside the transport. The server issues a monotonic positive **PeerId**, independent of
+ENet's identifiers. A lobby owns a revisioned participant roster: **ActorId**, **OwnerPeerId**, Human/Bot kind,
+name, appearance, versioned controller configuration, presence, allocation slot and **LifeId**. Actor ids and
+allocation slots are never reused in that lobby session, including across matches. Spawn slots are a separate,
+frozen match mapping. Drop entities use the actor's allocation slot, never its spawn position. Allocation fails
+before an id, life, epoch or publication counter can wrap. Local view ids are session-local and never transmitted.
+
+One peer may own several actors. Each has its own input, aim, ammo, pose/action sequence, grace and predictions;
+there is one shared world and one body synchronizer per peer. The server owns bank and standings. Attacker owners
+report bullet/melee contacts; victim owners apply grace, blast distance/throws and spills. Shared body ownership
+and correction stay per peer. Delayed chains carry the initiating actor unchanged; the ledger validates that a
+causal request belongs to the same actor as its accepted root. Another actor on the same peer cannot borrow credit.
+Same-peer hits follow the same actor event handler as network hits. Predicted contacts and reliable echoes share
+an action id and are applied once.
+
+Roster requests are reliable `AddActor(RequestId, Kind, Name, Appearance, ControllerConfig)`,
+`UpdateActor(RequestId, ActorId, Name, Appearance, ControllerConfig)` and `RemoveActor(RequestId, ActorId)`.
+Only the owning peer may update/remove an actor. The server replies with
+`ActorRequestResult(RequestId, Accepted, Revision, Reason)` and broadcasts full
+`RosterState(LobbyId, Revision, Actors)`. Repeated requests do not mutate the roster; stale revisions are ignored.
+Controller configuration is three bytes: schema version (1), Device/Bot kind, and difficulty (0–2; Device uses 0).
+A8 supplies the lobby bot controls and runtime brains.
+
+Wire changes in this package:
+
+- `LobbyList` advertises the tested actor ceiling; each summary adds its selected capacity and counts actors.
+- `SetCapacity(Int32)` changes a waiting lobby's capacity for its creator, from 2 through the tested ceiling.
+- `LobbyState` adds capacity, roster revision and the peer membership list; its entries are full actor profiles.
+- A full actor profile is `ActorId, OwnerPeerId, Kind, Name, Appearance, ControllerConfig, Present,
+  AllocationSlot, LifeId`. Actor/peer/slot ids are Int32; revision/life/action counters are UInt32.
+- `MatchStart` adds the roster revision, original creator peer and frozen peer capabilities before its actor/spawn
+  list. It freezes accepted profiles, allocation slots, lives, unique starts and initial world authority. Loading
+  acknowledgments and broadcasts operate once per participating peer; generation and supplies count actors.
+- `PlayerState`, `Shot`, `MeleeStart`, `MeleeContact`, `Puncture`, `Explode`, `Drop`, `Ragdoll`, `GetUp` and
+  `ClaimPickup` add `ActorId, LifeId, ActionId` after MatchId, before the server-inserted sender peer. Poses use a
+  separate sequence stream from reliable actor actions. Both ends reject stale lives and repeated sequences.
+- `Shot` and `MeleeContact` add the victim's LifeId. Targets, `Score`, `PickupTaken` and `MatchEnd` standings use
+  actor ids. `Drop` relays the actor envelope; accepted appearance comes from that actor's frozen profile.
+- Canonical `Authority` bodies add `CauseActorId`; body owners and authority request identities remain peers.
+  `PlayerLeft` identifies a departed peer and successor world authority; clients remove every actor of that peer.
+
+The server retains departed actors' banks for conservation and final standings, transfers surviving body ownership
+with new epochs, and may transfer lobby creator controls. Original debug-tuning capability does not transfer.
+The wire safety ceiling is 64 actors/peers, separate from capacity and the color presets. Hello, Welcome and Rejected
+retain their layouts. `Protocol.Version` remains **2** under the unreleased-cycle ruling; these changes require a
+minor release.

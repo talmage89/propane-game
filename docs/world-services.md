@@ -129,9 +129,8 @@ camera/HUD/device source without retiring the actor.
 
 Ammo, intent, the movement resolver, resolved state, logical aim, swing/publication sequence, snapshot buffer,
 hit grace and drop predictions now belong to each actor. Match interpolation iterates the session registry.
-There remains exactly one owned actor per connection in Tank Bank's Protocol 2 adapter; scoring, relayed targets,
-slot-derived drop ids and `Match.Player` still use today's peer identity. A6 must supply actor/peer/life ids and
-replace that wire routing, including same-peer contact deduplication. No message or tuner changes here.
+A6 routes actor ids and lives independently of peer ids, including scoring, contact targets, snapshots and drop
+allocation. Several owned actors share one body synchronizer; views remain process-local.
 Headless `net_test` attaches no local view, so the existing smart/simple bots and network scenarios run on actors
 with no camera. Rendered runs attach the same view used by the shipped facades.
 

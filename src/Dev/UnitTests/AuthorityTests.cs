@@ -177,7 +177,7 @@ public static class AuthorityTests
 
                 runner.World.SetContentRoot(effects);
                 var ledger = Ledger();
-                var replies = order.Select(peer => ledger.Puncture(peer, Puncture(peer), true)).ToArray();
+                var replies = order.Select(peer => ledger.Puncture(peer, Puncture(peer), 100 + peer, true)).ToArray();
                 TestRunner.Assert(replies[0].Reason == ClaimRefusal.None && replies.Skip(1).All(r => r.Reason == ClaimRefusal.StaleEpoch), "first contender did not win alone");
                 var canonical = replies[0].Bodies.Single();
                 foreach (var peer in order)
@@ -206,7 +206,7 @@ public static class AuthorityTests
         runner.Run("authority/departure mid-vent preserves canonical parameters and resets the stream", () =>
         {
             var ledger = Ledger();
-            var puncture = ledger.Puncture(3, Puncture(3), true).Bodies.Single();
+            var puncture = ledger.Puncture(3, Puncture(3), 103, true).Bodies.Single();
             var latest = Pose(Id, 2, 99);
             ledger.Update(3, latest, false);
             var transferred = ledger.Transfer(3, 2).Single();
@@ -262,12 +262,12 @@ public static class AuthorityTests
         runner.Run("authority/detonation and chain claims share ordering and initiating-peer attribution", () =>
         {
             var ledger = Ledger();
-            var accepted = ledger.Detonate(2, new ExplodeMessage(Id, Vector3.One, Request: 10), true);
-            var duplicate = ledger.Detonate(3, new ExplodeMessage(Id, Vector3.Right, Request: 11), true);
+            var accepted = ledger.Detonate(2, new ExplodeMessage(Id, Vector3.One, Request: 10), 102, true);
+            var duplicate = ledger.Detonate(3, new ExplodeMessage(Id, Vector3.Right, Request: 11), 103, true);
             TestRunner.Assert(accepted.Reason == ClaimRefusal.None && duplicate.Reason == ClaimRefusal.Exploded && duplicate.Bodies.Single().Center == Vector3.One && ledger.MapDetonations == 1, "duplicate blast changed the canonical transition or score");
             var child = Puncture(3) with { Id = Other, Cause = 10 };
-            TestRunner.Assert(ledger.Puncture(3, child, true).Reason == ClaimRefusal.Cause, "another peer borrowed the chain");
-            TestRunner.Assert(ledger.Puncture(2, child, true).Reason == ClaimRefusal.None, "winning root could not start its chain");
+            TestRunner.Assert(ledger.Puncture(3, child, 103, true).Reason == ClaimRefusal.Cause, "another peer borrowed the chain");
+            TestRunner.Assert(ledger.Puncture(2, child, 102, true).Reason == ClaimRefusal.None, "winning root could not start its chain");
             TestRunner.Assert(ledger.Claim(3, Claim(12, Pose(Other, 2)) with { Cause = 11 }, true).Reason == ClaimRefusal.Cause, "refused root granted pushed-body ownership");
         });
         runner.Run("authority/a canceled chain fuse cannot detonate a restored or re-punctured tank", () =>
@@ -316,7 +316,7 @@ public static class AuthorityTests
             using var f = new MatchFixture(runner);
             var tank = f.Match.LiveTanks.Single(t => t.NetId == Id);
             f.Match.Claim(new[] { tank }, atomic: true);
-            tank.TakeShot(tank.ToGlobal(new Vector3(.15f, .23f, 0)), tank.GlobalBasis * Vector3.Right, Vector3.Left);
+            tank.TakeShot(tank.ToGlobal(new Vector3(.15f, .23f, 0)), tank.GlobalBasis * Vector3.Right, Vector3.Left, f.Match.Player.ActorId);
             var current = new Transform3D(Basis.Identity, new Vector3(9, 4, 8));
             BodySync.Snap(tank, current, Vector3.One * 6, Vector3.One * 2);
             BodyAuthority? accepted = null;
@@ -335,9 +335,9 @@ public static class AuthorityTests
             var root = f.Match.LiveTanks.Single(t => t.NetId == Id);
             var child = f.Match.LiveTanks.Single(t => t.NetId == Other);
             root.GlobalPosition = new Vector3(0, 60, 0);
-            root.Detonate(); // Assign/send the root request, away from other bodies.
+            root.Detonate(f.Match.Player.ActorId); // Assign/send the root request, away from other bodies.
             var cause = root.BlastRequest;
-            child.ChainHit(child.GlobalPosition - Vector3.Right, 0, cause);
+            child.ChainHit(child.GlobalPosition - Vector3.Right, 0, cause, f.Match.Player.ActorId);
             child.LinearVelocity = Vector3.One * 6;
             child.AngularVelocity = Vector3.One * 2;
             // This production callback follows all pushes; pending children are excluded from Claim itself.
@@ -359,8 +359,8 @@ public static class AuthorityTests
             var root = f.Match.LiveTanks.Single(t => t.NetId == Id);
             var other = f.Match.LiveTanks.Single(t => t.NetId == Other);
             root.GlobalPosition = new Vector3(0, 60, 0);
-            root.TakeShot(root.ToGlobal(new Vector3(.15f, .23f, 0)), root.GlobalBasis * Vector3.Right, Vector3.Left);
-            root.Detonate(); // Its explosion waits for the first-shot grant.
+            root.TakeShot(root.ToGlobal(new Vector3(.15f, .23f, 0)), root.GlobalBasis * Vector3.Right, Vector3.Left, f.Match.Player.ActorId);
+            root.Detonate(f.Match.Player.ActorId); // Its explosion waits for the first-shot grant.
             f.Match.Claim(new[] { other }, cause: root.BlastRequest, atomic: true);
             var current = new Transform3D(Basis.Identity, new Vector3(9, 4, 8));
             BodySync.Snap(other, current, Vector3.One * 6, Vector3.One * 2);
@@ -380,7 +380,7 @@ public static class AuthorityTests
             {
                 using var f = new MatchFixture(runner);
                 var tank = f.Match.LiveTanks.Single(t => t.NetId == Id);
-                tank.TakeShot(tank.ToGlobal(new Vector3(.15f, .23f, 0)), tank.GlobalBasis * Vector3.Right, Vector3.Left);
+                tank.TakeShot(tank.ToGlobal(new Vector3(.15f, .23f, 0)), tank.GlobalBasis * Vector3.Right, Vector3.Left, f.Match.Player.ActorId);
                 Send(f.Server, 3, Msg.Puncture, Puncture(3));
                 if (!broadcastFirst) { f.Server.Packets.Clear(); }
                 var transform = new Transform3D(new Basis(Vector3.Up, .7f), new Vector3(8, 2, 9));
@@ -399,16 +399,16 @@ public static class AuthorityTests
             using var f = new MatchFixture(runner);
             var root = f.Match.LiveTanks.Single(t => t.NetId == Id);
             var child = f.Match.LiveTanks.Single(t => t.NetId == Other);
-            child.TakeShot(child.ToGlobal(new Vector3(.15f, .23f, 0)), child.GlobalBasis * Vector3.Right, Vector3.Left);
+            child.TakeShot(child.ToGlobal(new Vector3(.15f, .23f, 0)), child.GlobalBasis * Vector3.Right, Vector3.Left, f.Match.Player.ActorId);
             f.Flush();
             TestRunner.Assert(f.Match.Bodies.Get(Other) is { Owner: 2, Epoch: 2 }, "child was not already owned");
             root.GlobalPosition = new Vector3(0, 60, 0); // Isolate manual chain contact from the blast query.
-            root.Detonate();
+            root.Detonate(f.Match.Player.ActorId);
             Action? callback = null;
             var detonations = 0;
             child.Detonated += _ => detonations++;
             child.FuseScheduleOverride = (_, finish) => callback = finish;
-            child.ChainHit(Vector3.Zero, 0, root.BlastRequest);
+            child.ChainHit(Vector3.Zero, 0, root.BlastRequest, f.Match.Player.ActorId);
             f.Match.OnLocalBlast(root.GlobalPosition, new[] { child }, root.BlastRequest);
             f.Server.Advance(20);
             f.Server.Packets.Clear();
@@ -423,11 +423,11 @@ public static class AuthorityTests
         {
             using var f = new MatchFixture(runner);
             var tank = f.Match.LiveTanks.Single(t => t.NetId == Id);
-            tank.TakeShot(tank.ToGlobal(new Vector3(.15f, .23f, 0)), tank.GlobalBasis * Vector3.Right, Vector3.Left);
+            tank.TakeShot(tank.ToGlobal(new Vector3(.15f, .23f, 0)), tank.GlobalBasis * Vector3.Right, Vector3.Left, f.Match.Player.ActorId);
             f.Flush();
             Action? callback = null;
             tank.FuseScheduleOverride = (_, finish) => callback = finish;
-            tank.ChainHit(Vector3.Zero, 0, 99);
+            tank.ChainHit(Vector3.Zero, 0, 99, f.Match.Player.ActorId);
             f.Match.Claim(new[] { tank }, atomic: true);
             Send(f.Server, 3, Msg.Claim, Claim(30, Pose(Id, 2)));
             f.Server.Packets.Clear();
@@ -441,7 +441,7 @@ public static class AuthorityTests
         {
             using var f = new MatchFixture(runner);
             var tank = f.Match.LiveTanks.Single(t => t.NetId == Id);
-            tank.TakeShot(tank.ToGlobal(new Vector3(0.15f, 0.23f, 0)), tank.GlobalBasis * Vector3.Right, Vector3.Left);
+            tank.TakeShot(tank.ToGlobal(new Vector3(0.15f, 0.23f, 0)), tank.GlobalBasis * Vector3.Right, Vector3.Left, f.Match.Player.ActorId);
             f.Server.Advance(20);
             f.Server.Packets.Clear();
             f.Flush();
@@ -459,7 +459,7 @@ public static class AuthorityTests
             Send(f.Server, 2, Msg.BodyRest, new BodyRestMessage(Id, tank.GlobalTransform, 1, entry.Epoch, 1));
             f.Server.Advance(20);
             f.Server.Packets.Clear();
-            tank.Detonate();
+            tank.Detonate(f.Match.Player.ActorId);
             tank.Free();
             f.Flush();
             var restored = f.Match.LiveTanks.Single(t => t.NetId == Id);
@@ -470,12 +470,12 @@ public static class AuthorityTests
         {
             using var f = new MatchFixture(runner);
             var tank = f.Match.LiveTanks.Single(t => t.NetId == Id);
-            tank.TakeShot(tank.ToGlobal(new Vector3(0.15f, 0.23f, 0)), tank.GlobalBasis * Vector3.Right, Vector3.Left);
+            tank.TakeShot(tank.ToGlobal(new Vector3(0.15f, 0.23f, 0)), tank.GlobalBasis * Vector3.Right, Vector3.Left, f.Match.Player.ActorId);
             f.Flush();
             var vent = new VentParameters(tank.HoleLocal, tank.HoleNormalLocal, tank.SwirlSign);
             // Move away from piles so this probe tests the refused root alone.
             tank.GlobalPosition = new Vector3(0, 60, 0);
-            tank.Detonate();
+            tank.Detonate(f.Match.Player.ActorId);
             tank.Free(); // The reliable refusal usually arrives after QueueFree has completed.
             Send(f.Server, 3, Msg.Claim, Claim(20, Pose(Id, 2)));
             f.Server.Packets.Clear();
@@ -491,7 +491,7 @@ public static class AuthorityTests
             f.Deliver();
             var tank = f.Match.LiveTanks.Single(t => t.NetId == Id);
             tank.GlobalPosition = new Vector3(0, 60, 0);
-            tank.Detonate();
+            tank.Detonate(f.Match.Player.ActorId);
             tank.Free();
             // Refusal was generated before this disposable publication, but arrives after it.
             var vent = new VentParameters(Puncture(3).Hole, Puncture(3).Normal, Puncture(3).Swirl);
@@ -517,7 +517,7 @@ public static class AuthorityTests
             var tank = f.Match.LiveTanks.Single(t => t.NetId == Id);
             Action? callback = null;
             tank.FuseScheduleOverride = (_, finish) => callback = finish;
-            tank.ChainHit(Vector3.Zero, 0, 99);
+            tank.ChainHit(Vector3.Zero, 0, 99, f.Match.Player.ActorId);
             f.Match.Claim(new[] { tank }, atomic: true);
             f.Server.Advance(20);
             Send(f.Server, 3, Msg.BodyStates, new BodyStatesMessage(1, new[] { Pose(Id, 2, 7) }));

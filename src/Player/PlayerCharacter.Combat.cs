@@ -113,7 +113,7 @@ public partial class PlayerCharacter
         switch (collider)
         {
             case PropaneTank tank:
-                tank.TakeShot(end, normal, shotDir);
+                tank.TakeShot(end, normal, shotDir, ActorId);
                 ImpactEffect.Spawn(World, end, normal, metal: true, leaveDecal: false);
                 break;
             case PlayerCharacter or PhysicalBone3D:
@@ -196,7 +196,7 @@ public partial class PlayerCharacter
             if (!meleeContact.TryHit((victim as GodotObject ?? collider).GetInstanceId())) continue;
             if (victim != null)
             {
-                if (!victim.IsRemote) victim.ReceiveMelee(meleeDirection);
+                if (!World.Networked && !victim.IsRemote) victim.ReceiveMelee(meleeDirection);
             }
             else
             {

@@ -168,9 +168,9 @@ public partial class NetTest : Node
             {
                 // Stage before countdown so snapshots settle before the ordinary brains choose any targets.
                 var peers = setup.Players.OrderBy(p => p.Player.Id).ToList();
-                var slot = peers.FindIndex(p => p.Player.Id == match.Player.PeerId);
+                var slot = peers.FindIndex(p => p.Player.Id == match.Player.ActorId);
                 var anchorId = peers[slot / 2 * 2].Player.Id;
-                var anchor = match.Player.PeerId == anchorId ? match.Player : match.RemoteBodies.First(p => p.PeerId == anchorId);
+                var anchor = match.Player.ActorId == anchorId ? match.Player : match.RemoteBodies.First(p => p.ActorId == anchorId);
                 var yaw = anchor.FacingYaw;
                 var forward = new Vector3(-Mathf.Sin(yaw), 0, -Mathf.Cos(yaw));
                 // Use a normal clear spawn so navigation still has useful routes after the initial knockdowns.
@@ -178,7 +178,7 @@ public partial class NetTest : Node
                     yaw + (slot % 2 == 0 ? 0 : Mathf.Pi));
             }
             match.Player.MeleeStarted += (swing, _) => Log($"melee swing {swing}");
-            match.Player.MeleeHit += hit => Log($"melee contact {hit.Swing} victim {PlayerCharacter.Owning(hit.Collider)?.PeerId ?? 0}");
+            match.Player.MeleeHit += hit => Log($"melee contact {hit.Swing} victim {PlayerCharacter.Owning(hit.Collider)?.ActorId ?? 0}");
             clock = 0;
             duelTime = -1;
             gatherPositions.Clear();
@@ -341,7 +341,7 @@ public partial class NetTest : Node
             ScenarioAssert(tank.State == PropaneTank.TankState.Intact && match.Bodies.Get(id)!.Epoch == 1, "race: contender received a puncture before its simultaneous contact");
             var normal = role == "host" ? Vector3.Right : Vector3.Left;
             var hole = PropaneTank.LocalCenter + normal * 0.15f;
-            tank.TakeShot(tank.ToGlobal(hole), tank.GlobalBasis * normal, -(tank.GlobalBasis * normal));
+            tank.TakeShot(tank.ToGlobal(hole), tank.GlobalBasis * normal, -(tank.GlobalBasis * normal), match.Player.ActorId);
             Log($"race contact tick {raceTick} hole {Vector(tank.HoleLocal)} swirl {tank.SwirlSign}");
         }
         if (raceCamera != null)
@@ -434,7 +434,7 @@ public partial class NetTest : Node
         var gathering = DevArgs.Get("scenario") == "gather";
         if (gathering)
         {
-            var dropper = match.Setup.Players.Single(p => p.Player.Id != match.Bodies.Host).Player;
+            var dropper = match.Setup.Players.Single(p => p.Player.OwnerPeerId != match.Bodies.Host).Player;
             foreach (var tank in match.LiveTanks.Where(IsDrop))
             {
                 var mesh = tank.GetNode<MeshInstance3D>("Mesh");
@@ -524,7 +524,7 @@ public partial class NetTest : Node
         }
         if (Once(3.5f, dt))
         {
-            var victimId = host ? match.RemoteBodies.First().PeerId : net.MyId;
+            var victimId = host ? match.RemoteBodies.First().ActorId : match.Player.ActorId;
             ScenarioAssert(match.Scores[victimId] == (refusal ? 7 : 6) && match.LiveTanks.Count(IsDrop) == (refusal ? 1 : 2),
                 refusal ? "drop-refusal: rejected prediction changed the bank or left a phantom tank" : "duel: three hits must spill exactly two tanks (one hit inside grace)");
             if (refusal)
@@ -793,7 +793,7 @@ public partial class NetTest : Node
         }
         if (Once(4, dt))
         {
-            ScenarioAssert(meleeFirstDown && match.Scores[target.PeerId] == 0 && match.LiveTanks.Count(IsDrop) == 5,
+            ScenarioAssert(meleeFirstDown && match.Scores[target.ActorId] == 0 && match.LiveTanks.Count(IsDrop) == 5,
                 "melee: first knockdown must spill exactly five tanks from a five-tank bank");
             if (victim) ScenarioAssert(meleeThrows == 1, "melee: repeated active contacts threw victim twice");
         }
@@ -804,7 +804,7 @@ public partial class NetTest : Node
         }
         if (Once(14, dt))
         {
-            ScenarioAssert(meleeSecondDown && match.Scores[target.PeerId] == 0 && match.LiveTanks.Count(IsDrop) == 5,
+            ScenarioAssert(meleeSecondDown && match.Scores[target.ActorId] == 0 && match.LiveTanks.Count(IsDrop) == 5,
                 "melee: zero-bank victim must ragdoll without another drop");
             if (victim) ScenarioAssert(meleeThrows == 2, "melee: missing zero-bank throw");
         }
@@ -1012,14 +1012,14 @@ public partial class NetTest : Node
             var p = tank.GlobalPosition;
             tanks.Append($" {tank.NetId:x}:{(tank.State == PropaneTank.TankState.Venting ? "V" : "I")}:{p.X:0.00},{p.Y:0.00},{p.Z:0.00}");
         }
-        var remotes = string.Join(" ", match.RemoteBodies.Select(b => $"{b.PeerId}@{b.GlobalPosition.X:0.0},{b.GlobalPosition.Z:0.0}{(b.IsRagdolled ? "R" : "")}"));
+        var remotes = string.Join(" ", match.RemoteBodies.Select(b => $"{b.ActorId}@{b.GlobalPosition.X:0.0},{b.GlobalPosition.Z:0.0}{(b.IsRagdolled ? "R" : "")}"));
         foreach (var body in match.RemoteBodies)
         {
             var bones = body.FindChildren("Physical_*", "PhysicalBone3D", owned: false).OfType<PhysicalBone3D>().ToList();
             if (bones.Count > 0)
             {
                 var far = bones.Max(b => b.GlobalPosition.DistanceTo(body.GlobalPosition));
-                Log($"bones of {body.PeerId}: farthest {far:0.00} m from the body, ragdolled {body.IsRagdolled}, layer {bones[0].CollisionLayer}");
+                Log($"bones of {body.ActorId}: farthest {far:0.00} m from the body, ragdolled {body.IsRagdolled}, layer {bones[0].CollisionLayer}");
             }
         }
         var self = match.Player;

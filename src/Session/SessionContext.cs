@@ -13,6 +13,7 @@ public sealed class SessionContext : IDisposable
 {
     private readonly List<ActorRuntime> actors = new();
     private readonly List<Node> views = new();
+    private readonly Net.IdentitySequence viewIds = new();
     private readonly List<Action> detach = new();
     private readonly List<Action> unsubscribe = new();
     private readonly List<Action> stop = new();
@@ -68,7 +69,7 @@ public sealed class SessionContext : IDisposable
     {
         EnsureAlive();
         if (!actors.Contains(actor)) throw new ArgumentException("actor is not in this session", nameof(actor));
-        return AddView(parent, new LocalView { Actor = actor.Character, Input = input, Name = "LocalView" });
+        return AddView(parent, new LocalView { LocalViewId = viewIds.Allocate(), Actor = actor.Character, Input = input, Name = "LocalView" });
     }
 
     public T AddView<T>(Node parent, T view, bool followsPause = false) where T : Node

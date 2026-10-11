@@ -384,7 +384,7 @@ public partial class Menus : CanvasLayer
             return;
         }
         var tuning = Net.Template;
-        var creator = lobby.Members.FirstOrDefault(m => m.Id == lobby.CreatorId);
+        var creator = lobby.Members.FirstOrDefault(m => m.OwnerPeerId == lobby.CreatorId && m.Kind == ActorKind.Human);
         layout.AddChild(UiStyle.Title($"{(creator?.Name ?? "?").ToUpperInvariant()}'S LOBBY", 34));
         layout.AddChild(UiStyle.Text(lobby.Phase == LobbyServer.LobbyPhase.Waiting ? $"{lobby.Members.Count} of {Net.LobbyCapacity} players" : "A match is on",
             16, UiStyle.SoftInk, HorizontalAlignment.Center));
@@ -395,10 +395,10 @@ public partial class Menus : CanvasLayer
             var row = new HBoxContainer();
             row.AddThemeConstantOverride("separation", 12);
             row.AddChild(UiStyle.ColorSample(member.Appearance.Color, 20, member.Id.ToString(System.Globalization.CultureInfo.InvariantCulture)));
-            var label = UiStyle.Text(member.Name + (member.Id == Net.MyId ? "  (you)" : ""), 20);
+            var label = UiStyle.Text(member.Name + (member.OwnerPeerId == Net.MyId ? "  (you)" : ""), 20);
             label.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
             row.AddChild(label);
-            if (member.Id == lobby.CreatorId)
+            if (member.OwnerPeerId == lobby.CreatorId && member.Kind == ActorKind.Human)
             {
                 row.AddChild(UiStyle.Text("starts the match", 15, UiStyle.SoftInk));
             }

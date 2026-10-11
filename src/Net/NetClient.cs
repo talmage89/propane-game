@@ -7,16 +7,39 @@ using Propane.Core;
 namespace Propane.Net;
 
 /// <summary>A lobby as the lobby browser lists it.</summary>
-public sealed record LobbySummary(int Id, string CreatorName, int Players, LobbyServer.LobbyPhase Phase);
+public sealed record LobbySummary(int Id, string CreatorName, int Players, LobbyServer.LobbyPhase Phase, int Capacity = 5);
 
 /// <summary>A player in a lobby or match.</summary>
-public sealed record PlayerProfile(int Id, string Name, AppearanceRecord Appearance);
+public sealed record PlayerProfile(int Id, string Name, AppearanceRecord Appearance)
+{
+    public int OwnerPeerId { get; init; } = Id;
+    public ActorKind Kind { get; init; }
+    public ControllerConfig ControllerConfig { get; init; } = ControllerConfig.Human;
+    public bool Present { get; init; } = true;
+    public int AllocationSlot { get; init; }
+    public uint LifeId { get; init; } = 1;
+    public static PlayerProfile From(ActorRecord a) => new(a.ActorId, a.Name, a.Appearance)
+    {
+        OwnerPeerId = a.OwnerPeerId, Kind = a.Kind, ControllerConfig = a.ControllerConfig,
+        Present = a.Present, AllocationSlot = a.AllocationSlot, LifeId = a.LifeId,
+    };
+}
 
 /// <summary>The lobby the player is in, as the server last described it.</summary>
-public sealed record LobbyInfo(int Id, int CreatorId, float MatchLength, LobbyServer.LobbyPhase Phase, IReadOnlyList<PlayerProfile> Members);
+public sealed record LobbyInfo(int Id, int CreatorId, float MatchLength, LobbyServer.LobbyPhase Phase, IReadOnlyList<PlayerProfile> Members, int Capacity = 5, uint RosterRevision = 1)
+{
+    public IReadOnlyList<int> Peers { get; init; } = Members.Select(a => a.OwnerPeerId).Distinct().ToArray();
+}
 
 /// <summary>Everything a client needs to start a match.</summary>
-public sealed record MatchSetup(int Id, byte[] Plan, int HostId, bool CreatorDebug, float Length, Godot.Collections.Dictionary Tuning, IReadOnlyList<(PlayerProfile Player, int Spawn)> Players);
+public sealed record MatchSetup(int Id, byte[] Plan, int HostId, bool CreatorDebug, float Length, Godot.Collections.Dictionary Tuning, IReadOnlyList<(PlayerProfile Player, int Spawn)> Players)
+{
+    public uint RosterRevision { get; init; } = 1;
+    public int CreatorId { get; init; } = HostId;
+    public IReadOnlyList<PeerCapabilities> Peers { get; init; } = Players.Select(p => p.Player.OwnerPeerId).Distinct()
+        .Select(id => new PeerCapabilities(id, id == HostId && CreatorDebug)).ToArray();
+}
+public sealed record PeerCapabilities(int PeerId, bool DebugTuning);
 
 /// <summary>A final standing, from the server.</summary>
 public sealed record Standing(int Id, string Name, AppearanceRecord Appearance, int Score, bool Present);
@@ -66,6 +89,11 @@ public partial class NetClient : Node
     public int LobbyCapacity { get; private set; } = 5;
 
     public LobbyInfo? Lobby { get; private set; }
+
+    public uint RosterRevision { get; private set; }
+    public IReadOnlyList<PlayerProfile> Roster { get; private set; } = Array.Empty<PlayerProfile>();
+    private uint nextActorRequest;
+    public event Action<ActorRequestResultMessage>? ActorRequestCompleted;
 
     public bool IsCreator => Lobby != null && Lobby.CreatorId == MyId;
 
@@ -175,6 +203,8 @@ public partial class NetClient : Node
         transport.Close();
         inbox.Clear();
         Lobby = null;
+        Roster = Array.Empty<PlayerProfile>();
+        RosterRevision = 0;
         MyId = 0;
         SetState(Status.Offline, null);
     }
@@ -218,6 +248,8 @@ public partial class NetClient : Node
         Send(new NetWriter(Msg.LeaveLobby));
         inbox.Clear();
         Lobby = null;
+        Roster = Array.Empty<PlayerProfile>();
+        RosterRevision = 0;
         LobbyChanged?.Invoke();
     }
 
@@ -229,6 +261,26 @@ public partial class NetClient : Node
         {
             Send(new NetWriter(Msg.SetProfile).String(PlayerName).Appearance(Appearance));
         }
+    }
+
+    public void SetCapacity(int capacity) => Send(new NetWriter(Msg.SetCapacity).Int(capacity));
+    public uint AddActor(ActorKind kind, string name, AppearanceRecord appearance, ControllerConfig config)
+    {
+        var request = checked(++nextActorRequest);
+        Send(MessageCodec.Encode(new NetMessage(Msg.AddActor, 0, 0, new AddActorMessage(request, kind, name, appearance, config)), false));
+        return request;
+    }
+    public uint UpdateActor(int actorId, string name, AppearanceRecord appearance, ControllerConfig config)
+    {
+        var request = checked(++nextActorRequest);
+        Send(MessageCodec.Encode(new NetMessage(Msg.UpdateActor, 0, 0, new UpdateActorMessage(request, actorId, name, appearance, config)), false));
+        return request;
+    }
+    public uint RemoveActor(int actorId)
+    {
+        var request = checked(++nextActorRequest);
+        Send(MessageCodec.Encode(new NetMessage(Msg.RemoveActor, 0, 0, new RemoveActorMessage(request, actorId)), false));
+        return request;
     }
 
     public void SetMatchLength(float seconds) => Send(new NetWriter(Msg.SetMatchLength).Float(seconds));
@@ -271,14 +323,26 @@ public partial class NetClient : Node
                     LobbiesChanged?.Invoke();
                     break;
                 case LobbyInfo lobby:
-                    var me = lobby.Members.FirstOrDefault(m => m.Id == MyId);
+                    if (Lobby?.Id == lobby.Id && lobby.RosterRevision < RosterRevision) break;
+                    var me = lobby.Members.FirstOrDefault(m => m.OwnerPeerId == MyId && m.Kind == ActorKind.Human);
                     if (me != null) { Appearance = me.Appearance; PlayerName = me.Name; }
-                    Lobby = me != null ? lobby : null;
+                    Lobby = lobby.Peers.Contains(MyId) ? lobby : null;
+                    if (Lobby != null) { Roster = lobby.Members; RosterRevision = lobby.RosterRevision; }
                     if (Lobby == null) { inbox.Clear(); }
                     LobbyChanged?.Invoke();
                     break;
+                case RosterStateMessage roster:
+                    if (Lobby?.Id != roster.LobbyId || roster.Revision <= RosterRevision) break;
+                    Roster = roster.Actors;
+                    RosterRevision = roster.Revision;
+                    Lobby = Lobby with { Members = Roster, RosterRevision = RosterRevision };
+                    LobbyChanged?.Invoke();
+                    break;
+                case ActorRequestResultMessage result:
+                    ActorRequestCompleted?.Invoke(result);
+                    break;
                 case MatchSetup setup:
-                    if (State != Status.Connected || Lobby == null || setup.Id <= lastMatchId || !setup.Players.Any(p => p.Player.Id == MyId)) { return; }
+                    if (State != Status.Connected || Lobby == null || setup.Id <= lastMatchId || !setup.Players.Any(p => p.Player.OwnerPeerId == MyId)) { return; }
                     lastMatchId = setup.Id;
                     inbox.Begin(setup.Id);
                     MatchStarting?.Invoke(setup);
@@ -314,6 +378,8 @@ public partial class NetClient : Node
         transport.Close();
         inbox.Clear();
         Lobby = null;
+        Roster = Array.Empty<PlayerProfile>();
+        RosterRevision = 0;
         MyId = 0;
         State = Status.Offline;
         StatusChanged?.Invoke(Status.Offline, reason.Detail);
