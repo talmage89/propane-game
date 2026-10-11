@@ -24,7 +24,11 @@ public partial class GameTest : Node
         game.Player.InputOverride = input;
         var director = new CaptureDirector { QuitAfter = DevArgs.GetFloat("quit", 16f) };
         AddChild(director);
-        if (DevArgs.Get("scenario") == "ragdoll")
+        if (DevArgs.Get("scenario") == "gather")
+        {
+            ScriptGather(director);
+        }
+        else if (DevArgs.Get("scenario") == "ragdoll")
         {
             ScriptRagdoll(director);
         }
@@ -390,6 +394,72 @@ public partial class GameTest : Node
         }
         GD.Print($"[settle] seed {suburb.Plan.Seed}: {moved} of {bodies.Count} props unsettled, {tanks} tanks moved");
         if (tanks > 0) { GD.PushError("[settle] tanks moved before a hit"); GetTree().Quit(1); }
+    }
+
+    private void ScriptGather(CaptureDirector director)
+    {
+        Core.Tuning.Current.GatherDelay = 2;
+        director.QuitAfter = 24;
+        PropaneTank[] members = System.Array.Empty<PropaneTank>();
+        Vector3 center = Vector3.Zero;
+        Vector3 direction = Vector3.Forward;
+        PropaneTank? source = null;
+        var exploded = false;
+        var poses = new System.Collections.Generic.Dictionary<PropaneTank, Transform3D>();
+        void Require(bool condition, string message)
+        {
+            if (condition) { return; }
+            GD.PushError($"[game gather] FAIL {message}");
+            GetTree().Quit(1);
+            throw new System.InvalidOperationException(message);
+        }
+        director.At(3, () =>
+        {
+            var road = game.Current!.Plan.Roads.OrderByDescending(r => r.Length).First();
+            center = World.Suburb.ToWorld((road.A + road.B) / 2);
+            direction = new Vector3(road.Direction.X, 0, road.Direction.Y);
+            var across = direction.Cross(Vector3.Up);
+            members = game.Current.LiveTanks.Take(3).ToArray();
+            for (var i = 0; i < members.Length; i++)
+            {
+                var tank = members[i];
+                tank.GlobalTransform = new Transform3D(Basis.Identity, center + across * ((i - 1) * 0.36f));
+                tank.LinearVelocity = tank.AngularVelocity = Vector3.Zero;
+                tank.Sleeping = true;
+                tank.MarkPile();
+            }
+            source = game.Current.LiveTanks.Skip(3).First();
+            source.GlobalTransform = new Transform3D(Basis.Identity, center - direction * 5);
+            source.LinearVelocity = source.AngularVelocity = Vector3.Zero;
+            source.Sleeping = true;
+            source.MarkPile();
+            source.Detonated += _ => exploded = true;
+            var yaw = Mathf.Atan2(-direction.X, -direction.Z);
+            game.Player.Teleport(center - direction * 18 + Vector3.Up * 0.05f, yaw);
+            target = source;
+            input.Hold(T(0), T(3), new Player.PlayerIntent { Aim = true });
+            input.Fire(T(1)); input.Fire(T(1.6f));
+        });
+        director.ShotAt(4.7f, "gather_00_blast");
+        director.At(6, () =>
+        {
+            Require(exploded && members.Count(t => t.Loose && t.State == PropaneTank.TankState.Intact) >= 2,
+                "player's blast did not knock an intact group loose");
+            var camera = new Camera3D { Current = true }; AddChild(camera);
+            camera.LookAtFromPosition(center + new Vector3(5, 4, 7), center + direction * 3 + Vector3.Up * 0.5f);
+        });
+        for (var i = 0; i < 10; i++) { director.ShotAt(7 + i, $"gather_{i + 1:00}"); }
+        director.At(18, () =>
+        {
+            Require(members.Count(t => !t.Loose && !t.Gathering && t.AtRest) >= 2, "knocked tanks did not gather");
+            foreach (var tank in members.Where(t => !t.Loose)) { poses[tank] = tank.GlobalTransform; }
+        });
+        director.At(22, () =>
+        {
+            Require(poses.Count >= 2 && poses.All(p => p.Key.GlobalPosition.DistanceTo(p.Value.Origin) <= 0.006f &&
+                p.Key.GlobalBasis.GetRotationQuaternion().AngleTo(p.Value.Basis.GetRotationQuaternion()) <= Mathf.DegToRad(0.5f)), "gathered pile moved or tipped");
+            GD.Print($"[game gather] PASS player shot a blast that knocked the pile loose; {poses.Count} intact tanks gathered and remained stable");
+        });
     }
 
     private float clock;

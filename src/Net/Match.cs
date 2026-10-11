@@ -81,6 +81,8 @@ public partial class Match : Node3D
     private SuburbPlan plan = null!;
     private PlayerCharacter player = null!;
     private BodySync bodies = null!;
+    private TankGather gather = null!;
+    private readonly HashSet<uint> gatherRequests = new();
     private Hud hud = null!;
     private MatchHud matchHud = null!;
     private MatchMenu menu = null!;
@@ -189,6 +191,16 @@ public partial class Match : Node3D
                 looseProps[index] = body;
             }
         }
+
+        gather = new TankGather
+        {
+            Name = "Gather",
+            Tanks = () => LiveTanks,
+            Enabled = () => IsPlaying && bodies.Host == me,
+            Grant = GrantGather,
+            Publish = PublishGather
+        };
+        suburb.AddChild(gather);
 
         foreach (var (profile, slot) in Setup.Players)
         {
@@ -515,13 +527,63 @@ public partial class Match : Node3D
     }
 
     /// <summary>One atomic request for all disturbed bodies, with each body's expected epoch and proposed pose.</summary>
-    internal void Claim(IEnumerable<GodotObject> disturbed, uint cause = 0, bool atomic = false)
+    internal uint Claim(IEnumerable<GodotObject> disturbed, uint cause = 0, bool atomic = false)
     {
         var claims = atomic ? bodies.ClaimGroup(disturbed) : bodies.Claim(disturbed);
-        if (claims.Count == 0) { return; }
+        if (claims.Count == 0) { return 0; }
         var request = NewRequest();
         QueueAuthority(new AuthorityRequest(Msg.Claim, request, cause, claims.Select(c => c.Id).ToArray(),
             new ClaimMessage(request, claims, cause)));
+        return request;
+    }
+
+    private void GrantGather(IReadOnlyList<PropaneTank> members, Action<Func<PropaneTank, bool>?> done)
+    {
+        var request = Claim(members, atomic: true);
+        if (request == 0) { done(null); return; }
+        gatherRequests.Add(request);
+        void Resolve(AuthorityMessage result)
+        {
+            if (result.Peer != me || result.Request != request) { return; }
+            AuthorityResolved -= Resolve;
+            if (result.Reason != ClaimRefusal.None) { done(null); return; }
+            var epochs = result.Bodies.ToDictionary(b => b.Body.Id, b => b.Body.Epoch);
+            done(t => bodies.Get(t.NetId) is { } e && e.Owner == me && !e.ClaimPending && epochs.GetValueOrDefault(t.NetId) == e.Epoch);
+        }
+        AuthorityResolved += Resolve;
+    }
+
+    private void PublishGather(PropaneTank tank, GatherPhase phase)
+    {
+        if (!IsPlaying || bodies.Host != me || bodies.Get(tank.NetId) is not { } entry || entry.Owner != me || entry.ClaimPending ||
+            tank.State != PropaneTank.TankState.Intact) { return; }
+        var state = BodySync.Capture(entry) with { Sequence = ++entry.Sequence };
+        Net.Send(MessageCodec.Encode(new NetMessage(Msg.Gather, Setup.Id, 0, new GatherMessage(phase, new[] { state })), fromServer: false));
+    }
+
+    private void ReceiveGather(int sender, GatherMessage message)
+    {
+        foreach (var state in message.Bodies)
+        {
+            if (bodies.Get(state.Id) is not { } entry || entry.Owner != sender || entry.Epoch != state.Epoch ||
+                state.Sequence <= entry.LastGatherSequence || entry.Body is not PropaneTank tank || tank.State != PropaneTank.TankState.Intact) { continue; }
+            entry.LastGatherSequence = state.Sequence;
+            bodies.OnState(sender, state, message.Phase == GatherPhase.Settled, NetTransport.Now);
+            if (message.Phase == GatherPhase.Glide) { tank.BeginGather(); }
+            else
+            {
+                tank.EndGather();
+                if (message.Phase == GatherPhase.Settled)
+                {
+                    if (state.Sequence >= entry.LastSequence)
+                    {
+                        BodySync.Snap(tank, state.Transform, Vector3.Zero, Vector3.Zero);
+                        tank.Sleeping = true;
+                    }
+                    tank.MarkPile(state.Transform);
+                }
+            }
+        }
     }
 
     private void QueueAuthority(AuthorityRequest request)
@@ -607,6 +669,9 @@ public partial class Match : Node3D
             var id = authority.Body.Id;
             if (exploded.Contains(id)) { continue; }
             var entry = bodies.Get(id);
+            var gatherGrant = result.Peer == me && result.Reason == ClaimRefusal.None && gatherRequests.Contains(result.Request);
+            if (!gatherGrant && entry != null && authority.Body.Epoch > entry.Epoch &&
+                entry.Body is PropaneTank changed && IsInstanceValid(changed)) { changed.Disturb(); }
             if (entry != null && !bodies.OnAuthority(authority, out authority)) { continue; }
             if (authority.State == TankLedger.State.Exploded)
             {
@@ -639,10 +704,12 @@ public partial class Match : Node3D
             var recreated = !tanks.TryGetValue(id, out var tank) || !IsInstanceValid(tank) || tank.State == PropaneTank.TankState.Exploded;
             if (recreated)
             {
+                var pilePose = tank?.PilePose;
                 if (tank != null && IsInstanceValid(tank) && !tank.IsQueuedForDeletion()) { tank.QueueFree(); }
                 tank = PropaneTank.Create();
                 tank.NetId = id;
                 suburb.AddTank(tank);
+                if (pilePose is { } pose) { tank.MarkPile(pose); }
                 Track(tank, authority.Owner, replace: entry != null);
                 if (entry == null) { bodies.OnAuthority(authority); }
             }
@@ -675,6 +742,7 @@ public partial class Match : Node3D
         }
         FlushAuthority();
         AuthorityResolved?.Invoke(result);
+        if (result.Peer == me) { gatherRequests.Remove(result.Request); }
     }
 
     private void PlayExplosion(uint id, Vector3 center)
@@ -979,6 +1047,7 @@ public partial class Match : Node3D
             case Msg.MatchEnd:
                 var standings = (IReadOnlyList<Standing>)message.Payload;
                 phase = Phase.Ended;
+                foreach (var tank in LiveTanks) { tank.EndGather(); }
                 timeLeft = 0;
                 player.InputLocked = true;
                 endLeft = tuning.ResultsTime;
@@ -1029,6 +1098,11 @@ public partial class Match : Node3D
                 break;
             case BodyRestMessage rest:
                 bodies.OnState(sender, new BodyState(rest.Id, rest.Transform, Vector3.Zero, Vector3.Zero, rest.Epoch, rest.Sequence), rest: true, now);
+                if (bodies.Get(rest.Id) is { } rested && rested.Owner == sender && rested.Epoch == rest.Epoch &&
+                    rested.LastSequence == rest.Sequence && rested.Body is PropaneTank restingTank) { restingTank.EndGather(); }
+                break;
+            case GatherMessage gathering:
+                ReceiveGather(sender, gathering);
                 break;
             case DropMessage drop:
                 if (sender == me) { dropPredictions.Accepted(drop.Tanks.Select(t => t.Id)); }

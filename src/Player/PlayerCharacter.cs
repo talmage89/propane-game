@@ -495,7 +495,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         for (var i = 0; i < GetSlideCollisionCount(); i++)
         {
             var collision = GetSlideCollision(i);
-            if (collision.GetCollider() is not RigidBody3D body || body.Freeze)
+            if (collision.GetCollider() is not RigidBody3D body || body.Freeze && body is not PropaneTank { Gathering: true })
             {
                 continue;
             }
@@ -506,6 +506,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
                 continue;
             }
             var push = -new Vector3(normal.X, 0, normal.Z).Normalized() * into * Mathf.Min(body.Mass, 30f) * PushStrength * dt;
+            if (body is PropaneTank tank) { tank.Disturb(); }
             body.ApplyImpulse(push, collision.GetPosition() - body.GlobalPosition);
             PushedBody?.Invoke(body);
         }

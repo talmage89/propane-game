@@ -13,6 +13,12 @@ instance uniform float soot = 0.0;
 // A freshly dropped tank glows at its rim in the dropper's color while it ignores bullets (alpha is the strength).
 instance uniform vec4 shield_color : source_color = vec4(1.0, 1.0, 1.0, 0.0);
 
+// Construct scan while gathering; zero strength leaves the ordinary tank material.
+instance uniform float gather_shimmer = 0.0;
+instance uniform float gather_speed = 4.0;
+instance uniform float gather_bands = 18.0;
+instance uniform float gather_sharpness = 6.0;
+
 varying vec3 world_pos;
 
 void vertex() {
@@ -32,5 +38,6 @@ void fragment() {
 	NORMAL_MAP = vec3(n.r, 1.0 - n.g, n.b);
 	NORMAL_MAP_DEPTH = normal_strength;
 	float rim = pow(1.0 - clamp(dot(NORMAL, VIEW), 0.0, 1.0), 2.0);
-	EMISSION = reveal_glow.rgb * glow * 6.0 + shield_color.rgb * shield_color.a * (0.8 + rim * 6.0);
+	float gather_scan = pow(0.5 + 0.5 * sin(world_pos.y * gather_bands - TIME * gather_speed), gather_sharpness);
+	EMISSION = reveal_glow.rgb * glow * 6.0 + shield_color.rgb * shield_color.a * (0.8 + rim * 6.0) + vec3(gather_shimmer * gather_scan);
 }
