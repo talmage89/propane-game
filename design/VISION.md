@@ -46,11 +46,6 @@ does it make you want another round?
 - **The construct builds itself.** Worlds and objects appear and leave by scanning, dissolving and materializing.
 - **Generous explosions.** Fireball, shockwave, flash, shake, debris and scorch: every blast is worth watching.
 
-## Multiplayer
-
-- **Score is physical.** Points are tanks: what you detonate is banked, and getting shot or thrown spills tanks back
-  into the world for anyone to take. One rule, no special cases.
-
 ## Reach
 
 - Built to be picked up by many people: free or cheap, on PC first (Windows, macOS and Linux) and consoles later.

@@ -1,8 +1,10 @@
+using System.Diagnostics.CodeAnalysis;
 using Godot;
 
 namespace Propane.World;
 
 /// <summary>Small helpers for building flat ground geometry with SurfaceTool. Map (x, y) is world (X, Z).</summary>
+[SuppressMessage("Design", "CA1001", Justification = "SurfaceTool is Godot RefCounted; keep its existing lifetime with this mesh builder.")]
 public sealed class MeshKit
 {
     private readonly SurfaceTool tool = new();

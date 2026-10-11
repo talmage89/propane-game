@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches: [dev]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GODOT_VERSION: 4.7.2
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/setup-godot
+        with:
+          godot-version: ${{ env.GODOT_VERSION }}
+
+      - name: Import assets
+        run: '"$GODOT" --headless --path . --import'
+
+      - name: Lint
+        run: make lint
+
+      - name: Test
+        run: make test

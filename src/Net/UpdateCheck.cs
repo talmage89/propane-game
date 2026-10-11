@@ -30,7 +30,8 @@ public partial class UpdateCheck : Node
             using var http = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(10) };
             http.DefaultRequestHeaders.UserAgent.ParseAdd($"Propane/{BuildInfo.GameVersion}");
             http.DefaultRequestHeaders.Accept.ParseAdd("application/vnd.github+json");
-            using var json = JsonDocument.Parse(await http.GetStringAsync(DevArgs.Get("update-url") ?? LatestReleaseApi));
+            // Resume on Godot's main thread: Found updates the menu's nodes.
+            using var json = JsonDocument.Parse(await http.GetStringAsync(DevArgs.Get("update-url") ?? LatestReleaseApi).ConfigureAwait(true));
             var tag = json.RootElement.GetProperty("tag_name").GetString() ?? "";
             GD.Print($"[update] latest release {tag}, this game {BuildInfo.GameVersion}");
             if (BuildInfo.IsNewer(tag) && SemVer.Parse(tag) is { } latest)
