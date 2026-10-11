@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 using Godot;
 using Propane.Core;
@@ -49,6 +50,7 @@ public partial class WorldServicesTests : Node
             }
             ConstructionFailure();
             PresentationLifetime();
+            TuningPanelIsolation();
             GD.Print($"[world services] PASS two overlapping worlds, distinct tuning, events, blasts, callbacks, partial failure; 10 retirements stable at {baseline}");
             ShutdownGuard.Quit(GetTree());
         }
@@ -98,6 +100,20 @@ public partial class WorldServicesTests : Node
         }
         finally { view.Free(); }
         GD.Print("[world services] PASS shared presentation survives both world retirement orders");
+    }
+
+    private void TuningPanelIsolation()
+    {
+        using var template = new Tuning { TankMass = 7 };
+        using var a = new WorldContext(this, template);
+        using var b = new WorldContext(this, template);
+        var panel = a.AddView(this, new Propane.UI.TuningPanel { Target = a.Tuning });
+        var label = panel.FindChildren("*", "Label", true, false).OfType<Label>().Single(l => l.Text == "Tank mass");
+        var slider = label.GetParent().GetChildren().OfType<HSlider>().Single();
+        slider.Value = 13;
+        Assert(a.Tuning.TankMass == 13 && b.Tuning.TankMass == 7 && template.TankMass == 7,
+            "tuning panel edited another world or the future-world template");
+        GD.Print("[world services] PASS tuning slider edits only its explicit world target");
     }
 
     private void ConstructionFailure()

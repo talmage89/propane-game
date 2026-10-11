@@ -31,13 +31,14 @@ continue to use `MonotonicClock` and the server clock. Never compare those times
 Call `World.Dispose()` before freeing or replacing a facade. Cleanup invalidates first, cancels timers/deferred
 work, stops processing/physics, clears events and receiver registrations, runs stop adapters (including inbox detach and replication),
 releases views, restores presentation, and synchronously frees content and physics resources. It is idempotent.
+A presentation viewport owns its selection history; restoring skips disposed and invalidated predecessors.
 `World.Construct` uses that same path on a construction failure. `Suburb.Build` frees its detached subtree if
 construction fails before it can be attached to the world. Content spawn services retain their originating
 root; retiring content removes its effects and cancels source callbacks before the next suburb is built.
 
-`make test` discovers `[UnitSuite]` clock assertions and runs `world_services_tests.tscn`, which exercises two independent physics worlds at overlapping coordinates with different
-tuning. It asserts blast, event, spawn and callback isolation, survivor continuity, replacement safety, partial
-construction cleanup, and exact node/object/orphan counts across ten retirements after warming immutable caches.
+`make test` discovers `[UnitSuite]` clock assertions and runs `world_services_tests.tscn`, which exercises two
+independent physics worlds at overlapping coordinates with different tuning. It asserts blast, event, spawn and callback isolation, survivor continuity, replacement safety, partial
+construction cleanup, tuning-panel target isolation, and exact node/object/orphan counts across ten retirements after warming immutable caches.
 
 `World.SetPaused` disables the simulation root and calls `PhysicsServer3D.SpaceSetActive` for that world's space.
 Tracked cameras follow the pause; menus and the always-processing driver stay active. Connection polling remains
@@ -63,5 +64,5 @@ of an event currently being dispatched; a retired receiver is skipped in a blast
 `menu_test.tscn -- --scenario=lifetime` drives the real main/pause/lobby/match buttons through ten single-player and
 ten solo-match cycles after warming immutable catalog variants and lazy UI resources. It checks exact node, object
 and orphan counts and verifies each retired world's timers and receiver registry are empty. Server-owned match
-seeds still vary; the test never alters the server's construction inputs or messages. The ten-cycle sweep runs in `make test-full`. Rendered runs capture first
-and last entries plus the final browser.
+seeds still vary; the test never alters the server's construction inputs or messages. The ten-cycle sweep runs in
+`make test-full`. Rendered runs capture first and last entries plus the final browser.
