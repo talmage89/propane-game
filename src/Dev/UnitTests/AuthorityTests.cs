@@ -182,6 +182,31 @@ public static class AuthorityTests
                 transferred.Vent == puncture.Vent && transferred.Body.Transform == latest.Transform, "departure lost the canonical vent or pose");
             TestRunner.Assert(!ledger.Update(3, Pose(Id, 2, 100), true) && ledger.Update(2, Pose(Id, 3, 1), false), "handoff kept the departed stream");
         });
+        foreach (var moving in new[] { false, true })
+        {
+            runner.Run($"authority/new canonical vent reconciles an intact observer (moving {moving})", () =>
+            {
+                using var f = new MatchFixture(runner);
+                var tank = f.Match.LiveTanks.Single(t => t.NetId == Id);
+                // A relayed blast can already have pushed this intact observer before its child puncture arrives.
+                var current = new Transform3D(Basis.Identity, new Vector3(9, 4, 8));
+                BodySync.Snap(tank, current, Vector3.One * 20, Vector3.One * 2);
+                tank.Sleeping = !moving;
+                var puncture = Puncture(3);
+                Send(f.Server, 3, Msg.Puncture, puncture);
+                f.Deliver();
+                TestRunner.Assert(tank.State == PropaneTank.TankState.Venting && tank.HoleLocal == puncture.Hole &&
+                    f.Match.Bodies.Get(Id) is { Owner: 3, Epoch: 2 }, "observer did not adopt canonical vent authority");
+                TestRunner.Assert(tank.GlobalTransform.IsEqualApprox(moving ? current : puncture.Transform) &&
+                    tank.LinearVelocity == (moving ? Vector3.One * 20 : puncture.Linear) &&
+                    tank.AngularVelocity == (moving ? Vector3.One * 2 : puncture.Angular), "canonical vent rewound existing motion or failed to initialize a resting observer");
+                var now = NetTransport.Now;
+                f.Match.OnMessage(new NetMessage(Msg.BodyStates, f.Server.Id, 3,
+                    new BodyStatesMessage(now, new[] { Pose(Id, 2, 1) })));
+                f.Match.Bodies.Correct(now);
+                TestRunner.Assert(tank.GlobalTransform.IsEqualApprox(Pose(Id).Transform), "confirmed owner's stream did not reconcile the observer");
+            });
+        }
         runner.Run("authority/server echoes canonical punctures and refuses contenders explicitly", () =>
         {
             using var f = new ServerTests.Fixture();

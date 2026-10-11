@@ -626,7 +626,11 @@ public partial class Match : Node3D
             // A losing puncture changes the vent, not its current trajectory. The confirmed owner's stream
             // corrects motion normally; the later refusal must not rewind adoption to the cached claim pose.
             var adoptingVent = finished?.Type == Msg.Puncture && !recreated && !wasIntact && authority.State == TankLedger.State.Venting;
-            if (recreated || wasIntact && authority.State == TankLedger.State.Venting || result.Reason != ClaimRefusal.None && !adoptingVent)
+            // A remote root blast can already have pushed an intact copy before its canonical child puncture.
+            // The grant's pose predates that push. Keep existing motion until the confirmed owner's stream arrives;
+            // only a resting intact observer needs initialization from the puncture's pose.
+            var initializeVent = wasIntact && authority.State == TankLedger.State.Venting && tank.Sleeping;
+            if (recreated || initializeVent || result.Reason != ClaimRefusal.None && !adoptingVent)
             {
                 BodySync.Snap(tank, authority.Body.Transform, authority.Body.Linear, authority.Body.Angular);
                 tank.Sleeping = authority.Rest;
