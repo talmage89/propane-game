@@ -23,7 +23,7 @@ public sealed record Standing(int Id, string Name, int Color, int Score, bool Pr
 
 /// <summary>
 /// The client's connection to the server: connects and introduces itself, follows the lobby list and the lobby it is
-/// in, and hands everything about a running match to whoever listens to <see cref="MatchMessage"/>.
+/// in, and hands everything about a running match to whoever listens to <see cref="AttachMatch"/>.
 /// </summary>
 public partial class NetClient : Node
 {
@@ -81,10 +81,14 @@ public partial class NetClient : Node
 
     public event Action<MatchSetup>? MatchStarting;
 
-    /// <summary>Completely decoded messages about the current match.</summary>
-    public event Action<NetMessage>? MatchMessage;
+    private readonly MatchInbox inbox = new();
 
-    public int ActiveMatchId { get; private set; }
+    public int ActiveMatchId => inbox.MatchId;
+
+    /// <summary>Hands queued and subsequent messages to a fully initialized match.</summary>
+    public bool AttachMatch(int id, Action<NetMessage> receiver) => inbox.Attach(id, receiver);
+
+    public void DetachMatch(int id, Action<NetMessage> receiver) => inbox.Detach(id, receiver);
 
     private int lastMatchId;
 
@@ -111,7 +115,11 @@ public partial class NetClient : Node
         transport.SimulatedLoss = Dev.DevArgs.GetFloat("net-loss", 0) / 100f;
     }
 
-    public override void _ExitTree() => transport.Close();
+    public override void _ExitTree()
+    {
+        inbox.Clear();
+        transport.Close();
+    }
 
     public void Connect(string address, int port, string name, int color)
     {
@@ -138,7 +146,7 @@ public partial class NetClient : Node
             return;
         }
         transport.Close();
-        ActiveMatchId = 0;
+        inbox.Clear();
         Lobby = null;
         MyId = 0;
         SetState(Status.Offline, null);
@@ -172,7 +180,7 @@ public partial class NetClient : Node
     public void LeaveLobby()
     {
         Send(new NetWriter(Msg.LeaveLobby));
-        ActiveMatchId = 0;
+        inbox.Clear();
         Lobby = null;
         LobbyChanged?.Invoke();
     }
@@ -229,12 +237,13 @@ public partial class NetClient : Node
                     var me = lobby.Members.FirstOrDefault(m => m.Id == MyId);
                     if (me != null) { Color = me.Color; PlayerName = me.Name; }
                     Lobby = me != null ? lobby : null;
-                    if (Lobby == null) { ActiveMatchId = 0; }
+                    if (Lobby == null) { inbox.Clear(); }
                     LobbyChanged?.Invoke();
                     break;
                 case MatchSetup setup:
                     if (State != Status.Connected || Lobby == null || setup.Id <= lastMatchId || !setup.Players.Any(p => p.Player.Id == MyId)) { return; }
-                    lastMatchId = ActiveMatchId = setup.Id;
+                    lastMatchId = setup.Id;
+                    inbox.Begin(setup.Id);
                     MatchStarting?.Invoke(setup);
                     break;
                 case PongMessage pong:
@@ -243,9 +252,13 @@ public partial class NetClient : Node
                     ServerClockOffset = pong.ServerTime - (pong.Sent + now) / 2;
                     break;
                 default:
-                    if (message.MatchId == ActiveMatchId && ActiveMatchId != 0) { MatchMessage?.Invoke(message); }
+                    inbox.Receive(message, data.Length);
                     break;
             }
+        }
+        catch (MatchInbox.OverflowException e)
+        {
+            Drop(e.Message);
         }
         catch (Exception e)
         {
@@ -256,7 +269,7 @@ public partial class NetClient : Node
     private void Drop(string reason)
     {
         transport.Close();
-        ActiveMatchId = 0;
+        inbox.Clear();
         Lobby = null;
         MyId = 0;
         State = Status.Offline;

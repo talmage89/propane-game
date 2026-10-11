@@ -34,6 +34,13 @@ The counts and times are tuners (the Match, Tank bank, Multiplayer suburb, Ammo,
 5. **Match:** runs for the lobby's match length.
 6. **End:** a results screen, then back to the lobby.
 
+The server waits up to 20 seconds for loading acknowledgments before counting down anyway. The client's connection
+buffers every current-match event until the match scene has initialized its bodies and HUD, then replays them in
+receive order once. A late builder therefore receives Countdown, Go, scores and even End. Leaving or disconnecting
+clears the buffer; a new MatchStart invalidates the old queue and receiver, and old scene cleanup cannot clear the
+new queue. The inbox is capped at 4096 packets and 4 MiB of wire data; exceeding it disconnects with an explicit
+loading-buffer message rather than continuing with missing events.
+
 ## Changes from single player in a match
 
 - **Hitstop** is off. It changes `Engine.TimeScale`, which also slows the physics and would make the clients drift apart.
@@ -139,6 +146,7 @@ The server is the game itself started with `-- --server` (and `--headless`). It 
 | `src/Net/LobbyServer.cs` | The server: lobbies, match flow and clock, relaying, scores, first-claim ties, pickups. |
 | `src/Net/NetClient.cs`, `NetTransport.cs`, `Protocol.cs` | The client connection, the ENet transport (with simulated lag for tests), the message types. |
 | `src/Net/MessageCodec.cs`, `TankLedger.cs` | Complete, typed wire decoding and the server's tank existence/lifecycle ledger. |
+| `src/Net/MatchInbox.cs` | Per-match buffering until scene initialization, with generation-safe cleanup. |
 | `src/Net/BuildInfo.cs`, `UpdateCheck.cs` | Versions and who plays together; the launch check for a newer release. |
 | `src/Net/Match.cs` | A match on one player's machine: everything this player sends, and playing what the others send. |
 | `src/Net/BodySync.cs` | Ownership and corrections for tanks and cars. |
@@ -159,7 +167,7 @@ Details settled while building, within the decisions above:
 
 | Command | Checks |
 | --- | --- |
-| `make test` | Plain C# assertion suites (every wire message, malformed payloads, server ledger and permissions), generator checks, and separate-process built-world hashes. Add suites under `src/Dev/UnitTests/` and register them with `TestRunner`; any failure prints its name and exits nonzero. |
+| `make test` | Plain C# assertion suites (every wire message, malformed payloads, server ledger and permissions, lifecycle buffering), generator checks, and separate-process built-world hashes. Add suites under `src/Dev/UnitTests/` and register them with `TestRunner`; any failure prints its name and exits nonzero. |
 | `godot --headless res://scenes/dev/generator_tests.tscn -- --seeds=100` | Match suburbs too: a start per player, spread apart and clear; ammo spots; tanks nearer the center; the plan unchanged through `PlanCodec`. |
 | `tools/dev/net_bots.sh -n 3 -l 60 -- --net-lag=120 --net-jitter=30 --net-loss=3` | A local server and bot players (`scenes/dev/net_test.tscn`) that run to tanks, shoot them and each other, and fetch ammo, under simulated lag and loss. `-w N` shows N of them in windows; `-S host:port` uses an existing server. |
 | `tools/dev/compare_tanks.py out/bot*.log` | Where each bot had every tank at the same match times: counts, states and drift. |
@@ -167,6 +175,7 @@ Details settled while building, within the decisions above:
 | `net_bots.sh -n 2 -w 2 -s "--start-score=8" -- --scenario=duel --capture-dir=DIR` | Scripted close-up: hits with the grace period, dropped tanks, a blast that throws the victim, from both sides. |
 | `net_bots.sh -n 1 -w 1 -- --scenario=pickup --capture-dir=DIR` | Taking an ammo can and its return. |
 | `net_bots.sh -n 4 -l 120 -b smart,simple,smart,simple` | Bot brains against each other; the server log ends each match with tanks gained / lost to hits / lost to throws. Add `--bot-log` to log what each bot is doing. |
+| `net_bots.sh -n 2 -l 10 -- --match-delay=26` | Builds after the server's loading timeout and Go; the ready log must already say `playing True`. Use `--matches=2` without the delay to exercise another round on the same connection. |
 | `godot res://scenes/dev/menu_test.tscn -- --capture-dir=DIR` | Clicks through every menu, a solo match, leaving it, and single player and back. |
 | `menu_test.tscn -- --scenario=update --update-check --fake-version=0.0.9 --capture-dir=DIR` | The offer of a newer release, and a newer server (`-- --server --port=24993 --fake-version=9.9.0`) asking for an update. |
 

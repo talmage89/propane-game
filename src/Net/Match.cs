@@ -248,9 +248,10 @@ public partial class Match : Node3D
         Warmup.Run(this, new Vector3(0, -400f, 0));
 
         Blast.LocalBlast += OnLocalBlast;
-        Net.MatchMessage += OnMessage;
         CaptureMouse(true);
         ShowNotice("Waiting for everyone to arrive", 30f);
+        // Loaded is sent after the handoff: Countdown, Go or even End may already be waiting in the inbox.
+        Net.AttachMatch(Setup.Id, OnMessage);
         Send(new NetWriter(Msg.Loaded, Setup.Id));
         GD.Print($"[match] seed {plan.Seed}: {plan.Lots.Count} lots, {plan.Tanks.Count} tanks, {pickups.Count} pickups, {Setup.Players.Count} players, host {Setup.HostId}, me {me}");
     }
@@ -258,7 +259,7 @@ public partial class Match : Node3D
     public override void _ExitTree()
     {
         Blast.LocalBlast -= OnLocalBlast;
-        Net.MatchMessage -= OnMessage;
+        Net.DetachMatch(Setup.Id, OnMessage);
         Tuning.EndMatch();
         RenderingServer.GlobalShaderParameterSet("reveal_radius", 100000f);
         Engine.TimeScale = 1.0;
@@ -301,6 +302,8 @@ public partial class Match : Node3D
                 {
                     endLeft = float.MaxValue;
                     Finished?.Invoke();
+                    // Finished may remove this scene immediately; its viewport and world are then unavailable.
+                    return;
                 }
                 break;
         }

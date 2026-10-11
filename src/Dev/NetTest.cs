@@ -81,26 +81,35 @@ public partial class NetTest : Node
             if (net.Lobby is { } lobby)
             {
                 Log($"lobby {lobby.Id}: {string.Join(", ", lobby.Members.Select(m => $"{m.Name}/{Protocol.ColorNames[m.Color]}"))}, {lobby.Phase}");
-                if (role == "host" && net.IsCreator && !started && lobby.Members.Count >= players && lobby.Phase == LobbyServer.LobbyPhase.Waiting)
-                {
-                    started = true;
-                    net.SetMatchLength(DevArgs.GetFloat("length", 60));
-                    GetTree().CreateTimer(0.5).Timeout += net.StartMatch;
-                }
+                TryStartMatch();
             }
         };
         net.NoticeReceived += text => Log($"notice: {text}");
-        net.MatchStarting += setup =>
+        net.MatchStarting += async setup =>
         {
-            match?.QueueFree();
+            var delay = DevArgs.GetFloat("match-delay", 0);
+            if (delay > 0)
+            {
+                Log($"delaying match {setup.Id} construction by {delay} s");
+                await ToSignal(GetTree().CreateTimer(delay), SceneTreeTimer.SignalName.Timeout);
+                if (net.ActiveMatchId != setup.Id || net.State != NetClient.Status.Connected) { return; }
+            }
+            if (match != null)
+            {
+                RemoveChild(match);
+                match.QueueFree();
+            }
             match = new Match { Name = "Match", Net = net, Setup = setup };
             match.Finished += () =>
             {
                 Log($"finished match {match.Setup.Id}; final scores {ScoreLine()}");
+                RemoveChild(match);
                 match.QueueFree();
                 match = null;
                 matches++;
                 started = matches >= matchesWanted;
+                // Lobby Waiting may have arrived before this client's results timer finished.
+                TryStartMatch();
                 if (matches >= matchesWanted)
                 {
                     GetTree().CreateTimer(1.0).Timeout += () => GetTree().Quit();
@@ -109,12 +118,23 @@ public partial class NetTest : Node
             AddChild(match);
             match.Player.InputOverride = bot;
             clock = 0;
-            Log($"match starting with {setup.Players.Count} players");
+            Log($"match {setup.Id} ready with {setup.Players.Count} players; playing {match.IsPlaying}, over {match.IsOver}");
         };
         var name = DevArgs.Get("name") ?? (role == "host" ? "HostBot" : $"Bot{OS.GetProcessId() % 1000}");
         var color = (int)DevArgs.GetFloat("color", role == "host" ? 0 : 1);
         // Give a hosted server a moment to open its port.
         GetTree().CreateTimer(DevArgs.Get("host-server") != null ? 0.3 : 0.05).Timeout += () => net.Connect(address, port, name, color);
+    }
+
+    private void TryStartMatch()
+    {
+        if (role == "host" && net.IsCreator && !started && matches < matchesWanted &&
+            net.Lobby is { Phase: LobbyServer.LobbyPhase.Waiting } lobby && lobby.Members.Count >= players)
+        {
+            started = true;
+            net.SetMatchLength(DevArgs.GetFloat("length", 60));
+            GetTree().CreateTimer(0.5).Timeout += net.StartMatch;
+        }
     }
 
     public override void _PhysicsProcess(double delta)

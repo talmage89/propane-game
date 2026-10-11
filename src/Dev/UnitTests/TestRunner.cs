@@ -21,6 +21,7 @@ public partial class TestRunner : Node
             WorldBuildTests.Register(this);
             ProtocolTests.Register(this);
             ServerTests.Register(this);
+            LifecycleTests.Register(this);
         }
         catch (Exception e)
         {
