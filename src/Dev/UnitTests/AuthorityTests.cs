@@ -276,6 +276,69 @@ public static class AuthorityTests
             TestRunner.Assert(f.Match.LastAuthorityRefusal == ClaimRefusal.StaleEpoch && tank.GlobalTransform.IsEqualApprox(Pose(Id).Transform) &&
                 f.Match.Bodies.Get(Id) is { Owner: 3, Epoch: 3, ClaimPending: false }, "refused claim left divergent motion or ownership");
         });
+        runner.Run("authority/queued puncture proposes its current motion after the preceding grant", () =>
+        {
+            using var f = new MatchFixture(runner);
+            var tank = f.Match.LiveTanks.Single(t => t.NetId == Id);
+            f.Match.Claim(new[] { tank }, atomic: true);
+            tank.TakeShot(tank.ToGlobal(new Vector3(.15f, .23f, 0)), tank.GlobalBasis * Vector3.Right, Vector3.Left);
+            var current = new Transform3D(Basis.Identity, new Vector3(9, 4, 8));
+            BodySync.Snap(tank, current, Vector3.One * 6, Vector3.One * 2);
+            BodyAuthority? accepted = null;
+            f.Match.AuthorityResolved += reply =>
+            {
+                if (reply.Reason == ClaimRefusal.None && reply.Bodies.Single().State == TankLedger.State.Venting) { accepted = reply.Bodies.Single(); }
+            };
+            f.Flush();
+            TestRunner.Assert(accepted is { Body.Epoch: 3 } && accepted.Body.Transform.IsEqualApprox(current) &&
+                accepted.Body.Linear == Vector3.One * 6 && accepted.Body.Angular == Vector3.One * 2,
+                "queued puncture granted a stale prediction pose instead of the motion at send time");
+        });
+        runner.Run("authority/chain puncture proposes motion after the complete blast push", () =>
+        {
+            using var f = new MatchFixture(runner);
+            var root = f.Match.LiveTanks.Single(t => t.NetId == Id);
+            var child = f.Match.LiveTanks.Single(t => t.NetId == Other);
+            root.GlobalPosition = new Vector3(0, 60, 0);
+            root.Detonate(); // Assign/send the root request, away from other bodies.
+            var cause = root.BlastRequest;
+            child.ChainHit(child.GlobalPosition - Vector3.Right, 0, cause);
+            child.LinearVelocity = Vector3.One * 6;
+            child.AngularVelocity = Vector3.One * 2;
+            // This production callback follows all pushes; pending children are excluded from Claim itself.
+            f.Match.OnLocalBlast(root.GlobalPosition, new[] { child }, cause);
+            BodyAuthority? accepted = null;
+            f.Match.AuthorityResolved += reply =>
+            {
+                accepted = reply.Bodies.FirstOrDefault(b => b.Body.Id == Other && b.State == TankLedger.State.Venting) ?? accepted;
+            };
+            f.Flush();
+            TestRunner.Assert(accepted != null && accepted.Body.Linear == Vector3.One * 6 && accepted.Body.Angular == Vector3.One * 2,
+                "chain puncture proposed pre-push motion or was never flushed when all bodies were already pending");
+        });
+        runner.Run("authority/queued group proposes current motion after its root is sent", () =>
+        {
+            using var f = new MatchFixture(runner);
+            Send(f.Server, 3, Msg.Claim, Claim(20, Pose(Other)));
+            f.Deliver();
+            var root = f.Match.LiveTanks.Single(t => t.NetId == Id);
+            var other = f.Match.LiveTanks.Single(t => t.NetId == Other);
+            root.GlobalPosition = new Vector3(0, 60, 0);
+            root.TakeShot(root.ToGlobal(new Vector3(.15f, .23f, 0)), root.GlobalBasis * Vector3.Right, Vector3.Left);
+            root.Detonate(); // Its explosion waits for the first-shot grant.
+            f.Match.Claim(new[] { other }, cause: root.BlastRequest, atomic: true);
+            var current = new Transform3D(Basis.Identity, new Vector3(9, 4, 8));
+            BodySync.Snap(other, current, Vector3.One * 6, Vector3.One * 2);
+            BodyAuthority? accepted = null;
+            f.Match.AuthorityResolved += reply =>
+            {
+                accepted = reply.Bodies.FirstOrDefault(b => b.Body.Id == Other && b.Owner == 2) ?? accepted;
+            };
+            f.Flush();
+            TestRunner.Assert(accepted is { Body.Epoch: 3 } && accepted.Body.Transform.IsEqualApprox(current) &&
+                accepted.Body.Linear == Vector3.One * 6 && accepted.Body.Angular == Vector3.One * 2,
+                "queued group reused a pose from before its causal root was sent");
+        });
         foreach (var broadcastFirst in new[] { false, true })
         {
             runner.Run($"authority/losing puncture preserves motion (broadcast first {broadcastFirst})", () =>

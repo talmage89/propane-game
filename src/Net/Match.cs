@@ -506,7 +506,13 @@ public partial class Match : Node3D
             explosion));
     }
 
-    private void OnLocalBlast(Vector3 center, IReadOnlyList<RigidBody3D> pushed, uint cause) => Claim(pushed, cause);
+    internal void OnLocalBlast(Vector3 center, IReadOnlyList<RigidBody3D> pushed, uint cause)
+    {
+        Claim(pushed, cause);
+        // Child punctures are queued during ChainHit, before the blast applies its impulse/spin.
+        // Flush even if every pushed body is already owned or pending and Claim has nothing to send.
+        FlushAuthority();
+    }
 
     /// <summary>One atomic request for all disturbed bodies, with each body's expected epoch and proposed pose.</summary>
     internal void Claim(IEnumerable<GodotObject> disturbed, uint cause = 0, bool atomic = false)
@@ -525,7 +531,22 @@ public partial class Match : Node3D
             if (bodies.Get(id) is { } entry) { request.Expected[id] = entry.Epoch; entry.ClaimPending = true; entry.HasTarget = false; }
         }
         outgoingAuthority.Add(request);
-        FlushAuthority();
+        if (request.Type != Msg.Puncture || request.Cause == 0) { FlushAuthority(); }
+    }
+
+    private BodyState? CurrentProposal(uint id) => bodies.Get(id) is { } entry && IsInstanceValid(entry.Body)
+        ? BodySync.Capture(entry) : null;
+
+    private PunctureMessage PunctureProposal(PunctureMessage puncture, uint epoch)
+    {
+        var pose = CurrentProposal(puncture.Id);
+        return puncture with
+        {
+            Epoch = epoch,
+            Transform = pose?.Transform ?? puncture.Transform,
+            Linear = pose?.Linear ?? puncture.Linear,
+            Angular = pose?.Angular ?? puncture.Angular
+        };
     }
 
     private void FlushAuthority()
@@ -541,9 +562,9 @@ public partial class Match : Node3D
             if (request.Type == Msg.Explode) { sentExplosions.Add(request.Request); }
             var payload = request.Payload switch
             {
-                PunctureMessage p => (object)(p with { Epoch = request.Expected[p.Id] }),
+                PunctureMessage p => (object)PunctureProposal(p, request.Expected[p.Id]),
                 ExplodeMessage p => p with { Epoch = request.Expected[p.Id] },
-                ClaimMessage p => p with { Bodies = p.Bodies.Select(c => c with { Epoch = request.Expected[c.Id] }).ToArray() },
+                ClaimMessage p => p with { Bodies = p.Bodies.Select(c => (CurrentProposal(c.Id) ?? c) with { Epoch = request.Expected[c.Id] }).ToArray() },
                 _ => throw new InvalidOperationException("unknown authority request"),
             };
             var bytes = MessageCodec.Encode(new NetMessage(request.Type, Setup.Id, 0, payload), fromServer: false);

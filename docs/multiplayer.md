@@ -128,6 +128,10 @@ request ID. The root is sent before its children, even when waiting for a punctu
 only if that peer's root explosion was accepted. A losing root cannot score a child chain or grant its pushed bodies.
 Local predictions still play immediately. A queued second shot resolves after its first-shot grant, using that
 new epoch. Refused dependent predictions also receive their own authoritative replies.
+Moving ownership and puncture proposals capture their current pose when sent, including after a preceding grant
+unblocks them. Chain punctures wait until the complete blast push before sending, so their canonical motion includes
+that impulse and spin. An already freed predicted tank retains its original proposal; explosion centers always stay
+at the position of the predicted event.
 
 **Left to each client:** debris, small props and fence panels play out locally from the shared blasts. Cars are synced at a low rate, because players use them as cover.
 
