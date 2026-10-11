@@ -103,3 +103,17 @@ The timeout API's minimum and maximum interact with the RTT retransmission multi
 [Godot ENet timeout documentation](https://docs.godotengine.org/en/stable/classes/class_enetpacketpeer.html#class-enetpacketpeer-method-set-timeout).
 A native 64-datagram burst probe also received all 64 in one poll, ruling out the suspected single-datagram
 poll drain problem; no poll/drain rewrite is included.
+
+## Freed dev-bot targets
+
+An independent harness defect invalidated `/tmp/nas-proof-fault-2`: Bot1 attempted to blacklist its former
+tank while fleeing another one. The former tank had been freed by authoritative lifecycle handling, but
+the fleeing branch bypassed normal retargeting. `GetInstanceId` threw 2,251 times before logging could
+run, losing 18.996 s of samples. The 10% missing-time rejection correctly identified a broken harness.
+
+Blacklisting now ignores freed native objects; route failure then clears the stale target as usual. Live
+target blacklisting is unchanged. The new freed-tank/live-target regression failed before
+(`build/net-assert-artifacts/bot-before.log`: 202 tests, one failure) and passed after
+(`build/net-assert-artifacts/bot-after-clean.log`: 202 tests, zero failures, no leaked node). The initial
+fixture failed compilation because required world/spawn fields were omitted; it now uses the tank factory.
+Both final before/after builds were warning-free.
