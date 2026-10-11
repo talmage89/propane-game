@@ -47,6 +47,8 @@ public sealed class BodySync
         public uint LastSequence;
         public uint LastGatherSequence;
         public bool PublishRequired;
+        public bool PublishReliably;
+        internal double LastReliablePublication;
         internal (int Sender, BodyState Body, bool IsRest, double Received, double Updated)? Future;
         internal (BodyState Body, bool IsRest)? Latest;
     }
@@ -54,6 +56,7 @@ public sealed class BodySync
     private readonly Tuning settings;
     private readonly Dictionary<uint, Entry> entries = new();
     private readonly Dictionary<ulong, Entry> byInstance = new();
+    private double publicationTime;
     private double tankTimer;
     private double carTimer;
 
@@ -323,6 +326,7 @@ public sealed class BodySync
     public (List<Entry> Moving, List<Entry> Rested) Collect(double dt)
     {
         var tuning = settings;
+        publicationTime += dt;
         tankTimer -= dt;
         carTimer -= dt;
         var sendTanks = tankTimer <= 0;
@@ -350,6 +354,11 @@ public sealed class BodySync
             {
                 if (awake && (entry.PublishRequired || (entry.IsTank ? sendTanks : sendCars)))
                 {
+                    // ENet can throttle disposable packets to zero after RTT variance. Checkpoints
+                    // share the existing state/sequence stream and survive that suppression. No extra
+                    // samples: reserve an ordinary publication at half the correction silence bound.
+                    entry.PublishReliably = entry.PublishRequired || publicationTime - entry.LastReliablePublication >= StaleAfter / 2;
+                    if (entry.PublishReliably) { entry.LastReliablePublication = publicationTime; }
                     entry.PublishRequired = false;
                     moving.Add(entry);
                     Trace?.Invoke(entry, "publish-moving");
@@ -357,6 +366,7 @@ public sealed class BodySync
                 else if (!awake && (entry.PublishRequired || entry.WasAwake))
                 {
                     entry.PublishRequired = false;
+                    entry.LastReliablePublication = publicationTime;
                     rested.Add(entry);
                     Trace?.Invoke(entry, "publish-rest");
                 }

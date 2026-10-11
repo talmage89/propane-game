@@ -14,6 +14,20 @@ public static class ServerTests
 {
     public static void Register(TestRunner runner)
     {
+        runner.Run("server/moving checkpoints retain reliable delivery on the second leg", () =>
+        {
+            using var f = new Fixture();
+            var traffic = new List<bool>();
+            f.Server.SendOverride = (_, _, delivery) => traffic.Add(delivery);
+            byte[] Packet(uint sequence) => MessageCodec.Encode(new NetMessage(Msg.BodyStates, f.Id, 0,
+                new BodyStatesMessage(0, new[] { new BodyState(BodySync.MapTankId(0), Transform3D.Identity,
+                    Vector3.Right, Vector3.Zero, 1, sequence) })), false);
+            f.Server.OnReceived(2, Packet(1), TrafficClass.ReliableOrdered);
+            TestRunner.Assert(traffic.Single(), "server discarded moving checkpoint reliability");
+            traffic.Clear();
+            f.Server.OnReceived(2, Packet(2), TrafficClass.UnreliableBodyStates);
+            TestRunner.Assert(!traffic.Single(), "server made ordinary snapshots reliable");
+        });
         runner.Run("server/loading relays the owner's final rest to clients still building", () =>
         {
             using var f = new Fixture(playing: false);

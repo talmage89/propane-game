@@ -33,6 +33,29 @@ public static class AuthorityTests
 
     public static void Register(TestRunner runner)
     {
+        runner.Run("authority/moving owners periodically checkpoint through disposable loss", () =>
+        {
+            using var body = new BodyFixture(runner);
+            body.Body.Sleeping = false;
+            var sync = new BodySync(Tuning.SavedTemplate, 2, 2);
+            sync.Register(Id, body.Body, true, 2);
+            var first = sync.Collect(.01).Moving.Single();
+            TestRunner.Assert(first.PublishReliably, "new owner started with only disposable movement");
+            var reliable = 0;
+            var disposable = 0;
+            var silence = 0.0;
+            for (var step = 0; step < 120; step++)
+            {
+                silence += 1.0 / 60;
+                foreach (var entry in sync.Collect(1.0 / 60).Moving)
+                {
+                    if (entry.PublishReliably) { reliable++; silence = 0; }
+                    else { disposable++; }
+                }
+                TestRunner.Assert(silence <= .35, "moving reliable checkpoint exceeded correction freshness");
+            }
+            TestRunner.Assert(reliable >= 6 && disposable > reliable, "checkpoint cadence replaced the disposable motion stream");
+        });
         runner.Run("authority/reliable grant steers observers before owner publications", () =>
         {
             using var body = new BodyFixture(runner);

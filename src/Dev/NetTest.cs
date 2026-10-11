@@ -127,7 +127,7 @@ public partial class NetTest : Node
             match = new Match { Name = "Match", Net = net, Setup = setup };
             match.Finished += () =>
             {
-                if (DevArgs.Get("scenario") is "duel" or "pickup" or "drop-refusal" or "puncture-race" or "appearance" or "gather" or "melee")
+                if (DevArgs.Get("scenario") is "duel" or "pickup" or "drop-refusal" or "puncture-race" or "appearance" or "gather" or "melee" or "body-stream")
                 {
                     ScenarioAssert(scenarioPassed, "scenario ended before all assertions passed");
                 }
@@ -290,6 +290,10 @@ public partial class NetTest : Node
         else if (DevArgs.Get("scenario") == "puncture-race")
         {
             PunctureRace(match);
+        }
+        else if (DevArgs.Get("scenario") == "body-stream")
+        {
+            BodyStreamScenario(match);
         }
         else if (DevArgs.Get("scenario") == "movement")
         {
@@ -1076,6 +1080,39 @@ public partial class NetTest : Node
     }
 
     private string ScoreLine() => match == null ? "" : string.Join(" ", match.Scores.Select(s => $"{s.Key}={s.Value}"));
+
+    private PropaneTank? streamTank;
+    private Vector3 streamOrigin;
+    private float streamStarted;
+
+    // Native replication fixture: straight flight isolates packet delivery from collisions/vent chaos.
+    // Only the host drives the owner; observers must learn motion through the actual transport.
+    private void BodyStreamScenario(Match current)
+    {
+        if (streamTank == null)
+        {
+            streamTank = current.LiveTanks.OrderBy(t => t.NetId).First();
+            streamOrigin = streamTank.GlobalPosition;
+            streamStarted = clock;
+            streamTank.GravityScale = 0;
+            streamTank.LinearDamp = streamTank.AngularDamp = 0;
+            streamTank.CollisionMask = 0;
+        }
+        if (role == "host")
+        {
+            streamTank.GlobalPosition = streamOrigin + Vector3.Right * ((clock - streamStarted) * 8);
+            streamTank.LinearVelocity = Vector3.Right * 8;
+            streamTank.AngularVelocity = Vector3.Zero;
+            streamTank.Sleeping = false;
+        }
+        if (!scenarioPassed && clock - streamStarted >= 10)
+        {
+            ScenarioAssert(streamTank.GlobalPosition.DistanceTo(streamOrigin) > 40,
+                "body-stream: observer did not receive owner movement");
+            scenarioPassed = !scenarioFailed;
+            if (scenarioPassed) { Log("body-stream: authoritative movement received"); }
+        }
+    }
 
     // Stopwatch uses the OS monotonic clock shared by processes on this machine. Match.TimeLeft is a
     // packet-corrected countdown, unsuitable for alignment. This dev probe is for net_bots' local clients.

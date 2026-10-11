@@ -146,7 +146,7 @@ public partial class LobbyServer : Node
     }
 
     private void OnPacket(ConnectionHandle connection, TrafficClass traffic, ReadOnlyMemory<byte> bytes) =>
-        OnReceived(peerIds.PeerId(connection), bytes.ToArray());
+        OnReceived(peerIds.PeerId(connection), bytes.ToArray(), traffic);
 
     public override void _Process(double delta)
     {
@@ -195,7 +195,7 @@ public partial class LobbyServer : Node
         }
     }
 
-    internal void OnReceived(int from, byte[] data)
+    internal void OnReceived(int from, byte[] data, TrafficClass? incoming = null)
     {
         if (!clients.TryGetValue(from, out var client)) { return; }
         Msg? type = data.Length > 0 ? (Msg)data[0] : null;
@@ -206,7 +206,7 @@ public partial class LobbyServer : Node
             if (Protocol.IsMatch(message.Type) && client.Lobby?.Match?.Id != message.MatchId) { return; }
             if (Protocol.IsRelay(message.Type))
             {
-                Relay(client, message);
+                Relay(client, message, incoming);
                 return;
             }
             switch (message.Type)
@@ -574,7 +574,7 @@ public partial class LobbyServer : Node
     /// Resolves authority requests into ordered canonical grants/refusals, and forwards other match messages with
     /// the sender inserted. Accepted explosions and drops also change the bank.
     /// </summary>
-    private void Relay(Client client, NetMessage message)
+    private void Relay(Client client, NetMessage message, TrafficClass? incoming)
     {
         if (client.Lobby is not { Match: { } match } lobby || !match.Players.Contains(client.Id)) { return; }
         if (lobby.Phase is not (LobbyPhase.Countdown or LobbyPhase.Playing or LobbyPhase.Results) &&
@@ -675,7 +675,7 @@ public partial class LobbyServer : Node
         var traffic = message.Type switch
         {
             Msg.PlayerState => TrafficClass.UnreliablePlayerPoses,
-            Msg.BodyStates => TrafficClass.UnreliableBodyStates,
+            Msg.BodyStates => incoming == TrafficClass.ReliableOrdered ? TrafficClass.ReliableOrdered : TrafficClass.UnreliableBodyStates,
             _ => TrafficClass.ReliableOrdered,
         };
         foreach (var id in match.Players)

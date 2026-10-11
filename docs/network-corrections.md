@@ -127,3 +127,31 @@ probes, including geometry rays; ordinary matches do not perform those diagnosti
 In `/tmp/nas-throttle-1`, native packet throttle reached 0.125, permitting only one in eight
 disposable packets before the additional configured 3% fault loss. Reliable packet loss statistics
 do not measure that suppression. The second traced run still failed a 2.05 s moving episode.
+
+## Motion survives native disposable throttling
+
+In `/tmp/nas-motion-trace-1`, Bot4 owned `10000001`, epoch 2. Bot2 received the grant at
+91137.726554, but remained at last sequence 0 until 91139.84 despite owner publications at
+91137.687, .969, 91138.252, .536, .819, 91139.103, .371 and .654. Its moving/lifecycle
+disagreement lasted 2.30 s, peaking at 5.667 m. This was missing correction evidence, not
+ordinary vent chaos within the configured 120–180 ms two-leg delay. Native throttling is
+additional to the injected 3% loss and is not represented by the reliable loss statistic.
+
+Owners now mark an existing moving publication reliable at least every half silence bound
+(0.25 s plus up to one normal send interval), and immediately when publication is required.
+The server preserves that reliability on the second leg. Other snapshots remain disposable;
+there are no extra samples, message fields, protocol bump or gameplay/tuner changes. Reliable
+checkpoints share the existing epoch/sequence ordering, so a late checkpoint cannot rewind
+a newer disposable sample. Sustained congestion can still delay reliable delivery; native
+congestion control remains enabled.
+
+Two unit regressions failed before (204 tests, two failures,
+`build/net-assert-artifacts/checkpoint-before.log`) and passed after (204 tests, zero failures,
+`checkpoint-after.log`). Initial test compilation caught the packet sink's Boolean reliability
+signature; it was corrected before the recorded regression run. Final builds had zero warnings.
+The native fixture `tools/dev/net_bots.sh -n 2 -l 20 -s '--net-loss=100' -o /tmp/nas-stream-after
+-- --scenario=body-stream` drops every server-side disposable packet while the owner moves at
+8 m/s without collisions. Before the fix (`/tmp/nas-stream-before`), the observer's motion
+assertion failed and it exited without completion. Afterward it passed: 599 grids, 0.324 m peak
+moving drift, 0.152 m final drift, and matching score audits. These fixture physics overrides
+are dev-only, not tuner changes. The Match send partition is isolated in its own commit.
