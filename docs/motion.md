@@ -52,10 +52,14 @@ godot-mono --fixed-fps 60 --path . res://scenes/dev/player_range.tscn -- --scena
 
 `--capture-group=walk|run|sprint|creep|hip|aim|reload|getup` narrows the capture window; `recoil` captures both bursts.
 For an A/B fixture, use the motion scene/probe harness on package 3 (`cf3adce`), without changing player code.
+The harness files are `src/Dev/PlayerRange.cs` and `src/Dev/MotionProbe.cs` with their `.uid` files; rebuild the
+fixture before running it. Use `--motion-metrics` on the reference because it intentionally fails the new bounds.
 The old recoil comparison also overrides `RifleRecoilBack=0.045` and `RifleRecoilLiftDegrees=5` on that fixture.
 Do not use those overrides on the new spring implementation as a substitute for the old recoil algorithm.
 
 ```sh
+python3 -B tools/dev/review_motion.py /tmp/wpmove4-before-side /tmp/wpmove4-after-side /tmp/wpmove4-review-side --old-recoil=/tmp/wpmove4-old45-side
+python3 -B tools/dev/review_motion.py /tmp/wpmove4-before-player /tmp/wpmove4-after-player /tmp/wpmove4-review-player --old-recoil=/tmp/wpmove4-old45-player
 tools/dev/net_bots.sh -o /tmp/wpmove4-net -n 2 -w 0 -l 18 -- --scenario=movement --matches=2 --assert-feet --assert-grip --assert-motion --net-lag=120 --net-jitter=30 --net-loss=3
 python3 -B tools/dev/check_scores.py /tmp/wpmove4-net/server.log /tmp/wpmove4-net/bot1.log /tmp/wpmove4-net/bot2.log
 ```
@@ -79,3 +83,61 @@ ragdoll. Variable-frame-rate network runs report both raw frame changes and angu
 1/60 s can contain more than 25 degrees while meeting the equivalent rate bound. Rendered screenshots can stall
 GPU readback. The local comparison uses fixed 60 Hz stepping; a network screenshot run uses real time and reports
 the rate as well as the raw frame maximum.
+
+## Review results
+
+The reference is package 3 (`cf3adce`) with the motion capture harness only. Baseline failures came from abrupt
+look/stance changes in the neck and arm IK, trigger curls, get-up/reacquisition of the carry, and the trailing
+lateral sprint leg exhausting reach. Late remote reload phases added another wrist/finger handoff; late support
+and stance snapshots exposed a grounded foot-solve change even after landing recovery. These now use bounded
+presentation, coherent contact solving, or exceptional contact recovery. Staging teleports are excluded in the
+final probe rather than treated as normal movement.
+
+| Measure at 60 Hz | Package 3 | Package 4 |
+| --- | ---: | ---: |
+| Eight-direction gait matrix, largest bone change | 39.914 degrees | 24.522 degrees |
+| Full-pitch grip sweep, largest bone change | 133.292 degrees | 20.220 degrees |
+| Correction matrix, largest bone change | — | 20.779 degrees |
+| Movement / feet-events / motion, largest bone change | — | 19.994 / 20.009 / 19.987 degrees |
+| Steady creep, body-relative lateral muzzle range | 31.123 mm | 6.380 mm |
+| Full-pitch sweep, maximum wrist residual | — | 0.262 mm |
+| Full-pitch sweep, sampled penetration | — | 0.000 mm |
+| Full-pitch sweep, aimed eye/socket distance | — | 0.002 mm |
+| Motion sequence, remaining camera rotation after bursts | — | 0.0047 degrees |
+
+Physical ragdoll rotations remain above 25 degrees: the final motion throw reached about 103 degrees on the
+right forearm, 91 on the right upper arm and 85 on the right hand. Left arms, legs, clavicles and the head also
+had physical samples above 25; the probe lists every offending bone. Those samples come from physical collision,
+joint projection and flail. Clamping the displayed physical body would separate it from its collider and change
+the blast response, so those are reported exceptions. Digit release and every get-up frame still obey the bound.
+
+Both side and existing third-person player views contain 966 before and 966 after frames: 60 for each gait,
+108 for each burst, 150 for reload and 360 for throw/get-up/run. The old 45 mm/5-degree fixture adds 216 burst
+frames per view. All 4,296 PNGs were decoded and checked, and both views have eight comparison GIFs and eight
+contact sheets. GIF delays cycle 20/20/10 ms because GIF timing has 10 ms precision; each sequence preserves
+its 60 Hz frame count and total duration.
+
+The side and player-camera sequences were reviewed across the strides, kicks, magazine return and get-up.
+The chosen carry adds a small lateral arc and roll, strongest in sprint, rather than letting the shoulders and
+rifle bob independently. Walking remains subtle; aimed creep has much less body twist. Compared with 25 mm/2
+degrees, the new recoil visibly compresses the shoulder and lifts the muzzle; compared with the old 45 mm/5
+degrees, the aimed head follows the stock. Both hands stay on their solved destinations. Reload returns through
+the chest frame, and get-up reaches carry progressively before the run. Random physical flail makes the falls
+different between runs; the fall itself is not an A/B animation claim.
+
+The artifacts are retained locally under ignored `build/motion-proof/`: `review-side/`, `review-player/`, original
+before/after/old-recoil PNG directories, and remote review frames. They are generated evidence, not release assets.
+Pillow is needed only for `review_motion.py`; `make test` has no new external tool requirement.
+
+The final two-bot headless run passed two matches with 120 ms lag, 30 ms jitter and 3% loss. Its remote probe
+measured 23.260 and 20.122 degrees per frame, 72 and 70 recoil frames, wrist residuals at most 0.264 mm and no
+sampled penetration. A rendered screenshot run passed the same transport/probe flags and all seven remote
+state captures; those close-ups retain both grips through creep, sprint, flight and restored landing aim.
+GPU readback made its longest raw change 53.771 degrees across a long frame, with maximum rate 1211.10 degrees/s
+(20.19 degrees per 60 Hz interval). Both bots agreed with the server's score conservation audits in all matches.
+
+Earlier recording attempts exposed a 30.428-degree remote foot solve, which led to the exceptional recovery
+guard, and also failed state coverage when loading/capture stalls skipped the short observation windows.
+The passing rendered proof uses state screenshots rather than claiming a smooth 60 Hz multiplayer recording.
+Local comparisons still render every fixed 60 Hz frame. A full temporary filesystem interrupted one local
+capture attempt; those frames were regenerated and all final PNGs and GIF frames checked.
