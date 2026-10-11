@@ -50,6 +50,7 @@ class Sample:
     final: bool
     length: float
     tanks: dict
+    kind: str = "check"
 
 
 @dataclass
@@ -73,12 +74,12 @@ def observed(times, time, limits):
 def load(path):
     matches = {}
     for line in Path(path).read_text(errors="replace").splitlines():
-        if "tank-check match " not in line:
+        if not any(f"tank-{kind} match " in line for kind in ("check", "final", "completion")):
             continue
-        match = re.search(r"tank-check match (\d+) time (\S+) phase ([LPE]) final (True|False) length (\S+) n (\d+)(.*)$", line)
+        match = re.search(r"tank-(check|final|completion) match (\d+) time (\S+) phase ([LPE]) final (True|False) length (\S+) n (\d+)(.*)$", line)
         if not match:
             raise ValueError(f"{path}: malformed sample")
-        id_, time, phase, final, length, count, tokens = match.groups()
+        kind, id_, time, phase, final, length, count, tokens = match.groups()
         time, length = float(time), float(length)
         tanks = {}
         for token in tokens.split():
@@ -91,12 +92,17 @@ def load(path):
         if not math.isfinite(time) or not math.isfinite(length) or length <= 0 or len(tanks) != int(count):
             raise ValueError(f"{path}: invalid time, length or count")
         samples = matches.setdefault(int(id_), [])
-        if samples and (time <= samples[-1].time or samples[-1].final or length != samples[-1].length
+        completion = kind == "completion" and bool(samples) and samples[-1].kind == "final"
+        if kind != "check" and (phase != "E" or final != "True" or kind == "completion" and not completion):
+            raise ValueError(f"{path}: invalid terminal sample")
+        if samples and (time <= samples[-1].time or (samples[-1].final and not completion) or length != samples[-1].length
                         or "LPE".index(phase) < "LPE".index(samples[-1].phase)):
             raise ValueError(f"{path}: unordered samples or data after final")
-        samples.append(Sample(time, phase, final == "True", length, tanks))
+        samples.append(Sample(time, phase, final == "True", length, tanks, kind))
     if not matches:
         raise ValueError(f"{path}: no tank-check samples (use net_bots.sh or --tank-check)")
+    if any(samples[-1].kind == "final" for samples in matches.values()):
+        raise ValueError(f"{path}: missing exact completion after live final")
     return matches
 
 
@@ -126,7 +132,8 @@ def compare(logs, limits=PROFILES["faults"]):
     failures, episodes = [], []
     metrics = {"grids": 0, "body_pairs": 0, "unobserved_pairs": 0, "rest_peak": 0., "moving_peak": 0., "final_rest_peak": 0., "final_moving_peak": 0.}
     for match_id in sorted(logs[0]):
-        series = [log[match_id] for log in logs]
+        complete = [log[match_id][-1] for log in logs]
+        series = [log[match_id][:-1] if last.kind == "completion" else log[match_id] for log, last in zip(logs, complete)]
         length = series[0][0].length
         for peer, samples in enumerate(series, 1):
             playing = [s for s in samples if s.phase == "P"]
@@ -149,12 +156,12 @@ def compare(logs, limits=PROFILES["faults"]):
         settled_end = max(next(s.time for s in samples if s.phase == "E") for samples in series) + limits.settle
         if end < settled_end:
             raise ValueError(f"match {match_id}: no common settled end")
-        final_states = [{id_: tank[0] for id_, tank in samples[-1].tanks.items()} for samples in series]
+        final_states = [{id_: tank[0] for id_, tank in last.tanks.items()} for last in complete]
         if any(states != final_states[0] for states in final_states[1:]):
             failures.append(f"match {match_id}: final identities/states disagree")
-        for (pa, a), (pb, b) in combinations(enumerate(series, 1), 2):
-            for id_ in a[-1].tanks.keys() & b[-1].tanks.keys():
-                left, right = a[-1].tanks[id_], b[-1].tanks[id_]
+        for (pa, a), (pb, b) in combinations(enumerate(complete, 1), 2):
+            for id_ in a.tanks.keys() & b.tanks.keys():
+                left, right = a.tanks[id_], b.tanks[id_]
                 if left[:2] == right[:2] == ("I", "R") and math.dist(left[2], right[2]) > limits.resting:
                     failures.append(f"final completion match {match_id} peers {pa}/{pb} body {id_}: resting drift {math.dist(left[2], right[2]):.3f}m")
         active = {}

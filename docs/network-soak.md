@@ -32,6 +32,12 @@ Persistent errors fail, even if later interaction destroys the body or the peers
 The last common observed grid must be after every peer's end plus the settle window. Any above-tolerance difference
 there fails immediately, regardless of duration. Final completion samples must also agree exactly on
 IDs/states; bodies still moving during results use a tighter final moving tolerance for position.
+Live motion ends at the client's receipt of lobby Waiting, when the server has retired that match's replication,
+or at scene completion if that comes first. `tank-final` closes that trajectory; `tank-completion` still records
+exact scene-completion identities and intact resting poses. The checker requires both terminal rows in this
+format, rejects later trajectory rows, and applies the unchanged moving limit to the last common live grid.
+Venting physics after replication retirement is local, so its completion positions are not shared motion.
+Historical `tank-check ... final True` captures remain readable with their original completion-time motion check.
 Missing/malformed samples, nonfinite values, duplicate IDs, clock/phase reversals, differing matches or
 incomplete play/end coverage fail. Loading gaps are outside the comparison interval. A loaded machine may
 start logging play up to the smaller of 10 s or 10% of the requested duration late. A playing/results gap may
@@ -40,7 +46,7 @@ bound has 69% margin over the observed 5.923 s stall; the startup bound covers t
 No positions or lifecycle comparisons are invented inside these wide gaps: affected pairs are reported as
 unobserved. Gaps pause a disagreement’s observed duration without proving agreement or resetting its clock.
 Smaller gaps still interpolate. The final common observed grid must follow settlement; exact completion
-identities/states and intact resting positions are checked separately. The results interval supplies the
+identities/states and intact resting positions are checked separately. The live results interval supplies the
 settlement time, without extending or freezing gameplay.
 
 Limits are centralized in `PROFILES`/`Limits` in `tools/dev/compare_tanks.py`. They are harness tolerances for

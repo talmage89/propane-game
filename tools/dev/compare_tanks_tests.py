@@ -196,8 +196,44 @@ class TankChecks(unittest.TestCase):
         second[2] = log(shift=2)[1]
         self.assertTrue(any("match 2" in f for f in self.check(first, second)["failures"]))
 
+    def retired(self, offset=0):
+        samples = log(offset)[1][:61]
+        samples[-1].final = True
+        samples[-1].kind = "final"
+        samples.append(Sample(8 + offset, "E", True, 4,
+                              {"a": ("I", "R", (0, 0, 0)), "b": ("V", "M", (1000 + offset * 1000, 0, 0))}, "completion"))
+        return {1: samples}
+
+    def test_retirement_ends_shared_motion_but_checks_exact_completion(self):
+        first, second = self.retired(), self.retired(.025)
+        with tempfile.TemporaryDirectory(prefix="nas-tanks-") as directory:
+            paths = [Path(directory) / f"{peer}.log" for peer in range(2)]
+            for path, capture in zip(paths, (first, second)):
+                self.write(path, capture[1])
+            self.assertFalse(self.check(*(load(path) for path in paths))["failures"])
+        second[1][-1].tanks["a"] = ("I", "R", (2, 0, 0))
+        self.assertTrue(any("final completion" in f for f in self.check(first, second)["failures"]))
+        second[1][-1].tanks.pop("a")
+        self.assertTrue(any("final identities" in f for f in self.check(first, second)["failures"]))
+
+    def test_retirement_preserves_the_live_final_motion_limit(self):
+        first, second = self.retired(), self.retired()
+        final = second[1][-2]
+        final.tanks["b"] = ("V", "M", (final.time * 20 + .75, 0, 0))
+        self.assertTrue(any("final" in f for f in self.check(first, second)["failures"]))
+
+    def test_retirement_requires_completion_and_rejects_later_trajectory_rows(self):
+        samples = self.retired()[1]
+        for broken in (samples[:-1], samples[:-2] + samples[-1:], samples + [samples[-1]],
+                       samples[:-1] + [Sample(7, "E", False, 4, {})] + samples[-1:]):
+            with tempfile.TemporaryDirectory(prefix="nas-tanks-") as directory:
+                path = Path(directory) / "bot.log"
+                self.write(path, broken)
+                with self.assertRaises(ValueError):
+                    load(path)
+
     def write(self, path, samples):
-        path.write_text("\n".join(f"tank-check match 1 time {s.time:.6f} phase {s.phase} final {s.final} length {s.length} "
+        path.write_text("\n".join(f"tank-{s.kind} match 1 time {s.time:.6f} phase {s.phase} final {s.final} length {s.length} "
                                   f"n {len(s.tanks)}" + "".join(f" {id_}:{state}:{rest}:" + ",".join(map(str, pos))
                                                               for id_, (state, rest, pos) in s.tanks.items())
                                   for s in samples))

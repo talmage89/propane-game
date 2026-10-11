@@ -99,3 +99,30 @@ bound as free flight. Broader final-code soaks are recorded below.
 godot-mono --headless --fixed-fps 60 --path . res://scenes/dev/body_correction_tests.tscn
 tools/dev/net_bots.sh -n 2 -l 30 -s '--tune.FixedSeed=23' -o "$PWD/build/vna-contact" -- --scenario=vent-contact --tune.FixedSeed=23 --net-lag=120 --net-jitter=30 --net-loss=3 --tank-motion-trace
 ```
+
+## Replication retirement and completion
+
+The first batch after the force fix passed two faulted captures, then failed fault 3:
+final drift 0.656 m for `10000005` and 0.564 m for `1000000b`. This failure remains
+in `build/vna-final-fault-3-run.log`. Owner sequence advanced from 891 to 905 after
+the server returned the lobby to Waiting, while all observers stayed at 891. Their
+final quiet times reached 0.487/0.764 s; moving correction expires at 0.5 s.
+The server's results deadline had retired its ledger before the clients' delayed
+results timers completed. Comparing ongoing vent physics afterward measured a
+world that no longer had replication, not an owner stream the corrector could follow.
+
+The probe now closes its live trajectory on receipt of Waiting, or scene completion
+if that happens first. It separately records actual completion; the checker still
+requires exact IDs/states and the original 0.10 m intact resting bound there.
+The original 0.50/0.35 m motion bounds apply to the last common live grid. No gameplay
+timer, server retirement rule, motion predictor or tolerance changed.
+New-format captures require `tank-final` followed by `tank-completion`, and reject
+later trajectory rows. Legacy captures retain their original completion-time check.
+
+For an offline regression, the same fault-3 positions were retained through the last
+recorded snapshot before Waiting, with the original exact completions retained
+separately. That replay passes at final 0.001/0.422 m, with the same 93 unobserved
+pair grids and 1.95 s longest episode. Three synthetic regressions also prove that
+post-retirement vent positions cannot extend the trajectory, live final motion
+still fails at its original bound, missing completion/later trajectory data fail,
+and exact completion identities/resting errors still fail. All 23 comparer tests pass.

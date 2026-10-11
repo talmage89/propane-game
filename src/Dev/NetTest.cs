@@ -31,6 +31,7 @@ public partial class NetTest : Node
     private float clock;
     private float digestTimer;
     private double tankCheckNext;
+    private bool tankCheckFinal;
     private double motionTraceNext;
     private PropaneTank? nudgedTank;
     private Vector3 nudgedPosition;
@@ -89,6 +90,12 @@ public partial class NetTest : Node
         }
         net.LobbyChanged += () =>
         {
+            // The server retires replication before each client's delayed results timer ends.
+            // Finish the live trajectory here; still check exact completion identities/rest poses below.
+            if (!tankCheckFinal && match?.IsOver == true && net.Lobby?.Phase == LobbyServer.LobbyPhase.Waiting)
+            {
+                LogTankCheck(final: true);
+            }
             if (net.Lobby is { } lobby)
             {
                 Log($"lobby {lobby.Id}: {string.Join(", ", lobby.Members.Select(m => $"{m.Name}/{m.Appearance.Color.ToHtml(false)}"))}, {lobby.Phase}");
@@ -141,7 +148,8 @@ public partial class NetTest : Node
                 {
                     Log($"navigation finished: stuck={smart.StuckEvents} blacklist={smart.BlacklistedTargets} replans={smart.Replans} jumps={smart.Jumps}");
                 }
-                LogTankCheck(final: true);
+                if (!tankCheckFinal) { LogTankCheck(final: true); }
+                LogTankCheck(completion: true);
                 Log($"finished match {match.Setup.Id}; final scores {ScoreLine()}");
                 RemoveChild(match);
                 match.QueueFree();
@@ -216,6 +224,7 @@ public partial class NetTest : Node
             match.Player.MeleeHit += hit => Log($"melee contact {hit.Swing} victim {PlayerCharacter.Owning(hit.Collider)?.PeerId ?? 0}");
             clock = 0;
             tankCheckNext = 0;
+            tankCheckFinal = false;
             nudgedTank = null;
             duelTime = -1;
             gatherPositions.Clear();
@@ -353,7 +362,7 @@ public partial class NetTest : Node
             }
         }
         var sampleTime = TankCheckTime();
-        if (DevArgs.Get("tank-check") != null && sampleTime >= tankCheckNext)
+        if (DevArgs.Get("tank-check") != null && !tankCheckFinal && sampleTime >= tankCheckNext)
         {
             tankCheckNext = sampleTime + 0.05;
             LogTankCheck();
@@ -1134,7 +1143,7 @@ public partial class NetTest : Node
     // packet-corrected countdown, unsuitable for alignment. This dev probe is for net_bots' local clients.
     private static double TankCheckTime() => (double)System.Diagnostics.Stopwatch.GetTimestamp() / System.Diagnostics.Stopwatch.Frequency;
 
-    private void LogTankCheck(bool final = false)
+    private void LogTankCheck(bool final = false, bool completion = false)
     {
         if (match == null || DevArgs.Get("tank-check") == null) { return; }
         var sampleTime = TankCheckTime();
@@ -1148,7 +1157,9 @@ public partial class NetTest : Node
             count++;
         }
         var phase = match.IsPlaying ? "P" : match.IsOver ? "E" : "L";
-        Log(FormattableString.Invariant($"tank-check match {match.Setup.Id} time {sampleTime:0.000000} phase {phase} final {final} length {match.Setup.Length:0.000} n {count}{tanks}"));
+        var kind = completion ? "completion" : final ? "final" : "check";
+        Log(FormattableString.Invariant($"tank-{kind} match {match.Setup.Id} time {sampleTime:0.000000} phase {phase} final {final || completion} length {match.Setup.Length:0.000} n {count}{tanks}"));
+        if (final) { tankCheckFinal = true; }
         if (DevArgs.Get("tank-motion-trace") != null && (final || sampleTime >= motionTraceNext))
         {
             motionTraceNext = sampleTime + .25;
