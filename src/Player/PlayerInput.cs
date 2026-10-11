@@ -93,7 +93,12 @@ public sealed class DeviceInput : IPlayerInputSource
 
     public void Disconnect(long device)
     {
-        if (Assignment.IsPrimary || Assignment.GamepadId == device) { strengths.Clear(); Reset(); }
+        if (Assignment.IsPrimary || Assignment.GamepadId == device)
+        {
+            strengths.Clear();
+            ClearPending();
+            SynchronizeHeldActions();
+        }
     }
 
     private Vector2 look;
@@ -109,9 +114,37 @@ public sealed class DeviceInput : IPlayerInputSource
     /// <summary>Discard queued input and sample held actions when physics pauses/resumes or focus changes.</summary>
     public void Reset()
     {
+        if (!Assignment.IsPrimary)
+        {
+            // Releases can be lost across focus/processing changes. Poll only this assignment's bindings,
+            // preserving held controls without importing another view's aggregate InputMap strengths.
+            strengths.Clear();
+            foreach (var action in actions)
+            {
+                foreach (var binding in InputMap.ActionGetEvents(action))
+                    strengths[(action, Binding(binding))] = HeldBinding(binding);
+            }
+        }
+        ClearPending();
+        SynchronizeHeldActions();
+    }
+
+    private float HeldBinding(InputEvent binding) => binding switch
+    {
+        InputEventKey key when Assignment.KeyboardMouse => (key.PhysicalKeycode != 0
+            ? Input.IsPhysicalKeyPressed(key.PhysicalKeycode) : Input.IsKeyPressed(key.Keycode)) ? 1 : 0,
+        InputEventMouseButton button when Assignment.KeyboardMouse => Input.IsMouseButtonPressed(button.ButtonIndex) ? 1 : 0,
+        InputEventJoypadButton button when Assignment.GamepadId >= 0 && (button.Device < 0 || button.Device == Assignment.GamepadId) =>
+            Input.IsJoyButtonPressed(Assignment.GamepadId, button.ButtonIndex) ? 1 : 0,
+        InputEventJoypadMotion axis when Assignment.GamepadId >= 0 && (axis.Device < 0 || axis.Device == Assignment.GamepadId) =>
+            Mathf.Max(0, Input.GetJoyAxis(Assignment.GamepadId, axis.Axis) * Mathf.Sign(axis.AxisValue)),
+        _ => 0,
+    };
+
+    private void ClearPending()
+    {
         look = Vector2.Zero;
         jump = fire = reload = melee = false;
-        SynchronizeHeldActions();
     }
 
     private void SynchronizeHeldActions()

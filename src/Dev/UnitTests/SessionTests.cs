@@ -105,6 +105,47 @@ public static class SessionTests
             }
             Assert(!session.IsAlive && session.Actors.Count == 0 && !GodotObject.IsInstanceValid(session.World.Root), "uninitialized actor leaked its session");
         });
+        runner.Run("input/assigned devices resample held bindings after focus changes", () =>
+        {
+            InputSetup.Register();
+            var keyboard = new DeviceInput(runner.World.Tuning, () => true, InputDeviceAssignment.KeyboardAndMouse);
+            var pad = new DeviceInput(runner.World.Tuning, () => true, InputDeviceAssignment.Gamepad(7));
+            void Send(InputEvent e, bool deliver = true)
+            {
+                Input.ParseInputEvent(e);
+                Input.FlushBufferedEvents();
+                if (deliver) { keyboard.Accumulate(e); pad.Accumulate(e); }
+                e.Dispose();
+            }
+            try
+            {
+                Send(new InputEventKey { PhysicalKeycode = Key.W, Pressed = true });
+                Send(new InputEventJoypadMotion { Device = 7, Axis = JoyAxis.LeftX, AxisValue = 1 });
+                Assert(keyboard.Read().Move.Y == 1 && pad.Read().Move.X == 1, "held preconditions did not reach the assigned devices");
+                // The engine knows the new held state, but focus/disabled viewport delivery omitted these events.
+                Send(new InputEventKey { PhysicalKeycode = Key.W, Pressed = false }, deliver: false);
+                Send(new InputEventJoypadMotion { Device = 7, Axis = JoyAxis.LeftX, AxisValue = 0 }, deliver: false);
+                Send(new InputEventJoypadMotion { Device = 8, Axis = JoyAxis.LeftY, AxisValue = -1 });
+                keyboard.Reset(); pad.Reset();
+                Assert(keyboard.Read().Move == Vector2.Zero && pad.Read().Move == Vector2.Zero,
+                    "focus reset retained stale held input or sampled another controller");
+                Send(new InputEventKey { PhysicalKeycode = Key.W, Pressed = true }, deliver: false);
+                Send(new InputEventJoypadMotion { Device = 7, Axis = JoyAxis.LeftX, AxisValue = -1 }, deliver: false);
+                Send(new InputEventJoypadButton { Device = 7, ButtonIndex = JoyButton.A, Pressed = true }, deliver: false);
+                keyboard.Reset(); pad.Reset();
+                Assert(keyboard.Read().Move.Y == 1 && pad.Read() is { Move.X: -1, JumpPressed: false },
+                    "focus reset did not sample held bindings or invented a jump edge");
+                pad.Disconnect(7);
+                Assert(pad.Read().Move == Vector2.Zero, "disconnect resampled a retired controller");
+            }
+            finally
+            {
+                Send(new InputEventKey { PhysicalKeycode = Key.W, Pressed = false });
+                Send(new InputEventJoypadMotion { Device = 7, Axis = JoyAxis.LeftX, AxisValue = 0 });
+                Send(new InputEventJoypadMotion { Device = 8, Axis = JoyAxis.LeftY, AxisValue = 0 });
+                Send(new InputEventJoypadButton { Device = 7, ButtonIndex = JoyButton.A, Pressed = false });
+            }
+        });
         runner.Run("input/assigned devices isolate strengths and edges", () =>
         {
             InputSetup.Register();

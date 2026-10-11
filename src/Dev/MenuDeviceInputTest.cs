@@ -61,6 +61,13 @@ public partial class MenuDeviceInputTest : Node
             Check(ammo.Reloading, "match R starts reload");
             await Wait(() => !ammo.Reloading, "reload completes").ConfigureAwait(true);
             Check(ammo.Magazine > magazine, "match reload refills the fired round");
+            ammo.Magazine--;
+            Send(new InputEventJoypadButton { ButtonIndex = JoyButton.X, Pressed = true });
+            Send(new InputEventJoypadButton { ButtonIndex = JoyButton.X, Pressed = false });
+            await Frames().ConfigureAwait(true);
+            Check(ammo.Reloading, "match gamepad X starts reload");
+            await Wait(() => !ammo.Reloading, "gamepad reload completes").ConfigureAwait(true);
+            Check(ammo.Magazine == ammo.Tuning.MagazineSize, "match gamepad reload refills magazine");
             await Pause(match.Player, match.GetNode<MatchMenu>("Menu"), "match").ConfigureAwait(true);
             TapKey(Key.Escape);
             await Frames().ConfigureAwait(true);
@@ -96,12 +103,26 @@ public partial class MenuDeviceInputTest : Node
         await Frames().ConfigureAwait(true);
         Check(player.CameraRig.Yaw == yaw, $"{mode} mouse displacement is consumed");
 
+        Send(new InputEventJoypadMotion { Axis = JoyAxis.RightX, AxisValue = 1 });
+        await Frames(8).ConfigureAwait(true);
+        Send(new InputEventJoypadMotion { Axis = JoyAxis.RightX, AxisValue = 0 });
+        Check(player.Aim.Yaw < yaw, $"{mode} right stick turns the primary view");
+        await Frames().ConfigureAwait(true);
+        yaw = player.Aim.Yaw;
+        await Frames().ConfigureAwait(true);
+        Check(player.Aim.Yaw == yaw, $"{mode} neutral right stick stops turning");
+
         var height = player.GlobalPosition.Y;
         TapKey(Key.Space);
         await Frames(8).ConfigureAwait(true);
         Check(!player.IsOnFloor() && player.Velocity.Y > 0 && player.GlobalPosition.Y > height, $"{mode} Space jumps");
         capture.Screenshot($"{mode}_03_jump");
         await Wait(() => player.IsOnFloor(), $"{mode} jump lands").ConfigureAwait(true);
+        Send(new InputEventJoypadButton { ButtonIndex = JoyButton.A, Pressed = true });
+        Send(new InputEventJoypadButton { ButtonIndex = JoyButton.A, Pressed = false });
+        await Frames(8).ConfigureAwait(true);
+        Check(!player.IsOnFloor() && player.Velocity.Y > 0, $"{mode} gamepad A jumps");
+        await Wait(() => player.IsOnFloor(), $"{mode} gamepad jump lands").ConfigureAwait(true);
         var swings = 0;
         void Swing(uint id, Vector3 direction) => swings++;
         player.MeleeStarted += Swing;
@@ -111,6 +132,13 @@ public partial class MenuDeviceInputTest : Node
         await Frames((int)Math.Ceiling((player.World.Tuning.MeleeCooldown + player.World.Tuning.MeleeWindup +
             player.World.Tuning.MeleeActive + player.World.Tuning.MeleeRecovery) * 60) + 6).ConfigureAwait(true);
         Check(swings == 1, $"{mode} melee press is consumed");
+        Send(new InputEventJoypadButton { ButtonIndex = JoyButton.RightStick, Pressed = true });
+        Send(new InputEventJoypadButton { ButtonIndex = JoyButton.RightStick, Pressed = false });
+        await Frames().ConfigureAwait(true);
+        Check(swings == 2 && player.ResolvedState.Weapon == WeaponAction.Melee, $"{mode} R3 starts one melee");
+        await Frames((int)Math.Ceiling((player.World.Tuning.MeleeCooldown + player.World.Tuning.MeleeWindup +
+            player.World.Tuning.MeleeActive + player.World.Tuning.MeleeRecovery) * 60) + 6).ConfigureAwait(true);
+        Check(swings == 2, $"{mode} R3 press is consumed");
         player.MeleeStarted -= Swing;
 
         var shots = 0;
@@ -124,6 +152,13 @@ public partial class MenuDeviceInputTest : Node
         Check(shots == 1, $"{mode} single fire click shoots");
         await Frames(20).ConfigureAwait(true);
         Check(shots == 1, $"{mode} fire click is consumed");
+        Send(new InputEventJoypadMotion { Axis = JoyAxis.TriggerRight, AxisValue = 1 });
+        Send(new InputEventJoypadMotion { Axis = JoyAxis.TriggerRight, AxisValue = 0 });
+        Check(!Input.IsActionPressed(InputSetup.Fire), $"{mode} trigger released before physics");
+        await Frames().ConfigureAwait(true);
+        Check(shots == 2, $"{mode} complete trigger tap shoots");
+        await Frames(20).ConfigureAwait(true);
+        Check(shots == 2, $"{mode} trigger tap is consumed");
         player.Fired -= Shot;
     }
 

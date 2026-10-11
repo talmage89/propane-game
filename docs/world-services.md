@@ -24,7 +24,8 @@ synchronously releases its endpoint and intent source. Do not broadcast input in
 `menu_test.tscn -- --scenario=input` injects mouse motion, key presses and complete mouse-button clicks through
 `Input.ParseInputEvent`, including menu navigation with Tab/Enter. It checks exact camera displacement, jump,
 melee, single-click fire, single-player suburb replacement, match reload and logical Escape on physical Caps Lock
-in both facades. It also checks paused input and physical/logical system shortcut bindings. This runs in
+in both facades. Controller events also exercise primary-view look, jump, melee, complete trigger taps and
+match reload. It also checks paused input and physical/logical system shortcut bindings. This runs in
 `make test`. Headless Godot cannot capture a pointer, so that run substitutes only `DeviceInput`'s existing
 capture predicate with menu visibility; rendered runs use the default production input source and capture frames
 before/after the turn, in the jump, and with the remapped pause menu open. Gameplay keys stay physical; pause,
@@ -137,7 +138,9 @@ with no camera. Rendered runs attach the same view used by the shipped facades.
 `InputDeviceAssignment.Primary` retains the shipped single-view keyboard/mouse and gamepad switching. Explicit
 keyboard/mouse or numbered gamepad assignments filter events before tracking per-binding strengths and edges;
 one device cannot release another view's held action. Explicit views observe handled releases too, and disconnect
-clears their cached actions. Menus retain application-level keyboard/mouse and controller navigation. Split-screen
+clears their cached actions. Pause/focus resets resample each assignment's own physical keys, mouse buttons and
+controller bindings, discarding stale cached releases and queued presses without importing another view's held state.
+Menus retain application-level keyboard/mouse and controller navigation. Split-screen
 viewport layout is a dev fixture, not a new shipped mode.
 
 `session_actors_tests.tscn` renders two subviewports sharing the session's `World3D`. It asserts independent device
