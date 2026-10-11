@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Text;
 using Godot;
@@ -107,6 +108,7 @@ public static class Protocol
 }
 
 /// <summary>Builds one message: a type byte and little-endian fields.</summary>
+[SuppressMessage("Design", "CA1001", Justification = "The writer and MemoryStream hold only managed byte arrays, with no file or socket handles.")]
 public sealed class NetWriter
 {
     private readonly MemoryStream stream = new();
@@ -159,6 +161,7 @@ public sealed class NetWriter
 }
 
 /// <summary>Reads the fields of one message after its type byte.</summary>
+[SuppressMessage("Design", "CA1001", Justification = "The reader wraps only a managed byte-array MemoryStream, with no file or socket handles.")]
 public sealed class NetReader
 {
     private readonly BinaryReader reader;
