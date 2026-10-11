@@ -30,6 +30,9 @@ public partial class Menus : CanvasLayer
     private bool connecting;
     private LineEdit? nameField;
     private bool rebuilding;
+    private MenuNavigation navigation = null!;
+    private Screen builtScreen;
+    private LineEdit? serverField;
 
     /// <summary>The connection the multiplayer screens use. Set before adding to the tree.</summary>
     public NetClient Net { get; set; } = null!;
@@ -41,6 +44,9 @@ public partial class Menus : CanvasLayer
 
     /// <summary>When this game is hosting, where others can reach it (shown in the lobby screens).</summary>
     public string HostingNote { get; set; } = "";
+
+    /// <summary>Local hosting port; harnesses override it so parallel checkouts keep separate servers.</summary>
+    public int HostPort { get; set; } = Protocol.DefaultPort;
 
     public event Action? SinglePlayerRequested;
 
@@ -59,6 +65,14 @@ public partial class Menus : CanvasLayer
         layout = new VBoxContainer { CustomMinimumSize = new Vector2(520, 0) };
         layout.AddThemeConstantOverride("separation", 12);
         panel.AddChild(layout);
+        navigation = new MenuNavigation
+        {
+            Screen = this,
+            Root = layout,
+            Back = GoBack,
+            AdjustLength = AdjustMatchLength,
+        };
+        AddChild(navigation);
 
         version = UiStyle.Text($"Propane {BuildInfo.GameVersion}" + (BuildInfo.Build != "dev" ? $" ({BuildInfo.Build})" : ""), 14, UiStyle.SoftInk);
         version.SetAnchorsPreset(Control.LayoutPreset.BottomLeft);
@@ -131,10 +145,14 @@ public partial class Menus : CanvasLayer
 
     private void Rebuild()
     {
-        // Someone joining or a server update rebuilds the screen: keep a name being typed, and its focus.
+        // Network refreshes preserve the control identity, drafts and caret; screen changes start at the top.
+        var sameScreen = builtScreen == Current;
+        var focus = sameScreen ? navigation.FocusKey() : null;
+        var serverDraft = sameScreen && serverField != null ? serverField.Text : null;
+        builtScreen = Current;
         string? typing = null;
         var caret = 0;
-        if (nameField != null && IsInstanceValid(nameField) && nameField.HasFocus())
+        if (sameScreen && nameField != null && IsInstanceValid(nameField))
         {
             typing = nameField.Text;
             caret = nameField.CaretColumn;
@@ -148,6 +166,7 @@ public partial class Menus : CanvasLayer
         rebuilding = false;
         status = null;
         nameField = null;
+        serverField = null;
         version.Visible = Current == Screen.Main;
         switch (Current)
         {
@@ -171,8 +190,15 @@ public partial class Menus : CanvasLayer
         if (typing != null && nameField != null)
         {
             nameField.Text = typing;
-            nameField.CallDeferred(Control.MethodName.GrabFocus);
             nameField.CaretColumn = caret;
+        }
+        if (serverDraft != null && serverField != null)
+        {
+            serverField.Text = serverDraft;
+        }
+        if (Visible)
+        {
+            navigation.Configure(focus);
         }
     }
 
@@ -216,7 +242,7 @@ public partial class Menus : CanvasLayer
         layout.AddChild(name);
 
         layout.AddChild(UiStyle.Text("Server", 16, UiStyle.SoftInk));
-        var server = UiStyle.Field(PlayerSettings.Server, $"address or address:port (port {Protocol.DefaultPort} if left out)");
+        var server = serverField = UiStyle.Field(PlayerSettings.Server, $"address or address:port (port {Protocol.DefaultPort} if left out)");
         layout.AddChild(server);
         server.TextSubmitted += _ => Connect(server.Text, name.Text);
 
@@ -230,7 +256,7 @@ public partial class Menus : CanvasLayer
         host.Pressed += () =>
         {
             SaveName(name.Text);
-            HostRequested?.Invoke(Protocol.DefaultPort);
+            HostRequested?.Invoke(HostPort);
         };
         var back = UiStyle.Button("Back");
         back.Pressed += () =>
@@ -290,6 +316,22 @@ public partial class Menus : CanvasLayer
         {
             layout.AddChild(UiStyle.Text("No lobbies yet. Create one, then the others can join it.", 18, UiStyle.SoftInk, HorizontalAlignment.Center));
         }
+        VBoxContainer? list = null;
+        if (Net.Lobbies.Count > 0)
+        {
+            // Keep long server lists inside the panel; focusing a Join button scrolls its row into view.
+            var scroll = new ScrollContainer
+            {
+                FollowFocus = true,
+                HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
+                CustomMinimumSize = new Vector2(0, Mathf.Min(Net.Lobbies.Count, 4) * 52),
+            };
+            layout.AddChild(scroll);
+            list = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+            list.AddThemeConstantOverride("separation", 2);
+            scroll.AddChild(list);
+            scroll.GetVScrollBar().FocusMode = Control.FocusModeEnum.None;
+        }
         foreach (var lobby in Net.Lobbies)
         {
             var row = new HBoxContainer();
@@ -302,9 +344,16 @@ public partial class Menus : CanvasLayer
             var join = UiStyle.Button("Join");
             join.Disabled = inMatch || lobby.Players >= Net.LobbyCapacity;
             var id = lobby.Id;
+            join.SetMeta("focus_key", $"lobby_{id}");
             join.Pressed += () => Net.JoinLobby(id);
             row.AddChild(join);
-            layout.AddChild(row);
+            var inset = new MarginContainer();
+            foreach (var side in new[] { "left", "right", "top", "bottom" })
+            {
+                inset.AddThemeConstantOverride($"margin_{side}", 4);
+            }
+            inset.AddChild(row);
+            list!.AddChild(inset);
         }
         layout.AddChild(new HSeparator());
         var buttons = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.Center };
@@ -380,10 +429,12 @@ public partial class Menus : CanvasLayer
             var swatch = new Button
             {
                 CustomMinimumSize = new Vector2(40, 40),
-                FocusMode = Control.FocusModeEnum.None,
+                FocusMode = Control.FocusModeEnum.All,
                 TooltipText = Protocol.ColorNames[i] + (taken.Contains(i) ? " (taken)" : ""),
                 Disabled = taken.Contains(i),
             };
+            swatch.SetMeta("focus_key", $"color_{i}");
+            swatch.AddThemeStyleboxOverride("focus", UiStyle.Focus());
             var mine = Net.Color == i;
             foreach (var state in new[] { "normal", "hover", "pressed", "disabled" })
             {
@@ -421,9 +472,29 @@ public partial class Menus : CanvasLayer
             shorter.Pressed += () => Net.SetMatchLength(Mathf.Max(tuning.MatchLengthMin, lobby.MatchLength - step));
             length.AddChild(shorter);
         }
-        var minutes = UiStyle.Title(FormatTime(lobby.MatchLength), 26);
-        minutes.CustomMinimumSize = new Vector2(80, 0);
-        length.AddChild(minutes);
+        if (Net.IsCreator)
+        {
+            var minutes = UiStyle.Button(FormatTime(lobby.MatchLength));
+            minutes.SetMeta("focus_key", "match_length");
+            minutes.TooltipText = "Left / right to change match length";
+            minutes.CustomMinimumSize = new Vector2(80, 40);
+            // Keep the existing mouse −/+ buttons; the time itself is a controller adjustment target.
+            minutes.GuiInput += e =>
+            {
+                if (e is InputEventKey && (e.IsActionPressed("ui_left") || e.IsActionPressed("ui_right")))
+                {
+                    AdjustMatchLength(e.IsActionPressed("ui_left") ? -1 : 1);
+                    minutes.AcceptEvent();
+                }
+            };
+            length.AddChild(minutes);
+        }
+        else
+        {
+            var minutes = UiStyle.Title(FormatTime(lobby.MatchLength), 26);
+            minutes.CustomMinimumSize = new Vector2(80, 0);
+            length.AddChild(minutes);
+        }
         if (Net.IsCreator)
         {
             var longer = UiStyle.Button("+");
@@ -454,6 +525,34 @@ public partial class Menus : CanvasLayer
         buttons.AddChild(leave);
         layout.AddChild(buttons);
         AddMessage();
+    }
+
+    private void AdjustMatchLength(int direction)
+    {
+        if (Net.Lobby is not { } lobby || !Net.IsCreator)
+        {
+            return;
+        }
+        var tuning = Tuning.Current;
+        var seconds = Mathf.Clamp(lobby.MatchLength + direction * Mathf.Max(tuning.MatchLengthStep, 1f),
+            tuning.MatchLengthMin, tuning.MatchLengthMax);
+        if (seconds != lobby.MatchLength)
+        {
+            Net.SetMatchLength(seconds);
+        }
+    }
+
+    private void GoBack()
+    {
+        var text = Current switch
+        {
+            Screen.Connect => "Back",
+            Screen.Browser => "Disconnect",
+            Screen.Lobby => "Leave lobby",
+            _ => null,
+        };
+        var button = layout.FindChildren("*", "Button", owned: false).OfType<Button>().FirstOrDefault(b => b.Text == text);
+        button?.EmitSignal(BaseButton.SignalName.Pressed);
     }
 
     private void SetProfile(string name, int color)

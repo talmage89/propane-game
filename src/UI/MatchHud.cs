@@ -180,7 +180,7 @@ public partial class MatchHud : CanvasLayer
         reloadProgress = ammo.Reloading ? ammo.ReloadProgress : 0f;
         var empty = ammo.Magazine == 0;
         magazine.AddThemeColorOverride("font_color", empty ? Warn : Dark);
-        ammoNote.Text = ammo.Reloading ? "RELOADING" : empty && ammo.Reserve == 0 ? "NO AMMO" : empty ? "R TO RELOAD" : "";
+        ammoNote.Text = ammo.Reloading ? "RELOADING" : empty && ammo.Reserve == 0 ? "NO AMMO" : empty ? (MenuNavigation.Gamepad ? "X / SQUARE TO RELOAD" : "R TO RELOAD") : "";
         ammoNote.AddThemeColorOverride("font_color", ammo.Reloading ? Dark : Warn);
     }
 
