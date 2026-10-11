@@ -51,8 +51,10 @@ public partial class ShutdownGuard : Node
     {
         // End this stack frame before collecting, so its node wrappers cannot keep scene resources alive.
         var children = GetTree().Root.GetChildren();
-        foreach (var child in children)
+        // Match normal root teardown: scenes leave before the earlier autoloads they may use on exit.
+        for (var index = children.Count - 1; index >= 0; index--)
         {
+            var child = children[index];
             if (child != this)
             {
                 child.Free();

@@ -2,7 +2,9 @@
 
 Use `ShutdownGuard.Quit(tree, exitCode)` for game and harness exits. The first autoload owns shutdown:
 
-1. Defer cleanup until the current callback returns, then free the scene and other root children.
+1. Defer cleanup until the current callback returns, then free root children in reverse insertion order, matching
+   Godot's own [teardown](https://github.com/godotengine/godot/blob/ed1daf0bf/scene/main/node.cpp#L284).
+   Scenes leave before the earlier autoloads they may use on exit.
 2. Collect unreachable managed wrappers and wait for their finalizers while Godot's native services still exist.
    Collect and wait a second time: a native query can retain a shape wrapper until the query's finalizer releases it.
    One collection leaves that second wave for engine shutdown.
@@ -47,9 +49,9 @@ historical crash had this cause.
 ## Regression checks
 
 `shutdown_tests.tscn` creates 20,002 resource wrappers during scene destruction, including a query that natively retains
-its shape. A test-only witness checks that
-all weak targets have disappeared and a managed finalizer has completed before final engine teardown. Failures set
-exit 1. Collecting before scene destruction or draining only one wave fails this test.
+its shape. A test-only witness checks reverse root-child teardown order, that all weak targets have disappeared,
+a managed finalizer has completed and the physics frame has advanced before final engine teardown. Failures set
+exit 1. Collecting before scene destruction, draining only one wave or skipping the physics frame fails this test.
 `make test` also exercises a paused window-close request
 and duplicate quit requests.
 

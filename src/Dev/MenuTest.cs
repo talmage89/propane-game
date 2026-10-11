@@ -72,6 +72,13 @@ public partial class MenuTest : Node
             return;
         }
 
+        if (DevArgs.Get("quit-after") == "single")
+        {
+            director.ShotAt(1.5f, "01_main_menu");
+            SinglePlayer(director, 2f, quit: true);
+            return;
+        }
+
         director.ShotAt(1.5f, "01_main_menu");
         director.At(2f, () => Press("Multiplayer"));
         director.ShotAt(2.5f, "02_connect");
@@ -101,13 +108,24 @@ public partial class MenuTest : Node
         director.At(20.5f, () => Press("Disconnect"));
         director.ShotAt(21f, "14_connect_again");
         director.At(21.5f, () => Press("Back"));
-        director.At(22f, () => Press("Single player"));
-        director.ShotAt(26f, "15_single_player");
-        director.At(26.5f, () => SendKey(Key.Escape));
-        director.ShotAt(27f, "16_pause");
-        director.At(27.5f, () => Press("Main menu"));
-        director.ShotAt(28.5f, "17_back_to_main");
-        director.At(29f, () =>
+        if (DevArgs.Get("quit-after") == "match")
+        {
+            director.ShotAt(21.8f, "15_back_to_main_before_quit");
+            director.At(22f, () => Press("Quit"));
+            return;
+        }
+        SinglePlayer(director, 22f);
+    }
+
+    private void SinglePlayer(CaptureDirector director, float start, bool quit = false)
+    {
+        director.At(start, () => Press("Single player"));
+        director.ShotAt(start + 4f, "15_single_player");
+        director.At(start + 4.5f, () => SendKey(Key.Escape));
+        director.ShotAt(start + 5f, "16_pause");
+        director.At(start + 5.5f, () => Press("Main menu"));
+        director.ShotAt(start + 6.5f, "17_back_to_main");
+        director.At(start + 7f, () =>
         {
             if (FindButton(GetTree().Root, "Single player") == null)
             {
@@ -117,6 +135,7 @@ public partial class MenuTest : Node
             }
             GD.Print("[menutest] PASS: returned to main menu");
         });
+        if (quit) { director.At(start + 8f, () => Press("Quit")); }
     }
 
     private static bool HasText(Node node, string text)
