@@ -25,6 +25,7 @@ public partial class MeleeRange : Node3D
 
     public override void _Ready()
     {
+        DevArgs.MarkReady();
         DevArgs.Setup();
         ProcessPhysicsPriority = -10;
         InputSetup.Register();

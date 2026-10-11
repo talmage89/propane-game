@@ -72,7 +72,7 @@ test-generator: build ## Check every generator assertion with bounded seed depth
 test-world: build ## Compare all formations built in two fresh processes
 	tools/dev/check_world.sh
 
-test-full: test ## Run the gate plus deep generator and navigation sweeps
+test-full: test ## Run the gate plus deep sweeps
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/player_range.tscn -- --scenario=melee-reloads --assert-motion --assert-grip
 	"$(GODOT)" --headless --path . res://scenes/dev/generator_tests.tscn -- --seeds=200 --large-seeds=100 --formation-seeds=6
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/bot_navigation_course.tscn -- --seeds=100

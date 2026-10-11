@@ -33,7 +33,7 @@ implicit async context, ValueTask misuse, and whitespace and style drift. It als
 The fixtures compile in an isolated temporary project; they never run or modify game sources.
 The script also stubs external tools to prove `make -j4 check` runs lint before every gate suite and
 propagates a failure from each checker, scene, saved-plan writer and world-hash process. It checks that the core runner retains platform, movement and unit scenes with failure completion. It rejects missing or
-different world hashes and checks that `test-full` retains the gate and both deep sweeps. It checks that Godot
+different world hashes and checks that `test-full` retains the gate and every deep sweep, including melee reloads, and propagates their failures. It checks that Godot
 setup reuses a valid cached editor and stops on a download failure.
 
 ## Fast gate and deep sweeps
@@ -43,13 +43,13 @@ setup reuses a valid cached editor and stops on a download failure.
 | Target | Assertions |
 | --- | --- |
 | `test-core` | Python timing/score/vent/trajectory checkers, platform, movement, all unit suites |
-| `test-behavior` | Blast completeness, gather/races/appearance/real-game gather, navigation, all three menu scenarios, grip/recovery, feet/corrections/events, movement/motion continuity |
+| `test-behavior` | Blast completeness, gather/races/appearance/real-game gather, melee collision/poses, navigation, all three menu scenarios, grip/recovery, feet/corrections/events, movement/motion continuity |
 | `test-generator` | 20 single-player and 2-player seeds, three each at 8/16/24/32 players, two forced seeds for every formation at all six sizes |
 | `test-world` | All four saved formation plans built and hashed in two fresh processes |
 
 The generator gate keeps every assertion and all 14 explicit pile counts (0–128), with fewer random layouts.
 `make test-full` runs the gate, then 200 single-player and 2-player seeds, 100 each at the four large sizes,
-six forced seeds per formation/size, and 100 navigation seeds. It includes every seed formerly in the gate:
+six forced seeds per formation/size, 100 navigation seeds, and the melee-reload pose sweep. It includes every seed formerly in the gate:
 ordinary seeds 21–100, large seeds 4–10 and forced seeds 3–6 moved to this deeper sweep.
 
 `core_tests.tscn` runs platform, movement and unit scenes sequentially, prints BEGIN/PASS per suite and exits
@@ -74,9 +74,10 @@ compilation or assertions. Editor setup remains shared with release, whose tool 
 Add a headless command to the appropriate `test-*` recipe in `Makefile`. It automatically joins both local
 `make test`/`make check` and the corresponding CI job. Use a nonzero exit for every failed assertion and missing
 coverage; do not hide failures with a pipeline or `|| true`. Add the command to `check_make_order` in
-`tools/dev/lint_tests.py` so its presence and failure propagation are checked. For a compatible core scene, add its
-name to `CoreTests.Scenes`, complete through `CoreTests.Complete`, and check its isolation and assertion failures
-both alone and consolidated. Keep synchronous unit tests last.
+`tools/dev/lint_tests.py` so its presence and failure propagation are checked. Call `DevArgs.MarkReady()` at
+the start of a new scene's `_Ready` so the profiler separates startup from work. For a compatible core scene, add its
+name to `CoreTests.Scenes` and the required map in `check_core_wiring`, complete through `CoreTests.Complete`,
+and check its isolation and assertion failures both alone and consolidated. Keep synchronous unit tests last.
 
 Keep bounded regression seeds in the gate, and put deeper repetitions in `test-full` while retaining every
 assertion kind and required fixture in the gate. If adding a new partition, update `test` dependencies and the CI

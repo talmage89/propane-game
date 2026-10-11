@@ -56,6 +56,8 @@ fi
               "gather_range.tscn -- --scenario=grant-races",
               "gather_range.tscn -- --scenario=appearance",
               "game_test.tscn -- --scenario=gather --tune.FixedSeed=23",
+              "melee_range.tscn",
+              "player_range.tscn -- --scenario=melee --assert-motion --assert-grip",
               "bot_navigation_course.tscn -- --seeds=5",
               "menu_test.tscn -- --scenario=gamepad", "menu_test.tscn -- --scenario=devices", "menu_test.tscn -- --scenario=mouse",
               "player_range.tscn -- --scenario=grip --grip-sweep --assert-grip --assert-motion",
@@ -96,14 +98,22 @@ fi
         else:
             require(result.returncode != 0, f"parallel check ignored failure: {failure}", result.stdout)
     print("PASS: parallel check runs every suite after lint and propagates every suite/hash failure")
-    log.write_text("")
-    environment["PROBE_FAIL"] = "none"
-    code, output = run(ROOT, "make", "-j4", "test-full", environment=environment)
-    commands = log.read_text().splitlines()
-    require(code == 0 and any("--seeds=200 --large-seeds=100 --formation-seeds=6" in c for c in commands) and
-            any("bot_navigation_course.tscn -- --seeds=100" in c for c in commands) and
-            any("core_tests.tscn" in c for c in commands), "test-full lost the gate or deep sweeps", output)
-    print("PASS: test-full includes the gate and all deep sweeps")
+    deep = ["--scenario=melee-reloads --assert-motion --assert-grip",
+            "--seeds=200 --large-seeds=100 --formation-seeds=6",
+            "bot_navigation_course.tscn -- --seeds=100"]
+    for failure in ["none", *deep]:
+        log.write_text("")
+        counter.write_text("0\n")
+        environment["PROBE_FAIL"] = failure
+        code, output = run(ROOT, "make", "-j4", "test-full", environment=environment)
+        commands = log.read_text().splitlines()
+        if failure == "none":
+            require(code == 0 and all(any(probe in c for c in commands) for probe in deep) and
+                    any("core_tests.tscn" in c for c in commands), "test-full lost the gate or deep sweeps", output)
+        else:
+            require(code != 0, f"test-full ignored deep failure: {failure}", output)
+    print("PASS: test-full includes the gate and every deep sweep, and propagates their failures")
+
 
 
 def check_core_wiring():
