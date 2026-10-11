@@ -5,6 +5,7 @@ using Godot;
 using Propane.Core;
 using Propane.Fx;
 using Propane.Player;
+using Propane.Session;
 using Propane.Tank;
 using Propane.UI;
 using Propane.World;
@@ -20,7 +21,9 @@ namespace Propane.Net;
 /// </summary>
 public partial class Match : Node3D
 {
-    public WorldContext World { get; private set; } = null!;
+    public SessionContext Session { get; private set; } = null!;
+    public WorldContext World => Session.World;
+    public bool CreateLocalView { get; init; } = true;
 
     /// <summary>Network time source; set before entering the tree for deterministic simulation.</summary>
     internal IMonotonicClock Clock { get; init; } = MonotonicClock.Instance;
@@ -53,19 +56,11 @@ public partial class Match : Node3D
     private const int StatesPerMessage = Protocol.MaxBodyStates;
     private const float TagRefresh = 1f / 30f;
 
-    private sealed class Remote
-    {
-        public required PlayerProfile Profile;
-        public required PlayerCharacter Body;
-        public required SnapshotBuffer Buffer;
-    }
-
     private sealed record AuthorityRequest(Msg Type, uint Request, uint Cause, uint[] Ids, object Payload)
     {
         public readonly Dictionary<uint, uint> Expected = new();
     }
 
-    private readonly Dictionary<int, Remote> remotes = new();
     private readonly Dictionary<int, PlayerProfile> profiles = new();
     private readonly Dictionary<int, int> scores = new();
     private readonly Dictionary<uint, PropaneTank> tanks = new();
@@ -84,7 +79,7 @@ public partial class Match : Node3D
     private Node3D effects = null!;
     private Suburb suburb = null!;
     private SuburbPlan plan = null!;
-    private PlayerCharacter player = null!;
+    private PlayerCharacter player => Session.OwnedActors.Single().Character;
     private BodySync bodies = null!;
     private TankGather gather = null!;
     private readonly HashSet<uint> gatherRequests = new();
@@ -96,18 +91,13 @@ public partial class Match : Node3D
 
     private Phase phase = Phase.Loading;
     private int me;
-    private int mySlot;
     private float revealTime;
     private bool revealing = true;
     private float countdownLeft;
     private float timeLeft = -1;
     private float endLeft;
-    private float sendTimer;
     private float groupRefresh;
     private List<Vector3> tankGroups = new();
-    private double graceUntil;
-    private int dropCounter;
-    private readonly DropPredictions dropPredictions = new();
     private bool ammoFullShown;
     private string noticeText = "";
     private float noticeLeft;
@@ -138,7 +128,9 @@ public partial class Match : Node3D
 
     public float TimeLeft => timeLeft;
 
-    public IEnumerable<PlayerCharacter> RemoteBodies => remotes.Values.Select(r => r.Body);
+    private System.Collections.Generic.IEnumerable<ActorRuntime> RemoteActors => Session.Actors.Where(actor => actor.Character.IsRemote);
+
+    public IEnumerable<PlayerCharacter> RemoteBodies => RemoteActors.Select(actor => actor.Character);
 
     public IReadOnlyList<AmmoPickup> Pickups => pickups;
 
@@ -154,167 +146,28 @@ public partial class Match : Node3D
     internal Action<byte[]>? AuthoritySendOverride { get; set; }
 
     /// <summary>When (on <see cref="Clock"/>) another player's shot last hit this player, and whose it was.</summary>
-    public double LastHitTime { get; private set; } = -100;
+    public double LastHitTime => player.Runtime.LastHitTime;
 
-    public int LastHitBy { get; private set; }
+    public int LastHitBy => player.Runtime.LastHitBy;
 
     public override void _Ready()
     {
         using var tuning = Tuning.FromSnapshot(Setup.Tuning);
         tuning.CopyLocalTunersFrom(Net.Template);
-        World = new WorldContext(this, tuning, networked: true, present: true);
-        World.OnStopping(StopReplication);
-        World.Construct(BuildWorld);
+        SessionFactory.Build(this, tuning, new MatchSource(this), new TankBankMode(this), session => Session = session,
+            networked: true, present: CreateLocalView);
     }
 
-    private void BuildWorld()
-    {
-        InputSetup.Register();
-        _ = GameAssets.Debris;
-        ExplosionEffect.Preload();
-        me = Net.MyId;
-
-        environment = new VoidEnvironment { Name = "Void" };
-        World.Root.AddChild(environment);
-        effects = World.EffectsRoot;
-
-        plan = PlanCodec.Decode(Setup.Plan);
-        var settings = SuburbPlans.Match(World.Tuning, Setup.Players.Count);
-        suburb = Suburb.Build(World, plan, settings, networked: true);
-        World.Root.AddChild(suburb);
-        World.SetContentRoot(suburb.DynamicRoot);
-        bodies = new BodySync(World.Tuning, me, Setup.HostId);
-
-        var mapTanks = suburb.MapTanks;
-        for (var i = 0; i < mapTanks.Count; i++)
-        {
-            Track(mapTanks[i], Setup.HostId);
-        }
-        foreach (var body in suburb.DynamicRoot.GetChildren().OfType<RigidBody3D>().Where(b => b.HasMeta(Suburb.PlanIndexMeta)))
-        {
-            var index = body.GetMeta(Suburb.PlanIndexMeta).AsInt32();
-            if (plan.Props[index].Model.StartsWith("car:"))
-            {
-                bodies.Register(BodySync.CarId(index), body, isTank: false, Setup.HostId);
-            }
-            else
-            {
-                looseProps[index] = body;
-            }
-        }
-
-        gather = new TankGather
-        {
-            World = World,
-            Name = "Gather",
-            Tanks = () => LiveTanks,
-            Enabled = () => IsPlaying && bodies.Host == me,
-            Grant = GrantGather,
-            Publish = PublishGather
-        };
-        suburb.AddChild(gather);
-
-        foreach (var (profile, slot) in Setup.Players)
-        {
-            profiles[profile.Id] = profile;
-            scores[profile.Id] = 0;
-            var spawn = plan.Spawns.Count > 0 ? plan.Spawns[slot % plan.Spawns.Count] : new SpawnPoint(plan.Spawn, plan.SpawnYaw);
-            var position = Suburb.ToWorld(spawn.Position, 0.05f);
-            if (profile.Id == me)
-            {
-                mySlot = slot;
-                player = new PlayerCharacter
-                {
-                    World = World,
-                    Name = "Player",
-                    PeerId = me,
-                    BodyColor = profile.Appearance.Color,
-                    Ammo = AmmoState.Starting(World.Tuning),
-                    InputLocked = true,
-                };
-                World.Root.AddChild(player);
-                player.Teleport(position, spawn.Yaw + Mathf.Pi);
-            }
-            else
-            {
-                var body = new PlayerCharacter
-                {
-                    World = World,
-                    Name = $"Remote_{profile.Id}",
-                    IsRemote = true,
-                    PeerId = profile.Id,
-                    BodyColor = profile.Appearance.Color,
-                };
-                World.Root.AddChild(body);
-                body.Teleport(position, spawn.Yaw + Mathf.Pi);
-                remotes[profile.Id] = new Remote { Profile = profile, Body = body, Buffer = new SnapshotBuffer(World.Tuning) };
-            }
-        }
-        if (player == null)
-        {
-            throw new InvalidOperationException("this player is not in the match");
-        }
-        var view = LocalView.Attach(player, this, devices: true);
-        environment.Follow = view.CameraRig.Camera;
-        player.Fired += OnFired;
-        player.Ragdolled += OnRagdolled;
-        player.GotUp += (root, yaw) => Send(new NetWriter(Msg.GetUp, Setup.Id).Vec3(root).Float(yaw));
-        player.MeleeStarted += (swing, direction) => Send(new NetWriter(Msg.MeleeStart, Setup.Id).UInt(swing).Vec3(direction));
-        player.MeleeHit += OnMeleeHit;
-        player.PushedBody += body => Claim(new[] { body });
-
-        for (var i = 0; i < plan.AmmoSpots.Count; i++)
-        {
-            var pickup = new AmmoPickup { Name = $"Ammo_{i}", Index = i };
-            suburb.DynamicRoot.AddChild(pickup);
-            pickup.Position = Suburb.ToWorld(plan.AmmoSpots[i]);
-            pickups.Add(pickup);
-        }
-
-        hud = view.Hud;
-        hud.ShowTankCount(false);
-        matchHud = new MatchHud { World = World, Name = "MatchHud" };
-        World.AddView(this, matchHud);
-        results = new ResultsScreen { Name = "Results" };
-        World.AddView(this, results);
-        menu = new MatchMenu { Name = "Menu" };
-        menu.ResumeRequested += CloseMenu;
-        menu.LeaveRequested += () => World.Defer(() => LeaveRequested?.Invoke(), whilePaused: true);
-        World.AddView(this, menu);
-        if (OS.IsDebugBuild() && Setup.CreatorDebug && Setup.HostId == me)
-        {
-            tuningPanel = new TuningPanel { Target = World.Tuning, Name = "Tuning", Note = "Changes apply to everyone in the match", UseDeclaredRanges = true };
-            tuningPanel.ValueChanged += (name, value) => Send(new NetWriter(Msg.TuningSet, Setup.Id).String(name).Scalar(value));
-            World.AddView(this, tuningPanel);
-        }
-
-        // The suburb materializes around the player, as in single player.
-        suburb.SetRevealSide(1f);
-        World.Reveal.Center = player.GlobalPosition;
-        World.Reveal.Radius = 0f;
-        Warmup.Run(World, World.Root, new Vector3(0, -400f, 0));
-
-        World.Events.LocalBlast += OnLocalBlast;
-        CaptureMouse(true);
-        ShowNotice("Waiting for everyone to arrive", 30f);
-        // Loaded is sent after the handoff: Countdown, Go or even End may already be waiting in the inbox.
-        Net.AttachMatch(Setup.Id, OnMessage);
-        Send(new NetWriter(Msg.Loaded, Setup.Id));
-        GD.Print($"[match] seed {plan.Seed}: {plan.Lots.Count} lots, {plan.Tanks.Count} tanks, {pickups.Count} pickups, {Setup.Players.Count} players, host {Setup.HostId}, me {me}");
-    }
-
-    public override void _ExitTree() => World?.Dispose();
+    public override void _ExitTree() => Session?.Dispose();
 
     private void StopReplication()
     {
-        Net.DetachMatch(Setup.Id, OnMessage);
         foreach (var tank in tanks.Values.Where(IsInstanceValid))
         {
             tank.Punctured -= OnTankPunctured;
             tank.Detonated -= OnTankDetonated;
         }
         bodies?.Clear();
-        remotes.Clear();
         tanks.Clear();
         looseProps.Clear();
         pickups.Clear();
@@ -378,20 +231,20 @@ public partial class Match : Node3D
         if (World is not { IsAlive: true } || World.Paused) { return; }
         var dt = (float)delta;
         var now = Clock.Seconds;
-        foreach (var remote in remotes.Values)
+        foreach (var remote in RemoteActors)
         {
-            if (remote.Buffer.HasData)
+            if (remote.Snapshots!.HasData)
             {
-                remote.Body.SetRemoteState(remote.Buffer.Sample(now));
+                remote.Character.SetRemoteState(remote.Snapshots!.Sample(now));
             }
         }
         bodies.Correct(now);
 
-        sendTimer -= dt;
-        if (sendTimer <= 0)
+        player.Runtime.SendTimer -= dt;
+        if (player.Runtime.SendTimer <= 0)
         {
-            sendTimer += 1f / Mathf.Max(World.Tuning.PlayerSendRate, 1f);
-            sendTimer = Mathf.Max(sendTimer, 0);
+            player.Runtime.SendTimer += 1f / Mathf.Max(World.Tuning.PlayerSendRate, 1f);
+            player.Runtime.SendTimer = Mathf.Max(player.Runtime.SendTimer, 0);
             SendPlayerState(now);
         }
         SendBodies(dt, now);
@@ -400,8 +253,9 @@ public partial class Match : Node3D
 
     private void UpdateHud(float dt)
     {
+        if (player.View == null) return;
         var tuning = World.Tuning;
-        var camera = player.CameraRig.Camera;
+        var camera = player.View.CameraRig.Camera;
         var viewportHeight = GetViewport().GetVisibleRect().Size.Y;
         var radius = Mathf.Tan(Mathf.DegToRad(player.SpreadDegrees)) / Mathf.Tan(Mathf.DegToRad(camera.Fov / 2f)) * viewportHeight / 2f;
         var menuOpen = menu.Visible || tuningPanel?.Visible == true;
@@ -433,9 +287,9 @@ public partial class Match : Node3D
         var tuning = World.Tuning;
         var space = World.Physics.DirectSpaceState;
         var from = camera.GlobalPosition;
-        foreach (var remote in remotes.Values)
+        foreach (var remote in RemoteActors)
         {
-            var at = remote.Body.TagPosition;
+            var at = remote.Character.TagPosition;
             var distance = from.DistanceTo(at);
             if (distance > tuning.ScoreTagRange || camera.IsPositionBehind(at))
             {
@@ -447,7 +301,7 @@ public partial class Match : Node3D
                 continue;
             }
             var scale = tuning.ScoreTagScale * Mathf.Lerp(1.15f, 0.6f, Mathf.Clamp(distance / Mathf.Max(tuning.ScoreTagRange, 1f), 0, 1));
-            tags.Add(new ScoreTag(camera.UnprojectPosition(at), scores.GetValueOrDefault(remote.Profile.Id), remote.Profile.Appearance.Color, scale));
+            tags.Add(new ScoreTag(camera.UnprojectPosition(at), scores.GetValueOrDefault(remote.Character.PeerId), profiles[remote.Character.PeerId].Appearance.Color, scale));
         }
         return tags;
     }
@@ -871,12 +725,12 @@ public partial class Match : Node3D
         matchHud.AddHitDirection(shooterPosition);
         // The victim owns this gameplay grace; wire timestamps and interpolation remain monotonic.
         var now = World.Clock.Now;
-        if (phase != Phase.Playing || now < graceUntil)
+        if (phase != Phase.Playing || now < player.Runtime.GraceUntil)
         {
             return;
         }
         var tuning = World.Tuning;
-        graceUntil = now + tuning.HitGraceTime;
+        player.Runtime.GraceUntil = now + tuning.HitGraceTime;
         Vector3 origin;
         Vector3 away;
         if (player.IsRagdolled)
@@ -903,7 +757,7 @@ public partial class Match : Node3D
         {
             return;
         }
-        var count = Mathf.Min(wanted, Mathf.Max(0, MyScore - dropPredictions.UnconfirmedCount));
+        var count = Mathf.Min(wanted, Mathf.Max(0, MyScore - player.Runtime.DropPredictions.UnconfirmedCount));
         if (count <= 0)
         {
             return;
@@ -925,8 +779,8 @@ public partial class Match : Node3D
             var velocity = outward * tuning.DropToss + Vector3.Up * tuning.DropToss * 0.6f;
             var spin = new Vector3(rng.RandfRange(-1, 1), rng.RandfRange(-1, 1), rng.RandfRange(-1, 1)) * 2f;
             var transform = new Transform3D(new Basis(Vector3.Up, rng.RandfRange(0, Mathf.Tau)), position);
-            var id = BodySync.DropTankId(mySlot, dropCounter++);
-            dropPredictions.Add(id);
+            var id = BodySync.DropTankId(player.Runtime.SpawnSlot, player.Runtime.DropCounter++);
+            player.Runtime.DropPredictions.Add(id);
             SpawnDroppedTank(id, me, transform, velocity, spin);
             w.UInt(id).Transform(transform).Vec3(velocity).Vec3(spin).UInt(1).UInt(0);
         }
@@ -1017,6 +871,7 @@ public partial class Match : Node3D
 
     private void SendPlayerState(double now)
     {
+        player.Runtime.ReplicationSequence++;
         var message = new NetMessage(Msg.PlayerState, Setup.Id, 0, new PlayerStateMessage(now, player.CaptureNetState()));
         Net.Send(MessageCodec.Encode(message, fromServer: false), TrafficClass.UnreliablePlayerPoses);
     }
@@ -1078,11 +933,11 @@ public partial class Match : Node3D
                 {
                     matchHud.SetScore(update.Score, update.Delta > 0);
                     if (update.Delta > 0) { matchHud.AddScorePopup(update.Delta); }
-                    else if (update.Delta < 0) { dropPredictions.ScoreConfirmed(update.Delta); }
+                    else if (update.Delta < 0) { player.Runtime.DropPredictions.ScoreConfirmed(update.Delta); }
                 }
                 break;
             case Msg.DropRefused:
-                foreach (var id in dropPredictions.Refused(((DropRefusedMessage)message.Payload).Ids))
+                foreach (var id in player.Runtime.DropPredictions.Refused(((DropRefusedMessage)message.Payload).Ids))
                 {
                     if (!tanks.Remove(id, out var refused)) { continue; }
                     bodies.Remove(id);
@@ -1111,10 +966,12 @@ public partial class Match : Node3D
                 break;
             case Msg.PlayerLeft:
                 var left = (PlayerLeftMessage)message.Payload;
-                if (remotes.Remove(left.Player, out var remote))
+                var remote = RemoteActors.FirstOrDefault(actor => actor.Character.PeerId == left.Player);
+                if (remote != null)
                 {
-                    remote.Body.QueueFree();
-                    ShowNotice($"{remote.Profile.Name} left the match", 3f);
+                    var name = profiles[remote.Character.PeerId].Name;
+                    Session.RemoveActor(remote);
+                    ShowNotice($"{name} left the match", 3f);
                 }
                 bodies.Host = left.Host;
                 break;
@@ -1124,11 +981,11 @@ public partial class Match : Node3D
     private void OnRelay(int sender, object payload)
     {
         var now = Clock.Seconds;
-        var remote = remotes.GetValueOrDefault(sender);
+        var remote = RemoteActors.FirstOrDefault(actor => actor.Character.PeerId == sender);
         switch (payload)
         {
             case PlayerStateMessage state:
-                remote?.Buffer.Add(state.Time, state.State, now);
+                remote?.Snapshots?.Add(state.Time, state.State, now);
                 break;
             case MeleeStartMessage strike:
                 remoteMelee[sender] = strike;
@@ -1137,10 +994,10 @@ public partial class Match : Node3D
                 if (!remoteMelee.TryGetValue(sender, out var swing) || swing.Swing != contact.Swing) break;
                 if (contact.Victim == me)
                 {
-                    LastHitTime = now;
-                    LastHitBy = sender;
+                    player.Runtime.LastHitTime = now;
+                    player.Runtime.LastHitBy = sender;
                     player.ReceiveMelee(swing.Direction);
-                    if (remote != null) matchHud.AddHitDirection(remote.Body.GlobalPosition);
+                    if (remote != null) matchHud.AddHitDirection(remote.Character.GlobalPosition);
                 }
                 else if (contact.PropIndex >= 0 && looseProps.TryGetValue(contact.PropIndex, out var pushed) && IsInstanceValid(pushed) && !pushed.Freeze)
                 {
@@ -1149,7 +1006,7 @@ public partial class Match : Node3D
 
                 break;
             case ShotMessage shot:
-                remote?.Body.RemoteShot(shot.End);
+                remote?.Character.RemoteShot(shot.End);
                 var impact = (Impact)shot.Impact;
                 if (impact.HasFlag(Impact.Hit))
                 {
@@ -1161,9 +1018,9 @@ public partial class Match : Node3D
                 }
                 if (shot.Victim == me && remote != null)
                 {
-                    LastHitTime = now;
-                    LastHitBy = sender;
-                    OnHitByShot(remote.Body.GlobalPosition + Vector3.Up * 1.4f);
+                    player.Runtime.LastHitTime = now;
+                    player.Runtime.LastHitBy = sender;
+                    OnHitByShot(remote.Character.GlobalPosition + Vector3.Up * 1.4f);
                 }
                 break;
             case BodyStatesMessage states:
@@ -1179,19 +1036,19 @@ public partial class Match : Node3D
                 ReceiveGather(sender, gathering);
                 break;
             case DropMessage drop:
-                if (sender == me) { dropPredictions.Accepted(drop.Tanks.Select(t => t.Id)); }
+                if (sender == me) { player.Runtime.DropPredictions.Accepted(drop.Tanks.Select(t => t.Id)); }
                 foreach (var body in drop.Tanks) { SpawnDroppedTank(body.Id, sender, body.Transform, body.Linear, body.Angular); }
                 break;
             case RagdollMessage ragdoll:
-                remote?.Body.RemoteRagdoll(ragdoll.Position, ragdoll.Velocity, ragdoll.Spin);
+                remote?.Character.RemoteRagdoll(ragdoll.Position, ragdoll.Velocity, ragdoll.Spin);
                 break;
             case GetUpMessage getUp:
-                remote?.Body.RemoteGetUp(getUp.Position, getUp.Yaw);
+                remote?.Character.RemoteGetUp(getUp.Position, getUp.Yaw);
                 break;
             case TuningMessage tune:
                 World.Tuning.Apply(new Godot.Collections.Dictionary { [tune.Name] = tune.Value });
                 tuningPanel?.Refresh();
-                if (remote != null) { ShowNotice($"{remote.Profile.Name} changed {tune.Name}", 2.5f); }
+                if (remote != null) { ShowNotice($"{profiles[remote.Character.PeerId].Name} changed {tune.Name}", 2.5f); }
                 break;
         }
     }

@@ -86,6 +86,7 @@ public sealed class WorldContext : IDisposable
     {
         EnsureAlive();
         views.Add((node, node.ProcessMode, followsPause));
+        node.TreeExiting += () => views.RemoveAll(view => view.Node == node);
         if (Paused && followsPause) { node.ProcessMode = Node.ProcessModeEnum.Disabled; }
         parent.AddChild(node);
         return node;
@@ -213,7 +214,8 @@ public sealed class WorldContext : IDisposable
         if (disposed) { return; }
         disposed = true;
         Invalidate();
-        for (var i = views.Count - 1; i >= 0; i--) { if (GodotObject.IsInstanceValid(views[i].Node)) { views[i].Node.Free(); } }
+        var retiringViews = views.ToArray();
+        for (var i = retiringViews.Length - 1; i >= 0; i--) { if (GodotObject.IsInstanceValid(retiringViews[i].Node)) { retiringViews[i].Node.Free(); } }
         views.Clear();
         presentation?.Release(this);
         presentation = null;

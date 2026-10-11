@@ -52,11 +52,11 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
     private CollisionShape3D capsule = null!;
 
 
-    private PlayerIntent intent;
-    private readonly PlayerStateResolver resolver = new();
+    private PlayerIntent intent { get => Runtime.Intent; set => Runtime.Intent = value; }
+    private PlayerStateResolver resolver => Runtime.Resolver;
 
     /// <summary>The last physics tick's decision, shared by locomotion, shooting, animation and snapshots.</summary>
-    public PlayerState ResolvedState { get; private set; }
+    public PlayerState ResolvedState { get => Runtime.ResolvedState; private set => Runtime.ResolvedState = value; }
 
     private static StateTuning ResolverTuning(Tuning t) => new(t.RunSpeed, t.SprintSpeed, t.CreepSpeed,
         t.CoyoteTime, t.JumpBufferTime, t.ReadyHoldTime, t.SprintForwardThreshold,
@@ -64,7 +64,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
 
     private readonly MeleeContact meleeContact = new();
     private readonly SphereShape3D meleeShape = new();
-    private uint meleeSwing;
+    private uint meleeSwing { get => Runtime.MeleeSequence; set => Runtime.MeleeSequence = value; }
     private Vector3 meleeDirection;
     private float facingYaw;
     private float aimAmount;
@@ -92,11 +92,12 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
     private float remoteUpTimer;
     private float pendingYaw;
 
-    public ActorRuntime Runtime { get; private set; } = null!;
+    private ActorRuntime? runtime;
+    public ActorRuntime Runtime => runtime ??= new ActorRuntime(this);
     public LogicalAim Aim => Runtime.Aim;
     public LocalView? View { get; internal set; }
     // Compatibility for dev capture callers; simulation never uses a view.
-    public CameraRig CameraRig => View!.CameraRig;
+    public CameraRig CameraRig => View?.CameraRig!;
 
     /// <summary>Current shot spread (full cone half-angle in degrees), for the crosshair.</summary>
     public float SpreadDegrees { get; private set; }
@@ -118,7 +119,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
     public int PeerId { get; set; }
 
     /// <summary>Rounds in the magazine and reserve, in a match. Null means unlimited (single player).</summary>
-    public AmmoState? Ammo { get; set; }
+    public AmmoState? Ammo { get => Runtime.Ammo; set => Runtime.Ammo = value; }
 
     /// <summary>Only looking around is allowed (the countdown before a match, and after it ends).</summary>
     public bool InputLocked { get; set; }
@@ -163,17 +164,14 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
     /// <summary>Replaces keyboard and mouse, for scripted tests.</summary>
     public IPlayerInputSource? InputOverride
     {
-        get => Runtime?.IntentSource ?? pendingInput;
-        set { pendingInput = value; if (Runtime != null) Runtime.IntentSource = value; }
+        get => Runtime.IntentSource;
+        set => Runtime.IntentSource = value;
     }
-
-    private IPlayerInputSource? pendingInput;
 
     public Vector3 BlastTargetPosition => state == State.Ragdoll ? ragdoll.Pelvis.GlobalPosition : GlobalPosition + Vector3.Up * 1.0f;
 
     public override void _Ready()
     {
-        Runtime = new ActorRuntime(this) { IntentSource = pendingInput };
         World.Events.Explosion += Aim.OnExplosion;
         World.Register(this);
         CollisionLayer = Layers.Player;

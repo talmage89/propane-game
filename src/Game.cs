@@ -3,6 +3,7 @@ using Godot;
 using Propane.Core;
 using Propane.Fx;
 using Propane.Player;
+using Propane.Session;
 using Propane.Tank;
 using Propane.UI;
 using Propane.World;
@@ -17,7 +18,8 @@ namespace Propane;
 /// </summary>
 public partial class Game : Node3D
 {
-    public WorldContext World { get; private set; } = null!;
+    public SessionContext Session { get; private set; } = null!;
+    public WorldContext World => Session.World;
     public Tuning Template { get; init; } = Tuning.SavedTemplate;
 
     private enum Phase
@@ -68,57 +70,10 @@ public partial class Game : Node3D
         }
     }
 
-    public override void _Ready()
-    {
-        World = new WorldContext(this, Template, present: true);
-        World.Construct(BuildWorld);
-    }
+    public override void _Ready() => SessionFactory.Build(this, Template, new SandboxSource(this), new SandboxMode(this),
+        session => Session = session);
 
-    public override void _ExitTree() => World?.Dispose();
-
-    private void BuildWorld()
-    {
-        InputSetup.Register();
-        _ = GameAssets.Debris;
-        ExplosionEffect.Preload();
-        ProcessMode = ProcessModeEnum.Always;
-        seeds.Randomize();
-
-        environment = new VoidEnvironment { Name = "Void" };
-        World.Root.AddChild(environment);
-        effects = World.EffectsRoot;
-
-        player = new PlayerCharacter { World = World, Name = "Player" };
-        World.Root.AddChild(player);
-        var view = LocalView.Attach(player, this, devices: true);
-        environment.Follow = view.CameraRig.Camera;
-
-        hitstop = new Hitstop { World = World, Name = "Hitstop", Focus = player };
-        World.AddView(this, hitstop);
-        hud = view.Hud;
-        tuningPanel = new TuningPanel { Target = World.Tuning, Name = "Tuning" };
-        World.AddView(this, tuningPanel);
-        pauseMenu = new PauseMenu { Name = "Pause" };
-        pauseMenu.ResumeRequested += Resume;
-        if (ExitRequested != null)
-        {
-            pauseMenu.MainMenuRequested += () => World.Defer(() => ExitRequested?.Invoke(), whilePaused: true);
-        }
-        World.AddView(this, pauseMenu);
-
-        // The first suburb materializes around the player, like every later one.
-        World.Reveal.Radius = 0f;
-        LoadSuburb();
-        BeginMaterialize();
-        Warmup.Run(World, World.Root, new Vector3(0, -400f, 0));
-        CaptureMouse(true);
-        // Played for real, the game fills the screen; dev harnesses that host it keep their requested window.
-        // Deferred, because resizing the window runs a frame before everything above is ready.
-        if (GetTree().CurrentScene == this && DisplayServer.WindowGetMode() == DisplayServer.WindowMode.Windowed)
-        {
-            World.Defer(() => DisplayServer.WindowSetMode(DisplayServer.WindowMode.Maximized));
-        }
-    }
+    public override void _ExitTree() => Session?.Dispose();
 
     public override void _UnhandledInput(InputEvent @event)
     {
@@ -262,10 +217,10 @@ public partial class Game : Node3D
             Enabled = () => phase == Phase.Playing
         });
         current.TankDestroyed += OnTankDestroyed;
-        hud.SetTanks(current.TanksRemaining, animate: false);
+        hud?.SetTanks(current.TanksRemaining, animate: false);
 
         var spawn = Suburb.ToWorld(plan.Spawn, 0.05f);
-        player.Teleport(spawn, plan.SpawnYaw + Mathf.Pi);
+        player?.Teleport(spawn, plan.SpawnYaw + Mathf.Pi);
         GD.Print($"[game] suburb seed {plan.Seed}: {plan.Lots.Count} lots, {plan.Tanks.Count} tanks");
     }
 

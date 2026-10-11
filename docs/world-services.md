@@ -1,6 +1,6 @@
 # World services
 
-`Game` and `Match` are facades around `WorldContext`. A context owns its `World3D`, root, content/effects roots,
+`Game` and `Match` are facades around `SessionContext` and `WorldContext`. A context owns its `World3D`, root, content/effects roots,
 spawn service, tuning copy, random stream, events, blast receiver registry, simulation clock, deferred work, views, and mutable
 magazine/decal/light accounting. Consumers receive a context or tuning explicitly before entering the tree.
 Immutable asset, shader, material, mesh, collision and catalog caches remain shared.
@@ -32,7 +32,7 @@ callbacks; world invalidation cancels all timers and deferred work, including ca
 Network timestamps, interpolation, transport fault delays, server-owned deadlines and diagnostic hit timestamps
 continue to use `MonotonicClock` and the server clock. Never compare those timestamps with simulation seconds.
 
-Call `World.Dispose()` before freeing or replacing a facade. Cleanup invalidates first, cancels timers/deferred
+Call `Session.Dispose()` before freeing or replacing a session facade. World-only fixtures use `World.Dispose()`. Cleanup invalidates first, cancels timers/deferred
 work, stops processing/physics, clears events and receiver registrations, runs stop adapters (including inbox detach and replication),
 releases views, restores presentation, and synchronously frees content and physics resources. It is idempotent.
 A presentation viewport owns its selection history; restoring skips disposed and invalidated predecessors.
@@ -89,3 +89,25 @@ continue to use input yaw, excluding transient recoil yaw and shake. A camera re
 Rifle/torso sway and the rifle recoil spring remain body presentation; they still affect muzzle placement and
 its obstruction ray, never the primary aim ray. FOV affects projection/crosshair only. Hitstop remains the existing
 exclusive offline-world time-scale lease: it changes simulation timing, never an aim angle.
+
+## Session assembly
+
+`SessionFactory` executes one synchronous order: construct scoped services, configure the mode, build its world
+source, add actors, add local views, register replication, attach the matching inbox and acknowledge readiness.
+`ISessionWorldSource` builds content; `ISessionMode` supplies assembly policy, not a new rules engine. Sandbox and
+Tank Bank adapters retain their facade's existing gameplay. A new Lab/lobby source or mode can implement those
+interfaces without editing the factory. `WorldContext` still owns content replacement within a live session.
+
+`SessionContext` owns an actor registry independent of peer keys, local views and overlays, a cancellation token,
+inbox detach callbacks, subscriptions and replication stop adapters. Disposal invalidates world work first,
+cancels the session, detaches the inbox, unsubscribes, stops control/replication, frees views, frees actors and
+finally disposes world content/services. Callback failures are collected while cleanup completes. Partial assembly
+uses exactly the same path. Closing a local view removes its camera/HUD/device source without retiring the actor.
+
+Ammo, intent, the movement resolver, resolved state, logical aim, swing/publication sequence, snapshot buffer,
+hit grace and drop predictions now belong to each actor. Match interpolation iterates the session registry.
+There remains exactly one owned actor per connection in Tank Bank's Protocol 2 adapter; scoring, relayed targets,
+slot-derived drop ids and `Match.Player` still use today's peer identity. A6 must supply actor/peer/life ids and
+replace that wire routing, including same-peer contact deduplication. No message or tuner changes here.
+Headless `net_test` attaches no local view, so the existing smart/simple bots and network scenarios run on actors
+with no camera. Rendered runs attach the same view used by the shipped facades.
