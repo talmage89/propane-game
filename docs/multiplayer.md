@@ -292,7 +292,7 @@ The server is the game itself started with `-- --server` (and `--headless`). It 
 | `src/Net/MessageCodec.cs`, `TankLedger.cs` | Complete, typed wire decoding and the server's tank existence/lifecycle ledger. |
 | `src/Net/MatchInbox.cs` | Per-match buffering until scene initialization, with generation-safe cleanup. |
 | `src/Net/BuildInfo.cs`, `UpdateCheck.cs` | Versions and who plays together; the launch check for a newer release. |
-| `src/Net/Match.cs` | A match on one player's machine: everything this player sends, and playing what the others send. |
+| `src/Net/Match.cs` | A peer's shared match world: actions from its owned actors and playback of other actors' events. |
 | `src/Net/BodySync.cs` | Ownership and corrections for tanks and cars. |
 | `src/Net/SnapshotBuffer.cs` | Smooth playback of other players, `InterpolationDelay` behind. |
 | `src/Net/PlanCodec.cs` | Packs a suburb plan for sending. |
@@ -306,11 +306,11 @@ ENet for production; the unit suites inject an in-memory loopback with a manual 
 `ReliableOrdered`, `UnreliablePlayerPoses` or `UnreliableBodyStates`, never backend channel numbers. ENet maps all
 three to channel zero with the original reliability modes; ping and clock samples remain disposable/unreliable.
 On receive, the legacy channel cannot distinguish the two unreliable classes; the ENet adapter recognizes body
-state messages by their existing type byte. No packet layout, player id, tuner or gameplay rule changed.
+state messages by their existing type byte. Transport routing does not interpret actor identities or gameplay rules.
 
-Connection handles are opaque objects and are never reused. `ProtocolPeerMap` is the compatibility bridge between
-these handles and the existing wire player ids (still ENet peer ids). The client learns its player id from Welcome.
-Server-issued peer/actor identities are deferred to A6. Discovery, lobbies and invites are application services;
+Connection handles are opaque objects and are never reused. `ProtocolPeerMap` allocates server-issued peer ids
+independently of ENet's native ids; the client learns its peer id from Welcome. The server-owned roster assigns
+separate actor ids, and a peer may own several actors. Discovery, lobbies and invites are application services;
 `PacketEndpoint.Address` is backend-interpreted, with an ENet hostname/IP and port today.
 
 Every transport callback runs inside main-thread `Poll`. Receive memory is borrowed until the callback returns;
