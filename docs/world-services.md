@@ -34,3 +34,18 @@ root; retiring content removes its effects and cancels source callbacks before t
 `world_services_tests.tscn` exercises two independent physics worlds at overlapping coordinates with different
 tuning. It asserts blast, event, spawn and callback isolation, survivor continuity, replacement safety, partial
 construction cleanup, and exact node/object/orphan counts across ten retirements after warming immutable caches.
+
+`World.SetPaused` disables the simulation root and calls `PhysicsServer3D.SpaceSetActive` for that world's space.
+Tracked cameras follow the pause; menus and the always-processing driver stay active. Connection polling remains
+outside simulation roots. Pause resets queued input edges through process-disable notifications. Tree-wide pause
+is no longer a gameplay control.
+
+Reveal center, radius and glow are per-instance shader parameters owned by `WorldReveal`. Reveal uses slots 12–15
+across all compatible materials; actor parameters explicitly occupy lower slots. New geometry inherits the world's
+current state, and retiring geometry unregisters immediately. No shader global is shared between worlds.
+
+The sole application-wide simulation primitive is `WorldTimeScale`: an exclusive hitstop lease. Only one live,
+unpaused offline context can acquire it; construction of a second context, pause or retirement releases it. The
+always-processing driver expires the presentation lease in real seconds while gameplay uses simulation seconds.
+Network worlds cannot acquire it. The isolation scene also asserts actual physics pause/resume, independent reveal,
+lease restrictions and a production client/server handshake completing while a world is paused.

@@ -316,8 +316,8 @@ public partial class MovementTests : Node
         gameplayEnabled = true;
         foreach (var action in new[] { InputSetup.Jump, InputSetup.Fire, InputSetup.Reload }) Input.ActionRelease(action);
         device.Reset();
-        var player = new PlayerCharacter { World = world, InputOverride = device, ProcessMode = ProcessModeEnum.Pausable };
-        AddChild(player);
+        var player = new PlayerCharacter { World = world, InputOverride = device };
+        world.Root.AddChild(player);
         void Buttons(bool pressed, bool handled = false)
         {
             InputEvent[] events =
@@ -333,12 +333,12 @@ public partial class MovementTests : Node
         }
         Buttons(true);
         Send(new InputEventMouseMotion { ScreenRelative = new Vector2(12, -4) });
-        GetTree().Paused = true;
+        world.SetPaused(true);
         var pending = device.Read();
         Check(!pending.JumpPressed && !pending.FirePressed && !pending.ReloadPressed && pending.Look == Vector2.Zero,
             "pause notification discards queued presses and displacement");
         Buttons(false, handled: true);
-        GetTree().Paused = false;
+        world.SetPaused(false);
         Buttons(true);
         var intent = device.Read();
         Check(intent.JumpPressed && intent.FirePressed && intent.ReloadPressed,

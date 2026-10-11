@@ -150,6 +150,7 @@ public partial class Suburb : Node3D
 
     private void TagForReveal(Node root)
     {
+        world.Reveal.Track(root);
         if (root is GeometryInstance3D self and not GpuParticles3D)
         {
             self.SetInstanceShaderParameter("reveal_side", revealSide);

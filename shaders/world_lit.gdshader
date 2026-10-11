@@ -13,7 +13,7 @@ uniform float specular : hint_range(0.0, 1.0) = 0.35;
 uniform vec4 emission_color : source_color = vec4(0.0, 0.0, 0.0, 1.0);
 // Per-instance tint for cheap color variation. Only surfaces marked tintable take it fully; the rest take a
 // faint share so instances still vary slightly.
-instance uniform vec4 instance_tint : source_color = vec4(1.0);
+instance uniform vec4 instance_tint : source_color, instance_index(0) = vec4(1.0);
 uniform bool tintable = false;
 
 varying vec3 world_pos;

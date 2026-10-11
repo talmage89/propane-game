@@ -8,9 +8,6 @@ public partial class Hitstop : Node
 {
     public required WorldContext World { get; init; }
 
-    private ulong releaseAt;
-    private bool active;
-
     /// <summary>The node whose distance to a blast decides whether it stops time (the player).</summary>
     public Node3D? Focus { get; set; }
 
@@ -23,16 +20,7 @@ public partial class Hitstop : Node
     public override void _ExitTree()
     {
         World.Events.Explosion -= OnExplosion;
-        Engine.TimeScale = 1.0;
-    }
-
-    public override void _Process(double delta)
-    {
-        if (active && Time.GetTicksMsec() >= releaseAt)
-        {
-            active = false;
-            Engine.TimeScale = 1.0;
-        }
+        World.ReleaseTimeScale();
     }
 
     private void OnExplosion(Vector3 position)
@@ -42,8 +30,6 @@ public partial class Hitstop : Node
         {
             return;
         }
-        active = true;
-        Engine.TimeScale = tuning.HitstopTimeScale;
-        releaseAt = Time.GetTicksMsec() + (ulong)(tuning.HitstopDuration * 1000f);
+        World.TryHitstop(tuning.HitstopDuration, tuning.HitstopTimeScale);
     }
 }

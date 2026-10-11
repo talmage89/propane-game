@@ -10,7 +10,7 @@ namespace Propane.Core;
 public sealed class WorldContext : IDisposable
 {
     private readonly SubViewport viewport;
-    private readonly List<Node> views = new();
+    private readonly List<(Node Node, Node.ProcessModeEnum Mode, bool FollowsPause)> views = new();
     private readonly List<Action> stopping = new();
     private readonly List<(Action Callback, bool WhilePaused)> deferred = new();
     private readonly Dictionary<Node, Node3D> effectOrigins = new();
@@ -41,6 +41,7 @@ public sealed class WorldContext : IDisposable
         Root.AddChild(EffectsRoot);
         Root.AddChild(ContentRoot);
         viewport.AddChild(new WorldDriver { World = this, ProcessMode = Node.ProcessModeEnum.Always, ProcessPhysicsPriority = -100 });
+        WorldTimeScale.Register();
         try
         {
             owner.AddChild(viewport);
@@ -65,6 +66,7 @@ public sealed class WorldContext : IDisposable
     public bool Paused { get; private set; }
     public WorldClock Clock { get; } = new();
     public GameEvents Events { get; } = new();
+    public WorldReveal Reveal { get; } = new();
     public Spawn Spawn { get; private set; }
     public IReadOnlyCollection<IBlastReceiver> BlastReceivers => receivers;
     internal List<DroppedMagazine> Magazines { get; } = new();
@@ -81,13 +83,34 @@ public sealed class WorldContext : IDisposable
         view.World3D = Physics;
     }
 
-    public T AddView<T>(Node parent, T node) where T : Node
+    public T AddView<T>(Node parent, T node, bool followsPause = false) where T : Node
     {
         EnsureAlive();
-        views.Add(node);
+        views.Add((node, node.ProcessMode, followsPause));
+        if (Paused && followsPause) { node.ProcessMode = Node.ProcessModeEnum.Disabled; }
         parent.AddChild(node);
         return node;
     }
+
+    /// <summary>Connection polling and UI stay outside Root; both simulation processing and its space stop.</summary>
+    public void SetPaused(bool paused)
+    {
+        EnsureAlive();
+        if (Paused == paused) { return; }
+        Paused = paused;
+        if (paused) { ReleaseTimeScale(); }
+        Root.ProcessMode = paused ? Node.ProcessModeEnum.Disabled : Node.ProcessModeEnum.Pausable;
+        PhysicsServer3D.SpaceSetActive(Physics.Space, !paused);
+        foreach (var view in views)
+        {
+            if (view.FollowsPause && GodotObject.IsInstanceValid(view.Node))
+            { view.Node.ProcessMode = paused ? Node.ProcessModeEnum.Disabled : view.Mode; }
+        }
+    }
+
+    public bool TryHitstop(float duration, float scale) => WorldTimeScale.TryAcquire(this, duration, scale);
+    public void ReleaseTimeScale() => WorldTimeScale.Release(this);
+    internal void PollTimeScale() => WorldTimeScale.Poll(this);
 
     public void SetContentRoot(Node3D root)
     {
@@ -169,7 +192,9 @@ public sealed class WorldContext : IDisposable
     {
         if (!IsAlive) { return; }
         IsAlive = false;
+        WorldTimeScale.Unregister(this);
         Clock.Dispose();
+        Reveal.Dispose();
         deferred.Clear();
         Events.Clear();
         receivers.Clear();
@@ -186,7 +211,7 @@ public sealed class WorldContext : IDisposable
         if (disposed) { return; }
         disposed = true;
         Invalidate();
-        for (var i = views.Count - 1; i >= 0; i--) { if (GodotObject.IsInstanceValid(views[i])) { views[i].Free(); } }
+        for (var i = views.Count - 1; i >= 0; i--) { if (GodotObject.IsInstanceValid(views[i].Node)) { views[i].Node.Free(); } }
         views.Clear();
         if (presentation != null && GodotObject.IsInstanceValid(presentation) && presentation.World3D == Physics)
         {
@@ -210,6 +235,10 @@ internal partial class WorldDriver : Node
 {
     public required WorldContext World { get; init; }
     public override void _PhysicsProcess(double delta) => World.Advance(delta);
-    public override void _Process(double delta) => World.FlushDeferred();
+    public override void _Process(double delta)
+    {
+        World.PollTimeScale();
+        World.FlushDeferred();
+    }
     public override void _ExitTree() => World.Invalidate();
 }

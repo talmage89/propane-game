@@ -18,6 +18,7 @@ public sealed class Spawn
     {
         world.EnsureAlive();
         ContentRoot.AddChild(node);
+        world.Reveal.Track(node);
         return node;
     }
 
@@ -26,6 +27,7 @@ public sealed class Spawn
         world.EnsureAlive();
         world.EffectsRoot.AddChild(node);
         world.RecordEffect(node, ContentRoot);
+        world.Reveal.Track(node);
         return node;
     }
 
@@ -34,5 +36,6 @@ public sealed class Spawn
         world.EnsureAlive();
         node.Reparent(world.EffectsRoot, keepGlobalTransform: true);
         world.RecordEffect(node, ContentRoot);
+        world.Reveal.Track(node);
     }
 }

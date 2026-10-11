@@ -2,6 +2,8 @@ using System;
 using System.Threading.Tasks;
 using Godot;
 using Propane.Core;
+using Propane.Dev.UnitTests;
+using Propane.Net;
 using Propane.Tank;
 using static Propane.Dev.UnitTests.TestRunner;
 
@@ -14,6 +16,7 @@ public partial class WorldServicesTests : Node
     {
         try
         {
+            await PauseAndLease().ConfigureAwait(true);
             await Exercise().ConfigureAwait(true); // Warm immutable assets before counting.
             await Collect().ConfigureAwait(true);
             var baseline = Counts();
@@ -104,6 +107,69 @@ public partial class WorldServicesTests : Node
         }));
         partial.Clock.Advance(10);
         Assert(!partial.IsAlive && partialStops == 1 && old == 0, "partial failure skipped the ordinary cleanup path");
+    }
+
+    private async Task PauseAndLease()
+    {
+        using var template = new Tuning();
+        using var a = new WorldContext(this, template);
+        Assert(a.TryHitstop(1, 0.1f) && Engine.TimeScale < 0.11, "sole offline world denied hitstop");
+        using var b = new WorldContext(this, template);
+        Assert(Engine.TimeScale == 1 && !a.TryHitstop(1, 0.1f), "multiple worlds shared engine time scale");
+        var ma = a.Spawn.InWorld(new MeshInstance3D { Mesh = new BoxMesh() });
+        var mb = b.Spawn.InWorld(new MeshInstance3D { Mesh = new BoxMesh() });
+        a.Reveal.Center = Vector3.Right; a.Reveal.Radius = 2;
+        b.Reveal.Center = Vector3.Left; b.Reveal.Radius = 7;
+        Assert(ma.GetInstanceShaderParameter("reveal_radius").AsSingle() == 2 && mb.GetInstanceShaderParameter("reveal_radius").AsSingle() == 7 &&
+            ma.GetInstanceShaderParameter("reveal_center").AsVector3() == Vector3.Right, "reveal escaped its world");
+        ma.Free();
+        Assert(a.Reveal.Count == 0 && b.Reveal.Count == 1, "reveal retained a retired instance");
+        var late = a.Spawn.InWorld(new MeshInstance3D { Mesh = new BoxMesh() });
+        Assert(late.GetInstanceShaderParameter("reveal_radius").AsSingle() == 2, "late spawn missed world reveal state");
+        RigidBody3D Body(WorldContext world)
+        {
+            var body = new RigidBody3D { GravityScale = 0, LinearVelocity = Vector3.Right };
+            body.AddChild(new CollisionShape3D { Shape = new SphereShape3D() });
+            return world.Spawn.InWorld(body);
+        }
+        var ba = Body(a); var bb = Body(b);
+        await ToSignal(GetTree(), SceneTree.SignalName.PhysicsFrame);
+        await ToSignal(GetTree(), SceneTree.SignalName.PhysicsFrame);
+        a.SetPaused(true);
+        var at = ba.GlobalPosition; var bt = bb.GlobalPosition; var time = a.Clock.Now;
+        var called = 0;
+        a.Schedule(ba, 0.01, () => called++);
+        Assert(!PhysicsServer3D.SpaceIsActive(a.Physics.Space) && PhysicsServer3D.SpaceIsActive(b.Physics.Space), "pause did not isolate physics activity");
+        // Production connection polling is outside world roots, so a handshake still finishes during pause.
+        var network = new LoopbackNetwork();
+        var rawServer = network.Create();
+        var server = new LobbyServer(new ServerTransport(rawServer, rawServer.PeerIds)) { Port = 1 };
+        var client = new NetClient(network.Create());
+        AddChild(server); AddChild(client);
+        try
+        {
+            Assert(server.Start().Success, "pause fixture server failed");
+            client.Connect("", 1, "Pause", 0);
+            for (var i = 0; i < 12; i++) { await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            Assert(client.State == NetClient.Status.Connected, "world pause stopped connection polling");
+            Assert(ba.GlobalPosition == at && bb.GlobalPosition.X > bt.X && a.Clock.Now == time && called == 0,
+                "paused physics/timer advanced or survivor stopped");
+            a.SetPaused(false);
+            for (var i = 0; i < 4; i++) { await ToSignal(GetTree(), SceneTree.SignalName.PhysicsFrame); }
+            Assert(ba.GlobalPosition.X > at.X && a.Clock.Now > time && called == 1, "resume did not restart physics/timers");
+        }
+        finally { client.Free(); server.Free(); }
+        b.Dispose();
+        Assert(a.TryHitstop(1, 0.1f), "surviving sole offline world denied lease");
+        a.SetPaused(true);
+        Assert(Engine.TimeScale == 1, "pause did not release lease");
+        a.SetPaused(false);
+        Assert(a.TryHitstop(0, 0.1f), "lease not reacquired after resume");
+        a.PollTimeScale();
+        Assert(Engine.TimeScale == 1, "expired lease retained time scale");
+        a.Dispose();
+        using var net = new WorldContext(this, template, networked: true);
+        Assert(!net.TryHitstop(1, 0.1f) && Engine.TimeScale == 1, "network world acquired lease");
     }
 
     private (int Nodes, int Objects, int Orphans) Counts() => (GetTree().GetNodeCount(),

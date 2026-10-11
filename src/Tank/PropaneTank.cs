@@ -149,6 +149,7 @@ public partial class PropaneTank : RigidBody3D
 
     public override void _Ready()
     {
+        World.Reveal.Track(this);
         Mass = World.Tuning.TankMass;
         CollisionLayer = Layers.Tanks;
         CollisionMask = Layers.DynamicMask;

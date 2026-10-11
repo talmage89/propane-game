@@ -220,7 +220,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         if (!IsRemote)
         {
             CameraRig = new CameraRig { World = World, Name = "CameraRig" };
-            World.AddView(World.ViewRoot, CameraRig);
+            World.AddView(World.ViewRoot, CameraRig, followsPause: true);
             CameraRig.Exclude.Add(GetRid());
         }
         shotExclude.Add(GetRid());
@@ -258,6 +258,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
     public override void _Notification(int what)
     {
         if (what == NotificationPaused || what == NotificationUnpaused ||
+            what == NotificationDisabled || what == NotificationEnabled ||
             what == NotificationApplicationFocusOut || what == NotificationApplicationFocusIn)
         {
             (inputOverride as DeviceInput ?? deviceInput).Reset();

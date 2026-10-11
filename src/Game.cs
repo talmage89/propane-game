@@ -88,7 +88,7 @@ public partial class Game : Node3D
         World.Root.AddChild(environment);
         effects = World.EffectsRoot;
 
-        player = new PlayerCharacter { World = World, Name = "Player", ProcessMode = ProcessModeEnum.Pausable };
+        player = new PlayerCharacter { World = World, Name = "Player" };
         World.Root.AddChild(player);
         environment.Follow = player.CameraRig.Camera;
 
@@ -107,7 +107,7 @@ public partial class Game : Node3D
         World.AddView(this, pauseMenu);
 
         // The first suburb materializes around the player, like every later one.
-        RenderingServer.GlobalShaderParameterSet("reveal_radius", 0f);
+        World.Reveal.Radius = 0f;
         LoadSuburb();
         BeginMaterialize();
         Warmup.Run(World, World.Root, new Vector3(0, -400f, 0));
@@ -129,7 +129,7 @@ public partial class Game : Node3D
                 tuningPanel.Toggle();
                 CaptureMouse(true);
             }
-            else if (GetTree().Paused)
+            else if (World.Paused)
             {
                 Resume();
             }
@@ -139,7 +139,7 @@ public partial class Game : Node3D
             }
             GetViewport().SetInputAsHandled();
         }
-        else if (@event.IsActionPressed(InputSetup.ToggleTuning) && !GetTree().Paused)
+        else if (@event.IsActionPressed(InputSetup.ToggleTuning) && !World.Paused)
         {
             tuningPanel.Toggle();
             CaptureMouse(!tuningPanel.Visible);
@@ -149,12 +149,12 @@ public partial class Game : Node3D
             var fullscreen = DisplayServer.WindowGetMode() == DisplayServer.WindowMode.Fullscreen;
             DisplayServer.WindowSetMode(fullscreen ? DisplayServer.WindowMode.Windowed : DisplayServer.WindowMode.Fullscreen);
         }
-        else if (@event.IsActionPressed(InputSetup.NewSuburb) && !GetTree().Paused && phase is Phase.Playing or Phase.Celebrating)
+        else if (@event.IsActionPressed(InputSetup.NewSuburb) && !World.Paused && phase is Phase.Playing or Phase.Celebrating)
         {
             BeginDissolve();
         }
         else if (@event is InputEventMouseButton { Pressed: true } && Input.MouseMode != Input.MouseModeEnum.Captured &&
-                 !tuningPanel.Visible && !GetTree().Paused)
+                 !tuningPanel.Visible && !World.Paused)
         {
             CaptureMouse(true);
         }
@@ -164,7 +164,7 @@ public partial class Game : Node3D
     {
         // Losing focus pauses rather than leaving the mouse captured behind another window.
         // macOS can report focus loss before the game is ready, when it launches behind another window.
-        if (what == NotificationApplicationFocusOut && PauseOnFocusLoss && IsNodeReady() && !GetTree().Paused && !tuningPanel.Visible)
+        if (what == NotificationApplicationFocusOut && PauseOnFocusLoss && IsNodeReady() && !World.Paused && !tuningPanel.Visible)
         {
             Pause();
         }
@@ -174,7 +174,7 @@ public partial class Game : Node3D
     {
         var dt = (float)delta;
         UpdateHud();
-        if (GetTree().Paused)
+        if (World.Paused)
         {
             return;
         }
@@ -194,8 +194,8 @@ public partial class Game : Node3D
                 var t = Mathf.Clamp(phaseTime / duration, 0, 1);
                 revealCenter = player.GlobalPosition;
                 var radius = Mathf.Lerp(RevealMaxRadius, 0f, EaseInOut(t));
-                RenderingServer.GlobalShaderParameterSet("reveal_center", revealCenter);
-                RenderingServer.GlobalShaderParameterSet("reveal_radius", radius);
+                World.Reveal.Center = revealCenter;
+                World.Reveal.Radius = radius;
                 outgoing?.HideOutsideRing(revealCenter, radius);
                 Suburb.HideOutside(effects, revealCenter, radius);
                 if (t >= 1f)
@@ -208,11 +208,11 @@ public partial class Game : Node3D
             {
                 var duration = tuning.TransitionTime * (1f - DissolveShare);
                 var t = Mathf.Clamp(phaseTime / duration, 0, 1);
-                RenderingServer.GlobalShaderParameterSet("reveal_radius", Mathf.Lerp(0f, RevealMaxRadius, t * t));
+                World.Reveal.Radius = Mathf.Lerp(0f, RevealMaxRadius, t * t);
                 if (t >= 1f)
                 {
                     current?.SetRevealSide(0f);
-                    RenderingServer.GlobalShaderParameterSet("reveal_radius", 100000f);
+                    World.Reveal.Radius = 100000f;
                     // The last tank may already have gone up while the suburb was still assembling.
                     phase = current?.TanksRemaining == 0 ? Phase.Celebrating : Phase.Playing;
                     phaseTime = 0;
@@ -249,7 +249,6 @@ public partial class Game : Node3D
         // Occasionally a layout comes out sparse; a few rerolls keep every suburb worth exploring.
         var plan = SuburbPlans.Generate(settings, seed, tuning.FixedSeed == 0 ? () => (int)seeds.Randi() : null);
         current = Suburb.Build(World, plan, settings);
-        current.ProcessMode = ProcessModeEnum.Pausable;
         World.Root.AddChild(current);
         World.SetContentRoot(current.DynamicRoot);
         var gatheringWorld = current;
@@ -289,8 +288,8 @@ public partial class Game : Node3D
         outgoing.TankDestroyed -= OnTankDestroyed;
         outgoing.SetRevealSide(1f);
         revealCenter = player.GlobalPosition;
-        RenderingServer.GlobalShaderParameterSet("reveal_center", revealCenter);
-        RenderingServer.GlobalShaderParameterSet("reveal_radius", RevealMaxRadius);
+        World.Reveal.Center = revealCenter;
+        World.Reveal.Radius = RevealMaxRadius;
         phase = Phase.Dissolving;
         phaseTime = 0;
     }
@@ -304,7 +303,7 @@ public partial class Game : Node3D
         {
             child.Free();
         }
-        RenderingServer.GlobalShaderParameterSet("reveal_radius", 0f);
+        World.Reveal.Radius = 0f;
         LoadSuburb();
         BeginMaterialize();
     }
@@ -313,8 +312,8 @@ public partial class Game : Node3D
     {
         current?.SetRevealSide(1f);
         revealCenter = player.GlobalPosition;
-        RenderingServer.GlobalShaderParameterSet("reveal_center", revealCenter);
-        RenderingServer.GlobalShaderParameterSet("reveal_radius", 0f);
+        World.Reveal.Center = revealCenter;
+        World.Reveal.Radius = 0f;
         phase = Phase.Materializing;
         phaseTime = 0;
     }
@@ -323,7 +322,7 @@ public partial class Game : Node3D
 
     private void Pause()
     {
-        GetTree().Paused = true;
+        World.SetPaused(true);
         pauseMenu.Visible = true;
         hud.ShowHud(false);
         CaptureMouse(false);
@@ -331,7 +330,7 @@ public partial class Game : Node3D
 
     private void Resume()
     {
-        GetTree().Paused = false;
+        World.SetPaused(false);
         pauseMenu.Visible = false;
         hud.ShowHud(true);
         CaptureMouse(true);

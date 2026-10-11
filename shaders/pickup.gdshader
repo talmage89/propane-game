@@ -9,9 +9,9 @@ uniform float roughness : hint_range(0.0, 1.0) = 0.6;
 uniform float metallic : hint_range(0.0, 1.0) = 0.2;
 uniform vec4 emission_color : source_color = vec4(0.0, 0.0, 0.0, 1.0);
 // 0 = nothing shown, 1 = whole. The cut sweeps up from build_base over build_height meters, with a glowing edge.
-instance uniform float build = 1.0;
-instance uniform float build_base = 0.0;
-instance uniform float build_height = 1.0;
+instance uniform float build : instance_index(0) = 1.0;
+instance uniform float build_base : instance_index(1) = 0.0;
+instance uniform float build_height : instance_index(2) = 1.0;
 
 varying vec3 world_pos;
 

@@ -286,8 +286,8 @@ public partial class Match : Node3D
 
         // The suburb materializes around the player, as in single player.
         suburb.SetRevealSide(1f);
-        RenderingServer.GlobalShaderParameterSet("reveal_center", player.GlobalPosition);
-        RenderingServer.GlobalShaderParameterSet("reveal_radius", 0f);
+        World.Reveal.Center = player.GlobalPosition;
+        World.Reveal.Radius = 0f;
         Warmup.Run(World, World.Root, new Vector3(0, -400f, 0));
 
         World.Events.LocalBlast += OnLocalBlast;
@@ -324,18 +324,19 @@ public partial class Match : Node3D
 
     public override void _Process(double delta)
     {
+        if (!World.IsAlive || World.Paused) { return; }
         var dt = (float)delta;
         var tuning = World.Tuning;
         if (revealing)
         {
             revealTime += dt;
             var t = Mathf.Clamp(revealTime / Mathf.Max(tuning.TransitionTime * MaterializeShare, 0.01f), 0, 1);
-            RenderingServer.GlobalShaderParameterSet("reveal_radius", Mathf.Lerp(0f, RevealMaxRadius, t * t));
+            World.Reveal.Radius = Mathf.Lerp(0f, RevealMaxRadius, t * t);
             if (t >= 1f)
             {
                 revealing = false;
                 suburb.SetRevealSide(0f);
-                RenderingServer.GlobalShaderParameterSet("reveal_radius", 100000f);
+                World.Reveal.Radius = 100000f;
             }
         }
 
@@ -370,6 +371,7 @@ public partial class Match : Node3D
 
     public override void _PhysicsProcess(double delta)
     {
+        if (!World.IsAlive || World.Paused) { return; }
         var dt = (float)delta;
         var now = MonotonicClock.Now;
         foreach (var remote in remotes.Values)

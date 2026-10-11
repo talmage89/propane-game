@@ -101,7 +101,6 @@ public partial class Main : Node
             backdrop = new Backdrop { Name = "Backdrop", Template = SavedTuning };
             AddChild(backdrop);
         }
-        RenderingServer.GlobalShaderParameterSet("reveal_radius", 100000f);
         Input.MouseMode = Input.MouseModeEnum.Visible;
         menus.Show(screen, note);
     }
@@ -123,11 +122,16 @@ public partial class Main : Node
         public override void _Ready()
         {
             world = new WorldContext(this, Template, present: true);
+            world.Construct(Build);
+        }
+
+        private void Build()
+        {
             var environment = new VoidEnvironment { Name = "Void" };
-            AddChild(environment);
+            world.Root.AddChild(environment);
             var tank = PropaneTank.Create(world);
             tank.Freeze = true;
-            AddChild(tank);
+            world.Root.AddChild(tank);
             tank.RotationDegrees = new Vector3(0, 35, 0);
             tank.AddChild(new VentJet
             {
@@ -137,7 +141,7 @@ public partial class Main : Node
                 Transform = new Transform3D(Basis.LookingAt(Vector3.Back.Rotated(Vector3.Up, 0.5f), Vector3.Up), new Vector3(0.12f, 0.3f, 0.1f)),
             });
             camera = new Camera3D { Name = "Camera", Fov = 50, Current = true };
-            AddChild(camera);
+            world.AddView(this, camera, followsPause: true);
             environment.Follow = camera;
             Place();
         }
@@ -173,8 +177,6 @@ public partial class Main : Node
 
     private void ExitSinglePlayer()
     {
-        GetTree().Paused = false;
-        Engine.TimeScale = 1.0;
         game?.World.Dispose();
         game?.Free();
         game = null;
@@ -231,7 +233,7 @@ public partial class Main : Node
     {
         if (match != null)
         {
-            // Exit synchronously so its tuning and callbacks are restored before another scene enters.
+            // Retire replication, views and content before another scene enters.
             match.World.Dispose();
             match.Free();
             match = null;
