@@ -259,3 +259,10 @@ rebuild them with Blender 5.1 (`import_rifle.py` needs only Python):
 | `build_props.py` | `assets/props/*.glb`: fences, grill, bins, mailbox, lamp, hydrant, patio heater and more |
 
 Each script's header gives its exact command line.
+
+The rifle contact probe runs with `player_range.tscn -- --scenario=grip --grip-metrics --capture-dir=DIR`.
+It writes one row per modifier frame to `grip.csv`: both wrist position/rotation residuals, sampled bone-center
+penetration into solid rifle proxies, and the right-eye landmark's distance from `Socket_Eye` while fully aimed.
+The sequence covers carry, aim, recoil, both reloads, run, sprint, aimed strafe and both camera pitch limits.
+Use `--assert-grip` for nonzero exit on contact failures, including headless runs. The penetration sample is a
+regression proxy; inspect both rifle views to judge the actual fingers and cheek weld.

@@ -65,6 +65,8 @@ public partial class Rifle : Node3D
 
     public Transform3D ButtLocal { get; private set; }
 
+    public Transform3D EyeLocal { get; private set; }
+
     public Transform3D MagWellLocal { get; private set; }
 
     public Vector3 MuzzlePosition => GlobalTransform * MuzzleLocal.Origin;
@@ -87,6 +89,7 @@ public partial class Rifle : Node3D
                 case "Socket_Foregrip": ForegripLocal = local; break;
                 case "Socket_Muzzle": MuzzleLocal = local; break;
                 case "Socket_Butt": ButtLocal = local; break;
+                case "Socket_Eye": EyeLocal = local; break;
                 case "Socket_MagWell": MagWellLocal = local; break;
             }
         }

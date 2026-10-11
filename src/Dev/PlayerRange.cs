@@ -47,9 +47,16 @@ public partial class PlayerRange : Node3D
             AddChild(observer);
         }
 
-        var director = new CaptureDirector { QuitAfter = DevArgs.GetFloat("quit", 10f) };
-        AddChild(director);
         var scenario = DevArgs.Get("scenario") ?? "stances";
+        var director = new CaptureDirector { QuitAfter = DevArgs.GetFloat("quit", scenario == "grip" ? 15.2f : 10f) };
+        if (DevArgs.Get("grip-metrics") != null || DevArgs.Get("assert-grip") != null)
+        {
+            var bones = player.FindChildren("*", "Skeleton3D", owned: false).OfType<Skeleton3D>()
+                .Single(s => s.FindBone("hand_l") >= 0);
+            var grip = new GripProbe { Player = player };
+            bones.AddChild(grip);
+            director.At(director.QuitAfter - 0.1f, grip.Finish);
+        }
         switch (scenario)
         {
             case "creep":
@@ -71,6 +78,31 @@ public partial class PlayerRange : Node3D
                 director.At(end + 0.1f, stride.Finish);
                 director.QuitAfter = end + 0.3f;
                 GD.Print($"[creep] speed={Tuning.Current.CreepSpeed:0.00} clip-scale={Tuning.Current.CreepSpeed / 0.98f:0.000} stride={period:0.000}s");
+                break;
+            case "grip":
+                player.Ammo = new AmmoState { Magazine = 3, Reserve = 60 };
+                script.Hold(1, 4, new PlayerIntent { Aim = true });
+                script.Hold(2, 2.6f, new PlayerIntent { FireHeld = true });
+                script.Reload(4.1f);
+                script.Fire(6);
+                script.Reload(6.4f);
+                script.Hold(8.3f, 9.5f, new PlayerIntent { Move = Vector2.Down });
+                script.Hold(9.5f, 10.7f, new PlayerIntent { Move = Vector2.Down, Sprint = true });
+                script.Hold(10.7f, 14.8f, new PlayerIntent { Move = Vector2.Right, Aim = true });
+                director.At(11.6f, () => player.CameraRig.SetOrientation(0, -75));
+                director.At(12.8f, () => player.CameraRig.SetOrientation(0, 45));
+                director.At(14, () => player.CameraRig.SetOrientation(0, -10));
+                foreach (var (t, label) in new (float, string)[]
+                {
+                    (0.8f, "carry"), (1.7f, "aim"), (2.04f, "fire"), (3.8f, "empty"),
+                    (4.5f, "empty_swap"), (5.3f, "bolt"), (6.05f, "ready"), (6.8f, "tactical_swap"),
+                    (7.5f, "tactical_seat"), (9, "run"), (10.2f, "sprint"), (11.4f, "strafe"),
+                    (12.3f, "pitch_down"), (13.5f, "pitch_up"), (14.7f, "return"),
+                })
+                {
+                    director.ShotAt(t, label);
+                }
+
                 break;
             case "stances":
                 AddTank(new Vector3(1.5f, 0, -9f));
@@ -150,6 +182,8 @@ public partial class PlayerRange : Node3D
                 }
                 break;
         }
+        // Ready sorts the complete timeline, including diagnostics and pitch changes.
+        AddChild(director);
     }
 
     public override void _PhysicsProcess(double delta) => script.Advance((float)delta);

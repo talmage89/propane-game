@@ -29,6 +29,14 @@ public partial class RifleRig : SkeletonModifier3D
     private int upperL, lowerL, handL;
     private bool resolved;
 
+    /// <summary>Unclamped wrist targets, for final-pose contact diagnostics.</summary>
+    public Transform3D RightTarget { get; private set; }
+    public Transform3D LeftTarget { get; private set; }
+
+    /// <summary>Right-eye landmark in the mannequin head frame (meters).</summary>
+    public static Vector3 EyePosition(Skeleton3D skeleton) =>
+        skeleton.GlobalTransform * (skeleton.GetBoneGlobalPose(skeleton.FindBone("Head")) * new Vector3(-0.032f, 0.09f, 0.075f));
+
     /// <summary>The rifle visual this rig places.</summary>
     public Rifle? Rifle { get; set; }
 
@@ -171,6 +179,9 @@ public partial class RifleRig : SkeletonModifier3D
         var rightHand = handNow.InterpolateWith(RightHandTransform(stance), Weight);
         // The foregrip, or mid-reload wherever the rifle's reload needs the left hand: the magazine, the bolt catch.
         var leftHand = leftNow.InterpolateWith(LeftHandTransform(stance, Rifle.LeftHandLocal), Weight);
+
+        RightTarget = rightHand;
+        LeftTarget = leftHand;
 
         var upperRWorld = fromSkeleton * skeleton.GetBoneGlobalPose(upperR).Origin;
         var upperLWorld = fromSkeleton * skeleton.GetBoneGlobalPose(upperL).Origin;
