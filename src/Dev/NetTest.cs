@@ -433,16 +433,26 @@ public partial class NetTest : Node
             {
                 var mesh = tank.GetNode<MeshInstance3D>("Mesh");
                 var glow = mesh.GetInstanceShaderParameter("shield_color").AsColor();
-                if (tank.Invulnerable && glow.A > 0)
+                if (tank.Invulnerable)
                 {
-                    ScenarioAssert(!tank.Gathering && new Color(glow, 1) == dropper.Appearance.Color,
-                        "gather: shielded drop gathered or lost accepted appearance");
-                    gatherShields.Add(tank.NetId);
+                    ScenarioAssert(!tank.Gathering, "gather: shielded drop gathered");
+                    // The dummy renderer cannot read back shader instance uniforms.
+                    if (DisplayServer.GetName() == "headless") { gatherShields.Add(tank.NetId); }
+                    else if (glow.A > 0)
+                    {
+                        ScenarioAssert(new Color(glow, 1) == dropper.Appearance.Color,
+                            "gather: shielded drop lost accepted appearance");
+                        gatherShields.Add(tank.NetId);
+                    }
                 }
                 if (!tank.Gathering) { continue; }
-                ScenarioAssert(!tank.Invulnerable && glow.A == 0 && mesh.GetInstanceShaderParameter("shield_contrast").AsColor().A == 0 &&
-                    mesh.GetInstanceShaderParameter("gather_shimmer").AsSingle() == match.World.Tuning.GatherShimmer,
-                    "gather: expired shield glow/contrast remained or shimmer missing");
+                ScenarioAssert(!tank.Invulnerable, "gather: invulnerable drop entered glide");
+                if (DisplayServer.GetName() != "headless")
+                {
+                    ScenarioAssert(glow.A == 0 && mesh.GetInstanceShaderParameter("shield_contrast").AsColor().A == 0 &&
+                        mesh.GetInstanceShaderParameter("gather_shimmer").AsSingle() == match.World.Tuning.GatherShimmer,
+                        "gather: expired shield glow/contrast remained or shimmer missing");
+                }
                 if (host)
                 {
                     var camera = player.CameraRig.Camera;
@@ -451,7 +461,7 @@ public partial class NetTest : Node
                     camera.LookAtFromPosition(center + new Vector3(1.5f, 1, 2), center);
                     if (gatherGlides.Count == 0)
                     {
-                        GetTree().CreateTimer(0.2).Timeout += () => director.Screenshot("gather_host_shimmer");
+                        GetTree().CreateTimer(0.2).Timeout += () => director.ScreenshotAsync("gather_host_shimmer");
                     }
                 }
                 gatherGlides.Add(tank.NetId);
@@ -470,8 +480,11 @@ public partial class NetTest : Node
             {
                 gatherPositions[tank.NetId] = tank.GlobalPosition;
                 ScenarioAssert(match.Bodies.Get(tank.NetId)?.Owner == match.Bodies.Host, "gather: dropper retained ownership");
-                ScenarioAssert(tank.GetNode<MeshInstance3D>("Mesh").GetInstanceShaderParameter("gather_shimmer").AsSingle() == 0,
-                    "gather: settled drop retained shimmer");
+                if (DisplayServer.GetName() != "headless")
+                {
+                    ScenarioAssert(tank.GetNode<MeshInstance3D>("Mesh").GetInstanceShaderParameter("gather_shimmer").AsSingle() == 0,
+                        "gather: settled drop retained shimmer");
+                }
                 Log($"gather final {tank.NetId:x} {tank.GlobalPosition}");
             }
         }
@@ -481,14 +494,19 @@ public partial class NetTest : Node
             ScenarioAssert(gatherPositions.Count == 2 && match.LiveTanks.Where(IsDrop).All(t =>
                 gatherPositions.TryGetValue(t.NetId, out var position) && position.DistanceTo(t.GlobalPosition) <= 0.006f && t.AtRest), "gather: final pile unstable");
             scenarioPassed = !scenarioFailed;
-            if (scenarioPassed) { Log("gather: assertions passed; two accepted-color shields expired; both drops shimmered, acquired, settled and stable on this client"); }
-            director.Screenshot($"gather_{role}_settled");
+            if (scenarioPassed)
+            {
+                Log(DisplayServer.GetName() == "headless"
+                    ? "gather: gameplay assertions passed; both shields expired and drops acquired, settled and stable"
+                    : "gather: assertions passed; two accepted-color shields expired; both drops shimmered, acquired, settled and stable on this client");
+            }
+            director.ScreenshotAsync($"gather_{role}_settled");
         }
         if (gathering && host && duelTime is > 18 and < 32 && Mathf.PosMod(duelTime, 1) < dt)
         {
             var drops = match.LiveTanks.Where(IsDrop).ToArray();
             if (drops.Length > 0) { AimAt(player, drops[0].GlobalTransform * PropaneTank.LocalCenter); }
-            director.Screenshot($"gather_{role}_{duelTime:00}");
+            director.ScreenshotAsync($"gather_{role}_{duelTime:00}");
         }
         if (Once(0.8f, dt)) { duelInitialScore = match.MyScore; }
         if (refusal && host && Once(2.55f, dt))
