@@ -104,7 +104,7 @@ public partial class NetTest : Node
             match = new Match { Name = "Match", Net = net, Setup = setup };
             match.Finished += () =>
             {
-                if (DevArgs.Get("scenario") is "duel" or "pickup" or "drop-refusal" or "puncture-race" or "gather")
+                if (DevArgs.Get("scenario") is "duel" or "pickup" or "drop-refusal" or "puncture-race" or "gather" or "melee")
                 {
                     ScenarioAssert(scenarioPassed, "scenario ended before all assertions passed");
                 }
@@ -145,9 +145,27 @@ public partial class NetTest : Node
             };
             AddChild(match);
             match.Player.InputOverride = bot;
+            if (DevArgs.Get("melee-start") != null)
+            {
+                // Stage before countdown so snapshots settle before the ordinary brains choose any targets.
+                var peers = setup.Players.OrderBy(p => p.Player.Id).ToList();
+                var slot = peers.FindIndex(p => p.Player.Id == match.Player.PeerId);
+                var anchorId = peers[slot / 2 * 2].Player.Id;
+                var anchor = match.Player.PeerId == anchorId ? match.Player : match.RemoteBodies.First(p => p.PeerId == anchorId);
+                var yaw = anchor.FacingYaw;
+                var forward = new Vector3(-Mathf.Sin(yaw), 0, -Mathf.Cos(yaw));
+                // Use a normal clear spawn so navigation still has useful routes after the initial knockdowns.
+                match.Player.Teleport(anchor.GlobalPosition + (slot % 2 == 0 ? Vector3.Zero : forward * 1.8f),
+                    yaw + (slot % 2 == 0 ? 0 : Mathf.Pi));
+            }
+            match.Player.MeleeStarted += (swing, _) => Log($"melee swing {swing}");
+            match.Player.MeleeHit += hit => Log($"melee contact {hit.Swing} victim {PlayerCharacter.Owning(hit.Collider)?.PeerId ?? 0}");
             clock = 0;
             duelTime = -1;
             gatherPositions.Clear();
+            meleeThrows = meleeGetups = 0;
+            meleeFirstDown = meleeSecondDown = false;
+            meleeCaptured.Clear();
             duelInput = new ScriptedInput();
             duelTank = null;
             duelBlastAt = duelThrowAt = -1;
@@ -211,6 +229,10 @@ public partial class NetTest : Node
         if (DevArgs.Get("scenario") is "duel" or "drop-refusal" or "gather")
         {
             Duel(match, dt);
+        }
+        else if (DevArgs.Get("scenario") == "melee")
+        {
+            MeleeScenario(match, dt);
         }
         else if (DevArgs.Get("scenario") == "puncture-race")
         {
@@ -634,6 +656,91 @@ public partial class NetTest : Node
         {
             director.Screenshot($"watch_{duelTime:000.0}");
         }
+    }
+
+    private int meleeThrows, meleeGetups;
+    private bool meleeFirstDown, meleeSecondDown;
+    private readonly HashSet<string> meleeCaptured = new();
+
+    private void MeleeScenario(Match match, float dt)
+    {
+        if (!match.IsPlaying) return;
+        var victim = role == "host";
+        var player = match.Player;
+        var other = match.RemoteBodies.FirstOrDefault();
+        if (other == null) return;
+        if (duelTime < 0)
+        {
+            duelTime = 0;
+            player.InputOverride = duelInput;
+            player.Ragdolled += (_, _, _) => meleeThrows++;
+            player.GotUp += (_, _) => meleeGetups++;
+            if (!victim) { duelInput.Melee(2); duelInput.Melee(12); }
+            if (victim && DevArgs.Get("view") == "side")
+            {
+                movementCamera = new Camera3D { Fov = 40, Current = true };
+                match.AddChild(movementCamera);
+            }
+        }
+        duelTime += dt;
+        duelInput.Advance(dt);
+        var attacker = victim ? other : player;
+        var target = victim ? player : other;
+        var origin = new Vector3(Tuning.Current.MpMapSizeBase + Tuning.Current.MpMapSizePerPlayer * match.RemoteBodies.Count() + 30, 0.05f, 0);
+        if (Once(.25f, dt) || Once(10.5f, dt))
+        {
+            player.Teleport(origin + (victim ? Vector3.Forward * 1.8f : Vector3.Zero), victim ? Mathf.Pi : 0);
+            player.CameraRig.SetOrientation(victim ? 180 : 0, -6);
+            if (remoteMotion != null) remoteMotion.SkipNextPose = true;
+        }
+        if (duelTime > 1 && remoteGrip == null && DevArgs.Get("assert-grip") != null) remoteGrip = GripProbe.Attach(attacker);
+        if (duelTime > 1 && remoteMotion == null && DevArgs.Get("assert-motion") != null) remoteMotion = MotionProbe.Attach(attacker);
+        if (movementCamera != null)
+        {
+            var focus = attacker.GlobalPosition + Vector3.Up;
+            movementCamera.LookAtFromPosition(focus + new Vector3(4, .6f, -1.2f), focus);
+        }
+        if (duelTime < 8) meleeFirstDown |= target.IsRagdolled;
+        if (duelTime > 12) meleeSecondDown |= target.IsRagdolled;
+        if (attacker.ResolvedState.Weapon == WeaponAction.Melee)
+        {
+            var swing = duelTime < 8 ? 1 : 2;
+            var frame = (int)(attacker.MeleeProgress * 12);
+            var label = $"melee_{role}_{swing}_{frame:00}";
+            if (meleeCaptured.Add(label)) CaptureMelee(label);
+        }
+        if (Once(4, dt))
+        {
+            ScenarioAssert(meleeFirstDown && match.Scores[target.PeerId] == 0 && match.LiveTanks.Count(IsDrop) == 5,
+                "melee: first knockdown must spill exactly five tanks from a five-tank bank");
+            if (victim) ScenarioAssert(meleeThrows == 1, "melee: repeated active contacts threw victim twice");
+        }
+        if (Once(10, dt))
+        {
+            ScenarioAssert(!target.IsRagdolled && meleeFirstDown, "melee: first victim never got up");
+            if (victim) ScenarioAssert(meleeGetups == 1, "melee: missing first get-up");
+        }
+        if (Once(14, dt))
+        {
+            ScenarioAssert(meleeSecondDown && match.Scores[target.PeerId] == 0 && match.LiveTanks.Count(IsDrop) == 5,
+                "melee: zero-bank victim must ragdoll without another drop");
+            if (victim) ScenarioAssert(meleeThrows == 2, "melee: missing zero-bank throw");
+        }
+        if (Once(22, dt))
+        {
+            ScenarioAssert(!target.IsRagdolled && meleeSecondDown, "melee: zero-bank victim never got up");
+            if (victim) ScenarioAssert(meleeGetups == 2, "melee: missing zero-bank get-up");
+            remoteGrip?.Finish(); remoteMotion?.Finish();
+            scenarioPassed = !scenarioFailed;
+            if (scenarioPassed) Log("melee: assertions passed; five tanks spilled, zero-bank stun, both get-ups");
+        }
+    }
+
+    private async void CaptureMelee(string label)
+    {
+        if (DisplayServer.GetName() == "headless" || DevArgs.Get("capture-dir") == null) return;
+        await ToSignal(RenderingServer.Singleton, RenderingServer.SignalName.FramePostDraw);
+        if (IsInsideTree()) director.ScreenshotAsync(label);
     }
 
     private Camera3D? movementCamera;

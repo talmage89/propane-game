@@ -23,6 +23,8 @@ public partial class CaptureDirector : Node
     private long framesWritten;
     private long framesSent;
     private int recordPending;
+    private int screenshotPending;
+    private readonly List<(string Path, int Width, int Height, byte[] Data)> screenshots = new();
     private bool recordUnavailable;
     private System.Threading.Thread? recordWriter;
     private readonly System.Collections.Concurrent.BlockingCollection<(byte[] Data, int Repeat)> recordQueue = new(3);
@@ -42,6 +44,13 @@ public partial class CaptureDirector : Node
 
     public override void _ExitTree()
     {
+        if (screenshotPending > 0)
+        {
+            var screenshotDevice = RenderingServer.GetRenderingDevice();
+            for (var frame = 0; screenshotPending > 0 && frame <= screenshotDevice.GetFrameDelay(); frame++)
+                RenderingServer.ForceDraw();
+        }
+        FlushScreenshots();
         if (recorder == null)
         {
             return;
@@ -164,6 +173,56 @@ public partial class CaptureDirector : Node
             start.ArgumentList.Add(arg);
         }
         return start;
+    }
+
+    /// <summary>Network phase captures cannot stall the GPU to read a frame: a stall can skip the whole contact
+    /// window. Hold raw readbacks until exit so PNG encoding cannot stall the connection either.
+    /// ExitTree drains callbacks before C# teardown.</summary>
+    public void ScreenshotAsync(string name)
+    {
+        var dir = DevArgs.Get("capture-dir");
+        if (dir == null || DisplayServer.GetName() == "headless") return;
+        DirAccess.MakeDirRecursiveAbsolute(dir);
+        var device = RenderingServer.GetRenderingDevice();
+        var texture = RenderingServer.TextureGetRdTexture(GetViewport().GetTexture().GetRid());
+        var format = device.TextureGetFormat(texture);
+        var width = (int)format.Width;
+        var height = (int)format.Height;
+        screenshotPending++;
+        var status = device.TextureGetDataAsync(texture, 0, Callable.From((byte[] data) =>
+        {
+            try
+            {
+                if (data.Length != width * height * 4) throw new InvalidOperationException("unexpected screenshot texture format");
+                screenshots.Add(($"{dir}/{name}.png", width, height, data));
+            }
+            catch (Exception error) { GD.PushError($"[capture] FAIL {error.Message}"); GetTree().Quit(1); }
+            finally { screenshotPending--; }
+        }));
+        if (status != Error.Ok)
+        {
+            screenshotPending--;
+            GD.PushError($"[capture] FAIL readback request: {status}");
+            GetTree().Quit(1);
+        }
+    }
+
+    private void FlushScreenshots()
+    {
+        foreach (var shot in screenshots)
+        {
+            using var image = Image.CreateFromData(shot.Width, shot.Height, false, Image.Format.Rgba8, shot.Data);
+            if (image.SavePng(shot.Path) != Error.Ok)
+            {
+                GD.PushError($"[capture] FAIL could not save {shot.Path}");
+                GetTree()?.Quit(1);
+            }
+            else
+            {
+                GD.Print($"[capture] {shot.Path}");
+            }
+        }
+        screenshots.Clear();
     }
 
     public void Screenshot(string name)

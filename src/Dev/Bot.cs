@@ -75,6 +75,7 @@ public sealed class Bot : IBotBrain
         intent.FirePressed = false;
         intent.JumpPressed = false;
         intent.ReloadPressed = false;
+        intent.MeleePressed = false;
         return read;
     }
 
@@ -117,6 +118,26 @@ public sealed class Bot : IBotBrain
             Status = $"fleeing venting tank {danger.GlobalPosition.DistanceTo(here):0.0} m away";
             Navigate(match, dt);
             return;
+        }
+
+        // A close opponent is worth knocking down even with an empty bank. Do not abandon a tank in the sights.
+        if (target is not PropaneTank || !player.ResolvedState.EffectiveAim)
+        {
+            var reach = tuning.MeleeRange + tuning.MeleeLungeSpeed * (tuning.MeleeWindup + tuning.MeleeActive);
+            var close = match.RemoteBodies.Where(e => !e.IsRagdolled && e.GlobalPosition.DistanceTo(here) <= reach &&
+                    CanSee(e, here + Vector3.Up * tuning.MeleeContactHeight))
+                .OrderBy(e => e.GlobalPosition.DistanceSquaredTo(here)).FirstOrDefault();
+            if (close != null)
+            {
+                Face(player, Aim(close), dt);
+                var direction = Flat(close.GlobalPosition - here);
+                var forward = Flat(-player.CameraRig.Camera.GlobalBasis.Z).Normalized();
+                intent.MeleePressed = player.CanMelee && MeleeContact.InArc(direction, forward, reach, tuning.MeleeHalfAngleDegrees);
+                MoveToward(player, direction);
+                Status = $"melee {close.PeerId} at {direction.Length():0.0} m";
+                Navigate(match, dt);
+                return;
+            }
         }
 
         // 2. Under fire while holding more than the shooter: trading hits loses more than it wins, so break their

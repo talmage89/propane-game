@@ -274,7 +274,8 @@ tools/dev/compare_tanks.py build/net/bot*.log
 tools/dev/check_scores.py build/net/server.log build/net/bot*.log
 ```
 
-`net_test.tscn` scenarios: bots playing (default), `duel` (hits, drops and a thrown player, filmed from both sides),
+`net_test.tscn` scenarios: bots playing (default), `melee` (five-tank and zero-bank knockdowns and both get-ups),
+`duel` (hits, drops and a thrown player, filmed from both sides),
 `pickup` (an ammo can taken and returning), and `movement` (remote creep, sprint, jumping and held-aim landing,
 with assertions and labeled frames), `drop-refusal` (rolling back a refused predicted drop), and `puncture-race`
 (canonical vent adoption and trajectory assertions after two simultaneous bullet contacts).

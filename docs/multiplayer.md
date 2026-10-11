@@ -385,3 +385,36 @@ Bullets remain able to hit ragdolls.
 PlayerState gains one byte of normalized melee progress, before gait/support/weapon. Remote poses consume that
 progress; interpolation cannot rewind across a new swing or release. Protocol.Version stays **2** as directed for
 this unreleased development protocol. These two messages, snapshot field and shared tuners require a **minor release**.
+
+The smart bot chooses a nearby visible opponent when it is not aiming at a tank. Its approach reach derives from
+melee range plus the lunge distance. It can stun an empty-bank opponent and uses the resolver's grounded/cooldown
+availability. `net_test` logs actual accepted swings and contacts, rather than just requested inputs.
+
+Reproduce the duel and conservation proof after `make build`:
+
+```sh
+tools/dev/net_bots.sh -o /tmp/wpmelee-duel -n 2 -w 0 -l 25 -s '--start-score=5' -- --scenario=melee --assert-grip --assert-motion --net-lag=120 --net-jitter=30 --net-loss=3
+python3 -B tools/dev/check_scores.py /tmp/wpmelee-duel/server.log /tmp/wpmelee-duel/bot1.log /tmp/wpmelee-duel/bot2.log
+python3 -B tools/dev/compare_tanks.py /tmp/wpmelee-duel/bot1.log /tmp/wpmelee-duel/bot2.log
+```
+
+The joiner strikes the host twice in a clear fixture outside the suburb. Both clients assert the first fall,
+exactly five drops and a get-up, then a zero-bank fall with no extra drops and another get-up. Each match resets the
+proof. Use `-w 1 --view=side --capture-dir=/tmp/wpmelee-remote` for the victim's remote side captures.
+Allow 35 seconds for rendered runs. The melee harness reads frames back asynchronously and encodes PNGs at exit
+so screenshots do not skip contact or stall the connection. For a four-bot 90-second soak, use
+`-n 4 -w 0 -l 90 -- --melee-start --bot-log --digest-every=0.5 --net-lag=120 --net-jitter=30 --net-loss=3`.
+`--melee-start` places smart bots in close pairs once, then their ordinary brains control the entire match; the
+accepted swing/contact logs show actual use. Audit that run with the same two scripts and all four bot logs.
+`make test` runs the pure resolver/geometry/contact/server/wire assertions, real wall/tank/prop contact fixture,
+input bindings and device reference checks, plus the local strike grip/rotation probe. `make test-full` adds ten
+reload cancellations spanning early/late progress in both reload clips.
+
+Verified on Linux, 2026-10-11: the lagged duel spilled exactly five tanks once, stunned the empty bank without a
+second drop, and completed both get-ups. Both clients agreed with the bank audit (10 initial minus 5 spilled = 5).
+The final 90-second close-pair soak recorded 14 accepted swings and eight player contacts across four smart bots,
+including strikes while repositioning for tanks, followed by ordinary navigation, tank shooting and scoring. All four
+final standings agreed: 20 map gains + 34 drop gains - 50 spills = 4 banked. The 407 tank comparisons ended with
+identical ids/states and at most 0.165 m drift. During active chains the diagnostic reported transient differences
+up to five states and 5.862 m drift; it is a
+comparison report, not a threshold assertion. Those transients converged; this package does not revise body sync.
