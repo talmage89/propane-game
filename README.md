@@ -260,7 +260,11 @@ $GODOT --headless --fixed-fps 60 res://scenes/dev/gather_range.tscn -- --scenari
 # A real single-player rifle blast knocks intact tanks loose, then they gather; seed 23 fixes the road fixture.
 # Once the knock is proven, the fixture removes random blast fragments so departure paths stay clear.
 $GODOT --fixed-fps 60 res://scenes/dev/game_test.tscn -- --scenario=gather --tune.FixedSeed=23 --capture-dir=/tmp/gather-game
+# Upright pyramids: every physics tick for 120 simulated seconds, player passes, gather neighbors and toppling.
+$GODOT --headless --fixed-fps 60 res://scenes/dev/upright_pile_tests.tscn
+# --deep --awake adds 64/128-tank contact trials (make test-full).
 # Formation close-up and stability: Rows, Square, Triangular, Cluster; --count defaults to 14.
+# --hit=shot|blast|shove captures a disturbance and falling from player height.
 # --awake tests contact settling; --chain=fresh requires intact neighbors in range to puncture and keep venting.
 # --chain=primed first punctures each tank, then requires venting neighbors in range to detonate after the fuse.
 $GODOT --fixed-fps 60 res://scenes/dev/tank_range.tscn -- --capture-dir=/tmp/pile --formation=Square --chain=fresh

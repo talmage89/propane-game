@@ -139,6 +139,7 @@ public partial class TankRange : Node3D
             AddChild(tank);
             tank.Transform = transform;
             tank.Sleeping = DevArgs.Get("awake") == null;
+            tank.MarkPile();
             tanks.Add(tank);
         }
         camera.LookAtFromPosition(new Vector3(2.5f, 1.8f, 3f), new Vector3(0, 0.4f, 0));
@@ -205,6 +206,32 @@ public partial class TankRange : Node3D
                 GD.Print($"[formation] {formation} {chain}: {inRange.Count} neighbors in range, blast acts as one shot");
             }
         });
+        if (DevArgs.Get("hit") is { } hit)
+        {
+            if (!Require(hit is "shot" or "blast" or "shove", "hit must be shot, blast or shove")) return;
+            if (!Require(chain == null, "choose hit or chain, not both")) return;
+            director.At(4.3f, () =>
+            {
+                if (hit == "shot")
+                {
+                    Shoot(tanks.MaxBy(t => t.Position.Y)!);
+                }
+                else if (hit == "blast")
+                {
+                    tanks[0].Detonate();
+                }
+                else if (hit == "shove")
+                {
+                    var tank = tanks.MaxBy(t => t.Position.Y)!;
+                    tank.Disturb();
+                    tank.ApplyCentralImpulse(tank.GlobalBasis.Z * tuning.MeleePropImpulse);
+                }
+            });
+            director.ShotAt(4.4f, "02_hit");
+            director.ShotAt(4.7f, "03_falling");
+            director.ShotAt(5.3f, "04_falling");
+            director.ShotAt(7f, "05_fallen");
+        }
         if (chain != null)
         {
             director.ShotAt(4.4f, "02_chain");
