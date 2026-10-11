@@ -3,7 +3,8 @@
 Keep this file lean: only what an agent can't learn from the code and the other docs, in as few words as possible.
 
 Propane: a Godot 4.7.2 .NET (C#, Jolt) game. Read README.md and design/ first, and
-docs/multiplayer.md for network work. macOS (Apple Silicon) first, Linux second.
+docs/multiplayer.md for network work. Windows, macOS (Apple Silicon) and Linux are all targets; development and
+verification happen on Linux.
 
 ## Rules
 

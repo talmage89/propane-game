@@ -24,15 +24,15 @@ does it make you want another round?
   trees and the ground hold.
 - Arcade, not simulation. Physics serves spectacle and readable cause and effect, never realism for its own sake.
 - The mess stays. Debris and scattered props build up over a round, a record of what happened.
-- A blast throws you as a ragdoll and you get back up. Being thrown is the price of standing too close: funny and
-  costly, never frustrating.
+- A blast throws you as a ragdoll. Being thrown is the price of standing too close: funny and costly, never
+  frustrating.
 
 ## Feel
 
 - **Instant.** The player's own actions take effect on their screen at once. In multiplayer, small disagreements
   between screens are the accepted price of that.
 - **Moving and shooting feel natural.** The character moves with weight and polish, and the rifle sits in their hands
-  like a real one. The camera stays put when aiming; the stance and the spread change.
+  like a real one.
 - **Tuned by playing.** Every feel and effect value is a live dial; the right value is found in play, not in a spec.
 - **Short rounds with a payoff.** A cleared suburb gives way to a new one; a match lasts a few minutes. Another round
   should always be tempting.
@@ -53,5 +53,5 @@ does it make you want another round?
 
 ## Reach
 
-- Built to be picked up by many people: free or cheap, on PC first and consoles later. Anything sold is cosmetic;
-  nobody buys an advantage.
+- Built to be picked up by many people: free or cheap, on PC first (Windows, macOS and Linux) and consoles later.
+  Anything sold is cosmetic; nobody buys an advantage.
