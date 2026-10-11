@@ -50,3 +50,24 @@ arrived at Bot1 1.160–1.384 s after publication during its 3.65 s moving disag
 same stream mostly 0.142–0.262 s old. Bot1's receive interval peaked at 2.063 s. The configured two transport
 legs alone total 0.120–0.180 s; those late copies are not evidence that a 5.9 m error is ordinary flight under
 just that delay. Distance, settlement and final motion thresholds have not been increased.
+
+## Construction stalls and native liveness
+
+A second mechanism invalidated whole runs: native peers disconnected while a valid builder was stalled.
+The client used a 3 s minimum/8 s maximum ACK timeout; the server used ENet's shorter default minimum.
+Increasing only the client's maximum to 30 s still failed because the server could reach its minimum first.
+On connection, both ends now permit 20 s minimum/30 s maximum ACK silence, covering the server's existing
+20 s loading grace. Explicit leaves/disconnects remain immediate; detecting a silent failed endpoint can now
+require 20–30 s. These are transport liveness bounds, not gameplay tuner changes.
+
+The `--tank-check-load-stall=Bot2` native fixture blocks that client's construction frame for 9 s. The command
+`tools/dev/net_bots.sh -n 2 -l 35 -s '--start-score=5' -o /tmp/nas-load-stall-fixed -- --scenario=melee
+--tank-check-load-stall=Bot2` failed before (`/tmp/nas-load-stall-before`, bot status 2, absent final scores)
+and passed after (status 0, 898 grids, resting/moving peak 0.007/0.231 m, zero final disagreement, score audit
+10 initial - 5 spilled = 5 banked). The resumed builder was ready at 14.43 s. A maximum-only intermediate
+attempt also failed (`/tmp/nas-load-stall-after`), confirming the two-ended minimum matters.
+
+The timeout API's minimum and maximum interact with the RTT retransmission multiplier; see the
+[Godot ENet timeout documentation](https://docs.godotengine.org/en/stable/classes/class_enetpacketpeer.html#class-enetpacketpeer-method-set-timeout).
+A native 64-datagram burst probe also received all 64 in one poll, ruling out the suspected single-datagram
+poll drain problem; no poll/drain rewrite is included.

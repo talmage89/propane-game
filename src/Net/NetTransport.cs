@@ -32,6 +32,9 @@ public sealed class NetTransport : IPacketTransport
         this.peerIds = peerIds;
         peer.PeerConnected += id =>
         {
+            // A healthy builder may block its main thread for the server's 20 s loading grace.
+            // Configure both ends: ENet's RTT multiplier can trip its minimum before the maximum.
+            peer.GetPeer((int)id)?.SetTimeout(32, 20000, 30000);
             var connection = connections.GetValueOrDefault((int)id) ?? Add((int)id);
             connected.Add(connection);
             Connected?.Invoke(connection);
@@ -76,7 +79,6 @@ public sealed class NetTransport : IPacketTransport
         server = false;
         open = error == Error.Ok;
         connection = open ? Add(ServerId) : null;
-        if (open) { peer.GetPeer(ServerId)?.SetTimeout(32, 3000, 8000); }
         return new OpenResult(open, open ? null : error.ToString(), (int)error);
     }
 

@@ -117,6 +117,12 @@ public partial class NetTest : Node
                 RemoveChild(match);
                 match.QueueFree();
             }
+            if (DevArgs.Get("tank-check-load-stall") == net.PlayerName)
+            {
+                // Native transport regression: a legitimate construction frame can outlast an 8 s timeout.
+                Log("tank-check loading stall 9s");
+                System.Threading.Thread.Sleep(TimeSpan.FromSeconds(9));
+            }
             match = new Match { Name = "Match", Net = net, Setup = setup };
             match.Finished += () =>
             {
