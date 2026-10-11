@@ -32,6 +32,7 @@ public sealed class BodySync
         public required bool IsTank;
         public int Owner;
         public bool ClaimPending;
+        internal bool ObserveWhilePending;
         public bool WasAwake;
 
         public bool HasTarget;
@@ -85,6 +86,15 @@ public sealed class BodySync
 
     public bool IsMine(Entry entry) => entry.Owner == Me || entry.ClaimPending;
 
+    private bool ObservesOwner(Entry entry) => entry.Owner != Me && (!entry.ClaimPending || entry.ObserveWhilePending);
+
+    internal static void MarkPending(Entry entry, bool predictMotion = true)
+    {
+        entry.ClaimPending = true;
+        entry.ObserveWhilePending = !predictMotion;
+        if (predictMotion) { entry.HasTarget = false; }
+    }
+
     public void Register(uint id, RigidBody3D body, bool isTank, int owner)
     {
         Remove(id);
@@ -120,16 +130,18 @@ public sealed class BodySync
         var claimed = new List<BodyState>();
         foreach (var body in bodies)
         {
-            if (Find(body) is not { } entry || entry.Owner == Me || entry.ClaimPending) { continue; }
-            entry.ClaimPending = true;
-            entry.HasTarget = false;
+            if (Find(body) is not { } entry || entry.Owner == Me) { continue; }
+            var pending = entry.ClaimPending;
+            // An actual local disturbance supersedes a gather lease that was only observing its owner.
+            MarkPending(entry);
+            if (pending) { continue; }
             claimed.Add(Capture(entry));
         }
         return claimed;
     }
 
     /// <summary>Future grouped interactions include bodies already owned, and wait if any member is pending.</summary>
-    public List<BodyState> ClaimGroup(IEnumerable<GodotObject> bodies)
+    public List<BodyState> ClaimGroup(IEnumerable<GodotObject> bodies, bool predictMotion = true)
     {
         var group = new Dictionary<uint, Entry>();
         foreach (var body in bodies)
@@ -140,8 +152,9 @@ public sealed class BodySync
         var claims = new List<BodyState>();
         foreach (var entry in group.Values)
         {
-            entry.ClaimPending = true;
-            entry.HasTarget = false;
+            // A gather lease has not moved anything yet: keep its current owner's corrections
+            // until the grant. Ordinary predicted impulses retain their existing local authority.
+            MarkPending(entry, predictMotion);
             claims.Add(Capture(entry));
         }
         return claims;
@@ -172,6 +185,7 @@ public sealed class BodySync
         }
         entry.Owner = authority.Owner;
         entry.ClaimPending = false;
+        entry.ObserveWhilePending = false;
         entry.Sequence = System.Math.Max(entry.Sequence, authority.Body.Sequence);
         entry.LastSequence = System.Math.Max(entry.LastSequence, authority.Body.Sequence);
         if (entry.Latest is not { } latest || authority.Body.Sequence >= latest.Body.Sequence)
@@ -251,10 +265,10 @@ public sealed class BodySync
         {
             if (GodotObject.IsInstanceValid(entry.Body) && entry.Body is Tank.PropaneTank tank)
             {
-                tank.CorrectingMotion = entry.HasTarget && !IsMine(entry) &&
+                tank.CorrectingMotion = entry.HasTarget && ObservesOwner(entry) &&
                     (entry.TargetRest || now - entry.TargetUpdated <= StaleAfter);
             }
-            if (!entry.HasTarget || IsMine(entry) || !GodotObject.IsInstanceValid(entry.Body))
+            if (!entry.HasTarget || !ObservesOwner(entry) || !GodotObject.IsInstanceValid(entry.Body))
             {
                 continue;
             }

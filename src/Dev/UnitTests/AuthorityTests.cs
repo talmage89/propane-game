@@ -33,6 +33,24 @@ public static class AuthorityTests
 
     public static void Register(TestRunner runner)
     {
+        runner.Run("authority/pending gather lease still applies the resting owner", () =>
+        {
+            using var body = new BodyFixture(runner);
+            var sync = new BodySync(Tuning.SavedTemplate, 4, 2);
+            sync.Register(Id, body.Body, true, 2);
+            var rest = Pose(Id, 1, 1) with { Linear = Vector3.Zero, Angular = Vector3.Zero };
+            sync.OnState(2, rest, true, 1);
+            sync.Correct(2);
+            sync.ClaimGroup(new[] { body.Body }, predictMotion: false);
+            body.Body.GlobalPosition += Vector3.Right * .3f;
+            sync.Correct(2.1);
+            TestRunner.Assert(body.Body.GlobalTransform.IsEqualApprox(rest.Transform), "lease abandoned the resting owner");
+            sync.Claim(new[] { body.Body }); // A real push during the lease must still predict locally.
+            body.Body.GlobalPosition += Vector3.Right;
+            var pushed = body.Body.GlobalTransform;
+            sync.Correct(2.2);
+            TestRunner.Assert(body.Body.GlobalTransform.IsEqualApprox(pushed), "gather lease erased a genuine predicted impulse");
+        });
         runner.Run("authority/solid geometry cannot trap a fresh observer across a wall", () =>
         {
             using var body = new BodyFixture(runner.World.Root);

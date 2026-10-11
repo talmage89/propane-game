@@ -32,6 +32,11 @@ public partial class TankGather : Node3D
     // The callback receives a per-tank epoch lease after the complete atomic grant, or null on refusal.
     public Action<IReadOnlyList<PropaneTank>, Action<Func<PropaneTank, bool>?>> Grant { get; set; } = (_, done) => done(_ => true);
     public Action<PropaneTank, GatherPhase> Publish { get; set; } = (_, _) => { };
+    internal Action<string>? Trace { get; set; }
+
+    private static string Describe(IEnumerable<PropaneTank> members) => string.Join(" ", members.Select(t =>
+        $"{t.NetId:x}:revision={t.Disturbance}:eligible={Eligible(t)}:sleep={t.Sleeping}:speed={t.LinearVelocity.Length():0.000}:spin={t.AngularVelocity.Length():0.000}"));
+
     public int Completed { get; private set; }
     public int Interrupted { get; private set; }
 
@@ -93,13 +98,15 @@ public partial class TankGather : Node3D
             if (Plan(members) is not { } targets) { continue; }
             foreach (var tank in members) { pending.Add(tank.GetInstanceId()); }
             var revisions = members.Select(t => t.Disturbance).ToArray();
+            Trace?.Invoke($"request {Describe(members)}");
             var pendingIds = group.Select(s => s.Id).ToArray();
             Grant(members, owns =>
             {
                 foreach (var id in pendingIds) { pending.Remove(id); }
+                Trace?.Invoke($"resolve lease={owns != null} {Describe(members.Where(IsInstanceValid))}");
                 if (!World.IsAlive || !IsInstanceValid(this) || !IsInsideTree() || !Enabled() || owns == null || members.Where((t, i) => !IsInstanceValid(t) || !Eligible(t) || t.Disturbance != revisions[i] || !owns(t)).Any()) { return; }
                 // Revalidate after network latency: actors and obstacles may have moved while the grant was pending.
-                if (!SameGroup(members) || !Validate(members, targets)) { return; }
+                if (!SameGroup(members) || !Validate(members, targets)) { Trace?.Invoke("resolve geometry/group changed"); return; }
                 var exclude = Exclude(members);
                 for (var i = 0; i < members.Length; i++)
                 {

@@ -211,3 +211,29 @@ The expanded suite passed 208 tests/zero failures (`build/net-assert-artifacts/l
 All final builds had zero warnings/errors.
 The traced capture identifies delayed canonical delivery, but does not identify the exact
 original UDP datagram responsible; attributing that datagram to a checkpoint is an inference.
+
+## Preserving resting evidence through gather leases
+
+An extra gather check caught a regression after the standard twelve soaks had passed. The unchanged
+`dev e68ce64` passed the native seed-23 gather scenario; this branch failed it. Retaining resting
+anchors exposed a distinction previously hidden by locally settled copies: an atomic gather lease
+has not disturbed its members yet. Treating that lease as predicted motion discarded the target,
+woke the observer, incremented disturbance revisions, and invalidated the accepted grant.
+
+In `/tmp/nas-gather-diagnostic`, Bot1 requested drops `20100000`/`20100001` at shared time
+96542.997183, asleep with revisions 2/1 and zero velocities. The accepted epoch-2 grant arrived at
+96543.213260; revalidation at .216350 saw revisions 3/3, awake despite zero instantaneous velocity.
+No gather started. Both body sync and Match's outgoing authority queue cleared the target. A trial
+fixing only body sync still failed because the queue cleared it again.
+
+Body sync now distinguishes a gather lease from predicted motion. It keeps following the existing
+owner while that lease is pending; an actual local push during the lease switches back to ordinary
+prediction. Grants/refusals clear that distinction. The Match integration separately marks gather
+requests nonpredictive and preserves their target through its queue. Eligibility, disturbance
+revision checks, collision validation and gather timings remain unchanged. Optional dev-only
+`--gather-trace` records request/revalidation revisions; `--tank-trace` includes revisions too.
+
+Two regressions failed before (210 tests/two failures, `gather-queue-before.log`) and passed after
+(210 tests/zero failures, `gather-queue-after.log`): body sync continues applying the resting owner
+through a lease without erasing a real predicted push, and the production queue preserves that
+target. Builds were warning-free. Logs live in ignored `build/net-assert-artifacts/`.
