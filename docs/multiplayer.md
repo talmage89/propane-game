@@ -178,6 +178,9 @@ the same model; captures still compare the original node positions.
 before granting any, so later grouped interactions can include bodies already owned without a partial handoff.
 A local group with a pending member is left unpredicted for its caller to retry. Prediction never publishes movement until a grant is
 confirmed. `Puncture` and `Explode` use the same expected-epoch path; each request has a peer-local request ID.
+Predicted drops likewise defer body publications until the server's creation echo; a bank debit alone does not
+confirm creation. Deferred bodies retain their required first checkpoint or rest. This prevents independent
+body lanes from overtaking registration and invalidating a batch of otherwise registered bodies.
 
 `Authority` broadcasts accepted canonical state and replies only to the claimant on refusal. Reasons distinguish
 stale epochs, exploded tanks, wrong phases, incompatible lifecycle transitions, refused chain causes and unknown

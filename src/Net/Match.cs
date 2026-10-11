@@ -879,7 +879,7 @@ public partial class Match : Node3D
 
     private void SendBodies(double now)
     {
-        var (moving, rested) = bodies.Collect(now);
+        var (moving, rested) = bodies.Collect(now, player.Runtime.DropPredictions.PendingIds);
         foreach (var stream in moving.GroupBy(entry => entry.PublishReliably ? entry.CheckpointTraffic : TrafficClass.UnreliableBodyStates))
         {
             var entries = stream.ToList();

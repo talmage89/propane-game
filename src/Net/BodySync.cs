@@ -371,9 +371,10 @@ public sealed class BodySync
 
     /// <summary>
     /// The states this player owes the others at this monotonic network time: moving tanks and cars at their
-    /// real-time send rates, and a final resting state for each that has just stopped.
+    /// real-time send rates, and a final resting state for each that has just stopped. Predicted creations
+    /// retain their required first state until the server has registered them.
     /// </summary>
-    public (List<Entry> Moving, List<Entry> Rested) Collect(double now)
+    public (List<Entry> Moving, List<Entry> Rested) Collect(double now, IReadOnlySet<uint>? pendingCreation = null)
     {
         var tuning = settings;
         // Receiver silence is measured on the network clock too. A slow simulation must not stretch
@@ -400,7 +401,7 @@ public sealed class BodySync
         var rested = new List<Entry>();
         foreach (var entry in entries.Values)
         {
-            if (!GodotObject.IsInstanceValid(entry.Body))
+            if (!GodotObject.IsInstanceValid(entry.Body) || pendingCreation?.Contains(entry.Id) == true)
             {
                 continue;
             }

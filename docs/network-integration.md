@@ -315,3 +315,48 @@ godot-mono --headless --path . res://scenes/dev/unit_tests.tscn
 tools/dev/net_bots.sh -p 25090 -n 2 -l 30 -s '--tune.FixedSeed=23' -o "$PWD/build/vna-center-floor-after" -- --scenario=vent-contact --vent-contact-axis=mixed --tune.FixedSeed=23 --net-lag=120 --net-jitter=30 --net-loss=3 --tank-motion-trace
 tools/dev/net_bots.sh -p 25090 -n 4 -l 90 -s '--tune.FixedSeed=797598340' -o "$PWD/build/vna-center-repro" -- --melee-start --digest-every=0.5 --net-lag=120 --net-jitter=30 --net-loss=3 --tank-motion-trace --tank-authority-trace
 ```
+
+
+## Predicted creation and checkpoint ordering
+
+The full gates pass on 15eb974: make check and make test-full both exit zero,
+with 229 unit assertions and 24 comparer tests. Deep navigation passes 700/700
+courses (zero stuck, 600 jumps); the deep pile/lifetime results remain unchanged.
+Its first two completed 4-bot/90-second faulted soaks pass at final moving drift
+0/0.349 m and longest episodes 1.00/1.35 s. The launcher received SIGTERM during
+another capture; those logs are retained as `vna-center-final-fault-2-interrupted`
+and excluded, with no final sample. Subsequent batches use shorter launchers.
+
+The completed second soak also logs four "bad BodyStates ... unknown body id"
+rejections. Local predicted drops register in BodySync immediately and can publish
+on independent checkpoint lanes before their reliable Drop registration reaches
+the server. One unknown ID invalidates an entire batch, delaying updates for
+otherwise registered bodies. A bank debit precedes the creation echo, so the
+bank's unconfirmed count cannot serve as a publication permission.
+
+Match now passes the existing DropPredictions pending-ID set into collection.
+Those entries retain PublishRequired and their awake history until the creation
+echo removes them from the set. This avoids duplicating prediction state and
+preserves the required first checkpoint even if the body stops before confirmation.
+Filtering after collection would silently consume the sleeping body's sole rest.
+Server validation, ownership, local physics, scoring and message shapes are unchanged.
+The integration adds only one call-site edit to A4's Match structure.
+
+Two production regressions simulate a relayed shot and its real drop/spawn path,
+then drive Match physics while creation is pending. Both moving and sleeping
+cases fail before: unregistered bodies publish and consume their first state.
+After the fix, registered-body publications continue, a bank debit alone does
+not release the drops, and a creation echo releases exactly one required state.
+All 231 unit assertions pass, with zero build warnings/errors.
+
+A native 4-bot/90-second 120/30/3 repeat of layout 2113692991 passes:
+1,998 grids/282,791 body pairs, no unobserved grids, final rest/moving
+0.001/0.242 m, longest episode 0.60 s, and all scores agree (27 spilled,
+14 banked). Unknown-ID body-batch rejections fall from four to zero. This is a
+layout repeat with a new action schedule, not a deterministic replay.
+The final gates and complete matrix are repeated after this last product fix.
+
+```sh
+godot-mono --headless --path . res://scenes/dev/unit_tests.tscn
+tools/dev/net_bots.sh -p 25090 -n 4 -l 90 -s '--tune.FixedSeed=2113692991' -o "$PWD/build/vna-drop-native" -- --melee-start --digest-every=0.5 --net-lag=120 --net-jitter=30 --net-loss=3 --tank-motion-trace --tank-authority-trace
+```

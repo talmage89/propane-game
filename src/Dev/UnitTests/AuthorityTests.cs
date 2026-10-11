@@ -33,6 +33,41 @@ public static class AuthorityTests
 
     public static void Register(TestRunner runner)
     {
+        foreach (var sleeping in new[] { false, true })
+        {
+            runner.Run($"authority/unconfirmed {(sleeping ? "resting" : "moving")} drops defer publication until creation", () =>
+            {
+                using var f = new MatchFixture(runner);
+                f.Match.OnMessage(new NetMessage(Msg.MatchGo, f.Server.Id, 0, new FloatMessage(60)));
+                f.Match.OnMessage(new NetMessage(Msg.Score, f.Server.Id, 0, new ScoreMessage(2, 5, 0)));
+                f.Match.Player.Runtime.GraceUntil = 0;
+                f.Match.OnMessage(new NetMessage(Msg.Shot, f.Server.Id, 3,
+                    new ShotMessage(Vector3.Zero, Vector3.Up, Vector3.Forward, 0, 2, -1)));
+                var drops = f.Match.LiveTanks.Where(t => t.NetId >= BodySync.DropTankBase && t.NetId < BodySync.CarBase).ToArray();
+                TestRunner.Assert(drops.Length > 0, "production shot did not create predicted drops");
+                foreach (var drop in drops) { drop.Sleeping = sleeping; }
+                var known = f.Match.Bodies.Get(Id)!;
+                known.Body.Sleeping = false;
+                f.Server.Clock.Seconds += .1;
+                f.Match._PhysicsProcess(1.0 / 60);
+                TestRunner.Assert(known.Sequence > 0, "pending drops blocked a registered body's stream");
+                TestRunner.Assert(drops.All(t => f.Match.Bodies.Get(t.NetId) is { Sequence: 0, PublishRequired: true }),
+                    "unregistered drop published or consumed its required first state");
+                f.Match.OnMessage(new NetMessage(Msg.Score, f.Server.Id, 0, new ScoreMessage(2, 5 - drops.Length, -drops.Length)));
+                f.Server.Clock.Seconds += .1;
+                f.Match._PhysicsProcess(1.0 / 60);
+                TestRunner.Assert(drops.All(t => f.Match.Bodies.Get(t.NetId)!.Sequence == 0),
+                    "bank debit released publication before creation confirmation");
+                var states = drops.Select(t => new BodyState(t.NetId, t.GlobalTransform, t.LinearVelocity, t.AngularVelocity)).ToArray();
+                f.Match.OnMessage(new NetMessage(Msg.Drop, f.Server.Id, 2, new DropMessage(0, states)));
+                f.Match._PhysicsProcess(1.0 / 60);
+                TestRunner.Assert(drops.All(t => f.Match.Bodies.Get(t.NetId) is { Sequence: 1, PublishRequired: false }),
+                    "confirmation lost the first moving checkpoint or final rest");
+                f.Match._PhysicsProcess(1.0 / 60);
+                TestRunner.Assert(drops.All(t => f.Match.Bodies.Get(t.NetId)!.Sequence == 1),
+                    "confirmation repeatedly published without elapsed network time");
+            });
+        }
         runner.Run("authority/rotating an offset body does not translate its mass center", () =>
         {
             using var body = new BodyFixture(runner);
