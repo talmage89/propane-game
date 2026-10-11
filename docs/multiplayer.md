@@ -35,6 +35,13 @@ The counts and times are tuners (the Match, Tank bank, Multiplayer suburb, Ammo,
 5. **Match:** runs for the lobby's match length.
 6. **End:** a results screen, then back to the lobby.
 
+The server waits up to 20 seconds for loading acknowledgments before counting down anyway. The client's connection
+buffers every current-match event until the match scene has initialized its bodies and HUD, then replays them in
+receive order once. A late builder therefore receives Countdown, Go, scores and even End. Leaving or disconnecting
+clears the buffer; a new MatchStart invalidates the old queue and receiver, and old scene cleanup cannot clear the
+new queue. The inbox is capped at 4096 packets and 4 MiB of wire data; exceeding it disconnects with an explicit
+loading-buffer message rather than continuing with missing events.
+
 ## Changes from single player in a match
 
 - **Hitstop** is off. It changes `Engine.TimeScale`, which also slows the physics and would make the clients drift apart.
@@ -48,24 +55,57 @@ Every client simulates the whole suburb, so the game responds instantly. Each mo
 
 **The server** runs no physics. It hosts the lobbies, relays messages within each match, keeps the score and the match clock, and settles ties: when two claims for the same thing arrive, the first one wins. It runs headless on a dedicated server, or inside a player's game.
 
+Packets are completely decoded into typed data before any state changes or relays. Unknown message types, wrong
+directions, truncated or trailing payloads, invalid counts and ids, nonfinite numbers, invalid rotations and values
+outside wire limits are dropped and logged. Packets are capped at 1 MiB, collections at 4096 entries (body batches
+at 20), strings at 1024 UTF-8 bytes, and vector components at one million meters. These are wire safety ceilings;
+the match's tuners still determine gameplay. Hello, Welcome and Rejected allow trailing extensions so incompatible
+clients can still be told why they were rejected.
+
 **The world.** The server generates the match's suburb and sends the whole plan (roughly 10–30 KB compressed at 2–32 players) rather than just its seed. The generator's trigonometry can differ in the last bit between an Apple Silicon Mac and an x86 Linux machine, and a single flipped comparison would give the players different suburbs. The plan includes every tank's position, elevation, rotation and pile identity; clients do not reroll formations. Houses and other static parts never need syncing.
+
+Construction choices are pure functions of that plan and the shared tuning. Fence style and color use explicit
+integer mixing of the run's coordinates and seed, never a process-salted hash. `make test` hashes the built meshes,
+transforms, body masses and collision shapes (fences included) in two fresh processes using one saved plan.
 
 **Tanks:**
 - *Puncture:* the shooter's client punctures the tank at once. It then sends the cause to everyone: the hole position and normal, the jet's lean, and the bullet's push. Every client starts the same vent from the same starting point.
 - *Ownership:* whoever punctured a venting tank owns it and sends its position and velocity at a set rate. Other clients ease toward that position, and snap only if they have drifted far.
 - *Sleeping tanks:* intact tanks sleep, so they stay in sync without any messages.
 - *Detonation:* whoever detonates the first tank in a chain runs the whole chain on their client and sends each explosion with its position. Other clients play those explosions and don't run chain reactions themselves for remote blasts.
-- *Scoring:* the server credits the point. If two players claim the same tank, the first claim wins.
+- *Scoring:* the server credits the point only for a tank in its ledger that has not already exploded. If two players claim the same tank, the first claim wins. Map tanks are registered from the plan; client-created drops are registered atomically before being relayed. Exploded ids remain reserved for the whole match.
 
 **Players:**
-- Each client owns its own player's movement and sends it to the others, who show it smoothed.
+- Each client owns its own player's movement and sends it to the others, who show it smoothed. Player snapshots
+  include discrete gait, support phase and weapon action alongside the blended rifle poses, so remote creep uses
+  the walk clip and remote sprint uses the sprint clip. Protocol 2 adds these three bytes; this needs a minor release.
 - The shooter's client decides whether a bullet hit a player.
 - The victim's client decides whether a blast ragdolls them, because it knows exactly where they were.
 - The victim's client spawns the dropped tanks and owns them until another player interacts with them.
 
+A drop must contain unique, unused ids from that player's spawn slot, use that player's match color, and fit both
+their bank and the drop reason's tuner. The server refuses the whole batch if any entry is invalid. Scoring and
+spilling happen only while the server's clock is playing; late explosions can still be relayed for their effects
+after time expires, but earn nothing. Known exploded body ids may appear in late snapshots or claims, which clients
+ignore; body ids that never existed are refused. A client missing a server-accepted tank still plays its reported
+blast, including throws, without running a chain or claiming credit locally.
+
+Drops are predicted locally. The server echoes an accepted Drop to its sender as well as the other players, and
+replies with `DropRefused` ids for a fully decoded batch it cannot accept. The sender removes only those pending
+predictions and releases their bank reservation. This also handles legitimate drops overtaken by a live debug
+drop-count change or the server's match deadline. Malformed packets still get no reply.
+
+The ledger proves existence and prevents duplicate scoring; it does not prove hits, movement, proximity or blast
+positions. Those remain decisions of the distributed client authorities.
+
+Moving and final resting body states carry the owner's timestamp. Clients compare both against one ordering
+boundary, retained after a correction finishes, so an unreliable snapshot sent before a reliable rest cannot
+resume stale motion afterward. Genuinely newer movement still wakes the copy; changing owners resets the boundary
+because sender clocks are process-local.
+
 **Left to each client:** debris, small props and fence panels play out locally from the shared blasts. Cars are synced at a low rate, because players use them as cover.
 
-**Platforms.** Mac and Linux builds of the same minor version play together (0.2.0 with 0.2.5). A version check when a player connects turns away builds of another minor version or protocol, and says which version is needed (see Versions and releases in the README).
+**Platforms.** Windows, macOS and Linux builds of the same minor version play together (0.2.0 with 0.2.5). A version check when a player connects turns away builds of another minor version or protocol, and says which version is needed (see Versions and releases in the README).
 
 
 ## Playing
@@ -118,6 +158,8 @@ The server is the game itself started with `-- --server` (and `--headless`). It 
 | `src/Main.cs` | The root scene: menus over a backdrop, single player, the match, or server mode. |
 | `src/Net/LobbyServer.cs` | The server: lobbies, match flow and clock, relaying, scores, first-claim ties, pickups. |
 | `src/Net/NetClient.cs`, `NetTransport.cs`, `Protocol.cs` | The client connection, the ENet transport (with simulated lag for tests), the message types. |
+| `src/Net/MessageCodec.cs`, `TankLedger.cs` | Complete, typed wire decoding and the server's tank existence/lifecycle ledger. |
+| `src/Net/MatchInbox.cs` | Per-match buffering until scene initialization, with generation-safe cleanup. |
 | `src/Net/BuildInfo.cs`, `UpdateCheck.cs` | Versions and who plays together; the launch check for a newer release. |
 | `src/Net/Match.cs` | A match on one player's machine: everything this player sends, and playing what the others send. |
 | `src/Net/BodySync.cs` | Ownership and corrections for tanks and cars. |
@@ -129,22 +171,41 @@ The server is the game itself started with `-- --server` (and `--headless`). It 
 Details settled while building, within the decisions above:
 
 - **Remote players** are full copies of the character (animation, rifle, ragdoll) driven by the states their own game sends. A thrown player's ragdoll falls on its own on every screen, steered after the real one; it gets up where the real one got up. Shots hit other players' bodies and limbs. Players pass through each other.
-- **Ownership** goes to whoever last disturbed a body (a shot, a puncture, a blast, a push, a drop); the match's creator owns everything nobody has touched, and a player's bodies pass to the creator (or the next player) if they leave. Claims go through the server, which echoes them to everyone in one order, so all players agree on each owner.
+- **Ownership** goes to whoever last disturbed a body (a shot, a puncture, a blast, a push, a drop); the match's creator owns everything nobody has touched, and a player's bodies pass to the creator (or the next player) if they leave. Claims go through the server, which echoes them to everyone in one order, so all players agree on each owner. A handoff clears the former owner's correction target and clock comparison. The new owner sends its final state even if its copy was already asleep, so nobody is left correcting toward the former owner forever.
 - **Dropped tanks** glow in the dropper's color while they ignore bullets and chain reactions.
-- **Tuning in a match:** everyone plays on the creator's values: the baked ones in a release build, the creator's live ones in a debug build. In a debug build, F1 opens the panel, and a change applies to every player in the match. The player's own values come back after the match.
+- **Tuning in a match:** everyone plays on the creator's values: the baked ones in a release build, the creator's live ones in a debug build. Only that original creator's debug build gets F1 and may change the match's values. Hosting succession does not transfer this permission. Hello appends a debug-build flag, captured at match start; this is a client capability declaration, not remote build attestation. Tuning crosses the wire as named bool/int/float scalars, with exact exported types and inclusive declared ranges checked before applying the whole snapshot or a change. `FixedSeed` accepts the full int32 range. The player's own values come back after the match.
 - **Starting values** (all tuners): 20 base tanks plus 4 per player; pile limits of 5–12 plus floor(0.25 × players), near the central 40 m; a 190 m base map plus 4 m per player, with clear starts at least 12 m apart; a 30-round magazine, 60 in reserve, at most 150, a 1.6 s reload; 3 base ammo cans plus 1 per player, of 30 rounds that come back after 20 s; a 2:30 match after a 4 s countdown; results for 10 s.
 
 ## Testing
 
 | Command | Checks |
 | --- | --- |
+| `make test` | Plain C# assertion suites (every wire message, malformed payloads, server ledger and permissions, lifecycle buffering and ownership), score-checker regressions, movement and platform checks, generator checks (100 seeds), and separate-process built-world hashes. Add suites under `src/Dev/UnitTests/` and register them with `TestRunner`; any failure prints its name and exits nonzero. |
 | `godot --headless res://scenes/dev/generator_tests.tscn -- --seeds=100` | All four formations; 2, 8, 16, 24 and 32 players; exact supply counts, clear separated reachable starts, hull overlaps and supports, and exact `PlanCodec` round trips. |
 | `tools/dev/net_bots.sh -n 3 -l 60 -- --net-lag=120 --net-jitter=30 --net-loss=3` | A local server and bot players (`scenes/dev/net_test.tscn`) that run to tanks, shoot them and each other, and fetch ammo, under simulated lag and loss. `-w N` shows N of them in windows; `-S host:port` uses an existing server. |
 | `tools/dev/compare_tanks.py out/bot*.log` | Where each bot had every tank at the same match times: counts, states and drift. |
+| `tools/dev/check_scores.py out/server.log out/bot*.log` | Server conservation audit and identical per-player final scores on every bot; exits nonzero on a missing audit or disagreement. |
 | `net_bots.sh -n 2 -w 2 -s "--start-score=8" -- --scenario=duel --capture-dir=DIR` | Scripted close-up: hits with the grace period, dropped tanks, a blast that throws the victim, from both sides. |
+| `net_bots.sh -n 2 -l 45 -w 1 -- --scenario=movement --capture-dir=DIR` | Scripted remote creep, sprint, air aim suppression and held-aim landing through real snapshots; exits 1 on missing states. |
 | `net_bots.sh -n 1 -w 1 -- --scenario=pickup --capture-dir=DIR` | Taking an ammo can and its return. |
+| `net_bots.sh -n 2 -w 2 -l 10 -s "--start-score=8" -- --scenario=drop-refusal --net-lag=120 --net-jitter=30 --net-loss=3 --capture-dir=DIR` | The creator lowers the hit-drop count while a hit is in flight; the victim rolls back the refused drop, both clients keep one accepted tank and a bank of 7. |
 | `net_bots.sh -n 4 -l 120 -b smart,simple,smart,simple` | Bot brains against each other; the server log ends each match with tanks gained / lost to hits / lost to throws. Add `--bot-log` to log what each bot is doing. |
+| `net_bots.sh -n 2 -l 10 -- --match-delay=26` | Builds after the server's loading timeout and Go; the ready log must already say `playing True`. Use `--matches=2` without the delay to exercise another round on the same connection. |
 | `godot res://scenes/dev/menu_test.tscn -- --capture-dir=DIR` | Clicks through every menu, a solo match, leaving it, and single player and back. |
 | `menu_test.tscn -- --scenario=update --update-check --fake-version=0.0.9 --capture-dir=DIR` | The offer of a newer release, and a newer server (`-- --server --port=24993 --fake-version=9.9.0`) asking for an update. |
 
+The duel needs two players, `--start-score=8`, default tank-bank tuners and at least 15 seconds of play. It checks
+that three player hits spill exactly two tanks through the grace period, then follows one dropped tank continuously
+and retries missed shots until it explodes. Blast and throw captures are timed from the observed events, so lag does
+not move them out of frame. The pickup scenario checks that a can adds its rounds exactly once, vanishes and returns;
+allow at least `PickupRespawnTime + PickupRevealTime * 1.2 + 6` seconds. Both scenarios exit nonzero if a stage fails
+or the match ends before all checks complete. These assertions also run headlessly.
+
 Results, 2026-10-09: with three bots under 120 ms round trip, 30 ms jitter and 3% loss, every bot agreed on which tanks existed and their states throughout; resting tanks matched exactly and venting tanks to within about half a meter. The same held through the Docker server on another machine, over the LAN and over a VPN. When the match's creator left mid-match, the others played on in step. A client with a different protocol was turned away with a message.
+
+Protocol 2 adds match ids, scalar tuning, timestamps on final body rests, drop refusal replies and discrete player
+movement states, and appends the debug flag to Hello. These changes share one unreleased protocol bump; the next
+release must be a minor release. Every match-scoped request, event and relay carries its match id, and either side
+ignores a different id.
+The server ends each match with a bank audit: initial test scores + detonated map tanks + re-detonated drops - spills
+must equal total banked, including the banks of departed players retained in the final standings.

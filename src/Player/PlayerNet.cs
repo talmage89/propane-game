@@ -90,6 +90,9 @@ public struct PlayerNetState
     public float Ready;
     public float Reload;
     public bool Grounded;
+    public PlayerGait Gait;
+    public PlayerSupport Support;
+    public WeaponAction Weapon;
     public Mode State;
     public Vector3 PelvisPosition;
     public Vector3 PelvisVelocity;
@@ -105,7 +108,9 @@ public struct PlayerNetState
         s.Velocity = a.Velocity.Lerp(b.Velocity, t);
         s.Yaw = Mathf.LerpAngle(a.Yaw, b.Yaw, t);
         s.AimTarget = a.AimTarget.Lerp(b.AimTarget, t);
-        s.Aim = Mathf.Lerp(a.Aim, b.Aim, t);
+        // Discrete weapon/support ownership wins over pose interpolation: no residual aim in the air/reload.
+        s.Aim = s.Weapon == WeaponAction.Aim && s.Support is PlayerSupport.Grounded or PlayerSupport.Landing
+            ? Mathf.Lerp(a.Aim, b.Aim, t) : 0;
         s.Sprint = Mathf.Lerp(a.Sprint, b.Sprint, t);
         s.Ready = Mathf.Lerp(a.Ready, b.Ready, t);
         s.Reload = Mathf.Lerp(a.Reload, b.Reload, t);

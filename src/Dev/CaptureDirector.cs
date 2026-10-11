@@ -23,6 +23,7 @@ public partial class CaptureDirector : Node
     private long framesWritten;
     private long framesSent;
     private int recordPending;
+    private bool recordUnavailable;
     private System.Threading.Thread? recordWriter;
     private readonly System.Collections.Concurrent.BlockingCollection<(byte[] Data, int Repeat)> recordQueue = new(3);
 
@@ -47,6 +48,13 @@ public partial class CaptureDirector : Node
         }
         recordQueue.CompleteAdding();
         recordWriter?.Join();
+        // Drain managed GPU readback callbacks while .NET is still alive. Otherwise RenderingDevice.finalize
+        // invokes them during engine shutdown, after Godot has torn down its C# bindings.
+        var device = RenderingServer.GetRenderingDevice();
+        for (var frame = 0; recordPending > 0 && frame <= device.GetFrameDelay(); frame++)
+        {
+            RenderingServer.ForceDraw();
+        }
         recorder.WaitForExit();
         GD.Print($"[record] {framesWritten / recordFps:0.0} s, {framesSent} distinct frames of {framesWritten}, ffmpeg exit {recorder.ExitCode}");
         recorder = null;
@@ -78,7 +86,7 @@ public partial class CaptureDirector : Node
     private void Record()
     {
         var path = DevArgs.Get("record");
-        if (path == null || DisplayServer.GetName() == "headless")
+        if (path == null || recordUnavailable || DisplayServer.GetName() == "headless")
         {
             return;
         }
@@ -88,15 +96,16 @@ public partial class CaptureDirector : Node
             // The rendered texture, which can be larger than the viewport's logical size.
             var format = RenderingServer.GetRenderingDevice().TextureGetFormat(RenderingServer.TextureGetRdTexture(GetViewport().GetTexture().GetRid()));
             recordSize = new Vector2I((int)format.Width, (int)format.Height);
-            recorder = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            try
             {
-                FileName = "ffmpeg",
-                Arguments = $"-loglevel error -y -f rawvideo -pix_fmt rgba -s {recordSize.X}x{recordSize.Y} -r {recordFps} -i - " +
-                            "-vf scale='min(1280,iw)':-2 -c:v libx264 -preset veryfast -crf 23 -pix_fmt yuv420p " +
-                            $"-movflags +faststart \"{path}\"",
-                RedirectStandardInput = true,
-                UseShellExecute = false,
-            })!;
+                recorder = System.Diagnostics.Process.Start(RecorderStartInfo(path, recordSize, recordFps))!;
+            }
+            catch (System.ComponentModel.Win32Exception e)
+            {
+                recordUnavailable = true;
+                GD.PushWarning($"[record] Could not start ffmpeg; put it on PATH to record: {e.Message}");
+                return;
+            }
             recordStart = now;
             recordWriter = new System.Threading.Thread(() =>
             {
@@ -133,6 +142,28 @@ public partial class CaptureDirector : Node
                 framesSent++;
             }
         }));
+    }
+
+    /// <summary>Pass literal arguments on every OS, including Windows paths with spaces or a trailing backslash.</summary>
+    internal static System.Diagnostics.ProcessStartInfo RecorderStartInfo(string path, Vector2I size, double fps)
+    {
+        var start = new System.Diagnostics.ProcessStartInfo
+        {
+            FileName = "ffmpeg",
+            RedirectStandardInput = true,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+        };
+        foreach (var arg in new[]
+                 {
+                     "-loglevel", "error", "-y", "-f", "rawvideo", "-pix_fmt", "rgba", "-s", $"{size.X}x{size.Y}",
+                     "-r", fps.ToString(System.Globalization.CultureInfo.InvariantCulture), "-i", "-", "-vf", "scale='min(1280,iw)':-2",
+                     "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv420p", "-movflags", "+faststart", path,
+                 })
+        {
+            start.ArgumentList.Add(arg);
+        }
+        return start;
     }
 
     public void Screenshot(string name)

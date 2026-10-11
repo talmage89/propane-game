@@ -1,3 +1,4 @@
+using System;
 using Godot;
 using Propane.Core;
 
@@ -16,7 +17,10 @@ public struct PlayerIntent
     /// <summary>The fire button is down (for automatic fire).</summary>
     public bool FireHeld;
     public bool ReloadPressed;
+    /// <summary>Mouse displacement in screen pixels, consumed once per tick.</summary>
     public Vector2 Look;
+    /// <summary>Stick direction after deadzone, before response curve; a rate, not displacement.</summary>
+    public Vector2 LookStick;
 }
 
 public interface IPlayerInputSource
@@ -24,55 +28,84 @@ public interface IPlayerInputSource
     PlayerIntent Read();
 }
 
-/// <summary>Keyboard and mouse. Mouse motion accumulates between reads.</summary>
+/// <summary>Gameplay actions from any device. Mouse motion accumulates between reads.</summary>
 public sealed class DeviceInput : IPlayerInputSource
 {
+    private readonly Func<bool> gameplayEnabled;
+
+    /// <summary>The facade supplies UI focus; tests can enable actions without a rendered mouse capture.</summary>
+    public DeviceInput(Func<bool>? gameplayEnabled = null) =>
+        this.gameplayEnabled = gameplayEnabled ?? (() => Input.MouseMode == Input.MouseModeEnum.Captured);
+
     private Vector2 look;
     private bool jump;
     private bool fire;
     private bool reload;
+    private bool jumpDown;
+    private bool fireDown;
+    private bool reloadDown;
+
+    /// <summary>Discard queued input and sample held actions when physics pauses/resumes or focus changes.</summary>
+    public void Reset()
+    {
+        look = Vector2.Zero;
+        jump = fire = reload = false;
+        SynchronizeHeldActions();
+    }
+
+    private void SynchronizeHeldActions()
+    {
+        jumpDown = Input.IsActionPressed(InputSetup.Jump);
+        fireDown = Input.IsActionPressed(InputSetup.Fire);
+        reloadDown = Input.IsActionPressed(InputSetup.Reload);
+    }
 
     public void Accumulate(InputEvent @event)
     {
-        if (Input.MouseMode != Input.MouseModeEnum.Captured)
+        var enabled = gameplayEnabled();
+        // Motion is displacement and has no InputMap event binding; buttons/axes use actions only.
+        if (enabled && @event is InputEventMouseMotion motion)
         {
-            return;
+            look += motion.ScreenRelative;
         }
-        switch (@event)
-        {
-            case InputEventMouseMotion motion:
-                look += motion.ScreenRelative;
-                break;
-            case InputEventMouseButton { Pressed: true } button when button.IsAction(InputSetup.Fire):
-                fire = true;
-                break;
-            case InputEventKey { Pressed: true, Echo: false } key when key.IsAction(InputSetup.Jump):
-                jump = true;
-                break;
-            case InputEventKey { Pressed: true, Echo: false } key when key.IsAction(InputSetup.Reload):
-                reload = true;
-                break;
-        }
+        AccumulatePress(@event, InputSetup.Jump, enabled, ref jumpDown, ref jump);
+        AccumulatePress(@event, InputSetup.Fire, enabled, ref fireDown, ref fire);
+        AccumulatePress(@event, InputSetup.Reload, enabled, ref reloadDown, ref reload);
+    }
+
+    private static void AccumulatePress(InputEvent e, string action, bool enabled, ref bool down, ref bool pressed)
+    {
+        if (!e.IsAction(action)) return;
+        // Input holds the aggregate action state, including other devices. Axis events above the threshold can
+        // arrive repeatedly; only the rising edge is a press. Track releases even while gameplay is disabled.
+        var held = Input.IsActionPressed(action);
+        pressed |= enabled && held && !down && e.IsActionPressed(action);
+        down = held;
     }
 
     public PlayerIntent Read()
     {
-        var captured = Input.MouseMode == Input.MouseModeEnum.Captured;
+        var captured = gameplayEnabled();
         var intent = new PlayerIntent
         {
-            Move = captured ? Input.GetVector(InputSetup.MoveLeft, InputSetup.MoveRight, InputSetup.MoveBack, InputSetup.MoveForward) : Vector2.Zero,
+            Move = captured ? Input.GetVector(InputSetup.MoveLeft, InputSetup.MoveRight, InputSetup.MoveBack, InputSetup.MoveForward, Tuning.Current.StickDeadzone) : Vector2.Zero,
             Sprint = captured && Input.IsActionPressed(InputSetup.Sprint),
             Aim = captured && Input.IsActionPressed(InputSetup.Aim),
-            JumpPressed = jump,
-            FirePressed = fire,
+            JumpPressed = captured && jump,
+            FirePressed = captured && fire,
             FireHeld = captured && Input.IsActionPressed(InputSetup.Fire),
-            ReloadPressed = reload,
-            Look = look,
+            ReloadPressed = captured && reload,
+            Look = captured ? look : Vector2.Zero,
+            LookStick = captured ? Input.GetVector(InputSetup.LookLeft, InputSetup.LookRight,
+                InputSetup.LookUp, InputSetup.LookDown, Tuning.Current.StickDeadzone) : Vector2.Zero,
         };
         look = Vector2.Zero;
         jump = false;
         fire = false;
         reload = false;
+        // UI can consume a release before _UnhandledInput sees it. Resynchronize at the physics sample so
+        // returning to gameplay does not lose the next press; pending edges above are still consumed once.
+        SynchronizeHeldActions();
         return intent;
     }
 }

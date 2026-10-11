@@ -1,4 +1,6 @@
+using System.Diagnostics.CodeAnalysis;
 using Godot;
+using Propane.Core;
 
 namespace Propane.Player;
 
@@ -7,6 +9,7 @@ namespace Propane.Player;
 /// time-scaled to the measured ground speed of its clip so feet do not slide. Arms and fingers take the pistol-hold
 /// pose as a base for the rifle IK. One-shots cover landing, staggering and getting up.
 /// </summary>
+[SuppressMessage("Design", "CA1001", Justification = "modelRoot owns the AnimationTree node and frees it with the character.")]
 public sealed class CharacterAnimator
 {
     // Ground speed of each clip, measured from foot contact in the character lab.
@@ -38,6 +41,7 @@ public sealed class CharacterAnimator
     };
 
     private readonly AnimationTree tree;
+    private AnimationNodeTransition gaitTransition = null!;
     private string currentGait = "idle";
     private float airBlend;
 
@@ -63,38 +67,38 @@ public sealed class CharacterAnimator
     private const float GetUpSpeed = 1.1f;
 
     /// <summary>Signed ground speed along the body's facing (negative = backpedalling).</summary>
-    public void UpdateLocomotion(float forwardSpeed, float planarSpeed, bool grounded, float delta)
+    public void UpdateLocomotion(float forwardSpeed, float planarSpeed, bool grounded, float delta, PlayerGait resolvedGait)
     {
+        var tuning = Tuning.Current;
+        gaitTransition.XfadeTime = tuning.GaitBlendTime;
         var speed = planarSpeed;
         var direction = forwardSpeed < -0.2f ? -1f : 1f;
         string gait;
-        if (speed < 0.35f)
+        if (speed < tuning.AnimationIdleSpeed)
         {
             gait = "idle";
         }
-        else if (speed < 2.4f)
-        {
-            gait = "walk";
-        }
-        else if (speed < 7.6f)
-        {
-            gait = "jog";
-        }
         else
         {
-            gait = "sprint";
+            gait = resolvedGait switch
+            {
+                PlayerGait.Creep => "walk",
+                PlayerGait.Sprint => "sprint",
+                _ => "jog",
+            };
         }
         if (gait != currentGait)
         {
             currentGait = gait;
             tree.Set(Gait, gait);
         }
-        tree.Set(WalkScale, direction * Mathf.Clamp(speed / WalkClipSpeed, 0.5f, 2.2f));
+        // Creep is a live speed dial. A playback cap would make the planted feet slide at faster settings.
+        tree.Set(WalkScale, direction * speed / WalkClipSpeed);
         tree.Set(JogScale, direction * Mathf.Clamp(speed / JogClipSpeed, 0.5f, 1.35f));
         tree.Set(SprintScale, direction * Mathf.Clamp(speed / SprintClipSpeed, 0.7f, 1.3f));
         tree.Set(IdleScale, 1f);
 
-        airBlend = Mathf.MoveToward(airBlend, grounded ? 0f : 1f, delta * (grounded ? 10f : 5f));
+        airBlend = Mathf.MoveToward(airBlend, grounded ? 0f : 1f, delta * (grounded ? tuning.AirPoseLowerSpeed : tuning.AirPoseRaiseSpeed));
         tree.Set(Air, airBlend);
     }
 
@@ -112,7 +116,7 @@ public sealed class CharacterAnimator
     /// <summary>Weight of the pistol-hold base pose on the arms (0 when ragdolling or getting up).</summary>
     public void SetHoldWeight(float weight) => tree.Set(Hold, weight);
 
-    private static AnimationNodeBlendTree BuildTree(string skeletonPath)
+    private AnimationNodeBlendTree BuildTree(string skeletonPath)
     {
         var root = new AnimationNodeBlendTree();
 
@@ -131,7 +135,7 @@ public sealed class CharacterAnimator
         root.ConnectNode("jog_scale", 0, "jog");
         root.ConnectNode("sprint_scale", 0, "sprint");
 
-        var gait = new AnimationNodeTransition { XfadeTime = 0.22f, AllowTransitionToSelf = false };
+        var gait = gaitTransition = new AnimationNodeTransition { XfadeTime = Tuning.Current.GaitBlendTime, AllowTransitionToSelf = false };
         gait.InputCount = 4;
         gait.SetInputName(0, "idle");
         gait.SetInputName(1, "walk");

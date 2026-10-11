@@ -1,0 +1,28 @@
+name: Set up Godot .NET
+description: Install .NET 10 and the Linux x86_64 Godot .NET editor
+inputs:
+  godot-version:
+    description: Stable Godot version
+    required: true
+  cache:
+    description: Cache the editor (release already caches its tool bundle)
+    default: 'true'
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: 10.0.x
+
+    - name: Cache Godot
+      if: inputs.cache == 'true'
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/propane-ci/Godot_v${{ inputs.godot-version }}-stable_mono_linux_x86_64
+        key: godot-mono-linux-x86_64-${{ inputs.godot-version }}
+
+    - name: Install Godot
+      shell: bash
+      env:
+        GODOT_VERSION: ${{ inputs.godot-version }}
+      run: '"${{ github.action_path }}/install.sh" "$GODOT_VERSION" "$HOME/.cache/propane-ci"'

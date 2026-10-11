@@ -26,6 +26,13 @@ public partial class Main : Node
 
     public override void _Ready()
     {
+        // Official release templates disallow command-line scene overrides. Keep the same smoke test available in
+        // an untouched archive; its nested Main goes through the normal front end below.
+        if (DevArgs.Get("release-test") != null && GetParent() == GetTree().Root)
+        {
+            AddChild(new ReleaseTest());
+            return;
+        }
         if (DevArgs.Get("server") != null)
         {
             RunServer();
@@ -197,7 +204,7 @@ public partial class Main : Node
         // Let the loading screen draw before the suburb is built, which takes a moment.
         await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
         await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-        if (generation != matchGeneration || net.State != NetClient.Status.Connected)
+        if (generation != matchGeneration || net.State != NetClient.Status.Connected || net.ActiveMatchId != setup.Id)
         {
             return;
         }
@@ -217,6 +224,8 @@ public partial class Main : Node
     {
         if (match != null)
         {
+            // Exit synchronously so its tuning and callbacks are restored before another scene enters.
+            RemoveChild(match);
             match.QueueFree();
             match = null;
         }

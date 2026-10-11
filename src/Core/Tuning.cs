@@ -83,17 +83,56 @@ public partial class Tuning : Resource
         return tuning;
     }
 
-    /// <summary>Sets the values in a snapshot that this build knows; unknown names are ignored.</summary>
+    private static System.Collections.Generic.Dictionary<string, (Variant.Type Type, double Min, double Max)>? schema;
+
+    /// <summary>Validates every entry before any value changes. Export hints define inclusive network limits.</summary>
+    public static void ValidateSnapshot(Godot.Collections.Dictionary values, bool complete = false)
+    {
+        if (schema == null)
+        {
+            schema = new();
+            using var defaults = new Tuning();
+            var names = new System.Collections.Generic.HashSet<string>(ValueNames(defaults));
+            foreach (var entry in defaults.GetPropertyList())
+            {
+                var name = entry["name"].AsString();
+                if (!names.Contains(name)) { continue; }
+                var type = (Variant.Type)entry["type"].AsInt64();
+                var range = entry["hint_string"].AsString().Split(',');
+                var min = type == Variant.Type.Int ? int.MinValue : double.MinValue;
+                var max = type == Variant.Type.Int ? int.MaxValue : double.MaxValue;
+                if ((PropertyHint)entry["hint"].AsInt64() == PropertyHint.Range)
+                {
+                    min = double.Parse(range[0], System.Globalization.CultureInfo.InvariantCulture);
+                    max = double.Parse(range[1], System.Globalization.CultureInfo.InvariantCulture);
+                }
+                schema[name] = (type, min, max);
+            }
+        }
+        if (complete && values.Count != schema.Count) { throw new System.IO.InvalidDataException("incomplete tuning snapshot"); }
+        foreach (var (key, value) in values)
+        {
+            if (key.VariantType != Variant.Type.String || !schema.TryGetValue(key.AsString(), out var spec) || value.VariantType != spec.Type)
+            {
+                throw new System.IO.InvalidDataException($"unknown tuner or wrong type: {key}");
+            }
+            if (spec.Type == Variant.Type.Bool) { continue; }
+            var number = value.AsDouble();
+            if (!double.IsFinite(number) || number < spec.Min || number > spec.Max)
+            {
+                throw new System.IO.InvalidDataException($"tuner outside declared range: {key}");
+            }
+        }
+    }
+
+    /// <summary>Atomically applies a validated snapshot; unknown names and invalid values are refused.</summary>
     public void Apply(Godot.Collections.Dictionary values)
     {
-        var known = new System.Collections.Generic.HashSet<string>(ValueNames(this));
+        ValidateSnapshot(values);
         foreach (var (key, value) in values)
         {
             var name = key.AsString();
-            if (known.Contains(name))
-            {
-                Set(name, value);
-            }
+            Set(name, value);
         }
     }
 
@@ -163,9 +202,41 @@ public partial class Tuning : Resource
     // ---------------------------------------------------------------- Player and ragdoll
     [ExportGroup("Player")]
     [Export(PropertyHint.Range, "0.0002,0.01,0.0001")] public float MouseSensitivity { get; set; } = 0.0022f;
+    /// <summary>Right stick look at full deflection, in degrees per second.</summary>
+    [Export(PropertyHint.Range, "10,720,5")] public float StickLookDegreesPerSecond { get; set; } = 180f;
+    [Export(PropertyHint.Range, "1,4,0.1")] public float StickLookCurve { get; set; } = 1.8f;
+    [Export(PropertyHint.Range, "0,0.9,0.01")] public float StickDeadzone { get; set; } = 0.2f;
     [Export(PropertyHint.Range, "1,20,0.1")] public float RunSpeed { get; set; } = 6f;
     [Export(PropertyHint.Range, "1,30,0.1")] public float SprintSpeed { get; set; } = 9.5f;
-    [Export(PropertyHint.Range, "0.5,15,0.1")] public float AimMoveSpeed { get; set; } = 3.6f;
+    /// <summary>Upright aimed walk, with playback scaled from the clip's native 0.98 m/s.</summary>
+    [Export(PropertyHint.Range, "0.1,5,0.01")] public float CreepSpeed { get; set; } = 1.6f;
+    [Export(PropertyHint.Range, "0,0.5,0.01")] public float CoyoteTime { get; set; } = 0.12f;
+    [Export(PropertyHint.Range, "0,0.5,0.01")] public float JumpBufferTime { get; set; } = 0.12f;
+    [Export(PropertyHint.Range, "0,1,0.01")] public float SprintForwardThreshold { get; set; } = 0.3f;
+    [Export(PropertyHint.Range, "0,4,0.05")] public float ReadyHoldTime { get; set; } = 1.3f;
+    [Export(PropertyHint.Range, "1,40,0.5")] public float TurnSharpness { get; set; } = 14f;
+    [Export(PropertyHint.Range, "1,40,0.5")] public float AimBlendSpeed { get; set; } = 9f;
+    [Export(PropertyHint.Range, "1,40,0.5")] public float SprintRaiseSpeed { get; set; } = 7f;
+    [Export(PropertyHint.Range, "1,40,0.5")] public float SprintLowerSpeed { get; set; } = 17.5f;
+    [Export(PropertyHint.Range, "1,40,0.5")] public float ReadyRaiseSpeed { get; set; } = 14f;
+    [Export(PropertyHint.Range, "0.1,20,0.1")] public float ReadyLowerSpeed { get; set; } = 2.5f;
+    [Export(PropertyHint.Range, "1,40,0.5")] public float RecoilRecoverySpeed { get; set; } = 9f;
+    [Export(PropertyHint.Range, "0,1,0.01")] public float StaggerMoveControl { get; set; } = 0.25f;
+    [Export(PropertyHint.Range, "0,30,0.5")] public float GroundKnockbackFriction { get; set; } = 15f;
+    [Export(PropertyHint.Range, "0,10,0.1")] public float AirKnockbackFriction { get; set; } = 1.5f;
+    [Export(PropertyHint.Range, "0,2,0.05")] public float LandingMinAirTime { get; set; } = 0.3f;
+    [Export(PropertyHint.Range, "0,3,0.05")] public float LandingPoseTime { get; set; } = 1f;
+    [Export(PropertyHint.Range, "0,1,0.01")] public float LandingTraumaPerSecond { get; set; } = 0.15f;
+    [Export(PropertyHint.Range, "0,1,0.01")] public float LandingTraumaMax { get; set; } = 0.25f;
+    [Export(PropertyHint.Range, "0,120,1")] public float CombatSpineTwistDegrees { get; set; } = 70f;
+    [Export(PropertyHint.Range, "0,180,1")] public float CombatTurnDegrees { get; set; } = 50f;
+    [Export(PropertyHint.Range, "90,180,1")] public float BackpedalAngleDegrees { get; set; } = 108f;
+    [Export(PropertyHint.Range, "0,1,0.01")] public float MovingInputThreshold { get; set; } = 0.1f;
+    [Export(PropertyHint.Range, "0,1,0.01")] public float FacingInputThreshold { get; set; } = 0.2f;
+    [Export(PropertyHint.Range, "0,1,0.01")] public float AnimationIdleSpeed { get; set; } = 0.35f;
+    [Export(PropertyHint.Range, "0,1,0.01")] public float GaitBlendTime { get; set; } = 0.22f;
+    [Export(PropertyHint.Range, "1,40,0.5")] public float AirPoseRaiseSpeed { get; set; } = 5f;
+    [Export(PropertyHint.Range, "1,40,0.5")] public float AirPoseLowerSpeed { get; set; } = 10f;
     [Export(PropertyHint.Range, "1,120,1")] public float Acceleration { get; set; } = 45f;
     [Export(PropertyHint.Range, "0,1,0.01")] public float AirControl { get; set; } = 0.3f;
     [Export(PropertyHint.Range, "0,20,0.1")] public float JumpVelocity { get; set; } = 6.4f;
@@ -191,10 +262,15 @@ public partial class Tuning : Resource
     [Export(PropertyHint.Range, "1,20,0.1")] public float FireRate { get; set; } = 9f;
     [Export(PropertyHint.Range, "0,15,0.05")] public float HipSpreadDegrees { get; set; } = 3.2f;
     [Export(PropertyHint.Range, "0,10,0.01")] public float AimSpreadDegrees { get; set; } = 0.3f;
+    [Export(PropertyHint.Range, "0,10,0.05")] public float AirSpreadDegrees { get; set; } = 2.5f;
+    [Export(PropertyHint.Range, "0,1,0.01")] public float AimMoveSpreadReduction { get; set; } = 0.6f;
+    [Export(PropertyHint.Range, "0,1,0.01")] public float AimRecoilScale { get; set; } = 0.6f;
+    [Export(PropertyHint.Range, "0,1,0.01")] public float ShotSprintPoseLimit { get; set; } = 0.3f;
     [Export(PropertyHint.Range, "0,10,0.05")] public float MoveSpreadDegrees { get; set; } = 1.6f;
     [Export(PropertyHint.Range, "0,5,0.05")] public float ShotBloomDegrees { get; set; } = 0.7f;
     [Export(PropertyHint.Range, "0,60,0.5")] public float BloomRecovery { get; set; } = 9f;
     [Export(PropertyHint.Range, "0,5,0.05")] public float RecoilKickDegrees { get; set; } = 0.7f;
+    [Export(PropertyHint.Range, "10,1000,10")] public float ShotRange { get; set; } = 400f;
     [Export(PropertyHint.Range, "0,200,1")] public float BulletImpulse { get; set; } = 30f;
 
     // ---------------------------------------------------------------- World

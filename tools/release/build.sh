@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Exports the macOS (Apple Silicon) and Linux (x86_64) release builds and packages them in build/dist.
+# Exports the Windows (x86_64), macOS (Apple Silicon) and Linux (x86_64) release builds and packages them in build/dist.
 # Usage: tools/release/build.sh [path to the Godot .NET editor binary]
 # Needs rcodesign (https://github.com/indygreg/apple-platform-rs) on PATH or in $RCODESIGN to sign the macOS app.
 # Godot's exit code does not always reflect export errors, so the logs are checked as well.
@@ -17,9 +17,9 @@ if [[ -z "$rcodesign" ]]; then
 fi
 
 rm -rf build
-mkdir -p build/macos build/linux build/dist build/notices
+mkdir -p build/macos build/linux build/windows build/dist build/notices
 
-# The build id lets the multiplayer server turn away clients from a different commit.
+# The build id identifies the commit in the menu and multiplayer logs; it does not decide compatibility.
 git rev-parse --short HEAD >build_id.txt 2>/dev/null || echo "unknown" >build_id.txt
 trap 'rm -f "$project/build_id.txt"' EXIT
 
@@ -36,6 +36,7 @@ run() {
 run import --import
 run macos --export-release macOS build/macos/Propane.zip
 run linux --export-release Linux build/linux/Propane.x86_64
+run windows --export-release Windows build/windows/Propane.exe
 
 # Godot is MIT licensed and asks games to ship its notices.
 cp CREDITS.md build/notices/CREDITS.md
@@ -56,5 +57,11 @@ mkdir -p "$linux_dir"
 cp -R build/linux/. "$linux_dir/"
 cp build/notices/* "$linux_dir/"
 tar -C build -czf "build/dist/Propane-$version-linux-x86_64.tar.gz" "$(basename "$linux_dir")"
+
+windows_dir="build/Propane-$version-windows-x86_64"
+mkdir -p "$windows_dir"
+cp -R build/windows/. "$windows_dir/"
+cp build/notices/* "$windows_dir/"
+(cd "$windows_dir" && zip -qry "$project/build/dist/Propane-$version-windows-x86_64.zip" .)
 
 ls -lh build/dist

@@ -68,11 +68,20 @@ public partial class CameraRig : Node3D
         pitch = pitchDegrees;
     }
 
-    public void Look(Vector2 mouseDelta)
+    public void Look(Vector2 mouseDelta, Vector2 stick = default, float dt = 0)
     {
         var sensitivity = Mathf.RadToDeg(Tuning.Current.MouseSensitivity);
-        yaw -= mouseDelta.X * sensitivity;
-        pitch = Mathf.Clamp(pitch - mouseDelta.Y * sensitivity, PitchMin, PitchMax);
+        var displacement = mouseDelta * sensitivity + StickLookDelta(stick, dt,
+            Tuning.Current.StickLookDegreesPerSecond, Tuning.Current.StickLookCurve);
+        yaw -= displacement.X;
+        pitch = Mathf.Clamp(pitch - displacement.Y, PitchMin, PitchMax);
+    }
+
+    /// <summary>Radial response preserves stick direction; rate integration is independent of tick frequency.</summary>
+    public static Vector2 StickLookDelta(Vector2 stick, float dt, float degreesPerSecond, float curve)
+    {
+        var length = Mathf.Min(stick.Length(), 1f);
+        return length > 0 ? stick.Normalized() * Mathf.Pow(length, curve) * degreesPerSecond * dt : Vector2.Zero;
     }
 
     /// <summary>Recoil: kicks the view up; most of it recovers on its own.</summary>

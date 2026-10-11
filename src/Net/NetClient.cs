@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Godot;
 using Propane.Core;
 
@@ -15,14 +16,14 @@ public sealed record PlayerProfile(int Id, string Name, int Color);
 public sealed record LobbyInfo(int Id, int CreatorId, float MatchLength, LobbyServer.LobbyPhase Phase, IReadOnlyList<PlayerProfile> Members);
 
 /// <summary>Everything a client needs to start a match.</summary>
-public sealed record MatchSetup(byte[] Plan, int HostId, float Length, Godot.Collections.Dictionary Tuning, IReadOnlyList<(PlayerProfile Player, int Spawn)> Players);
+public sealed record MatchSetup(int Id, byte[] Plan, int HostId, bool CreatorDebug, float Length, Godot.Collections.Dictionary Tuning, IReadOnlyList<(PlayerProfile Player, int Spawn)> Players);
 
 /// <summary>A final standing, from the server.</summary>
 public sealed record Standing(int Id, string Name, int Color, int Score, bool Present);
 
 /// <summary>
 /// The client's connection to the server: connects and introduces itself, follows the lobby list and the lobby it is
-/// in, and hands everything about a running match to whoever listens to <see cref="MatchMessage"/>.
+/// in, and hands everything about a running match to whoever listens to <see cref="AttachMatch"/>.
 /// </summary>
 public partial class NetClient : Node
 {
@@ -80,8 +81,16 @@ public partial class NetClient : Node
 
     public event Action<MatchSetup>? MatchStarting;
 
-    /// <summary>Every message about the running match, with its type and the reader positioned after the type byte.</summary>
-    public event Action<Msg, NetReader>? MatchMessage;
+    private readonly MatchInbox inbox = new();
+
+    public int ActiveMatchId => inbox.MatchId;
+
+    /// <summary>Hands queued and subsequent messages to a fully initialized match.</summary>
+    public bool AttachMatch(int id, Action<NetMessage> receiver) => inbox.Attach(id, receiver);
+
+    public void DetachMatch(int id, Action<NetMessage> receiver) => inbox.Detach(id, receiver);
+
+    private int lastMatchId;
 
     public override void _Ready()
     {
@@ -89,7 +98,7 @@ public partial class NetClient : Node
         {
             if (id == NetTransport.ServerId)
             {
-                Send(new NetWriter(Msg.Hello).Int((int)Dev.DevArgs.GetFloat("fake-protocol", Protocol.Version)).String(BuildInfo.GameVersion).String(BuildInfo.Build).String(PlayerName).Int(Color));
+                Send(new NetWriter(Msg.Hello).Int((int)Dev.DevArgs.GetFloat("fake-protocol", Protocol.Version)).String(BuildInfo.GameVersion).String(BuildInfo.Build).String(PlayerName).Int(Color).Bool(OS.IsDebugBuild()));
             }
         };
         transport.PeerDisconnected += id =>
@@ -106,13 +115,18 @@ public partial class NetClient : Node
         transport.SimulatedLoss = Dev.DevArgs.GetFloat("net-loss", 0) / 100f;
     }
 
-    public override void _ExitTree() => transport.Close();
+    public override void _ExitTree()
+    {
+        inbox.Clear();
+        transport.Close();
+    }
 
     public void Connect(string address, int port, string name, int color)
     {
         Disconnect();
         PlayerName = Protocol.CleanName(name);
         Color = color;
+        lastMatchId = 0;
         lastError = null;
         RejectedBy = null;
         var error = transport.Connect(address, port);
@@ -132,6 +146,7 @@ public partial class NetClient : Node
             return;
         }
         transport.Close();
+        inbox.Clear();
         Lobby = null;
         MyId = 0;
         SetState(Status.Offline, null);
@@ -165,6 +180,7 @@ public partial class NetClient : Node
     public void LeaveLobby()
     {
         Send(new NetWriter(Msg.LeaveLobby));
+        inbox.Clear();
         Lobby = null;
         LobbyChanged?.Invoke();
     }
@@ -188,102 +204,72 @@ public partial class NetClient : Node
     public void StartMatch()
     {
         var tuning = OS.IsDebugBuild() ? Tuning.Current : Tuning.LoadBaked();
-        Send(new NetWriter(Msg.StartMatch).Bytes(GD.VarToBytes(tuning.Snapshot())));
+        Send(new NetWriter(Msg.StartMatch).Snapshot(tuning.Snapshot()));
     }
 
     // ------------------------------------------------------------------ Incoming
 
-    private void Handle(byte[] data)
+    internal void Handle(byte[] data)
     {
-        var type = (Msg)data[0];
-        var r = new NetReader(data);
         try
         {
-            switch (type)
+            var message = MessageCodec.Decode(data, fromServer: true);
+            switch (message.Payload)
             {
-                case Msg.Welcome:
-                    MyId = r.Int();
+                case WelcomeMessage welcome:
+                    MyId = welcome.Id;
                     SetState(Status.Connected, null);
                     break;
-                case Msg.Rejected:
-                    lastError = r.String();
-                    RejectedBy = r.AtEnd ? null : r.String();
+                case RejectedMessage rejected:
+                    lastError = rejected.Reason;
+                    RejectedBy = rejected.Version;
                     Drop(lastError);
                     break;
-                case Msg.Notice:
-                    NoticeReceived?.Invoke(r.String());
+                case TextMessage notice:
+                    NoticeReceived?.Invoke(notice.Value);
                     break;
-                case Msg.LobbyList:
-                {
-                    LobbyCapacity = r.Int();
-                    var list = new List<LobbySummary>();
-                    for (int i = 0, n = r.Int(); i < n; i++)
-                    {
-                        list.Add(new LobbySummary(r.Int(), r.String(), r.Int(), (LobbyServer.LobbyPhase)r.Byte()));
-                    }
-                    Lobbies = list;
+                case LobbyListMessage list:
+                    LobbyCapacity = list.Capacity;
+                    Lobbies = list.Lobbies;
                     LobbiesChanged?.Invoke();
                     break;
-                }
-                case Msg.LobbyState:
-                {
-                    var id = r.Int();
-                    var creator = r.Int();
-                    var length = r.Float();
-                    var phase = (LobbyServer.LobbyPhase)r.Byte();
-                    var members = new List<PlayerProfile>();
-                    for (int i = 0, n = r.Int(); i < n; i++)
-                    {
-                        members.Add(new PlayerProfile(r.Int(), r.String(), r.Int()));
-                    }
-                    var me = members.Find(m => m.Id == MyId);
-                    if (me != null)
-                    {
-                        // The server may have changed the color if someone else had it.
-                        Color = me.Color;
-                        PlayerName = me.Name;
-                    }
-                    Lobby = me != null ? new LobbyInfo(id, creator, length, phase, members) : null;
+                case LobbyInfo lobby:
+                    var me = lobby.Members.FirstOrDefault(m => m.Id == MyId);
+                    if (me != null) { Color = me.Color; PlayerName = me.Name; }
+                    Lobby = me != null ? lobby : null;
+                    if (Lobby == null) { inbox.Clear(); }
                     LobbyChanged?.Invoke();
                     break;
-                }
-                case Msg.MatchStart:
-                {
-                    var plan = r.Bytes();
-                    var host = r.Int();
-                    var length = r.Float();
-                    var tuning = GD.BytesToVar(r.Bytes()).AsGodotDictionary();
-                    var players = new List<(PlayerProfile, int)>();
-                    for (int i = 0, n = r.Int(); i < n; i++)
-                    {
-                        players.Add((new PlayerProfile(r.Int(), r.String(), r.Int()), r.Int()));
-                    }
-                    MatchStarting?.Invoke(new MatchSetup(plan, host, length, tuning, players));
+                case MatchSetup setup:
+                    if (State != Status.Connected || Lobby == null || setup.Id <= lastMatchId || !setup.Players.Any(p => p.Player.Id == MyId)) { return; }
+                    lastMatchId = setup.Id;
+                    inbox.Begin(setup.Id);
+                    MatchStarting?.Invoke(setup);
                     break;
-                }
-                case Msg.Pong:
-                {
-                    var sent = r.Double();
-                    var serverTime = r.Double();
+                case PongMessage pong:
                     var now = NetTransport.Now;
-                    PingMs = (now - sent) * 1000.0;
-                    ServerClockOffset = serverTime - (sent + now) / 2;
+                    PingMs = (now - pong.Sent) * 1000;
+                    ServerClockOffset = pong.ServerTime - (pong.Sent + now) / 2;
                     break;
-                }
                 default:
-                    MatchMessage?.Invoke(type, r);
+                    inbox.Receive(message, data.Length);
                     break;
             }
         }
+        catch (MatchInbox.OverflowException e)
+        {
+            Drop(e.Message);
+        }
         catch (Exception e)
         {
-            GD.PushWarning($"[net] bad {type} message: {e.Message}");
+            GD.PushWarning($"[net] bad message: {e.Message}");
         }
     }
 
     private void Drop(string reason)
     {
         transport.Close();
+        inbox.Clear();
         Lobby = null;
         MyId = 0;
         State = Status.Offline;

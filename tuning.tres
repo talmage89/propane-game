@@ -19,6 +19,7 @@ FireballScale = 0.95
 FlashDuration = 0.54
 CameraShakeDistance = 47.0
 HitstopDuration = 0.065
+CreepSpeed = 1.6
 AirControl = 0.2
 JumpVelocity = 9.9
 StaggerRadius = 25.0

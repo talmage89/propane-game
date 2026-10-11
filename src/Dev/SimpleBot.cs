@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using Godot;
 using Propane.Core;
@@ -12,6 +13,7 @@ namespace Propane.Dev;
 /// No sense of danger, so it often throws itself. An easy opponent (<c>--brain=simple</c>), and the baseline the
 /// <see cref="Bot"/> is measured against.
 /// </summary>
+[SuppressMessage("Design", "CA1001", Justification = "rng is Godot RefCounted; keep its existing reference-counted lifetime with the brain.")]
 public sealed class SimpleBot : IBotBrain
 {
     private PlayerIntent intent;

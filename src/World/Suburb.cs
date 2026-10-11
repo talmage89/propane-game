@@ -409,8 +409,8 @@ public partial class Suburb : Node3D
         foreach (var run in plan.Fences)
         {
             var length = run.A.DistanceTo(run.B);
-            // Style and color are fixed per run from its position, so they are stable for a seed.
-            var hash = (uint)HashCode.Combine(Mathf.RoundToInt(run.A.X * 10), Mathf.RoundToInt(run.A.Y * 10), plan.Seed);
+            // Explicit integer mixing: System.HashCode is salted per process, including on the same machine.
+            var hash = FenceHash(run, plan.Seed);
             var isPicket = hash % 10 < 3;
             var model = isPicket ? picket : privacy;
             var height = isPicket ? PicketHeight : FenceHeight;
@@ -462,6 +462,21 @@ public partial class Suburb : Node3D
     };
 
     private static readonly Color[] PicketTints = { new(1.05f, 1.05f, 1.05f), new(1f, 0.97f, 0.9f), new(0.92f, 0.95f, 1f) };
+
+    private static uint FenceHash(FenceRun run, int seed)
+    {
+        // FNV-1a over the coordinates' IEEE bits and the plan seed, with specified overflow semantics.
+        var hash = 2166136261u;
+        foreach (var value in new[] { BitConverter.SingleToUInt32Bits(run.A.X), BitConverter.SingleToUInt32Bits(run.A.Y),
+                     BitConverter.SingleToUInt32Bits(run.B.X), BitConverter.SingleToUInt32Bits(run.B.Y), unchecked((uint)seed) })
+        {
+            for (var shift = 0; shift < 32; shift += 8)
+            {
+                hash = unchecked((hash ^ ((value >> shift) & 255)) * 16777619u);
+            }
+        }
+        return hash;
+    }
 
     // ------------------------------------------------------------------ Props
 

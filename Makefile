@@ -12,7 +12,7 @@ PORT ?= $(if $(SLOT),$(shell echo $$((24680 + $(SLOT)))),24680)
 SERVER ?= 127.0.0.1:$(PORT)
 
 .DEFAULT_GOAL := help
-.PHONY: help setup run build test server bots bots-stop package deploy release-patch release-minor release-major
+.PHONY: help setup run build lint check test server bots bots-stop package deploy release-patch release-minor release-major
 
 help: ## List the tasks
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN { FS = ":.*## " } { printf "  make %-14s %s\n", $$1, $$2 }'
@@ -28,8 +28,21 @@ run: build ## Play from source
 build: ## Compile the C# code
 	dotnet build Propane.sln -c Debug -nologo -v quiet
 
-test: build ## Run the generator tests (as CI does before a release)
+lint: ## Check C# formatting and compile with warnings as errors
+	dotnet format Propane.sln --verify-no-changes
+	dotnet build Propane.sln -c Debug --no-restore --no-incremental -nologo -v quiet -warnaserror
+
+# A recipe keeps lint before test even when make runs with -j.
+check: lint ## Run lint, then the tests
+	@$(MAKE) --no-print-directory test
+
+test: build ## Run all headless regression suites and separate-process world tests (as CI does)
+	python3 -B tools/dev/check_scores_tests.py
+	"$(GODOT)" --headless --path . res://scenes/dev/unit_tests.tscn
+	"$(GODOT)" --headless --path . res://scenes/dev/movement_tests.tscn
 	"$(GODOT)" --headless --path . res://scenes/dev/generator_tests.tscn -- --seeds=100
+	"$(GODOT)" --headless --path . res://scenes/dev/platform_tests.tscn
+	tools/dev/check_world.sh
 
 server: build ## Run a multiplayer server here (PORT, default 24680, or this worktree's)
 	"$(GODOT)" --headless --path . -- --server --port=$(PORT)
@@ -40,7 +53,7 @@ bots: build ## Add N bots to a server's first open lobby (SERVER=host[:port], de
 bots-stop: ## Stop this checkout's bots
 	tools/dev/add_bots.sh -x
 
-package: ## Build the macOS and Linux release archives here, in build/dist (needs rcodesign)
+package: ## Build the Windows, macOS and Linux release archives here, in build/dist (needs rcodesign)
 	tools/release/build.sh "$(GODOT)"
 
 deploy: ## Run the server in Docker over ssh: make deploy HOST=host DIR=dir (from main, the latest release)

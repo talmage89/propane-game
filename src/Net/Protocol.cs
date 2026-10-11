@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Text;
 using Godot;
@@ -7,7 +8,7 @@ namespace Propane.Net;
 
 /// <summary>
 /// Message types. Clients only ever talk to the server. Messages in the relay range are passed on to the other
-/// players in the sender's match, with the sender's id inserted after the type byte.
+/// players in the sender's match, with the sender's id inserted after the match id.
 /// </summary>
 public enum Msg : byte
 {
@@ -39,6 +40,7 @@ public enum Msg : byte
     MatchEnd,
     PlayerLeft,
     Pong,
+    DropRefused,
 
     // Client to server to the rest of the match. The server reads some of them (claims, explosions, drops).
     PlayerState = 64,
@@ -61,13 +63,21 @@ public static class Protocol
     /// must bump at least the minor version (tools/release/check_version.sh enforces this). Hello, Welcome and
     /// Rejected never change shape (fields may only be appended), so any build can be told why it was turned away.
     /// </summary>
-    public const int Version = 3;
+    public const int Version = 2;
 
     public const int DefaultPort = 24680;
 
     public const int MaxNameLength = 16;
 
-    public static bool IsRelay(Msg type) => (byte)type >= (byte)Msg.PlayerState;
+    public static bool IsRelay(Msg type) => type is >= Msg.PlayerState and <= Msg.TuningSet;
+
+    public static bool IsMatch(Msg type) => IsRelay(type) || type is Msg.Loaded or Msg.ClaimPickup or Msg.MatchStart or
+        Msg.Countdown or Msg.MatchGo or Msg.Clock or Msg.Score or Msg.PickupTaken or Msg.PickupRespawn or Msg.MatchEnd or Msg.PlayerLeft or Msg.DropRefused;
+
+    // Wire safety limits, not gameplay tuners. Gameplay counts are also checked against the match's tuning.
+    public const int MaxPacketBytes = 1 << 20;
+    public const int MaxCollection = 4096;
+    public const int MaxBodyStates = 20;
 
     /// <summary>Player colors, picked in the lobby. Bright and far apart, readable against grass, roads and the void.</summary>
     public static readonly Color[] PlayerColors =
@@ -107,15 +117,21 @@ public static class Protocol
 }
 
 /// <summary>Builds one message: a type byte and little-endian fields.</summary>
+[SuppressMessage("Design", "CA1001", Justification = "The writer and MemoryStream hold only managed byte arrays, with no file or socket handles.")]
 public sealed class NetWriter
 {
     private readonly MemoryStream stream = new();
     private readonly BinaryWriter writer;
 
-    public NetWriter(Msg type)
+    public NetWriter(Msg type, int matchId = 0)
     {
         writer = new BinaryWriter(stream, Encoding.UTF8);
         writer.Write((byte)type);
+        if (Protocol.IsMatch(type))
+        {
+            if (matchId <= 0) { throw new ArgumentOutOfRangeException(nameof(matchId)); }
+            writer.Write(matchId);
+        }
     }
 
     public NetWriter Byte(byte v) { writer.Write(v); return this; }
@@ -148,6 +164,26 @@ public sealed class NetWriter
 
     public NetWriter Transform(Transform3D t) => Vec3(t.Origin).Quat(t.Basis.Orthonormalized().GetRotationQuaternion());
 
+    /// <summary>Only the three scalar tuner types cross the wire; never arbitrary serialized Godot objects.</summary>
+    public NetWriter Scalar(Variant value)
+    {
+        Byte((byte)value.VariantType);
+        return value.VariantType switch
+        {
+            Variant.Type.Bool => Bool(value.AsBool()),
+            Variant.Type.Int => Int(checked((int)value.AsInt64())),
+            Variant.Type.Float => Double(value.AsDouble()),
+            _ => throw new InvalidDataException("unsupported tuner type"),
+        };
+    }
+
+    public NetWriter Snapshot(Godot.Collections.Dictionary values)
+    {
+        Int(values.Count);
+        foreach (var (name, value) in values) { String(name.AsString()).Scalar(value); }
+        return this;
+    }
+
     public byte[] ToArray()
     {
         writer.Flush();
@@ -159,20 +195,29 @@ public sealed class NetWriter
 }
 
 /// <summary>Reads the fields of one message after its type byte.</summary>
+[SuppressMessage("Design", "CA1001", Justification = "The reader wraps only a managed byte-array MemoryStream, with no file or socket handles.")]
 public sealed class NetReader
 {
     private readonly BinaryReader reader;
 
     public NetReader(byte[] data, int offset = 1)
     {
-        reader = new BinaryReader(new MemoryStream(data, offset, data.Length - offset), Encoding.UTF8);
+        if (offset < 0 || offset > data.Length) { throw new InvalidDataException("bad message offset"); }
+        reader = new BinaryReader(new MemoryStream(data, offset, data.Length - offset), new UTF8Encoding(false, true));
     }
 
     public bool AtEnd => reader.BaseStream.Position >= reader.BaseStream.Length;
 
+    public long Remaining => reader.BaseStream.Length - reader.BaseStream.Position;
+
+    public void End()
+    {
+        if (!AtEnd) { throw new InvalidDataException("trailing payload"); }
+    }
+
     public byte Byte() => reader.ReadByte();
 
-    public bool Bool() => reader.ReadBoolean();
+    public bool Bool() => Byte() switch { 0 => false, 1 => true, _ => throw new InvalidDataException("bad boolean") };
 
     public short Short() => reader.ReadInt16();
 
@@ -182,23 +227,67 @@ public sealed class NetReader
 
     public uint UInt() => reader.ReadUInt32();
 
-    public float Float() => reader.ReadSingle();
+    public float Float()
+    {
+        var value = reader.ReadSingle();
+        if (!float.IsFinite(value)) { throw new InvalidDataException("nonfinite float"); }
+        return value;
+    }
 
-    public double Double() => reader.ReadDouble();
+    public double Double()
+    {
+        var value = reader.ReadDouble();
+        if (!double.IsFinite(value)) { throw new InvalidDataException("nonfinite double"); }
+        return value;
+    }
 
-    public string String() => reader.ReadString();
+    public string String()
+    {
+        var length = reader.Read7BitEncodedInt();
+        if (length < 0 || length > 1024 || length > Remaining) { throw new InvalidDataException("bad string length"); }
+        return new UTF8Encoding(false, true).GetString(reader.ReadBytes(length));
+    }
 
-    public Vector2 Vec2() => new(reader.ReadSingle(), reader.ReadSingle());
+    public Vector2 Vec2() => new(Float(), Float());
 
-    public Vector3 Vec3() => new(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
+    public Vector3 Vec3() => new(Float(), Float(), Float());
 
     public Quaternion Quat()
     {
-        var q = new Quaternion(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
-        return q.LengthSquared() > 0.0001f ? q.Normalized() : Quaternion.Identity;
+        var q = new Quaternion(Float(), Float(), Float(), Float());
+        if (q.LengthSquared() is < 0.9f or > 1.1f) { throw new InvalidDataException("bad rotation quaternion"); }
+        return q.Normalized();
     }
 
-    public Color Color() => new(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
+    public Color Color() => new(Float(), Float(), Float(), Float());
+
+    public Variant Scalar() => (Variant.Type)Byte() switch
+    {
+        Variant.Type.Bool => Bool(),
+        Variant.Type.Int => Int(),
+        Variant.Type.Float => Double(),
+        _ => throw new InvalidDataException("unsupported tuner type"),
+    };
+
+    public Godot.Collections.Dictionary Snapshot()
+    {
+        var values = new Godot.Collections.Dictionary();
+        var count = Count(Int(), Protocol.MaxCollection);
+        for (var i = 0; i < count; i++)
+        {
+            var name = String();
+            if (values.ContainsKey(name)) { throw new InvalidDataException("duplicate tuner"); }
+            values[name] = Scalar();
+        }
+        Core.Tuning.ValidateSnapshot(values, complete: true);
+        return values;
+    }
+
+    public static int Count(int count, int max, int min = 0)
+    {
+        if (count < min || count > max) { throw new InvalidDataException($"bad count {count}"); }
+        return count;
+    }
 
     public byte[] Bytes()
     {
