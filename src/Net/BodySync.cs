@@ -59,7 +59,7 @@ public sealed class BodySync
     private readonly Tuning settings;
     private readonly Dictionary<uint, Entry> entries = new();
     private readonly Dictionary<ulong, Entry> byInstance = new();
-    private double publicationTime;
+    private double? lastCollection;
     private double tankTimer;
     private double carTimer;
 
@@ -360,26 +360,31 @@ public sealed class BodySync
     }
 
     /// <summary>
-    /// The states this player owes the others this step: moving tanks and cars at their send rates, and a final
-    /// resting state for each that has just stopped.
+    /// The states this player owes the others at this monotonic network time: moving tanks and cars at their
+    /// real-time send rates, and a final resting state for each that has just stopped.
     /// </summary>
-    public (List<Entry> Moving, List<Entry> Rested) Collect(double dt)
+    public (List<Entry> Moving, List<Entry> Rested) Collect(double now)
     {
         var tuning = settings;
-        publicationTime += dt;
+        // Receiver silence is measured on the network clock too. A slow simulation must not stretch
+        // checkpoint intervals, and catch-up physics steps must not emit a burst of old poses.
+        var dt = lastCollection is { } previous ? System.Math.Max(0, now - previous) : 0;
+        lastCollection = now;
         tankTimer -= dt;
         carTimer -= dt;
         var sendTanks = tankTimer <= 0;
         var sendCars = carTimer <= 0;
         if (sendTanks)
         {
-            tankTimer += 1.0 / Mathf.Max(tuning.TankSendRate, 0.5f);
-            tankTimer = System.Math.Max(tankTimer, 0);
+            var interval = 1.0 / Mathf.Max(tuning.TankSendRate, 0.5f);
+            tankTimer += interval;
+            if (tankTimer <= 0) { tankTimer = interval; }
         }
         if (sendCars)
         {
-            carTimer += 1.0 / Mathf.Max(tuning.CarSendRate, 0.5f);
-            carTimer = System.Math.Max(carTimer, 0);
+            var interval = 1.0 / Mathf.Max(tuning.CarSendRate, 0.5f);
+            carTimer += interval;
+            if (carTimer <= 0) { carTimer = interval; }
         }
         var moving = new List<Entry>();
         var rested = new List<Entry>();
@@ -399,10 +404,10 @@ public sealed class BodySync
                     // ENet can throttle disposable packets to zero after RTT variance. Checkpoints
                     // share the existing state/sequence stream and survive that suppression. No extra
                     // samples: reserve an ordinary publication at half the correction silence bound.
-                    entry.PublishReliably = entry.PublishRequired || publicationTime - entry.LastReliablePublication >= StaleAfter / 2;
+                    entry.PublishReliably = entry.PublishRequired || now - entry.LastReliablePublication >= StaleAfter / 2;
                     if (entry.PublishReliably)
                     {
-                        entry.LastReliablePublication = publicationTime;
+                        entry.LastReliablePublication = now;
                         // Rotate per body, not per batch: a stable batch layout must not pin a
                         // body behind the retransmission of one older checkpoint.
                         entry.CheckpointTraffic = TrafficReliability.NextBodyCheckpoint(entry.CheckpointTraffic);
@@ -414,7 +419,7 @@ public sealed class BodySync
                 else if (!awake && (entry.PublishRequired || entry.WasAwake))
                 {
                     entry.PublishRequired = false;
-                    entry.LastReliablePublication = publicationTime;
+                    entry.LastReliablePublication = now;
                     rested.Add(entry);
                     Trace?.Invoke(entry, "publish-rest");
                 }

@@ -140,3 +140,110 @@ passes. It runs in `make test`, and the gate proof includes its invocation.
 The repeated six-bot/90-second 120/30/3 soak passes: 1,997 grids, 1,228,329 body
 pairs, zero unobserved pair grids, final rest/moving drift 0/0.267 m, longest
 episode 0.85 s, and all six score audits agree. Subsequent builds have zero warnings/errors.
+
+## Ordering, compatibility and capacity review
+
+Control, lifecycle authority and final rests retain reliable logical channel 0.
+Body checkpoints rotate independently per body through reliable logical channels
+1–3; the relay preserves the incoming class. Godot reserves native channels for
+its default modes, so these are logical transfer channels, not ENet's raw indices.
+The native `body-stream` fixture blocks the first checkpoint lane for two seconds
+and drops every outgoing disposable sample: the other checkpoint lanes still
+correct the observer. Checkpoints replace ordinary motion publications; they do
+not add a second stream or full-world snapshots. Cross-lane arrival order cannot
+replace the epoch/sequence comparisons. Reliable control still has head-of-line
+blocking; rotating body lanes does not make ownership changes bypass it.
+
+Protocol.Version remains 2, which is unreleased. No message changed shape in this
+integration. Native probes reject protocol 1 and a different game minor version
+before constructing a match; the rendered version rejection offers the download
+button. Build hashes remain diagnostic, deliberately allowing patch-compatible
+builds of a minor version to play together. Release this branch's shared
+replication changes as a minor release, not a patch.
+
+The fault decorator bounds each connection's incoming and outgoing queues to
+4,096 packets/4 MiB each; loading inboxes have the same bounds. Future motion is
+one latest sample per registered body. Failed required sends disconnect rather
+than silently losing reliable authority. Godot does not expose the native ENet
+send queue's size or admission cap; accepted reliable packets under sustained
+congestion therefore have no demonstrated memory bound here. Native retry
+timeouts address silent peers, not all congestion from an acknowledging peer.
+
+Owner publication cost scales with moving bodies; server relay cost multiplies
+that by recipients. A BodyState is 64 payload bytes: 100 awake bodies at 15 Hz
+and 16 players would relay about 1.44 MB/s before batch headers, UDP overhead
+and retries. Quarter-second checkpoints reserve about 0.384 MB/s of that traffic,
+rather than adding it. Tank counts also grow with player count, making the
+combined growth approximately quadratic. Native six-player admission is proven;
+sixteen-player admission is not supported by the existing eight-player
+profile/codec limits. The 16-player suburb generator sweep is not a substitute
+for a 16-player network test. Raising those limits belongs with participants
+work and requires its own compatibility and performance verification.
+
+## Gate and soak evidence before the cadence fix
+
+This verification used production revision `fc76127`.
+`TMPDIR="$PWD/build/vna-scratch" make check` and `make test-full` both pass.
+The warning-as-error build reports zero warnings/errors, the unit suite has
+226 passing tests, and the tank comparer has 23 passing tests. The deep upright
+fixture covers 53 piles/738 tanks for 120 simulated seconds, maximum drift
+0.001669 m/tilt 0.151 degrees; stand, topple and gather assertions pass. Ten
+single-player and ten solo-match lifetime cycles leave no orphans. Generator
+sweeps cover 200 ordinary/2-player seeds, 100 each at 8/16/24/32 players and
+six seeds per forced formation/size. Navigation passes 700/700 courses with
+zero stuck events, mean 3.20 s, and 600 jumps. Complete logs are
+`build/vna-check-final.log` and `build/vna-test-full-final.log`.
+
+The first final-code soak batch overlapped that gate. Seven of nine completed
+faulted runs fail the unchanged two-second agreement window, despite all nine
+passing final position and score checks. Longest episodes are 3.30, 1.30, 2.85,
+2.80, 3.95, 0.60, 4.45, 4.30 and 2.05 seconds. Capture gaps account for at most
+127 pair grids; these are real observed disagreements, not missing-data failures.
+Fault 7 includes intact moving drops as well as vent lifecycle differences;
+it must not be dismissed as a floor-vent-only residual. For drop `20100008`,
+Bot2 observes epoch 2 near monotonic time 106486, while Bot1/Bot4 still have
+the previous owner until roughly 106488. The owner continues publishing in
+between. Median FPS for these peers is 46/33/25/15.5; median native RTT is
+160.5/195/231/385 ms. This implicates delayed reliable control delivery under
+load but does not prove a unique cause or excuse the failures.
+
+The owned launcher was stopped between completed captures, without discarding
+their logs (`build/vna-proof-fault-1` through `-9`). The next matrix runs
+serially after the entire deep gate, preserving the same tuning, fault flags,
+limits and traces in separate `build/vna-isolated-*` directories. Its results
+are eight passes and one failure before stopping between captures for another
+fix. Do not substitute the earlier ten passing
+captures from before the immediate ownership flag resets for this final matrix.
+
+## Publication clock regression
+
+The isolated batch also fails fault 7, proving that overlapping the gate does not
+explain every failure. Its 2.10-second episode for `10000010` begins with position
+error (peak 5.048 m), then includes a brief predicted/confirmed explosion lifecycle
+difference. Median FPS is 56/57/56/54. The owner advances only sequence 26 to 28
+between monotonic times 109058.586 and 109059.931. Its frame reports 47.4 ms of
+physics work; observers pass the 0.5-second receipt-silence deadline and resume
+local vent simulation. Final rest/moving drift is 0.012/0.178 m and scores agree,
+but neither excuses the persistent earlier disagreement.
+
+Body publication and reliable checkpoint timers previously accumulated simulation
+delta, while receiving freshness and sampling used monotonic time. Slow physics
+therefore stretched a network deadline. Collect now takes Match's existing
+monotonic clock. The existing tank/car send rates and checkpoint period are
+measured in real time, and missed intervals do not create extra publications
+during catch-up ticks at the same network time. Simulation timing, gameplay,
+message shapes, tuners and agreement bounds are unchanged.
+
+The regression invokes the production Match physics path for 60 ticks whose
+network clock advances 0.1 s while simulation delta advances only 1/120 s. The
+old code fails because due publications disappear; the fix passes, keeps reliable
+checkpoint silence below 0.35 s, and emits no extra samples over eight catch-up
+ticks with no clock advance. The full unit suite passes 227 tests, zero failures,
+and make build has zero warnings/errors. These prove the timing defect and its
+correction, not that this was the isolated soak's only cause. Subsequent native
+verification must still pass the unchanged agreement limits.
+The first native repeat uses the failed run's map seed, 1341647191, with the
+same 4-bot/90-second 120/30/3 schedule. It passes 1,998 grids/342,637 body
+pairs with no unobserved grids, final drift 0/0.194 m and a 0.95-second
+longest episode; all score audits agree. This repeats the layout, not the
+real-time action schedule, so it does not establish a deterministic replay.

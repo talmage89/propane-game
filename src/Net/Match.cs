@@ -244,7 +244,7 @@ public partial class Match : Node3D
             player.Runtime.SendTimer = Mathf.Max(player.Runtime.SendTimer, 0);
             SendPlayerState(now);
         }
-        SendBodies(dt, now);
+        SendBodies(now);
         CheckPickups();
     }
 
@@ -877,9 +877,9 @@ public partial class Match : Node3D
         Net.Send(MessageCodec.Encode(message, fromServer: false), TrafficClass.UnreliablePlayerPoses);
     }
 
-    private void SendBodies(float dt, double now)
+    private void SendBodies(double now)
     {
-        var (moving, rested) = bodies.Collect(dt);
+        var (moving, rested) = bodies.Collect(now);
         foreach (var stream in moving.GroupBy(entry => entry.PublishReliably ? entry.CheckpointTraffic : TrafficClass.UnreliableBodyStates))
         {
             var entries = stream.ToList();

@@ -151,7 +151,9 @@ positions. Those remain decisions of the distributed client authorities.
 
 The ledger also owns each body's peer and monotonically increasing epoch. Every accepted ownership or lifecycle
 claim increments that body's epoch, including another grant to the same peer; departure transfers get new epochs.
-Moving publications include a reliable checkpoint every 0.25 s plus up to one normal send interval, and immediately
+Moving publications use monotonic network time for send rates and checkpoint deadlines, so slow or catch-up
+physics cannot stretch freshness intervals or burst old samples. They include a reliable checkpoint every 0.25 s
+plus up to one normal send interval, and immediately
 when publication is required. The server preserves its delivery class on the second leg; other moving samples
 remain disposable. Native ENet throttling can suppress those samples beyond injected loss. Checkpoints and
 reliable rests carry the same per-body sequence within the epoch. Neither side compares owner clocks:
@@ -503,3 +505,5 @@ up to five states and 5.862 m drift; it is a
 comparison report, not a threshold assertion. Those transients converged in the original melee package.
 The later [tank assertion and correction work](network-corrections.md) adds automatic failure checks and fixes
 the replication causes identified by repeated soaks.
+The [independent integration review](network-integration.md) records A4 integration, native regressions,
+remaining capacity limits and the verification matrix for this branch.

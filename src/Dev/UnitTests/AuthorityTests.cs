@@ -85,7 +85,7 @@ public static class AuthorityTests
             var lanes = new HashSet<int>();
             for (var i = 0; i < 3; i++)
             {
-                var sample = sync.Collect(.3).Moving.Single();
+                var sample = sync.Collect((i + 1) * .3).Moving.Single();
                 TestRunner.Assert(sample.PublishReliably, "probe did not collect a checkpoint");
                 lanes.Add(NetTransport.Channel(sample.CheckpointTraffic));
             }
@@ -138,7 +138,7 @@ public static class AuthorityTests
             for (var step = 0; step < 120; step++)
             {
                 silence += 1.0 / 60;
-                foreach (var entry in sync.Collect(1.0 / 60).Moving)
+                foreach (var entry in sync.Collect(.01 + (step + 1) / 60.0).Moving)
                 {
                     if (entry.PublishReliably) { reliable++; silence = 0; }
                     else { disposable++; }
@@ -146,6 +146,28 @@ public static class AuthorityTests
                 TestRunner.Assert(silence <= .35, "moving reliable checkpoint exceeded correction freshness");
             }
             TestRunner.Assert(reliable >= 6 && disposable > reliable, "checkpoint cadence replaced the disposable motion stream");
+        });
+        runner.Run("authority/match publications keep real-time cadence when physics falls behind", () =>
+        {
+            using var f = new MatchFixture(runner);
+            var tank = f.Match.LiveTanks.Single(t => t.NetId == Id);
+            var entry = f.Match.Bodies.Get(Id)!;
+            tank.Sleeping = false;
+            var lastCheckpoint = f.Server.Clock.Seconds;
+            for (var step = 0; step < 60; step++)
+            {
+                f.Server.Clock.Seconds += .1;
+                var sequence = entry.Sequence;
+                f.Match._PhysicsProcess(1.0 / 120);
+                TestRunner.Assert(entry.Sequence > sequence, "simulation delta throttled a due wall-clock publication");
+                if (entry.PublishReliably) { lastCheckpoint = f.Server.Clock.Seconds; }
+                TestRunner.Assert(f.Server.Clock.Seconds - lastCheckpoint <= .35,
+                    "slow physics left reliable motion beyond the correction freshness budget");
+            }
+            var beforeCatchup = entry.Sequence;
+            for (var step = 0; step < 8; step++) { f.Match._PhysicsProcess(1.0 / 120); }
+            TestRunner.Assert(entry.Sequence == beforeCatchup,
+                "catch-up physics emitted old poses without any elapsed network time");
         });
         runner.Run("authority/reliable grant steers observers before owner publications", () =>
         {
