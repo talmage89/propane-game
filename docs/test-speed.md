@@ -211,3 +211,119 @@ Final deep-launch timing (startup ends at the scene entry marker):
 | Melee reloads | 5.22 s | 0.29 s | 4.93 s |
 | Generator deep sweep | 960.21 s | 0.29 s | 959.92 s |
 | Navigation deep sweep | 178.12 s | 0.29 s | 177.83 s |
+
+
+## Shutdown merge and suite discovery
+
+Merged `dev`'s shutdown fix (`8f2cdcd`) in `f8d3392`. Consolidated completion now always reaches
+`ShutdownGuard.Quit`; normal and paused window-close shutdown witnesses remain in the core partition.
+The world wrapper retains failed logs and original child status while still batching four formations in
+one writer and two fresh builders. Its four Python regression cases pass, including status 134 retention.
+
+Six additional direct exit paths in melee, reload failure and capture errors now also use the guard; the wiring
+check rejects direct quits in all dev harnesses except the final-teardown witness.
+
+Unit suites now opt in with `[UnitSuite]` and are discovered in deterministic order. World construction runs
+first; transport is a separate discovered suite. Both successful gate runs discover 13 suites and execute
+189 assertions, matching the pre-discovery count. No test assertion was removed or moved by this merge.
+
+`make setup` and the restored-code `make build` passed with zero warnings/errors. `dotnet format Propane.sln
+--no-restore` completed. The final `python3 -B tools/dev/lint_tests.py` passed analyzer/format fixtures,
+parallel gate and deep failure propagation, shutdown completion/discovery wiring, installer and CI equivalence.
+
+A temporary inversion of the world rebuild equality assertion caused `make test` to exit 2 in 37.14 seconds,
+with four world assertion failures and `[core] FAIL unit_tests`. The assertion was restored in a `finally`
+block before rebuilding. A second proof added a temporary `[UnitSuite]` class without changing the runner.
+Its named failing assertion was discovered automatically: `make test` ran 190 tests with one failure and exited
+2 in 38.99 seconds. The temporary script and any UID were removed before rebuilding. No deliberate failure
+is committed. An initial full run was intentionally interrupted while auditing remaining direct exit paths;
+its deep generator received SIGTERM and the gate returned nonzero. The fresh full run uses final code.
+
+The rendered melee command passed and exited normally through the guard:
+
+```sh
+godot-mono --fixed-fps 60 --path . res://scenes/dev/melee_range.tscn -- --capture-dir=/tmp/wptest-merge-melee
+```
+
+All seven PNG captures were reviewed: strike contact, victim knockdown/recovery and the intact tank are visible.
+The numeric assertions proved wall blocking, exactly one victim hit/throw, 0.104 m intact tank movement,
+0.593 m prop movement and the large duplicate-shape contact. Invisible collision-only fixtures are proven by
+assertions rather than appearance. Screenshot readback/save error branches were audited but not fault-injected.
+
+The profiler command was:
+
+```sh
+python3 -B tools/dev/time_gate.py --output=/tmp/wptest-merge-speed/check-final -- make check
+```
+
+It passed in **231.04 seconds**, with 25 Godot launches (two added shutdown witnesses).
+Every external step below passed. Shutdown witnesses lack a scene-entry marker; their complete launch times
+are recorded, and startup cannot be separated for those two launches. Other launch work includes orderly shutdown.
+
+| Merged check step | Total | Startup | Work and exit |
+| --- | ---: | ---: | ---: |
+| Formatter | 26.082 s | — | — |
+| Warning-as-error build | 5.000 s | — | — |
+| Incremental build | 1.233 s | — | — |
+| check_world_tests.py | 0.105 s | — | — |
+| time_gate_tests.py | 0.409 s | — | — |
+| check_scores_tests.py | 0.098 s | — | — |
+| compare_vents_tests.py | 0.092 s | — | — |
+| compare_tank_paths_tests.py | 0.078 s | — | — |
+| core_tests | 39.584 s | 0.546 s | 39.038 s |
+| shutdown_tests | 0.578 s | — | — |
+| shutdown_tests: paused, window-close, repeat-quit | 0.607 s | — | — |
+| blast_query_tests | 0.667 s | 0.304 s | 0.364 s |
+| gather_range | 1.595 s | 0.309 s | 1.286 s |
+| gather_range: scenario=grant-races | 0.943 s | 0.297 s | 0.646 s |
+| gather_range: scenario=appearance | 2.801 s | 0.299 s | 2.501 s |
+| game_test: scenario=gather | 4.107 s | 0.297 s | 3.811 s |
+| melee_range | 1.802 s | 0.301 s | 1.501 s |
+| player_range: scenario=melee | 1.990 s | 0.291 s | 1.699 s |
+| bot_navigation_course: seeds=5 | 8.041 s | 0.295 s | 7.746 s |
+| menu_test: scenario=gamepad | 8.871 s | 0.291 s | 8.580 s |
+| menu_test: scenario=devices | 2.068 s | 0.299 s | 1.769 s |
+| menu_test: scenario=mouse | 6.532 s | 0.294 s | 6.237 s |
+| player_range: scenario=grip | 7.185 s | 0.399 s | 6.786 s |
+| player_range: scenario=ragdoll | 2.902 s | 0.324 s | 2.578 s |
+| player_range: scenario=feet | 5.161 s | 0.391 s | 4.770 s |
+| player_range: scenario=feet, feet-corrections | 6.074 s | 0.357 s | 5.717 s |
+| player_range: scenario=feet-events | 5.057 s | 0.366 s | 4.691 s |
+| player_range: scenario=movement | 1.981 s | 0.349 s | 1.632 s |
+| player_range: scenario=motion | 4.957 s | 0.348 s | 4.609 s |
+| generator_tests: seeds=20, large-seeds=3, formation-seeds=2 | 73.596 s | 0.319 s | 73.277 s |
+| World writer (four plans) | 1.502 s | 0.299 s | 1.203 s |
+| World hash builder | 3.735 s | 0.289 s | 3.446 s |
+| World hash builder | 3.995 s | 0.300 s | 3.695 s |
+
+The fresh full command passed:
+
+```sh
+python3 -B tools/dev/time_gate.py --output=/tmp/wptest-merge-speed/full-final -- make -j4 test-full
+```
+
+Elapsed **1167.06 seconds** (19.45 minutes). All gate partitions passed under parallel make,
+followed by melee reloads, 944 generator layouts (200 SP + 200 two-player + 400 large + 144 forced),
+and 700/700 navigation goals across 100 seeds. No assertion or deep repetition was lost.
+
+| Deep launch | Total | Startup | Work and exit |
+| --- | ---: | ---: | ---: |
+| Melee reloads | 5.510 s | 0.318 s | 5.192 s |
+| Generator | 947.882 s | 0.343 s | 947.538 s |
+| Navigation | 138.191 s | 0.292 s | 137.899 s |
+
+| Deep generator phase | Elapsed |
+| --- | ---: |
+| Single-player | 33.344 s |
+| Forced formations | 100.644 s |
+| Two-player | 83.242 s |
+| 8-player | 70.673 s |
+| 16-player | 125.863 s |
+| 24-player | 217.033 s |
+| 32-player | 315.083 s |
+
+The merged sequential check measured lint 31.08 s, core 41.55 s, behavior 72.73 s, generator 73.60 s,
+world 9.23 s, plus one 1.23 s shared incremental build. CI retains the four parallel partitions and import
+cache; the earlier estimate of 2–4 minutes warm / 3–5 minutes cold remains an estimate. CI was not pushed or run.
+The existing malformed-packet fixture emits an expected network warning; builds reported zero warnings.
+No messages, suburb construction, tank behavior or tuners changed relative to merged dev; protocol version remains 2.
