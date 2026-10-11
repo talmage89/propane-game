@@ -594,6 +594,10 @@ public partial class LobbyServer : Node
             case ClaimMessage claim:
                 PublishAuthority(match, match.Tanks.Claim(client.Id, claim, lobby.Phase == LobbyPhase.Playing && NetTransport.Now < match.PhaseEnds));
                 return;
+            case GatherMessage gather:
+                if (!match.Tanks.Gather(client.Id, match.HostId, gather,
+                    lobby.Phase == LobbyPhase.Playing && NetTransport.Now < match.PhaseEnds)) { return; }
+                break;
             case BodyStatesMessage states:
                 match.Tanks.ValidateBodies(states.Bodies.Select(b => b.Id));
                 var accepted = states.Bodies.Where(b => match.Tanks.Update(client.Id, b, rest: false)).ToArray();

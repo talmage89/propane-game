@@ -43,6 +43,7 @@ public sealed class BodySync
         public uint Epoch = 1;
         public uint Sequence;
         public uint LastSequence;
+        public uint LastGatherSequence;
         public bool PublishRequired;
         internal (int Sender, BodyState Body, bool IsRest, double Received)? Future;
         internal (BodyState Body, bool IsRest)? Latest;
@@ -149,6 +150,7 @@ public sealed class BodySync
             entry.Epoch = authority.Body.Epoch;
             entry.Sequence = 0;
             entry.LastSequence = 0;
+            entry.LastGatherSequence = 0;
             entry.HasTarget = false;
             entry.PublishRequired = authority.Owner == Me;
             entry.Latest = null;
@@ -243,6 +245,14 @@ public sealed class BodySync
             }
             var axis = Mathf.Abs(angle) > 0.0001f ? rotationError.GetAxis() : Vector3.Up;
 
+            if (body is Tank.PropaneTank { Gathering: true })
+            {
+                // Construct motion is collision-checked by its owner; frozen observers follow the ordinary stream.
+                var weight = Mathf.Clamp((float)body.GetPhysicsProcessDeltaTime() / blend, 0, 1);
+                body.GlobalTransform = new Transform3D(new Basis(current.Basis.GetRotationQuaternion().Slerp(targetRotation, weight)),
+                    current.Origin.Lerp(targetPosition, weight));
+                continue;
+            }
             if (error.Length() > tuning.SnapDistance)
             {
                 Snap(body, new Transform3D(new Basis(targetRotation), targetPosition), entry.TargetLinear, entry.TargetAngular);

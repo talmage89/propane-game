@@ -434,6 +434,24 @@ public static class AuthorityTests
             TestRunner.Assert(f.Match.LastAuthorityRefusal == ClaimRefusal.WrongPhase && tank.State == PropaneTank.TankState.Intact &&
                 f.Match.Bodies.Get(Id) is { Epoch: 1, ClaimPending: false }, "refused puncture remained venting");
         });
+        runner.Run("gather/refused explosion preserves gathered pile membership", () =>
+        {
+            using var f = new MatchFixture(runner);
+            var tank = f.Match.LiveTanks.Single(t => t.NetId == Id);
+            tank.GlobalTransform = new Transform3D(Basis.Identity, new Vector3(0, 60, 0));
+            tank.MarkPile();
+            var entry = f.Match.Bodies.Get(Id)!;
+            entry.Sequence = 1;
+            Send(f.Server, 2, Msg.BodyRest, new BodyRestMessage(Id, tank.GlobalTransform, 1, entry.Epoch, 1));
+            f.Server.Server.AdvanceMatches(NetTransport.Now + 20);
+            f.Server.Packets.Clear();
+            tank.Detonate();
+            tank.Free();
+            f.Flush();
+            var restored = f.Match.LiveTanks.Single(t => t.NetId == Id);
+            TestRunner.Assert(restored != tank && restored.State == PropaneTank.TankState.Intact && !restored.Loose,
+                "refused explosion made a recreated settled tank loose");
+        });
         runner.Run("authority/refused predicted detonation recreates the canonical venting body", () =>
         {
             using var f = new MatchFixture(runner);

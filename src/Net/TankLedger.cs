@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Godot;
+using Propane.Tank;
 using Propane.World;
 using Propane.World.Plan;
 
@@ -16,6 +17,7 @@ public sealed class TankLedger
     public enum State { Intact, Venting, Exploded }
     private readonly Dictionary<uint, BodyAuthority> bodies = new();
     private readonly HashSet<(int Peer, uint Request)> explosions = new();
+    private readonly Dictionary<uint, (uint Epoch, uint Sequence)> gathers = new();
 
     public TankLedger(SuburbPlan plan, int host)
     {
@@ -95,6 +97,21 @@ public sealed class TankLedger
         if (!bodies.TryGetValue(state.Id, out var current) || current.State == State.Exploded || current.Owner != peer ||
             current.Body.Epoch != state.Epoch || state.Sequence <= current.Body.Sequence) { return false; }
         bodies[state.Id] = current with { Body = state, Rest = rest };
+        return true;
+    }
+
+    /// <summary>Gather presentation obeys the same ordered body stream; only the world authority starts piles.</summary>
+    public bool Gather(int peer, int host, GatherMessage gather, bool allowed)
+    {
+        if (!allowed || peer != host || gather.Bodies.Any(b => !bodies.TryGetValue(b.Id, out var current) ||
+            current.Owner != peer || current.Body.Epoch != b.Epoch || current.State != State.Intact ||
+            gathers.TryGetValue(b.Id, out var prior) && prior.Epoch == b.Epoch && b.Sequence <= prior.Sequence)) { return false; }
+        foreach (var body in gather.Bodies)
+        {
+            // Disposable motion may overtake reliable presentation. Relay membership without rewinding its pose.
+            gathers[body.Id] = (body.Epoch, body.Sequence);
+            Update(peer, body, rest: gather.Phase == GatherPhase.Settled);
+        }
         return true;
     }
 

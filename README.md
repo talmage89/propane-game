@@ -118,6 +118,13 @@ cramped sites use smaller whole formations. Pyramids stand on clear ground rathe
 Rifle hits puncture, then detonate. A blast within `ChainRadius` acts as a shot: an intact neighbor punctures and
 keeps venting and moving; an already-venting neighbor detonates after its `ChainFuseMin`/`ChainFuseMax` fuse.
 
+Loose intact tanks gather with nearby resting neighbors after 20 undisturbed seconds. The **Tank Gather** tuners
+control radius (3 m), minimum group size (2), delay, a three-stage lift/glide/settle and optional scan shimmer (set
+`GatherShimmer` to 0 to disable it). Connected neighbors gather at a clear center; isolated singles, venting tanks,
+shielded drops and tanks still in their original or gathered pile stay put. Shots, blast pushes, movement, new members
+and player bumps reset the wait or interrupt a gliding tank. Cramped groups wait for a clear site and path.
+Rebuilt piles use `PileBuilder`'s upright cluster: every count fits, and removing one tank leaves no suspended tier.
+
 Match settings use the actual player count. Tank supply is `MpTankCount + MpTanksPerPlayer × players`, ammo cans are
 `PickupCount + PickupsPerPlayer × players`, and map width is `MpMapSizeBase + MpMapSizePerPlayer × players`. Pile
 limits gain `floor(MpPileSizePerPlayer × players)`. `MpStartSpacing` is a hard minimum between clear road starts;

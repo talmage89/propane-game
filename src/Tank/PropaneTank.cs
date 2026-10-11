@@ -25,6 +25,9 @@ public partial class PropaneTank : RigidBody3D
     private const float HoleDecalSize = 0.07f;
     private const float PunctureKick = 6f;
 
+    private Transform3D? pilePose;
+    private Transform3D? restPose;
+
     private VentJet? vent;
     private Decal? holeDecal;
     private uint fuseGeneration;
@@ -43,6 +46,13 @@ public partial class PropaneTank : RigidBody3D
     private Color shieldColor = Colors.White;
 
     public TankState State { get; private set; } = TankState.Intact;
+
+    /// <summary>Changes on hits, pushes and motion, even if the tank rests again between gather scans.</summary>
+    public ulong Disturbance { get; private set; }
+
+    public bool Gathering { get; private set; }
+
+    internal Transform3D? PilePose => pilePose;
 
     /// <summary>The tank's id in a match (0 in single player), shared by every player's copy.</summary>
     public uint NetId { get; set; }
@@ -75,6 +85,61 @@ public partial class PropaneTank : RigidBody3D
     /// <summary>Raised when this game punctures the tank (a shot or a chain reaction), not for another player's puncture.</summary>
     public event Action<PropaneTank>? Punctured;
 
+    /// <summary>Before the caller queues authority or applies its impulse/lifecycle change.</summary>
+    public event Action<PropaneTank>? Disturbed;
+
+    public bool AtRest => Sleeping || (LinearVelocity.Length() <= Tuning.Current.GatherRestSpeed &&
+        AngularVelocity.Length() <= Tuning.Current.GatherRestSpin);
+
+    public bool Loose
+    {
+        get
+        {
+            if (pilePose is not { } pose) { return true; }
+            var tuning = Tuning.Current;
+            return (GlobalTransform * LocalCenter).DistanceTo(pose * LocalCenter) > tuning.GatherPileTolerance ||
+                GlobalBasis.GetRotationQuaternion().AngleTo(pose.Basis.GetRotationQuaternion()) > Mathf.DegToRad(tuning.GatherPileAngle);
+        }
+    }
+
+    public void MarkPile() => pilePose = IsInsideTree() ? GlobalTransform : Transform;
+
+    public void MarkPile(Transform3D pose) => pilePose = pose;
+
+    /// <summary>Called before impulses/lifecycle changes, including those while frozen for the construct glide.</summary>
+    public void Disturb()
+    {
+        Disturbance++;
+        EndGather();
+        Disturbed?.Invoke(this);
+    }
+
+    public void BeginGather()
+    {
+        Gathering = true;
+        Freeze = true;
+        Sleeping = false;
+        UpdateGatherShimmer();
+    }
+
+    public void EndGather()
+    {
+        if (!Gathering) { return; }
+        Gathering = false;
+        Freeze = false;
+        Sleeping = false;
+        mesh.SetInstanceShaderParameter("gather_shimmer", 0f);
+    }
+
+    private void UpdateGatherShimmer()
+    {
+        var tuning = Tuning.Current;
+        mesh.SetInstanceShaderParameter("gather_shimmer", tuning.GatherShimmer);
+        mesh.SetInstanceShaderParameter("gather_speed", tuning.GatherShimmerSpeed);
+        mesh.SetInstanceShaderParameter("gather_bands", tuning.GatherShimmerBands);
+        mesh.SetInstanceShaderParameter("gather_sharpness", tuning.GatherShimmerSharpness);
+    }
+
     /// <summary>Instantiates a ready-to-place tank.</summary>
     public static PropaneTank Create() => new() { Name = "PropaneTank" };
 
@@ -97,11 +162,14 @@ public partial class PropaneTank : RigidBody3D
         // In a match every copy of a tank flutters alike, so the copies drift apart less.
         flutterPhase = NetId != 0 ? NetId % 997 * 0.1f : GD.Randf() * 100f;
         SetProcess(false);
+        if (pilePose != null) { pilePose = GlobalTransform; }
     }
 
     /// <summary>Makes a dropped tank ignore bullets and chain reactions for a while, glowing in the dropper's color.</summary>
     public void MakeInvulnerable(float seconds, Color color)
     {
+        pilePose = null;
+        Disturb();
         invulnerableUntil = Now + seconds;
         shieldColor = color;
         SetProcess(true);
@@ -215,6 +283,22 @@ public partial class PropaneTank : RigidBody3D
 
     public override void _PhysicsProcess(double delta)
     {
+        if (Gathering) { UpdateGatherShimmer(); }
+        if (State == TankState.Intact && !Gathering)
+        {
+            var idleTuning = Tuning.Current;
+            if (!AtRest)
+            {
+                if (restPose != null) { Disturbance++; restPose = null; }
+            }
+            else if (restPose is not { } pose) { restPose = GlobalTransform; }
+            else if ((GlobalTransform * LocalCenter).DistanceTo(pose * LocalCenter) > idleTuning.GatherRestDistance ||
+                GlobalBasis.GetRotationQuaternion().AngleTo(pose.Basis.GetRotationQuaternion()) > Mathf.DegToRad(idleTuning.GatherRestAngle))
+            {
+                Disturbance++;
+                restPose = GlobalTransform;
+            }
+        }
         if (State != TankState.Venting)
         {
             return;
@@ -256,6 +340,7 @@ public partial class PropaneTank : RigidBody3D
         {
             return;
         }
+        Disturb();
         State = TankState.Exploded;
         var groundY = GroundHeightBelow(center);
 
@@ -276,6 +361,7 @@ public partial class PropaneTank : RigidBody3D
 
     private void PunctureLocal(Vector3 point, Vector3 normal, float swirl)
     {
+        Disturb();
         State = TankState.Venting;
         CanSleep = false;
         Sleeping = false;

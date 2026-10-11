@@ -183,7 +183,7 @@ public partial class Suburb : Node3D
         }
         AddMesh(edge, GroundMaterial(4, new Color(0.86f, 0.86f, 0.87f), new Color(0.78f, 0.79f, 0.8f)), "SlabEdge");
 
-        var body = new StaticBody3D { Name = "SlabBody", CollisionLayer = Layers.World, CollisionMask = 0 };
+        var body = new StaticBody3D { Name = "SlabBody", CollisionLayer = Layers.World | Layers.Floor, CollisionMask = 0 };
         body.AddChild(new CollisionShape3D
         {
             Shape = new BoxShape3D { Size = new Vector3(b.Size.X, GroundHeight, b.Size.Y) },
@@ -695,6 +695,7 @@ public partial class Suburb : Node3D
             tank.Position = ToWorld(placement.Position, placement.Elevation);
             tank.Basis = new Basis(Vector3.Up, placement.Yaw) * Basis.FromEuler(placement.Rotation);
             tank.Sleeping = true;
+            tank.MarkPile();
             tank.Detonated += OnTankDetonated;
             tanks.Add(tank);
         }

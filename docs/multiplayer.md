@@ -142,6 +142,28 @@ unblocks them. Chain punctures wait until the complete blast push before sending
 that impulse and spin. An already freed predicted tank retains its original proposal; explosion centers always stay
 at the position of the predicted event.
 
+Loose tanks gather in both modes through `TankGather`: intact, unshielded tanks outside their built/gathered pile
+connect within `GatherRadius` (3 m) and wait `GatherDelay` (20 s), with at least `GatherMinimum` (2) members. Motion,
+disturbance and membership changes restart that wait. The creator (or current world-authority successor) requests
+an atomic `Claim` for the complete group, including tanks it already owns. Nothing glides before that grant. The
+component rechecks eligibility, membership and clearance after the reply, then uses the granted epochs as its lease.
+A refused grant or changed member leaves the group alone; ownership/lifecycle changes cancel an active glide.
+
+Gathered piles use `PileBuilder`'s upright cluster with the existing pile spacing: it supports every count without
+upper tiers depending on a tank that might be interrupted. Site checks require flat floor support, an empty footprint
+and clear enclosing-sphere sweeps for lift, traverse and settle. Players, houses and other obstacles block the path;
+low obstacles can sit under the traverse. The path is checked again each physics tick. A shot, blast push, player
+bump or puncture releases that tank to ordinary physics immediately and publishes cancellation before queuing
+its ownership/lifecycle request. Finished tanks sleep with ordinary collisions and track their pile poses;
+displacement/rotation out of the tuned tolerance makes them loose again.
+
+Reliable `Gather` relays carry a phase (cancel/glide/settled) and body poses with epochs/sequences. Only the current
+world authority may send them for its intact owned tanks during play. Body sync publishes the glide normally;
+observers freeze gravity while following that stream, and the reliable completion supplies exact pose and pile
+membership. Presentation has separate sequence tracking so newer disposable motion cannot hide a reliable start
+or rewind a newer pose. Handoffs and ordered final body rests release frozen observers, and stale epochs cannot
+finish an abandoned pile.
+
 Blast shape queries page past full 512-result pages by excluding returned bodies. Large piles cannot silently truncate
 pushes or chain contacts; `scenes/dev/blast_query_tests.tscn` checks 1,100 bodies and duplicate shapes.
 
@@ -263,10 +285,10 @@ or the match ends before all checks complete. These assertions also run headless
 
 Results, 2026-10-09: with three bots under 120 ms round trip, 30 ms jitter and 3% loss, every bot agreed on which tanks existed and their states throughout; resting tanks matched exactly and venting tanks to within about half a meter. The same held through the Docker server on another machine, over the LAN and over a VPN. When the match's creator left mid-match, the others played on in step. A client with a different protocol was turned away with a message.
 
-Protocol 2 adds authority request IDs, grouped epoch grants, per-body publication sequences and canonical/refused
-lifecycle reconciliation, as well as match ids, scalar tuning, timestamps on final body rests, drop refusal replies and discrete player
-movement states, and appends the debug flag to Hello. These changes share one unreleased protocol bump; the next
-release must be a minor release. Every match-scoped request, event and relay carries its match id, and either side
-ignores a different id.
+Protocol 2 adds the reliable `Gather` relay, authority request IDs, grouped epoch grants, per-body publication
+sequences and canonical/refused lifecycle reconciliation, as well as match ids, scalar tuning, timestamps on final
+body rests, drop refusal replies and discrete player movement states, and appends the debug flag to Hello. These
+changes share one unreleased protocol bump; the next release must be a minor release. Every match-scoped request,
+event and relay carries its match id, and either side ignores a different id.
 The server ends each match with a bank audit: initial test scores + detonated map tanks + re-detonated drops - spills
 must equal total banked, including the banks of departed players retained in the final standings.

@@ -135,6 +135,7 @@ public static class Blast
             breakaway.Release();
         }
 
+        if (body is PropaneTank pushedTank) { pushedTank.Disturb(); }
         body.Sleeping = false;
         body.ApplyCentralImpulse(PushDirection(center, massCenter, tuning, rng) * deltaV * body.Mass);
         var spin = new Vector3(rng.RandfRange(-1, 1), rng.RandfRange(-1, 1), rng.RandfRange(-1, 1));
