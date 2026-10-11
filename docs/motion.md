@@ -36,3 +36,46 @@ visual clock, including the final hand return if a snapshot skips the end. Local
 An exceptional grounded solve above `FootPoseRecoverySpeed` also enters bounded recovery and withdraws its contact
 promise until the displayed joints converge. This covers late support and stance snapshots without sliding a
 reported planted contact.
+
+## Reproduce
+
+Run `make build` first. All rendered sequences advance at 60 frames/s, with 120 Hz physics. The `motion` scenario
+covers analog walk, default run, sprint, creep, nine-shot hip and aimed bursts, walking reload, and a controlled throw
+followed by get-up into a run. It captures every rendered frame in the review windows, rather than sampling shots
+between kicks.
+
+```sh
+godot-mono --headless --fixed-fps 60 --path . res://scenes/dev/player_range.tscn -- --scenario=motion --assert-motion --assert-grip
+godot-mono --fixed-fps 60 --path . res://scenes/dev/player_range.tscn -- --scenario=motion --view=side --assert-motion --capture-dir=/tmp/wpmove4-side
+godot-mono --fixed-fps 60 --path . res://scenes/dev/player_range.tscn -- --scenario=motion --view=player --assert-motion --capture-dir=/tmp/wpmove4-player
+```
+
+`--capture-group=walk|run|sprint|creep|hip|aim|reload|getup` narrows the capture window; `recoil` captures both bursts.
+For an A/B fixture, use the motion scene/probe harness on package 3 (`cf3adce`), without changing player code.
+The old recoil comparison also overrides `RifleRecoilBack=0.045` and `RifleRecoilLiftDegrees=5` on that fixture.
+Do not use those overrides on the new spring implementation as a substitute for the old recoil algorithm.
+
+```sh
+tools/dev/net_bots.sh -o /tmp/wpmove4-net -n 2 -w 0 -l 18 -- --scenario=movement --matches=2 --assert-feet --assert-grip --assert-motion --net-lag=120 --net-jitter=30 --net-loss=3
+python3 -B tools/dev/check_scores.py /tmp/wpmove4-net/server.log /tmp/wpmove4-net/bot1.log /tmp/wpmove4-net/bot2.log
+```
+
+The network sequence extends the gait/jump proof with hip and aimed bursts and a walking reload. Each match gets
+fresh remote probes; recoil and reload coverage are required when `--assert-motion` is enabled.
+For rendered remote screenshots, use `-w 1 -l 35 --view=rifleright --capture-dir=DIR` with the same assertion
+and transport flags. Keep `-w 0 -l 18 --matches=2` for the headless reuse/second-match proof.
+
+## Acceptance
+
+`make test` asserts final wrist contact and sampled hand penetration, a maximum angular rate of 1500 degrees/s
+(25 degrees at 60 Hz), and creep lateral muzzle range no greater than 12 mm over a measured steady interval.
+The motion scenario also requires burst coverage and camera return within 0.02 degrees after both bursts.
+Unit tests check spring recovery at 30/60/120 Hz, burst accumulation, bounded response and lifecycle reset.
+
+The rotation metric covers every local bone after all modifiers. Spawn and explicit staging teleports are excluded;
+ordinary snapshot corrections remain measured. Physical ragdoll samples are reported separately because limiting
+those poses would change the physical blast response. Digit release remains subject to the bound even during a
+ragdoll. Variable-frame-rate network runs report both raw frame changes and angular rate; a frame longer than
+1/60 s can contain more than 25 degrees while meeting the equivalent rate bound. Rendered screenshots can stall
+GPU readback. The local comparison uses fixed 60 Hz stepping; a network screenshot run uses real time and reports
+the rate as well as the raw frame maximum.

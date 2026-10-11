@@ -209,6 +209,8 @@ $GODOT --fixed-fps 60 res://scenes/dev/tank_range.tscn -- --capture-dir=/tmp/t -
 # --chain=primed first punctures each tank, then requires venting neighbors in range to detonate after the fuse.
 $GODOT --fixed-fps 60 res://scenes/dev/tank_range.tscn -- --capture-dir=/tmp/pile --formation=Square --chain=fresh
 $GODOT --fixed-fps 60 res://scenes/dev/player_range.tscn -- --capture-dir=/tmp/p
+# Motion: all gaits, hip/aimed bursts, walking reload and get-up into run, captured at 60 Hz.
+$GODOT --fixed-fps 60 res://scenes/dev/player_range.tscn -- --scenario=motion --view=side --assert-motion --assert-grip --capture-dir=/tmp/motion
 # Player scenarios: stances (default), reload, ragdoll, creep (two measured strides), movement (labeled gait/jump transitions),
 # sprint-repro (discovery sequence, exact-tick assertions and transition log), grip (all rifle contacts).
 # feet (all eight body-relative directions in every gait) and feet-events (local starts/stops/turns/jumps/terrain)

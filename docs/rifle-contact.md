@@ -76,7 +76,8 @@ tools/dev/net_bots.sh -n 2 -l 45 -w 1 -- --scenario=movement --assert-grip \
 ```
 
 The host probes its remote character during creep, sprint, jumping and landing through real snapshots. Its
-`remote_*.png` frames and `grip.csv` show that rendered copy; the remote probe does not claim reload coverage.
+`remote_*.png` frames and `grip.csv` show that rendered copy. Package 4 extends the sequence with bursts and
+walking reload; `--assert-motion` requires remote recoil and reload coverage as well as rotation continuity.
 
 ## Calibration results (2026-10-10)
 
