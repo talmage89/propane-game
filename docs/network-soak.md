@@ -152,3 +152,35 @@ The physical nudge run exited 1 with `10000000` intact/resting displaced 2.000 m
 at final comparison. Both bots exited normally and passed the melee scenario; standings agreed with the audit
 (10 initial - 5 spilled = 5 banked). The synthetic CLI fixture likewise exits 1 on a sustained 2 m resting
 offset.
+
+## Verification record
+
+Verified the implementation in `b98fe2d`; no gameplay/network repair was made to improve these results.
+
+- `make setup` and `make build`: passed, zero warnings/errors.
+- `TMPDIR=/tmp/nas-gate make check`: passed formatting, warning-as-error compilation and all `make test`
+  partitions, including real physics/menu/world fixtures and separate-process hashes for all four formations.
+  The new 15 comparer tests took 0.504 s; the three launcher tests took 1.934 s under shared CPU load.
+- `TMPDIR=/tmp/nas-gate python3 -B tools/dev/lint_tests.py`: seven wiring/negative proofs passed. An initial
+  run found incomplete scene metadata in that proof; the final version retains melee and includes the existing
+  world-services and clear-game fixtures. This proves `test-full` wiring, not an actual deep-sweep run.
+- `python3 -B tools/dev/compare_tanks_tests.py`, `python3 -B tools/dev/net_bots_tests.py`,
+  `bash -n tools/dev/net_bots.sh` and `git diff --check`: passed.
+- The 21 soak commands above were re-audited with the final comparer profiles and `check_scores.py`.
+  `/tmp/nas-final-audit.txt` records every result; capture directories contain the raw logs. Fault 6 also used
+  `-w 1 --shot-every=30 --capture-dir=/tmp/nas-fault-6/shots` for rendered inspection.
+- `python3 -B tools/dev/compare_tanks.py /tmp/nas-nudge/bot*.log`: exited 1 on the actual physical offset.
+- `python3 -B tools/dev/compare_tanks.py /tmp/nas-synthetic/a.log /tmp/nas-synthetic/b.log`: exited 1 on a
+  synthetic intact/resting 2 m offset lasting 7.05 s, including final comparison. Passing/asynchronous and
+  bounded-transient synthetic captures are also exercised through disk logs in the unit tests.
+
+Inspected rendered fault-6 `Bot1_030.0.png` (ragdoll flight) and `Bot1_060.0.png` (active tank chain,
+fire/smoke and bank HUD). Inspected nudge-run `melee_host_1_06.png` and `melee_join_1_06.png`: knocked-down
+players and shielded spills render on both peers, with the expected 5/0 bank standings. These images verify
+the scenes render; the physical offset is established by scene mutation and simultaneous tank logs, not by
+these camera views.
+
+Linux on this machine only: macOS, stock Ubuntu CI execution and cross-machine alignment were not verified.
+The probe explicitly requires same-machine clients. Ownership/collision causes of the observed disagreements
+remain unverified and need a separate package. Shared messages, construction, tanks, tuners and
+`Protocol.Version` (2) are unchanged; this is dev logging, verification and documentation only.
