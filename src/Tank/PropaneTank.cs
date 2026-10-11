@@ -19,7 +19,7 @@ public partial class PropaneTank : RigidBody3D
     }
 
     /// <summary>Center of the vessel in the tank's local frame (origin is the center of the foot ring).</summary>
-    public static readonly Vector3 LocalCenter = new(0, 0.235f, 0);
+    public static readonly Vector3 LocalCenter = World.Plan.PileBuilder.LocalCenter;
 
     private const float ShellRadius = 0.156f;
     private const float HoleDecalSize = 0.07f;

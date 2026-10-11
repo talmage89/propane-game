@@ -1,6 +1,8 @@
+using System;
 using System.Linq;
 using Godot;
 using Propane.Core;
+using Propane.Tank;
 using Propane.World;
 using Propane.World.Plan;
 
@@ -22,7 +24,19 @@ public partial class SuburbPreview : Node3D
         AddChild(env);
 
         var seed = (int)DevArgs.GetFloat("seed", 7);
-        var settings = new SuburbSettings();
+        var players = (int)DevArgs.GetFloat("players", 0);
+        var settings = players > 0 ? SuburbPlans.Match(Tuning.Current, players) : SuburbPlans.SinglePlayer(Tuning.Current);
+        if (DevArgs.Get("formation") is { } name)
+        {
+            var formation = Enum.Parse<PileFormation>(name, true);
+            settings = settings with
+            {
+                RowsWeight = formation == PileFormation.Rows ? 1 : 0,
+                SquareWeight = formation == PileFormation.Square ? 1 : 0,
+                TriangularWeight = formation == PileFormation.Triangular ? 1 : 0,
+                TightWeight = formation == PileFormation.Cluster ? 1 : 0,
+            };
+        }
         var timer = System.Diagnostics.Stopwatch.StartNew();
         var plan = new SuburbGenerator(settings, new GameCatalog(), seed).Generate();
         var planMs = timer.ElapsedMilliseconds;
@@ -78,8 +92,24 @@ public partial class SuburbPreview : Node3D
         }
         if (plan.Tanks.Count > 0)
         {
-            var t = Suburb.ToWorld(plan.Tanks[0].Position, plan.Tanks[0].Elevation);
-            director.At(3.5f, () => camera.LookAtFromPosition(t + new Vector3(2.5f, 1.8f, 2.5f), t));
+            var pile = plan.Tanks.GroupBy(t => t.Pile).MaxBy(g => g.Count())!;
+            var index = plan.Tanks.IndexOf(pile.First());
+            director.At(3.5f, () =>
+            {
+                var center = suburb.MapTanks[index].GlobalTransform * PropaneTank.LocalCenter;
+                var space = GetWorld3D().DirectSpaceState;
+                for (var i = 0; i < 24; i++)
+                {
+                    var angle = i * Mathf.Tau / 24;
+                    var from = center + new Vector3(Mathf.Sin(angle) * 3f, 1.8f, Mathf.Cos(angle) * 3f);
+                    if (space.IntersectRay(PhysicsRayQueryParameters3D.Create(from, center, Layers.World | Layers.Props)).Count > 0) continue;
+                    camera.LookAtFromPosition(from, center);
+                    GD.Print($"[preview] {pile.First().Formation} pile of {pile.Count()}");
+                    return;
+                }
+                GD.PushError("No clear camera position for the pile close-up.");
+                GetTree().Quit(1);
+            });
             director.ShotAt(4.0f, $"{seed}_05_tank");
         }
     }

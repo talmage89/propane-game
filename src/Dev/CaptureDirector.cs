@@ -72,6 +72,9 @@ public partial class CaptureDirector : Node
         Record();
         if (QuitAfter > 0 && elapsed >= QuitAfter)
         {
+            // Finalize unused C# RefCounted wrappers before Godot shuts down their native servers.
+            System.GC.Collect();
+            System.GC.WaitForPendingFinalizers();
             GetTree().Quit();
         }
     }
@@ -171,7 +174,7 @@ public partial class CaptureDirector : Node
             return;
         }
         DirAccess.MakeDirRecursiveAbsolute(dir);
-        var image = GetViewport().GetTexture().GetImage();
+        using var image = GetViewport().GetTexture().GetImage();
         var path = $"{dir}/{name}.png";
         image.SavePng(path);
         GD.Print($"[capture] {path}");

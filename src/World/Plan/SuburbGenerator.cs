@@ -28,6 +28,17 @@ public sealed record SuburbSettings
 
     public int ClusterSizeMax { get; init; } = 10;
 
+    public float RoadSpacing { get; init; } = 70f;
+    public float PileSiteSpacing { get; init; } = 1f;
+    public float RowsWeight { get; init; } = 1f;
+    public float SquareWeight { get; init; } = 1f;
+    public float TriangularWeight { get; init; } = 1f;
+    public float TightWeight { get; init; } = 1f;
+    public float PileSpacing { get; init; } = 0.36f;
+    public float PileLayerHeight { get; init; } = 0.249f;
+    public float PileDepthSpacing { get; init; } = 0.49f;
+    public float StartSpacing { get; init; } = 12f;
+
     public float CarriagewayHalfWidth { get; init; } = 4f;
     public float VergeWidth { get; init; } = 1.3f;
     public float SidewalkWidth { get; init; } = 1.8f;
@@ -127,6 +138,19 @@ public sealed class SuburbGenerator
     private void LayOutRoads()
     {
         var half = settings.MapSize / 2f;
+        if (settings.PlayerSpawns > 0)
+        {
+            // A connected street grid grows with the match. Keep road frontage density as the slab grows,
+            // rather than stretching a fixed number of streets into an increasingly empty map.
+            var streets = Math.Max(2, (int)(settings.MapSize / settings.RoadSpacing));
+            for (var i = 0; i < streets; i++)
+            {
+                var offset = -half + settings.MapSize * (i + 1) / (streets + 1);
+                plan.Roads.Add(new RoadSegment(new Vector2(-half, offset), new Vector2(half, offset)));
+                plan.Roads.Add(new RoadSegment(new Vector2(offset, -half), new Vector2(offset, half)));
+            }
+            return;
+        }
         switch (rng.Next(3))
         {
             case 0:
@@ -826,90 +850,71 @@ public sealed class SuburbGenerator
 
     // ------------------------------------------------------------------ Tanks and spawn
 
-    private const float ClusterSpacing = 0.42f;
-
-    /// <summary>
-    /// Spreads groups of tanks across the map: greedy farthest-point picks among the story spots (grills, garages,
-    /// pickup beds...), each filled with a group of tanks packed together, until the total is reached.
-    /// </summary>
+    /// <summary>Place complete formations atomically: a clipped pyramid must never lose a supporting tank.</summary>
     private void ChooseTanks()
     {
-        var candidates = tankSpots.Where(s => InsideMap(new OrientedRect(s.Position, new Vector2(0.4f, 0.4f), 0)) &&
-                                              (s.Elevation > 0 || IsClearForTank(s.Position)))
+        var candidates = tankSpots.Where(s => s.Elevation == 0 && IsClearForTank(s.Position))
             .OrderBy(_ => rng.Next()).ToList();
         var sites = new List<Vector2>();
         var minSize = Mathf.Clamp(settings.ClusterSizeMin, 1, settings.ClusterSizeMax);
         while (plan.Tanks.Count < settings.TankCount && candidates.Count > 0)
         {
-            // A little noise keeps the spread from looking regular. With a center bias, the first group goes nearest
-            // the center and later ones weigh closeness to it against spreading out.
             var spot = sites.Count == 0
                 ? settings.CenterBias > 0 ? candidates.OrderBy(c => c.Position.DistanceTo(MapCenter)).First() : candidates[0]
                 : candidates.OrderByDescending(c => sites.Min(t => t.DistanceTo(c.Position)) * SpotAppeal(c.Reason) *
-                                                    CenterFactor(c.Position) * (0.75f + 0.5f * (float)rng.NextDouble())).First();
+                    CenterFactor(c.Position) * (0.75f + 0.5f * (float)rng.NextDouble())).First();
             candidates.Remove(spot);
-            // Group sizes lean small, so a map has a few big stacks among pairs and loners.
-            var size = minSize + (int)((settings.ClusterSizeMax - minSize + 1) * Mathf.Pow((float)rng.NextDouble(), 1.4f));
-            size = Mathf.Min(size, settings.TankCount - plan.Tanks.Count);
-            var placed = 0;
-            foreach (var slot in ClusterSlots(spot))
+            var formation = ChooseFormation();
+            var size = Math.Min(settings.TankCount - plan.Tanks.Count, minSize +
+                (int)((settings.ClusterSizeMax - minSize + 1) * Mathf.Pow((float)rng.NextDouble(), 1.4f)));
+            var yaw = Range(0, Mathf.Tau);
+            var turn = new Basis(Vector3.Up, yaw);
+            // Retry a smaller complete formation at cramped story spots. Trucks have too little stable
+            // support for pyramids, so all formations use clear ground beside the yard's story props.
+            for (; size > 0; size--)
             {
-                if (placed >= size)
-                {
-                    break;
-                }
-                if (plan.Tanks.All(t => t.Position.DistanceTo(slot) > ClusterSpacing * 0.9f || Mathf.Abs(t.Elevation - spot.Elevation) > 0.5f))
-                {
-                    var reason = placed == 0 ? spot.Reason : $"{spot.Reason} group";
-                    plan.Tanks.Add(new TankPlacement(slot, Range(0, Mathf.Tau), spot.Elevation, reason));
-                    placed++;
-                }
-            }
-            if (placed > 0)
-            {
-                sites.Add(spot.Position);
-            }
-        }
-    }
-
-    /// <summary>Where the tanks of a group can stand, nearest the spot first: a packed lattice, or the pickup's bed.</summary>
-    private IEnumerable<Vector2> ClusterSlots((Vector2 Position, float Yaw, float Elevation, string Reason) spot)
-    {
-        if (spot.Elevation > 0)
-        {
-            // Rows across the bed, in the truck's frame (the spot's yaw is the truck's).
-            var along = FacingVector(spot.Yaw);
-            var across = new Vector2(along.Y, -along.X);
-            var offsets = new List<Vector2>();
-            foreach (var a in new[] { -0.6f, -0.2f, 0.2f, 0.6f })
-            {
-                foreach (var c in new[] { -0.6f, -0.2f, 0.2f, 0.6f })
-                {
-                    offsets.Add(new Vector2(a, c));
-                }
-            }
-            return offsets.OrderBy(o => o.Length() + (float)rng.NextDouble() * 0.05f)
-                .Select(o => spot.Position + along * o.X + across * o.Y).ToList();
-        }
-        // A hexagonal lattice around the spot, slightly jittered, kept to clear ground.
-        var slots = new List<Vector2>();
-        var rowStep = ClusterSpacing * Mathf.Sqrt(3f) / 2f;
-        var turn = Range(0, Mathf.Tau);
-        for (var row = -4; row <= 4; row++)
-        {
-            for (var col = -4; col <= 4; col++)
-            {
-                var local = new Vector2(col * ClusterSpacing + (row % 2 != 0 ? ClusterSpacing / 2f : 0f), row * rowStep);
-                if (local.Length() > ClusterSpacing * 4f)
+                var slots = PileBuilder.Build(formation, size,
+                    new Vector3(settings.PileSpacing, settings.PileLayerHeight, settings.PileDepthSpacing))
+                    .Select(t => new Transform3D(turn * t.Basis, turn * t.Origin + new Vector3(spot.Position.X, 0, spot.Position.Y))).ToList();
+                // A sideways vessel's footprint is longer than its diameter. Enclose the whole hull
+                // in a circle so this clearance remains conservative at every yaw.
+                var margin = formation != PileFormation.Cluster
+                    ? Mathf.Sqrt(PileBuilder.Radius * PileBuilder.Radius + PileBuilder.Height * PileBuilder.Height / 4f)
+                    : 0.22f;
+                if (slots.Any(t => !IsClearForTank(new Vector2((t * PileBuilder.LocalCenter).X, (t * PileBuilder.LocalCenter).Z), margin) ||
+                    !InsideMap(new OrientedRect(new Vector2((t * PileBuilder.LocalCenter).X, (t * PileBuilder.LocalCenter).Z), new Vector2(margin, margin), 0)) ||
+                    plan.Tanks.Any(k => k.Position.DistanceTo(new Vector2(t.Origin.X, t.Origin.Z)) < settings.PileSiteSpacing)))
                 {
                     continue;
                 }
-                var jitter = new Vector2(Range(-0.03f, 0.03f), Range(-0.03f, 0.03f));
-                slots.Add(spot.Position + local.Rotated(turn) + jitter);
+
+                var pile = sites.Count;
+                for (var i = 0; i < slots.Count; i++)
+                {
+                    var t = slots[i];
+                    plan.Tanks.Add(new TankPlacement(new Vector2(t.Origin.X, t.Origin.Z), yaw, t.Origin.Y,
+                        i == 0 ? spot.Reason : $"{spot.Reason} group", (turn.Inverse() * t.Basis).GetEuler(), pile, formation));
+                }
+                sites.Add(spot.Position);
+                break;
             }
         }
-        return slots.OrderBy(p => p.DistanceTo(spot.Position))
-            .Where(p => IsClearForTank(p) && InsideMap(new OrientedRect(p, new Vector2(0.4f, 0.4f), 0))).ToList();
+        if (plan.Tanks.Count != settings.TankCount)
+            throw new InvalidOperationException($"Seed {Seed}: only placed {plan.Tanks.Count}/{settings.TankCount} tanks.");
+    }
+
+    private PileFormation ChooseFormation()
+    {
+        var weights = new[] { settings.RowsWeight, settings.SquareWeight, settings.TriangularWeight, settings.TightWeight };
+        var total = weights.Sum(w => Math.Max(w, 0));
+        if (total <= 0) return PileFormation.Cluster;
+        var pick = Range(0, total);
+        for (var i = 0; i < weights.Length; i++)
+        {
+            pick -= Math.Max(weights[i], 0);
+            if (pick < 0) return (PileFormation)i;
+        }
+        return PileFormation.Cluster;
     }
 
     /// <summary>How much a spot tells a story: tanks by the things that use them beat a tank dropped on a lawn.</summary>
@@ -922,9 +927,9 @@ public sealed class SuburbGenerator
     };
 
     /// <summary>A tank (31 cm wide) fits here without touching houses, trees, props or fences.</summary>
-    private bool IsClearForTank(Vector2 p)
+    private bool IsClearForTank(Vector2 p, float margin = 0.22f)
     {
-        var tank = new OrientedRect(p, new Vector2(0.22f, 0.22f), 0);
+        var tank = new OrientedRect(p, new Vector2(margin, margin), 0);
         if (occupied.Any(o => o.Overlaps(tank)) || obstacles.Any(o => o.Overlaps(tank)))
         {
             return false;
@@ -999,28 +1004,24 @@ public sealed class SuburbGenerator
                 }
             }
         }
-        if (candidates.Count == 0)
+        List<Vector2> Select(List<Vector2> available)
         {
-            candidates.Add(plan.Spawn);
-        }
-        // Keep to the ring around the action when there is room; otherwise take the nearest points there are.
-        var reach = Mathf.Max(settings.CenterRadius, 20f) * 1.4f;
-        var near = candidates.Where(p => p.DistanceTo(MapCenter) <= reach).ToList();
-        if (near.Count < count * 3)
-        {
-            near = candidates.OrderBy(p => p.DistanceTo(MapCenter)).Take(Math.Max(count * 6, near.Count)).ToList();
-        }
-        var chosen = new List<Vector2> { near.OrderByDescending(p => p.DistanceTo(MapCenter) + Range(0f, 6f)).First() };
-        while (chosen.Count < count)
-        {
-            var next = near.OrderByDescending(p => chosen.Min(c => c.DistanceTo(p))).First();
-            if (chosen.Min(c => c.DistanceTo(next)) < 0.5f)
+            var starts = new List<Vector2>();
+            while (starts.Count < count && available.Count > 0)
             {
-                // Fewer distinct points than players: reuse them in turn, nudged apart.
-                next = chosen[chosen.Count % Math.Max(1, chosen.Count)] + new Vector2(1.2f, 0).Rotated(chosen.Count);
+                var next = starts.Count == 0 ? available.OrderByDescending(p => p.DistanceTo(MapCenter)).First()
+                    : available.OrderByDescending(p => starts.Min(c => c.DistanceTo(p))).First();
+                starts.Add(next);
+                available.RemoveAll(p => p.DistanceTo(next) < settings.StartSpacing);
             }
-            chosen.Add(next);
+            return starts;
         }
+        // Prefer the existing ring around the action; expand to all roads when more players need the space.
+        var reach = Mathf.Max(settings.CenterRadius, 20f) * 1.4f;
+        var chosen = Select(candidates.Where(p => p.DistanceTo(MapCenter) <= reach).ToList());
+        if (chosen.Count != count) chosen = Select(candidates);
+        if (chosen.Count != count)
+            throw new InvalidOperationException($"Seed {Seed}: cannot fit {count} clear starts {settings.StartSpacing} m apart.");
         foreach (var p in chosen)
         {
             var toCenter = MapCenter - p;
@@ -1050,7 +1051,7 @@ public sealed class SuburbGenerator
         }
         if (candidates.Count == 0)
         {
-            return;
+            throw new InvalidOperationException($"Seed {Seed}: cannot place {count} ammo cans.");
         }
         var chosen = new List<Vector2> { candidates.OrderBy(p => p.DistanceTo(MapCenter) + Range(0f, 10f)).First() };
         while (chosen.Count < count)
@@ -1062,6 +1063,8 @@ public sealed class SuburbGenerator
             }
             chosen.Add(best);
         }
+        if (chosen.Count != count)
+            throw new InvalidOperationException($"Seed {Seed}: only placed {chosen.Count}/{count} ammo cans.");
         plan.AmmoSpots.AddRange(chosen);
     }
 

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
@@ -13,7 +14,10 @@ namespace Propane.Net;
 /// </summary>
 public static class PlanCodec
 {
-    private const int FormatVersion = 1;
+    private const int FormatVersion = 2;
+
+    // A wire safety ceiling, independent of gameplay tuners; bound inflation before allocating a whole plan.
+    public const int MaxRawBytes = Protocol.MaxPacketBytes * 8;
 
     public static byte[] Encode(SuburbPlan plan)
     {
@@ -99,6 +103,11 @@ public static class PlanCodec
                 w.Write(tank.Yaw);
                 w.Write(tank.Elevation);
                 w.Write(tank.Reason);
+                w.Write(tank.Rotation.X);
+                w.Write(tank.Rotation.Y);
+                w.Write(tank.Rotation.Z);
+                w.Write(tank.Pile);
+                w.Write((byte)tank.Formation);
             }
             Vec2(w, plan.Spawn);
             w.Write(plan.SpawnYaw);
@@ -126,77 +135,111 @@ public static class PlanCodec
 
     public static SuburbPlan Decode(byte[] data)
     {
+        if (data.Length == 0 || data.Length > Protocol.MaxPacketBytes)
+        {
+            throw new InvalidDataException("bad compressed plan size");
+        }
         using var packed = new MemoryStream(data);
         using var deflate = new DeflateStream(packed, CompressionMode.Decompress);
         using var raw = new MemoryStream();
-        deflate.CopyTo(raw);
-        raw.Position = 0;
-        using var r = new BinaryReader(raw);
+        var buffer = new byte[8192];
+        int read;
+        while ((read = deflate.Read(buffer)) > 0)
+        {
+            if (raw.Length + read > MaxRawBytes) { throw new InvalidDataException("inflated plan exceeds wire limit"); }
+            raw.Write(buffer, 0, read);
+        }
+        var r = new NetReader(raw.ToArray(), offset: 0);
 
-        var version = r.ReadInt32();
+        var version = r.Int();
         if (version != FormatVersion)
         {
             throw new InvalidDataException($"plan format {version}, expected {FormatVersion}");
         }
-        var plan = new SuburbPlan { Seed = r.ReadInt32(), Bounds = Rect(r) };
-        for (int i = 0, n = r.ReadInt32(); i < n; i++)
+        var plan = new SuburbPlan { Seed = r.Int(), Bounds = Rect(r) };
+        if (plan.Bounds.Size.X <= 0 || plan.Bounds.Size.Y <= 0) { throw new InvalidDataException("bad plan bounds"); }
+        for (int i = 0, n = Count(r); i < n; i++)
         {
             plan.Roads.Add(new RoadSegment(Vec2(r), Vec2(r)));
         }
-        for (int i = 0, n = r.ReadInt32(); i < n; i++)
+        for (int i = 0, n = Count(r); i < n; i++)
         {
-            plan.CulDeSacs.Add(new CulDeSac(Vec2(r), r.ReadSingle()));
+            plan.CulDeSacs.Add(new CulDeSac(Vec2(r), Nonnegative(Number(r))));
         }
-        for (int i = 0, n = r.ReadInt32(); i < n; i++)
+        for (int i = 0, n = Count(r); i < n; i++)
         {
-            var lot = new Lot { Bounds = Oriented(r), Seed = r.ReadInt32() };
-            lot.HouseModel = r.ReadInt32();
-            lot.HousePalette = r.ReadInt32();
+            var lot = new Lot { Bounds = Oriented(r), Seed = r.Int() };
+            lot.HouseModel = NetReader.Count(r.Int(), Protocol.MaxCollection - 1, -1);
+            lot.HousePalette = NetReader.Count(r.Int(), Protocol.MaxCollection - 1);
             lot.House = Oriented(r);
-            lot.ReturnDepth = r.ReadSingle();
-            lot.DrivewaySide = (HouseSide)r.ReadByte();
+            lot.ReturnDepth = Nonnegative(Number(r));
+            lot.DrivewaySide = EnumValue<HouseSide>(r);
             plan.Lots.Add(lot);
         }
-        for (int i = 0, n = r.ReadInt32(); i < n; i++)
+        for (int i = 0, n = Count(r); i < n; i++)
         {
             plan.Fences.Add(new FenceRun(Vec2(r), Vec2(r)));
         }
-        for (int i = 0, n = r.ReadInt32(); i < n; i++)
+        for (int i = 0, n = Count(r); i < n; i++)
         {
-            plan.Pavings.Add(new Paving(Oriented(r), (PavingKind)r.ReadByte()));
+            plan.Pavings.Add(new Paving(Oriented(r), EnumValue<PavingKind>(r)));
         }
         var names = new List<string>();
-        for (int i = 0, n = r.ReadInt32(); i < n; i++)
+        for (int i = 0, n = Count(r); i < n; i++)
         {
-            names.Add(r.ReadString());
+            names.Add(r.String());
         }
-        for (int i = 0, n = r.ReadInt32(); i < n; i++)
+        for (int i = 0, n = Count(r); i < n; i++)
         {
-            var model = names[r.ReadInt32()];
+            var model = names[NetReader.Count(r.Int(), names.Count - 1)];
             var position = Vec2(r);
-            var yaw = r.ReadSingle();
-            var scale = r.ReadSingle();
-            var body = (PropBody)r.ReadByte();
-            var mass = r.ReadSingle();
-            var tint = new Color(r.ReadSingle(), r.ReadSingle(), r.ReadSingle(), r.ReadSingle());
-            var elevation = r.ReadSingle();
+            var yaw = Number(r);
+            var scale = Nonnegative(Number(r));
+            if (scale == 0) { throw new InvalidDataException("zero prop scale"); }
+            var body = EnumValue<PropBody>(r);
+            var mass = Nonnegative(Number(r));
+            var tint = new Color(Number(r), Number(r), Number(r), Number(r));
+            var elevation = Number(r);
             plan.Props.Add(new PropPlacement(model, position, yaw, scale, body, mass, tint, elevation));
         }
-        for (int i = 0, n = r.ReadInt32(); i < n; i++)
+        for (int i = 0, n = Count(r); i < n; i++)
         {
-            plan.Tanks.Add(new TankPlacement(Vec2(r), r.ReadSingle(), r.ReadSingle(), r.ReadString()));
+            plan.Tanks.Add(new TankPlacement(Vec2(r), Number(r), Nonnegative(Number(r)), r.String(),
+                new Vector3(Number(r), Number(r), Number(r)), NetReader.Count(r.Int(), Protocol.MaxCollection - 1), EnumValue<PileFormation>(r)));
         }
         plan.Spawn = Vec2(r);
-        plan.SpawnYaw = r.ReadSingle();
-        for (int i = 0, n = r.ReadInt32(); i < n; i++)
+        plan.SpawnYaw = Number(r);
+        for (int i = 0, n = Count(r); i < n; i++)
         {
-            plan.Spawns.Add(new SpawnPoint(Vec2(r), r.ReadSingle()));
+            plan.Spawns.Add(new SpawnPoint(Vec2(r), Number(r)));
         }
-        for (int i = 0, n = r.ReadInt32(); i < n; i++)
+        for (int i = 0, n = Count(r); i < n; i++)
         {
             plan.AmmoSpots.Add(Vec2(r));
         }
+        r.End();
         return plan;
+    }
+
+    private static int Count(NetReader r)
+    {
+        var count = NetReader.Count(r.Int(), Protocol.MaxCollection);
+        if (count > r.Remaining) { throw new InvalidDataException("truncated plan collection"); }
+        return count;
+    }
+
+    private static float Number(NetReader r)
+    {
+        var value = r.Float();
+        return Mathf.Abs(value) <= 1_000_000 ? value : throw new InvalidDataException("plan number outside wire limits");
+    }
+
+    private static float Nonnegative(float value) => value >= 0 ? value : throw new InvalidDataException("negative plan size");
+
+    private static T EnumValue<T>(NetReader r) where T : struct, Enum
+    {
+        var value = (T)Enum.ToObject(typeof(T), r.Byte());
+        return Enum.IsDefined(value) ? value : throw new InvalidDataException($"unknown plan {typeof(T).Name}");
     }
 
     private static void Vec2(BinaryWriter w, Vector2 v)
@@ -205,7 +248,7 @@ public static class PlanCodec
         w.Write(v.Y);
     }
 
-    private static Vector2 Vec2(BinaryReader r) => new(r.ReadSingle(), r.ReadSingle());
+    private static Vector2 Vec2(NetReader r) => new(Number(r), Number(r));
 
     private static void Rect(BinaryWriter w, Rect2 rect)
     {
@@ -213,7 +256,7 @@ public static class PlanCodec
         Vec2(w, rect.Size);
     }
 
-    private static Rect2 Rect(BinaryReader r) => new(Vec2(r), Vec2(r));
+    private static Rect2 Rect(NetReader r) => new(Vec2(r), Vec2(r));
 
     private static void Oriented(BinaryWriter w, OrientedRect rect)
     {
@@ -222,5 +265,10 @@ public static class PlanCodec
         w.Write(rect.Angle);
     }
 
-    private static OrientedRect Oriented(BinaryReader r) => new(Vec2(r), Vec2(r), r.ReadSingle());
+    private static OrientedRect Oriented(NetReader r)
+    {
+        var center = Vec2(r);
+        var half = new Vector2(Nonnegative(Number(r)), Nonnegative(Number(r)));
+        return new OrientedRect(center, half, Number(r));
+    }
 }

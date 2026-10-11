@@ -11,6 +11,7 @@ hit or thrown. Every gain and loss of tanks follows from that rule; there are no
 clock runs out wins.
 
 - A chain reaction credits every tank in it to whoever detonated the first one.
+  A close blast acts as a shot: intact tanks puncture and keep venting; already-venting tanks detonate after a fuse.
 - A bullet hit drops 1 tank behind the victim, then a 0.5 s grace period before another hit can drop one.
 - Being ragdolled drops 5 tanks where the player was thrown, even by their own blast. A ragdolled player can still be
   shot.
@@ -61,11 +62,13 @@ at 20), strings at 1024 UTF-8 bytes, and vector components at one million meters
 the match's tuners still determine gameplay. Hello, Welcome and Rejected allow trailing extensions so incompatible
 clients can still be told why they were rejected.
 
-**The world.** The server generates the match's suburb and sends the whole plan (about 10 KB compressed) rather than just its seed. The generator's trigonometry can differ in the last bit between an Apple Silicon Mac and an x86 Linux machine, and a single flipped comparison would give the players different suburbs. Houses and other static parts never need syncing.
+**The world.** The server generates the match's suburb and sends the whole plan (roughly 10–30 KB compressed at 2–32 players) rather than just its seed. The generator's trigonometry can differ in the last bit between an Apple Silicon Mac and an x86 Linux machine, and a single flipped comparison would give the players different suburbs. The plan includes every tank's position, elevation, rotation and pile identity; clients do not reroll formations. Houses and other static parts never need syncing.
 
 Construction choices are pure functions of that plan and the shared tuning. Fence style and color use explicit
 integer mixing of the run's coordinates and seed, never a process-salted hash. `make test` hashes the built meshes,
-transforms, body masses and collision shapes (fences included) in two fresh processes using one saved plan.
+transforms, body masses and collision shapes (fences and piles included) in two fresh processes using a saved plan
+for each formation. Compressed plans are validated before match setup: inflation is capped at 8 MiB, collection
+and string limits apply inside the plan, and starts must agree with the player assignments.
 
 **Tanks:**
 - *Puncture:* the shooter's client punctures the tank at once. It then sends the cause to everyone: the hole position and normal, the jet's lean, and the bullet's push. Every client starts the same vent from the same starting point.
@@ -185,14 +188,14 @@ Details settled while building, within the decisions above:
 - **Ownership** goes to whoever last disturbed a body (a shot, a puncture, a blast, a push, a drop); the match's creator owns everything nobody has touched, and a player's bodies pass to the creator (or the next player) if they leave. Claims go through the server, which echoes them to everyone in one order, so all players agree on each owner. A handoff clears the former owner's correction target and clock comparison. The new owner sends its final state even if its copy was already asleep, so nobody is left correcting toward the former owner forever.
 - **Dropped tanks** glow in the dropper's color while they ignore bullets and chain reactions.
 - **Tuning in a match:** everyone plays on the creator's values: the baked ones in a release build, the creator's live ones in a debug build. Only that original creator's debug build gets F1 and may change the match's values. Hosting succession does not transfer this permission. Hello appends a debug-build flag, captured at match start; this is a client capability declaration, not remote build attestation. Tuning crosses the wire as named bool/int/float scalars, with exact exported types and inclusive declared ranges checked before applying the whole snapshot or a change. `FixedSeed` accepts the full int32 range. The player's own values come back after the match.
-- **Starting values** (all tuners): 40 tanks in piles of 5–12 within about 40 m of the center; a 30-round magazine, 60 in reserve, at most 150, a 1.6 s reload; 8 ammo cans of 30 rounds that come back after 20 s; a 2:30 match after a 4 s countdown; results for 10 s.
+- **Starting values** (all tuners): 20 base tanks plus 4 per player; pile limits of 5–12 plus floor(0.25 × players), near the central 40 m; a 190 m base map plus 4 m per player, with clear starts at least 12 m apart; a 30-round magazine, 60 in reserve, at most 150, a 1.6 s reload; 3 base ammo cans plus 1 per player, of 30 rounds that come back after 20 s; a 2:30 match after a 4 s countdown; results for 10 s.
 
 ## Testing
 
 | Command | Checks |
 | --- | --- |
 | `make test` | Plain C# assertion suites (every wire message, malformed payloads, server ledger and permissions, lifecycle buffering and ownership), score-checker regressions, movement, gamepad menu, device switching and platform checks, generator checks (100 seeds), and separate-process built-world hashes. Add suites under `src/Dev/UnitTests/` and register them with `TestRunner`; any failure prints its name and exits nonzero. |
-| `godot --headless res://scenes/dev/generator_tests.tscn -- --seeds=100` | Match suburbs too: a start per player, spread apart and clear; ammo spots; tanks nearer the center; the plan unchanged through `PlanCodec`. |
+| `godot --headless res://scenes/dev/generator_tests.tscn -- --seeds=100` | All four formations; 2, 8, 16, 24 and 32 players; exact supply counts, clear separated reachable starts, hull overlaps and supports, and exact `PlanCodec` round trips. |
 | `tools/dev/net_bots.sh -n 3 -l 60 -- --net-lag=120 --net-jitter=30 --net-loss=3` | A local server and bot players (`scenes/dev/net_test.tscn`) that run to tanks, shoot them and each other, and fetch ammo, under simulated lag and loss. `-w N` shows N of them in windows; `-S host:port` uses an existing server. |
 | `tools/dev/compare_tanks.py out/bot*.log` | Where each bot had every tank at the same match times: counts, states and drift. |
 | `tools/dev/check_scores.py out/server.log out/bot*.log` | Server conservation audit and identical per-player final scores on every bot; exits nonzero on a missing audit or disagreement. |

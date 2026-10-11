@@ -21,7 +21,7 @@ verification happen on Linux.
 
 ## Working
 
-- `make` lists the tasks. Run `make build` before any scene; `make test` takes about 75 s.
+- `make` lists the tasks. Run `make build` before any scene; `make test` runs all suites, including 600 seeded layouts, forced formations and separate-process world hashes.
 - Verify with the scripted scenes in `scenes/dev` and review their screenshots. Test network changes with
   `tools/dev/net_bots.sh`.
 - Don't commit `.import` churn from opening the editor.

@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using Godot;
 using Propane.World;
 using Propane.World.Plan;
@@ -15,15 +14,31 @@ namespace Propane.Dev;
 public partial class GeneratorTests : Node
 {
     private const float GridCell = 0.25f;
+    private static readonly (int X, int Y)[] Neighbors = { (1, 0), (-1, 0), (0, 1), (0, -1) };
     private int failures;
+    private TankGeometry geometry = null!;
+    private float chainRadius;
     private readonly Dictionary<string, int> failureKinds = new();
 
     public override void _Ready()
     {
+        try { RunTests(); }
+        catch (Exception error)
+        {
+            GD.PushError(error.ToString());
+            GetTree().Quit(1);
+        }
+    }
+
+    private void RunTests()
+    {
         DevArgs.Setup();
         var count = (int)DevArgs.GetFloat("seeds", 120);
-        var settings = new SuburbSettings();
+        var tuning = new Core.Tuning();
+        var settings = SuburbPlans.SinglePlayer(tuning);
+        chainRadius = Mathf.Min(tuning.ChainRadius, tuning.BlastRadius);
         var catalog = new GameCatalog();
+        geometry = new TankGeometry();
         var tankTotals = new List<int>();
         var lotTotals = new List<int>();
         var sizes = new List<Vector2>();
@@ -35,7 +50,7 @@ public partial class GeneratorTests : Node
         {
             var plan = new SuburbGenerator(settings, catalog, seed).Generate();
             var again = new SuburbGenerator(settings, catalog, seed).Generate();
-            Check(seed, "deterministic", Fingerprint(plan) == Fingerprint(again));
+            Check(seed, "deterministic", Net.PlanCodec.Encode(plan).SequenceEqual(Net.PlanCodec.Encode(again)));
             CheckLots(seed, plan, settings);
             CheckTanks(seed, plan, settings);
             CheckSpawn(seed, plan, settings);
@@ -57,7 +72,8 @@ public partial class GeneratorTests : Node
         GD.Print($"[tests] tank groups: {groupSizes.Count / (float)count:0.0} per map, sizes " +
                  string.Join(" ", groupSizes.GroupBy(g => g).OrderBy(g => g.Key).Select(g => $"{g.Key}:{g.Count()}")));
         GD.Print("[tests] tank spots: " + string.Join(", ", reasons.OrderByDescending(r => r.Value).Select(r => $"{r.Key} {r.Value} (seed {firstSeedFor[r.Key]})")));
-        TestMatchSuburbs(count, settings, catalog);
+        TestFormations(catalog);
+        foreach (var players in new[] { 2, 8, 16, 24, 32 }) TestMatchSuburbs(count, players, catalog);
         foreach (var (kind, n) in failureKinds.OrderByDescending(k => k.Value))
         {
             GD.Print($"[tests] FAIL {kind}: {n}");
@@ -84,12 +100,12 @@ public partial class GeneratorTests : Node
     /// Match suburbs: the same checks, plus a start for every player and the ammo spots, tank piles pulled toward the
     /// center, and the plan surviving the trip through <see cref="Net.PlanCodec"/> unchanged.
     /// </summary>
-    private void TestMatchSuburbs(int count, SuburbSettings single, GameCatalog catalog)
+    private void TestMatchSuburbs(int count, int players, GameCatalog catalog)
     {
-        var tuning = Core.Tuning.Current;
-        var settings = SuburbPlans.Match(tuning, tuning.MaxPlayers);
+        var tuning = new Core.Tuning();
+        var settings = SuburbPlans.Match(tuning, players);
         var timer = System.Diagnostics.Stopwatch.StartNew();
-        var spRadius = new List<float>();
+
         var mpRadius = new List<float>();
         var spawnGaps = new List<float>();
         var ammoCounts = new List<int>();
@@ -98,34 +114,21 @@ public partial class GeneratorTests : Node
         {
             var plan = new SuburbGenerator(settings, catalog, seed).Generate();
             var again = new SuburbGenerator(settings, catalog, seed).Generate();
-            Check(seed, "match: deterministic", Fingerprint(plan) == Fingerprint(again) &&
+            Check(seed, "match: deterministic", Net.PlanCodec.Encode(plan).SequenceEqual(Net.PlanCodec.Encode(again)) &&
                                                 plan.Spawns.SequenceEqual(again.Spawns) && plan.AmmoSpots.SequenceEqual(again.AmmoSpots));
             CheckLots(seed, plan, settings);
             CheckTanks(seed, plan, settings);
             CheckSpawn(seed, plan, settings);
             CheckReachability(seed, plan, settings);
 
-            Check(seed, "match: a start per player", plan.Spawns.Count == settings.PlayerSpawns, $"{plan.Spawns.Count}");
-            var cars = plan.Props.Where(p => p.Model.StartsWith("car:")).Select(p => p.Position).ToList();
-            foreach (var spawn in plan.Spawns)
-            {
-                Check(seed, "match: start on a road", plan.Roads.Any(r => r.RightOfWay(settings.CarriagewayHalfWidth).Contains(spawn.Position)));
-                Check(seed, "match: start clear of cars", cars.All(c => c.DistanceTo(spawn.Position) > 4f));
-                Check(seed, "match: start clear of tanks", plan.Tanks.All(t => t.Position.DistanceTo(spawn.Position) > 6f));
-            }
-            var gap = float.MaxValue;
-            for (var i = 0; i < plan.Spawns.Count; i++)
-            {
-                for (var j = i + 1; j < plan.Spawns.Count; j++)
-                {
-                    gap = Mathf.Min(gap, plan.Spawns[i].Position.DistanceTo(plan.Spawns[j].Position));
-                }
-            }
-            spawnGaps.Add(gap);
-            Check(seed, "match: starts spread apart", gap > 10f, $"{gap:0.0} m");
+            Check(seed, "match: supply settings", settings.TankCount == tuning.MpTankCount + tuning.MpTanksPerPlayer * players &&
+                settings.AmmoSpots == tuning.PickupCount + tuning.PickupsPerPlayer * players &&
+                settings.MapSize == tuning.MpMapSizeBase + tuning.MpMapSizePerPlayer * players &&
+                settings.ClusterSizeMax == Mathf.Max(tuning.MpClusterSizeMin, tuning.MpClusterSizeMax) + (int)(tuning.MpPileSizePerPlayer * players));
+            spawnGaps.Add(CheckMatchStarts(seed, plan, settings));
 
+            mpRadius.Add(plan.Tanks.Average(t => t.Position.DistanceTo(plan.Bounds.GetCenter())));
             ammoCounts.Add(plan.AmmoSpots.Count);
-            Check(seed, "match: enough ammo spots", plan.AmmoSpots.Count >= settings.AmmoSpots - 2, $"{plan.AmmoSpots.Count}");
             foreach (var spot in plan.AmmoSpots)
             {
                 Check(seed, "match: ammo inside map", plan.Bounds.HasPoint(spot));
@@ -138,21 +141,106 @@ public partial class GeneratorTests : Node
             var bytes = Net.PlanCodec.Encode(plan);
             planBytes.Add(bytes.Length);
             var decoded = Net.PlanCodec.Decode(bytes);
-            Check(seed, "match: plan survives encoding", Fingerprint(decoded) == Fingerprint(plan) && decoded.Seed == plan.Seed &&
+            Check(seed, "match: plan survives encoding", Net.PlanCodec.Encode(decoded).SequenceEqual(bytes) && decoded.Seed == plan.Seed &&
                                                          decoded.Spawns.SequenceEqual(plan.Spawns) && decoded.AmmoSpots.SequenceEqual(plan.AmmoSpots) &&
-                                                         decoded.Pavings.Count == plan.Pavings.Count && decoded.Bounds == plan.Bounds &&
-                                                         decoded.Props.SequenceEqual(plan.Props) && decoded.Tanks.SequenceEqual(plan.Tanks));
+                                                         decoded.Pavings.SequenceEqual(plan.Pavings) && decoded.Bounds == plan.Bounds &&
+                                                         decoded.Props.SequenceEqual(plan.Props) && decoded.Tanks.SequenceEqual(plan.Tanks) &&
+                                                         decoded.Roads.SequenceEqual(plan.Roads) && decoded.Fences.SequenceEqual(plan.Fences) &&
+                                                         decoded.CulDeSacs.SequenceEqual(plan.CulDeSacs));
 
-            // The same seed in single player, for comparing how central the tanks are.
-            var sp = new SuburbGenerator(single, catalog, seed).Generate();
-            spRadius.Add(sp.Tanks.Average(t => t.Position.DistanceTo(sp.Bounds.GetCenter())));
-            mpRadius.Add(plan.Tanks.Average(t => t.Position.DistanceTo(plan.Bounds.GetCenter())));
         }
-        Check(0, "match: tanks nearer the center than in single player", mpRadius.Average() < spRadius.Average() * 0.85f,
-            $"{mpRadius.Average():0.0} vs {spRadius.Average():0.0} m");
-        GD.Print($"[tests] match suburbs: {count} seeds in {timer.ElapsedMilliseconds} ms; tanks average {mpRadius.Average():0.0} m from the center " +
-                 $"(single player {spRadius.Average():0.0} m); closest starts {spawnGaps.Min():0.0}..{spawnGaps.Max():0.0} m apart; " +
+        GD.Print($"[tests] {players} players: tanks {settings.TankCount}, max pile {settings.ClusterSizeMax}, map input {settings.MapSize}, ammo {settings.AmmoSpots}");
+        GD.Print($"[tests] match suburbs ({players} players): {count} seeds in {timer.ElapsedMilliseconds} ms; tanks average {mpRadius.Average():0.0} m from the center; " +
+                 $"closest starts {spawnGaps.Min():0.0}..{spawnGaps.Max():0.0} m apart; " +
                  $"ammo spots {ammoCounts.Min()}..{ammoCounts.Max()}; plan {planBytes.Average() / 1024f:0.0} KB encoded (max {planBytes.Max() / 1024f:0.0})");
+    }
+
+    private float CheckMatchStarts(int seed, SuburbPlan plan, SuburbSettings settings)
+    {
+        Check(seed, "match: a start per player", plan.Spawns.Count == settings.PlayerSpawns, $"{plan.Spawns.Count}");
+        var cars = plan.Props.Where(p => p.Model.StartsWith("car:")).Select(p => p.Position).ToList();
+        foreach (var spawn in plan.Spawns)
+        {
+            Check(seed, "match: start inside slab", plan.Bounds.Grow(-4f).HasPoint(spawn.Position));
+            Check(seed, "match: start on a road", plan.Roads.Any(r => r.RightOfWay(settings.CarriagewayHalfWidth).Contains(spawn.Position)));
+            Check(seed, "match: start clear of cars", cars.All(c => c.DistanceTo(spawn.Position) > 6f));
+            Check(seed, "match: start clear of tanks", plan.Tanks.All(t => t.Position.DistanceTo(spawn.Position) > 8f));
+        }
+        var gap = float.MaxValue;
+        for (var i = 0; i < plan.Spawns.Count; i++)
+        {
+            for (var j = i + 1; j < plan.Spawns.Count; j++)
+            {
+                gap = Mathf.Min(gap, plan.Spawns[i].Position.DistanceTo(plan.Spawns[j].Position));
+            }
+        }
+        Check(seed, "match: starts spread apart", gap >= settings.StartSpacing - 0.001f, $"{gap:0.0} m");
+        Check(seed, "match: exact ammo supply", plan.AmmoSpots.Count == settings.AmmoSpots);
+        return gap;
+    }
+
+    private void TestFormations(GameCatalog catalog)
+    {
+        foreach (var formation in Enum.GetValues<World.Plan.PileFormation>())
+        {
+            var tuning = new Core.Tuning();
+            var spacing = new Vector3(tuning.PileSpacing, tuning.PileLayerHeight, tuning.PileDepthSpacing);
+            foreach (var n in new[] { 0, 1, 2, 4, 5, 6, 9, 10, 14, 16, 20, 30, 64, 128 })
+            {
+                var transforms = World.Plan.PileBuilder.Build(formation, n, spacing);
+                Check(n, "formation count", transforms.Count == n);
+                Check(n, "formation deterministic", transforms.SequenceEqual(World.Plan.PileBuilder.Build(formation, n, spacing)));
+                CheckChainConnections(n, transforms.Select(t => t * PileBuilder.LocalCenter).ToArray());
+                if (formation == PileFormation.Square && n >= 5 || formation == PileFormation.Triangular && n >= 4)
+                    Check(n, "pyramid has an upper tier", transforms.Any(t => t.Origin.Y > PileBuilder.Radius + 0.001f), $"{formation} {n}");
+                foreach (var t in transforms)
+                {
+                    Check(n, "formation finite", t.Origin.IsFinite() && t.Basis.X.IsFinite() && t.Origin.Y >= 0);
+                    Check(n, "formation above ground", geometry.Bottom(t) >= -0.001f);
+                    if (formation != PileFormation.Cluster && t.Origin.Y > World.Plan.PileBuilder.Radius + 0.001f)
+                    {
+                        Check(n, "formation supported by two tanks", transforms.Count(b =>
+                            Mathf.Abs(t.Origin.Y - b.Origin.Y - spacing.Y) < 0.0001f && geometry.Overlaps(t, b, -0.005f)) >= 2, $"{formation} {t.Origin}");
+                    }
+                }
+                for (var i = 0; i < transforms.Count; i++)
+                {
+                    for (var j = i + 1; j < transforms.Count; j++)
+                    {
+                        if (transforms[i].Origin.DistanceTo(transforms[j].Origin) < 0.8f)
+                            Check(n, "formation hulls do not intersect", !geometry.Overlaps(transforms[i], transforms[j]), $"{formation} {i}/{j}");
+                    }
+                }
+            }
+            var settings = SuburbPlans.SinglePlayer(tuning) with
+            {
+                RowsWeight = formation == PileFormation.Rows ? 1 : 0,
+                SquareWeight = formation == PileFormation.Square ? 1 : 0,
+                TriangularWeight = formation == PileFormation.Triangular ? 1 : 0,
+                TightWeight = formation == PileFormation.Cluster ? 1 : 0,
+                ClusterSizeMin = 14,
+                ClusterSizeMax = 14,
+            };
+            var modes = new[] { settings }.Concat(new[] { 2, 8, 16, 24, 32 }.Select(players => SuburbPlans.Match(tuning, players) with
+            {
+                RowsWeight = settings.RowsWeight,
+                SquareWeight = settings.SquareWeight,
+                TriangularWeight = settings.TriangularWeight,
+                TightWeight = settings.TightWeight,
+            }));
+            foreach (var mode in modes)
+            {
+                for (var seed = 1; seed <= 6; seed++)
+                {
+                    var plan = new SuburbGenerator(mode, catalog, seed).Generate();
+                    Check(seed, "forced formation", plan.Tanks.All(t => t.Formation == formation));
+                    CheckTanks(seed, plan, mode);
+                    CheckLots(seed, plan, mode);
+                    if (mode.PlayerSpawns > 0) CheckMatchStarts(seed, plan, mode);
+                    CheckReachability(seed, plan, mode);
+                }
+            }
+        }
     }
 
     private void CheckLots(int seed, SuburbPlan plan, SuburbSettings settings)
@@ -179,25 +267,54 @@ public partial class GeneratorTests : Node
     private void CheckTanks(int seed, SuburbPlan plan, SuburbSettings settings)
     {
         Check(seed, "tank count", plan.Tanks.Count == settings.TankCount, $"{plan.Tanks.Count}");
+        foreach (var pile in plan.Tanks.GroupBy(t => t.Pile))
+            CheckChainConnections(seed, pile.Select(t => TankTransform(t) * PileBuilder.LocalCenter).ToArray());
         foreach (var tank in plan.Tanks)
         {
             Check(seed, "tank inside map", plan.Bounds.HasPoint(tank.Position), $"{tank.Position}");
-            Check(seed, "tank outside houses", !plan.Lots.Any(l => l.HouseModel >= 0 && l.House.Grown(0.2f).Contains(tank.Position)), tank.Reason);
-            if (tank.Elevation == 0)
-            {
-                var nearest = plan.Fences.Select(f => DistanceToSegment(tank.Position, f.A, f.B)).DefaultIfEmpty(99).Min();
-                Check(seed, "tank clear of fences", nearest > 0.3f, $"{nearest:0.00} {tank.Reason}");
-            }
+            var center = TankTransform(tank) * World.Plan.PileBuilder.LocalCenter;
+            var footprint = tank.Formation == PileFormation.Cluster ? PileBuilder.Radius
+                : Mathf.Sqrt(PileBuilder.Radius * PileBuilder.Radius + PileBuilder.Height * PileBuilder.Height / 4f);
+            var mapCenter = new Vector2(center.X, center.Z);
+            Check(seed, "tank hull inside map", plan.Bounds.Grow(-footprint).HasPoint(mapCenter), tank.Reason);
+            Check(seed, "tank hull outside houses", !plan.Lots.Any(l => l.HouseModel >= 0 && l.House.Grown(footprint).Contains(mapCenter)), tank.Reason);
+            var nearest = plan.Fences.Select(f => DistanceToSegment(new Vector2(center.X, center.Z), f.A, f.B)).DefaultIfEmpty(99).Min();
+            Check(seed, "tank clear of fences", nearest > 0.3f, $"{nearest:0.00} {tank.Reason}");
         }
         for (var i = 0; i < plan.Tanks.Count; i++)
         {
             for (var j = i + 1; j < plan.Tanks.Count; j++)
             {
-                // Tanks are 31 cm across.
-                Check(seed, "tanks do not overlap", plan.Tanks[i].Position.DistanceTo(plan.Tanks[j].Position) > 0.34f ||
-                                                     plan.Tanks[i].Elevation != plan.Tanks[j].Elevation);
+                var a = plan.Tanks[i]; var b = plan.Tanks[j];
+                if (a.Position.DistanceTo(b.Position) < 0.8f && Mathf.Abs(a.Elevation - b.Elevation) < 0.6f)
+                    Check(seed, "tanks do not overlap", !geometry.Overlaps(TankTransform(a), TankTransform(b)), $"{a.Formation} {i}/{j}");
             }
         }
+    }
+
+    private static Transform3D TankTransform(TankPlacement tank) => new(
+        new Basis(Vector3.Up, tank.Yaw) * Basis.FromEuler(tank.Rotation), new Vector3(tank.Position.X, tank.Elevation, tank.Position.Y));
+
+    private void CheckChainConnections(int seed, IReadOnlyList<Vector3> centers)
+    {
+        if (centers.Count < 2) return;
+        var reached = new HashSet<int> { 0 };
+        var pending = new Queue<int>();
+        pending.Enqueue(0);
+        while (pending.Count > 0)
+        {
+            var i = pending.Dequeue();
+            for (var j = 0; j < centers.Count; j++)
+            {
+                if (!reached.Contains(j) && centers[i].DistanceTo(centers[j]) <= chainRadius)
+                {
+                    reached.Add(j);
+                    pending.Enqueue(j);
+                }
+            }
+        }
+        // Connectivity is stronger than just having one close neighbor: disconnected pairs cannot share a chain.
+        Check(seed, "pile connected within chain range", reached.Count == centers.Count, $"{reached.Count}/{centers.Count}");
     }
 
     private void CheckSpawn(int seed, SuburbPlan plan, SuburbSettings settings)
@@ -223,6 +340,8 @@ public partial class GeneratorTests : Node
             var corners = rect.Corners();
             var min = new Vector2(corners.Min(c => c.X), corners.Min(c => c.Y));
             var max = new Vector2(corners.Max(c => c.X), corners.Max(c => c.Y));
+            var axisX = rect.AxisX;
+            var axisY = rect.AxisY;
             var (x0, y0) = Cell(min);
             var (x1, y1) = Cell(max);
             for (var x = Math.Max(0, x0); x <= Math.Min(w - 1, x1); x++)
@@ -230,7 +349,8 @@ public partial class GeneratorTests : Node
                 for (var y = Math.Max(0, y0); y <= Math.Min(h - 1, y1); y++)
                 {
                     var center = origin + new Vector2((x + 0.5f) * GridCell, (y + 0.5f) * GridCell);
-                    if (rect.Contains(center))
+                    var relative = center - rect.Center;
+                    if (Mathf.Abs(relative.Dot(axisX)) <= rect.HalfExtents.X && Mathf.Abs(relative.Dot(axisY)) <= rect.HalfExtents.Y)
                     {
                         blocked[x, y] = true;
                     }
@@ -263,7 +383,7 @@ public partial class GeneratorTests : Node
         while (queue.Count > 0)
         {
             var (x, y) = queue.Dequeue();
-            foreach (var (dx, dy) in new[] { (1, 0), (-1, 0), (0, 1), (0, -1) })
+            foreach (var (dx, dy) in Neighbors)
             {
                 var nx = x + dx;
                 var ny = y + dy;
@@ -274,6 +394,11 @@ public partial class GeneratorTests : Node
                 reached[nx, ny] = true;
                 queue.Enqueue((nx, ny));
             }
+        }
+        foreach (var spawn in plan.Spawns)
+        {
+            var (sx, sy) = Cell(spawn.Position);
+            Check(seed, "match: start reachable", reached[sx, sy] && !blocked[sx, sy]);
         }
         foreach (var tank in plan.Tanks)
         {
@@ -289,7 +414,7 @@ public partial class GeneratorTests : Node
                     ok = x >= 0 && y >= 0 && x < w && y < h && reached[x, y];
                 }
             }
-            Check(seed, "tank reachable", ok || tank.Elevation > 0, $"{tank.Reason} at {tank.Position}");
+            Check(seed, "tank reachable", ok, $"{tank.Reason} at {tank.Position}");
         }
     }
 
@@ -332,25 +457,4 @@ public partial class GeneratorTests : Node
         return (a + d * t).DistanceTo(p);
     }
 
-    private static string Fingerprint(SuburbPlan plan)
-    {
-        var sb = new StringBuilder();
-        foreach (var lot in plan.Lots)
-        {
-            sb.Append($"{lot.Bounds.Center:F3}{lot.HouseModel}{lot.HousePalette};");
-        }
-        foreach (var prop in plan.Props)
-        {
-            sb.Append($"{prop.Model}{prop.Position:F3}{prop.Yaw:F3};");
-        }
-        foreach (var tank in plan.Tanks)
-        {
-            sb.Append($"{tank.Position:F3};");
-        }
-        foreach (var fence in plan.Fences)
-        {
-            sb.Append($"{fence.A:F2}{fence.B:F2};");
-        }
-        return sb.ToString();
-    }
 }

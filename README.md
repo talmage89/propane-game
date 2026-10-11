@@ -112,6 +112,18 @@ can edit. In a downloaded build, Save writes the player's own `tuning.tres` in t
 `~/.local/share/godot/app_userdata/Propane` on Linux), which then takes precedence. **Defaults** restores the values
 in code. `FixedSeed` (World group) replays one suburb; 0 picks a random one.
 
+Tank piles use weighted formations in both modes: side-laid rows, square tiers, triangular tiers, and upright tight
+clusters. The **Tank Piles** tuners control weights and spacing. Each upper tier is placed only after its supports;
+cramped sites use smaller whole formations. Pyramids stand on clear ground rather than moving pickup beds.
+Rifle hits puncture, then detonate. A blast within `ChainRadius` acts as a shot: an intact neighbor punctures and
+keeps venting and moving; an already-venting neighbor detonates after its `ChainFuseMin`/`ChainFuseMax` fuse.
+
+Match settings use the actual player count. Tank supply is `MpTankCount + MpTanksPerPlayer × players`, ammo cans are
+`PickupCount + PickupsPerPlayer × players`, and map width is `MpMapSizeBase + MpMapSizePerPlayer × players`. Pile
+limits gain `floor(MpPileSizePerPlayer × players)`. `MpStartSpacing` is a hard minimum between clear road starts;
+invalid settings fail generation instead of placing players on top of one another. The lobby cap remains a separate
+setting. These shared plan and tuner changes require the next release to be minor (`Protocol.Version` is 2).
+
 ## Layout
 
 | Path | Contents |
@@ -150,8 +162,8 @@ GODOT=/Applications/Godot_mono.app/Contents/MacOS/Godot
 # injected gamepad actions and stick look.
 $GODOT --headless res://scenes/dev/movement_tests.tscn
 
-# Generator: determinism, overlaps, tank count and placement, spawn safety, reachability, and the same for match
-# suburbs with player starts, ammo spots and the plan's encoding. Exits 1 on failure.
+# Generator: exact determinism and encoding, authored hull overlaps and tier supports, placement and reachability,
+# all four formations, and supply/start safety at 2, 8, 16, 24 and 32 players. Exits 1 on failure.
 $GODOT --headless res://scenes/dev/generator_tests.tscn -- --seeds=200
 
 # Bot navigation: real picket/privacy fences, gates, bins, cars, piles, houses and touching-fence recovery.
@@ -161,7 +173,7 @@ $GODOT --fixed-fps 60 res://scenes/dev/bot_navigation_course.tscn -- --seeds=5 -
 # --baseline compares direct movement plus the old stuck recovery; --first-seed=39 --seeds=1 replays one seed.
 # --nav-log traces waypoints/replans. make test runs five seeds; docs/bot-navigation.md describes the component.
 
-# Plain C# assertion suites; make test runs these, the generator, and two separate builds of one saved plan.
+# Plain C# assertion suites; make test runs these, the generator, and two separate builds of a saved plan for each formation.
 $GODOT --headless res://scenes/dev/unit_tests.tscn
 tools/dev/check_world.sh
 
@@ -176,7 +188,8 @@ $GODOT --resolution 1280x720 res://scenes/dev/release_test.tscn -- --windowed --
 # Add --scenario=network --connect=host:port --name=Tester to test against another client on a source server.
 
 # The real game with a scripted player. Scenarios: loop (default), clear (destroys every tank), ragdoll, shoot,
-# tour (camera in tight spots), spots (visits each tank), settle (props that move on their own), dissolve, menus,
+# tour (camera in tight spots), spots (visits each tank), settle (fails on tank drift >6 mm or rotation >0.5 degrees),
+# dissolve, menus,
 # readme (a chain reaction captured as frames for the README GIF; seed 23 is the one in docs/).
 $GODOT --fixed-fps 60 --resolution 1280x720 res://scenes/dev/game_test.tscn -- --capture-dir=/tmp/g --scenario=ragdoll
 
@@ -185,6 +198,10 @@ $GODOT res://scenes/dev/soak.tscn
 
 # Tank close-ups (scenarios: full, vent, blast, look), the character and rifle rig, the world kit, map overviews.
 $GODOT --fixed-fps 60 res://scenes/dev/tank_range.tscn -- --capture-dir=/tmp/t --scenario=blast
+# Formation close-up and stability: Rows, Square, Triangular, Cluster; --count defaults to 14.
+# --awake tests contact settling; --chain=fresh requires intact neighbors in range to puncture and keep venting.
+# --chain=primed first punctures each tank, then requires venting neighbors in range to detonate after the fuse.
+$GODOT --fixed-fps 60 res://scenes/dev/tank_range.tscn -- --capture-dir=/tmp/pile --formation=Square --chain=fresh
 $GODOT --fixed-fps 60 res://scenes/dev/player_range.tscn -- --capture-dir=/tmp/p
 # Player scenarios: stances (default), reload, ragdoll, creep (two measured strides), movement (labeled gait/jump transitions),
 # sprint-repro (discovery sequence, exact-tick assertions and transition log), grip (all rifle contacts).
@@ -201,6 +218,7 @@ $GODOT --fixed-fps 60 res://scenes/dev/player_range.tscn -- --scenario=grip --gr
 $GODOT --fixed-fps 60 res://scenes/dev/player_range.tscn -- --scenario=creep --view=side --tune.CreepSpeed=1.6 --capture-dir=/tmp/creep
 $GODOT --fixed-fps 60 res://scenes/dev/world_lab.tscn -- --capture-dir=/tmp/w
 $GODOT --fixed-fps 60 res://scenes/dev/suburb_preview.tscn -- --capture-dir=/tmp/s
+# --players=16 previews a scaled match instead of single player; --formation=Square forces a formation.
 
 # Every menu screen, a solo match, and single player and back (keyboard/mouse).
 $GODOT res://scenes/dev/menu_test.tscn -- --capture-dir=/tmp/m
