@@ -1024,16 +1024,20 @@ public partial class Match : Node3D
     private void SendBodies(float dt, double now)
     {
         var (moving, rested) = bodies.Collect(dt);
-        for (var start = 0; start < moving.Count; start += StatesPerMessage)
+        foreach (var stream in moving.GroupBy(entry => entry.PublishReliably))
         {
-            var batch = moving.Skip(start).Take(StatesPerMessage).ToList();
-            var w = new NetWriter(Msg.BodyStates, Setup.Id).Double(Net.BodySampleTime(now)).UShort((ushort)batch.Count);
-            foreach (var entry in batch)
+            var entries = stream.ToList();
+            for (var start = 0; start < entries.Count; start += StatesPerMessage)
             {
-                w.UInt(entry.Id).Transform(entry.Body.GlobalTransform).Vec3(entry.Body.LinearVelocity).Vec3(entry.Body.AngularVelocity)
-                    .UInt(entry.Epoch).UInt(checked(++entry.Sequence));
+                var batch = entries.Skip(start).Take(StatesPerMessage).ToList();
+                var w = new NetWriter(Msg.BodyStates, Setup.Id).Double(Net.BodySampleTime(now)).UShort((ushort)batch.Count);
+                foreach (var entry in batch)
+                {
+                    w.UInt(entry.Id).Transform(entry.Body.GlobalTransform).Vec3(entry.Body.LinearVelocity).Vec3(entry.Body.AngularVelocity)
+                        .UInt(entry.Epoch).UInt(checked(++entry.Sequence));
+                }
+                Send(w, stream.Key ? TrafficClass.ReliableOrdered : TrafficClass.UnreliableBodyStates);
             }
-            Send(w, TrafficClass.UnreliableBodyStates);
         }
         foreach (var entry in rested)
         {
