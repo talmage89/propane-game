@@ -18,6 +18,8 @@ help: ## List the tasks
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN { FS = ":.*## " } { printf "  make %-14s %s\n", $$1, $$2 }'
 
 setup: ## Import the assets and compile: a fresh clone, or after switching branches or pulling
+	@mkdir -p build
+	@touch build/.gdignore
 	@printf '; Written by make setup: user:// for this checkout only.\n[application]\nconfig/use_custom_user_dir=true\nconfig/custom_user_dir_name="Propane-dev/%s"\n' "$(CHECKOUT)" >override.cfg
 	"$(GODOT)" --headless --path . --import >/dev/null 2>&1 || true
 	@$(MAKE) --no-print-directory build

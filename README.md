@@ -35,7 +35,7 @@ Nothing else is needed: each build carries its own .NET runtime.
 Requires Godot 4.7.2 (.NET edition) and the .NET 10 SDK.
 
 - First: `make setup` imports the assets and compiles. Run it again after switching branches or pulling. It also
-  gives the checkout its own Godot user data folder, `Propane-dev/<folder name>`, in a gitignored `override.cfg`.
+  excludes scratch captures in `build/` from asset imports and gives the checkout its own Godot user data folder, `Propane-dev/<folder name>`, in a gitignored `override.cfg`.
 - Editor: open `project.godot` and press Play (F5).
 - Command line: `make run`. `make` lists the other tasks (tests, a local server, bots, releases); they find Godot on
   `PATH` (`godot-mono` or `godot`) or in `/Applications`, or set `GODOT` to its binary.
