@@ -1,0 +1,251 @@
+{
+  "provenance": {
+    "reference": "v0.2.0 / 7170a13c8d449759d79b3d59dcf32aba707fab41",
+    "fps": 60,
+    "window_seconds": [
+      0.8,
+      2.5
+    ],
+    "rule": "Alternation upper = half reference correlation; spans 0.5\u20131.5 times reference; separation minimum 0.8 times reference; sliding <= 2 times reference + 0.02 m/s. Forward reference only: directional failures are not calibration targets. Sprint sliding is capped by slow-walk reference because release sprint visibly slides. Clearance uses surface contact with 5 mm proxy tolerance; shouldered stock gap <=25 mm. Hip/aim yaw <=15 degrees (authored walk pelvis sway <2 degrees plus 13 degrees allowance), not release combat facing."
+  },
+  "gate_cases": [
+    "walk_000",
+    "jog_000",
+    "creep_000",
+    "creep_180",
+    "creep_090",
+    "sprint",
+    "aim_idle"
+  ],
+  "gaits": {
+    "walk": {
+      "alternation": [
+        -1,
+        -0.2865089096855949
+      ],
+      "head_span": [
+        0.026013900000000034,
+        0.0780417000000001
+      ],
+      "pelvis_span": [
+        0.026211115000000007,
+        0.07863334500000002
+      ],
+      "knee_gap": [
+        0.14230268,
+        1
+      ],
+      "thigh_gap": [
+        0.141951648,
+        1
+      ],
+      "foot_sliding": [
+        0,
+        0.19981617565975815
+      ]
+    },
+    "jog": {
+      "alternation": [
+        -1,
+        -0.28884591430157835
+      ],
+      "head_span": [
+        0.11517310000000003,
+        0.3455193000000001
+      ],
+      "pelvis_span": [
+        0.12155717500000002,
+        0.36467152500000005
+      ],
+      "knee_gap": [
+        0.141097416,
+        1
+      ],
+      "thigh_gap": [
+        0.14103872,
+        1
+      ],
+      "foot_sliding": [
+        0,
+        1.1590345089472718
+      ]
+    },
+    "creep": {
+      "alternation": [
+        -1,
+        -0.28048603864243316
+      ],
+      "head_span": [
+        0.026600899999999927,
+        0.07980269999999978
+      ],
+      "pelvis_span": [
+        0.026233615000000043,
+        0.07870084500000013
+      ],
+      "knee_gap": [
+        0.14272884,
+        1
+      ],
+      "thigh_gap": [
+        0.1419516,
+        1
+      ],
+      "foot_sliding": [
+        0,
+        0.20252118150389464
+      ]
+    },
+    "sprint": {
+      "alternation": [
+        -1,
+        -0.409942173289678
+      ],
+      "head_span": [
+        0.06258929999999996,
+        0.18776789999999988
+      ],
+      "pelvis_span": [
+        0.06833155000000002,
+        0.20499465000000006
+      ],
+      "knee_gap": [
+        0.141712688,
+        1
+      ],
+      "thigh_gap": [
+        0.141706368,
+        1
+      ],
+      "foot_sliding": [
+        0,
+        0.19981617565975815
+      ]
+    }
+  },
+  "clearance": {
+    "stock_head": [
+      -0.005,
+      1
+    ],
+    "stock_shoulder": [
+      -0.005,
+      0.025
+    ]
+  },
+  "hip_aim_yaw": 15,
+  "reference_measurements": {
+    "walk_000": {
+      "samples": 102,
+      "speed": 1.5,
+      "head_span": 0.05202780000000007,
+      "pelvis_span": 0.052422230000000014,
+      "knee_gap": 0.17787835,
+      "thigh_gap": 0.17743956,
+      "stock_head": 0.26634073,
+      "stock_shoulder": 0.005487442,
+      "hip_aim_yaw": 1.997926,
+      "alternation": -0.5730178193711898,
+      "foot_sliding": 0.08990808782987908,
+      "contact_pairs": 71
+    },
+    "jog_000": {
+      "samples": 102,
+      "speed": 6.0,
+      "head_span": 0.23034620000000006,
+      "pelvis_span": 0.24311435000000003,
+      "knee_gap": 0.17637177,
+      "thigh_gap": 0.1762984,
+      "stock_head": 0.20092332,
+      "stock_shoulder": 0.0054867417,
+      "hip_aim_yaw": 1.36603785e-05,
+      "alternation": -0.5776918286031567,
+      "foot_sliding": 0.5695172544736359,
+      "contact_pairs": 16
+    },
+    "creep_000": {
+      "samples": 102,
+      "speed": 1.6,
+      "head_span": 0.053201799999999855,
+      "pelvis_span": 0.05246723000000009,
+      "knee_gap": 0.17841105,
+      "thigh_gap": 0.1774395,
+      "stock_head": 0.14853653,
+      "stock_shoulder": -0.025384698,
+      "hip_aim_yaw": 1.9977348,
+      "alternation": -0.5609720772848663,
+      "foot_sliding": 0.09126059075194733,
+      "contact_pairs": 72
+    },
+    "creep_090": {
+      "samples": 102,
+      "speed": 1.6,
+      "head_span": 0.0524363000000001,
+      "pelvis_span": 0.05246723000000009,
+      "knee_gap": 0.178411,
+      "thigh_gap": 0.17743948,
+      "stock_head": 0.14582571,
+      "stock_shoulder": -0.02536976,
+      "hip_aim_yaw": 71.99742,
+      "alternation": -0.5609720772848663,
+      "foot_sliding": 0.5585086166392352,
+      "contact_pairs": 72
+    },
+    "creep_180": {
+      "samples": 102,
+      "speed": 1.6,
+      "head_span": 0.05271929999999991,
+      "pelvis_span": 0.052336200000000055,
+      "knee_gap": 0.17779796,
+      "thigh_gap": 0.17743987,
+      "stock_head": 0.14821118,
+      "stock_shoulder": -0.02542378,
+      "hip_aim_yaw": 1.9952759,
+      "alternation": -0.5579196844714385,
+      "foot_sliding": 0.09338362139340392,
+      "contact_pairs": 73
+    },
+    "sprint": {
+      "samples": 102,
+      "speed": 9.5,
+      "head_span": 0.12517859999999992,
+      "pelvis_span": 0.13666310000000004,
+      "knee_gap": 0.17714086,
+      "thigh_gap": 0.17713296,
+      "stock_head": 0.18677267,
+      "stock_shoulder": 0.004463069,
+      "hip_aim_yaw": 1.36603785e-05,
+      "alternation": -0.819884346579356,
+      "foot_sliding": 8.903876173500224,
+      "contact_pairs": 27
+    },
+    "aim_idle": {
+      "samples": 102,
+      "speed": 0.0,
+      "head_span": 0.010499100000000094,
+      "pelvis_span": 0.008285150000000074,
+      "knee_gap": 0.4001383,
+      "thigh_gap": 0.17800257,
+      "stock_head": 0.1380511,
+      "stock_shoulder": -0.025366895,
+      "hip_aim_yaw": 13.324292
+    }
+  },
+  "authored_clip_crosscheck": {
+    "Walk_Loop": {
+      "alternation": -0.5973229115308069,
+      "head_span": 0.05179050000000007,
+      "pelvis_span": 0.05263816999999993
+    },
+    "Jog_Fwd_Loop": {
+      "alternation": -0.5484325233006512,
+      "head_span": 0.22858390000000006,
+      "pelvis_span": 0.24482179000000004
+    },
+    "Sprint_Loop": {
+      "alternation": -0.7908293062437085,
+      "head_span": 0.12534829999999997,
+      "pelvis_span": 0.13818760000000008
+    }
+  }
+}
