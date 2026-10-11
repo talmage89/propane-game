@@ -1036,7 +1036,7 @@ public partial class Match : Node3D
                     w.UInt(entry.Id).Transform(entry.Body.GlobalTransform).Vec3(entry.Body.LinearVelocity).Vec3(entry.Body.AngularVelocity)
                         .UInt(entry.Epoch).UInt(checked(++entry.Sequence));
                 }
-                Send(w, stream.Key ? TrafficClass.ReliableOrdered : TrafficClass.UnreliableBodyStates);
+                Send(w, stream.Key ? TrafficClass.ReliableBodyStates : TrafficClass.UnreliableBodyStates);
             }
         }
         foreach (var entry in rested)
