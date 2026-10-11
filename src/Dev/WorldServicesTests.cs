@@ -19,6 +19,12 @@ public partial class WorldServicesTests : Node
         DevArgs.MarkReady();
         try
         {
+            if (DevArgs.Get("scenario") == "presentation-lifetime")
+            {
+                PresentationLifetime();
+                ShutdownGuard.Quit(GetTree());
+                return;
+            }
             if (DevArgs.Get("scenario") == "construction-failure")
             {
                 ConstructionFailure();
@@ -42,6 +48,7 @@ public partial class WorldServicesTests : Node
                 Assert(Counts() == baseline, $"world leaked on cycle {i + 1}: {baseline} -> {Counts()}");
             }
             ConstructionFailure();
+            PresentationLifetime();
             GD.Print($"[world services] PASS two overlapping worlds, distinct tuning, events, blasts, callbacks, partial failure; 10 retirements stable at {baseline}");
             ShutdownGuard.Quit(GetTree());
         }
@@ -50,6 +57,39 @@ public partial class WorldServicesTests : Node
             GD.PushError($"[world services] FAIL {error}");
             ShutdownGuard.Quit(GetTree(), 1);
         }
+    }
+
+    private void PresentationLifetime()
+    {
+        using var template = new Tuning();
+        using var original = new World3D();
+        var view = new SubViewport { World3D = original, RenderTargetUpdateMode = SubViewport.UpdateMode.Disabled };
+        AddChild(view);
+        try
+        {
+            foreach (var retireFirst in new[] { true, false })
+            {
+                using var a = new WorldContext(this, template);
+                using var b = new WorldContext(this, template);
+                a.Present(view);
+                b.Present(view);
+                if (retireFirst)
+                {
+                    a.Dispose();
+                    Assert(view.World3D == b.Physics, "retiring hidden world displaced survivor presentation");
+                    b.Dispose();
+                }
+                else
+                {
+                    b.Dispose();
+                    Assert(view.World3D == a.Physics, "retiring selected world did not restore live predecessor");
+                    a.Dispose();
+                }
+                Assert(view.World3D == original, "presentation restored a retired physics world");
+            }
+        }
+        finally { view.Free(); }
+        GD.Print("[world services] PASS shared presentation survives both world retirement orders");
     }
 
     private void ConstructionFailure()

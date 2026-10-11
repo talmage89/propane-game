@@ -15,8 +15,7 @@ public sealed class WorldContext : IDisposable
     private readonly List<(Action Callback, bool WhilePaused)> deferred = new();
     private readonly Dictionary<Node, Node3D> effectOrigins = new();
     private readonly HashSet<IBlastReceiver> receivers = new();
-    private Viewport? presentation;
-    private World3D? previousWorld;
+    private WorldPresentation? presentation;
     private bool disposed;
     private readonly List<Exception> stopErrors = new();
 
@@ -58,7 +57,7 @@ public sealed class WorldContext : IDisposable
     public Node3D Root { get; }
     public Node3D ContentRoot { get; private set; }
     public Node3D EffectsRoot { get; }
-    public Viewport Viewport => presentation ?? viewport;
+    public Viewport Viewport => presentation?.View ?? viewport;
     public World3D Physics { get; }
     public Tuning Tuning { get; }
     public bool Networked { get; }
@@ -78,9 +77,7 @@ public sealed class WorldContext : IDisposable
     {
         EnsureAlive();
         if (presentation != null) { throw new InvalidOperationException("world already presented"); }
-        presentation = view;
-        previousWorld = view.World3D;
-        view.World3D = Physics;
+        presentation = WorldPresentation.Acquire(view, this);
     }
 
     public T AddView<T>(Node parent, T node, bool followsPause = false) where T : Node
@@ -216,12 +213,8 @@ public sealed class WorldContext : IDisposable
         Invalidate();
         for (var i = views.Count - 1; i >= 0; i--) { if (GodotObject.IsInstanceValid(views[i].Node)) { views[i].Node.Free(); } }
         views.Clear();
-        if (presentation != null && GodotObject.IsInstanceValid(presentation) && presentation.World3D == Physics)
-        {
-            presentation.World3D = previousWorld;
-        }
+        presentation?.Release(this);
         presentation = null;
-        previousWorld = null;
         if (GodotObject.IsInstanceValid(viewport)) { viewport.Free(); }
         effectOrigins.Clear();
         Magazines.Clear();

@@ -10,6 +10,8 @@ Each simulation lives in a viewport with rendering disabled. The application vie
 small presentation bridge preserves today's single-view facades. Session factories, actor/view assembly, Lab,
 and split-screen routing are later packages. Authored dev fixtures can place geometry directly under their scene
 while explicitly presenting that fixture's context.
+The presentation viewport owns the bridge in metadata. When several contexts present there, retirement restores
+the most recently presented live context, or the viewport's original world when none remain, in either teardown order.
 
 `Tuning.SavedTemplate` is an application composition/UI accessor, never the gameplay target. Each context copies
 its template. Matches validate and copy the creator-supplied snapshot without swapping any process-wide override.
