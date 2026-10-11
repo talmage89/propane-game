@@ -3,6 +3,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using Godot;
 using Propane.Core;
+using Propane.Navigation;
 using Propane.Net;
 using Propane.Player;
 using Propane.Tank;
@@ -31,7 +32,6 @@ public sealed class Bot : IBotBrain
     private const float RetargetInterval = 0.35f;
     private const float PlayerRange = 38f;
     private const float AmmoLow = 15;
-    private const float TurnSharpness = 18f;
 
     private readonly RandomNumberGenerator rng = new();
     private readonly Dictionary<ulong, float> blacklist = new();
@@ -39,7 +39,13 @@ public sealed class Bot : IBotBrain
     private Node3D? target;
     private float retarget;
     private float blocked;
-    private float stuck;
+    private readonly Tuning localTuning = Tuning.Current;
+    private readonly BotNavigator navigator = new();
+    private Vector3? navigationGoal;
+    public int StuckEvents => navigator.StuckEvents;
+    public int Replans => navigator.Replans;
+    public int Jumps => navigator.Jumps;
+    public int BlacklistedTargets { get; private set; }
     private float strafeTimer;
     private Vector3? vantage;
     private Vector3? cover;
@@ -53,7 +59,6 @@ public sealed class Bot : IBotBrain
     private float vantageTimer;
     private float strafeSide = 1f;
     private float clock;
-    private Vector3 lastPosition;
     private float yaw;
     private float pitch;
     private bool hasView;
@@ -79,9 +84,11 @@ public sealed class Bot : IBotBrain
         tapCooldown -= dt;
         var player = match.Player;
         intent = new PlayerIntent();
+        navigationGoal = null;
         if (!match.IsPlaying || player.IsRagdolled || player.Ammo == null)
         {
             hasView = false;
+            navigator.Reset();
             return;
         }
         var tuning = Tuning.Current;
@@ -104,11 +111,11 @@ public sealed class Bot : IBotBrain
             var away = here - danger.GlobalPosition;
             away.Y = 0;
             away = away.LengthSquared() > 0.01f ? away.Normalized() : Vector3.Forward;
-            Face(player, here + away * 10f + Vector3.Up * 1.4f, dt, snap: true);
-            MoveToward(player, away);
+            Face(player, here + away * 10f + Vector3.Up * 1.4f, dt);
+            MoveToward(player, away * 10f);
             intent.Sprint = true;
             Status = $"fleeing venting tank {danger.GlobalPosition.DistanceTo(here):0.0} m away";
-            Unstick(player, dt);
+            Navigate(match, dt);
             return;
         }
 
@@ -120,18 +127,18 @@ public sealed class Bot : IBotBrain
             if (shooter != null && match.Scores.GetValueOrDefault(shooter.PeerId) < match.MyScore && CanSee(shooter, here + Vector3.Up * 1.2f))
             {
                 coverTimer -= dt;
-                if (cover == null || coverTimer <= 0)
+                if (cover == null || coverTimer <= 0 && CanSeeFrom(shooter, cover.Value + Vector3.Up * 1.2f))
                 {
                     coverTimer = 0.5f;
                     cover = FindCover(player, shooter);
                 }
                 if (cover != null)
                 {
-                    Face(player, cover.Value + Vector3.Up * 1.4f, dt, snap: false);
+                    Face(player, cover.Value + Vector3.Up * 1.4f, dt);
                     MoveToward(player, Flat(cover.Value - here));
                     intent.Sprint = true;
                     Status = $"taking cover {Flat(cover.Value - here).Length():0.0} m away";
-                    Unstick(player, dt);
+                    Navigate(match, dt);
                     return;
                 }
             }
@@ -146,18 +153,18 @@ public sealed class Bot : IBotBrain
             if (watcher != null)
             {
                 coverTimer -= dt;
-                if (cover == null || coverTimer <= 0)
+                if (cover == null || coverTimer <= 0 && CanSeeFrom(watcher, cover.Value + Vector3.Up * 1.2f))
                 {
                     coverTimer = 0.5f;
                     cover = FindCover(player, watcher);
                 }
                 if (cover != null && Flat(cover.Value - here).Length() > 0.8f)
                 {
-                    Face(player, cover.Value + Vector3.Up * 1.4f, dt, snap: false);
+                    Face(player, cover.Value + Vector3.Up * 1.4f, dt);
                     MoveToward(player, Flat(cover.Value - here));
                     intent.Sprint = true;
                     Status = $"protecting {match.MyScore}: hiding from {watcher.PeerId}";
-                    Unstick(player, dt);
+                    Navigate(match, dt);
                     return;
                 }
             }
@@ -169,9 +176,14 @@ public sealed class Bot : IBotBrain
         {
             retarget = RetargetInterval;
             var chosen = Choose(match, ammo);
+            // Keep a valid demolition goal stable while its route is being followed. Piles contain many
+            // nearly equivalent tanks; distance-based retargeting otherwise discards the runway every 0.35 s.
+            if (chosen is PropaneTank && target is PropaneTank current && IsValid(current) &&
+                !blacklist.ContainsKey(current.GetInstanceId())) { chosen = target; }
             if (chosen != target)
             {
                 blocked = 0;
+                if (!navigator.Jumping) { navigator.Reset(); }
                 vantage = null;
                 target = chosen;
             }
@@ -179,6 +191,7 @@ public sealed class Bot : IBotBrain
         if (target == null)
         {
             Status = "no target";
+            if (navigator.Jumping) { Navigate(match, dt); }
             return;
         }
 
@@ -186,7 +199,7 @@ public sealed class Bot : IBotBrain
         {
             case AmmoPickup pickup:
                 Status = $"fetching ammo {pickup.GlobalPosition.DistanceTo(here):0.0} m away";
-                Face(player, pickup.GlobalPosition + Vector3.Up * 0.4f, dt, snap: false);
+                Face(player, pickup.GlobalPosition + Vector3.Up * 0.4f, dt);
                 MoveToward(player, Flat(pickup.GlobalPosition - here));
                 intent.Sprint = true;
                 break;
@@ -203,7 +216,7 @@ public sealed class Bot : IBotBrain
         {
             intent.ReloadPressed = true;
         }
-        Unstick(player, dt);
+        Navigate(match, dt);
     }
 
     // ------------------------------------------------------------------ Choosing
@@ -237,7 +250,7 @@ public sealed class Bot : IBotBrain
 
         // Ammo: go out of the way for it when low; grab a can on the way when it is close.
         var rounds = ammo.Magazine + ammo.Reserve;
-        var pickup = match.Pickups.Where(p => p.Available).OrderBy(p => p.GlobalPosition.DistanceTo(here)).FirstOrDefault();
+        var pickup = match.Pickups.Where(p => p.Available && !blacklist.ContainsKey(p.GetInstanceId())).OrderBy(p => p.GlobalPosition.DistanceTo(here)).FirstOrDefault();
         if (pickup != null && ammo.Reserve < tuning.MaxReserve &&
             (rounds < AmmoLow || rounds < AmmoLow * 3 && pickup.GlobalPosition.DistanceTo(here) < 12f))
         {
@@ -255,7 +268,7 @@ public sealed class Bot : IBotBrain
             // against whoever just shot this bot.
             var avenging = enemy.PeerId == match.LastHitBy && NetTransport.Now - match.LastHitTime < 3;
             var worth = protecting ? banked > match.MyScore : banked >= 3 || banked >= 1 && distance < 18f || avenging && banked > 0;
-            if (!worth || distance > PlayerRange || !CanSee(player, Aim(enemy)))
+            if (blacklist.ContainsKey(enemy.GetInstanceId()) || !worth || distance > PlayerRange || !CanSee(player, Aim(enemy)))
             {
                 continue;
             }
@@ -323,11 +336,11 @@ public sealed class Bot : IBotBrain
         fightTime += dt;
         // Aim like a person: a moment to react, then an error that wanders and tightens while tracking.
         var settle = Mathf.Clamp(fightTime / 1.2f, 0, 1);
-        var error = Mathf.Lerp(1.1f, 0.22f, Skill) * Mathf.Lerp(1.6f, 0.55f, settle);
+        var error = Mathf.Lerp(localTuning.BotAimErrorEasy, localTuning.BotAimErrorHard, Skill) * Mathf.Lerp(1.6f, 0.55f, settle);
         var t = clock;
         var wobble = new Vector3(Mathf.Sin(t * 1.7f + 0.3f), 0.6f * Mathf.Sin(t * 2.3f + 1.1f), Mathf.Cos(t * 1.9f + 2.2f)) * error;
         var aimPoint = Aim(enemy) + wobble;
-        Face(player, aimPoint, dt, snap: false);
+        Face(player, aimPoint, dt);
         intent.Aim = distance > 9f;
         // Strafe to be harder to hit; close in if far, back off if right on top of them.
         strafeTimer -= dt;
@@ -341,7 +354,7 @@ public sealed class Bot : IBotBrain
 
         var camera = player.CameraRig.Camera;
         var off = Mathf.RadToDeg((-camera.GlobalBasis.Z).AngleTo(aimPoint - camera.GlobalPosition));
-        var reacted = fightTime > Mathf.Lerp(0.5f, 0.2f, Skill);
+        var reacted = fightTime > Mathf.Lerp(localTuning.BotReactionEasy, localTuning.BotReactionHard, Skill);
         var firing = reacted && off < 2f && CanSee(player, Aim(enemy));
         // Short bursts, letting the aim settle in between.
         burstClock += dt;
@@ -372,7 +385,7 @@ public sealed class Bot : IBotBrain
         if (clear && blocked < 1f)
         {
             // In a good spot: stand, shoulder the rifle and fire when the crosshair is on it.
-            Face(player, center, dt, snap: false);
+            Face(player, center, dt);
             intent.Aim = true;
             vantage = null;
             Status = $"shooting {tank.State} tank at {distance:0.0} m (keeping {near:0.0})";
@@ -395,36 +408,39 @@ public sealed class Bot : IBotBrain
 
         // Somewhere better: a spot at the right distance with a clear view of it, that can be walked to.
         vantageTimer -= dt;
-        if (vantage == null || vantageTimer <= 0)
+        if (vantage == null || vantageTimer <= 0 &&
+            (Flat(vantage.Value - center).Length() < near || Flat(vantage.Value - center).Length() > far + 4f ||
+             !VisibleFrom(player, vantage.Value + Vector3.Up * 1.6f, center)))
         {
             vantageTimer = 0.6f;
             vantage = FindVantage(player, center, near, far);
             blocked = 0;
             if (vantage == null)
             {
-                blacklist[tank.GetInstanceId()] = clock + 10f;
+                Blacklist(tank, 10f);
                 retarget = 0;
                 Status = "no vantage point";
                 return;
             }
         }
+        vantageTimer = Mathf.Max(vantageTimer, 0);
         var to = Flat(vantage.Value - here);
         if (to.Length() < 0.6f)
         {
             // Arrived but still no shot (the tank moved): look again.
-            vantageTimer = 0;
-            Face(player, center, dt, snap: false);
+            vantage = null;
+            Face(player, center, dt);
             return;
         }
         if (distance < 30f && to.Length() < 12f)
         {
             // Close: walk there keeping the tank in view, ready to shoot.
-            Face(player, center, dt, snap: false);
+            Face(player, center, dt);
             MoveToward(player, to);
         }
         else
         {
-            Face(player, vantage.Value + Vector3.Up * 1.4f, dt, snap: false);
+            Face(player, vantage.Value + Vector3.Up * 1.4f, dt);
             MoveToward(player, to);
             intent.Sprint = to.Length() > 8f;
         }
@@ -497,11 +513,8 @@ public sealed class Bot : IBotBrain
                 {
                     continue;
                 }
-                if (space.IntersectRay(PhysicsRayQueryParameters3D.Create(here + Vector3.Up * 0.6f, spot + Vector3.Up * 0.6f, Layers.World | Layers.Props)).Count > 0)
-                {
-                    continue;
-                }
-                var cost = radius + spot.DistanceTo(eye) * -0.05f;
+                var blockedPath = space.IntersectRay(PhysicsRayQueryParameters3D.Create(here + Vector3.Up * 0.6f, spot + Vector3.Up * 0.6f, Layers.World | Layers.Props)).Count > 0;
+                var cost = radius + (blockedPath ? localTuning.BotCoverDetourCost : 0) + spot.DistanceTo(eye) * -0.05f;
                 if (cost < bestCost)
                 {
                     bestCost = cost;
@@ -516,24 +529,16 @@ public sealed class Bot : IBotBrain
         return null;
     }
 
-    /// <summary>Walks along a world direction whatever way the view faces.</summary>
+    /// <summary>Requests a destination; navigation resolves its route after tactical aim is chosen.</summary>
     private void MoveToward(PlayerCharacter player, Vector3 direction)
     {
-        var yawRad = Mathf.DegToRad(player.CameraRig.Yaw);
-        var forward = new Vector3(-Mathf.Sin(yawRad), 0, -Mathf.Cos(yawRad));
-        var right = new Vector3(Mathf.Cos(yawRad), 0, -Mathf.Sin(yawRad));
-        if (direction.LengthSquared() < 0.0001f)
-        {
-            return;
-        }
-        var d = new Vector3(direction.X, 0, direction.Z).Normalized();
-        intent.Move = new Vector2(d.Dot(right), d.Dot(forward));
+        navigationGoal = player.GlobalPosition + Flat(direction);
     }
 
     private static Vector3 Flat(Vector3 v) => new(v.X, 0, v.Z);
 
-    /// <summary>Turns the view toward a point: quickly but not instantly, unless running for cover.</summary>
-    private void Face(PlayerCharacter player, Vector3 point, float dt, bool snap)
+    /// <summary>Turns the view toward a point with skill-dependent smoothing, including while fleeing.</summary>
+    private void Face(PlayerCharacter player, Vector3 point, float dt)
     {
         var camera = player.CameraRig.Camera;
         var view = point - camera.GlobalPosition;
@@ -543,13 +548,13 @@ public sealed class Bot : IBotBrain
         }
         var wantYaw = Mathf.RadToDeg(Mathf.Atan2(-view.X, -view.Z));
         var wantPitch = Mathf.RadToDeg(Mathf.Asin(Mathf.Clamp(view.Normalized().Y, -1, 1)));
-        if (!hasView || snap)
+        if (!hasView)
         {
             yaw = player.CameraRig.Yaw;
             pitch = player.CameraRig.Pitch;
             hasView = true;
         }
-        var k = snap ? 1f : 1f - Mathf.Exp(-TurnSharpness * Mathf.Lerp(0.35f, 1f, Skill) * dt);
+        var k = 1f - Mathf.Exp(-localTuning.BotAimTurnSharpness * Mathf.Lerp(0.35f, 1f, Skill) * dt);
         yaw += Mathf.Wrap(wantYaw - yaw, -180f, 180f) * k;
         pitch = Mathf.Lerp(pitch, wantPitch, k);
         player.CameraRig.SetOrientation(yaw, pitch);
@@ -578,27 +583,60 @@ public sealed class Bot : IBotBrain
                                                  node is not PropaneTank { State: PropaneTank.TankState.Exploded } &&
                                                  node is not AmmoPickup { Available: false };
 
-    /// <summary>Jumps and sidesteps when running into something.</summary>
-    private void Unstick(PlayerCharacter player, float dt)
+    private void Blacklist(Node3D node, float seconds)
     {
-        var moved = player.GlobalPosition.DistanceTo(lastPosition);
-        lastPosition = player.GlobalPosition;
-        var trying = intent.Move.LengthSquared() > 0.25f;
-        stuck = trying && moved < 0.02f ? stuck + dt : 0;
-        if (stuck > 0.4f)
+        blacklist[node.GetInstanceId()] = clock + seconds;
+        BlacklistedTargets++;
+    }
+
+    private static bool CanSeeFrom(PlayerCharacter observer, Vector3 point) =>
+        VisibleFrom(observer, observer.GlobalPosition + Vector3.Up * 1.6f, point);
+
+    private static bool VisibleFrom(PlayerCharacter player, Vector3 eye, Vector3 point) =>
+        player.GetWorld3D().DirectSpaceState.IntersectRay(PhysicsRayQueryParameters3D.Create(eye, point, Layers.World | Layers.Props)).Count == 0;
+
+    private void Navigate(Match match, float dt)
+    {
+        var player = match.Player;
+        if (navigationGoal == null)
         {
-            intent.JumpPressed = true;
-            intent.Move = new Vector2(strafeSide, 0.4f);
-            if (stuck > 2.5f)
-            {
-                stuck = 0;
-                strafeSide = -strafeSide;
-                if (target is PropaneTank tank)
-                {
-                    blacklist[tank.GetInstanceId()] = clock + 8f;
-                }
-                retarget = 0;
-            }
+            // Combat strafing uses the same collision checks and recovery as travel. Standing to shoot is
+            // intentional; reset its progress window so a later walk is never counted as already stuck.
+            if (intent.Move.LengthSquared() < 0.01f && !navigator.Jumping) { navigator.Reset(); return; }
+            var basis = new Basis(Vector3.Up, Mathf.DegToRad(player.CameraRig.Yaw));
+            var wish = basis * new Vector3(intent.Move.X, 0, -intent.Move.Y);
+            navigationGoal = player.GlobalPosition + wish.Normalized() * localTuning.BotRouteSpacing * 2;
         }
+        var tuning = Tuning.Current;
+        var shape = player.GetChildren().OfType<CollisionShape3D>().Single();
+        var capabilities = new NavigationCapabilities(shape.Shape, shape.Position, ((CapsuleShape3D)shape.Shape).Radius,
+            tuning.RunSpeed, tuning.SprintSpeed, tuning.JumpVelocity, tuning.PlayerGravity, tuning.Acceleration, tuning.AirControl);
+        var hazards = match.LiveTanks.Select(t => new NavigationHazard(t.GlobalPosition,
+            t.State == PropaneTank.TankState.Venting ? tuning.RagdollRadius + localTuning.BotVentClearance : localTuning.BotTankClearance)).ToArray();
+        var world = new NavigationWorld(player.GetWorld3D().DirectSpaceState, capabilities, hazards, localTuning.BotJumpMargin, player.GlobalPosition, localTuning.BotJumpMinimumRange);
+        var move = navigator.Navigate(world, new NavigationState(player.GlobalPosition, player.Velocity, player.IsOnFloor()),
+            capabilities, navigationGoal.Value, localTuning, dt);
+        if (move.Failed)
+        {
+            if (target != null) { Blacklist(target, localTuning.BotTargetRetryTime); }
+            target = null;
+            vantage = cover = null;
+            retarget = 0;
+            navigator.Reset();
+            intent.Move = Vector2.Zero;
+            return;
+        }
+        if (navigator.Jumping || move.Sprint)
+        {
+            Face(player, player.GlobalPosition + move.Direction * 10 + Vector3.Up * 1.4f, dt);
+            intent.Aim = false;
+        }
+        var yawRad = Mathf.DegToRad(player.CameraRig.Yaw);
+        var forward = new Vector3(-Mathf.Sin(yawRad), 0, -Mathf.Cos(yawRad));
+        var right = new Vector3(Mathf.Cos(yawRad), 0, -Mathf.Sin(yawRad));
+        intent.Move = new Vector2(move.Direction.Dot(right), move.Direction.Dot(forward));
+        intent.Sprint = move.Sprint && intent.Move.Y > tuning.SprintForwardThreshold;
+        intent.JumpPressed = move.Jump;
+        if (!player.IsOnFloor()) { intent.Aim = false; }
     }
 }

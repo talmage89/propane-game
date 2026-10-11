@@ -113,6 +113,10 @@ public partial class NetTest : Node
                     GetTree().Quit(1);
                     return;
                 }
+                if (bot is Bot smart)
+                {
+                    Log($"navigation finished: stuck={smart.StuckEvents} blacklist={smart.BlacklistedTargets} replans={smart.Replans} jumps={smart.Jumps}");
+                }
                 Log($"finished match {match.Setup.Id}; final scores {ScoreLine()}");
                 RemoveChild(match);
                 match.QueueFree();
@@ -207,7 +211,7 @@ public partial class NetTest : Node
             bot.Think(match, dt);
             if (DevArgs.Get("bot-log") != null && Mathf.PosMod(clock, 2f) < dt)
             {
-                Log($"bot: {bot.Status}");
+                Log($"bot: {bot.Status}" + (bot is Bot smart ? $"; stuck={smart.StuckEvents} blacklist={smart.BlacklistedTargets} replans={smart.Replans} jumps={smart.Jumps}" : ""));
             }
         }
 
