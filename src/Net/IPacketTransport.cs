@@ -71,6 +71,8 @@ public interface IPacketTransport
     OpenResult Connect(PacketEndpoint endpoint, out ConnectionHandle? connection);
     void Poll();
     SendResult Send(ConnectionHandle connection, TrafficClass traffic, ReadOnlyMemory<byte> bytes);
+    /// <summary>Allow a construction stall until readiness; backends without native ACK deadlines may ignore it.</summary>
+    void SetLoading(ConnectionHandle connection, bool loading) { }
     void Disconnect(ConnectionHandle connection, DisconnectReason reason);
     void Close();
     TransportDiagnostics Diagnostics(ConnectionHandle connection);

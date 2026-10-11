@@ -230,7 +230,11 @@ public partial class LobbyServer : Node
                     break;
                 case Msg.StartMatch: StartMatch(client, (Godot.Collections.Dictionary)message.Payload); break;
                 case Msg.Loaded:
-                    if (client.Lobby is { Phase: LobbyPhase.Loading, Match: { } match }) { match.Loaded.Add(client.Id); }
+                    if (client.Lobby?.Match is { } match)
+                    {
+                        match.Loaded.Add(client.Id);
+                        if (client.Connection != null) { transport.SetLoading(client.Connection, false); }
+                    }
                     break;
                 case Msg.ClaimPickup: ClaimPickup(client, ((IntMessage)message.Payload).Value); break;
                 case Msg.Ping:
@@ -320,6 +324,7 @@ public partial class LobbyServer : Node
     {
         var lobby = client.Lobby!;
         client.Lobby = null;
+        if (client.Connection != null) { transport.SetLoading(client.Connection, false); }
         lobby.Members.Remove(client.Id);
         if (lobby.Match is { } match && match.Players.Remove(client.Id))
         {
@@ -463,6 +468,7 @@ public partial class LobbyServer : Node
         var bytes = w.ToArray();
         foreach (var id in match.Players)
         {
+            if (clients[id].Connection is { } connection) { transport.SetLoading(connection, true); }
             Send(id, bytes, traffic: TrafficClass.ReliableOrdered);
         }
         lobby.Match = match;

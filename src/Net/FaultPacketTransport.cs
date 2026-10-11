@@ -180,6 +180,7 @@ public sealed class FaultPacketTransport : IPacketTransport
         state.Outgoing.Clear();
     }
     public void Disconnect(ConnectionHandle connection, DisconnectReason reason) { Clear(connection); inner.Disconnect(connection, reason); }
+    public void SetLoading(ConnectionHandle connection, bool loading) => inner.SetLoading(connection, loading);
     public void Close()
     {
         foreach (var connection in states.Keys) { Clear(connection); }

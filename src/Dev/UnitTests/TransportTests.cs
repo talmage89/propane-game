@@ -329,6 +329,51 @@ public static class TransportTests
 
     private static void RegisterClientTests(TestRunner runner)
     {
+        runner.Run("transport/loading grace ends on readiness even after the loading deadline", () =>
+        {
+            var network = new LoopbackNetwork();
+            var clock = new Clock();
+            var rawServer = network.Create();
+            var rawClient = network.Create();
+            var serverTransport = new FaultPacketTransport(rawServer, clock, 1, new PacketFaults());
+            var clientTransport = new FaultPacketTransport(rawClient, clock, 2, new PacketFaults());
+            var server = new LobbyServer(new ServerTransport(serverTransport, rawServer.PeerIds), clock) { Port = Endpoint.Port };
+            var client = new NetClient(clientTransport, clock);
+            try
+            {
+                server.Start(); client._Ready(); client.Connect("", Endpoint.Port, "Builder", 0);
+                void Pump() { client._Process(0); server._Process(0); }
+                for (var i = 0; i < 6; i++) { Pump(); }
+                client.CreateLobby();
+                for (var i = 0; i < 4; i++) { Pump(); }
+                MatchSetup? setup = null;
+                client.MatchStarting += value => setup = value;
+                client.StartMatch();
+                for (var i = 0; i < 4; i++) { Pump(); }
+                Assert(setup != null && rawServer.Loading.Values.Single() && rawClient.Loading.Values.Single(),
+                    "construction did not extend both native endpoints through the decorator");
+                var events = new List<Msg>();
+                client.AttachMatch(setup!.Id, message => events.Add(message.Type));
+                clock.Seconds += 25;
+                for (var i = 0; i < 4; i++) { Pump(); }
+                clock.Seconds += 5;
+                for (var i = 0; i < 4; i++) { Pump(); }
+                Assert(events.Contains(Msg.MatchGo) && rawServer.Loading.Values.Single(),
+                    "countdown revoked a late builder's grace before readiness");
+                client.Send(new NetWriter(Msg.Loaded, setup!.Id));
+                for (var i = 0; i < 4; i++) { Pump(); }
+                Assert(!rawServer.Loading.Values.Single() && !rawClient.Loading.Values.Single(),
+                    "a late Loaded left the live match with construction disconnect latency");
+                // Leaving releases an unfinished loading grace without Loaded.
+                clientTransport.SetLoading(rawClient.Loading.Keys.Single(), true);
+                serverTransport.SetLoading(rawServer.Loading.Keys.Single(), true);
+                client.LeaveLobby();
+                for (var i = 0; i < 4; i++) { Pump(); }
+                Assert(!rawServer.Loading.Values.Single() && !rawClient.Loading.Values.Single(),
+                    "leaving construction retained a long timeout");
+            }
+            finally { client._ExitTree(); server._ExitTree(); client.Free(); server.Free(); }
+        });
         runner.Run("transport/client and server handshake, lobby, disconnect and reconnect", () =>
         {
             var network = new LoopbackNetwork();

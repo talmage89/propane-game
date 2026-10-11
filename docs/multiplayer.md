@@ -340,9 +340,13 @@ notices remain notices on an otherwise live connection. `NetClient.LastDisconnec
 and does not distinguish an established peer timeout from a remote close: these report `TransportFailure` with an
 unavailable code. A failed connection/Hello deadline reports `Timeout`. Local reasons and open errors keep any known
 code. Supporting more precise ENet remote reasons would require a lower-level adapter and is deferred.
-Both native endpoints use a 20 s minimum/30 s maximum ACK timeout so a construction stall within the server's
-20 s loading grace does not disconnect a healthy builder. Explicit disconnects remain immediate; a silent
-failed endpoint can take 20–30 s to detect.
+Native endpoints normally use a 3 s minimum/8 s maximum ACK timeout. The server extends only the builder's
+connection to 20/30 s before sending MatchStart, and the client does so before invoking its construction callback.
+`IPacketTransport.SetLoading` carries this policy through decorators; backends without native ACK deadlines may
+ignore it. Loaded restores the short timeout at both ends, including a late Loaded after countdown or Go.
+Leaving construction also restores it. A silent failed endpoint therefore does not keep a live-match player
+present for the construction grace. Explicit disconnects remain immediate. ENet's retry schedule can defer
+the check until its next retransmission; these are ACK timeout parameters, not exact wall-clock disconnect times.
 
 `NetClient.Diagnostics` exposes the local connection counters; server logs include per-connection payload
 packets/bytes accepted out and received in, RTT, managed queue
@@ -390,6 +394,7 @@ Details settled while building, within the decisions above:
 | `tools/dev/net_bots.sh -n 3 -l 60 -- --net-lag=120 --net-jitter=30 --net-loss=3` | A local server and bot players (`scenes/dev/net_test.tscn`) that run to tanks, shoot them and each other, and fetch ammo, under simulated lag and loss. `-w N` shows N of them in windows; `-S host:port -k` uses an existing server (audit it separately with its server log). Tank agreement and score checks run automatically; either failure fails the command. `-k` skips checks, `-t clean` uses tighter tank limits. |
 | `tools/dev/compare_tanks.py [--profile clean] out/bot*.log` | Same-machine shared monotonic samples interpolated to a 50 ms grid, all peer pairs, bounded lifecycle/moving/resting disagreement and settled final agreement. Missing samples, gaps or incomplete matches fail. `--details` prints disagreement intervals. Replaces the coarse countdown and tank-path comparers. See [calibration](network-soak.md) for limits and observed failures on dev. |
 | `tools/dev/check_scores.py out/server.log out/bot*.log` | Server conservation audit and identical per-player final scores on every bot; exits nonzero on a missing audit or disagreement. |
+| `python3 -B tools/dev/check_liveness.py --output=build/liveness [--silent=server]` | Stops a native client or server process during play without sending Leave; asserts detection within 10 s. Run after `make build`; separate-process logs stay in the chosen directory. `--project` and `--maximum` allow historical baseline measurements. |
 | `net_bots.sh -n 2 -l 45 -s "--start-score=8" -- --scenario=gather --tune.DropScatter=0.2 --tune.DropToss=1 --net-lag=120 --net-jitter=30 --net-loss=3` | Two bot hits spill two close tanks from the joiner; both clients require an intact stable gathered pile owned by the world authority. Scatter/toss are fixture overrides to keep the drops within the gather radius. Add `-w 2` and `--capture-dir=DIR` to verify both clients' shield colors and shimmer as well as the glide; headless clients assert gameplay state without shader readback. |
 | `net_bots.sh -n 2 -w 2 -s "--start-score=8" -- --scenario=duel --capture-dir=DIR` | Scripted close-up: hits with the grace period, dropped tanks, a blast that throws the victim, from both sides. |
 | `net_bots.sh -n 2 -l 35 -w 1 -- --scenario=movement --assert-motion --assert-feet --assert-grip` | Remote creep, sprint, air aim suppression, held-aim landing, hip/aimed bursts and walking reload through real snapshots; final contact and rotation assertions. Headless runs need at least 18 seconds; rendered runs allow 35 seconds for loading and capture stalls. |

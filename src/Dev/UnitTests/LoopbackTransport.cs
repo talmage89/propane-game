@@ -36,6 +36,8 @@ internal sealed class LoopbackTransport : IPacketTransport
     public ProtocolPeerMap PeerIds { get; } = new();
     public bool BlockSends { get; set; }
     public TrafficClass? BlockTraffic { get; set; }
+    public readonly Dictionary<ConnectionHandle, bool> Loading = new();
+    public void SetLoading(ConnectionHandle connection, bool loading) => Loading[connection] = loading;
     public int MaxPayloadSize { get; }
     public event Action<ConnectionHandle>? Connected;
     public event Action<ConnectionHandle, DisconnectReason>? Disconnected;

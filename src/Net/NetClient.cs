@@ -200,6 +200,10 @@ public partial class NetClient : Node
     {
         if (server == null) { return SendResult.Closed; }
         var result = transport.Send(server, traffic, message);
+        if (result == SendResult.Success && message.Length > 0 && (Msg)message[0] is Msg.Loaded or Msg.LeaveLobby)
+        {
+            transport.SetLoading(server, false);
+        }
         if (traffic.IsReliable() && result != SendResult.Success)
         {
             Drop(new DisconnectReason(DisconnectKind.TransportFailure, $"Could not send a required message ({result}). Please reconnect."));
@@ -281,6 +285,7 @@ public partial class NetClient : Node
                     if (State != Status.Connected || Lobby == null || setup.Id <= lastMatchId || !setup.Players.Any(p => p.Player.Id == MyId)) { return; }
                     lastMatchId = setup.Id;
                     inbox.Begin(setup.Id);
+                    if (server != null) { transport.SetLoading(server, true); }
                     MatchStarting?.Invoke(setup);
                     break;
                 case PongMessage pong:

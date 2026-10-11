@@ -6,7 +6,7 @@ using Godot;
 
 namespace Propane.Net;
 
-/// <summary>ENet adapter. Control uses channel zero; reliable body checkpoints use an independent ordered channel.</summary>
+/// <summary>ENet adapter. Control uses channel zero; reliable body checkpoints use three independent ordered channels.</summary>
 [SuppressMessage("Design", "CA1001", Justification = "Close releases the ENet connection; the RefCounted peer remains reusable for reconnects.")]
 public sealed class NetTransport : IPacketTransport
 {
@@ -32,9 +32,7 @@ public sealed class NetTransport : IPacketTransport
         this.peerIds = peerIds;
         peer.PeerConnected += id =>
         {
-            // A healthy builder may block its main thread for the server's 20 s loading grace.
-            // Configure both ends: ENet's RTT multiplier can trip its minimum before the maximum.
-            peer.GetPeer((int)id)?.SetTimeout(32, 20000, 30000);
+            peer.GetPeer((int)id)?.SetTimeout(32, 3000, 8000);
             var connection = connections.GetValueOrDefault((int)id) ?? Add((int)id);
             connected.Add(connection);
             Connected?.Invoke(connection);
@@ -89,6 +87,14 @@ public sealed class NetTransport : IPacketTransport
         TrafficClass.ReliableBodyStates3 => 3,
         _ => 0,
     };
+
+    public void SetLoading(ConnectionHandle connection, bool loading)
+    {
+        if (!connected.Contains(connection)) { return; }
+        // Both ends need the longer minimum while the client constructs its world. Once it
+        // reports ready, live players should not linger for the entire construction grace.
+        peer.GetPeer(peerIds.PeerId(connection))?.SetTimeout(32, loading ? 20000 : 3000, loading ? 30000 : 8000);
+    }
 
     private static TrafficClass ReliableTraffic(int channel) => channel switch
     {
