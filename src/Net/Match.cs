@@ -621,7 +621,10 @@ public partial class Match : Node3D
             if (result.Reason != ClaimRefusal.None) { tank!.CancelChainFuse(); }
             var wasIntact = tank!.State == PropaneTank.TankState.Intact;
             if (authority.State == TankLedger.State.Intact) { tank.RestoreIntact(); }
-            if (recreated || wasIntact && authority.State == TankLedger.State.Venting || result.Reason != ClaimRefusal.None)
+            // A losing puncture changes the vent, not its current trajectory. The confirmed owner's stream
+            // corrects motion normally; the later refusal must not rewind adoption to the cached claim pose.
+            var adoptingVent = finished?.Type == Msg.Puncture && !recreated && !wasIntact && authority.State == TankLedger.State.Venting;
+            if (recreated || wasIntact && authority.State == TankLedger.State.Venting || result.Reason != ClaimRefusal.None && !adoptingVent)
             {
                 BodySync.Snap(tank, authority.Body.Transform, authority.Body.Linear, authority.Body.Angular);
                 tank.Sleeping = authority.Rest;

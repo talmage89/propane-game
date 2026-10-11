@@ -112,6 +112,8 @@ confirmed. `Puncture` and `Explode` use the same expected-epoch path; each reque
 stale epochs, exploded tanks, wrong phases, incompatible lifecycle transitions, refused chain causes and unknown
 bodies. Replies carry the current owner, epoch, sequence, lifecycle, last reported pose/rest and canonical vent or
 explosion center. A refused prediction restores that state, recreating a locally exploded tank when necessary.
+A losing puncture adopts the canonical vent while preserving current motion; the owner's stream corrects its
+trajectory normally.
 The pose is the owner's last publication, not server-simulated physics. Refusal cancels pending chain fuses; an old
 fuse callback cannot detonate a restored lifecycle. Effects already played locally remain
 transient; reconciliation does not rewind debris or player motion.

@@ -225,6 +225,26 @@ public static class AuthorityTests
             TestRunner.Assert(f.Match.LastAuthorityRefusal == ClaimRefusal.StaleEpoch && tank.GlobalTransform.IsEqualApprox(Pose(Id).Transform) &&
                 f.Match.Bodies.Get(Id) is { Owner: 3, Epoch: 3, ClaimPending: false }, "refused claim left divergent motion or ownership");
         });
+        foreach (var broadcastFirst in new[] { false, true })
+        {
+            runner.Run($"authority/losing puncture preserves motion (broadcast first {broadcastFirst})", () =>
+            {
+                using var f = new MatchFixture(runner);
+                var tank = f.Match.LiveTanks.Single(t => t.NetId == Id);
+                tank.TakeShot(tank.ToGlobal(new Vector3(.15f, .23f, 0)), tank.GlobalBasis * Vector3.Right, Vector3.Left);
+                Send(f.Server, 3, Msg.Puncture, Puncture(3));
+                if (!broadcastFirst) { f.Server.Packets.Clear(); }
+                var transform = new Transform3D(new Basis(Vector3.Up, .7f), new Vector3(8, 2, 9));
+                BodySync.Snap(tank, transform, Vector3.One * 3, Vector3.One * 2);
+                if (broadcastFirst) { f.Deliver(); }
+                f.Flush();
+                TestRunner.Assert(f.Match.LastAuthorityRefusal == ClaimRefusal.StaleEpoch && tank.HoleLocal == Puncture(3).Hole &&
+                    tank.HoleNormalLocal == Puncture(3).Normal && tank.SwirlSign == Puncture(3).Swirl &&
+                    f.Match.Bodies.Get(Id) is { Owner: 3, Epoch: 2, ClaimPending: false }, "loser did not adopt canonical authority and vent");
+                TestRunner.Assert(tank.GlobalTransform.IsEqualApprox(transform) && tank.LinearVelocity == Vector3.One * 3 &&
+                    tank.AngularVelocity == Vector3.One * 2, "puncture refusal rewound the contender's current motion");
+            });
+        }
         runner.Run("authority/refused vent ownership cancels its predicted chain fuse", () =>
         {
             using var f = new MatchFixture(runner);
