@@ -1,9 +1,8 @@
-using System.Linq;
 using Godot;
 
 namespace Propane.UI;
 
-/// <summary>Esc in a match: the controls, and resume, leave or quit. The match keeps running behind it.</summary>
+/// <summary>Esc or Start/Options in a match: the controls, and resume, leave or quit. The match keeps running behind it.</summary>
 public partial class MatchMenu : CanvasLayer
 {
     public event System.Action? ResumeRequested;
@@ -41,20 +40,7 @@ public partial class MatchMenu : CanvasLayer
         layout.AddChild(title);
         layout.AddChild(UiStyle.Text("The match is still on", 18, UiStyle.SoftInk, HorizontalAlignment.Center));
         layout.AddChild(new HSeparator());
-        foreach (var (keys, action) in new[]
-                 {
-                     ("W A S D", "Move"), ("Shift", "Sprint"), ("Space", "Jump"), ("Mouse", "Look"), ("Left click", "Fire"),
-                     ("Right click", "Aim (tighter spread)"), ("R", "Reload"), ("F11  or  Alt+Enter", "Fullscreen"),
-                 }.Concat(OS.IsDebugBuild() ? new[] { ("F1  or  `", "Tuning (debug: changes everyone's)") } : System.Array.Empty<(string, string)>()))
-        {
-            var row = new HBoxContainer();
-            var key = UiStyle.Text(keys, 19);
-            key.AddThemeFontOverride("font", UiStyle.BoldFont);
-            key.CustomMinimumSize = new Vector2(210, 0);
-            row.AddChild(key);
-            row.AddChild(UiStyle.Text(action, 19, UiStyle.SoftInk));
-            layout.AddChild(row);
-        }
+        layout.AddChild(new ControlsReference { Match = true });
         layout.AddChild(new HSeparator());
         var rules = UiStyle.Text("Every tank you blow up is banked. A bullet hit spills one behind you; getting thrown spills five.", 16,
             UiStyle.SoftInk, HorizontalAlignment.Center);
@@ -72,5 +58,6 @@ public partial class MatchMenu : CanvasLayer
         buttons.AddChild(leave);
         buttons.AddChild(quit);
         layout.AddChild(buttons);
+        AddChild(new MenuNavigation { Screen = this, Root = layout, Back = () => ResumeRequested?.Invoke() });
     }
 }

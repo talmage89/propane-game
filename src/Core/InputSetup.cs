@@ -34,7 +34,7 @@ public static class InputSetup
         Bind(Jump, Key(Godot.Key.Space), Button(JoyButton.A));
         Bind(NewSuburb, Key(Godot.Key.R), Button(JoyButton.X));
         Bind(Reload, Key(Godot.Key.R), Button(JoyButton.X));
-        Bind(Pause, Key(Godot.Key.Escape));
+        Bind(Pause, Key(Godot.Key.Escape), Button(JoyButton.Start));
         // Function keys need fn on a Mac (and F11 is Show Desktop there), so each has a plain alternative.
         Bind(ToggleTuning, Key(Godot.Key.F1), Key(Godot.Key.Quoteleft));
         Bind(ToggleFullscreen, Key(Godot.Key.F11), new InputEventKey { PhysicalKeycode = Godot.Key.Enter, AltPressed = true });

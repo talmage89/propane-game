@@ -77,13 +77,19 @@ then plays with every patch of that minor version.
 | Left click | Right trigger | Fire (hold for full auto; toggle it in the tuning panel) |
 | Right click (hold) | Left trigger (hold) | Aim and creep: upright shouldered walk (1.6 m/s), tight spread; camera stays put |
 | R | X / Square | New suburb (single player); reload (multiplayer) |
-| Esc | — | Pause and show the controls (a match keeps running) |
+| Esc | Start / Options | Pause and show the controls (a match keeps running) |
 | F1 or ` | — | Tuning panel (live sliders; in a match, the creator's debug build only, and it changes everyone's values) |
 | F11 or Alt+Enter | — | Fullscreen |
 
 Aim cancels sprint. Releasing aim with sprint still held restores sprint's target speed on that physics tick,
 including after firing. Jumping drops effective aim in the air; held aim returns on landing. Reload owns the weapon
-and suppresses aim/fire while leaving the selected movement gait free. Menus still require a keyboard or mouse.
+and suppresses aim/fire while leaving the selected movement gait free.
+
+Menus work with D-pad or left stick, A / Cross to confirm, and B / Circle to go back. Start / Options opens and
+closes pause or the match menu. Left / right changes the focused match length; disabled choices are skipped.
+Name and server fields accept their current text with A / Cross, so defaults can be accepted or skipped without
+typing. On-screen text entry is supplied by Steam, outside the game. The pause reference and reload hint follow the
+last active input device.
 
 Gameplay buttons and stick axes use named actions ([Godot's controller input model](https://docs.godotengine.org/en/stable/tutorials/inputs/controllers_gamepads_joysticks.html)).
 Mouse look is displacement; stick look is a rate with separate sensitivity, radial curve and deadzone tuners.
