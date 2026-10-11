@@ -1,5 +1,6 @@
 using System;
 using Godot;
+using Propane.Core;
 
 namespace Propane.Dev.UnitTests;
 

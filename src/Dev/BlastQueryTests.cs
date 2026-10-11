@@ -14,7 +14,7 @@ public partial class BlastQueryTests : Node3D
     {
         if (condition) { return; }
         GD.PushError($"[blast query] FAIL {message}");
-        GetTree().Quit(1);
+        ShutdownGuard.Quit(GetTree(), 1);
         throw new InvalidOperationException(message);
     }
 

@@ -31,7 +31,8 @@ Seven class-specific CA1001 suppressions preserve current lifetimes, with the re
 `python3 tools/dev/lint_tests.py` proves the gate rejects nullable dereferences, disposable-field ownership,
 implicit async context, ValueTask misuse, and whitespace and style drift. It also checks corrected code passes.
 The fixtures compile in an isolated temporary project; they never run or modify game sources.
-The script also stubs external tools to prove `make -j4 check` runs lint before every gate suite and
+`check_world_tests.py` proves failed children retain their logs and exit status, while successful runs remove scratch
+files. The script also stubs external tools to prove `make -j4 check` runs lint before every gate suite and
 propagates a failure from each checker, scene, saved-plan writer and world-hash process. It checks that the core runner retains platform, movement and unit scenes with failure completion. It rejects missing or
 different world hashes and checks that `test-full` retains the gate and every deep sweep, including melee reloads, and propagates their failures. It checks that Godot
 setup reuses a valid cached editor and stops on a download failure.
@@ -42,7 +43,7 @@ setup reuses a valid cached editor and stops on a download failure.
 
 | Target | Assertions |
 | --- | --- |
-| `test-core` | Python timing/score/vent/trajectory checkers, platform, movement, all unit suites |
+| `test-core` | Python timing/world-wrapper/score/vent/trajectory checkers, platform, movement, all unit suites, normal shutdown and paused window-close witnesses |
 | `test-behavior` | Blast completeness, gather/races/appearance/real-game gather, melee collision/poses, navigation, all three menu scenarios, grip/recovery, feet/corrections/events, movement/motion continuity |
 | `test-generator` | 20 single-player and 2-player seeds, three each at 8/16/24/32 players, two forced seeds for every formation at all six sizes |
 | `test-world` | All four saved formation plans built and hashed in two fresh processes |
@@ -53,7 +54,8 @@ six forced seeds per formation/size, 100 navigation seeds, and the melee-reload 
 ordinary seeds 21–100, large seeds 4–10 and forced seeds 3–6 moved to this deeper sweep.
 
 `core_tests.tscn` runs platform, movement and unit scenes sequentially, prints BEGIN/PASS per suite and exits
-nonzero on failure. Those scenes also work alone: `CoreTests.Complete` quits when their parent is not the runner.
+nonzero on failure. Those scenes also work alone: `CoreTests.Complete` routes standalone completion through `ShutdownGuard.Quit`. The consolidated runner also uses
+that guard on success, assertion failure and setup failure; no completion bypasses orderly shutdown.
 The runner frees each suite before starting the next and releases injected actions. Synchronous unit suites run
 last because they build/free worlds without advancing physics. Stateful game probes retain separate processes;
 sharing their tuning, spawn roots, network sessions and animation state would need a larger isolation contract.

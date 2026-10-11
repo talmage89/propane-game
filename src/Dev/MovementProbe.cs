@@ -32,7 +32,7 @@ public partial class MovementProbe : Node
             (intent.Aim && state.Grounded && state.Weapon != WeaponAction.Reload && !state.EffectiveAim))
         {
             GD.PushError($"[movement-probe] FAIL t={Input.Now:0.0000} {state}");
-            GetTree().Quit(1);
+            ShutdownGuard.Quit(GetTree(), 1);
             return;
         }
         ticks++;
@@ -56,7 +56,7 @@ public partial class MovementProbe : Node
         if (releases < 1 || sprintReleases != releases || ticks < 100 || (requireAimedLanding && aimedLandings < 1))
         {
             GD.PushError($"[movement-probe] FAIL incomplete sequence: ticks={ticks} releases={releases} aimedLandings={aimedLandings}");
-            GetTree().Quit(1);
+            ShutdownGuard.Quit(GetTree(), 1);
             return;
         }
         GD.Print($"[movement-probe] PASS ticks={ticks} releases={releases} aimedLandings={aimedLandings}");

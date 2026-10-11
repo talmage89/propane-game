@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using Godot;
+using Propane.Core;
 using Propane.Player;
 
 namespace Propane.Dev;
@@ -101,7 +102,7 @@ public partial class JumpTimingProbe : SkeletonModifier3D
         if (DevArgs.Get("assert-feet") != null && failed)
         {
             GD.PushError("[feet timing] FAIL missing jump/landing or more than one 60 Hz frame of latency");
-            GetTree().Quit(1);
+            ShutdownGuard.Quit(GetTree(), 1);
         }
     }
 }

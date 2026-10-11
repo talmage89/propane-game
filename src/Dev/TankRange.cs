@@ -154,7 +154,7 @@ public partial class TankRange : Node3D
         {
             if (condition) return true;
             GD.PushError($"[formation] {formation}: {message}");
-            GetTree().Quit(1);
+            ShutdownGuard.Quit(GetTree(), 1);
             return false;
         }
         var director = new CaptureDirector { QuitAfter = 12f };
@@ -170,7 +170,7 @@ public partial class TankRange : Node3D
             if (drift > 0.006f || tilt > Mathf.DegToRad(0.5f))
             {
                 GD.PushError("[formation] moved before hit");
-                GetTree().Quit(1);
+                ShutdownGuard.Quit(GetTree(), 1);
                 return;
             }
             if (chain != null)

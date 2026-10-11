@@ -4,11 +4,24 @@ set -euo pipefail
 project="$(cd "$(dirname "$0")/../.." && pwd)"
 godot="${GODOT:-godot-mono}"
 scratch="$(mktemp -d "${TMPDIR:-/tmp}/wptest-world-XXXXXX")"
-trap 'rm -rf "$scratch"' EXIT
+cleanup() {
+  local status=$?
+  if (( status == 0 )); then
+    rm -rf "$scratch"
+  else
+    echo "World check failed (status $status); logs kept in $scratch" >&2
+    for log in "$scratch"/*.log; do
+      [[ -f "$log" ]] || continue
+      echo "--- $log (last 80 lines) ---" >&2
+      tail -n 80 "$log" >&2
+    done
+  fi
+}
+trap cleanup EXIT
 scene=res://scenes/dev/unit_tests.tscn
-"$godot" --headless --path "$project" "$scene" -- --write-world-plans="$scratch" >"$scratch/plan.log" 2>&1 || { cat "$scratch/plan.log" >&2; exit 1; }
+"$godot" --headless --path "$project" "$scene" -- --write-world-plans="$scratch" >"$scratch/plan.log" 2>&1
 for process in 1 2; do
-  "$godot" --headless --path "$project" "$scene" -- --hash-world-plans="$scratch" >"$scratch/$process.log" 2>&1 || { cat "$scratch/$process.log" >&2; exit 1; }
+  "$godot" --headless --path "$project" "$scene" -- --hash-world-plans="$scratch" >"$scratch/$process.log" 2>&1
   grep -E '^\[world\] hash ' "$scratch/$process.log" >"$scratch/$process.hash"
   # Matching partial output must not accidentally pass the comparison.
   test "$(wc -l < "$scratch/$process.hash")" -eq 4

@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using Godot;
+using Propane.Core;
 
 namespace Propane.Dev;
 
@@ -36,7 +37,7 @@ public partial class CoreTests : Node
             if (next == Scenes.Length)
             {
                 GD.Print($"[core] PASS {next} suites");
-                GetTree().Quit();
+                ShutdownGuard.Quit(GetTree());
                 return;
             }
             completing = false;
@@ -50,7 +51,7 @@ public partial class CoreTests : Node
         {
             failed = true;
             GD.PushError($"[core] FAIL setup/cleanup: {error}");
-            GetTree().Quit(1);
+            ShutdownGuard.Quit(GetTree(), 1);
         }
     }
 
@@ -61,7 +62,7 @@ public partial class CoreTests : Node
         {
             failed = true;
             GD.PushError($"[core] FAIL {Scenes[next - 1]} after {timer.Elapsed.TotalSeconds:0.000}s");
-            GetTree().Quit(code);
+            ShutdownGuard.Quit(GetTree(), code);
             completing = true;
             return;
         }
@@ -74,6 +75,6 @@ public partial class CoreTests : Node
     public static void Complete(Node node, int code = 0)
     {
         if (node.GetParent() is CoreTests runner) runner.Finish(code);
-        else node.GetTree().Quit(code);
+        else ShutdownGuard.Quit(node.GetTree(), code);
     }
 }

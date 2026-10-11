@@ -40,11 +40,14 @@ check: lint ## Run lint, then the tests
 test: test-core test-behavior test-generator test-world ## Run the fast headless gate (the same suites as CI)
 
 test-core: build ## Run checker, platform, movement and unit assertions
+	python3 -B tools/dev/check_world_tests.py
 	python3 -B tools/dev/time_gate_tests.py
 	python3 -B tools/dev/check_scores_tests.py
 	python3 -B tools/dev/compare_vents_tests.py
 	python3 -B tools/dev/compare_tank_paths_tests.py
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/core_tests.tscn
+	"$(GODOT)" --headless --path . res://scenes/dev/shutdown_tests.tscn
+	"$(GODOT)" --headless --path . res://scenes/dev/shutdown_tests.tscn -- --paused --window-close --repeat-quit
 
 test-behavior: build ## Run isolated physics, navigation, menu, grip and feet probes
 	"$(GODOT)" --headless --path . --fixed-fps 60 res://scenes/dev/blast_query_tests.tscn

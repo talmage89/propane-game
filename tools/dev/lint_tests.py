@@ -51,8 +51,8 @@ fi
     counter = scratch / "world-count"
     environment = dict(os.environ, PATH=f"{scratch}:{os.environ['PATH']}", GODOT=str(scratch / "godot"),
                        COMMAND_LOG=str(log), WORLD_COUNT=str(counter), TMPDIR=str(scratch))
-    checkers = ["time_gate_tests.py", "check_scores_tests.py", "compare_vents_tests.py", "compare_tank_paths_tests.py"]
-    scenes = ["core_tests.tscn", "blast_query_tests.tscn", "gather_range.tscn",
+    checkers = ["check_world_tests.py", "time_gate_tests.py", "check_scores_tests.py", "compare_vents_tests.py", "compare_tank_paths_tests.py"]
+    scenes = ["shutdown_tests.tscn", "shutdown_tests.tscn -- --paused --window-close --repeat-quit", "core_tests.tscn", "blast_query_tests.tscn", "gather_range.tscn",
               "gather_range.tscn -- --scenario=grant-races",
               "gather_range.tscn -- --scenario=appearance",
               "game_test.tscn -- --scenario=gather --tune.FixedSeed=23",
@@ -87,7 +87,7 @@ fi
             for scene in scenes:
                 # The default gather probe has no scenario, so distinguish it from grant-races.
                 matches = [command for command in commands if scene in command and
-                           (scene != "gather_range.tscn" or "--scenario=" not in command)]
+                           (scene not in ("gather_range.tscn", "shutdown_tests.tscn") or " -- " not in command)]
                 require(len(matches) == 1, f"check skipped/duplicated {scene}", result.stdout)
             require(sum("--write-world-plans=" in c for c in commands) == 1 and
                     sum("--hash-world-plans=" in c for c in commands) == 2,

@@ -43,12 +43,12 @@ public partial class MenuGamepadTest : Node
                 await Run().ConfigureAwait(true);
             }
             GD.Print($"[gamepadmenu] PASS: {assertions} assertions");
-            GetTree().Quit();
+            ShutdownGuard.Quit(GetTree());
         }
         catch (Exception e)
         {
             GD.PushError($"[gamepadmenu] FAIL: {e}");
-            GetTree().Quit(1);
+            ShutdownGuard.Quit(GetTree(), 1);
         }
     }
 
