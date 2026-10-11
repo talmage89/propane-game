@@ -177,6 +177,9 @@ $GODOT --fixed-fps 60 res://scenes/dev/bot_navigation_course.tscn -- --seeds=5 -
 $GODOT --headless res://scenes/dev/unit_tests.tscn
 tools/dev/check_world.sh
 
+# Blast-query completeness: 1,100 rigid bodies and duplicate collision shapes; asserts every body is pushed.
+$GODOT --headless --fixed-fps 60 res://scenes/dev/blast_query_tests.tscn
+
 # Platform download URLs and recorder arguments, including Windows paths and non-English locales. Exits 1 on failure.
 $GODOT --headless res://scenes/dev/platform_tests.tscn
 

@@ -43,7 +43,7 @@ public static class Blast
         };
         var seen = new HashSet<ulong>();
         var pushed = new List<RigidBody3D>();
-        foreach (var hit in space.IntersectShape(query, MaxQueryResults))
+        foreach (var hit in QueryAll(space, query))
         {
             if (hit["collider"].As<GodotObject>() is not RigidBody3D body || !seen.Add(body.GetInstanceId()))
             {
@@ -80,6 +80,24 @@ public static class Blast
         if (chain)
         {
             LocalBlast?.Invoke(center, pushed, source?.BlastRequest ?? 0);
+        }
+    }
+
+    /// <summary>Full pages are ambiguous: exclude their bodies and keep querying until a short page proves completion.</summary>
+    internal static IEnumerable<Godot.Collections.Dictionary> QueryAll(PhysicsDirectSpaceState3D space, PhysicsShapeQueryParameters3D query)
+    {
+        while (true)
+        {
+            var page = space.IntersectShape(query, MaxQueryResults);
+            var excluded = query.Exclude;
+            foreach (var hit in page)
+            {
+                var rid = hit["rid"].AsRid();
+                if (!excluded.Contains(rid)) { excluded.Add(rid); }
+                yield return hit;
+            }
+            query.Exclude = excluded;
+            if (page.Count < MaxQueryResults) { yield break; }
         }
     }
 

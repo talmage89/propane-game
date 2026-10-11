@@ -142,6 +142,9 @@ unblocks them. Chain punctures wait until the complete blast push before sending
 that impulse and spin. An already freed predicted tank retains its original proposal; explosion centers always stay
 at the position of the predicted event.
 
+Blast shape queries page past full 512-result pages by excluding returned bodies. Large piles cannot silently truncate
+pushes or chain contacts; `scenes/dev/blast_query_tests.tscn` checks 1,100 bodies and duplicate shapes.
+
 **Left to each client:** debris, small props and fence panels play out locally from the shared blasts. Cars are synced at a low rate, because players use them as cover.
 
 **Platforms.** Windows, macOS and Linux builds of the same minor version play together (0.2.0 with 0.2.5). A version check when a player connects turns away builds of another minor version or protocol, and says which version is needed (see Versions and releases in the README).
