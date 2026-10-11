@@ -10,7 +10,7 @@ public partial class LocomotionMatrix : Node
 {
     public PlayerCharacter Player { get; init; } = null!;
     public LocomotionProbe Probe { get; init; } = null!;
-    public const float EpisodeTime = 3;
+    public static float EpisodeTime => DevArgs.Get("feet-corrections") != null ? 3.5f : 3;
     public const int Episodes = 24;
     private float time;
     private Vector3 position;
@@ -28,7 +28,7 @@ public partial class LocomotionMatrix : Node
         var angle = direction * Mathf.Tau / 8;
         var speed = gait == PlayerGait.Creep ? Tuning.Current.CreepSpeed : gait == PlayerGait.Sprint ? Tuning.Current.SprintSpeed : Tuning.Current.RunSpeed;
         var localTime = time % EpisodeTime;
-        var target = localTime < 0.25f || localTime > 2.75f ? Vector3.Zero : new Vector3(Mathf.Sin(angle), 0, -Mathf.Cos(angle)) * speed;
+        var target = localTime < 0.25f || localTime > EpisodeTime - 0.25f ? Vector3.Zero : new Vector3(Mathf.Sin(angle), 0, -Mathf.Cos(angle)) * speed;
         velocity = velocity.MoveToward(target, Tuning.Current.Acceleration * dt);
         position += velocity * dt;
         // Reproducible interpolation corrections in both directions. A saved contact must release rather
@@ -52,7 +52,7 @@ public partial class LocomotionMatrix : Node
             Sprint = gait == PlayerGait.Sprint ? 1 : 0,
         });
         Probe.Label = $"{gait}_{direction * 45:000}";
-        Probe.SampleDrift = localTime > (DevArgs.Get("feet-corrections") != null ? 2.1f : 1) && localTime < 2.7f;
+        Probe.SampleDrift = localTime > (DevArgs.Get("feet-corrections") != null ? 2.1f : 1) && localTime < EpisodeTime - 0.25f;
         Probe.SampleSeparation = localTime > 0.2f;
     }
 }

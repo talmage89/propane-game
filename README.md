@@ -105,6 +105,9 @@ A foot modifier plants world-space contacts, steps in the travel direction and a
 remote clips follow displayed snapshot displacement. Jump poses follow latched takeoff, vertical velocity and
 impact-scaled landing. See [the locomotion review](docs/locomotion.md) for measurements and captures. The node
 facade owns collisions, ammo and lifecycle transitions; the resolver has no scene or engine dependencies.
+Rifle and torso sway follow that stride; walk is subtle and aimed creep stays steady. Shots add spring momentum,
+with the shoulder absorbing the kick and the camera returning fully. Contact-aware upper-body blends keep hands
+attached through stance changes, reload and get-up. See [the motion review](docs/motion.md) for captures and bounds.
 A throw immediately clears weapon poses and cancels reload, so get-up cannot restore a pose from before the throw.
 
 ## Tuning
@@ -224,6 +227,8 @@ $GODOT --fixed-fps 60 res://scenes/dev/game_test.tscn -- --scenario=gather --tun
 # --chain=primed first punctures each tank, then requires venting neighbors in range to detonate after the fuse.
 $GODOT --fixed-fps 60 res://scenes/dev/tank_range.tscn -- --capture-dir=/tmp/pile --formation=Square --chain=fresh
 $GODOT --fixed-fps 60 res://scenes/dev/player_range.tscn -- --capture-dir=/tmp/p
+# Motion: all gaits, hip/aimed bursts, walking reload and get-up into run, captured at 60 Hz.
+$GODOT --fixed-fps 60 res://scenes/dev/player_range.tscn -- --scenario=motion --view=side --assert-motion --assert-grip --capture-dir=/tmp/motion
 # Player scenarios: stances (default), reload, ragdoll, creep (two measured strides), movement (labeled gait/jump transitions),
 # sprint-repro (discovery sequence, exact-tick assertions and transition log), grip (all rifle contacts).
 # feet (all eight body-relative directions in every gait) and feet-events (local starts/stops/turns/jumps/terrain)

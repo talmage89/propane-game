@@ -27,6 +27,7 @@ public partial class TestRunner : Node
             AuthorityTests.Register(this);
             LocomotionTests.Register(this);
             GatherTests.Register(this);
+            RecoilTests.Register(this);
         }
         catch (Exception e)
         {

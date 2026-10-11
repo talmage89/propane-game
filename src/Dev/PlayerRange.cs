@@ -59,8 +59,38 @@ public partial class PlayerRange : Node3D
         GripProbe? grip = null;
         if (DevArgs.Get("grip-metrics") != null || DevArgs.Get("assert-grip") != null)
             grip = GripProbe.Attach(player, scenario == "grip");
+        var motion = DevArgs.Get("motion-metrics") != null || DevArgs.Get("assert-motion") != null
+            ? MotionProbe.Attach(player, scenario == "motion") : null;
         switch (scenario)
         {
+            case "motion":
+                player.Ammo = new AmmoState { Magazine = 30, Reserve = 90 };
+                script.Hold(0.5f, 3, new PlayerIntent { Move = Vector2.Down * 0.3f });
+                script.Hold(3, 5.5f, new PlayerIntent { Move = Vector2.Down });
+                script.Hold(5.5f, 8, new PlayerIntent { Move = Vector2.Down, Sprint = true });
+                script.Hold(8, 11, new PlayerIntent { Move = Vector2.Down, Aim = true });
+                script.Hold(11.5f, 12.4f, new PlayerIntent { FireHeld = true });
+                script.Hold(13.5f, 15, new PlayerIntent { Aim = true });
+                script.Hold(14, 14.9f, new PlayerIntent { FireHeld = true });
+                script.Hold(15.5f, 18, new PlayerIntent { Move = Vector2.Down * 0.3f });
+                script.Reload(15.6f);
+                director.At(18.5f, () => player.RemoteRagdoll(player.GlobalPosition, new Vector3(0, 2, -1), Vector3.Zero));
+                script.Hold(20, 25, new PlayerIntent { Move = Vector2.Down });
+                director.QuitAfter = 26;
+                foreach (var (start, seconds, label) in new (float, float, string)[]
+                {
+                    (1.5f, 1, "walk"), (4, 1, "run"), (6.5f, 1, "sprint"), (9.5f, 1, "creep"),
+                    (11.4f, 1.8f, "hip"), (13.9f, 1.8f, "aim"), (15.5f, 2.5f, "reload"), (19, 6, "getup"),
+                })
+                {
+                    if (DevArgs.Get("capture-group") is string group && group != label && !(group == "recoil" && (label == "hip" || label == "aim"))) continue;
+                    for (var frame = 0; frame < (int)(seconds * 60); frame++)
+                    {
+                        var name = $"{label}_{frame:000}";
+                        director.At(start + frame / 60f, () => CaptureAfterDraw(director, name));
+                    }
+                }
+                break;
             case "feet-events":
                 var events = LocomotionProbe.Attach(player, true);
                 var timing = JumpTimingProbe.Attach(player, true);
@@ -89,10 +119,10 @@ public partial class PlayerRange : Node3D
                     AddFootSurface(new Vector3(0, 0.06f, -6.4f), new Vector3(3, 0.12f, 0.8f));
                     AddFootSurface(new Vector3(0, 0.03f, -7.3f), new Vector3(3, 0.12f, 1), 6);
                 });
-                director.At(15.8f, () => { player.Teleport(new Vector3(0, 0.24f, -4.5f), 0); events.SkipNextPose = true; });
-                director.At(19.7f, () => { player.Teleport(new Vector3(0.05f, 0.24f, -6), Mathf.Pi / 2); events.SkipNextPose = true; });
+                director.At(15.8f, () => { player.Teleport(new Vector3(0, 0.24f, -4.5f), 0); events.SkipNextPose = true; if (motion != null) motion.SkipNextPose = true; });
+                director.At(19.7f, () => { player.Teleport(new Vector3(0.05f, 0.24f, -6), Mathf.Pi / 2); events.SkipNextPose = true; if (motion != null) motion.SkipNextPose = true; });
                 director.At(20.35f, events.AssertSplitSupport);
-                director.At(20.6f, () => { player.Teleport(new Vector3(0, 0, -8.5f), Mathf.Pi / 2); events.SkipNextPose = true; });
+                director.At(20.6f, () => { player.Teleport(new Vector3(0, 0, -8.5f), Mathf.Pi / 2); events.SkipNextPose = true; if (motion != null) motion.SkipNextPose = true; });
                 script.Hold(20.7f, 21.5f, new PlayerIntent { Aim = true });
                 script.Look(20.7f, 21.5f, new Vector2(Mathf.Pi / 2 / Tuning.Current.MouseSensitivity / 0.8f, 0));
                 script.Hold(21.6f, 24.5f, new PlayerIntent { Move = Vector2.Up, Aim = true });
@@ -113,6 +143,7 @@ public partial class PlayerRange : Node3D
                     for (var frame = 0; frame < 25; frame++)
                     {
                         var label = $"{(PlayerGait)(episode / 8)}_{episode % 8 * 45:000}_{frame:00}";
+                        if (DevArgs.Get("capture-group") is string episodeGroup && !label.StartsWith(episodeGroup, System.StringComparison.Ordinal)) continue;
                         director.At(episode * LocomotionMatrix.EpisodeTime + 1.033333f + frame / 15f, () => CaptureAfterDraw(director, label));
                     }
                 }
@@ -282,6 +313,7 @@ public partial class PlayerRange : Node3D
                 break;
         }
         // Scenarios such as creep set their own duration; finish diagnostics against that final duration.
+        if (motion != null) director.At(director.QuitAfter - 0.08f, motion.Finish);
         if (grip != null) director.At(director.QuitAfter - 0.1f, grip.Finish);
         // Ready sorts the complete timeline, including diagnostics and pitch changes.
         AddChild(director);

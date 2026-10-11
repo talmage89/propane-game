@@ -1,10 +1,12 @@
+using System;
 using Godot;
+using Propane.Core;
 
 namespace Propane.Player;
 
 /// <summary>
-/// Last modifier on the skeleton. It can capture the final pose (the settled ragdoll) in world space, then fade from
-/// that captured pose into whatever the animation and earlier modifiers produce, such as the start of the get-up clip.
+/// Blends the settled ragdoll into the get-up and bounds authored animation changes. Runs after physical
+/// bones, before feet and rifle contacts, so smoothing never detaches a solved hand or planted foot.
 /// </summary>
 public partial class PoseBlend : SkeletonModifier3D
 {
@@ -13,6 +15,9 @@ public partial class PoseBlend : SkeletonModifier3D
     private bool blending;
     private float duration;
     private float elapsed;
+    private Quaternion[]? previous;
+    private Quaternion[]? displayed;
+    private bool[] digitBones = Array.Empty<bool>();
 
     public bool HasCapture => captured != null && !captureRequested;
 
@@ -61,6 +66,7 @@ public partial class PoseBlend : SkeletonModifier3D
         }
         if (!blending || captured == null)
         {
+            SmoothAnimation(skeleton, (float)delta);
             return;
         }
 
@@ -70,6 +76,7 @@ public partial class PoseBlend : SkeletonModifier3D
         {
             blending = false;
             captured = null;
+            SmoothAnimation(skeleton, (float)delta);
             return;
         }
 
@@ -85,6 +92,52 @@ public partial class PoseBlend : SkeletonModifier3D
                 .Slerp(local.Basis.GetRotationQuaternion(), weight);
             skeleton.SetBonePoseRotation(i, rotation);
             skeleton.SetBonePosePosition(i, current.Origin.Lerp(local.Origin, weight));
+        }
+        SmoothAnimation(skeleton, (float)delta);
+    }
+    /// <summary>Remember the complete displayed pose, including IK, for the next animation handoff.</summary>
+    public void ObserveFinalPose(Skeleton3D skeleton)
+    {
+        displayed ??= new Quaternion[skeleton.GetBoneCount()];
+        for (var i = 0; i < displayed.Length; i++) displayed[i] = skeleton.GetBonePoseRotation(i).Normalized();
+    }
+
+    // Bound authored animation changes before contact solvers, never after them. Physical ragdoll poses
+    // remain authoritative; cache them so the first get-up frame starts from the actual settled body.
+    private void SmoothAnimation(Skeleton3D skeleton, float dt)
+    {
+        var simulating = skeleton.GetNode<Ragdoll>("Ragdoll").Simulating;
+        var count = skeleton.GetBoneCount();
+        if (skeleton.GetNode<RifleRig>("RifleRig").Weight <= 0.001f && displayed != null)
+        {
+            previous ??= new Quaternion[count];
+            Array.Copy(displayed, previous, count);
+        }
+        if (digitBones.Length != count)
+        {
+            digitBones = new bool[count];
+            for (var i = 0; i < count; i++)
+            {
+                var name = skeleton.GetBoneName(i).ToString();
+                digitBones[i] = name.StartsWith("index_", StringComparison.Ordinal) || name.StartsWith("middle_", StringComparison.Ordinal) ||
+                    name.StartsWith("ring_", StringComparison.Ordinal) || name.StartsWith("pinky_", StringComparison.Ordinal) || name.StartsWith("thumb_", StringComparison.Ordinal);
+            }
+        }
+        var initialized = previous != null;
+        previous ??= new Quaternion[count];
+        var limit = Mathf.DegToRad(Tuning.Current.PoseAngularSpeed) * dt;
+        for (var i = 0; i < count; i++)
+        {
+            var target = skeleton.GetBonePoseRotation(i).Normalized();
+            // Digits have no physical bodies. Keep their release smooth even when the arm is thrown.
+            if (initialized && (!simulating || digitBones[i]))
+            {
+                var difference = previous[i].Inverse() * target;
+                var angle = 2 * Mathf.Atan2(new Vector3(difference.X, difference.Y, difference.Z).Length(), Mathf.Abs(difference.W));
+                if (angle > limit) target = previous[i].Slerp(target, limit / angle);
+                skeleton.SetBonePoseRotation(i, target);
+            }
+            previous[i] = target;
         }
     }
 }

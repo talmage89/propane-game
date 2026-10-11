@@ -10,7 +10,7 @@ public partial class FootPlacement : SkeletonModifier3D
 {
     public PlayerCharacter Player { get; init; } = null!;
     public LocomotionPose Pose { get; init; } = null!;
-    public bool Settled => weight >= 0.999f && resetTime <= 0;
+    public bool Settled => weight >= 0.999f && resetTime <= 0 && !recoveringPose;
     public bool AirSettled => inAir && !Player.ResolvedState.Grounded && weight <= 0 && resetTime <= 0;
     public bool LeftPlanted => legs[0].Planted && Settled;
     public bool RightPlanted => legs[1].Planted && Settled;
@@ -58,6 +58,7 @@ public partial class FootPlacement : SkeletonModifier3D
     private Vector3 resetPelvisPosition;
     private float resetTime;
     private bool hasPose;
+    private bool recoveringPose;
 
     /// <summary>Discard contacts. Unexpected motion snaps can fade the previous joint pose into the new solve.</summary>
     public void Reset(bool blendPose = false)
@@ -68,7 +69,7 @@ public partial class FootPlacement : SkeletonModifier3D
             BeginPoseBlend();
         }
         if (!blendPose) hasPose = false;
-        initialized = hasMotion = false;
+        initialized = hasMotion = recoveringPose = false;
         weight = pelvisOffset = terrainOffset = 0;
         previousVelocity = lean = Vector3.Zero;
         turning = -1;
@@ -141,8 +142,6 @@ public partial class FootPlacement : SkeletonModifier3D
                 // than cycling a forward gait in the air while waiting for the discrete support transition.
                 heldForSupport = true;
                 BlendAir(s, 1);
-                BlendReset(s, dt);
-                CapturePose(s);
             }
             else
             {
@@ -153,9 +152,11 @@ public partial class FootPlacement : SkeletonModifier3D
             if (weight <= 0 && !heldForSupport)
             {
                 wasGrounded = false;
-                BlendReset(s, dt);
-                CapturePose(s);
             }
+            BlendReset(s, dt);
+            LimitFreePose(s, dt);
+            recoveringPose = true;
+            CapturePose(s);
             return;
         }
         if (inAir)
@@ -263,6 +264,8 @@ public partial class FootPlacement : SkeletonModifier3D
 
         // Keep the body's height compatible with leg reach. Authored running clips contain large vertical
         // root motion; copying that height while pinning the soles makes a knee hit its straight-leg limit.
+        var steady = Player.AimAmount * t.RifleAimPelvisSteady;
+        s.SetBonePoseRotation(pelvis, s.GetBonePoseRotation(pelvis).Normalized().Slerp(s.GetBoneRest(pelvis).Basis.GetRotationQuaternion(), steady));
         var body = s.GetBoneGlobalPose(pelvis);
         var rest = s.GetBoneGlobalRest(pelvis).Origin;
         var height = t.LocomotionBodyLower + Mathf.Cos(Pose.Phase * Mathf.Tau * 2) * t.LocomotionBodyBounce * Pose.Moving;
@@ -302,18 +305,73 @@ public partial class FootPlacement : SkeletonModifier3D
         for (var i = 0; i < 2; i++)
         {
             var leg = legs[i];
-            var thigh = s.GetBonePoseRotation(leg.Thigh);
-            var calf = s.GetBonePoseRotation(leg.Calf);
-            var foot = s.GetBonePoseRotation(leg.Foot);
+            var thigh = s.GetBonePoseRotation(leg.Thigh).Normalized();
+            var calf = s.GetBonePoseRotation(leg.Calf).Normalized();
+            var foot = s.GetBonePoseRotation(leg.Foot).Normalized();
             var target = toLocal * leg.Target;
             var pole = toLocal * (root + Vector3.Up * t.FootKneePoleHeight + facing * new Vector3(i == 0 ? -t.FootHalfWidth : t.FootHalfWidth, 0, -t.FootKneePoleForward));
             ReachError = Mathf.Max(ReachError, Solve(s, leg, target, pole));
-            s.SetBonePoseRotation(leg.Thigh, thigh.Slerp(s.GetBonePoseRotation(leg.Thigh), weight));
-            s.SetBonePoseRotation(leg.Calf, calf.Slerp(s.GetBonePoseRotation(leg.Calf), weight));
-            s.SetBonePoseRotation(leg.Foot, foot.Slerp(s.GetBonePoseRotation(leg.Foot), weight));
+            s.SetBonePoseRotation(leg.Thigh, thigh.Slerp(s.GetBonePoseRotation(leg.Thigh).Normalized(), weight));
+            s.SetBonePoseRotation(leg.Calf, calf.Slerp(s.GetBonePoseRotation(leg.Calf).Normalized(), weight));
+            s.SetBonePoseRotation(leg.Foot, foot.Slerp(s.GetBonePoseRotation(leg.Foot).Normalized(), weight));
         }
         BlendReset(s, dt);
+        // A delayed support/stance snapshot can change an otherwise settled analytic solve abruptly.
+        // Withdraw the contact promise while that exceptional pose catches up; do not report a planted
+        // anchor on a foot whose displayed joints are still recovering.
+        recoveringPose |= NeedsPoseRecovery(s, dt);
+        if (weight < 0.999f || resetTime > 0 || recoveringPose) recoveringPose = LimitFreePose(s, dt);
         CapturePose(s);
+    }
+
+    private bool NeedsPoseRecovery(Skeleton3D s, float dt)
+    {
+        if (!hasPose) return false;
+        var limit = Mathf.DegToRad(Tuning.Current.FootPoseRecoverySpeed) * dt;
+        for (var i = 0; i < 2; i++)
+        {
+            var leg = legs[i];
+            if (Changed(leg.Thigh, lastLegRotations[i * 3]) || Changed(leg.Calf, lastLegRotations[i * 3 + 1]) ||
+                Changed(leg.Foot, lastLegRotations[i * 3 + 2]))
+            {
+                return true;
+            }
+        }
+        return false;
+
+        bool Changed(int bone, Quaternion previous)
+        {
+            var difference = previous.Inverse() * s.GetBonePoseRotation(bone).Normalized();
+            return 2 * Mathf.Atan2(new Vector3(difference.X, difference.Y, difference.Z).Length(), Mathf.Abs(difference.W)) > limit;
+        }
+    }
+
+    // Air and contact recovery have no planted-foot promise yet. Bound the clip/solve handoff here;
+    // settled ground contacts still use the exact analytic solve and never slide to satisfy a bone limit.
+    private bool LimitFreePose(Skeleton3D s, float dt)
+    {
+        if (!hasPose) return false;
+        var limited = false;
+        var limit = Mathf.DegToRad(Tuning.Current.PoseAngularSpeed) * dt;
+        for (var i = 0; i < 2; i++)
+        {
+            var leg = legs[i];
+            Limit(leg.Thigh, lastLegRotations[i * 3]);
+            Limit(leg.Calf, lastLegRotations[i * 3 + 1]);
+            Limit(leg.Foot, lastLegRotations[i * 3 + 2]);
+        }
+        return limited;
+        void Limit(int bone, Quaternion previous)
+        {
+            var current = s.GetBonePoseRotation(bone).Normalized();
+            var difference = previous.Inverse() * current;
+            var angle = 2 * Mathf.Atan2(new Vector3(difference.X, difference.Y, difference.Z).Length(), Mathf.Abs(difference.W));
+            if (angle > limit)
+            {
+                limited = true;
+                s.SetBonePoseRotation(bone, previous.Slerp(current, limit / angle));
+            }
+        }
     }
 
     private void BlendReset(Skeleton3D s, float dt)
@@ -337,9 +395,9 @@ public partial class FootPlacement : SkeletonModifier3D
     {
         for (var i = 0; i < 2; i++)
         {
-            lastLegRotations[i * 3] = s.GetBonePoseRotation(legs[i].Thigh);
-            lastLegRotations[i * 3 + 1] = s.GetBonePoseRotation(legs[i].Calf);
-            lastLegRotations[i * 3 + 2] = s.GetBonePoseRotation(legs[i].Foot);
+            lastLegRotations[i * 3] = s.GetBonePoseRotation(legs[i].Thigh).Normalized();
+            lastLegRotations[i * 3 + 1] = s.GetBonePoseRotation(legs[i].Calf).Normalized();
+            lastLegRotations[i * 3 + 2] = s.GetBonePoseRotation(legs[i].Foot).Normalized();
         }
         lastPelvisPosition = s.GetBonePosePosition(pelvis);
         hasPose = true;
@@ -353,9 +411,9 @@ public partial class FootPlacement : SkeletonModifier3D
         for (var i = 0; i < 2; i++)
         {
             var leg = legs[i];
-            s.SetBonePoseRotation(leg.Thigh, s.GetBonePoseRotation(leg.Thigh).Slerp(rotations[i * 3], amount));
-            s.SetBonePoseRotation(leg.Calf, s.GetBonePoseRotation(leg.Calf).Slerp(rotations[i * 3 + 1], amount));
-            s.SetBonePoseRotation(leg.Foot, s.GetBonePoseRotation(leg.Foot).Slerp(rotations[i * 3 + 2], amount));
+            s.SetBonePoseRotation(leg.Thigh, s.GetBonePoseRotation(leg.Thigh).Normalized().Slerp(rotations[i * 3], amount));
+            s.SetBonePoseRotation(leg.Calf, s.GetBonePoseRotation(leg.Calf).Normalized().Slerp(rotations[i * 3 + 1], amount));
+            s.SetBonePoseRotation(leg.Foot, s.GetBonePoseRotation(leg.Foot).Normalized().Slerp(rotations[i * 3 + 2], amount));
         }
     }
 

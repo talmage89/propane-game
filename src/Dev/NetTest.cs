@@ -158,6 +158,8 @@ public partial class NetTest : Node
             movementCamera = null;
             remoteFeet = null;
             remoteGrip = null;
+            remoteMotion = null;
+            sawRemoteReload = false;
             sawRemoteCreep = sawRemoteSprint = sawRemoteAir = sawRemoteRestoredAim = movementProved = false;
             capturedCreep = capturedSprint = capturedLanding = capturedRelease = false;
             remoteGait = PlayerGait.Default;
@@ -637,6 +639,8 @@ public partial class NetTest : Node
     private Camera3D? movementCamera;
     private GripProbe? remoteGrip;
     private LocomotionProbe? remoteFeet;
+    private MotionProbe? remoteMotion;
+    private bool sawRemoteReload;
     private bool sawRemoteCreep;
     private bool sawRemoteSprint;
     private bool sawRemoteAir;
@@ -665,6 +669,11 @@ public partial class NetTest : Node
                 duelInput.Hold(1.5f, 3.0f, new PlayerIntent { Aim = true });
                 duelInput.Hold(4.5f, 7.5f, new PlayerIntent { Aim = true });
                 duelInput.Jump(5.0f);
+                duelInput.Hold(8.6f, 9.3f, new PlayerIntent { FireHeld = true });
+                duelInput.Hold(9.5f, 11.2f, new PlayerIntent { Aim = true });
+                duelInput.Hold(10, 10.7f, new PlayerIntent { FireHeld = true });
+                duelInput.Hold(11.4f, 13.8f, new PlayerIntent { Move = Vector2.Down * 0.3f });
+                duelInput.Reload(11.6f);
             }
             else
             {
@@ -683,6 +692,9 @@ public partial class NetTest : Node
         // sequence after that controlled staging has settled; the matrix measures ordinary corrections.
         if (remoteFeet == null && duelTime >= 1 && (DevArgs.Get("feet-metrics") != null || DevArgs.Get("assert-feet") != null))
             remoteFeet = LocomotionProbe.Attach(other);
+        if (remoteMotion == null && duelTime >= 1 && DevArgs.Get("assert-motion") != null)
+            remoteMotion = MotionProbe.Attach(other);
+        sawRemoteReload |= other.ResolvedState.Weapon == WeaponAction.Reload;
         if (remoteFeet != null) remoteFeet.Label = other.ResolvedState.Gait.ToString();
         var focus = other.GlobalPosition + Vector3.Up;
         var offset = new Vector3(4, 0.5f, -1.5f);
@@ -749,11 +761,18 @@ public partial class NetTest : Node
                 CaptureRemoteFrame("remote_07_release_sprint");
             }
         }
-        if (!movementProved && duelTime >= 10)
+        if (!movementProved && duelTime >= 14.5f)
         {
             movementProved = true;
             remoteGrip?.Finish();
             remoteFeet?.Finish();
+            remoteMotion?.Finish();
+            if (DevArgs.Get("assert-motion") != null && (!sawRemoteReload || remoteMotion?.RecoilFrames < 10))
+            {
+                GD.PushError("[net movement] FAIL missing remote reload or recoil");
+                GetTree().Quit(1);
+                return;
+            }
             if (!sawRemoteCreep || !sawRemoteSprint || !sawRemoteAir || !sawRemoteRestoredAim ||
                 !capturedCreep || !capturedSprint || !capturedLanding || !capturedRelease)
             {
@@ -761,7 +780,7 @@ public partial class NetTest : Node
                 GetTree().Quit(1);
                 return;
             }
-            Log("[net movement] PASS remote creep, sprint, air aim suppression and restored landing aim");
+            Log("[net movement] PASS remote creep, sprint, air aim suppression, restored landing aim, bursts and walking reload");
         }
     }
 
