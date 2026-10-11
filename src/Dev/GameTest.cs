@@ -17,6 +17,7 @@ public partial class GameTest : Node
 
     public override void _Ready()
     {
+        DevArgs.MarkReady();
         DevArgs.Setup();
         Core.DevLog.Enabled = DevArgs.Get("verbose-log") != null;
         game = new Game { PauseOnFocusLoss = false };

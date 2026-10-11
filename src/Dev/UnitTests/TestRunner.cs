@@ -11,11 +11,12 @@ public partial class TestRunner : Node
 
     public override void _Ready()
     {
+        DevArgs.MarkReady();
         try
         {
             if (WorldBuildTests.RunProcessMode(this))
             {
-                GetTree().Quit();
+                CoreTests.Complete(this);
                 return;
             }
             WorldBuildTests.Register(this);
@@ -37,7 +38,7 @@ public partial class TestRunner : Node
             GD.Print($"[unit] FAIL suite setup: {e}");
         }
         GD.Print($"[unit] {tests} tests, {failures} failures");
-        GetTree().Quit(failures == 0 ? 0 : 1);
+        CoreTests.Complete(this, failures == 0 ? 0 : 1);
     }
 
     public void Run(string name, Action test)

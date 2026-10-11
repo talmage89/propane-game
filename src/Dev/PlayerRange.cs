@@ -22,6 +22,7 @@ public partial class PlayerRange : Node3D
 
     public override void _Ready()
     {
+        DevArgs.MarkReady();
         DisplayServer.WindowSetVsyncMode(DisplayServer.VSyncMode.Disabled);
         ProcessPhysicsPriority = -10;
         DevArgs.Setup();

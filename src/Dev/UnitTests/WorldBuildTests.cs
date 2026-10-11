@@ -51,6 +51,23 @@ public static class WorldBuildTests
 
     public static bool RunProcessMode(Node root)
     {
+        if (DevArgs.Get("write-world-plans") is { } directory)
+        {
+            Directory.CreateDirectory(directory);
+            foreach (var formation in Enum.GetValues<PileFormation>())
+                File.WriteAllBytes(Path.Combine(directory, $"{formation}.bin"), PlanCodec.Encode(Fixture(formation)));
+            return true;
+        }
+        if (DevArgs.Get("hash-world-plans") is { } inputs)
+        {
+            foreach (var formation in Enum.GetValues<PileFormation>())
+            {
+                var plan = PlanCodec.Decode(File.ReadAllBytes(Path.Combine(inputs, $"{formation}.bin")));
+                TestRunner.Assert(plan.Tanks.All(t => t.Formation == formation), "wrong saved formation");
+                PrintHash(root, plan);
+            }
+            return true;
+        }
         if (DevArgs.Get("write-world-plan") is { } output)
         {
             var formation = Enum.Parse<PileFormation>(DevArgs.Get("formation") ?? "Square");
@@ -61,11 +78,14 @@ public static class WorldBuildTests
         if (DevArgs.Get("hash-world-plan") is { } input)
         {
             var plan = PlanCodec.Decode(File.ReadAllBytes(input));
-            GD.Print($"[world] hash {BuildHash(root, plan, SuburbPlans.Match(new Tuning(), 4))} fences {plan.Fences.Count} tanks {plan.Tanks.Count} formation {plan.Tanks[0].Formation}");
+            PrintHash(root, plan);
             return true;
         }
         return false;
     }
+
+    private static void PrintHash(Node root, SuburbPlan plan) =>
+        GD.Print($"[world] hash {BuildHash(root, plan, SuburbPlans.Match(new Tuning(), 4))} fences {plan.Fences.Count} tanks {plan.Tanks.Count} formation {plan.Tanks[0].Formation}");
 
     private static string BuildHash(Node root, SuburbPlan plan, SuburbSettings settings)
     {
