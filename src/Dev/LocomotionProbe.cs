@@ -16,6 +16,7 @@ public partial class LocomotionProbe : SkeletonModifier3D
     public string Label { get; set; } = "";
     public bool SampleDrift { get; set; }
     public bool SampleSeparation { get; set; }
+    public bool SampleTurns { get; set; }
     public bool RequireJumpPhases { get; init; }
     public bool SkipNextPose { get; set; }
     private readonly List<(string Label, double Time, Vector3 Left, Vector3 Right)> samples = new();
@@ -37,6 +38,7 @@ public partial class LocomotionProbe : SkeletonModifier3D
     private float minimumSeparation = float.PositiveInfinity;
     private float minimumSettledSeparation = float.PositiveInfinity;
     private Vector3 previousRoot;
+    private readonly int[] turnLifts = new int[2];
 
     public static LocomotionProbe Attach(PlayerCharacter player, bool requireJumpPhases = false)
     {
@@ -101,6 +103,8 @@ public partial class LocomotionProbe : SkeletonModifier3D
                 var foot = side == 0 ? left : right;
                 var anchor = side == 0 ? feet.LeftAnchor : feet.RightAnchor;
                 var planted = side == 0 ? feet.LeftPlanted : feet.RightPlanted;
+                if (SampleTurns && !planted && foot.Y - Player.GlobalPosition.Y > Tuning.Current.FootSoleHeight + Tuning.Current.WalkFootLift * 0.5f)
+                    turnLifts[side]++;
                 if (planted)
                 {
                     var stat = contacts.GetValueOrDefault(Label);
@@ -128,6 +132,16 @@ public partial class LocomotionProbe : SkeletonModifier3D
         if (DevArgs.Get("assert-feet") != null && Math.Abs(delta - 0.12f) > 0.003f)
         {
             GD.PushError("[feet terrain] FAIL feet do not adapt independently to slab/curb support");
+            GetTree().Quit(1);
+        }
+    }
+
+    public void AssertTurns()
+    {
+        GD.Print($"[feet turn] lifted samples left={turnLifts[0]} right={turnLifts[1]}");
+        if (DevArgs.Get("assert-feet") != null && (turnLifts[0] < 2 || turnLifts[1] < 2))
+        {
+            GD.PushError("[feet turn] FAIL standing turns did not lift both feet");
             GetTree().Quit(1);
         }
     }

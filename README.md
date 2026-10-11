@@ -185,6 +185,7 @@ $GODOT --fixed-fps 60 res://scenes/dev/player_range.tscn -- --capture-dir=/tmp/p
 # sprint-repro (discovery sequence, exact-tick assertions and transition log), grip (all rifle contacts).
 # feet (all eight body-relative directions in every gait) and feet-events (local starts/stops/turns/jumps/terrain)
 # write final-pose feet.csv and drift/angular metrics.
+# --assert-feet enforces contacts, continuity and jump timing in make test; --feet-corrections exercises snapshot snaps.
 # --view=rifleleft or rifleright follows the rifle up close.
 $GODOT --fixed-fps 60 res://scenes/dev/player_range.tscn -- --capture-dir=/tmp/p --scenario=reload --view=rifleleft
 $GODOT --fixed-fps 60 res://scenes/dev/player_range.tscn -- --capture-dir=/tmp/movement --scenario=movement --view=side
