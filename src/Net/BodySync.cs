@@ -1,8 +1,6 @@
 using System.Collections.Generic;
-using System.Linq;
 using Godot;
 using Propane.Core;
-using Propane.Tank;
 
 namespace Propane.Net;
 
@@ -12,8 +10,8 @@ namespace Propane.Net;
 /// when it stops; everyone else eases their copy toward the owner's, snapping only when far off.
 /// <para>
 /// Ownership goes to whoever last disturbed a body (a shot, a puncture, a blast, a push or a drop). Claims travel
-/// through the server, which echoes each claim to every player including the claimer, so all players apply them in
-/// the same order and agree on the owner. Until a claim's echo arrives, the claimer treats the body as its own.
+/// through the server, which grants groups atomically with new epochs or refuses them with canonical state.
+/// Prediction is local; only a confirmed owner publishes movement. Epochs and per-body sequences order corrections.
 /// The match host owns every body nobody has claimed.
 /// </para>
 /// </summary>
@@ -29,6 +27,7 @@ public sealed class BodySync
     public sealed class Entry
     {
         public required uint Id;
+        public required ulong InstanceId;
         public required RigidBody3D Body;
         public required bool IsTank;
         public int Owner;
@@ -41,7 +40,11 @@ public sealed class BodySync
         public Vector3 TargetLinear;
         public Vector3 TargetAngular;
         public double TargetReceived;
-        public double LastSenderTime = double.NegativeInfinity;
+        public uint Epoch = 1;
+        public uint Sequence;
+        public uint LastSequence;
+        public bool PublishRequired;
+        internal (int Sender, BodyState Body, bool IsRest, double Received)? Future;
     }
 
     private readonly Dictionary<uint, Entry> entries = new();
@@ -69,7 +72,8 @@ public sealed class BodySync
 
     public void Register(uint id, RigidBody3D body, bool isTank, int owner)
     {
-        var entry = new Entry { Id = id, Body = body, IsTank = isTank, Owner = owner, WasAwake = !body.Sleeping };
+        Remove(id);
+        var entry = new Entry { Id = id, InstanceId = body.GetInstanceId(), Body = body, IsTank = isTank, Owner = owner, WasAwake = !body.Sleeping };
         entries[id] = entry;
         byInstance[body.GetInstanceId()] = entry;
     }
@@ -78,111 +82,95 @@ public sealed class BodySync
     {
         if (entries.Remove(id, out var entry))
         {
-            byInstance.Remove(entry.Body.GetInstanceId());
+            byInstance.Remove(entry.InstanceId);
         }
     }
 
     /// <summary>
-    /// Takes charge of bodies this game just disturbed. Returns the ids to claim from the server (those not already
+    /// Takes charge of bodies this game just disturbed. Returns the poses to claim from the server (those not already
     /// this player's).
     /// </summary>
-    public List<uint> Claim(IEnumerable<GodotObject> bodies)
+    public List<BodyState> Claim(IEnumerable<GodotObject> bodies)
     {
-        var claimed = new List<uint>();
+        var claimed = new List<BodyState>();
         foreach (var body in bodies)
         {
-            if (Find(body) is not { } entry || entry.Owner == Me && !entry.ClaimPending)
-            {
-                continue;
-            }
-            if (!entry.ClaimPending)
-            {
-                entry.ClaimPending = true;
-                claimed.Add(entry.Id);
-            }
+            if (Find(body) is not { } entry || entry.Owner == Me || entry.ClaimPending) { continue; }
+            entry.ClaimPending = true;
             entry.HasTarget = false;
+            claimed.Add(Capture(entry));
         }
         return claimed;
     }
 
-    /// <summary>A claim, as the server ordered it (including the echo of this player's own).</summary>
-    public void OnClaim(int owner, IEnumerable<uint> ids)
+    /// <summary>Future grouped interactions include bodies already owned, and wait if any member is pending.</summary>
+    public List<BodyState> ClaimGroup(IEnumerable<GodotObject> bodies)
     {
-        foreach (var id in ids)
+        var group = new Dictionary<uint, Entry>();
+        foreach (var body in bodies)
         {
-            if (entries.TryGetValue(id, out var entry))
-            {
-                if (entry.Owner != owner)
-                {
-                    // Sender clocks are process-local. A correction from the former owner must not reject the
-                    // new owner's first snapshot, or keep steering the body after a claim.
-                    entry.HasTarget = false;
-                    entry.LastSenderTime = double.NegativeInfinity;
-                    // Even an already sleeping successor owes everyone its final position once.
-                    entry.WasAwake |= owner == Me;
-                }
-                entry.Owner = owner;
-                if (owner == Me)
-                {
-                    entry.ClaimPending = false;
-                }
-                else if (entry.ClaimPending)
-                {
-                    // Someone else's claim came after ours: theirs stands. Our echo may still follow and take it back.
-                    entry.ClaimPending = false;
-                }
-            }
+            if (Find(body) is not { } entry || entry.ClaimPending) { return new List<BodyState>(); }
+            group[entry.Id] = entry;
         }
-    }
-
-    /// <summary>A player left: everything they owned passes to the (possibly new) host.</summary>
-    public void OwnerLeft(int left, int newHost)
-    {
-        Host = newHost;
-        foreach (var entry in entries.Values.Where(e => e.Owner == left))
+        var claims = new List<BodyState>();
+        foreach (var entry in group.Values)
         {
-            entry.Owner = newHost;
+            entry.ClaimPending = true;
             entry.HasTarget = false;
-            entry.LastSenderTime = double.NegativeInfinity;
-            entry.WasAwake |= newHost == Me;
+            claims.Add(Capture(entry));
         }
+        return claims;
     }
 
-    /// <summary>A moving state from a body's owner.</summary>
-    public void OnState(int sender, double senderTime, uint id, Transform3D transform, Vector3 linear, Vector3 angular, double now)
+    public static BodyState Capture(Entry entry) => new(entry.Id, entry.Body.GlobalTransform,
+        entry.Body.LinearVelocity, entry.Body.AngularVelocity, entry.Epoch, entry.Sequence);
+
+    /// <summary>Server-ordered authority. Even the same peer's next grant starts a separate sequence space.</summary>
+    public bool OnAuthority(BodyAuthority authority)
     {
-        if (!entries.TryGetValue(id, out var entry) || entry.Owner != sender || sender == Me || entry.ClaimPending)
+        if (!entries.TryGetValue(authority.Body.Id, out var entry) || authority.Body.Epoch < entry.Epoch ||
+            authority.Body.Epoch == entry.Epoch && authority.Body.Sequence < entry.LastSequence) { return false; }
+        if (authority.Body.Epoch > entry.Epoch)
         {
-            return;
+            entry.Epoch = authority.Body.Epoch;
+            entry.Sequence = 0;
+            entry.LastSequence = 0;
+            entry.HasTarget = false;
+            entry.PublishRequired = authority.Owner == Me;
         }
-        // Keep the ordering boundary even after a rest correction finishes or a moving target goes stale.
-        if (senderTime <= entry.LastSenderTime)
+        entry.Owner = authority.Owner;
+        entry.ClaimPending = false;
+        entry.Sequence = System.Math.Max(entry.Sequence, authority.Body.Sequence);
+        entry.LastSequence = authority.Body.Sequence;
+        if (entry.Future is { } future && future.Body.Epoch <= entry.Epoch)
         {
-            return;
+            entry.Future = null;
+            OnState(future.Sender, future.Body, future.IsRest, future.Received);
         }
-        entry.LastSenderTime = senderTime;
-        entry.HasTarget = true;
-        entry.TargetRest = false;
-        entry.Target = transform;
-        entry.TargetLinear = linear;
-        entry.TargetAngular = angular;
-        entry.TargetReceived = now;
+        return true;
     }
 
-    /// <summary>A body came to rest on its owner's side.</summary>
-    public void OnRest(int sender, double senderTime, uint id, Transform3D transform, double now)
+    /// <summary>A moving or resting state. Ordering uses only the server's epoch and its owner's sequence.</summary>
+    public void OnState(int sender, BodyState state, bool rest, double now)
     {
-        if (!entries.TryGetValue(id, out var entry) || entry.Owner != sender || sender == Me || entry.ClaimPending)
+        if (!entries.TryGetValue(state.Id, out var entry) || state.Epoch < entry.Epoch) { return; }
+        if (state.Epoch > entry.Epoch)
         {
+            // Unreliable motion can overtake the reliable grant. Retain one latest future state per body.
+            if (entry.Future is not { } prior || state.Epoch > prior.Body.Epoch ||
+                state.Epoch == prior.Body.Epoch && state.Sequence > prior.Body.Sequence)
+            {
+                entry.Future = (sender, state, rest, now);
+            }
             return;
         }
-        if (senderTime <= entry.LastSenderTime) { return; }
-        entry.LastSenderTime = senderTime;
+        if (entry.Owner != sender || sender == Me || state.Sequence <= entry.LastSequence) { return; }
+        entry.LastSequence = state.Sequence;
         entry.HasTarget = true;
-        entry.TargetRest = true;
-        entry.Target = transform;
-        entry.TargetLinear = Vector3.Zero;
-        entry.TargetAngular = Vector3.Zero;
+        entry.TargetRest = rest;
+        entry.Target = state.Transform;
+        entry.TargetLinear = rest ? Vector3.Zero : state.Linear;
+        entry.TargetAngular = rest ? Vector3.Zero : state.Angular;
         entry.TargetReceived = now;
     }
 
@@ -284,14 +272,16 @@ public sealed class BodySync
                 continue;
             }
             var awake = !entry.Body.Sleeping;
-            if (IsMine(entry))
+            if (entry.Owner == Me && !entry.ClaimPending)
             {
-                if (awake && (entry.IsTank ? sendTanks : sendCars))
+                if (awake && (entry.PublishRequired || (entry.IsTank ? sendTanks : sendCars)))
                 {
+                    entry.PublishRequired = false;
                     moving.Add(entry);
                 }
-                else if (!awake && entry.WasAwake)
+                else if (!awake && (entry.PublishRequired || entry.WasAwake))
                 {
+                    entry.PublishRequired = false;
                     rested.Add(entry);
                 }
             }

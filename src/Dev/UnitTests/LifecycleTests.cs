@@ -29,7 +29,7 @@ public static class LifecycleTests
                 TestRunner.Assert(pending.UnconfirmedCount == 1, "subsequent spill could not reserve its bank");
             }
         });
-        runner.Run("lifecycle/sleeping bodies publish a final state after their owner leaves", () =>
+        runner.Run("lifecycle/sleeping successor publishes once and clears the previous target", () =>
         {
             var body = new RigidBody3D { Sleeping = true };
             try
@@ -37,58 +37,12 @@ public static class LifecycleTests
                 var sync = new BodySync(me: 3, host: 2);
                 var id = BodySync.MapTankId(0);
                 sync.Register(id, body, isTank: true, owner: 2);
-                // The old owner's final correction need not have finished before PlayerLeft arrives.
-                sync.OnRest(2, 10, id, new Transform3D(Basis.Identity, Vector3.One), 1);
-                sync.OwnerLeft(2, 3);
-                var (moving, rested) = sync.Collect(1);
-                TestRunner.Assert(moving.Count == 0 && rested.SingleOrDefault()?.Id == id,
-                    "new owner went quiet while the other copies could still be correcting");
-                TestRunner.Assert(sync.Get(id) is { Owner: 3, HasTarget: false }, "old owner still corrects the successor");
+                var state = new BodyState(id, Transform3D.Identity, Vector3.Zero, Vector3.Zero, 1, 10);
+                sync.OnState(2, state, rest: true, 1);
+                sync.OnAuthority(new BodyAuthority(state with { Epoch = 2, Sequence = 0 }, 3, TankLedger.State.Intact, true, null, Vector3.Zero));
+                TestRunner.Assert(sync.Get(id) is { Owner: 3, HasTarget: false, Epoch: 2 }, "old owner still corrects the successor");
+                TestRunner.Assert(sync.Collect(1).Rested.SingleOrDefault()?.Id == id, "sleeping successor omitted its final state");
                 TestRunner.Assert(sync.Collect(1).Rested.Count == 0, "handoff repeatedly sends rest");
-            }
-            finally { body.Free(); }
-        });
-        runner.Run("lifecycle/claims start a fresh owner's correction stream", () =>
-        {
-            var body = new RigidBody3D { Sleeping = true };
-            try
-            {
-                var sync = new BodySync(me: 2, host: 3);
-                var id = BodySync.MapTankId(0);
-                sync.Register(id, body, isTank: true, owner: 3);
-                sync.OnState(3, 100, id, Transform3D.Identity, Vector3.Zero, Vector3.Zero, 1);
-                sync.OnClaim(4, new[] { id });
-                // Sender times use each process's uptime. A new owner can have a lower timestamp.
-                sync.OnState(4, 2, id, new Transform3D(Basis.Identity, Vector3.One), Vector3.Up, Vector3.Zero, 1.1);
-                TestRunner.Assert(sync.Get(id) is { Owner: 4, LastSenderTime: 2, Target.Origin: var position } && position == Vector3.One,
-                    "previous owner's clock starved the new correction stream");
-                sync.OnClaim(2, new[] { id });
-                TestRunner.Assert(sync.Collect(1).Rested.SingleOrDefault()?.Id == id, "sleeping claimant omitted its final state");
-            }
-            finally { body.Free(); }
-        });
-        runner.Run("lifecycle/a delayed moving snapshot cannot supersede the final rest", () =>
-        {
-            var body = new RigidBody3D { Sleeping = true };
-            try
-            {
-                var sync = new BodySync(me: 3, host: 2);
-                var id = BodySync.MapTankId(0);
-                sync.Register(id, body, isTank: true, owner: 2);
-                sync.OnState(2, 10, id, Transform3D.Identity, Vector3.Up, Vector3.Zero, 1);
-                var rest = new Transform3D(Basis.Identity, Vector3.One);
-                sync.OnRest(2, 11, id, rest, 1.1);
-                // Sent after the last received motion, but before the rest: different channels can reorder it.
-                sync.OnState(2, 10.5, id, Transform3D.Identity, Vector3.Up, Vector3.Zero, 1.2);
-                TestRunner.Assert(sync.Get(id) is { TargetRest: true, Target.Origin: var position } && position == Vector3.One,
-                    "late unreliable motion replaced the reliable final position");
-                sync.Get(id)!.HasTarget = false; // The rest correction finished; keep its timestamp boundary.
-                sync.OnState(2, 10.75, id, Transform3D.Identity, Vector3.Up, Vector3.Zero, 2);
-                TestRunner.Assert(!sync.Get(id)!.HasTarget, "late motion resumed after the rest correction finished");
-                sync.OnState(2, 12, id, Transform3D.Identity, Vector3.Up, Vector3.Zero, 2.1);
-                TestRunner.Assert(sync.Get(id) is { HasTarget: true, TargetRest: false, LastSenderTime: 12 }, "genuine later motion was refused");
-                sync.OnRest(2, 11, id, rest, 2.2);
-                TestRunner.Assert(!sync.Get(id)!.TargetRest, "old rest froze genuinely later motion");
             }
             finally { body.Free(); }
         });
@@ -102,12 +56,12 @@ public static class LifecycleTests
                 Feed(client, Msg.Countdown, new FloatMessage(4));
                 Feed(client, Msg.MatchGo, new FloatMessage(90));
                 Feed(client, Msg.Score, new ScoreMessage(2, 1, 1));
-                Feed(client, Msg.Claim, new ClaimMessage(new[] { BodySync.MapTankId(0) }));
+                Feed(client, Msg.Authority, ProtocolTests.Fixtures().Single(f => f.Type == Msg.Authority).Payload);
                 Feed(client, Msg.MatchEnd, new[] { new Standing(2, "Test", 1, 1, true) });
                 TestRunner.Assert(delivered.Count == 0, "events dispatched before attachment");
                 Action<NetMessage> receiver = m => delivered.Add(m.Type);
                 TestRunner.Assert(client.AttachMatch(7, receiver), "current scene could not attach");
-                TestRunner.Assert(delivered.SequenceEqual(new[] { Msg.Countdown, Msg.MatchGo, Msg.Score, Msg.Claim, Msg.MatchEnd }), "queued events lost or reordered");
+                TestRunner.Assert(delivered.SequenceEqual(new[] { Msg.Countdown, Msg.MatchGo, Msg.Score, Msg.Authority, Msg.MatchEnd }), "queued events lost or reordered");
                 client.AttachMatch(7, receiver);
                 TestRunner.Assert(delivered.Count == 5, "queue replayed twice");
                 Feed(client, Msg.Clock, new FloatMessage(0));

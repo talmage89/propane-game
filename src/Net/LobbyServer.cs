@@ -279,8 +279,11 @@ public partial class LobbyServer : Node
             {
                 match.HostId = match.Players[0];
             }
+            var transfers = match.Players.Count > 0 ? match.Tanks.Transfer(client.Id, match.HostId) : Array.Empty<BodyAuthority>();
             foreach (var id in match.Players)
             {
+                Send(id, MessageCodec.Encode(new NetMessage(Msg.Authority, match.Id, 0,
+                    new AuthorityMessage(match.HostId, 0, ClaimRefusal.None, transfers)), fromServer: true));
                 Send(id, new NetWriter(Msg.PlayerLeft, match.Id).Int(client.Id).Int(match.HostId), reliable: true);
             }
             if (match.Players.Count == 0)
@@ -411,7 +414,7 @@ public partial class LobbyServer : Node
         var settings = SuburbPlans.Match(tuning, Mathf.Max(match.Players.Count, tuning.MaxPlayers));
         var plan = SuburbPlans.Generate(settings, seed, () => random.Next());
         var planBytes = PlanCodec.Encode(plan);
-        match.Tanks = new TankLedger(plan);
+        match.Tanks = new TankLedger(plan, match.HostId);
         for (var i = 0; i < plan.Props.Count; i++)
         {
             if (plan.Props[i].Body != World.Plan.PropBody.Static && !plan.Props[i].Model.StartsWith("car:")) { match.LooseProps.Add(i); }
@@ -539,29 +542,30 @@ public partial class LobbyServer : Node
     // ------------------------------------------------------------------ Relay
 
     /// <summary>
-    /// Passes a match message on to the other players with the sender's id inserted. Claims go back to the sender
-    /// too, so every client sees all claims in the server's order. Explosions and drops also change the score.
+    /// Resolves authority requests into ordered canonical grants/refusals, and forwards other match messages with
+    /// the sender inserted. Accepted explosions and drops also change the bank.
     /// </summary>
     private void Relay(Client client, NetMessage message)
     {
-        if (client.Lobby is not { Match: { } match } lobby || !match.Players.Contains(client.Id) ||
-            lobby.Phase is not (LobbyPhase.Countdown or LobbyPhase.Playing or LobbyPhase.Results)) { return; }
+        if (client.Lobby is not { Match: { } match } lobby || !match.Players.Contains(client.Id)) { return; }
+        if (lobby.Phase is not (LobbyPhase.Countdown or LobbyPhase.Playing or LobbyPhase.Results) &&
+            message.Type is not (Msg.Claim or Msg.Puncture or Msg.Explode or Msg.Drop)) { return; }
         var includeSender = false;
         switch (message.Payload)
         {
             case ExplodeMessage explosion:
-                // Decode completed before the ledger or bank can change. The first existing tank claim wins.
-                if (!match.Tanks.Detonate(explosion.Id, lobby.Phase == LobbyPhase.Playing)) { return; }
-                if (lobby.Phase == LobbyPhase.Playing)
+                var detonation = match.Tanks.Detonate(client.Id, explosion, lobby.Phase == LobbyPhase.Playing && NetTransport.Now < match.PhaseEnds);
+                PublishAuthority(match, detonation);
+                if (detonation.Reason == ClaimRefusal.None)
                 {
                     ChangeScore(match, client.Id, 1);
                     var stats = match.Stats.GetValueOrDefault(client.Id);
                     match.Stats[client.Id] = stats with { Gained = stats.Gained + 1 };
                 }
-                break;
+                return;
             case PunctureMessage puncture:
-                if (!match.Tanks.Puncture(puncture.Id)) { return; }
-                break;
+                PublishAuthority(match, match.Tanks.Puncture(client.Id, puncture, lobby.Phase == LobbyPhase.Playing && NetTransport.Now < match.PhaseEnds));
+                return;
             case DropMessage drop:
                 try
                 {
@@ -570,7 +574,7 @@ public partial class LobbyServer : Node
                     {
                         throw new InvalidDataException("drop outside play, exceeds bank/tuner or has wrong color");
                     }
-                    match.Tanks.RegisterDrops(match.Slots[client.Id], drop.Tanks);
+                    match.Tanks.RegisterDrops(match.Slots[client.Id], client.Id, drop.Tanks);
                 }
                 catch (InvalidDataException e)
                 {
@@ -588,14 +592,17 @@ public partial class LobbyServer : Node
                     : losses with { LostToHits = losses.LostToHits + drop.Tanks.Count };
                 break;
             case ClaimMessage claim:
-                match.Tanks.ValidateBodies(claim.Ids);
-                includeSender = true;
-                break;
+                PublishAuthority(match, match.Tanks.Claim(client.Id, claim, lobby.Phase == LobbyPhase.Playing && NetTransport.Now < match.PhaseEnds));
+                return;
             case BodyStatesMessage states:
                 match.Tanks.ValidateBodies(states.Bodies.Select(b => b.Id));
+                var accepted = states.Bodies.Where(b => match.Tanks.Update(client.Id, b, rest: false)).ToArray();
+                if (accepted.Length == 0) { return; }
+                message = message with { Payload = states with { Bodies = accepted } };
                 break;
             case BodyRestMessage rest:
                 match.Tanks.ValidateBodies(new[] { rest.Id });
+                if (!match.Tanks.Update(client.Id, new BodyState(rest.Id, rest.Transform, Vector3.Zero, Vector3.Zero, rest.Epoch, rest.Sequence), rest: true)) { return; }
                 break;
             case ShotMessage shot:
                 if (shot.Victim != 0 && (!match.Players.Contains(shot.Victim) || shot.Victim == client.Id) ||
@@ -615,6 +622,20 @@ public partial class LobbyServer : Node
         foreach (var id in match.Players)
         {
             if (id != client.Id || includeSender) { Send(id, bytes, reliable); }
+        }
+    }
+
+    private void PublishAuthority(MatchRun match, AuthorityMessage result)
+    {
+        var bytes = MessageCodec.Encode(new NetMessage(Msg.Authority, match.Id, 0, result), fromServer: true);
+        if (result.Reason == ClaimRefusal.None)
+        {
+            foreach (var id in match.Players) { Send(id, bytes); }
+        }
+        else
+        {
+            Send(result.Peer, bytes);
+            Log($"refused authority from {result.Peer} request {result.Request}: {result.Reason}");
         }
     }
 
