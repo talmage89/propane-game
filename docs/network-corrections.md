@@ -422,3 +422,10 @@ capture alignment were not verified. No push or merge into dev/main was performe
 After the final documentation/calibration-comment update, `python3 -B tools/dev/compare_tanks_tests.py`
 passed 20 tests in 0.174 s and `python3 -B tools/dev/net_bots_tests.py` passed three in 0.414 s.
 `bash -n tools/dev/net_bots.sh` and `git diff --check` passed. There were no further behavioral changes.
+Final targeted canonical-vent verification also passed:
+`tools/dev/net_bots.sh -n 2 -l 20 -o /tmp/nas-race-complete -- --scenario=puncture-race
+--net-lag=120 --net-jitter=30 --net-loss=3`, then
+`python3 -B tools/dev/compare_vents.py /tmp/nas-race-complete/bot*.log`.
+The new tank check passed 599 grids (fixture-teleport peak 35.683 m for 0.20 s, final motion
+0.178 m); scores agreed. The retained vent tool passed canonical parameters and 280 trajectory
+pairs with median/p95/max 0.093/0.194/0.328 m. This was run on final rotating-lane code.
