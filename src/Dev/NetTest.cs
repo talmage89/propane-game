@@ -29,6 +29,7 @@ public partial class NetTest : Node
     private bool started;
     private float clock;
     private float digestTimer;
+    private float trajectoryTimer;
     private float shotTimer;
     private int matches;
     private int matchesWanted = 1;
@@ -228,6 +229,12 @@ public partial class NetTest : Node
         }
 
         digestTimer -= dt;
+        trajectoryTimer -= dt;
+        if (DevArgs.Get("tank-trajectories") != null && trajectoryTimer <= 0)
+        {
+            trajectoryTimer = 0.05f;
+            LogTankTrajectory();
+        }
         if (digestTimer <= 0)
         {
             digestTimer = DevArgs.GetFloat("digest-every", 5f);
@@ -770,6 +777,20 @@ public partial class NetTest : Node
     }
 
     private string ScoreLine() => match == null ? "" : string.Join(" ", match.Scores.Select(s => $"{s.Key}={s.Value}"));
+
+    /// <summary>Same-machine wall time avoids comparing independently corrected match countdowns.</summary>
+    private void LogTankTrajectory()
+    {
+        if (match == null) { return; }
+        var sampleTime = Time.GetUnixTimeFromSystem();
+        var tanks = new StringBuilder();
+        foreach (var tank in match.LiveTanks.OrderBy(t => t.NetId))
+        {
+            var p = tank.GlobalPosition;
+            tanks.Append(FormattableString.Invariant($" {tank.NetId:x}:{(tank.State == PropaneTank.TankState.Venting ? "V" : "I")}:{p.X:0.000},{p.Y:0.000},{p.Z:0.000}"));
+        }
+        Log(FormattableString.Invariant($"tank-sample time {sampleTime:0.000000} playing {match.IsPlaying} clock {match.TimeLeft:0.000} n {match.LiveTanks.Count()}{tanks}"));
+    }
 
     private void Log(string text) => GD.Print($"[nettest {net.PlayerName} {Time.GetTicksMsec() / 1000.0:0.00}] {text}");
 }
