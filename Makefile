@@ -40,6 +40,7 @@ check: lint ## Run lint, then the tests
 test: test-core test-behavior test-generator test-world ## Run the fast headless gate (the same suites as CI)
 
 test-core: build ## Run checker, platform, movement and unit assertions
+	GODOT="$(GODOT)" python3 -B tools/dev/check_test_threads.py
 	python3 -B tools/dev/check_world_tests.py
 	python3 -B tools/dev/time_gate_tests.py
 	python3 -B tools/dev/check_scores_tests.py

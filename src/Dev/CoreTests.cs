@@ -18,6 +18,7 @@ public partial class CoreTests : Node
 
     public override void _Ready()
     {
+        TestThreadGuard.Install();
         DevArgs.MarkReady();
         Callable.From(StartNext).CallDeferred();
     }
