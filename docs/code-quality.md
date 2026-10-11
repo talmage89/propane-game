@@ -43,7 +43,7 @@ setup reuses a valid cached editor and stops on a download failure.
 
 | Target | Assertions |
 | --- | --- |
-| `test-core` | Python timing/world-wrapper/score/vent/trajectory checkers, platform, movement, all unit suites, normal shutdown and paused window-close witnesses |
+| `test-core` | Python timing/world-wrapper/score/vent/tank-agreement/launcher checkers, platform, movement, all unit suites, normal shutdown and paused window-close witnesses |
 | `test-behavior` | Blast completeness, gather/races/appearance/real-game gather, melee collision/poses, navigation, all three menu scenarios, grip/recovery, feet/corrections/events, movement/motion continuity |
 | `test-generator` | 20 single-player and 2-player seeds, three each at 8/16/24/32 players, two forced seeds for every formation at all six sizes |
 | `test-world` | All four saved formation plans built and hashed in two fresh processes |

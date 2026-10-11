@@ -44,7 +44,8 @@ test-core: build ## Run checker, platform, movement and unit assertions
 	python3 -B tools/dev/time_gate_tests.py
 	python3 -B tools/dev/check_scores_tests.py
 	python3 -B tools/dev/compare_vents_tests.py
-	python3 -B tools/dev/compare_tank_paths_tests.py
+	python3 -B tools/dev/compare_tanks_tests.py
+	python3 -B tools/dev/net_bots_tests.py
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/core_tests.tscn
 	"$(GODOT)" --headless --path . res://scenes/dev/shutdown_tests.tscn
 	"$(GODOT)" --headless --path . res://scenes/dev/shutdown_tests.tscn -- --paused --window-close --repeat-quit

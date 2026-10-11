@@ -300,11 +300,11 @@ $GODOT --fixed-fps 60 res://scenes/dev/menu_test.tscn -- --scenario=gamepad --ca
 # Switch devices while paused and verify the reference and reload hints in both directions.
 $GODOT res://scenes/dev/menu_test.tscn -- --scenario=devices --capture-dir=/tmp/devices
 
-# Multiplayer: a local server and bot players under simulated lag and loss, then compare what each bot saw.
+# Multiplayer: a local server and bot players under simulated lag and loss; asserts tank agreement and scores.
 # Logs go to build/net (-o picks another directory).
 GODOT=$GODOT tools/dev/net_bots.sh -n 3 -l 60 -- --net-lag=120 --net-jitter=30 --net-loss=3
-tools/dev/compare_tanks.py build/net/bot*.log
-tools/dev/check_scores.py build/net/server.log build/net/bot*.log
+# -t clean uses tighter tank limits; -k skips both post-run checks.
+# Rerun a comparison: tools/dev/compare_tanks.py [--profile clean] build/net/bot*.log
 ```
 
 `net_test.tscn` scenarios: bots playing (default), `melee` (five-tank and zero-bank knockdowns and both get-ups),

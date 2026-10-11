@@ -51,12 +51,13 @@ fi
     counter = scratch / "world-count"
     environment = dict(os.environ, PATH=f"{scratch}:{os.environ['PATH']}", GODOT=str(scratch / "godot"),
                        COMMAND_LOG=str(log), WORLD_COUNT=str(counter), TMPDIR=str(scratch))
-    checkers = ["check_world_tests.py", "time_gate_tests.py", "check_scores_tests.py", "compare_vents_tests.py", "compare_tank_paths_tests.py"]
+    checkers = ["check_world_tests.py", "time_gate_tests.py", "check_scores_tests.py", "compare_vents_tests.py", "compare_tanks_tests.py", "net_bots_tests.py"]
     scenes = ["shutdown_tests.tscn", "shutdown_tests.tscn -- --paused --window-close --repeat-quit", "core_tests.tscn", "blast_query_tests.tscn", "gather_range.tscn",
               "gather_range.tscn -- --scenario=grant-races",
               "gather_range.tscn -- --scenario=appearance",
               "game_test.tscn -- --scenario=gather --tune.FixedSeed=23",
-              "melee_range.tscn",
+              "game_test.tscn -- --scenario=clear --quit=32 --tune.FixedSeed=23",
+              "world_services_tests.tscn", "melee_range.tscn",
               "player_range.tscn -- --scenario=melee --assert-motion --assert-grip",
               "bot_navigation_course.tscn -- --seeds=5",
               "menu_test.tscn -- --scenario=gamepad", "menu_test.tscn -- --scenario=devices", "menu_test.tscn -- --scenario=mouse",

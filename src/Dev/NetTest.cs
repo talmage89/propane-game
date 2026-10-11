@@ -14,7 +14,8 @@ namespace Propane.Dev;
 /// A multiplayer client driven by a bot, for testing matches without people. It connects, creates a lobby
 /// (<c>--role=host</c>, starting once <c>--players=N</c> have joined) or joins the first one (<c>--role=join</c>),
 /// then plays with <see cref="Bot"/>. It logs
-/// scores and, every few seconds, where it has every tank, so runs on several machines can be compared.
+/// scores and coarse tank digests. <c>--tank-check</c> adds frequent samples on the shared OS monotonic
+/// clock for assertions across same-machine clients; <c>--tank-check-nudge=Name</c> injects a physical divergence.
 /// Run: godot res://scenes/dev/net_test.tscn -- --server=127.0.0.1 --role=host --players=2 [--capture-dir=/tmp/n]
 /// Add <c>--host-server</c> to run the server in the same process.
 /// </summary>
@@ -29,7 +30,9 @@ public partial class NetTest : Node
     private bool started;
     private float clock;
     private float digestTimer;
-    private float trajectoryTimer;
+    private double tankCheckNext;
+    private PropaneTank? nudgedTank;
+    private Vector3 nudgedPosition;
     private float shotTimer;
     private int matches;
     private int matchesWanted = 1;
@@ -131,6 +134,7 @@ public partial class NetTest : Node
                 {
                     Log($"navigation finished: stuck={smart.StuckEvents} blacklist={smart.BlacklistedTargets} replans={smart.Replans} jumps={smart.Jumps}");
                 }
+                LogTankCheck(final: true);
                 Log($"finished match {match.Setup.Id}; final scores {ScoreLine()}");
                 RemoveChild(match);
                 match.QueueFree();
@@ -174,6 +178,8 @@ public partial class NetTest : Node
             match.Player.MeleeStarted += (swing, _) => Log($"melee swing {swing}");
             match.Player.MeleeHit += hit => Log($"melee contact {hit.Swing} victim {PlayerCharacter.Owning(hit.Collider)?.PeerId ?? 0}");
             clock = 0;
+            tankCheckNext = 0;
+            nudgedTank = null;
             duelTime = -1;
             gatherPositions.Clear();
             gatherShields.Clear();
@@ -281,13 +287,33 @@ public partial class NetTest : Node
             }
         }
 
-        digestTimer -= dt;
-        trajectoryTimer -= dt;
-        if (DevArgs.Get("tank-trajectories") != null && trajectoryTimer <= 0)
+        // A physical divergence fixture, opt-in on one named peer. Holding the pose defeats corrections
+        // intentionally; it tests the verifier through real scene state, rather than falsifying its log.
+        if (DevArgs.Get("tank-check-nudge") == net.PlayerName && match.IsPlaying && clock >= 20)
         {
-            trajectoryTimer = 0.05f;
-            LogTankTrajectory();
+            if (nudgedTank == null)
+            {
+                nudgedTank = match.LiveTanks.FirstOrDefault(t => t.State == PropaneTank.TankState.Intact && t.AtRest);
+                if (nudgedTank != null)
+                {
+                    nudgedPosition = nudgedTank.GlobalPosition + Vector3.Right * 2;
+                    Log($"tank-check injected nudge {nudgedTank.NetId:x}");
+                }
+            }
+            if (IsInstanceValid(nudgedTank) && nudgedTank!.State == PropaneTank.TankState.Intact)
+            {
+                nudgedTank.GlobalPosition = nudgedPosition;
+                nudgedTank.LinearVelocity = nudgedTank.AngularVelocity = Vector3.Zero;
+                nudgedTank.Sleeping = true;
+            }
         }
+        var sampleTime = TankCheckTime();
+        if (DevArgs.Get("tank-check") != null && sampleTime >= tankCheckNext)
+        {
+            tankCheckNext = sampleTime + 0.05;
+            LogTankCheck();
+        }
+        digestTimer -= dt;
         if (digestTimer <= 0)
         {
             digestTimer = DevArgs.GetFloat("digest-every", 5f);
@@ -1026,18 +1052,25 @@ public partial class NetTest : Node
 
     private string ScoreLine() => match == null ? "" : string.Join(" ", match.Scores.Select(s => $"{s.Key}={s.Value}"));
 
-    /// <summary>Same-machine wall time avoids comparing independently corrected match countdowns.</summary>
-    private void LogTankTrajectory()
+    // Stopwatch uses the OS monotonic clock shared by processes on this machine. Match.TimeLeft is a
+    // packet-corrected countdown, unsuitable for alignment. This dev probe is for net_bots' local clients.
+    private static double TankCheckTime() => (double)System.Diagnostics.Stopwatch.GetTimestamp() / System.Diagnostics.Stopwatch.Frequency;
+
+    private void LogTankCheck(bool final = false)
     {
-        if (match == null) { return; }
-        var sampleTime = Time.GetUnixTimeFromSystem();
+        if (match == null || DevArgs.Get("tank-check") == null) { return; }
+        var sampleTime = TankCheckTime();
         var tanks = new StringBuilder();
+        var count = 0;
         foreach (var tank in match.LiveTanks.OrderBy(t => t.NetId))
         {
             var p = tank.GlobalPosition;
-            tanks.Append(FormattableString.Invariant($" {tank.NetId:x}:{(tank.State == PropaneTank.TankState.Venting ? "V" : "I")}:{p.X:0.000},{p.Y:0.000},{p.Z:0.000}"));
+            var resting = tank.AtRest && !tank.Gathering;
+            tanks.Append(FormattableString.Invariant($" {tank.NetId:x}:{(tank.State == PropaneTank.TankState.Venting ? "V" : "I")}:{(resting ? "R" : "M")}:{p.X:0.000},{p.Y:0.000},{p.Z:0.000}"));
+            count++;
         }
-        Log(FormattableString.Invariant($"tank-sample time {sampleTime:0.000000} playing {match.IsPlaying} clock {match.TimeLeft:0.000} n {match.LiveTanks.Count()}{tanks}"));
+        var phase = match.IsPlaying ? "P" : match.IsOver ? "E" : "L";
+        Log(FormattableString.Invariant($"tank-check match {match.Setup.Id} time {sampleTime:0.000000} phase {phase} final {final} length {match.Setup.Length:0.000} n {count}{tanks}"));
     }
 
     private void Log(string text) => GD.Print($"[nettest {net.PlayerName} {Time.GetTicksMsec() / 1000.0:0.00}] {text}");
