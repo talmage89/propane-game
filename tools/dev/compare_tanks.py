@@ -22,12 +22,17 @@ class Limits:
     # Persistent resting outliers are failures, not included in the noise budget.
     # Final moving drift <=0.281m -> 0.50m (+78%); clean <=0.197m -> 0.35m (+78%).
     # Clean profile: 1.5s/2.5m; see docs/network-soak.md for all runs and margins.
-    # Observed capture cadence gaps <=0.28s -> 0.35s (+25%); multi-second stalls fail.
+    # Loaded-machine validation saw 4.018s gaps and a 7.30s late play start. Permit up to 5s
+    # per gap, <=10% unobserved time, and <=min(10s, 10% of play) late startup. Positions
+    # across gaps >0.35s are unobserved, never guessed. See docs/network-soak.md.
     settle: float = 2.0
     resting: float = .10
     moving: float = 3.0
     final_moving: float = .50
-    gap: float = .35
+    gap: float = 5.0
+    interpolation_gap: float = .35
+    missing_fraction: float = .10
+    startup: float = 10.0
 
 
 PROFILES = {"faults": Limits(), "clean": Limits(settle=1.5, moving=2.5, final_moving=.35)}
@@ -49,10 +54,16 @@ class Run:
     peak: float
     kind: str
     detail: str
+    observed: float = 0.
 
 
-def finish_episode(key, run, end):
-    return (*key, run.kind, run.start, run.peak, run.detail, end - run.start)
+def finish_episode(key, run):
+    return (*key, run.kind, run.start, run.peak, run.detail, run.observed)
+
+
+def observed(times, time, limits):
+    index = bisect.bisect_right(times, time) - 1
+    return index == len(times) - 1 or time == times[index] or times[index + 1] - times[index] <= limits.interpolation_gap
 
 
 def load(path):
@@ -109,7 +120,7 @@ def compare(logs, limits=PROFILES["faults"]):
     if any(log.keys() != logs[0].keys() for log in logs):
         raise ValueError("match IDs disagree")
     failures, episodes = [], []
-    metrics = {"grids": 0, "body_pairs": 0, "rest_peak": 0., "moving_peak": 0., "final_rest_peak": 0., "final_moving_peak": 0.}
+    metrics = {"grids": 0, "body_pairs": 0, "unobserved_pairs": 0, "rest_peak": 0., "moving_peak": 0., "final_rest_peak": 0., "final_moving_peak": 0.}
     for match_id in sorted(logs[0]):
         series = [log[match_id] for log in logs]
         length = series[0][0].length
@@ -117,13 +128,17 @@ def compare(logs, limits=PROFILES["faults"]):
             playing = [s for s in samples if s.phase == "P"]
             ended = [s for s in samples if s.phase == "E"]
             if (not samples[-1].final or samples[-1].phase != "E" or not ended or not playing
-                    or playing[-1].time - playing[0].time < length * .95
+                    or playing[-1].time - playing[0].time < length - min(limits.startup, length * limits.missing_fraction)
                     or ended[-1].time - ended[0].time < limits.settle
                     or any(s.length != length for s in samples)):
                 raise ValueError(f"match {match_id} peer {peer}: missing play coverage or settled completion")
             # Loading is outside the comparison interval; first-draw shader work can stall there.
             if any(a.phase != "L" and b.time - a.time > limits.gap for a, b in zip(samples, samples[1:])):
                 raise ValueError(f"match {match_id} peer {peer}: sampling gap > {limits.gap}s")
+            missing = sum(b.time - a.time for a, b in zip(samples, samples[1:])
+                          if a.phase != "L" and b.time - a.time > limits.interpolation_gap)
+            if missing > (samples[-1].time - playing[0].time) * limits.missing_fraction:
+                raise ValueError(f"match {match_id} peer {peer}: >{limits.missing_fraction:.0%} unobserved capture time")
         times = [[s.time for s in samples] for samples in series]
         start = max(next(s.time for s in samples if s.phase == "P") for samples in series)
         end = min(t[-1] for t in times)
@@ -133,15 +148,31 @@ def compare(logs, limits=PROFILES["faults"]):
         final_states = [{id_: tank[0] for id_, tank in samples[-1].tanks.items()} for samples in series]
         if any(states != final_states[0] for states in final_states[1:]):
             failures.append(f"match {match_id}: final identities/states disagree")
+        for (pa, a), (pb, b) in combinations(enumerate(series, 1), 2):
+            for id_ in a[-1].tanks.keys() & b[-1].tanks.keys():
+                left, right = a[-1].tanks[id_], b[-1].tanks[id_]
+                if left[:2] == right[:2] == ("I", "R") and math.dist(left[2], right[2]) > limits.resting:
+                    failures.append(f"final completion match {match_id} peers {pa}/{pb} body {id_}: resting drift {math.dist(left[2], right[2]):.3f}m")
         active = {}
         final_bad = {}
         last_tick = math.floor(end / STEP)
+        # A late frame stall cannot fabricate a final trajectory. Use the last common observed instant
+        # after settlement, and independently check exact completion lifecycle/resting poses above.
+        while last_tick * STEP >= settled_end and not all(observed(ts, last_tick * STEP, limits) for ts in times):
+            last_tick -= 1
+        if last_tick * STEP < settled_end:
+            raise ValueError(f"match {match_id}: no common observed settled end")
         for tick in range(math.ceil(start / STEP), last_tick + 1):
             time = tick * STEP
             frames = [interpolate(samples, ts, time) for samples, ts in zip(series, times)]
             bad = {}
+            skipped = set()
             metrics["grids"] += 1
             for (pa, (_, a)), (pb, (_, b)) in combinations(enumerate(frames, 1), 2):
+                if not observed(times[pa - 1], time, limits) or not observed(times[pb - 1], time, limits):
+                    skipped.add((pa, pb))
+                    metrics["unobserved_pairs"] += 1
+                    continue
                 for id_ in sorted(a.keys() | b.keys()):
                     left, right = a.get(id_), b.get(id_)
                     key = (match_id, pa, pb, id_)
@@ -159,17 +190,19 @@ def compare(logs, limits=PROFILES["faults"]):
                     if distance > (limits.resting if resting else moving_limit):
                         bad[key] = (distance, "position", f"{kind} {left[:2]}/{right[:2]}")
             for key in sorted(active.keys() - bad.keys()):
-                episodes.append(finish_episode(key, active[key], time))
-            updated = {}
+                if key[1:3] not in skipped:
+                    episodes.append(finish_episode(key, active[key]))
+            # Missing frames pause the observed duration; they neither prove agreement nor prolong an error.
+            updated = {key: run for key, run in active.items() if key[1:3] in skipped}
             for key, (peak, kind, detail) in bad.items():
                 previous = active.get(key, Run(time, 0., kind, detail))
                 # A body must actually agree to reset its clock, even if the type of disagreement changes.
                 run_kind = kind if previous.kind == kind else "mixed"
-                updated[key] = Run(previous.start, max(peak, previous.peak), run_kind, detail)
+                updated[key] = Run(previous.start, max(peak, previous.peak), run_kind, detail, previous.observed + STEP)
             active = updated
             final_bad = bad
         for key, value in active.items():
-            episodes.append(finish_episode(key, value, time + STEP))
+            episodes.append(finish_episode(key, value))
         if time < settled_end:
             raise ValueError(f"match {match_id}: last grid precedes settled end")
         for (match_id, pa, pb, body), (peak, kind, detail) in final_bad.items():
@@ -195,7 +228,7 @@ def main():
         parser.exit(1, f"FAIL: {error}\n")
     longest = max((e[-1] for e in result["episodes"]), default=0)
     print(f"{'FAIL' if result['failures'] else 'PASS'} tanks ({args.profile}): {result['grids']} grids, "
-          f"{result['body_pairs']} body pairs; rest/moving peak {result['rest_peak']:.3f}/{result['moving_peak']:.3f}m; "
+          f"{result['body_pairs']} body pairs, {result['unobserved_pairs']} unobserved pair grids; rest/moving peak {result['rest_peak']:.3f}/{result['moving_peak']:.3f}m; "
           f"final rest/moving {result['final_rest_peak']:.3f}/{result['final_moving_peak']:.3f}m; "
           f"{len(result['episodes'])} above-tolerance episodes, longest {longest:.2f}s; {len(result['failures'])} disagreements")
     if args.details:

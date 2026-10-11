@@ -12,15 +12,16 @@ from compare_tanks import Limits, Sample, compare, load
 LIMITS = Limits(settle=.3, resting=.1, moving=1, gap=.15)
 
 
-def log(offset=0, transform=None, shift=0):
+def log(offset=0, transform=None, shift=0, length=4):
     samples = []
-    for tick in range(71):
+    last_tick = (length + 3) * 10
+    for tick in range(last_tick + 1):
         time = tick * .1 + offset
-        phase = "P" if tick < 40 else "E"
+        phase = "P" if tick < length * 10 else "E"
         tanks = {"a": ("I", "R", (shift, 0, 0)), "b": ("V", "M", (time * 20, 0, 0))}
         if transform:
             tanks = transform(time, tanks)
-        samples.append(Sample(time, phase, tick == 70, 4, tanks))
+        samples.append(Sample(time, phase, tick == last_tick, length, tanks))
     return {1: samples}
 
 
@@ -137,6 +138,50 @@ class TankChecks(unittest.TestCase):
         other = log()
         other[1].insert(0, Sample(-2, "L", False, 4, {}))
         self.assertFalse(self.check(log(), other)["failures"])
+
+    def test_bounded_stall_is_unobserved_instead_of_an_invented_path(self):
+        def bounce(time, tanks):
+            if 2 < time < 4.8:
+                tanks["b"] = ("V", "M", (time * 20 + 100, 0, 0))
+            return tanks
+        a, b = log(length=30, transform=bounce), log(length=30)
+        del b[1][21:48]
+        result = compare([a, b])
+        self.assertFalse(result["failures"])
+        self.assertGreater(result["unobserved_pairs"], 50)
+        self.assertLess(result["moving_peak"], 1e-10)
+
+    def test_gap_pauses_but_does_not_reset_a_real_disagreement(self):
+        def disagree(time, tanks):
+            if 1 < time < 8:
+                tanks["a"] = ("I", "R", (2, 0, 0))
+            return tanks
+        a, b = log(length=30), log(length=30, transform=disagree)
+        del b[1][21:48]
+        result = compare([a, b])
+        self.assertTrue(result["failures"])
+        duration = max(e[-1] for e in result["episodes"])
+        self.assertGreater(duration, 4)
+        self.assertLess(duration, 5)
+
+    def test_capture_stalls_and_startup_have_explicit_bounds(self):
+        late = log(length=90)
+        late[1] = late[1][73:]
+        self.assertFalse(compare([log(length=90), late])["failures"])
+        too_late = log(length=90)
+        too_late[1] = too_late[1][120:]
+        excessive_gap = log(length=90)
+        del excessive_gap[1][20:80]
+        excessive_total = log(length=30)
+        del excessive_total[1][20:65]
+        for other in (too_late, excessive_gap, excessive_total):
+            with self.assertRaises(ValueError):
+                compare([log(length=other[1][0].length), other])
+
+    def test_late_completion_resting_position_is_checked_directly(self):
+        other = log(.025)
+        other[1][-1].tanks["a"] = ("I", "R", (2, 0, 0))
+        self.assertTrue(any("final completion" in f for f in self.check(log(), other)["failures"]))
 
     def test_every_match_checked(self):
         first, second = log(), log()

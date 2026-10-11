@@ -24,19 +24,24 @@ discarded.
 
 Every unordered peer pair is checked. An identity/state difference or above-tolerance position difference may
 last only through the settle window. Episodes retain their start across resting/moving and lifecycle/position
-transitions; only actual agreement resets the window. Durations are quantized to the 50 ms comparison grid.
+transitions; only actual agreement resets the window. Observed durations are quantized to the 50 ms comparison grid.
 Intact bodies resting at both interpolation endpoints on both peers use the resting tolerance; other bodies
 use the moving tolerance. Brief flight/correction and replication transients are counted and reported.
 Persistent errors fail, even if later interaction destroys the body or the peers agree at the end.
 
-The last common grid must be after every peer's end plus the settle window. Any above-tolerance difference
+The last common observed grid must be after every peer's end plus the settle window. Any above-tolerance difference
 there fails immediately, regardless of duration. Final completion samples must also agree exactly on
 IDs/states; bodies still moving during results use a tighter final moving tolerance for position.
-Missing/malformed samples, nonfinite values, duplicate IDs, clock/phase reversals, playing/results gaps,
-differing matches or incomplete play/end coverage fail. Loading gaps are outside the comparison interval and
-do not invalidate it. At least 95% of the requested match duration must be captured as playing; no
-extrapolation fills absent data. The results interval supplies the settlement time, without extending or
-freezing gameplay.
+Missing/malformed samples, nonfinite values, duplicate IDs, clock/phase reversals, differing matches or
+incomplete play/end coverage fail. Loading gaps are outside the comparison interval. A loaded machine may
+start logging play up to the smaller of 10 s or 10% of the requested duration late. A playing/results gap may
+last at most 5 s, and gaps above 0.35 s may occupy at most 10% of the captured play/results interval. The 5 s
+bound has 24% margin over the observed 4.018 s stall; the startup bound covers the observed 7.30 s late start.
+No positions or lifecycle comparisons are invented inside these wide gaps: affected pairs are reported as
+unobserved. Gaps pause a disagreement’s observed duration without proving agreement or resetting its clock.
+Smaller gaps still interpolate. The final common observed grid must follow settlement; exact completion
+identities/states and intact resting positions are checked separately. The results interval supplies the
+settlement time, without extending or freezing gameplay.
 
 Limits are centralized in `PROFILES`/`Limits` in `tools/dev/compare_tanks.py`. They are harness tolerances for
 the default tuning and stated faults, not new game tuners. A stronger fault schedule or very slow capture can
@@ -96,8 +101,8 @@ cannot retain the full flight drift allowance at the end.
 These labels correspond to `/tmp/nas-fault-N` and `/tmp/nas-clean-N` logs. Every completed score audit agreed
 on all four individual standings and conserved the bank. Fault 1 lacked startup samples and failed coverage;
 clean 2 had playing gaps of 2.652/4.018 s. They were rejected rather than interpolated, and are excluded from
-calibration. Rendered fault 6 had two playing gaps of 0.275/0.277 s, and clean 3 reached 0.251 s. The final
-cadence limit is 0.35 s, a 25% margin over the rounded observed 0.28 s maximum. These captures are included
+calibration. Rendered fault 6 had two playing gaps of 0.275/0.277 s, and clean 3 reached 0.251 s. The original
+cadence limit was 0.35 s, a 25% margin over the rounded observed 0.28 s maximum. These captures are included
 after rechecking with the calibrated limit. A preliminary run edited while its launcher was active is also
 excluded.
 
@@ -107,8 +112,7 @@ not a fast body paired to a different time. Fault 5 demonstrates an error surviv
 despite exact final identities/states and scores. The checker establishes disagreement; this package does not
 identify its ownership/collision cause or alter network/gameplay behavior to fix it.
 
-Current dev does not reliably pass this check: it has persistent resting-position disagreement. Scoping that
-fix belongs to the lead. Increasing the resting limit to accept these captures would conceal the behavior this
+The pre-fix dev baseline did not reliably pass this check: it has persistent resting-position disagreement. The replication follow-up is recorded in [network-corrections.md](network-corrections.md). Increasing the resting limit to accept these captures would conceal the behavior this
 check is intended to detect.
 
 ## Validation with held limits
@@ -130,7 +134,7 @@ Fault 15 failed only at final moving comparison: venting `20300003` was 0.585 m 
 with a longest above-tolerance episode of 1.40 s and final resting/moving peaks of 0.037/0.318 m. Clean 4
 failed coverage: peer 4 captured only 82.70 s of the 90-second playing interval.
 
-With the final checker, fault captures 3/6/7 pass; 2/4/5/8/9/10/11/13/14/15 fail; 1/12 are invalid. Clean
+With the original pre-fix checker, fault captures 3/6/7 pass; 2/4/5/8/9/10/11/13/14/15 fail; 1/12 are invalid. Clean
 captures 3/6 pass; 1/5 fail; 2/4 are invalid. All 21 completed soaks passed the independent score audit. The
 requested five passing faulted captures were **not achieved** after 15 attempts. Two clean-network captures
 passed the tighter profile. No threshold was increased to absorb the validation disagreements.
@@ -153,7 +157,7 @@ at final comparison. Both bots exited normally and passed the melee scenario; st
 (10 initial - 5 spilled = 5 banked). The synthetic CLI fixture likewise exits 1 on a sustained 2 m resting
 offset.
 
-## Verification record
+## Original assertion verification record
 
 Verified the implementation in `b98fe2d`; no gameplay/network repair was made to improve these results.
 
