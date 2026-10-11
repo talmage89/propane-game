@@ -219,7 +219,7 @@ public sealed class BotNavigator
         var wanted = toward.Normalized();
         var turn = 1 - Mathf.Exp(-tuning.BotTurnSharpness * dt);
         direction = direction.LengthSquared() < 0.01f ? wanted : direction.Lerp(wanted, turn).Normalized();
-        return new NavigationIntent(direction, toward.Length() > tuning.BotSprintDistance, false, false, false);
+        return new NavigationIntent(direction, capabilities.SprintSpeed > capabilities.Speed && toward.Length() > tuning.BotSprintDistance, false, false, false);
     }
 
     public bool Jumping => flying || route.Count > 0 && route[0].Jump;

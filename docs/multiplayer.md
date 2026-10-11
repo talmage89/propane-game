@@ -132,7 +132,19 @@ The bot (`src/Dev/Bot.cs`) plays to win:
 - holding 4 or more while leading, or late in the match, it stays out of everyone's sight and only goes for tanks
   with nobody near them;
 - its aim is a person's, not perfect: it reacts after a moment, and its aim wanders and tightens while it tracks;
-- it taps tanks, fires short bursts at players, and fetches ammo when low or close.
+- it taps tanks, fires short bursts at players, and fetches ammo when low or close;
+- it keeps travel goals stable, finds capsule-clear routes around houses and props, and plans fence jumps from the
+  live player jump physics, including a runway and clear landing; a direct gate is preferred to a jump;
+- it avoids tank piles and vent clearance zones, replans around changed obstacles, then tries alternate routes
+  before temporarily excluding a target; ammo targets use that same recovery;
+- it smooths walking turns, sprints on longer clear stretches, and releases aim for a runway and flight.
+
+`src/Navigation` takes collision queries, actor capabilities/state and a goal, and returns world movement intent.
+It has no `Match` dependency. [Bot navigation](bot-navigation.md) describes its assumptions, local difficulty dials
+and seeded regression course. `Tuning.Bot...` properties are local C# dials (also accepted by `--tune.Bot...` in dev
+harnesses); they are deliberately absent from exported match tuning and its snapshot schema. The smart brain keeps
+that local tuning object when a match installs its shared movement tuning. `--bot-log` logs cumulative stuck,
+blacklist, replan and jump counts. The simple brain remains the original benchmark.
 
 Measured over two-minute matches of four bots each, before and after (the server logs each player's tanks gained,
 lost to hits and lost to throws at the end of a match): the first bot often threw itself with its own blasts and

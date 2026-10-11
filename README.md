@@ -125,6 +125,7 @@ in code. `FixedSeed` (World group) replays one suburb; 0 picks a random one.
 | `src/Player` | Character controller, camera, animation, the procedural rifle rig, ragdoll and get-up. |
 | `src/Fx` | Explosions, tracers, impacts, hitstop, particle helpers, and the shader warm-up. |
 | `src/UI` | HUD, menus (main, multiplayer, lobby, pause, match, results), match HUD, tuning panel. |
+| `src/Navigation` | Reusable bot routes, capsule sweeps, jump links and bounded recovery. |
 | `src/Dev`, `scenes/dev` | Test harnesses (below). |
 | `shaders` | World, tank, ground, void and effect shaders, plus the shared reveal transition. |
 | `tools/blender` | Scripts that build the assets in `assets/`. |
@@ -153,8 +154,12 @@ $GODOT --headless res://scenes/dev/movement_tests.tscn
 # suburbs with player starts, ammo spots and the plan's encoding. Exits 1 on failure.
 $GODOT --headless res://scenes/dev/generator_tests.tscn -- --seeds=200
 
-# Seeded bot fence courses using the real suburb builder and player (baseline before navigation work).
-$GODOT --headless --fixed-fps 60 res://scenes/dev/bot_navigation_course.tscn -- --baseline --seeds=20
+# Bot navigation: real picket/privacy fences, gates, bins, cars, piles, houses and touching-fence recovery.
+# Asserts >=95% success, walking through a direct gate, planned fence jumps and tank clearance.
+$GODOT --headless --fixed-fps 60 res://scenes/dev/bot_navigation_course.tscn -- --seeds=100
+$GODOT --fixed-fps 60 res://scenes/dev/bot_navigation_course.tscn -- --seeds=5 --capture-dir=/tmp/bot-fences
+# --baseline compares direct movement plus the old stuck recovery; --first-seed=39 --seeds=1 replays one seed.
+# --nav-log traces waypoints/replans. make test runs five seeds; docs/bot-navigation.md describes the component.
 
 # Plain C# assertion suites; make test runs these, the generator, and two separate builds of one saved plan.
 $GODOT --headless res://scenes/dev/unit_tests.tscn

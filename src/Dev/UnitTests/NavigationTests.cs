@@ -40,11 +40,17 @@ internal static class NavigationTests
         using var tuning = Tuning.LoadBaked();
         var caps = new NavigationCapabilities(shape, Vector3.Up * 0.9f, shape.Radius, tuning.RunSpeed,
             tuning.SprintSpeed, tuning.JumpVelocity, tuning.PlayerGravity, tuning.Acceleration, tuning.AirControl);
-        runner.Run("navigation physics uses live jump tuning", () =>
+        runner.Run("navigation uses actor jump and gait capabilities", () =>
         {
             TestRunner.Assert(caps.JumpHeight > 1.7f, "baked player jump clears privacy fences");
             var low = caps with { JumpVelocity = 1 };
             TestRunner.Assert(low.JumpHeight < 0.1f && low.JumpRange < 1, "no hardcoded jump height or reach");
+            var state = new NavigationState(Vector3.Zero, Vector3.Zero, true);
+            var goal = new Vector3(0, 0, -12);
+            TestRunner.Assert(new BotNavigator().Navigate(new CourseWorld(), state, caps, goal, tuning, 1f / 60).Sprint,
+                "long open routes use a faster sprint gait");
+            TestRunner.Assert(!new BotNavigator().Navigate(new CourseWorld(), state, caps with { SprintSpeed = caps.Speed }, goal, tuning, 1f / 60).Sprint,
+                "actors without a faster gait cannot be told to sprint");
         });
         runner.Run("navigation chooses jumps and equal-cost gates", () =>
         {
@@ -137,6 +143,29 @@ internal static class NavigationTests
             TestRunner.Assert(moved && frames > 1 && nav.Replans == 1, "search resumes and completes instead of restarting each tick");
             slow.BotSearchPerTick = 0;
             TestRunner.Throws<ArgumentOutOfRangeException>(() => BotNavigator.Plan(world, state.Position, Vector3.Zero, caps, slow));
+        });
+        runner.Run("normal aimed creep is progress at both physics rates", () =>
+        {
+            foreach (var rate in new[] { 60, 120 })
+            {
+                var nav = new BotNavigator();
+                var position = Vector3.Zero;
+                var velocity = Vector3.Zero;
+                var legacyStuck = 0f;
+                var dt = 1f / rate;
+                for (var tick = 0; tick < rate * 6; tick++)
+                {
+                    var move = nav.Navigate(new CourseWorld(), new NavigationState(position, velocity, true), caps,
+                        new Vector3(0, 0, -24), tuning, dt);
+                    TestRunner.Assert(!move.Failed && nav.StuckEvents == 0, "valid creep must not trigger recovery or target exclusion");
+                    // The player resolver's ordinary aimed gait. The old per-tick detector mistakes this
+                    // legitimate speed for an obstacle at the project's 120 Hz physics rate.
+                    velocity = move.Direction * tuning.CreepSpeed;
+                    position += velocity * dt;
+                    legacyStuck = velocity.Length() * dt < 0.02f ? legacyStuck + dt : 0;
+                }
+                if (rate == 120) { TestRunner.Assert(legacyStuck > 0.4f, "fixture reproduces the old creep misclassification"); }
+            }
         });
         runner.Run("bot tuners preserve the match snapshot schema", () =>
         {
