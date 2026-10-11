@@ -67,7 +67,7 @@ public static class ServerTests
             using var f = new Fixture(playing: false);
             f.Receive(new NetWriter(Msg.Loaded, f.Id));
             f.Receive(new NetWriter(Msg.Loaded, f.Id), peer: 3);
-            var past = NetTransport.Now - 20;
+            var past = MonotonicClock.Now - 20;
             f.Server.AdvanceMatches(past); // Loading -> Countdown.
             f.Server.AdvanceMatches(past); // Countdown -> Playing, with an already expired deadline.
             f.Packets.Clear();
@@ -76,7 +76,7 @@ public static class ServerTests
             TestRunner.Assert(f.Packets.Single() is { Peer: 2, Message.Payload: DropRefusedMessage reply } &&
                 reply.Ids.SequenceEqual(new[] { DropBody(0, 0).Id }), "expired clock accepted a predicted drop");
             f.Packets.Clear();
-            f.Server.AdvanceMatches(NetTransport.Now);
+            f.Server.AdvanceMatches(MonotonicClock.Now);
             TestRunner.Assert(f.Packets.Select(p => p.Message.Payload).OfType<IReadOnlyList<Standing>>().First().All(s => s.Score == 4),
                 "late drop changed final banks before the phase tick");
         });
@@ -96,17 +96,17 @@ public static class ServerTests
         runner.Run("server/motion bounds future sample timestamps to the relay clock", () =>
         {
             using var f = new Fixture();
-            var before = NetTransport.Now;
+            var before = MonotonicClock.Now;
             f.Receive(MessageCodec.Encode(new NetMessage(Msg.BodyStates, f.Id, 0,
                 new BodyStatesMessage(100000, new[] { DropBody(0, 0) with { Id = BodySync.MapTankId(0), Sequence = 1 } })), false));
-            var after = NetTransport.Now;
+            var after = MonotonicClock.Now;
             TestRunner.Assert(f.Packets.Single().Message.Payload is BodyStatesMessage relayed &&
                 relayed.Time >= before && relayed.Time <= after, "relay accepted a future sample time");
         });
         runner.Run("server/motion preserves bounded sample age across both transport legs", () =>
         {
             using var f = new Fixture();
-            var sampled = NetTransport.Now - 0.12;
+            var sampled = MonotonicClock.Now - 0.12;
             var body = DropBody(0, 0) with { Id = BodySync.MapTankId(0), Sequence = 1, Linear = Vector3.Right * 200 };
             f.Receive(MessageCodec.Encode(new NetMessage(Msg.BodyStates, f.Id, 0,
                 new BodyStatesMessage(sampled, new[] { body })), false));
@@ -126,13 +126,13 @@ public static class ServerTests
             }
             finally { moving.Free(); }
             f.Packets.Clear();
-            var before = NetTransport.Now;
+            var before = MonotonicClock.Now;
             f.Receive(MessageCodec.Encode(new NetMessage(Msg.BodyStates, f.Id, 0,
                 new BodyStatesMessage(0, new[] { body with { Sequence = 2 } })), false));
             TestRunner.Assert(f.Packets.Single().Message.Payload is BodyStatesMessage unsynced && unsynced.Time >= before,
                 "missing clock synchronization used a stale sampling age");
             f.Packets.Clear();
-            before = NetTransport.Now;
+            before = MonotonicClock.Now;
             f.Receive(MessageCodec.Encode(new NetMessage(Msg.BodyStates, f.Id, 0,
                 new BodyStatesMessage(1, new[] { body with { Sequence = 3 } })), false));
             TestRunner.Assert(f.Packets.Single().Message.Payload is BodyStatesMessage ancient &&
@@ -174,7 +174,7 @@ public static class ServerTests
             f.Packets.Clear();
             f.Receive(f.Drop(new[] { DropBody(1, 0) }, color: 1), peer: 3);
             f.AssertScore(3, 3, -1);
-            f.Server.AdvanceMatches(NetTransport.Now + 20);
+            f.Server.AdvanceMatches(MonotonicClock.Now + 20);
             var standings = f.Packets.Select(p => p.Message.Payload).OfType<IReadOnlyList<Standing>>().Single();
             TestRunner.Assert(standings.Any(s => s is { Id: 2, Score: 4, Present: false }) &&
                 standings.Any(s => s is { Id: 3, Score: 3, Present: true }), "departure erased a bank or renumbered a spawn slot");
@@ -212,19 +212,19 @@ public static class ServerTests
         {
             using var f = new Fixture();
             f.Reject(new NetWriter(Msg.Explode, f.Id + 1).UInt(BodySync.MapTankId(0)).Vec3(Vector3.One).UInt(1).UInt(1).UInt(0).ToArray());
-            f.Server.AdvanceMatches(NetTransport.Now + 20); // End this ten-second match.
-            f.Server.AdvanceMatches(NetTransport.Now + 30); // Results -> lobby.
+            f.Server.AdvanceMatches(MonotonicClock.Now + 20); // End this ten-second match.
+            f.Server.AdvanceMatches(MonotonicClock.Now + 30); // Results -> lobby.
             f.Receive(new NetWriter(Msg.StartMatch).Snapshot(f.Tuning.Snapshot()));
             var next = f.Packets.Select(p => p.Message.Payload).OfType<MatchSetup>().First();
             TestRunner.Assert(next.Id > f.Id, "match id was reused");
             f.Reject(new NetWriter(Msg.Loaded, f.Id).ToArray());
             f.Reject(new NetWriter(Msg.Explode, f.Id).UInt(BodySync.MapTankId(0)).Vec3(Vector3.One).UInt(1).UInt(1).UInt(0).ToArray());
             f.Packets.Clear();
-            f.Server.AdvanceMatches(NetTransport.Now);
+            f.Server.AdvanceMatches(MonotonicClock.Now);
             TestRunner.Assert(!f.Packets.Any(p => p.Message.Type == Msg.Countdown), "stale Loaded started the next match");
             f.Receive(new NetWriter(Msg.Loaded, next.Id));
             f.Receive(new NetWriter(Msg.Loaded, next.Id), peer: 3);
-            f.Server.AdvanceMatches(NetTransport.Now);
+            f.Server.AdvanceMatches(MonotonicClock.Now);
             TestRunner.Assert(f.Packets.Any(p => p.Message.Type == Msg.Countdown), "current Loaded failed to start the next match");
         });
         runner.Run("server/legacy Hello is rejected without changing its prefix", () =>
@@ -271,8 +271,8 @@ public static class ServerTests
             {
                 Receive(new NetWriter(Msg.Loaded, Id));
                 Receive(new NetWriter(Msg.Loaded, Id), peer: 3);
-                Server.AdvanceMatches(NetTransport.Now);
-                Server.AdvanceMatches(NetTransport.Now);
+                Server.AdvanceMatches(MonotonicClock.Now);
+                Server.AdvanceMatches(MonotonicClock.Now);
                 TestRunner.Assert(Packets.Any(p => p.Message.Type == Msg.MatchGo), "fixture never reached play");
             }
             Packets.Clear();

@@ -121,7 +121,7 @@ public sealed class Bot : IBotBrain
 
         // 2. Under fire while holding more than the shooter: trading hits loses more than it wins, so break their
         //    line of sight. A shooter holding more gets shot back.
-        if (match.MyScore > 0 && NetTransport.Now - match.LastHitTime < 2.5)
+        if (match.MyScore > 0 && MonotonicClock.Now - match.LastHitTime < 2.5)
         {
             var shooter = match.RemoteBodies.FirstOrDefault(b => b.PeerId == match.LastHitBy);
             if (shooter != null && match.Scores.GetValueOrDefault(shooter.PeerId) < match.MyScore && CanSee(shooter, here + Vector3.Up * 1.2f))
@@ -266,7 +266,7 @@ public sealed class Bot : IBotBrain
             var distance = enemy.GlobalPosition.DistanceTo(here);
             // A fight costs ammo and invites return fire: worth it for a real bank, for a cheap close one, or
             // against whoever just shot this bot.
-            var avenging = enemy.PeerId == match.LastHitBy && NetTransport.Now - match.LastHitTime < 3;
+            var avenging = enemy.PeerId == match.LastHitBy && MonotonicClock.Now - match.LastHitTime < 3;
             var worth = protecting ? banked > match.MyScore : banked >= 3 || banked >= 1 && distance < 18f || avenging && banked > 0;
             if (blacklist.ContainsKey(enemy.GetInstanceId()) || !worth || distance > PlayerRange || !CanSee(player, Aim(enemy)))
             {

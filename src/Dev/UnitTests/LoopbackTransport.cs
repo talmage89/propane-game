@@ -51,7 +51,6 @@ internal sealed class LoopbackTransport : IPacketTransport
     {
         Close();
         if (network.Listeners.ContainsKey(endpoint)) { return new OpenResult(false, "Address in use.", 1); }
-        counters.Clear();
         PeerIds.Clear();
         network.Listeners.Add(endpoint, this);
         listening = endpoint;
@@ -61,7 +60,6 @@ internal sealed class LoopbackTransport : IPacketTransport
     public OpenResult Connect(PacketEndpoint endpoint, out ConnectionHandle? connection)
     {
         Close();
-        counters.Clear();
         PeerIds.Clear();
         connection = null;
         if (!network.Listeners.TryGetValue(endpoint, out var remote)) { return new OpenResult(false, "No listener.", 2); }
@@ -101,7 +99,11 @@ internal sealed class LoopbackTransport : IPacketTransport
             var count = notifications.Count;
             while (count-- > 0 && notifications.TryDequeue(out var n))
             {
-                if (n.Reason != null) { Disconnected?.Invoke(n.Handle, n.Reason); PeerIds.Forget(n.Handle); }
+                if (n.Reason != null)
+                {
+                    try { Disconnected?.Invoke(n.Handle, n.Reason); }
+                    finally { PeerIds.Forget(n.Handle); counters.Remove(n.Handle); }
+                }
                 else if (links.TryGetValue(n.Handle, out var link))
                 {
                     if (n.Data == null) { link.Ready = true; Connected?.Invoke(n.Handle); }

@@ -153,15 +153,36 @@ public static class TransportTests
                 Assert(p.AtServer.Count == 0 && p.Client.Diagnostics(p.ClientHandle).QueuedPackets == 0, "queued data survived disconnect");
             }
         });
+        runner.Run("transport/closing in a packet callback cancels the rest and retires diagnostics", () =>
+        {
+            using var p = new Pair(new PacketFaults(Lag: .1));
+            p.Server.Send(p.ServerHandle, TrafficClass.ReliableOrdered, new byte[] { 1 });
+            p.Server.Send(p.ServerHandle, TrafficClass.ReliableOrdered, new byte[] { 2 });
+            p.Client.Poll();
+            p.Client.Packet += (_, _, _) => p.Client.Close();
+            TransportDiagnostics? final = null;
+            p.Client.Disconnected += (connection, _) => final = p.Client.Diagnostics(connection);
+            p.Pump(.2);
+            Assert(p.AtClient.Count == 1, "close in callback delivered a later packet");
+            p.Pump();
+            Assert(final?.PacketsIn == 2 && final?.QueuedPackets == 0, "final diagnostics were missing during callback");
+            Assert(p.Client.Diagnostics(p.ClientHandle) == default, "retired diagnostics retained connection state");
+        });
         runner.Run("transport/reconnect discards old delayed packets and retires old handles", () =>
         {
             using var p = new Pair(new PacketFaults(Lag: .1));
             p.Send(1);
+            TransportDiagnostics? retired = null;
+            p.Client.Disconnected += (connection, _) =>
+            {
+                if (connection == p.ClientHandle) { retired = p.Client.Diagnostics(connection); }
+            };
             p.Client.Close();
             Assert(p.Client.Connect(Endpoint, out var fresh).Success && fresh != p.ClientHandle, "reconnect failed/reused handle");
             Assert(p.Client.Send(fresh!, TrafficClass.ReliableOrdered, new byte[] { 2 }) == SendResult.Closed, "connecting send accepted");
             p.Client.Poll(); p.Server.Poll();
             Assert(p.Send(3) == SendResult.Closed, "retired handle revived");
+            Assert(retired?.PacketsOut == 1, "reconnect erased diagnostics before the old disconnect callback");
             Assert(p.Client.Send(fresh!, TrafficClass.ReliableOrdered, new byte[] { 4 }) == SendResult.Success, "fresh handle rejected");
             p.Pump(.2);
             Assert(p.AtServer.Select(n => n.Bytes[0]).SequenceEqual(new byte[] { 4 }), "old delayed packet survived reconnect");
@@ -241,6 +262,115 @@ public static class TransportTests
             Assert(borrowed.Span[0] == 0xdd && p.AtClient.Count == 0, "test did not invalidate borrowed memory");
             p.Pump(.21);
             Assert(p.AtClient.Single()[0] == 11, "decorator retained borrowed memory");
+        });
+        RegisterClientTests(runner);
+    }
+
+    private static void RegisterClientTests(TestRunner runner)
+    {
+        runner.Run("transport/client and server handshake, lobby, disconnect and reconnect", () =>
+        {
+            var network = new LoopbackNetwork();
+            var clock = new Clock();
+            var rawServer = network.Create();
+            var rawClient = network.Create();
+            var server = new LobbyServer(new ServerTransport(rawServer, rawServer.PeerIds), clock) { Port = Endpoint.Port };
+            var client = new NetClient(rawClient, clock);
+            try
+            {
+                Assert(server.Start().Success, "server could not start");
+                client._Ready();
+                client.Connect("", Endpoint.Port, "Tester", 0);
+                void Pump() { client._Process(0); server._Process(0); }
+                for (var i = 0; i < 5; i++) { Pump(); }
+                Assert(client.State == NetClient.Status.Connected && client.MyId == 2, "Hello/Welcome failed");
+                client.CreateLobby();
+                for (var i = 0; i < 3; i++) { Pump(); }
+                Assert(client.Lobby?.Members.Single().Name == "Tester" && client.IsCreator, "lobby flow failed");
+                var old = rawServer.PeerIds.Connection(2)!;
+                string? ui = null;
+                client.StatusChanged += (_, detail) => ui = detail;
+                var reason = new DisconnectReason(DisconnectKind.Timeout, "Timed out during test.", 9001);
+                rawServer.Disconnect(old, reason);
+                Pump();
+                Assert(client.State == NetClient.Status.Offline && client.LastDisconnect == reason && ui == reason.Detail, "disconnect reason did not reach UI");
+                client.Connect("", Endpoint.Port, "Again", 1);
+                // Reconnect before the old local-close notification is polled.
+                for (var i = 0; i < 5; i++) { Pump(); }
+                Assert(client.State == NetClient.Status.Connected && client.MyId == 3 && rawServer.PeerIds.Connection(3) != old, "reconnect reused handle or stale close dropped new connection");
+                Assert(client.Lobbies.Count == 0 && client.Lobby == null, "old lobby survived reconnect");
+                MatchSetup? setup = null;
+                client.MatchStarting += value => setup = value;
+                client.CreateLobby();
+                for (var i = 0; i < 3; i++) { Pump(); }
+                client.StartMatch();
+                for (var i = 0; i < 3; i++) { Pump(); }
+                Assert(setup != null && PlanCodec.Decode(setup.Plan).Tanks.Count > 0, "retained setup lost its borrowed plan memory");
+                client.Send(new NetWriter(Msg.Loaded, setup!.Id));
+                for (var i = 0; i < 3; i++) { Pump(); }
+                clock.Seconds += 10;
+                for (var i = 0; i < 3; i++) { Pump(); }
+                var events = new List<Msg>();
+                Assert(client.AttachMatch(setup.Id, message => events.Add(message.Type)) && events.Contains(Msg.MatchGo), "loopback match inbox lost queued Go");
+                client.Disconnect(); Pump();
+                Assert(client.LastDisconnect?.Kind == DisconnectKind.LocalClose, "client local close cause missing");
+            }
+            finally { client._ExitTree(); server._ExitTree(); client.Free(); server.Free(); }
+        });
+        runner.Run("transport/client shows application rejection and retains server version", () =>
+        {
+            using var p = new Pair();
+            var client = new NetClient(p.Client, p.Clock);
+            try
+            {
+                client._Ready();
+                client.Connect("", Endpoint.Port, "Tester", 0);
+                p.Server.Poll(); client._Process(0); p.Server.Poll();
+                var handle = p.Server.PeerIds.Connection(3)!;
+                p.Server.Send(handle, TrafficClass.ReliableOrdered, new NetWriter(Msg.Rejected).String("That lobby is full.").String(BuildInfo.GameVersion).ToArray());
+                string? ui = null;
+                client.StatusChanged += (_, detail) => ui = detail;
+                client._Process(0);
+                Assert(client.LastDisconnect?.Kind == DisconnectKind.ApplicationRejected && ui == "That lobby is full." && client.RejectedBy == BuildInfo.GameVersion, "application rejection lost");
+            }
+            finally { client._ExitTree(); client.Free(); }
+        });
+        runner.Run("transport/client teardown detaches polling callbacks", () =>
+        {
+            using var p = new Pair();
+            var client = new NetClient(p.Client, p.Clock);
+            try
+            {
+                client._Ready(); client.Connect("", Endpoint.Port, "Tester", 0);
+                client._Process(0); p.Server.Poll();
+                var statuses = 0;
+                client.StatusChanged += (_, _) => statuses++;
+                client._ExitTree();
+                p.Client.Poll(); p.Server.Poll();
+                Assert(statuses == 0, "teardown retained callbacks into the retired node");
+            }
+            finally { client._ExitTree(); client.Free(); }
+        });
+        runner.Run("transport/reliable handshake stall hits deterministic client timeout", () =>
+        {
+            var network = new LoopbackNetwork();
+            var clock = new Clock();
+            var rawServer = network.Create();
+            var rawClient = network.Create();
+            var transport = new FaultPacketTransport(rawClient, clock, 123, new PacketFaults(ReliableStall: 10));
+            var server = new LobbyServer(new ServerTransport(rawServer, rawServer.PeerIds), clock) { Port = Endpoint.Port };
+            var client = new NetClient(transport, clock);
+            try
+            {
+                server.Start(); client._Ready(); client.Connect("", Endpoint.Port, "Tester", 0);
+                client._Process(0); server._Process(0);
+                clock.Seconds += 8.1;
+                client._Process(0); server._Process(0);
+                Assert(client.State == NetClient.Status.Offline && client.LastDisconnect?.Kind == DisconnectKind.Timeout, "reliable stall failed to exercise timeout");
+                clock.Seconds += 30; client._Process(0); server._Process(0);
+                Assert(client.State == NetClient.Status.Offline, "stale Hello/Welcome resurrected timed-out connection");
+            }
+            finally { client._ExitTree(); server._ExitTree(); client.Free(); server.Free(); }
         });
     }
 }

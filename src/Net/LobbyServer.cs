@@ -32,12 +32,14 @@ public partial class LobbyServer : Node
     private sealed class Client
     {
         public int Id;
+        public ConnectionHandle? Connection;
         public string Name = "Player";
         public int Color;
         public bool Welcomed;
         public bool Debug;
         public Lobby? Lobby;
         public double KickAt;
+        public DisconnectReason? Rejection;
     }
 
     private sealed class Lobby
@@ -72,43 +74,78 @@ public partial class LobbyServer : Node
         public double[] PickupBack = Array.Empty<double>();
     }
 
-    private readonly NetTransport transport = new();
+    private readonly IPacketTransport transport;
+    private readonly IMonotonicClock clock;
+    private readonly ProtocolPeerMap peerIds;
+    private bool subscribed;
+    private double nextDiagnostics;
+
+    public LobbyServer() : this(PacketTransports.CreateServer()) { }
+    public LobbyServer(ServerTransport services, IMonotonicClock? clock = null)
+    {
+        transport = services.Transport;
+        peerIds = services.PeerIds;
+        this.clock = clock ?? MonotonicClock.Instance;
+    }
     private readonly Dictionary<int, Client> clients = new();
     private readonly Dictionary<int, Lobby> lobbies = new();
     private readonly Random random = new();
     private int nextLobbyId = 1;
     private int nextMatchId = 1;
 
-    // Injectable packet sink for headless tests; production always uses ENet.
+    // Legacy handler tests bypass the connection layer; transport tests use the injected interface.
     internal Action<int, byte[], bool>? SendOverride { get; set; }
 
     public int Port { get; set; } = Protocol.DefaultPort;
-
-    /// <summary>Simulated lag (seconds, each way) for testing.</summary>
-    public double SimulatedLag
-    {
-        get => transport.SimulatedLag;
-        set => transport.SimulatedLag = value;
-    }
 
     public bool Running { get; private set; }
 
     /// <summary>Tanks every player starts a match with. 0 normally; tests set it to have something to lose.</summary>
     public int StartScore { get; set; }
 
-    public Error Start()
+    public OpenResult Start()
     {
-        transport.PeerConnected += OnConnected;
-        transport.PeerDisconnected += OnDisconnected;
-        transport.Received += OnReceived;
-        var error = transport.Host(Port, MaxClients);
-        Running = error == Error.Ok;
+        if (Running) { return new OpenResult(true); }
+        if (!subscribed)
+        {
+            transport.Connected += OnTransportConnected;
+            transport.Disconnected += OnTransportDisconnected;
+            transport.Packet += OnPacket;
+            subscribed = true;
+        }
+        var result = transport.Listen(new PacketEndpoint("", Port), MaxClients);
+        Running = result.Success;
         Log(Running ? $"listening on UDP {Port} (version {BuildInfo.GameVersion}, build {BuildInfo.Build}, protocol {Protocol.Version})"
-            : $"could not listen on UDP {Port}: {error}");
-        return error;
+            : $"could not listen on UDP {Port}: {result.Detail}");
+        return result;
     }
 
-    public override void _ExitTree() => transport.Close();
+    public override void _ExitTree()
+    {
+        transport.Connected -= OnTransportConnected;
+        transport.Disconnected -= OnTransportDisconnected;
+        transport.Packet -= OnPacket;
+        subscribed = false;
+        Running = false;
+        transport.Close();
+    }
+
+    private void OnTransportConnected(ConnectionHandle connection)
+    {
+        var id = peerIds.PeerId(connection);
+        OnConnected(id);
+        clients[id].Connection = connection;
+    }
+
+    private void OnTransportDisconnected(ConnectionHandle connection, DisconnectReason reason)
+    {
+        var id = peerIds.PeerId(connection);
+        Log($"peer {id} disconnect reason {reason.Kind}: {reason.Detail} (backend {reason.BackendCode?.ToString() ?? "unavailable"})");
+        if (clients.TryGetValue(id, out var client) && client.Connection == connection) { OnDisconnected(id); }
+    }
+
+    private void OnPacket(ConnectionHandle connection, TrafficClass traffic, ReadOnlyMemory<byte> bytes) =>
+        OnReceived(peerIds.PeerId(connection), bytes.ToArray());
 
     public override void _Process(double delta)
     {
@@ -117,13 +154,23 @@ public partial class LobbyServer : Node
             return;
         }
         transport.Poll();
-        var now = NetTransport.Now;
+        var now = clock.Seconds;
         foreach (var client in clients.Values.Where(c => c.KickAt > 0 && now >= c.KickAt).ToList())
         {
             client.KickAt = 0;
-            transport.Kick(client.Id);
+            if (peerIds.Connection(client.Id) is { } connection) { transport.Disconnect(connection, client.Rejection ?? DisconnectReason.LocalClose); }
         }
         AdvanceMatches(now);
+        if (now >= nextDiagnostics)
+        {
+            nextDiagnostics = now + 10;
+            foreach (var id in clients.Keys)
+            {
+                if (peerIds.Connection(id) is not { } connection) { continue; }
+                var d = transport.Diagnostics(connection);
+                Log($"net peer {id} in {d.PacketsIn}/{d.BytesIn}B out {d.PacketsOut}/{d.BytesOut}B rtt {d.RoundTripMilliseconds:0.0}ms queue {d.QueuedPackets}/{d.QueuedBytes}B drops {d.Drops} poll {d.PollMilliseconds:0.000}ms native-queue {d.NativeQueueBytes?.ToString() ?? "unavailable"} loss {d.NativeLoss?.ToString("0.000") ?? "unavailable"}");
+            }
+        }
     }
 
     // ------------------------------------------------------------------ Connections
@@ -186,7 +233,7 @@ public partial class LobbyServer : Node
                     break;
                 case Msg.ClaimPickup: ClaimPickup(client, ((IntMessage)message.Payload).Value); break;
                 case Msg.Ping:
-                    Send(client.Id, new NetWriter(Msg.Pong).Double(((TimeMessage)message.Payload).Value).Double(NetTransport.Now), reliable: false);
+                    Send(client.Id, new NetWriter(Msg.Pong).Double(((TimeMessage)message.Payload).Value).Double(clock.Seconds), traffic: TrafficClass.UnreliablePlayerPoses);
                     break;
             }
         }
@@ -202,8 +249,9 @@ public partial class LobbyServer : Node
         var mismatch = BuildInfo.Mismatch(hello.Protocol, hello.Version);
         if (mismatch != null)
         {
-            Send(client.Id, new NetWriter(Msg.Rejected).String(mismatch).String(BuildInfo.GameVersion), reliable: true);
-            client.KickAt = NetTransport.Now + 1;
+            Send(client.Id, new NetWriter(Msg.Rejected).String(mismatch).String(BuildInfo.GameVersion), traffic: TrafficClass.ReliableOrdered);
+            client.KickAt = clock.Seconds + 1;
+            client.Rejection = new DisconnectReason(DisconnectKind.ApplicationRejected, mismatch);
             Log($"peer {client.Id} ({hello.Version}, build {hello.Build}) turned away: {mismatch}");
             return;
         }
@@ -211,7 +259,7 @@ public partial class LobbyServer : Node
         client.Color = hello.Color;
         client.Debug = hello.Debug;
         client.Welcomed = true;
-        Send(client.Id, new NetWriter(Msg.Welcome).Int(client.Id).String(BuildInfo.GameVersion), reliable: true);
+        Send(client.Id, new NetWriter(Msg.Welcome).Int(client.Id).String(BuildInfo.GameVersion), traffic: TrafficClass.ReliableOrdered);
         SendLobbyList(client);
         Log($"peer {client.Id} is {client.Name} ({hello.Version}, build {hello.Build}, debug {hello.Debug})");
     }
@@ -284,7 +332,7 @@ public partial class LobbyServer : Node
             {
                 Send(id, MessageCodec.Encode(new NetMessage(Msg.Authority, match.Id, 0,
                     new AuthorityMessage(match.HostId, 0, ClaimRefusal.None, transfers)), fromServer: true));
-                Send(id, new NetWriter(Msg.PlayerLeft, match.Id).Int(client.Id).Int(match.HostId), reliable: true);
+                Send(id, new NetWriter(Msg.PlayerLeft, match.Id).Int(client.Id).Int(match.HostId), traffic: TrafficClass.ReliableOrdered);
             }
             if (match.Players.Count == 0)
             {
@@ -354,7 +402,7 @@ public partial class LobbyServer : Node
         var bytes = w.ToArray();
         foreach (var id in lobby.Members)
         {
-            Send(id, bytes, reliable: true);
+            Send(id, bytes, traffic: TrafficClass.ReliableOrdered);
         }
     }
 
@@ -369,18 +417,18 @@ public partial class LobbyServer : Node
         return w.ToArray();
     }
 
-    private void SendLobbyList(Client client) => Send(client.Id, LobbyList(), reliable: true);
+    private void SendLobbyList(Client client) => Send(client.Id, LobbyList(), traffic: TrafficClass.ReliableOrdered);
 
     private void BroadcastLobbyList()
     {
         var bytes = LobbyList();
         foreach (var client in clients.Values.Where(c => c.Welcomed && c.Lobby == null))
         {
-            Send(client.Id, bytes, reliable: true);
+            Send(client.Id, bytes, traffic: TrafficClass.ReliableOrdered);
         }
     }
 
-    private void Notice(Client client, string text) => Send(client.Id, new NetWriter(Msg.Notice).String(text), reliable: true);
+    private void Notice(Client client, string text) => Send(client.Id, new NetWriter(Msg.Notice).String(text), traffic: TrafficClass.ReliableOrdered);
 
     // ------------------------------------------------------------------ Match flow
 
@@ -434,11 +482,11 @@ public partial class LobbyServer : Node
         var bytes = w.ToArray();
         foreach (var id in match.Players)
         {
-            Send(id, bytes, reliable: true);
+            Send(id, bytes, traffic: TrafficClass.ReliableOrdered);
         }
         lobby.Match = match;
         lobby.Phase = LobbyPhase.Loading;
-        match.PhaseEnds = NetTransport.Now + LoadTimeout;
+        match.PhaseEnds = clock.Seconds + LoadTimeout;
         SendLobbyState(lobby);
         BroadcastLobbyList();
     }
@@ -490,7 +538,7 @@ public partial class LobbyServer : Node
                 if (now >= match.NextClock)
                 {
                     match.NextClock += 1;
-                    Broadcast(match, new NetWriter(Msg.Clock, match.Id).Float((float)Math.Max(0, match.PhaseEnds - now)), reliable: false);
+                    Broadcast(match, new NetWriter(Msg.Clock, match.Id).Float((float)Math.Max(0, match.PhaseEnds - now)), traffic: TrafficClass.UnreliablePlayerPoses);
                 }
                 if (now >= match.PhaseEnds)
                 {
@@ -535,7 +583,7 @@ public partial class LobbyServer : Node
             return;
         }
         match.PickupUp[index] = false;
-        match.PickupBack[index] = NetTransport.Now + match.Tuning.PickupRespawnTime;
+        match.PickupBack[index] = clock.Seconds + match.Tuning.PickupRespawnTime;
         Broadcast(match, new NetWriter(Msg.PickupTaken, match.Id).Int(index).Int(client.Id));
     }
 
@@ -554,7 +602,7 @@ public partial class LobbyServer : Node
         switch (message.Payload)
         {
             case ExplodeMessage explosion:
-                var detonation = match.Tanks.Detonate(client.Id, explosion, lobby.Phase == LobbyPhase.Playing && NetTransport.Now < match.PhaseEnds);
+                var detonation = match.Tanks.Detonate(client.Id, explosion, lobby.Phase == LobbyPhase.Playing && clock.Seconds < match.PhaseEnds);
                 PublishAuthority(match, detonation);
                 if (detonation.Reason == ClaimRefusal.None)
                 {
@@ -564,13 +612,13 @@ public partial class LobbyServer : Node
                 }
                 return;
             case PunctureMessage puncture:
-                PublishAuthority(match, match.Tanks.Puncture(client.Id, puncture, lobby.Phase == LobbyPhase.Playing && NetTransport.Now < match.PhaseEnds));
+                PublishAuthority(match, match.Tanks.Puncture(client.Id, puncture, lobby.Phase == LobbyPhase.Playing && clock.Seconds < match.PhaseEnds));
                 return;
             case DropMessage drop:
                 try
                 {
                     var limit = drop.Reason == 1 ? match.Tuning.RagdollDropCount : match.Tuning.HitDropCount;
-                    if (lobby.Phase != LobbyPhase.Playing || NetTransport.Now >= match.PhaseEnds || drop.Tanks.Count > limit || drop.Tanks.Count > match.Scores[client.Id] || drop.Color != match.Profiles[client.Id].Color)
+                    if (lobby.Phase != LobbyPhase.Playing || clock.Seconds >= match.PhaseEnds || drop.Tanks.Count > limit || drop.Tanks.Count > match.Scores[client.Id] || drop.Color != match.Profiles[client.Id].Color)
                     {
                         throw new InvalidDataException("drop outside play, exceeds bank/tuner or has wrong color");
                     }
@@ -592,7 +640,7 @@ public partial class LobbyServer : Node
                     : losses with { LostToHits = losses.LostToHits + drop.Tanks.Count };
                 break;
             case ClaimMessage claim:
-                PublishAuthority(match, match.Tanks.Claim(client.Id, claim, lobby.Phase == LobbyPhase.Playing && NetTransport.Now < match.PhaseEnds));
+                PublishAuthority(match, match.Tanks.Claim(client.Id, claim, lobby.Phase == LobbyPhase.Playing && clock.Seconds < match.PhaseEnds));
                 return;
             case BodyStatesMessage states:
                 match.Tanks.ValidateBodies(states.Bodies.Select(b => b.Id));
@@ -600,7 +648,7 @@ public partial class LobbyServer : Node
                 if (accepted.Length == 0) { return; }
                 // Sampling uses the owner's estimate of our clock, only for bounded pose extrapolation, never ordering.
                 // Zero means no ping yet: fall back to this relay's time instead of inventing a sampling age.
-                var relayedAt = NetTransport.Now;
+                var relayedAt = clock.Seconds;
                 var sampledAt = states.Time == 0 ? relayedAt : System.Math.Clamp(states.Time,
                     System.Math.Max(0, relayedAt - BodySync.MaxExtrapolation), relayedAt);
                 message = message with { Payload = states with { Time = sampledAt, Bodies = accepted } };
@@ -623,10 +671,15 @@ public partial class LobbyServer : Node
                 break;
         }
         var bytes = MessageCodec.Encode(message with { Sender = client.Id }, fromServer: true);
-        var reliable = message.Type is not (Msg.PlayerState or Msg.BodyStates);
+        var traffic = message.Type switch
+        {
+            Msg.PlayerState => TrafficClass.UnreliablePlayerPoses,
+            Msg.BodyStates => TrafficClass.UnreliableBodyStates,
+            _ => TrafficClass.ReliableOrdered,
+        };
         foreach (var id in match.Players)
         {
-            if (id != client.Id || includeSender) { Send(id, bytes, reliable); }
+            if (id != client.Id || includeSender) { Send(id, bytes, traffic); }
         }
     }
 
@@ -655,21 +708,29 @@ public partial class LobbyServer : Node
         Broadcast(match, new NetWriter(Msg.Score, match.Id).Int(player).Int(next).Int(next - score));
     }
 
-    private void Broadcast(MatchRun match, NetWriter message, bool reliable = true)
+    private void Broadcast(MatchRun match, NetWriter message, TrafficClass traffic = TrafficClass.ReliableOrdered)
     {
         var bytes = message.ToArray();
         foreach (var id in match.Players)
         {
-            Send(id, bytes, reliable);
+            Send(id, bytes, traffic);
         }
     }
 
-    private void Send(int peer, NetWriter message, bool reliable = true) => Send(peer, message.ToArray(), reliable);
+    private void Send(int peer, NetWriter message, TrafficClass traffic = TrafficClass.ReliableOrdered) => Send(peer, message.ToArray(), traffic);
 
-    private void Send(int peer, byte[] bytes, bool reliable = true)
+    private void Send(int peer, byte[] bytes, TrafficClass traffic = TrafficClass.ReliableOrdered)
     {
-        if (SendOverride != null) { SendOverride(peer, bytes, reliable); }
-        else { transport.Send(peer, bytes, reliable); }
+        if (SendOverride != null) { SendOverride(peer, bytes, traffic == TrafficClass.ReliableOrdered); }
+        else if (peerIds.Connection(peer) is { } connection)
+        {
+            var result = transport.Send(connection, traffic, bytes);
+            if (traffic == TrafficClass.ReliableOrdered && result is SendResult.Backpressure or SendResult.Oversized)
+            {
+                transport.Disconnect(connection, new DisconnectReason(DisconnectKind.TransportFailure,
+                    $"Could not send a required message ({result}). Please reconnect."));
+            }
+        }
     }
 
     private static void Log(string text) => GD.Print($"[server {Time.GetDatetimeStringFromSystem()}] {text}");

@@ -16,10 +16,10 @@ public static class LifecycleTests
             try
             {
                 TestRunner.Assert(client.BodySampleTime(4) == 0, "unsynchronized sample invented a server clock");
-                var before = NetTransport.Now;
+                var before = MonotonicClock.Now;
                 var serverTime = before + 100;
                 client.Handle(MessageCodec.Encode(new NetMessage(Msg.Pong, 0, 0, new PongMessage(before - 0.2, serverTime)), true));
-                var after = NetTransport.Now;
+                var after = MonotonicClock.Now;
                 var stamp = client.BodySampleTime(after + 3);
                 TestRunner.Assert(stamp >= serverTime + 3.1 - 0.00001 && stamp <= serverTime + 3.1 + after - before + 0.00001,
                     "sampling used the client's unrelated clock instead of its ping estimate");

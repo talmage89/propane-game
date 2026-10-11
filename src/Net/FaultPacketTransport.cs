@@ -63,7 +63,8 @@ public sealed class FaultPacketTransport : IPacketTransport
         inner.Disconnected += (connection, reason) =>
         {
             Clear(connection);
-            Disconnected?.Invoke(connection, reason);
+            try { Disconnected?.Invoke(connection, reason); }
+            finally { states.Remove(connection); }
         };
         inner.Packet += (connection, traffic, bytes) =>
         {
@@ -87,13 +88,11 @@ public sealed class FaultPacketTransport : IPacketTransport
     public OpenResult Listen(PacketEndpoint endpoint, int maxConnections)
     {
         Close();
-        states.Clear();
         return inner.Listen(endpoint, maxConnections);
     }
     public OpenResult Connect(PacketEndpoint endpoint, out ConnectionHandle? connection)
     {
         Close();
-        states.Clear();
         var result = inner.Connect(endpoint, out connection);
         if (result.Success && connection != null) { states.Add(connection, new State()); }
         return result;

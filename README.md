@@ -58,7 +58,9 @@ addresses friends can use. Versions with the same major and minor number play to
 server turns away others and says which version it needs.
 
 To play against bots, create a lobby and run `make bots SERVER=host[:port]` (from source; `make bots-stop` stops them).
-Starting the game with `-- --connect=host[:port]` skips straight to that server's lobbies. On Windows or macOS, the
+Starting the game with `-- --connect=host[:port]` skips straight to that server's lobbies.
+The message transport is injectable for deterministic tests; see the [transport contract](docs/multiplayer.md#transport-contract)
+for fault simulation, disconnect reasons and diagnostics. On Windows or macOS, the
 first time you host, allow incoming connections if the system asks.
 
 The dedicated server is the same game run headless: `./Propane.x86_64 --headless -- --server [--port=24680]`.

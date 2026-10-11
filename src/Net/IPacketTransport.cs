@@ -1,5 +1,4 @@
 using System;
-using System.Diagnostics;
 
 namespace Propane.Net;
 
@@ -41,7 +40,7 @@ public readonly record struct TransportDiagnostics(long PacketsIn, long BytesIn,
 /// send accepts nothing. Packet memory is borrowed for the duration of the callback: copy it before retaining.
 /// ReliableOrdered preserves send order per connection; the other classes may reorder or disappear. No ordering
 /// is promised across classes. Disconnect/Close invalidate handles immediately and discard queued packets;
-/// notifications arrive on the next Poll. Diagnostics for retired handles remain available until the next open.
+/// notifications are deferred to Poll. Diagnostics remain available through Disconnected, then expire.
 /// </summary>
 public interface IPacketTransport
 {
@@ -66,7 +65,8 @@ public interface IMonotonicClock
 public sealed class MonotonicClock : IMonotonicClock
 {
     public static readonly MonotonicClock Instance = new();
-    public static double Now => (double)Stopwatch.GetTimestamp() / Stopwatch.Frequency;
+    // Keep the existing process-relative wire clock; it is independent of Engine.TimeScale.
+    public static double Now => Godot.Time.GetTicksUsec() / 1_000_000.0;
     public double Seconds => Now;
 }
 

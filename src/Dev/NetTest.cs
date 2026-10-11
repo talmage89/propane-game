@@ -306,7 +306,7 @@ public partial class NetTest : Node
         var entry = match.Bodies.Get(id)!;
         if (entry.Owner != net.MyId && entry.HasTarget)
         {
-            var lead = (float)Math.Clamp(NetTransport.Now - entry.TargetReceived, 0, 0.3);
+            var lead = (float)Math.Clamp(MonotonicClock.Now - entry.TargetReceived, 0, 0.3);
             var drift = tank.GlobalPosition.DistanceTo(entry.Target.Origin + entry.TargetLinear * lead);
             raceWorst = Mathf.Max(raceWorst, drift);
             ScenarioAssert(drift <= Tuning.Current.SnapDistance + 0.5f, $"race: trajectory escaped owner corrections ({drift:0.000} m)");
@@ -314,7 +314,7 @@ public partial class NetTest : Node
         if (raceTick % 6 == 0)
         {
             raceSamples++;
-            Log($"race path time {NetTransport.Now + net.ServerClockOffset:0.000} pos {Vector(tank.GlobalPosition)}");
+            Log($"race path time {MonotonicClock.Now + net.ServerClockOffset:0.000} pos {Vector(tank.GlobalPosition)}");
         }
         if (raceTick == 720)
         {
