@@ -9,7 +9,7 @@ namespace Propane.Dev;
 
 /// <summary>
 /// Scripted player test: locomotion, hip fire, aimed fire, reloads, a tank blast that ragdolls the player, and the get-up.
-/// Run: godot --fixed-fps 60 res://scenes/dev/player_range.tscn -- --capture-dir=/tmp/p [--scenario=...] [--view=side]
+/// Run: godot-mono --fixed-fps 60 res://scenes/dev/player_range.tscn -- --capture-dir=$PWD/build/player-range [--scenario=...] [--view=side]
 /// Views: player, side, front, left, top, rightclose, leftclose, rifleleft, rifleright.
 /// </summary>
 public partial class PlayerRange : Node3D
@@ -68,6 +68,28 @@ public partial class PlayerRange : Node3D
             ? MotionProbe.Attach(player, scenario == "motion") : null;
         switch (scenario)
         {
+            case "bot-recoil":
+                world.Random.Seed = 19019;
+                player.Ammo = new AmmoState { Tuning = world.Tuning, Magazine = 30, Reserve = 0 };
+                script.Hold(0, 41, new PlayerIntent { Aim = DevArgs.GetFloat("distance", 20) > 9 });
+                var magazines = System.Math.Clamp((int)DevArgs.GetFloat("magazines", 10), 1, 10);
+                for (var magazine = 0; magazine < magazines; magazine++)
+                    script.Hold(magazine * 4 + 1, magazine * 4 + 3.8f, new PlayerIntent { FireHeld = true });
+                AddChild(new BotRecoilProbe { Player = player });
+                director.QuitAfter = magazines * 4 + 2;
+                break;
+            case "recoil":
+                world.Random.Seed = 19019;
+                player.Ammo = new AmmoState { Tuning = world.Tuning, Magazine = world.Tuning.MagazineSize, Reserve = 0 };
+                player.Aim.SetOrientation(0, DevArgs.GetFloat("pitch", -10));
+                var stance = DevArgs.Get("stance") ?? "aim";
+                script.Hold(.1f, 9.9f, new PlayerIntent { Aim = stance != "hip", Move = stance == "creep" ? Vector2.Down : Vector2.Zero });
+                if (stance == "air") script.Jump(.8f);
+                script.Hold(DevArgs.GetFloat("burst-start", 1), 4.6f, new PlayerIntent { FireHeld = true });
+                var recoil = RecoilProbe.Attach(player, director);
+                director.At(9.8f, recoil.Finish);
+                director.QuitAfter = 10;
+                break;
             case "melee-reloads":
                 director.QuitAfter = 31;
                 for (var episode = 0; episode < 10; episode++)

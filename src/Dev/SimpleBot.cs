@@ -17,6 +17,7 @@ namespace Propane.Dev;
 public sealed class SimpleBot : IBotBrain
 {
     private PlayerIntent intent;
+    private readonly BotAim aimControl = new();
     private Node3D? target;
     private Vector3 targetPoint;
     private float retarget;
@@ -42,6 +43,7 @@ public sealed class SimpleBot : IBotBrain
         intent = new PlayerIntent();
         if (!match.IsPlaying || player.IsRagdolled)
         {
+            aimControl.Reset();
             return;
         }
         var ammo = player.Ammo!;
@@ -78,10 +80,7 @@ public sealed class SimpleBot : IBotBrain
 
         // Face the target from the logical eye, whether or not the actor has a rendered view.
         var aim = player.Aim;
-        var view = targetPoint - aim.EyeOrigin;
-        var yaw = Mathf.RadToDeg(Mathf.Atan2(-view.X, -view.Z));
-        var pitch = Mathf.RadToDeg(Mathf.Asin(Mathf.Clamp(view.Normalized().Y, -1, 1)));
-        player.Aim.SetOrientation(yaw, pitch);
+        Face(player, targetPoint, dt);
 
         // In range but unable to hit it (a fence or house in the way): close in, then give up on it.
         if (blocked > 1.2f)
@@ -145,6 +144,8 @@ public sealed class SimpleBot : IBotBrain
             }
         }
     }
+
+    internal void Face(PlayerCharacter player, Vector3 point, float dt) => aimControl.Track(player, point, dt, 1, smooth: false);
 
     private Node3D? Choose(Match match, AmmoState ammo)
     {

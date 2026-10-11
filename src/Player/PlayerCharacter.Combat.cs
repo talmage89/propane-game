@@ -65,7 +65,9 @@ public partial class PlayerCharacter
         Fire(SpreadDegrees);
         bloom += tuning.ShotBloomDegrees;
         rig.Kick();
-        Aim.Kick(tuning.RecoilKickDegrees * Mathf.Lerp(1f, tuning.AimRecoilScale, aim));
+        var recoilScale = Mathf.Lerp(1f, tuning.AimRecoilScale, aim);
+        Aim.Kick(tuning.RecoilKickDegrees * recoilScale);
+        View?.CameraRig.KickPresentation(recoilScale);
     }
 
     private void Fire(float spreadDegrees)
@@ -81,6 +83,7 @@ public partial class PlayerCharacter
         var end = hit.Count > 0 ? hit["position"].AsVector3() : start + direction * tuning.ShotRange;
 
         // The bullet really leaves the muzzle: something between the muzzle and the target blocks it first.
+        rig.AlignShot(end);
         var muzzle = rifle.MuzzlePosition;
         var toEnd = end - muzzle;
         if (toEnd.LengthSquared() > 0.01f)
@@ -93,6 +96,8 @@ public partial class PlayerCharacter
             }
         }
 
+        rifle.AlignBarrel(end);
+
         rifle.Fire(lastRound: Ammo is { Magazine: 0 });
         World.Spawn.Effect(Tracer.Create(muzzle, end));
 
@@ -104,7 +109,7 @@ public partial class PlayerCharacter
         }
         if (hit.Count == 0)
         {
-            Fired?.Invoke(new ShotReport(muzzle, end, Vector3.Zero, direction, null, false));
+            Fired?.Invoke(new ShotReport(muzzle, end, Vector3.Zero, (end - muzzle).Normalized(), null, false));
             return;
         }
         var normal = hit["normal"].AsVector3();

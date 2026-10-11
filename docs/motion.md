@@ -15,8 +15,10 @@ stride. Remote characters use displayed snapshot travel, just like their feet.
 Both local fire and the existing remote Shot event add momentum to an exact underdamped `RecoilSpring`. The torso
 absorbs most of the rearward travel and some pitch; the remaining compression and muzzle lift pivot about the stock.
 The shouldered pose fits the head to the moving eye socket. Bursts preserve the spring's displacement and momentum,
-then settle to zero. Camera recoil also returns completely, including its transient sideways kick, without changing
-the player's input yaw or pitch. Shot rays and spread still use the existing camera path.
+then settle to zero. R19 adds a separate short camera spring, while persistent climb belongs to logical aim.
+Shot rays retain their existing spread sampler and logical eye path. During a burst the rig aligns the barrel
+immediately, absorbing the spring's kick in placement and the body. See [the recoil review](recoil.md) for the
+new climb curves, alignment measurements and the firing-pose exceptions below.
 
 `PoseBlend` runs before contacts, bounds authored animation changes, and observes the displayed pose at the end of
 the modifier stack. Get-up starts from that displayed pose. Physical ragdoll bones remain authoritative; digits,
@@ -28,6 +30,11 @@ The rig interpolates a coherent upper pose and rifle placement, then solves both
 clamping arm rotations after IK. The aimed eye anchors the final placement before the reach projection. Finger curls
 also obey the angular tuner. This can delay presentation during abrupt look changes; effective aim and fire remain
 immediate. No per-frame pose arrays are allocated after bone resolution.
+
+Firing barrel alignment overrides wrist interpolation: both arms solve their contact frames immediately, while
+body/head changes on a shot use `RifleShotPoseAngularSpeed`. The reachable placement also includes the aimed eye's
+neck reach, so alignment toward a nearby floor does not pull the stock away from the cheek. Carry, reload, melee
+and get-up retain their existing interpolation. The probe reports firing-arm changes separately from those bounds.
 
 Earlier contact release (`FootContactRadius`) prevents the trailing lateral sprint leg from exhausting reach while
 waiting behind the planted leading foot. Air and contact recovery bound lower-pose changes while contacts are
@@ -73,8 +80,10 @@ and transport flags. Keep `-w 0 -l 18 --matches=2` for the headless reuse/second
 
 `make test` asserts final wrist contact and sampled hand penetration, a maximum angular rate of 1500 degrees/s
 (25 degrees at 60 Hz), and creep lateral muzzle range no greater than 12 mm over a measured steady interval.
-The motion scenario also requires burst coverage and camera return within 0.02 degrees after both bursts.
-Unit tests check spring recovery at 30/60/120 Hz, burst accumulation, bounded response and lifecycle reset.
+During firing, the body/head bound is the shared `RifleShotPoseAngularSpeed` (2400 degrees/s); the two arms follow
+the instantaneous rigid barrel and are measured separately. The motion scenario requires burst coverage and the
+expected retained logical climb after both bursts. Unit tests check presentation spring recovery and retained aim
+at 30/60/120 Hz, device pull-down, aim limits, lifecycle reset and muzzle-preserving alignment.
 
 The rotation metric covers every local bone after all modifiers. Spawn and explicit staging teleports are excluded;
 ordinary snapshot corrections remain measured. Physical ragdoll samples are reported separately because limiting
@@ -85,6 +94,9 @@ GPU readback. The local comparison uses fixed 60 Hz stepping; a network screensh
 the rate as well as the raw frame maximum.
 
 ## Review results
+
+These package 4 measurements predate R19. In particular, complete camera return and bounded firing-arm changes
+are historical results; [R19](recoil.md) records their replacements and the remaining animation tradeoff.
 
 The reference is package 3 (`cf3adce`) with the motion capture harness only. Baseline failures came from abrupt
 look/stance changes in the neck and arm IK, trigger curls, get-up/reacquisition of the carry, and the trailing

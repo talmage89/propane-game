@@ -22,12 +22,16 @@ public partial class MotionProbe : SkeletonModifier3D
     private double time;
     private Vector3 previousRoot;
     private float maximum, maximumRate;
+    private float alignedArmMaximum;
     private float minMuzzle = float.PositiveInfinity, maxMuzzle = float.NegativeInfinity;
     private int frames, creepFrames;
     private bool invalid;
-    private readonly Quaternion[] cameraBefore = new Quaternion[2];
-    private readonly bool[] cameraStarted = new bool[2], cameraFinished = new bool[2];
-    private float cameraDrift;
+    private bool rotationFailed;
+    private readonly float[] pitchBefore = new float[2];
+    private readonly float[] expectedClimb = new float[2];
+    private bool climbFailed;
+    private readonly bool[] burstStarted = new bool[2], burstFinished = new bool[2];
+    private float maximumClimb;
     private int recoilFrames;
     public int RecoilFrames => recoilFrames;
 
@@ -37,6 +41,22 @@ public partial class MotionProbe : SkeletonModifier3D
         var probe = new MotionProbe { Player = player, RequireCreep = requireCreep };
         skeleton.AddChild(probe);
         return probe;
+    }
+
+    public override void _Ready() => Player.Fired += Shot;
+    public override void _ExitTree() => Player.Fired -= Shot;
+
+    private void Shot(ShotReport shot)
+    {
+        if (!RequireCreep) return;
+        for (var burst = 0; burst < 2; burst++)
+        {
+            var before = burst == 0 ? 11.3 : 13.8;
+            var after = burst == 0 ? 13.3 : 16.0;
+            var tuning = Player.World.Tuning;
+            if (time >= before && time < after)
+                expectedClimb[burst] += tuning.RecoilKickDegrees * (Player.ResolvedState.EffectiveAim ? tuning.AimRecoilScale : 1) * (1 - tuning.RecoilReturnShare);
+        }
     }
 
     public override void _ProcessModificationWithDelta(double delta)
@@ -65,6 +85,15 @@ public partial class MotionProbe : SkeletonModifier3D
                 var name = s.GetBoneName(i).ToString();
                 var digit = name.StartsWith("index_", StringComparison.Ordinal) || name.StartsWith("middle_", StringComparison.Ordinal) ||
                     name.StartsWith("ring_", StringComparison.Ordinal) || name.StartsWith("pinky_", StringComparison.Ordinal) || name.StartsWith("thumb_", StringComparison.Ordinal);
+                var alignedArm = rig.TrackingBarrelThisFrame && (name.StartsWith("upperarm_", StringComparison.Ordinal) ||
+                    name.StartsWith("lowerarm_", StringComparison.Ordinal) || name.StartsWith("hand_", StringComparison.Ordinal));
+                var shotBody = rig.AlignedShotThisFrame && (name.StartsWith("spine_", StringComparison.Ordinal) ||
+                    name.StartsWith("clavicle_", StringComparison.Ordinal) || name == "neck_01" || name == "Head");
+                if (!physical || digit)
+                {
+                    if (alignedArm) alignedArmMaximum = Mathf.Max(alignedArmMaximum, degrees);
+                    else rotationFailed |= degrees / delta > (shotBody ? Player.World.Tuning.RifleShotPoseAngularSpeed : 1500f) + 0.01f;
+                }
                 var statistics = physical && !digit ? physicalMaxima : maxima;
                 if (physical && digit)
                 {
@@ -94,13 +123,17 @@ public partial class MotionProbe : SkeletonModifier3D
             {
                 var before = burst == 0 ? 11.3 : 13.8;
                 var after = burst == 0 ? 13.3 : 16.0;
-                var camera = Player.Aim.EyeTransform.Basis.GetRotationQuaternion();
-                if (time >= before && !cameraStarted[burst]) { cameraBefore[burst] = camera; cameraStarted[burst] = true; }
-                if (time >= after && !cameraFinished[burst])
+                var pitch = Player.Aim.Pitch;
+                if (time >= before && !burstStarted[burst]) { pitchBefore[burst] = pitch; burstStarted[burst] = true; }
+                if (time >= after && !burstFinished[burst])
                 {
-                    var difference = cameraBefore[burst].Inverse() * camera;
-                    cameraDrift = Mathf.Max(cameraDrift, Mathf.RadToDeg(2 * Mathf.Atan2(new Vector3(difference.X, difference.Y, difference.Z).Length(), Mathf.Abs(difference.W))));
-                    cameraFinished[burst] = true;
+                    var climb = pitch - pitchBefore[burst];
+                    maximumClimb = Mathf.Max(maximumClimb, climb);
+                    var expected = expectedClimb[burst];
+                    // The retained share must remain; the small outstanding settle budget may still be visible.
+                    climbFailed |= expected < 0.5f || climb < expected - 0.05f ||
+                        climb > expected / (1 - Player.World.Tuning.RecoilReturnShare) + 0.05f;
+                    burstFinished[burst] = true;
                 }
             }
         }
@@ -123,9 +156,9 @@ public partial class MotionProbe : SkeletonModifier3D
         foreach (var (bone, degrees) in physicalMaxima.Where(p => p.Value > 25).OrderByDescending(p => p.Value))
             GD.Print(FormattableString.Invariant($"[motion physical] {bone} max={degrees:F3}deg"));
         var range = creepFrames > 0 ? maxMuzzle - minMuzzle : 0;
-        var failed = invalid || frames < 100 || maximumRate > 1500.01f ||
-            (RequireCreep && (creepFrames < 50 || !float.IsFinite(range) || range > 0.012f || recoilFrames < 20 || cameraFinished.Any(done => !done) || cameraDrift > 0.02f));
-        GD.Print(FormattableString.Invariant($"[motion] {(assert && failed ? "FAIL" : assert ? "PASS" : "MEASURED")} frames={frames} max={maximum:F3}deg physical-max={physicalMaximum:F3}deg rate={maximumRate:F2}deg/s creep-frames={creepFrames} muzzle-range={range:F6}m recoil-frames={recoilFrames} camera-drift={cameraDrift:F6}deg"));
+        var failed = invalid || frames < 100 || rotationFailed ||
+            (RequireCreep && (creepFrames < 50 || !float.IsFinite(range) || range > 0.012f || recoilFrames < 20 || burstFinished.Any(done => !done) || climbFailed));
+        GD.Print(FormattableString.Invariant($"[motion] {(assert && failed ? "FAIL" : assert ? "PASS" : "MEASURED")} frames={frames} max={maximum:F3}deg physical-max={physicalMaximum:F3}deg rate={maximumRate:F2}deg/s aligned-arm-max={alignedArmMaximum:F3}deg creep-frames={creepFrames} muzzle-range={range:F6}m recoil-frames={recoilFrames} aim-climb={maximumClimb:F6}deg"));
         var directory = DevArgs.Get("capture-dir");
         if (directory != null)
         {
@@ -134,6 +167,6 @@ public partial class MotionProbe : SkeletonModifier3D
             file.StoreString(csv.ToString());
         }
         Active = false;
-        if (assert && failed) { GD.PushError("[motion] FAIL rotation continuity or creep aim steadiness"); ShutdownGuard.Quit(GetTree(), 1); }
+        if (assert && failed) { GD.PushError("[motion] FAIL rotation continuity or creep steadiness or persistent aim climb"); ShutdownGuard.Quit(GetTree(), 1); }
     }
 }

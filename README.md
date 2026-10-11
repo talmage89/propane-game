@@ -116,9 +116,11 @@ A foot modifier plants world-space contacts, steps in the travel direction and a
 remote clips follow displayed snapshot displacement. Jump poses follow latched takeoff, vertical velocity and
 impact-scaled landing. See [the locomotion review](docs/locomotion.md) for measurements and captures. The node
 facade owns collisions, ammo and lifecycle transitions; the resolver has no scene or engine dependencies.
-Rifle and torso sway follow that stride; walk is subtle and aimed creep stays steady. Shots add spring momentum,
-with the shoulder absorbing the kick and the camera returning fully. Contact-aware upper-body blends keep hands
-attached through stance changes, reload and get-up. See [the motion review](docs/motion.md) for captures and bounds.
+Rifle and torso sway follow that stride; walk is subtle and aimed creep stays steady. Shots climb the logical aim;
+the player pulls against the retained recoil. Short rifle and camera springs supply the visible kick. During a
+burst the barrel tracks each shot, with both hands attached. Contact-aware upper-body blends retain contacts
+through stance changes, reload and get-up. See [the recoil review](docs/recoil.md) for climb, barrel-angle and bot
+measurements, and [the motion review](docs/motion.md) for the other captures and bounds.
 A throw immediately clears weapon poses and cancels reload, so get-up cannot restore a pose from before the throw.
 
 ## Tuning
@@ -282,7 +284,13 @@ $GODOT --fixed-fps 60 res://scenes/dev/player_range.tscn -- --scenario=melee --v
 # Deeper cancellation sweep of both reloads (also in make test-full).
 $GODOT --headless --fixed-fps 60 res://scenes/dev/player_range.tscn -- --scenario=melee-reloads --assert-grip --assert-motion
 # Motion: all gaits, hip/aimed bursts, walking reload and get-up into run, captured at 60 Hz.
-$GODOT --fixed-fps 60 res://scenes/dev/player_range.tscn -- --scenario=motion --view=side --assert-motion --assert-grip --capture-dir=/tmp/motion
+$GODOT --fixed-fps 60 res://scenes/dev/player_range.tscn -- --scenario=motion --view=side --assert-motion --assert-grip --capture-dir="$PWD/build/motion"
+# Full-auto magazine, persistent aim climb and shot/rendered barrel alignment; aim, hip or creep.
+$GODOT --fixed-fps 60 --resolution 1280x720 res://scenes/dev/player_range.tscn -- --scenario=recoil --stance=aim --view=player --assert-grip --assert-motion --capture-dir="$PWD/build/rcl-player"
+# Ten magazines against a player capsule with the production bot aim controller.
+$GODOT --headless --fixed-fps 60 res://scenes/dev/player_range.tscn -- --scenario=bot-recoil --skill=1 --distance=20
+# Real device delivery: held mouse burst, retained climb and mouse pull-down in single and network views.
+$GODOT --headless --fixed-fps 60 res://scenes/dev/menu_test.tscn -- --scenario=input
 # Player scenarios: stances (default), reload, ragdoll, creep (two measured strides), movement (labeled gait/jump transitions),
 # sprint-repro (discovery sequence, exact-tick assertions and transition log), grip (all rifle contacts).
 # feet (all eight body-relative directions in every gait) and feet-events (local starts/stops/turns/jumps/terrain)
