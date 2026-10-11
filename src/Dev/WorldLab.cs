@@ -15,7 +15,7 @@ public partial class WorldLab : Node3D
         AddChild(env);
         var set = DevArgs.Get("set") ?? "houses";
         var scale = DevArgs.GetFloat("scale", 7.5f);
-        string[] models = set switch
+        var models = set switch
         {
             "houses" => "abcdefghijklmnopqrstu".Select(c => $"res://assets/kenney/suburban/building-type-{c}.glb").ToArray(),
             "yard" => new[] { "fence", "fence-1x3", "fence-low", "tree-large", "tree-small", "planter", "driveway-long", "path-long" }.Select(n => $"res://assets/kenney/suburban/{n}.glb").ToArray(),
