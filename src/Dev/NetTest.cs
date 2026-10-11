@@ -102,7 +102,7 @@ public partial class NetTest : Node
             match = new Match { Name = "Match", Net = net, Setup = setup };
             match.Finished += () =>
             {
-                if (DevArgs.Get("scenario") == "duel")
+                if (DevArgs.Get("scenario") is "duel" or "pickup")
                 {
                     ScenarioAssert(scenarioPassed, "scenario ended before all assertions passed");
                 }
@@ -126,6 +126,8 @@ public partial class NetTest : Node
             duelInput = new ScriptedInput();
             duelTank = null;
             duelBlastAt = duelThrowAt = -1;
+            pickupTakenAt = -1;
+            pickupMovedAway = false;
             scenarioPassed = scenarioFailed = false;
             Log($"match {setup.Id} ready with {setup.Players.Count} players; playing {match.IsPlaying}, over {match.IsOver}");
         };
@@ -216,6 +218,8 @@ public partial class NetTest : Node
     private bool scenarioPassed;
     private bool scenarioFailed;
     private int duelInitialScore;
+    private float pickupTakenAt = -1;
+    private bool pickupMovedAway;
 
     /// <summary>
     /// A scripted close-up of the tank bank: the host shoots the other player (dropping tanks behind them, with the
@@ -378,32 +382,54 @@ public partial class NetTest : Node
         {
             AimAt(player, pickup.GlobalPosition + Vector3.Up * 0.3f);
             director.Screenshot("pickup_0_before");
-            duelInput.Hold(duelInput.Now, duelInput.Now + 0.55f, new PlayerIntent { Move = new Vector2(0, 1f) });
+            duelInput.Hold(duelInput.Now, duelInput.Now + 5f, new PlayerIntent { Move = new Vector2(0, 1f) });
         }
-        if (Once(1.2f, dt))
-        {
-            player.Teleport(player.GlobalPosition + new Vector3(3f, 0, 0), player.FacingYaw);
-        }
-        if (Once(1.4f, dt))
+        if (duelTime >= 0.6f && !pickupMovedAway)
         {
             AimAt(player, pickup.GlobalPosition + Vector3.Up * 0.3f);
-        }
-        foreach (var t in new[] { 1.5f, 2.5f })
-        {
-            if (Once(t, dt))
+            if (pickup.ClaimPending || !pickup.Available)
             {
-                director.Screenshot($"pickup_1_taken_{t:0.0}");
+                // Stop only after actually reaching the can, and move out before it can respawn. The old fixed
+                // walking interval could end short of the take radius, yet still capture a "taken" frame.
+                pickupMovedAway = true;
+                duelInput = new ScriptedInput();
+                player.InputOverride = duelInput;
+                player.Teleport(pickup.GlobalPosition + new Vector3(3.5f, 0.05f, 0), player.FacingYaw);
+                AimAt(player, pickup.GlobalPosition + Vector3.Up * 0.3f);
+            }
+        }
+        if (!pickup.Available && pickupTakenAt < 0)
+        {
+            pickupTakenAt = duelTime;
+            ScenarioAssert(player.Ammo!.Reserve == 10 + Tuning.Current.PickupAmount,
+                "pickup: can did not add its rounds exactly once");
+        }
+        if (Once(5f, dt)) { ScenarioAssert(pickupTakenAt >= 0, "pickup: player never took the can"); }
+        if (pickupTakenAt < 0) { return; }
+        foreach (var offset in new[] { 0.15f, 1f })
+        {
+            if (Once(pickupTakenAt + offset, dt))
+            {
+                director.Screenshot($"pickup_1_taken_{offset:0.00}");
                 Log($"pickup available {pickup.Available}, ammo {player.Ammo!.Magazine}/{player.Ammo.Reserve}");
+                ScenarioAssert(!pickup.Available && player.Ammo.Reserve == 10 + Tuning.Current.PickupAmount,
+                    "pickup: can returned early or changed ammo while absent");
             }
         }
         var respawn = Tuning.Current.PickupRespawnTime;
         var reveal = Tuning.Current.PickupRevealTime;
         foreach (var f in new[] { 0.15f, 0.4f, 0.65f, 0.9f, 1.2f })
         {
-            var t = 1.0f + respawn + reveal * f;
+            var t = pickupTakenAt + respawn + reveal * f;
             if (Once(t, dt))
             {
                 director.Screenshot($"pickup_2_reveal_{f:0.00}");
+                if (f == 1.2f)
+                {
+                    ScenarioAssert(pickup.Available, "pickup: can did not respawn");
+                    scenarioPassed = !scenarioFailed;
+                    if (scenarioPassed) { Log("pickup: assertions passed"); }
+                }
             }
         }
     }

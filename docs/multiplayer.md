@@ -187,7 +187,9 @@ Details settled while building, within the decisions above:
 The duel needs two players, `--start-score=8`, default tank-bank tuners and at least 15 seconds of play. It checks
 that three player hits spill exactly two tanks through the grace period, then follows one dropped tank continuously
 and retries missed shots until it explodes. Blast and throw captures are timed from the observed events, so lag does
-not move them out of frame. It exits nonzero if a stage fails or the match ends before all checks complete. The assertions also run headlessly.
+not move them out of frame. The pickup scenario checks that a can adds its rounds exactly once, vanishes and returns;
+allow at least `PickupRespawnTime + PickupRevealTime * 1.2 + 6` seconds. Both scenarios exit nonzero if a stage fails
+or the match ends before all checks complete. These assertions also run headlessly.
 
 Results, 2026-10-09: with three bots under 120 ms round trip, 30 ms jitter and 3% loss, every bot agreed on which tanks existed and their states throughout; resting tanks matched exactly and venting tanks to within about half a meter. The same held through the Docker server on another machine, over the LAN and over a VPN. When the match's creator left mid-match, the others played on in step. A client with a different protocol was turned away with a message.
 
