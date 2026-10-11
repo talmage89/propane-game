@@ -87,6 +87,11 @@ after time expires, but earn nothing. Known exploded body ids may appear in late
 ignore; body ids that never existed are refused. A client missing a server-accepted tank still plays its reported
 blast, including throws, without running a chain or claiming credit locally.
 
+Drops are predicted locally. The server echoes an accepted Drop to its sender as well as the other players, and
+replies with `DropRefused` ids for a fully decoded batch it cannot accept. The sender removes only those pending
+predictions and releases their bank reservation. This also handles legitimate drops overtaken by a live debug
+drop-count change or the server's match deadline. Malformed packets still get no reply.
+
 The ledger proves existence and prevents duplicate scoring; it does not prove hits, movement, proximity or blast
 positions. Those remain decisions of the distributed client authorities.
 
@@ -179,6 +184,7 @@ Details settled while building, within the decisions above:
 | `tools/dev/check_scores.py out/server.log out/bot*.log` | Server conservation audit and identical per-player final scores on every bot; exits nonzero on a missing audit or disagreement. |
 | `net_bots.sh -n 2 -w 2 -s "--start-score=8" -- --scenario=duel --capture-dir=DIR` | Scripted close-up: hits with the grace period, dropped tanks, a blast that throws the victim, from both sides. |
 | `net_bots.sh -n 1 -w 1 -- --scenario=pickup --capture-dir=DIR` | Taking an ammo can and its return. |
+| `net_bots.sh -n 2 -w 2 -l 10 -s "--start-score=8" -- --scenario=drop-refusal --net-lag=120 --net-jitter=30 --net-loss=3 --capture-dir=DIR` | The creator lowers the hit-drop count while a hit is in flight; the victim rolls back the refused drop, both clients keep one accepted tank and a bank of 7. |
 | `net_bots.sh -n 4 -l 120 -b smart,simple,smart,simple` | Bot brains against each other; the server log ends each match with tanks gained / lost to hits / lost to throws. Add `--bot-log` to log what each bot is doing. |
 | `net_bots.sh -n 2 -l 10 -- --match-delay=26` | Builds after the server's loading timeout and Go; the ready log must already say `playing True`. Use `--matches=2` without the delay to exercise another round on the same connection. |
 | `godot res://scenes/dev/menu_test.tscn -- --capture-dir=DIR` | Clicks through every menu, a solo match, leaving it, and single player and back. |
@@ -193,7 +199,7 @@ or the match ends before all checks complete. These assertions also run headless
 
 Results, 2026-10-09: with three bots under 120 ms round trip, 30 ms jitter and 3% loss, every bot agreed on which tanks existed and their states throughout; resting tanks matched exactly and venting tanks to within about half a meter. The same held through the Docker server on another machine, over the LAN and over a VPN. When the match's creator left mid-match, the others played on in step. A client with a different protocol was turned away with a message.
 
-Protocol 3 adds match ids, scalar tuning and timestamps on final body rests, and appends the debug flag to Hello; the next release must be a minor
+Protocol 4 adds match ids, scalar tuning, timestamps on final body rests and drop refusal replies, and appends the debug flag to Hello; the next release must be a minor
 release. Every match-scoped request, event and relay carries its match id, and either side ignores a different id.
 The server ends each match with a bank audit: initial test scores + detonated map tanks + re-detonated drops - spills
 must equal total banked, including the banks of departed players retained in the final standings.

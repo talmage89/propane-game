@@ -10,6 +10,25 @@ public static class LifecycleTests
 {
     public static void Register(TestRunner runner)
     {
+        runner.Run("lifecycle/refused drop predictions release only their own tanks and bank reservation", () =>
+        {
+            foreach (var refuseFirst in new[] { false, true })
+            {
+                var pending = new DropPredictions();
+                var accepted = BodySync.DropTankId(0, 0);
+                var refused = BodySync.DropTankId(0, 1);
+                pending.Add(accepted);
+                pending.Add(refused);
+                if (!refuseFirst) { pending.ScoreConfirmed(-1); pending.Accepted(new[] { accepted }); }
+                var removed = pending.Refused(new[] { BodySync.MapTankId(0), refused, refused });
+                TestRunner.Assert(removed.SequenceEqual(new[] { refused }), "refusal removed foreign or duplicate ids");
+                if (refuseFirst) { pending.ScoreConfirmed(-1); pending.Accepted(new[] { accepted }); }
+                TestRunner.Assert(pending.UnconfirmedCount == 0, "refusal permanently consumed the local bank reservation");
+                TestRunner.Assert(pending.Refused(new[] { accepted, refused }).Count == 0, "late refusal removed a confirmed tank");
+                pending.Add(BodySync.DropTankId(0, 2));
+                TestRunner.Assert(pending.UnconfirmedCount == 1, "subsequent spill could not reserve its bank");
+            }
+        });
         runner.Run("lifecycle/sleeping bodies publish a final state after their owner leaves", () =>
         {
             var body = new RigidBody3D { Sleeping = true };

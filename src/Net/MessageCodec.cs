@@ -32,6 +32,7 @@ public sealed record BodyState(uint Id, Transform3D Transform, Vector3 Linear, V
 public sealed record BodyStatesMessage(double Time, IReadOnlyList<BodyState> Bodies);
 public sealed record BodyRestMessage(uint Id, Transform3D Transform, double Time);
 public sealed record DropMessage(byte Reason, int Color, IReadOnlyList<BodyState> Tanks);
+public sealed record DropRefusedMessage(IReadOnlyList<uint> Ids);
 public sealed record RagdollMessage(Vector3 Position, Vector3 Velocity, Vector3 Spin);
 public sealed record GetUpMessage(Vector3 Position, float Yaw);
 public sealed record TuningMessage(string Name, Variant Value);
@@ -47,7 +48,7 @@ public static class MessageCodec
         if (data.Length == 0 || data.Length > Protocol.MaxPacketBytes) { throw new InvalidDataException("bad packet size"); }
         var type = (Msg)data[0];
         var relay = Protocol.IsRelay(type);
-        if (!(fromServer ? type is >= Msg.Welcome and <= Msg.Pong || relay : type is >= Msg.Hello and <= Msg.Ping || relay))
+        if (!(fromServer ? type is >= Msg.Welcome and <= Msg.DropRefused || relay : type is >= Msg.Hello and <= Msg.Ping || relay))
         {
             throw new InvalidDataException($"unknown or wrong-direction message {(byte)type}");
         }
@@ -79,6 +80,7 @@ public static class MessageCodec
                 new Standing(Positive(r.Int()), r.String(), ColorIndex(r.Int()), Nonnegative(r.Int()), r.Bool()), min: 1),
             Msg.PlayerLeft => new PlayerLeftMessage(Positive(r.Int()), Positive(r.Int())),
             Msg.Pong => new PongMessage(Time(r.Double()), Time(r.Double())),
+            Msg.DropRefused => new DropRefusedMessage(Unique(ReadArray(r, r.UShort(), Protocol.MaxCollection, () => Id(r.UInt()), min: 1))),
             Msg.PlayerState => ReadPlayerState(r),
             Msg.Shot => ReadShot(r),
             Msg.Puncture => ReadPuncture(r),
@@ -157,6 +159,9 @@ public static class MessageCodec
             case BodyRestMessage p: w.UInt(p.Id).Transform(p.Transform).Double(p.Time); break;
             case DropMessage p:
                 w.Byte(p.Reason).Int(p.Tanks.Count).Int(p.Color); foreach (var body in p.Tanks) { WriteBody(w, body); }
+                break;
+            case DropRefusedMessage p:
+                w.UShort((ushort)p.Ids.Count); foreach (var id in p.Ids) { w.UInt(id); }
                 break;
             case RagdollMessage p: w.Vec3(p.Position).Vec3(p.Velocity).Vec3(p.Spin); break;
             case GetUpMessage p: w.Vec3(p.Position).Float(p.Yaw); break;

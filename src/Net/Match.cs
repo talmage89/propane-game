@@ -88,7 +88,7 @@ public partial class Match : Node3D
     private List<Vector3> tankGroups = new();
     private double graceUntil;
     private int dropCounter;
-    private int unconfirmedDrops;
+    private readonly DropPredictions dropPredictions = new();
     private bool ammoFullShown;
     private string noticeText = "";
     private float noticeLeft;
@@ -594,12 +594,11 @@ public partial class Match : Node3D
         {
             return;
         }
-        var count = Mathf.Min(wanted, Mathf.Max(0, MyScore - unconfirmedDrops));
+        var count = Mathf.Min(wanted, Mathf.Max(0, MyScore - dropPredictions.UnconfirmedCount));
         if (count <= 0)
         {
             return;
         }
-        unconfirmedDrops += count;
         var tuning = Tuning.Current;
         var color = profiles[me].Color;
         var rng = new RandomNumberGenerator();
@@ -619,6 +618,7 @@ public partial class Match : Node3D
             var spin = new Vector3(rng.RandfRange(-1, 1), rng.RandfRange(-1, 1), rng.RandfRange(-1, 1)) * 2f;
             var transform = new Transform3D(new Basis(Vector3.Up, rng.RandfRange(0, Mathf.Tau)), position);
             var id = BodySync.DropTankId(mySlot, dropCounter++);
+            dropPredictions.Add(id);
             SpawnDroppedTank(id, me, color, transform, velocity, spin);
             w.UInt(id).Transform(transform).Vec3(velocity).Vec3(spin);
         }
@@ -767,7 +767,17 @@ public partial class Match : Node3D
                 {
                     matchHud.SetScore(update.Score, update.Delta > 0);
                     if (update.Delta > 0) { matchHud.AddScorePopup(update.Delta); }
-                    else if (update.Delta < 0) { unconfirmedDrops = Mathf.Max(0, unconfirmedDrops + update.Delta); }
+                    else if (update.Delta < 0) { dropPredictions.ScoreConfirmed(update.Delta); }
+                }
+                break;
+            case Msg.DropRefused:
+                foreach (var id in dropPredictions.Refused(((DropRefusedMessage)message.Payload).Ids))
+                {
+                    if (!tanks.Remove(id, out var refused)) { continue; }
+                    bodies.Remove(id);
+                    refused.Punctured -= OnTankPunctured;
+                    refused.Detonated -= OnTankDetonated;
+                    refused.QueueFree();
                 }
                 break;
             case Msg.PickupTaken:
@@ -861,6 +871,7 @@ public partial class Match : Node3D
                 bodies.OnRest(sender, rest.Time, rest.Id, rest.Transform, now);
                 break;
             case DropMessage drop:
+                if (sender == me) { dropPredictions.Accepted(drop.Tanks.Select(t => t.Id)); }
                 foreach (var body in drop.Tanks) { SpawnDroppedTank(body.Id, sender, drop.Color, body.Transform, body.Linear, body.Angular); }
                 break;
             case RagdollMessage ragdoll:

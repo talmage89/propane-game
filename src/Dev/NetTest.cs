@@ -102,7 +102,7 @@ public partial class NetTest : Node
             match = new Match { Name = "Match", Net = net, Setup = setup };
             match.Finished += () =>
             {
-                if (DevArgs.Get("scenario") is "duel" or "pickup")
+                if (DevArgs.Get("scenario") is "duel" or "pickup" or "drop-refusal")
                 {
                     ScenarioAssert(scenarioPassed, "scenario ended before all assertions passed");
                 }
@@ -173,7 +173,7 @@ public partial class NetTest : Node
             GetTree().Quit();
             return;
         }
-        if (DevArgs.Get("scenario") == "duel")
+        if (DevArgs.Get("scenario") is "duel" or "drop-refusal")
         {
             Duel(match, dt);
         }
@@ -251,14 +251,28 @@ public partial class NetTest : Node
         var shooterSpot = World.Suburb.ToWorld(mid - road.Direction * 7f, 0.05f);
         var victimSpot = World.Suburb.ToWorld(mid + road.Direction * 7f, 0.05f);
         var host = role == "host";
+        var refusal = DevArgs.Get("scenario") == "drop-refusal";
         if (Once(0.8f, dt)) { duelInitialScore = match.MyScore; }
+        if (refusal && host && Once(2.55f, dt))
+        {
+            // The second victim hit is already in flight. With 120 ms lag, this creator change reaches the server
+            // before the victim's old-count Drop, while reliable order delivers Shot before TuningSet to the victim.
+            Tuning.Current.HitDropCount = 0;
+            net.Send(new NetWriter(Msg.TuningSet, match.Setup.Id).String(nameof(Tuning.HitDropCount)).Scalar(0));
+        }
         if (Once(3.5f, dt))
         {
             var victimId = host ? match.RemoteBodies.First().PeerId : net.MyId;
-            ScenarioAssert(match.Scores[victimId] == 6 && match.LiveTanks.Count(IsDrop) == 2,
-                "duel: three hits must spill exactly two tanks (one hit inside grace)");
+            ScenarioAssert(match.Scores[victimId] == (refusal ? 7 : 6) && match.LiveTanks.Count(IsDrop) == (refusal ? 1 : 2),
+                refusal ? "drop-refusal: rejected prediction changed the bank or left a phantom tank" : "duel: three hits must spill exactly two tanks (one hit inside grace)");
+            if (refusal)
+            {
+                scenarioPassed = !scenarioFailed;
+                director.Screenshot($"{(host ? "shooter" : "victim")}_drop_refused");
+                if (scenarioPassed) { Log("drop-refusal: assertions passed"); }
+            }
         }
-        if (Once(14f, dt))
+        if (!refusal && Once(14f, dt))
         {
             ScenarioAssert(host ? duelBlastAt >= 0 && match.MyScore > duelInitialScore : duelThrowAt >= 0 && match.MyScore <= 1,
                 host ? "duel: dropped tank never detonated and scored" : "duel: blast never threw the victim and spilled five tanks");
@@ -315,6 +329,7 @@ public partial class NetTest : Node
         {
             director.Screenshot($"shooter_{duelTime:00.0}");
         }
+        if (refusal) { return; }
         // Drops keep moving under lag. Follow one tank every frame, retrying until its detonation is observed;
         // a fixed aim/fire gap used to miss the first shot and puncture a different tank with the second.
         if (duelTime >= 4f && duelBlastAt < 0)

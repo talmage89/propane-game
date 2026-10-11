@@ -33,6 +33,7 @@ public static class ProtocolTests
             Packet(Msg.PickupTaken, new PickupMessage(0, 2)), Packet(Msg.PickupRespawn, new IntMessage(0)),
             Packet(Msg.MatchEnd, new[] { new Standing(2, "Test", 1, 3, true) }), Packet(Msg.PlayerLeft, new PlayerLeftMessage(3, 2)),
             Packet(Msg.Pong, new PongMessage(1, 2)),
+            Packet(Msg.DropRefused, new DropRefusedMessage(new[] { BodySync.DropTankId(0, 0) })),
             Packet(Msg.PlayerState, new PlayerStateMessage(1, new PlayerNetState { Position = Vector3.One, Velocity = Vector3.Zero,
                 Yaw = 1, AimTarget = Vector3.Forward, Aim = 17 / 255f, Sprint = 1, Ready = 128 / 255f, Reload = 0,
                 Grounded = true, State = PlayerNetState.Mode.GettingUp, PelvisPosition = Vector3.Up, PelvisVelocity = Vector3.Down, Staggers = 2 })),
@@ -55,7 +56,7 @@ public static class ProtocolTests
             Enum.GetValues<Msg>().Order().SequenceEqual(fixtures.Select(f => f.Type).Order()), "missing or duplicate message fixture"));
         foreach (var fixture in fixtures)
         {
-            var fromServer = fixture.Type is >= Msg.Welcome and <= Msg.Pong;
+            var fromServer = fixture.Type is >= Msg.Welcome and <= Msg.DropRefused;
             RoundTrip(runner, fixture, fromServer);
             if (Protocol.IsRelay(fixture.Type)) { RoundTrip(runner, fixture, true); }
         }

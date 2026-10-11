@@ -106,6 +106,22 @@ public static class ServerTests
             TestRunner.Assert(standings.Any(s => s is { Id: 2, Score: 4, Present: false }) &&
                 standings.Any(s => s is { Id: 3, Score: 3, Present: true }), "departure erased a bank or renumbered a spawn slot");
         });
+        runner.Run("server/a drop refused after a tuning change gets an explicit reply", () =>
+        {
+            using var f = new Fixture();
+            f.Receive(new NetWriter(Msg.TuningSet, f.Id).String(nameof(Tuning.RagdollDropCount)).Scalar(1));
+            f.Packets.Clear();
+            // This batch fit the former count of five when the victim sent it. The creator's tuning arrived first.
+            f.Receive(f.Drop(new[] { DropBody(0, 0), DropBody(0, 1) }));
+            TestRunner.Assert(f.Packets.Count == 1 && f.Packets[0] is { Peer: 2, Message.Payload: DropRefusedMessage reply } &&
+                reply.Ids.SequenceEqual(new[] { DropBody(0, 0).Id, DropBody(0, 1).Id }),
+                "refused prediction had no reply and could leave phantom tanks");
+            f.Packets.Clear();
+            f.Receive(f.Drop(new[] { DropBody(0, 2) }));
+            f.AssertScore(2, 3, -1);
+            TestRunner.Assert(f.Packets.Any(p => p is { Peer: 2, Message.Sender: 2, Message.Payload: DropMessage }),
+                "accepted prediction did not confirm its ids to the sender");
+        });
         runner.Run("server/tuning requires original debug creator", () =>
         {
             using var f = new Fixture();
@@ -190,7 +206,16 @@ public static class ServerTests
         {
             Packets.Clear();
             Receive(bytes, peer);
-            TestRunner.Assert(Packets.Count == 0, $"invalid {(bytes.Length > 0 ? ((Msg)bytes[0]).ToString() : "empty")} emitted {Packets.Count} packets");
+            if (Packets.Count == 1 && Packets[0] is { Message.Payload: DropRefusedMessage reply } && Packets[0].Peer == peer)
+            {
+                // Only a fully decoded Drop may receive a refusal. Malformed packets must emit nothing.
+                var drop = MessageCodec.Decode(bytes, false).Payload as DropMessage;
+                TestRunner.Assert(drop != null && reply.Ids.SequenceEqual(drop.Tanks.Select(t => t.Id)), "refusal changed the predicted ids");
+            }
+            else
+            {
+                TestRunner.Assert(Packets.Count == 0, $"invalid {(bytes.Length > 0 ? ((Msg)bytes[0]).ToString() : "empty")} mutated or relayed {Packets.Count} packets");
+            }
         }
         public byte[] Drop(IReadOnlyList<BodyState> tanks, byte reason = 1, int color = 0) => MessageCodec.Encode(new NetMessage(Msg.Drop, Id, 0, new DropMessage(reason, color, tanks)), false);
         public void AssertScore(int player, int score, int delta) => TestRunner.Assert(Packets.Any(p => p.Message.Payload is ScoreMessage s &&

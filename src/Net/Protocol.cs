@@ -40,6 +40,7 @@ public enum Msg : byte
     MatchEnd,
     PlayerLeft,
     Pong,
+    DropRefused,
 
     // Client to server to the rest of the match. The server reads some of them (claims, explosions, drops).
     PlayerState = 64,
@@ -62,7 +63,7 @@ public static class Protocol
     /// must bump at least the minor version (tools/release/check_version.sh enforces this). Hello, Welcome and
     /// Rejected never change shape (fields may only be appended), so any build can be told why it was turned away.
     /// </summary>
-    public const int Version = 3;
+    public const int Version = 4;
 
     public const int DefaultPort = 24680;
 
@@ -71,7 +72,7 @@ public static class Protocol
     public static bool IsRelay(Msg type) => type is >= Msg.PlayerState and <= Msg.TuningSet;
 
     public static bool IsMatch(Msg type) => IsRelay(type) || type is Msg.Loaded or Msg.ClaimPickup or Msg.MatchStart or
-        Msg.Countdown or Msg.MatchGo or Msg.Clock or Msg.Score or Msg.PickupTaken or Msg.PickupRespawn or Msg.MatchEnd or Msg.PlayerLeft;
+        Msg.Countdown or Msg.MatchGo or Msg.Clock or Msg.Score or Msg.PickupTaken or Msg.PickupRespawn or Msg.MatchEnd or Msg.PlayerLeft or Msg.DropRefused;
 
     // Wire safety limits, not gameplay tuners. Gameplay counts are also checked against the match's tuning.
     public const int MaxPacketBytes = 1 << 20;

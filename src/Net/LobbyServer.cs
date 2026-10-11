@@ -563,13 +563,25 @@ public partial class LobbyServer : Node
                 if (!match.Tanks.Puncture(puncture.Id)) { return; }
                 break;
             case DropMessage drop:
-                if (lobby.Phase != LobbyPhase.Playing) { return; }
-                var limit = drop.Reason == 1 ? match.Tuning.RagdollDropCount : match.Tuning.HitDropCount;
-                if (drop.Tanks.Count > limit || drop.Tanks.Count > match.Scores[client.Id] || drop.Color != match.Profiles[client.Id].Color)
+                try
                 {
-                    throw new InvalidDataException("drop exceeds bank/tuner or has wrong color");
+                    var limit = drop.Reason == 1 ? match.Tuning.RagdollDropCount : match.Tuning.HitDropCount;
+                    if (lobby.Phase != LobbyPhase.Playing || drop.Tanks.Count > limit || drop.Tanks.Count > match.Scores[client.Id] || drop.Color != match.Profiles[client.Id].Color)
+                    {
+                        throw new InvalidDataException("drop outside play, exceeds bank/tuner or has wrong color");
+                    }
+                    match.Tanks.RegisterDrops(match.Slots[client.Id], drop.Tanks);
                 }
-                match.Tanks.RegisterDrops(match.Slots[client.Id], drop.Tanks);
+                catch (InvalidDataException e)
+                {
+                    // A fully decoded prediction can legitimately become invalid in flight (clock/tuning changes).
+                    // Tell only its sender which ids to remove; the ledger and bank remain untouched.
+                    Send(client.Id, MessageCodec.Encode(new NetMessage(Msg.DropRefused, match.Id, 0,
+                        new DropRefusedMessage(drop.Tanks.Select(t => t.Id).ToArray())), fromServer: true));
+                    Log($"refused Drop from {client.Id}: {e.Message}");
+                    return;
+                }
+                includeSender = true; // Confirmation clears the sender's pending ids without spawning them twice.
                 ChangeScore(match, client.Id, -drop.Tanks.Count);
                 var losses = match.Stats.GetValueOrDefault(client.Id);
                 match.Stats[client.Id] = drop.Reason == 1 ? losses with { LostToThrows = losses.LostToThrows + drop.Tanks.Count }
