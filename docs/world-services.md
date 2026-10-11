@@ -7,8 +7,8 @@ Immutable asset, shader, material, mesh, collision and catalog caches remain sha
 
 Each simulation lives in a viewport with rendering disabled. The application viewport shares the selected
 `World3D` to present it; camera nodes stay under the facade and query their injected world's physics space. This
-small presentation bridge preserves today's single-view facades. Session factories, actor/view assembly, Lab,
-and split-screen routing are later packages. Authored dev fixtures can place geometry directly under their scene
+presentation bridge preserves the facades. Actors carry camera-independent logical aim; explicit local views
+attach cameras, HUDs and input sources. Lab and split-screen layout remain later packages. Authored dev fixtures can place geometry directly under their scene
 while explicitly presenting that fixture's context.
 The presentation viewport owns the bridge in metadata. When several contexts present there, retirement restores
 the most recently presented live context, or the viewport's original world when none remain, in either teardown order.
@@ -72,3 +72,20 @@ ten solo-match cycles after warming immutable catalog variants and lazy UI resou
 and orphan counts and verifies each retired world's timers and receiver registry are empty. Server-owned match
 seeds still vary; the test never alters the server's construction inputs or messages. The ten-cycle sweep runs in
 `make test-full`. Rendered runs capture first and last entries plus the final browser.
+
+## Actors and aim
+
+`PlayerCharacter` is the simulated character, including the skeleton used for ragdoll recovery and muzzle
+placement. `ActorRuntime` owns its intent source and logical aim. No camera, viewport or HUD is needed to move,
+shoot, strike or get up. `LocalView` explicitly attaches a `CameraRig`, HUD and optional device input to an actor;
+closing it releases input but leaves the actor alive. Bot brains and navigation use the actor's aim directly.
+The character's `CameraRig` accessor remains a convenience for existing rendered dev harnesses only.
+
+The aim split preserves the old ray, including its over-the-shoulder origin, wall pull-in, target smoothing,
+render-frame updates and the chest-plane projection that keeps shots from starting behind the character.
+Camera recoil (pitch and random sideways kick), explosion/landing shake (rotation and displacement), and their
+recovery affected the ray before this extraction, so all remain in logical aim. Movement, facing and melee
+continue to use input yaw, excluding transient recoil yaw and shake. A camera renders the resulting transform.
+Rifle/torso sway and the rifle recoil spring remain body presentation; they still affect muzzle placement and
+its obstruction ray, never the primary aim ray. FOV affects projection/crosshair only. Hitstop remains the existing
+exclusive offline-world time-scale lease: it changes simulation timing, never an aim angle.

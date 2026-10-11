@@ -90,12 +90,12 @@ public partial class Game : Node3D
 
         player = new PlayerCharacter { World = World, Name = "Player" };
         World.Root.AddChild(player);
-        environment.Follow = player.CameraRig.Camera;
+        var view = LocalView.Attach(player, this, devices: true);
+        environment.Follow = view.CameraRig.Camera;
 
         hitstop = new Hitstop { World = World, Name = "Hitstop", Focus = player };
         World.AddView(this, hitstop);
-        hud = new Hud { Name = "Hud" };
-        World.AddView(this, hud);
+        hud = view.Hud;
         tuningPanel = new TuningPanel { Target = World.Tuning, Name = "Tuning" };
         World.AddView(this, tuningPanel);
         pauseMenu = new PauseMenu { Name = "Pause" };

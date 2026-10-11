@@ -3,168 +3,47 @@ using Propane.Core;
 
 namespace Propane.Player;
 
-/// <summary>
-/// Over-the-shoulder orbit camera. It follows a target point with a little lag, orbits with the mouse, pulls in
-/// when geometry is behind it, and adds trauma-based shake and recoil kick. Aiming does not move it.
-/// </summary>
+/// <summary>A rendered follower of logical aim. Standalone review cameras own their own aim.</summary>
 public partial class CameraRig : Node3D
 {
     public required WorldContext World { get; init; }
-
-    private const float PitchMin = -75f;
-    private const float PitchMax = 45f;
-    private const float FollowSharpness = 18f;
-    private const float CollisionRadius = 0.22f;
-    private const float TraumaDecay = 1.6f;
-    private const float MaxShakeDegrees = 3.2f;
-    private const float MaxShakeOffset = 0.12f;
-
-    private float yaw;
-    private float pitch = -8f;
-    private float recoilPitch;
-    private float recoilYaw;
-    private float trauma;
-    private float shakeTime;
-    private float currentDistance;
-    private Vector3 smoothedTarget;
-    private bool hasTarget;
-    private readonly SphereShape3D probe = new() { Radius = CollisionRadius };
-    private readonly FastNoiseLite shakeNoise = new() { Frequency = 0.9f, NoiseType = FastNoiseLite.NoiseTypeEnum.Perlin };
-
+    public LogicalAim? Aim { get; init; }
+    private LogicalAim aim = null!;
     public Camera3D Camera { get; private set; } = null!;
-
-    /// <summary>The point the camera orbits (the player's head height, or the ragdoll's hips).</summary>
-    public Vector3 Target { get; set; }
-
-    /// <summary>Bodies the camera collision ignores (the player and its ragdoll).</summary>
-    public Godot.Collections.Array<Rid> Exclude { get; } = new();
-
-    public float Yaw => yaw;
-
-    public float Pitch => pitch + recoilPitch;
+    public Vector3 Target { get => aim.Target; set => aim.Target = value; }
+    public Godot.Collections.Array<Rid> Exclude => aim.Exclude;
+    public float Yaw => aim.Yaw;
+    public float Pitch => aim.Pitch;
 
     public override void _Ready()
     {
         TopLevel = true;
+        aim = Aim ?? new LogicalAim(World);
         Camera = new Camera3D { Name = "Camera", Current = true, Near = 0.05f, Far = 2000f };
         AddChild(Camera);
-        currentDistance = World.Tuning.CameraDistance;
-        World.Events.Explosion += OnExplosion;
+        if (Aim == null) World.Events.Explosion += aim.OnExplosion;
     }
 
-    public override void _ExitTree() => World.Events.Explosion -= OnExplosion;
-
-    /// <summary>Jumps straight to the target next frame instead of easing there, for teleports.</summary>
-    public void Snap()
+    public override void _ExitTree()
     {
-        hasTarget = false;
-        currentDistance = World.Tuning.CameraDistance;
-        trauma = 0;
-        recoilPitch = recoilYaw = 0;
+        if (Aim != null) return;
+        World.Events.Explosion -= aim.OnExplosion;
+        aim.Dispose();
     }
 
-    public void SetOrientation(float yawDegrees, float pitchDegrees)
-    {
-        yaw = yawDegrees;
-        pitch = pitchDegrees;
-    }
-
-    public void Look(Vector2 mouseDelta, Vector2 stick = default, float dt = 0)
-    {
-        var sensitivity = Mathf.RadToDeg(World.Tuning.MouseSensitivity);
-        var displacement = mouseDelta * sensitivity + StickLookDelta(stick, dt,
-            World.Tuning.StickLookDegreesPerSecond, World.Tuning.StickLookCurve);
-        yaw -= displacement.X;
-        pitch = Mathf.Clamp(pitch - displacement.Y, PitchMin, PitchMax);
-    }
-
-    /// <summary>Radial response preserves stick direction; rate integration is independent of tick frequency.</summary>
-    public static Vector2 StickLookDelta(Vector2 stick, float dt, float degreesPerSecond, float curve)
-    {
-        var length = Mathf.Min(stick.Length(), 1f);
-        return length > 0 ? stick.Normalized() * Mathf.Pow(length, curve) * degreesPerSecond * dt : Vector2.Zero;
-    }
-
-    /// <summary>Transient view kick. Recovery leaves the player's input orientation unchanged.</summary>
-    public void Kick(float degrees)
-    {
-        recoilPitch += degrees;
-        recoilYaw += World.Random.RandiRange(-1, 1) * degrees * World.Tuning.CameraRecoilSideShare;
-    }
-
-    public void AddTrauma(float amount) => trauma = Mathf.Clamp(trauma + amount, 0, 1);
+    public void Snap() => aim.Snap();
+    public void SetOrientation(float yawDegrees, float pitchDegrees) => aim.SetOrientation(yawDegrees, pitchDegrees);
+    public void Look(Vector2 mouseDelta, Vector2 stick = default, float dt = 0) => aim.Look(mouseDelta, stick, dt);
+    public static Vector2 StickLookDelta(Vector2 stick, float dt, float degreesPerSecond, float curve) =>
+        LogicalAim.StickLookDelta(stick, dt, degreesPerSecond, curve);
+    public void Kick(float degrees) => aim.Kick(degrees);
+    public void AddTrauma(float amount) => aim.AddTrauma(amount);
 
     public override void _Process(double delta)
     {
-        var dt = (float)delta;
-        var tuning = World.Tuning;
-        Camera.Fov = tuning.FieldOfView;
-
-        var recoilReturn = Mathf.Exp(-tuning.CameraRecoilRecovery * dt);
-        recoilPitch *= recoilReturn;
-        recoilYaw *= recoilReturn;
-
-        if (!hasTarget)
-        {
-            smoothedTarget = Target;
-            hasTarget = true;
-        }
-        smoothedTarget = smoothedTarget.Lerp(Target, 1f - Mathf.Exp(-FollowSharpness * dt));
-
-        var basis = new Basis(Vector3.Up, Mathf.DegToRad(yaw + recoilYaw)) * new Basis(Vector3.Right, Mathf.DegToRad(Pitch));
-        var right = basis.Column0;
-        var back = basis.Column2;
-
-        // Shoulder offset first, then pull back; each leg is collision-checked so the camera never enters walls.
-        var shoulder = CastClear(smoothedTarget, smoothedTarget + right * tuning.ShoulderOffset);
-        // Looking up swings the camera down behind the player; easing it in keeps it off the ground.
-        var lookUp = Mathf.SmoothStep(5f, PitchMax, Pitch);
-        var desired = shoulder + back * tuning.CameraDistance * Mathf.Lerp(1f, 0.6f, lookUp);
-        var clear = CastClear(shoulder, desired);
-        var clearDistance = shoulder.DistanceTo(clear);
-        // Pull in instantly, ease back out.
-        currentDistance = clearDistance < currentDistance
-            ? clearDistance
-            : Mathf.Lerp(currentDistance, clearDistance, 1f - Mathf.Exp(-6f * dt));
-        GlobalTransform = new Transform3D(basis, shoulder + back * currentDistance);
-
-        // Trauma shake, squared so small bumps stay subtle.
-        trauma = Mathf.Max(0, trauma - TraumaDecay * dt);
-        shakeTime += dt;
-        var shake = trauma * trauma * tuning.CameraShake;
-        float N(float seed) => shakeNoise.GetNoise2D(shakeTime * 25f, seed);
-        Camera.Rotation = new Vector3(Mathf.DegToRad(N(1) * MaxShakeDegrees * shake), Mathf.DegToRad(N(2) * MaxShakeDegrees * shake),
-            Mathf.DegToRad(N(3) * MaxShakeDegrees * 0.6f * shake));
-        Camera.Position = new Vector3(N(4), N(5), 0) * MaxShakeOffset * shake;
-    }
-
-    private Vector3 CastClear(Vector3 from, Vector3 to)
-    {
-        var space = World.Physics.DirectSpaceState;
-        var motion = to - from;
-        if (motion.LengthSquared() < 0.0001f)
-        {
-            return to;
-        }
-        var query = new PhysicsShapeQueryParameters3D
-        {
-            Shape = probe,
-            Transform = new Transform3D(Basis.Identity, from),
-            Motion = motion,
-            // The void floor too, so looking up from outside the suburb never puts the camera under it.
-            CollisionMask = Layers.World | Layers.Props | Layers.Floor,
-            Exclude = Exclude,
-        };
-        var result = space.CastMotion(query);
-        var safe = result.Length > 0 ? result[0] : 1f;
-        return from + motion * safe;
-    }
-
-    private void OnExplosion(Vector3 position)
-    {
-        var tuning = World.Tuning;
-        var distance = GlobalPosition.DistanceTo(position);
-        var closeness = Mathf.Clamp(1f - distance / tuning.CameraShakeDistance, 0, 1);
-        AddTrauma(closeness * closeness * 1.1f + closeness * 0.25f);
+        if (Aim == null) aim.Advance(delta);
+        GlobalTransform = aim.Transform;
+        Camera.Transform = aim.Transform.AffineInverse() * aim.EyeTransform;
+        Camera.Fov = World.Tuning.FieldOfView;
     }
 }

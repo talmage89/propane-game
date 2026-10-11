@@ -254,7 +254,8 @@ public partial class Match : Node3D
         {
             throw new InvalidOperationException("this player is not in the match");
         }
-        environment.Follow = player.CameraRig.Camera;
+        var view = LocalView.Attach(player, this, devices: true);
+        environment.Follow = view.CameraRig.Camera;
         player.Fired += OnFired;
         player.Ragdolled += OnRagdolled;
         player.GotUp += (root, yaw) => Send(new NetWriter(Msg.GetUp, Setup.Id).Vec3(root).Float(yaw));
@@ -270,8 +271,7 @@ public partial class Match : Node3D
             pickups.Add(pickup);
         }
 
-        hud = new Hud { Name = "Hud" };
-        World.AddView(this, hud);
+        hud = view.Hud;
         hud.ShowTankCount(false);
         matchHud = new MatchHud { World = World, Name = "MatchHud" };
         World.AddView(this, matchHud);
