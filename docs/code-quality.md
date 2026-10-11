@@ -17,6 +17,8 @@ CA2000 (local disposal) and CA2213 (field disposal) are outside this baseline: t
 reference-counted lifetimes as ordinary CLR disposal. Excluding Godot-derived classes also hides CLR leaks inside
 those classes, so there are no such exclusions. These rules need an engine-aware ownership policy before they
 can be useful here. Disposable resources in new code still need an explicit lifetime.
+The CA2213 trial also flagged `CaptureDirector`'s Process and BlockingCollection; their shutdown lifetimes remain
+a separate audit item rather than being changed as part of the gate.
 
 Seven class-specific CA1001 suppressions preserve current lifetimes, with the reason beside each declaration:
 
@@ -30,3 +32,9 @@ Seven class-specific CA1001 suppressions preserve current lifetimes, with the re
 implicit async context, ValueTask misuse, and whitespace and style drift. It also checks corrected code passes.
 The fixtures compile in an isolated temporary project; they never run or modify game sources.
 The script also stubs the external tools to verify `make -j4 check` runs in order and stops at either lint failure.
+It checks that Godot setup reuses a valid cached editor and stops on a download failure.
+
+`.github/workflows/ci.yml` runs asset import, `make lint` and `make test` on every push to `dev` and every pull
+request. Superseded runs for the same ref are canceled. CI and release share the .NET 10/Godot 4.7.2 .NET setup;
+CI caches only the editor, while release keeps its existing cache of the editor, templates and signing tools.
+Both workflows stop and show the error if asset import fails.

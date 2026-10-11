@@ -10,8 +10,8 @@ import tempfile
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 
 
-def run(directory, *arguments):
-    result = subprocess.run(arguments, cwd=directory, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+def run(directory, *arguments, environment=None):
+    result = subprocess.run(arguments, cwd=directory, env=environment, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     return result.returncode, result.stdout
 
 
@@ -48,6 +48,27 @@ if [[ "${0##*/}" == dotnet && "$*" == *-warnaserror* && "$PROBE_FAIL" == build ]
         else:
             require(result.returncode != 0 and len(commands) == (1 if failure == "format" else 2), "lint failure did not stop check", result.stdout)
     print("PASS: parallel make check orders lint before tests and stops on formatter/build failures")
+
+
+def check_installer(scratch):
+    # A download failure must propagate; a valid cache must not attempt a download.
+    curl = scratch / "curl"
+    curl.write_text("#!/usr/bin/env bash\nexit 23\n")
+    curl.chmod(0o755)
+    cache = scratch / "editor-cache"
+    binary = cache / "Godot_v4.7.2-stable_mono_linux_x86_64" / "Godot_v4.7.2-stable_mono_linux.x86_64"
+    binary.parent.mkdir(parents=True)
+    binary.write_text("#!/usr/bin/env bash\nexit 0\n")
+    binary.chmod(0o755)
+    exports = scratch / "github-env"
+    environment = dict(os.environ, PATH=f"{scratch}:{os.environ['PATH']}", GITHUB_ENV=str(exports))
+    installer = ROOT / ".github/actions/setup-godot/install.sh"
+    code, output = run(scratch, "bash", str(installer), "4.7.2", str(cache), environment=environment)
+    require(code == 0 and exports.read_text() == f"GODOT={binary}\n", "cached editor setup failed", output)
+    environment["GITHUB_ENV"] = str(scratch / "failed-env")
+    code, output = run(scratch, "bash", str(installer), "4.7.2", str(scratch / "empty-cache"), environment=environment)
+    require(code == 23 and not pathlib.Path(environment["GITHUB_ENV"]).exists(), "failed download was ignored", output)
+    print("PASS: Godot setup exports a cached editor and propagates download failures")
 
 
 def main():
@@ -102,6 +123,7 @@ public static class Formatting
         require(code == 0, "corrected code did not pass", output)
         print("PASS: whitespace and style drift fail; corrected code passes formatting and build")
         check_make_order(scratch)
+        check_installer(scratch)
 
 
 if __name__ == "__main__":
