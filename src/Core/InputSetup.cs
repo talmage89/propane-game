@@ -35,10 +35,12 @@ public static class InputSetup
         Bind(Jump, Key(Godot.Key.Space), Button(JoyButton.A));
         Bind(NewSuburb, Key(Godot.Key.R), Button(JoyButton.X));
         Bind(Reload, Key(Godot.Key.R), Button(JoyButton.X));
-        Bind(Pause, Key(Godot.Key.Escape), Button(JoyButton.Start));
+        Bind(Pause, Key(Godot.Key.Escape), LogicalKey(Godot.Key.Escape), Button(JoyButton.Start));
         // Function keys need fn on a Mac (and F11 is Show Desktop there), so each has a plain alternative.
-        Bind(ToggleTuning, Key(Godot.Key.F1), Key(Godot.Key.Quoteleft));
-        Bind(ToggleFullscreen, Key(Godot.Key.F11), new InputEventKey { PhysicalKeycode = Godot.Key.Enter, AltPressed = true });
+        Bind(ToggleTuning, Key(Godot.Key.F1), LogicalKey(Godot.Key.F1), Key(Godot.Key.Quoteleft), LogicalKey(Godot.Key.Quoteleft));
+        Bind(ToggleFullscreen, Key(Godot.Key.F11), LogicalKey(Godot.Key.F11),
+            new InputEventKey { PhysicalKeycode = Godot.Key.Enter, AltPressed = true },
+            new InputEventKey { Keycode = Godot.Key.Enter, AltPressed = true });
         Bind(Fire, new InputEventMouseButton { ButtonIndex = MouseButton.Left }, Axis(JoyAxis.TriggerRight, 1));
         Bind(Aim, new InputEventMouseButton { ButtonIndex = MouseButton.Right }, Axis(JoyAxis.TriggerLeft, 1));
         Bind(Melee, Key(Godot.Key.F), new InputEventMouseButton { ButtonIndex = MouseButton.Xbutton1 },
@@ -52,6 +54,8 @@ public static class InputSetup
     private static InputEventJoypadMotion Axis(JoyAxis axis, float value) => new() { Device = -1, Axis = axis, AxisValue = value };
     private static InputEventJoypadButton Button(JoyButton button) => new() { Device = -1, ButtonIndex = button };
     private static InputEventKey Key(Key key) => new() { PhysicalKeycode = key };
+    // System/menu shortcuts honor desktop remaps as well as the original physical key. Gameplay stays physical.
+    private static InputEventKey LogicalKey(Key key) => new() { Keycode = key };
 
     private static void Bind(string action, params InputEvent[] events)
     {

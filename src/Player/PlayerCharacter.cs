@@ -245,11 +245,12 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         visual.Rotation = new Vector3(0, facingYaw, 0);
     }
 
-    public override void _UnhandledInput(InputEvent @event)
+    /// <summary>The application-view facade delivers events; WorldSpace does not receive device input.</summary>
+    internal void AccumulateDeviceInput(InputEvent @event)
     {
-        if (!IsRemote)
+        if (!IsRemote && World.IsAlive && CanProcess())
         {
-            deviceInput.Accumulate(@event);
+            (inputOverride as DeviceInput ?? deviceInput).Accumulate(@event);
         }
     }
 
