@@ -196,7 +196,9 @@ tools/dev/check_scores.py build/net/server.log build/net/bot*.log
 
 `net_test.tscn` scenarios: bots playing (default), `duel` (hits, drops and a thrown player, filmed from both sides),
 `pickup` (an ammo can taken and returning), and `movement` (remote creep, sprint, jumping and held-aim landing,
-with assertions and labeled frames), and `drop-refusal` (rolling back a refused predicted drop).
+with assertions and labeled frames), `drop-refusal` (rolling back a refused predicted drop), and `puncture-race`
+(canonical vent adoption and trajectory assertions after two simultaneous bullet contacts).
+`tools/dev/compare_vents.py` compares its logs.
 [docs/multiplayer.md](docs/multiplayer.md) lists the commands.
 
 The creep probe reports median and 75th-percentile horizontal foot/toe drift for adjacent samples within 3 cm of

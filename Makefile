@@ -38,6 +38,7 @@ check: lint ## Run lint, then the tests
 
 test: build ## Run all headless regression suites and separate-process world tests (as CI does)
 	python3 -B tools/dev/check_scores_tests.py
+	python3 -B tools/dev/compare_vents_tests.py
 	"$(GODOT)" --headless --path . res://scenes/dev/unit_tests.tscn
 	"$(GODOT)" --headless --path . res://scenes/dev/movement_tests.tscn
 	"$(GODOT)" --headless --path . res://scenes/dev/generator_tests.tscn -- --seeds=100
