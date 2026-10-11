@@ -6,6 +6,7 @@ public partial class Tuning
     // patch compatibility. DevArgs --tune.Bot... and C# callers can tune them; a later runtime bot package can
     // provide local difficulty profiles without changing the match's movement physics or network schema.
     public float BotRouteSpacing { get; set; } = 1.5f;
+    public int BotSearchPerTick { get; set; } = 12;
     public int BotSearchBudget { get; set; } = 900;
     public float BotWaypointRadius { get; set; } = 0.45f;
     public float BotGoalRadius { get; set; } = 0.6f;

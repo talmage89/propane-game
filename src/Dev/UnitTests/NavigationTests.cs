@@ -25,6 +25,15 @@ internal static class NavigationTests
         public bool Jump(Vector3 from, Vector3 to) => !Impossible && Fence && from.Z * to.Z < 0;
     }
 
+    private sealed class CountedWorld : INavigationWorld
+    {
+        private readonly CourseWorld course = new() { Fence = true };
+        public int StandQueries { get; private set; }
+        public bool Standable(Vector3 feet) { StandQueries++; return course.Standable(feet); }
+        public bool Walk(Vector3 from, Vector3 to) => course.Walk(from, to);
+        public bool Jump(Vector3 from, Vector3 to) => course.Jump(from, to);
+    }
+
     public static void Register(TestRunner runner)
     {
         using var shape = new CapsuleShape3D { Radius = 0.32f, Height = 1.8f };
@@ -106,6 +115,28 @@ internal static class NavigationTests
                 }
             }
             TestRunner.Assert(tookOff && nav.Jumps == 1, "planned runway actually produces a jump");
+        });
+        runner.Run("navigation spreads search work across ticks without false recovery", () =>
+        {
+            using var slow = Tuning.LoadBaked();
+            slow.BotSearchPerTick = 1;
+            slow.BotProgressWindow = 0.1f;
+            var nav = new BotNavigator();
+            var world = new CountedWorld();
+            var state = new NavigationState(new Vector3(0, 0, 7), Vector3.Zero, true);
+            var moved = false;
+            var frames = 0;
+            for (; frames < 1000 && !moved; frames++)
+            {
+                var before = world.StandQueries;
+                var move = nav.Navigate(world, state, caps, new Vector3(0, 0, -7), slow, 1f / 60);
+                TestRunner.Assert(world.StandQueries - before <= 16, "one expansion tests at most sixteen neighbor cells");
+                TestRunner.Assert(!move.Failed && nav.StuckEvents == 0, "pending search is not a stalled movement");
+                moved = move.Direction.LengthSquared() > 0;
+            }
+            TestRunner.Assert(moved && frames > 1 && nav.Replans == 1, "search resumes and completes instead of restarting each tick");
+            slow.BotSearchPerTick = 0;
+            TestRunner.Throws<ArgumentOutOfRangeException>(() => BotNavigator.Plan(world, state.Position, Vector3.Zero, caps, slow));
         });
         runner.Run("bot tuners preserve the match snapshot schema", () =>
         {

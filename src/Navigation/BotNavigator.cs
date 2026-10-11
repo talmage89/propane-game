@@ -15,6 +15,7 @@ public readonly record struct NavigationStep(Vector3 From, Vector3 To, bool Jump
 /// </summary>
 public sealed class BotNavigator
 {
+    private RouteSearch? search;
     private readonly List<NavigationStep> route = new();
     private readonly List<Vector3> avoided = new();
     private Vector3 goal;
@@ -41,6 +42,7 @@ public sealed class BotNavigator
     public void Reset()
     {
         route.Clear();
+        search = null;
         avoided.Clear();
         hasGoal = flying = sawAir = preparing = runwayChosen = false;
         progressTime = validationTime = retryTime = 0;
@@ -78,6 +80,7 @@ public sealed class BotNavigator
             goal = requestedGoal;
             hasGoal = true;
             route.Clear();
+            search = null;
             runwayChosen = false;
             avoided.Clear();
             retries = 0;
@@ -93,7 +96,7 @@ public sealed class BotNavigator
             return new NavigationIntent(Vector3.Zero, false, false, true, false);
         }
 
-        progressTime += dt;
+        if (search == null) { progressTime += dt; }
         if (progressTime >= tuning.BotProgressWindow)
         {
             if (Flat(state.Position - progressPosition).Length() < tuning.BotProgressDistance)
@@ -116,10 +119,19 @@ public sealed class BotNavigator
         if (route.Count == 0)
         {
             if (retryTime > 0) { return new NavigationIntent(Vector3.Zero, false, false, false, false); }
-            Replans++;
-            runwayChosen = false;
-            route.AddRange(Plan(world, state.Position, goal, capabilities, tuning, avoided));
-            validationTime = tuning.BotReplanInterval;
+            if (search == null)
+            {
+                Replans++;
+                runwayChosen = false;
+                search = new RouteSearch(world, state.Position, goal, capabilities, tuning, avoided);
+            }
+            search.Advance(world, tuning.BotSearchPerTick);
+            if (!search.Complete) { return new NavigationIntent(Vector3.Zero, false, false, false, false); }
+            route.AddRange(search.Result);
+            search = null;
+            progressTime = 0;
+            progressPosition = state.Position;
+            validationTime = 0; // Recheck against the current world after a multi-tick search.
             if (route.Count == 0)
             {
                 retries++;
@@ -127,6 +139,7 @@ public sealed class BotNavigator
                 return new NavigationIntent(Vector3.Zero, false, false, false, retries >= tuning.BotRouteRetries);
             }
         }
+
         while (route.Count > 1 && !route[0].Jump && Flat(route[0].To - state.Position).Length() < tuning.BotWaypointRadius)
         {
             route.RemoveAt(0);
@@ -223,83 +236,118 @@ public sealed class BotNavigator
         return true;
     }
 
-    /// <summary>Algorithmic grid resolution and expansion bound are local tuners, not suburb construction.</summary>
+    /// <summary>Synchronous entry point for tests and offline callers; runtime navigation budgets work per tick.</summary>
     public static IReadOnlyList<NavigationStep> Plan(INavigationWorld world, Vector3 start, Vector3 goal,
         NavigationCapabilities capabilities, Tuning tuning, IReadOnlyList<Vector3>? avoided = null)
     {
-        var result = new List<NavigationStep>();
-        if (Avoids(start, goal, avoided, tuning.BotRouteSpacing * 0.75f) && world.Walk(start, goal))
+        var search = new RouteSearch(world, start, goal, capabilities, tuning, avoided);
+        while (!search.Complete) { search.Advance(world, tuning.BotSearchBudget); }
+        return search.Result;
+    }
+
+    private sealed class RouteSearch
+    {
+        private readonly Vector3 start;
+        private readonly Vector3 goal;
+        private readonly NavigationCapabilities capabilities;
+        private readonly Tuning tuning;
+        private readonly List<Vector3> avoided;
+        private readonly PriorityQueue<Vector2I, float> frontier = new();
+        private readonly Dictionary<Vector2I, float> costs = new() { [Vector2I.Zero] = 0 };
+        private readonly Dictionary<Vector2I, (Vector2I Parent, bool Jump)> parents = new();
+        private readonly HashSet<Vector2I> closed = new();
+        private readonly Dictionary<Vector2I, bool> points = new();
+        private int expansions;
+
+        public bool Complete { get; private set; }
+        public List<NavigationStep> Result { get; } = new();
+
+        public RouteSearch(INavigationWorld world, Vector3 start, Vector3 goal, NavigationCapabilities capabilities,
+            Tuning tuning, IReadOnlyList<Vector3>? avoided)
         {
-            result.Add(new NavigationStep(start, goal, false));
-            return result;
+            if (tuning.BotRouteSpacing <= 0 || tuning.BotSearchBudget <= 0 || tuning.BotSearchPerTick <= 0 || capabilities.Speed <= 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(tuning), "navigation needs positive spacing, search budgets and speed");
+            }
+            this.start = start;
+            this.goal = goal;
+            this.capabilities = capabilities;
+            this.tuning = tuning;
+            this.avoided = avoided == null ? new() : new List<Vector3>(avoided);
+            if (Avoids(start, goal, this.avoided, tuning.BotRouteSpacing * 0.75f) && world.Walk(start, goal))
+            {
+                Result.Add(new NavigationStep(start, goal, false));
+                Complete = true;
+            }
+            else { frontier.Enqueue(Vector2I.Zero, 0); }
         }
-        var spacing = tuning.BotRouteSpacing;
-        var frontier = new PriorityQueue<Vector2I, float>();
-        var costs = new Dictionary<Vector2I, float> { [Vector2I.Zero] = 0 };
-        var parents = new Dictionary<Vector2I, (Vector2I Parent, bool Jump)>();
-        var closed = new HashSet<Vector2I>();
-        var points = new Dictionary<Vector2I, bool>();
-        Vector3 Point(Vector2I cell) => start + new Vector3(cell.X * spacing, 0, cell.Y * spacing);
-        bool Allowed(Vector2I cell)
+
+        private Vector3 Point(Vector2I cell) => start + new Vector3(cell.X * tuning.BotRouteSpacing, 0, cell.Y * tuning.BotRouteSpacing);
+
+        private bool Allowed(INavigationWorld world, Vector2I cell)
         {
             if (points.TryGetValue(cell, out var allowed)) { return allowed; }
             var point = Point(cell);
             allowed = world.Standable(point);
-            if (avoided != null)
+            foreach (var blocked in avoided)
             {
-                foreach (var blocked in avoided)
-                {
-                    if (Flat(point - blocked).Length() < spacing * 0.75f) { allowed = false; break; }
-                }
+                if (Flat(point - blocked).Length() < tuning.BotRouteSpacing * 0.75f) { allowed = false; break; }
             }
             points[cell] = allowed;
             return allowed;
         }
-        frontier.Enqueue(Vector2I.Zero, 0);
-        var jumpCells = (int)(capabilities.JumpRange / spacing);
-        var expansions = 0;
-        while (frontier.TryDequeue(out var cell, out _) && expansions < tuning.BotSearchBudget)
+
+        public void Advance(INavigationWorld world, int budget)
         {
-            if (!closed.Add(cell)) { continue; }
-            expansions++;
-            var from = Point(cell);
-            if (Flat(from - goal).Length() < spacing * 2 && Avoids(from, goal, avoided, spacing * 0.75f) && world.Walk(from, goal))
+            if (Complete) { return; }
+            var spacing = tuning.BotRouteSpacing;
+            var jumpCells = (int)(capabilities.JumpRange / spacing);
+            var worked = 0;
+            while (worked < budget && expansions < tuning.BotSearchBudget && frontier.TryDequeue(out var cell, out _))
             {
-                result.Add(new NavigationStep(from, goal, false));
-                while (parents.TryGetValue(cell, out var parent))
+                if (!closed.Add(cell)) { continue; }
+                expansions++;
+                worked++;
+                var from = Point(cell);
+                if (Flat(from - goal).Length() < spacing * 2 && Avoids(from, goal, avoided, spacing * 0.75f) && world.Walk(from, goal))
                 {
-                    result.Add(new NavigationStep(Point(parent.Parent), Point(cell), parent.Jump));
-                    cell = parent.Parent;
-                }
-                result.Reverse();
-                return result;
-            }
-            for (var x = -1; x <= 1; x++)
-            {
-                for (var z = -1; z <= 1; z++)
-                {
-                    if (x == 0 && z == 0) { continue; }
-                    var offset = new Vector2I(x, z);
-                    Explore(cell + offset, false);
-                    if (jumpCells >= 2)
+                    Result.Add(new NavigationStep(from, goal, false));
+                    while (parents.TryGetValue(cell, out var parent))
                     {
-                        var length = x != 0 && z != 0 ? (int)(jumpCells / Mathf.Sqrt(2)) : jumpCells;
-                        if (length >= 2) { Explore(cell + offset * length, true); }
+                        Result.Add(new NavigationStep(Point(parent.Parent), Point(cell), parent.Jump));
+                        cell = parent.Parent;
+                    }
+                    Result.Reverse();
+                    Complete = true;
+                    return;
+                }
+                for (var x = -1; x <= 1; x++)
+                {
+                    for (var z = -1; z <= 1; z++)
+                    {
+                        if (x == 0 && z == 0) { continue; }
+                        var offset = new Vector2I(x, z);
+                        Explore(cell + offset, false);
+                        if (jumpCells >= 2)
+                        {
+                            var length = x != 0 && z != 0 ? (int)(jumpCells / Mathf.Sqrt(2)) : jumpCells;
+                            if (length >= 2) { Explore(cell + offset * length, true); }
+                        }
                     }
                 }
+                void Explore(Vector2I next, bool jump)
+                {
+                    if (closed.Contains(next) || !Allowed(world, next)) { return; }
+                    var to = Point(next);
+                    var cost = costs[cell] + from.DistanceTo(to) / capabilities.Speed + (jump ? tuning.BotJumpCost : 0);
+                    if (costs.TryGetValue(next, out var old) && cost >= old) { return; }
+                    if (!Avoids(from, to, avoided, spacing * 0.75f) || (jump ? !world.Jump(from, to) : !world.Walk(from, to))) { return; }
+                    costs[next] = cost;
+                    parents[next] = (cell, jump);
+                    frontier.Enqueue(next, cost + Flat(to - goal).Length() / capabilities.Speed);
+                }
             }
-            void Explore(Vector2I next, bool jump)
-            {
-                if (closed.Contains(next) || !Allowed(next)) { return; }
-                var to = Point(next);
-                var cost = costs[cell] + from.DistanceTo(to) / capabilities.Speed + (jump ? tuning.BotJumpCost : 0);
-                if (costs.TryGetValue(next, out var old) && cost >= old) { return; }
-                if (!Avoids(from, to, avoided, spacing * 0.75f) || (jump ? !world.Jump(from, to) : !world.Walk(from, to))) { return; }
-                costs[next] = cost;
-                parents[next] = (cell, jump);
-                frontier.Enqueue(next, cost + Flat(to - goal).Length() / capabilities.Speed);
-            }
+            Complete = frontier.Count == 0 || expansions >= tuning.BotSearchBudget;
         }
-        return result;
     }
 }
