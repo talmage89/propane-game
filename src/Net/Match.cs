@@ -904,7 +904,7 @@ public partial class Match : Node3D
         for (var start = 0; start < moving.Count; start += StatesPerMessage)
         {
             var batch = moving.Skip(start).Take(StatesPerMessage).ToList();
-            var w = new NetWriter(Msg.BodyStates, Setup.Id).Double(now).UShort((ushort)batch.Count);
+            var w = new NetWriter(Msg.BodyStates, Setup.Id).Double(Net.BodySampleTime(now)).UShort((ushort)batch.Count);
             foreach (var entry in batch)
             {
                 w.UInt(entry.Id).Transform(entry.Body.GlobalTransform).Vec3(entry.Body.LinearVelocity).Vec3(entry.Body.AngularVelocity)

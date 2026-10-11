@@ -10,6 +10,25 @@ public static class LifecycleTests
 {
     public static void Register(TestRunner runner)
     {
+        runner.Run("lifecycle/body sampling converts to server time only after a ping", () =>
+        {
+            var client = new NetClient();
+            try
+            {
+                TestRunner.Assert(client.BodySampleTime(4) == 0, "unsynchronized sample invented a server clock");
+                var before = NetTransport.Now;
+                var serverTime = before + 100;
+                client.Handle(MessageCodec.Encode(new NetMessage(Msg.Pong, 0, 0, new PongMessage(before - 0.2, serverTime)), true));
+                var after = NetTransport.Now;
+                var stamp = client.BodySampleTime(after + 3);
+                TestRunner.Assert(stamp >= serverTime + 3.1 - 0.00001 && stamp <= serverTime + 3.1 + after - before + 0.00001,
+                    "sampling used the client's unrelated clock instead of its ping estimate");
+                client.Disconnect();
+                TestRunner.Assert(client.BodySampleTime(4) == 0 && client.ServerClockOffset == 0,
+                    "a reconnect could reuse the previous server's clock");
+            }
+            finally { client.Free(); }
+        });
         runner.Run("lifecycle/refused drop predictions release only their own tanks and bank reservation", () =>
         {
             foreach (var refuseFirst in new[] { false, true })

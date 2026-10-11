@@ -107,9 +107,10 @@ claim increments that body's epoch, including another grant to the same peer; de
 Movement and reliable rests carry a per-body sequence within the epoch. Neither side compares owner clocks:
 old epochs and duplicate/older sequences cannot replace a newer state or wake a completed rest. A client retains
 one newest future state per body when an unreliable publication overtakes its reliable grant.
-The server replaces moving batches' timestamps with its relay clock. After a ping establishes the server clock
-offset, receivers include that relay leg's travel time in motion extrapolation, bounded by the existing 0.3 s
-limit. This also survives motion overtaking its grant. Rest settling uses receipt time; clocks never order states.
+Moving batches use sampling timestamps on the sender's ping-estimated server clock. The server bounds these to
+the existing 0.3 s extrapolation window; zero means no ping yet and falls back to relay time. Receivers use their
+own server clock estimate to include both transport legs in bounded motion extrapolation. This also survives
+motion overtaking its grant. Rest settling uses receipt time; clocks never order states.
 
 `Claim` requests carry expected epochs and proposed poses for the complete group. The server validates every member
 before granting any, so later grouped interactions can include bodies already owned without a partial handoff.

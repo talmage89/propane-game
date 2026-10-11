@@ -67,6 +67,9 @@ public partial class NetClient : Node
     /// <summary>The server's clock minus ours, from the last ping.</summary>
     public double ServerClockOffset { get; private set; }
 
+    /// <summary>Sampling time on the estimated server clock; zero until a ping establishes the offset.</summary>
+    internal double BodySampleTime(double now) => PingMs > 0 ? now + ServerClockOffset : 0;
+
     public NetTransport Transport => transport;
 
     /// <summary>Connection, welcome, rejection or loss. The string is a reason to show, if any.</summary>
@@ -141,6 +144,9 @@ public partial class NetClient : Node
 
     public void Disconnect()
     {
+        PingMs = 0;
+        ServerClockOffset = 0;
+        nextPing = 0;
         if (State == Status.Offline)
         {
             return;

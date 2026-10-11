@@ -22,7 +22,7 @@ public sealed class BodySync
     public const uint CarBase = 0x3000_0000;
 
     private const double StaleAfter = 0.5;
-    private const double MaxExtrapolation = 0.3;
+    internal const double MaxExtrapolation = 0.3;
 
     public sealed class Entry
     {
@@ -174,7 +174,7 @@ public sealed class BodySync
     public void OnState(int sender, BodyState state, bool rest, double now, double transit = 0)
     {
         if (!entries.TryGetValue(state.Id, out var entry) || state.Epoch < entry.Epoch) { return; }
-        // Backdate moving targets by the server-to-client relay leg, bounded by our existing extrapolation limit.
+        // Backdate moving targets by their estimated sampling age, bounded by our existing extrapolation limit.
         // This adjusts pose prediction only: clocks never decide which epoch or sequence wins.
         if (!rest) { now -= System.Math.Clamp(transit, 0, MaxExtrapolation); }
         if (state.Epoch > entry.Epoch)
