@@ -19,6 +19,7 @@ public partial class MenuNavigation : Node
     private Vector2I pad;
     private Vector2I held;
     private double repeat;
+    private double heldSeconds;
     private bool wasActive;
     private int scrollDelay;
 
@@ -131,6 +132,7 @@ public partial class MenuNavigation : Node
         if (next != held)
         {
             held = next;
+            heldSeconds = 0;
             repeat = RepeatDelay;
             if (held != Vector2I.Zero)
             {
@@ -161,6 +163,7 @@ public partial class MenuNavigation : Node
         {
             return;
         }
+        heldSeconds += delta;
         repeat -= delta;
         if (repeat <= 0)
         {
@@ -171,6 +174,7 @@ public partial class MenuNavigation : Node
 
     private void ClearHeld()
     {
+        heldSeconds = 0;
         stick = Vector2.Zero;
         pad = held = Vector2I.Zero;
     }
@@ -231,6 +235,11 @@ public partial class MenuNavigation : Node
         var owner = GetViewport().GuiGetFocusOwner();
         if (owner == null)
         {
+            return;
+        }
+        if (direction.X != 0 && owner is HsvColorSlider colorSlider)
+        {
+            colorSlider.Adjust(direction.X, heldSeconds);
             return;
         }
         if (direction.X != 0 && owner is HSlider slider)

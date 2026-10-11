@@ -110,27 +110,56 @@ public partial class MenuGamepadTest : Node
         // Cancel is transactional; a separate Apply sends/persists the exact preview bytes.
         await Navigate("custom_color").ConfigureAwait(true);
         await Press(JoyButton.A).ConfigureAwait(true);
-        CheckFocus("rgb_red");
+        CheckFocus("preset_coral");
+        Check(Reachable().Keys.Count(k => k.StartsWith("preset_", StringComparison.Ordinal)) == 12, "all twelve presets are reachable");
+        await Navigate("hsv_hue").ConfigureAwait(true);
         var before = Net.Appearance;
         await Press(JoyButton.DpadLeft).ConfigureAwait(true);
         await Press(JoyButton.B).ConfigureAwait(true);
         Check(Net.Appearance == before && PlayerSettings.Appearance == before, "cancel leaves accepted/saved appearance alone");
         CheckFocus("custom_color");
         await Press(JoyButton.A).ConfigureAwait(true);
-        await Press(JoyButton.DpadLeft).ConfigureAwait(true);
+        await Navigate("preset_sky").ConfigureAwait(true);
+        await Press(JoyButton.A).ConfigureAwait(true);
+        var picker = Picker;
+        Check(picker.Selected == AppearanceRecord.FromColor(Color.FromHtml("48AEDD")), "A selects the sky preset exactly");
+        await Shot("07_preset_sky").ConfigureAwait(true);
+        await Navigate("hsv_hue").ConfigureAwait(true);
+        var hue = ColorSlider("hsv_hue");
+        var saturation = ColorSlider("hsv_saturation");
+        var brightness = ColorSlider("hsv_value");
+        var previousHue = hue.Value;
+        await Press(JoyButton.DpadRight).ConfigureAwait(true);
+        Check(Mathf.IsEqualApprox(hue.Value, previousHue + 1f / 360), "D-pad adjusts hue by one degree");
+        // Sustained stick accelerates, neutral stops it, and a new tap returns to fine adjustment.
+        previousHue = hue.Value;
+        Input.ParseInputEvent(new InputEventJoypadMotion { Axis = JoyAxis.LeftX, AxisValue = -1 });
+        await ToSignal(GetTree().CreateTimer(1.7), SceneTreeTimer.SignalName.Timeout);
+        await Axis(JoyAxis.LeftX, 0).ConfigureAwait(true);
+        Check(previousHue - hue.Value > 20f / 360, "held stick accelerates hue movement");
+        var stoppedHue = hue.Value;
+        await ToSignal(GetTree().CreateTimer(0.25), SceneTreeTimer.SignalName.Timeout);
+        Check(hue.Value == stoppedHue, "neutral stops HSV repeat");
+        await Press(JoyButton.DpadRight).ConfigureAwait(true);
+        Check(Mathf.IsEqualApprox(hue.Value, stoppedHue + 1f / 360), "release resets fine adjustment");
         await Press(JoyButton.DpadDown).ConfigureAwait(true);
-        CheckFocus("rgb_green");
-        await Axis(JoyAxis.LeftX, 1).ConfigureAwait(true);
+        CheckFocus("hsv_saturation");
+        var previousSaturation = saturation.Value;
+        await Axis(JoyAxis.LeftX, -1).ConfigureAwait(true);
+        Check(Mathf.IsEqualApprox(saturation.Value, previousSaturation - 0.01f), "stick adjusts saturation");
         await Press(JoyButton.DpadDown).ConfigureAwait(true);
-        CheckFocus("rgb_blue");
+        CheckFocus("hsv_value");
+        var previousValue = brightness.Value;
         await Press(JoyButton.DpadLeft).ConfigureAwait(true);
-        var selected = Main.FindChildren("*", "CanvasLayer", owned: false).OfType<AppearancePicker>().Single().Selected;
-        Check(selected != before && !Protocol.PlayerColors.Any(c => AppearanceRecord.FromColor(c) == selected), "joypad selects a custom color");
+        Check(Mathf.IsEqualApprox(brightness.Value, previousValue - 0.01f), "D-pad adjusts brightness");
+        var selected = AppearanceRecord.FromColor(Color.FromHsv(hue.Value, saturation.Value, brightness.Value));
+        Check(picker.Selected == selected && selected != before, "HSV adjustments produce the expected sRGB bytes");
+        CheckPreview(selected);
         await Shot("07_custom_color_preview").ConfigureAwait(true);
         await Navigate("Use color").ConfigureAwait(true);
         await Press(JoyButton.A).ConfigureAwait(true);
         await Wait(() => Net.Lobby!.Members.Single(m => m.Id == Net.MyId).Appearance == selected, "custom color acknowledged").ConfigureAwait(true);
-        Check(PlayerSettings.Appearance == selected, "custom record saved");
+        CheckSaved(selected, "gamepad HSV record saved on disk");
         CheckSample(Menus, Net.MyId, selected, "lobby renders custom color");
         CheckFocus("custom_color");
         await Shot("07_lobby_color").ConfigureAwait(true);
@@ -307,10 +336,32 @@ public partial class MenuGamepadTest : Node
         await Click("Create lobby").ConfigureAwait(true);
         await Wait(() => Net.Lobby != null, "mouse created lobby").ConfigureAwait(true);
         await Click("custom_color").ConfigureAwait(true);
-        var slider = Main.FindChildren("*", "HSlider", owned: false).OfType<HSlider>().Single(s => MenuNavigation.Key(s) == "rgb_red");
-        var before = slider.Value;
-        await MouseClick(slider.GetGlobalRect().Position + new Vector2(slider.Size.X * 0.25f, slider.Size.Y / 2)).ConfigureAwait(true);
-        Check(slider.Value != before, "mouse changes RGB channel");
+        await Click("preset_coral").ConfigureAwait(true);
+        Check(Picker.Selected == AppearanceRecord.FromColor(Color.FromHtml("E85D65")), "mouse selects coral preset exactly");
+        await Shot("00_mouse_preset_coral").ConfigureAwait(true);
+        await MouseColor("hsv_hue", 0.5f).ConfigureAwait(true);
+        await MouseColor("hsv_saturation", 0.75f, drag: true).ConfigureAwait(true);
+        await MouseColor("hsv_value", 0.8f).ConfigureAwait(true);
+        var hsvColor = AppearanceRecord.FromColor(new Color(0.2f, 0.8f, 0.8f));
+        Check(Picker.Selected == hsvColor, "mouse HSV controls produce cyan at 75% saturation and 80% brightness");
+        CheckPreview(hsvColor);
+        await Shot("00_mouse_hsv_cyan").ConfigureAwait(true);
+        // Black must retain both hue and saturation, and gray must retain hue.
+        await MouseColor("hsv_value", 0).ConfigureAwait(true);
+        await MouseColor("hsv_hue", 0.25f).ConfigureAwait(true);
+        Check(Picker.Selected == new AppearanceRecord(0, 0, 0), "hue adjustment keeps black black");
+        await MouseColor("hsv_value", 0.8f).ConfigureAwait(true);
+        Check(Mathf.IsEqualApprox(ColorSlider("hsv_hue").Value, 0.25f) &&
+            Mathf.IsEqualApprox(ColorSlider("hsv_saturation").Value, 0.75f), "raising brightness restores hue and saturation");
+        await MouseColor("hsv_saturation", 0).ConfigureAwait(true);
+        await MouseColor("hsv_hue", 0.5f).ConfigureAwait(true);
+        await MouseColor("hsv_saturation", 0.75f).ConfigureAwait(true);
+        Check(Picker.Selected == hsvColor, "raising saturation restores hue from gray");
+        await Click("Use color").ConfigureAwait(true);
+        await Wait(() => Net.Lobby!.Members.Single(m => m.Id == Net.MyId).Appearance == hsvColor, "mouse HSV color acknowledged").ConfigureAwait(true);
+        CheckSaved(hsvColor, "mouse HSV record saved on disk");
+        await Click("custom_color").ConfigureAwait(true);
+        Check(Picker.Selected == hsvColor, "reopened picker restores accepted HSV color");
         var field = Main.FindChildren("*", "LineEdit", owned: false).OfType<LineEdit>().Single(f => f.PlaceholderText == "Hex color (RRGGBB)");
         await MouseClick(field.GetGlobalRect().GetCenter()).ConfigureAwait(true);
         await TypeHex("12ABEF").ConfigureAwait(true);
@@ -328,7 +379,7 @@ public partial class MenuGamepadTest : Node
         await Click("Use color").ConfigureAwait(true);
         await Wait(() => Net.Lobby!.Members.Single(m => m.Id == Net.MyId).Appearance == custom, "mouse custom color acknowledged").ConfigureAwait(true);
         CheckSample(Menus, Net.MyId, custom, "mouse lobby renders custom color");
-        Check(PlayerSettings.Appearance == custom, "mouse custom color saved");
+        CheckSaved(custom, "mouse hex record saved on disk");
         await Shot("02_mouse_custom_lobby").ConfigureAwait(true);
         await Click("Start match").ConfigureAwait(true);
         await Wait(() => Main.HasNode("Match") && Main.GetNode<Match>("Match").IsPlaying, "mouse solo match playing").ConfigureAwait(true);
@@ -338,6 +389,37 @@ public partial class MenuGamepadTest : Node
         await Wait(() => Main.GetNode<Match>("Match").IsOver, "mouse real match ended").ConfigureAwait(true);
         CheckSample(Main.GetNode<ResultsScreen>("Match/Results"), Net.MyId, custom, "mouse results render custom color");
         await Shot("04_mouse_custom_results").ConfigureAwait(true);
+    }
+
+    private AppearancePicker Picker => Main.FindChildren("*", "CanvasLayer", owned: false).OfType<AppearancePicker>().Single();
+
+    private HsvColorSlider ColorSlider(string key) => Picker.FindChildren("*", "Control", owned: false)
+        .OfType<HsvColorSlider>().Single(s => MenuNavigation.Key(s) == key);
+
+    private void CheckPreview(AppearanceRecord color) => Check(Picker.FindChildren("Preview", "", owned: false).OfType<PlayerCharacter>().Single().BodyColor == color.Color, "live character preview uses selected bytes");
+
+    private void CheckSaved(AppearanceRecord color, string outcome)
+    {
+        PlayerSettings.UseFile("user://menu_test_settings.cfg");
+        Check(PlayerSettings.Appearance == color, outcome);
+    }
+
+    private async Task MouseColor(string key, float value, bool drag = false)
+    {
+        var slider = ColorSlider(key);
+        var target = slider.GetGlobalRect().Position + new Vector2(6 + value * (slider.Size.X - 12), slider.Size.Y / 2);
+        if (drag)
+        {
+            var start = slider.GetGlobalRect().GetCenter();
+            GetViewport().PushInput(new InputEventMouseButton { Position = start, ButtonIndex = MouseButton.Left, Pressed = true }, true);
+            await Frames(1).ConfigureAwait(true);
+            GetViewport().PushInput(new InputEventMouseMotion { Position = target, Relative = target - start, ButtonMask = MouseButtonMask.Left }, true);
+            await Frames(1).ConfigureAwait(true);
+            GetViewport().PushInput(new InputEventMouseButton { Position = target, ButtonIndex = MouseButton.Left, Pressed = false }, true);
+            await Frames().ConfigureAwait(true);
+        }
+        else { await MouseClick(target).ConfigureAwait(true); }
+        Check(Mathf.IsEqualApprox(slider.Value, value), $"mouse sets {key} to {value}");
     }
 
     private async Task TypeHex(string text)
@@ -527,7 +609,7 @@ public partial class MenuGamepadTest : Node
                      })
             {
                 // Left/right on match length adjusts the value instead of following a neighbor.
-                if ((MenuNavigation.Key(next.Control) == "match_length" || next.Control is HSlider) && button is JoyButton.DpadLeft or JoyButton.DpadRight) { continue; }
+                if ((MenuNavigation.Key(next.Control) == "match_length" || next.Control is HSlider or HsvColorSlider) && button is JoyButton.DpadLeft or JoyButton.DpadRight) { continue; }
                 var control = next.Control.GetNodeOrNull<Control>(neighbor);
                 if (control != null) { queue.Enqueue((control, next.Path.Append(button).ToList())); }
             }
