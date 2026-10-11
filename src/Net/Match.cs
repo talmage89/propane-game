@@ -1029,7 +1029,7 @@ public partial class Match : Node3D
     private void SendBodies(float dt, double now)
     {
         var (moving, rested) = bodies.Collect(dt);
-        foreach (var stream in moving.GroupBy(entry => entry.PublishReliably))
+        foreach (var stream in moving.GroupBy(entry => entry.PublishReliably ? entry.CheckpointTraffic : TrafficClass.UnreliableBodyStates))
         {
             var entries = stream.ToList();
             for (var start = 0; start < entries.Count; start += StatesPerMessage)
@@ -1041,7 +1041,7 @@ public partial class Match : Node3D
                     w.UInt(entry.Id).Transform(entry.Body.GlobalTransform).Vec3(entry.Body.LinearVelocity).Vec3(entry.Body.AngularVelocity)
                         .UInt(entry.Epoch).UInt(checked(++entry.Sequence));
                 }
-                Send(w, stream.Key ? TrafficClass.ReliableBodyStates : TrafficClass.UnreliableBodyStates);
+                Send(w, stream.Key);
             }
         }
         foreach (var entry in rested)
