@@ -87,6 +87,14 @@ public partial class WorldServicesTests : Node
                 }
                 Assert(view.World3D == original, "presentation restored a retired physics world");
             }
+            using var invalidated = new WorldContext(this, template);
+            using var selected = new WorldContext(this, template);
+            invalidated.Present(view);
+            selected.Present(view);
+            invalidated.Invalidate();
+            selected.Dispose();
+            Assert(view.World3D == original, "presentation restored an invalidated predecessor");
+            invalidated.Dispose();
         }
         finally { view.Free(); }
         GD.Print("[world services] PASS shared presentation survives both world retirement orders");

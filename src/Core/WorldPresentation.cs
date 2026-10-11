@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using Godot;
 
 namespace Propane.Core;
@@ -31,7 +32,7 @@ internal partial class WorldPresentation : RefCounted
         {
             if (View.World3D == world.Physics)
             {
-                View.World3D = worlds.Count > 0 ? worlds[^1].Physics : original;
+                View.World3D = worlds.LastOrDefault(candidate => candidate.IsAlive)?.Physics ?? original;
             }
             if (worlds.Count == 0) { View.RemoveMeta(Metadata); }
         }
