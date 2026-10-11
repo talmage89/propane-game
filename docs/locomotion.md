@@ -1,6 +1,6 @@
 # Locomotion review
 
-For the authored-animation redo, use [animation review](animation-review.md).
+For the authored-animation redo, use [animation review](animation-review.md) and [source choices](animation-sources.md).
 The source-availability statements below describe the historical package, before the free source archives were acquired.
 
 This is package 3's historical proof. [Package 4](motion.md) adds rifle motion and replaces its 40-degree

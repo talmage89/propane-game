@@ -84,10 +84,11 @@ no free source clip shoulders a rifle, so an empirical rifle-clip calibration is
 ## External clip review
 
 Official free CC0 source archives are kept outside the repository in a shared `assets-src/` directory. Its
-`SOURCES.md` records stable download URLs, licenses and archive SHA-256 values. Keep the original source archive and its license alongside that manifest.
-Preview candidate libraries:
+`SOURCES.md` records stable download URLs, licenses and archive SHA-256 values. See [source choices](animation-sources.md).
+Inventory every clip, including the separate root-motion variants:
 
 ```sh
+python3 -B tools/dev/animation_inventory.py ../assets-src build/animation-review/clip-inventory.csv
 python3 -B tools/dev/animation_review.py --candidate 'UAL1=../assets-src/UAL1-Standard/Universal Animation Library[Standard]/Unreal-Godot/UAL1_Standard.glb' --anims=Walk_Loop,Walk_Loop@reverse,Jog_Fwd_Loop,Sprint_Loop,Punch_Cross --output build/animation-candidates
 python3 -B tools/dev/animation_review.py --candidate 'UAL2=../assets-src/UAL2-Standard/Universal Animation Library 2[Standard]/Unreal-Godot/UAL2_Standard.glb' --anims=Walk_Carry_Loop,Walk_Carry_Loop@reverse,Melee_Hook,Sword_Regular_A,Sword_Heavy_Combo --output build/animation-candidates
 python3 -B tools/dev/animation_review.py --candidate 'hands=../assets-src/UAL2-Standard/Universal Animation Library 2[Standard]/Unreal-Godot/UAL2_Standard.glb' --anims=Walk_Carry_Loop,Melee_Hook --hands --output build/animation-candidates

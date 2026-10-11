@@ -3,12 +3,14 @@
 import csv
 import json
 import math
+import struct
 from pathlib import Path
 import tempfile
 import unittest
 
 import animation_metrics as metrics
 import animation_review as review
+import animation_inventory as inventory
 
 
 class MetricsTests(unittest.TestCase):
@@ -103,6 +105,38 @@ class CaptureTests(unittest.TestCase):
                 (path / name).touch()
             with self.assertRaisesRegex(ValueError, 'consecutive'):
                 review.capture_frames(path, 'walk', 2)
+
+
+class InventoryTests(unittest.TestCase):
+    def test_binary_root_motion_and_duration(self):
+        binary = struct.pack('<8f', 0, 1.5, 0, 0, 0, 0, 0, 1.3)
+        model = {'asset': {'version': '2.0'}, 'nodes': [{'name': 'root'}],
+                 'bufferViews': [{'buffer': 0, 'byteOffset': 0, 'byteLength': 8},
+                                 {'buffer': 0, 'byteOffset': 8, 'byteLength': 24}],
+                 'accessors': [{'bufferView': 0, 'componentType': 5126, 'count': 2, 'type': 'SCALAR'},
+                               {'bufferView': 1, 'componentType': 5126, 'count': 2, 'type': 'VEC3'}],
+                 'animations': [{'name': 'Walk_Loop', 'samplers': [{'input': 0, 'output': 1}],
+                                 'channels': [{'sampler': 0, 'target': {'node': 0, 'path': 'translation'}}]}]}
+        text = json.dumps(model).encode()
+        text += b' ' * ((-len(text)) % 4)
+        data = struct.pack('<4sII', b'glTF', 2, 28 + len(text) + len(binary))
+        data += struct.pack('<II', len(text), 0x4e4f534a) + text
+        data += struct.pack('<II', len(binary), 0x004e4942) + binary
+        with tempfile.TemporaryDirectory(dir=Path('build')) as directory:
+            path = Path(directory) / 'motion.glb'
+            path.write_bytes(data)
+            clip = inventory.animations(path)['Walk_Loop']
+            self.assertEqual(clip['seconds'], 1.5)
+            self.assertAlmostEqual(clip['root_delta'][2], 1.3)
+            self.assertAlmostEqual(clip['root_span'][2], 1.3)
+
+    def test_box_carry_is_not_rifle_locomotion(self):
+        direction, carry = inventory.classify('Walk_Carry_Loop')
+        self.assertEqual(direction, 'forward')
+        self.assertIn('no rifle', carry)
+        self.assertIn('non-directional', inventory.classify('Sword_Dash')[0])
+        self.assertEqual(inventory.travel_direction([0, 0, -1]), 'back')
+        self.assertEqual(inventory.travel_direction([1, 0, 1]), 'forward-right')
 
 
 if __name__ == '__main__':
