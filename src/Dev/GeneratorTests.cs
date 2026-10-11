@@ -17,6 +17,7 @@ public partial class GeneratorTests : Node
     private static readonly (int X, int Y)[] Neighbors = { (1, 0), (-1, 0), (0, 1), (0, -1) };
     private int failures;
     private TankGeometry geometry = null!;
+    private float chainRadius;
     private readonly Dictionary<string, int> failureKinds = new();
 
     public override void _Ready()
@@ -33,7 +34,9 @@ public partial class GeneratorTests : Node
     {
         DevArgs.Setup();
         var count = (int)DevArgs.GetFloat("seeds", 120);
-        var settings = SuburbPlans.SinglePlayer(new Core.Tuning());
+        var tuning = new Core.Tuning();
+        var settings = SuburbPlans.SinglePlayer(tuning);
+        chainRadius = Mathf.Min(tuning.ChainRadius, tuning.BlastRadius);
         var catalog = new GameCatalog();
         geometry = new TankGeometry();
         var tankTotals = new List<int>();
@@ -187,6 +190,7 @@ public partial class GeneratorTests : Node
                 var transforms = World.Plan.PileBuilder.Build(formation, n, spacing);
                 Check(n, "formation count", transforms.Count == n);
                 Check(n, "formation deterministic", transforms.SequenceEqual(World.Plan.PileBuilder.Build(formation, n, spacing)));
+                CheckChainConnections(n, transforms.Select(t => t * PileBuilder.LocalCenter).ToArray());
                 if (formation == PileFormation.Square && n >= 5 || formation == PileFormation.Triangular && n >= 4)
                     Check(n, "pyramid has an upper tier", transforms.Any(t => t.Origin.Y > PileBuilder.Radius + 0.001f), $"{formation} {n}");
                 foreach (var t in transforms)
@@ -252,6 +256,8 @@ public partial class GeneratorTests : Node
     private void CheckTanks(int seed, SuburbPlan plan, SuburbSettings settings)
     {
         Check(seed, "tank count", plan.Tanks.Count == settings.TankCount, $"{plan.Tanks.Count}");
+        foreach (var pile in plan.Tanks.GroupBy(t => t.Pile))
+            CheckChainConnections(seed, pile.Select(t => TankTransform(t) * PileBuilder.LocalCenter).ToArray());
         foreach (var tank in plan.Tanks)
         {
             Check(seed, "tank inside map", plan.Bounds.HasPoint(tank.Position), $"{tank.Position}");
@@ -277,6 +283,26 @@ public partial class GeneratorTests : Node
 
     private static Transform3D TankTransform(TankPlacement tank) => new(
         new Basis(Vector3.Up, tank.Yaw) * Basis.FromEuler(tank.Rotation), new Vector3(tank.Position.X, tank.Elevation, tank.Position.Y));
+
+    private void CheckChainConnections(int seed, IReadOnlyList<Vector3> centers)
+    {
+        if (centers.Count < 2) return;
+        var reached = new HashSet<int> { 0 };
+        var pending = new Queue<int>();
+        pending.Enqueue(0);
+        while (pending.Count > 0)
+        {
+            var i = pending.Dequeue();
+            for (var j = 0; j < centers.Count; j++)
+                if (!reached.Contains(j) && centers[i].DistanceTo(centers[j]) <= chainRadius)
+                {
+                    reached.Add(j);
+                    pending.Enqueue(j);
+                }
+        }
+        // Connectivity is stronger than just having one close neighbor: disconnected pairs cannot share a chain.
+        Check(seed, "pile connected within chain range", reached.Count == centers.Count, $"{reached.Count}/{centers.Count}");
+    }
 
     private void CheckSpawn(int seed, SuburbPlan plan, SuburbSettings settings)
     {

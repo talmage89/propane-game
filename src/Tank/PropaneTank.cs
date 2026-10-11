@@ -145,7 +145,7 @@ public partial class PropaneTank : RigidBody3D
         Puncture(ToGlobal(holeLocalPoint), GlobalBasis * holeNormal, swirl);
     }
 
-    /// <summary>A close blast punctures an intact tank and lights its chain fuse, so fresh piles clear in succession.</summary>
+    /// <summary>A blast went off within chain range: punctures an intact tank, or detonates a venting one after a fuse.</summary>
     public void ChainHit(Vector3 blastCenter, float distance)
     {
         if (State == TankState.Exploded || fuseLit || Invulnerable)
@@ -157,6 +157,7 @@ public partial class PropaneTank : RigidBody3D
             var (point, normal) = SurfaceFacing(blastCenter);
             Puncture(point, normal, GD.Randf() < 0.5f ? -1f : 1f);
             Punctured?.Invoke(this);
+            return;
         }
         fuseLit = true;
         var tuning = Tuning.Current;

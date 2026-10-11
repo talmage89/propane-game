@@ -11,7 +11,7 @@ hit or thrown. Every gain and loss of tanks follows from that rule; there are no
 clock runs out wins.
 
 - A chain reaction credits every tank in it to whoever detonated the first one.
-  Close blasts puncture fresh tanks and light their chain fuses; a pile needs only one initial detonation.
+  A close blast acts as a shot: intact tanks puncture and keep venting; already-venting tanks detonate after a fuse.
 - A bullet hit drops 1 tank behind the victim, then a 0.5 s grace period before another hit can drop one.
 - Being ragdolled drops 5 tanks where the player was thrown, even by their own blast. A ragdolled player can still be
   shot.

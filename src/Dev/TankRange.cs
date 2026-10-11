@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Collections.Generic;
 using Godot;
 using Propane.Core;
 using Propane.Tank;
@@ -140,6 +141,22 @@ public partial class TankRange : Node3D
         }
         camera.LookAtFromPosition(new Vector3(2.5f, 1.8f, 3f), new Vector3(0, 0.4f, 0));
         var initial = tanks.Select(t => t.Transform).ToArray();
+        var chain = DevArgs.Get("chain");
+        var punctured = new HashSet<PropaneTank>();
+        var detonated = new HashSet<PropaneTank>();
+        var inRange = new List<PropaneTank>();
+        foreach (var tank in tanks)
+        {
+            tank.Punctured += t => punctured.Add(t);
+            tank.Detonated += t => detonated.Add(t);
+        }
+        bool Require(bool condition, string message)
+        {
+            if (condition) return true;
+            GD.PushError($"[formation] {formation}: {message}");
+            GetTree().Quit(1);
+            return false;
+        }
         var director = new CaptureDirector { QuitAfter = 12f };
         AddChild(director);
         director.ShotAt(0.2f, "00_placed");
@@ -156,27 +173,51 @@ public partial class TankRange : Node3D
                 GetTree().Quit(1);
                 return;
             }
-            if (DevArgs.Get("chain") != null)
+            if (chain != null)
             {
-                // Also exercise a pile that the player has already punctured with rifle shots.
-                if (DevArgs.Get("chain") == "primed")
+                if (!Require(chain is "fresh" or "primed", "chain must be fresh or primed")) return;
+                if (!Require(tanks.Count > 1, "a chain check needs at least two tanks")) return;
+                var center = tanks[0].GlobalTransform * PropaneTank.LocalCenter;
+                // Use the same mass centers and effective range as Blast.Push, before any tank moves.
+                inRange.AddRange(tanks.Skip(1).Where(t => center.DistanceTo(t.GlobalPosition +
+                    PhysicsServer3D.BodyGetDirectState(t.GetRid()).CenterOfMass) <= Mathf.Min(tuning.ChainRadius, tuning.BlastRadius)));
+                if (!Require(inRange.Count > 0, "no neighbor in chain range")) return;
+                if (chain == "primed")
                     foreach (var tank in tanks)
                         tank.TakeShot(tank.GlobalTransform * (PropaneTank.LocalCenter + Vector3.Right * PileBuilder.Radius),
                             tank.GlobalBasis.X, Vector3.Zero);
+                punctured.Clear();
                 tanks[0].Detonate();
+                if (!Require(inRange.All(t => t.State == PropaneTank.TankState.Venting), "neighbors must vent immediately after a blast")) return;
+                if (!Require(detonated.SetEquals(new[] { tanks[0] }), "a venting neighbor detonated without waiting for its fuse")) return;
+                if (chain == "fresh")
+                {
+                    if (!Require(punctured.SetEquals(inRange), "blast did not puncture exactly the intact neighbors in range")) return;
+                    if (!Require(tanks.Skip(1).Except(inRange).All(t => t.State == PropaneTank.TankState.Intact), "an intact neighbor outside range changed state")) return;
+                }
+                GD.Print($"[formation] {formation} {chain}: {inRange.Count} neighbors in range, blast acts as one shot");
             }
         });
-        if (DevArgs.Get("chain") != null)
+        if (chain != null)
         {
             director.ShotAt(4.4f, "02_chain");
             director.ShotAt(5.2f, "03_chain");
+            // Timer runs in scaled physics time; allow a second for blast hitstop and frame scheduling.
+            director.At(4.2f + Mathf.Max(tuning.ChainFuseMin, tuning.ChainFuseMax) * 1.15f + 1f, () =>
+            {
+                if (chain == "primed") Require(inRange.All(detonated.Contains), "a primed neighbor exceeded its fuse deadline");
+            });
         }
         director.At(11f, () =>
         {
-            if (DevArgs.Get("chain") == null) return;
-            var live = tanks.Count(t => IsInstanceValid(t) && t.State != PropaneTank.TankState.Exploded);
-            GD.Print($"[formation] {formation} chain survivors {live}");
-            if (live != 0) { GD.PushError("[formation] incomplete chain"); GetTree().Quit(1); }
+            if (chain == null) return;
+            if (chain == "fresh")
+            {
+                if (!Require(detonated.SetEquals(new[] { tanks[0] }), "fresh neighbors detonated from only one blast")) return;
+                if (!Require(inRange.All(t => IsInstanceValid(t) && t.State == PropaneTank.TankState.Venting), "fresh neighbors did not keep venting")) return;
+            }
+            else if (!Require(inRange.All(detonated.Contains), "a primed neighbor did not detonate after its fuse")) return;
+            GD.Print($"[formation] {formation} {chain}: PASS; {inRange.Count} neighbors {(chain == "fresh" ? "still venting" : "detonated after fuse")}");
         });
     }
 
