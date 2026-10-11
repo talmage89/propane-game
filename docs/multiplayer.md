@@ -96,6 +96,8 @@ replies with `DropRefused` ids for a fully decoded batch it cannot accept. The s
 predictions and releases their bank reservation. This also handles legitimate drops overtaken by a live debug
 drop-count change or the server's match deadline. Malformed packets still get no reply.
 The deadline check uses the server clock even when a packet is polled before that frame's phase transition.
+Refusing a predicted root also cancels its pending child fuses, including already owned venting neighbors that
+needed no ownership request. Children already sent still receive explicit refusals and restore their own bodies.
 
 The ledger proves existence and prevents duplicate scoring; it does not prove hits, movement, proximity or blast
 positions. Those remain decisions of the distributed client authorities.

@@ -592,6 +592,11 @@ public partial class Match : Node3D
             if (result.Reason != ClaimRefusal.None)
             {
                 LastAuthorityRefusal = result.Reason;
+                if (finished.Type == Msg.Explode)
+                {
+                    // Already owned venting neighbors need no Claim, but can still have this root's fuse.
+                    foreach (var tank in LiveTanks.Where(t => t.ChainCause == finished.Request)) { tank.CancelChainFuse(); }
+                }
                 // Keep dependent predictions' original epochs. They also need explicit refusals to restore
                 // their bodies; silently canceling a queued group could strand its other members.
             }

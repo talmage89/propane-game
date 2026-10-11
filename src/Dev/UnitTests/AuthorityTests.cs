@@ -380,6 +380,31 @@ public static class AuthorityTests
                     tank.AngularVelocity == Vector3.One * 2, "puncture refusal rewound the contender's current motion");
             });
         }
+        runner.Run("authority/refused root cancels a chain fuse on an already owned vent", () =>
+        {
+            using var f = new MatchFixture(runner);
+            var root = f.Match.LiveTanks.Single(t => t.NetId == Id);
+            var child = f.Match.LiveTanks.Single(t => t.NetId == Other);
+            child.TakeShot(child.ToGlobal(new Vector3(.15f, .23f, 0)), child.GlobalBasis * Vector3.Right, Vector3.Left);
+            f.Flush();
+            TestRunner.Assert(f.Match.Bodies.Get(Other) is { Owner: 2, Epoch: 2 }, "child was not already owned");
+            root.GlobalPosition = new Vector3(0, 60, 0); // Isolate manual chain contact from the blast query.
+            root.Detonate();
+            Action? callback = null;
+            var detonations = 0;
+            child.Detonated += _ => detonations++;
+            child.FuseScheduleOverride = (_, finish) => callback = finish;
+            child.ChainHit(Vector3.Zero, 0, root.BlastRequest);
+            f.Match.OnLocalBlast(root.GlobalPosition, new[] { child }, root.BlastRequest);
+            f.Server.Server.AdvanceMatches(NetTransport.Now + 20);
+            f.Server.Packets.Clear();
+            f.Flush();
+            TestRunner.Assert(callback != null && f.Match.LastAuthorityRefusal == ClaimRefusal.WrongPhase,
+                "probe did not refuse the root after scheduling the owned child's fuse");
+            callback!();
+            TestRunner.Assert(child.State == PropaneTank.TankState.Venting && child.ChainCause == 0 && detonations == 0,
+                "refused root left an owned child's fuse live");
+        });
         runner.Run("authority/refused vent ownership cancels its predicted chain fuse", () =>
         {
             using var f = new MatchFixture(runner);
