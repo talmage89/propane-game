@@ -33,6 +33,9 @@ public sealed class NetTransport : IPacketTransport
         this.peerIds = peerIds;
         peer.PeerConnected += id =>
         {
+            // Connection attempts still fail promptly. Established peers must tolerate synchronous world imports
+            // and scene construction; sixteen local clients can exceed the attempt's eight-second timeout.
+            peer.GetPeer((int)id)?.SetTimeout(32, 30000, 30000);
             var connection = connections.GetValueOrDefault((int)id) ?? Add((int)id);
             connected.Add(connection);
             Connected?.Invoke(connection);

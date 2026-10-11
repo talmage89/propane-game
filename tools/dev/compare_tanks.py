@@ -1,31 +1,91 @@
 #!/usr/bin/env python3
-"""Compares where several net_test bots had each tank at the same match times: counts, states and drift.
-Usage: tools/dev/compare_tanks.py bot1.log bot2.log [...]"""
-import re, sys, math
+"""Compare tank snapshots; --assert checks final convergence, including ids, states and bounded drift."""
+import argparse
+import math
+import re
+import sys
+
+
 def load(path):
-    snaps = {}
-    for line in open(path, errors='replace'):
-        m = re.search(r'tanks clock (\S+) n (\d+)(.*)', line)
-        if not m: continue
-        clock = float(m.group(1))
-        tanks = {}
-        for tok in m.group(3).split():
-            id_, st, pos = tok.split(':')
-            tanks[id_] = (st, tuple(map(float, pos.split(','))))
-        snaps.setdefault(clock, []).append(tanks)
-    return snaps
-logs = [load(p) for p in sys.argv[1:]]
-base = logs[0]
-for clock in sorted(base.keys(), reverse=True):
-    a = base[clock][-1]
-    for other in logs[1:]:
-        near = min(other.keys(), key=lambda c: abs(c-clock)) if other else None
-        if near is None or abs(near-clock) > 0.6: continue
-        b = other[near][-1]
-        common = set(a) & set(b)
-        only_a = set(a) - set(b); only_b = set(b) - set(a)
-        dists = sorted(((math.dist(a[i][1], b[i][1]), i, a[i][0], b[i][0]) for i in common), reverse=True)
-        state_diff = sum(1 for i in common if a[i][0] != b[i][0])
-        worst = dists[:3]
-        print(f"clock {clock:6.1f}: {len(a)} vs {len(b)} tanks, only-first {sorted(only_a)[:6]} only-second {sorted(only_b)[:6]}, state diffs {state_diff}, "
-              f"max drift {worst[0][0] if worst else 0:.3f} " + " ".join(f"{i}:{d:.2f}{sa}{sb}" for d,i,sa,sb in worst))
+    snapshots = {}
+    with open(path, errors="replace") as source:
+        for line in source:
+            match = re.search(r"tanks clock (\S+) n (\d+)(.*)", line)
+            if not match:
+                continue
+            clock = float(match[1])
+            if not math.isfinite(clock) or clock < 0 and clock != -1:
+                raise ValueError(f"{path}: invalid snapshot clock")
+            tanks = {}
+            for token in match[3].split():
+                identity, state, position = token.split(":")
+                if not re.fullmatch(r"[0-9A-Fa-f]+", identity) or not 0 < int(identity, 16) <= 0xffffffff or state not in ("I", "V"):
+                    raise ValueError(f"{path}: invalid tank id or state")
+                identity = f"{int(identity, 16):x}"
+                if identity in tanks:
+                    raise ValueError(f"{path}: duplicate tank or invalid state")
+                point = tuple(map(float, position.split(",")))
+                if len(point) != 3 or not all(map(math.isfinite, point)):
+                    raise ValueError(f"{path}: invalid tank position")
+                tanks[identity] = state, point
+            if len(tanks) != int(match[2]):
+                raise ValueError(f"{path}: declared count disagrees with snapshot")
+            snapshots[clock] = tanks
+    return snapshots
+
+
+def compare(first, second):
+    common = first.keys() & second.keys()
+    missing = first.keys() ^ second.keys()
+    states = sum(first[key][0] != second[key][0] for key in common)
+    drift = max((math.dist(first[key][1], second[key][1]) for key in common), default=0)
+    return len(missing), states, drift
+
+
+def check(paths, max_drift=.5):
+    if not math.isfinite(max_drift) or max_drift < 0:
+        raise ValueError("drift limit must be finite and nonnegative")
+    if len(paths) < 2:
+        raise ValueError("provide at least two client logs")
+    final = []
+    for path in paths:
+        snapshots = load(path)
+        if 0 not in snapshots:
+            raise ValueError(f"{path}: no completed-match tank snapshot")
+        final.append(snapshots[0])
+    worst = 0
+    for path, tanks in zip(paths[1:], final[1:]):
+        missing, states, drift = compare(final[0], tanks)
+        if missing or states or drift > max_drift:
+            raise ValueError(f"{path}: final tanks disagree: ids={missing} states={states} drift={drift:.3f}m (limit {max_drift}m)")
+        worst = max(worst, drift)
+    print(f"PASS final tanks: {len(final[0])} ids/states agree across {len(paths)} clients; max drift {worst:.3f}m")
+    return worst
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--assert", dest="asserting", action="store_true")
+    parser.add_argument("--max-drift", type=float, default=.5)
+    parser.add_argument("logs", nargs="+")
+    args = parser.parse_args()
+    if args.asserting:
+        check(args.logs, args.max_drift)
+        return
+    if len(args.logs) < 2:
+        raise ValueError("provide at least two client logs")
+    logs = [load(path) for path in args.logs]
+    for clock in sorted(logs[0], reverse=True):
+        for path, other in zip(args.logs[1:], logs[1:]):
+            near = min(other, key=lambda value: abs(value - clock)) if other else None
+            if near is None or abs(near - clock) > .6:
+                continue
+            missing, states, drift = compare(logs[0][clock], other[near])
+            print(f"clock {clock:6.1f} {path}: ids {missing} states {states} max drift {drift:.3f}m")
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except (ValueError, OSError) as error:
+        sys.exit(f"FAIL: {error}")

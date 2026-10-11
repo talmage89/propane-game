@@ -20,8 +20,12 @@ public sealed record PlayerProfile(int Id, string Name, AppearanceRecord Appeara
     public uint LifeId { get; init; } = 1;
     public static PlayerProfile From(ActorRecord a) => new(a.ActorId, a.Name, a.Appearance)
     {
-        OwnerPeerId = a.OwnerPeerId, Kind = a.Kind, ControllerConfig = a.ControllerConfig,
-        Present = a.Present, AllocationSlot = a.AllocationSlot, LifeId = a.LifeId,
+        OwnerPeerId = a.OwnerPeerId,
+        Kind = a.Kind,
+        ControllerConfig = a.ControllerConfig,
+        Present = a.Present,
+        AllocationSlot = a.AllocationSlot,
+        LifeId = a.LifeId,
     };
 }
 
@@ -126,6 +130,7 @@ public partial class NetClient : Node
     private readonly MatchInbox inbox = new();
 
     public int ActiveMatchId => inbox.MatchId;
+    public (int Packets, int Bytes, int Overflows) InboxPressure => (inbox.PeakPackets, inbox.PeakBytes, inbox.Overflows);
 
     /// <summary>Hands queued and subsequent messages to a fully initialized match.</summary>
     public bool AttachMatch(int id, Action<NetMessage> receiver) => inbox.Attach(id, receiver);

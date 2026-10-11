@@ -14,9 +14,9 @@ using Propane.World.Plan;
 namespace Propane.Net;
 
 /// <summary>
-/// A multiplayer match on this player's machine: the suburb the server generated, this player, everyone else's
-/// remote copy, the ammo pickups and the match HUD. Every player simulates the whole suburb; this class sends what
-/// this player does (movement, shots, punctures, explosions, drops, the bodies they own) and plays what the others
+/// A multiplayer match on one peer: the generated suburb, its owned actors, everyone else's
+/// remote copies, ammo pickups and local presentation. Every peer simulates the whole suburb; this class sends what
+/// its actors do (movement, shots, punctures, explosions, drops, the bodies they own) and plays what the others
 /// send. See docs/multiplayer.md for the rules and the networking model.
 /// </summary>
 public partial class Match : Node3D
@@ -123,6 +123,8 @@ public partial class Match : Node3D
 
     public bool IsPlaying => phase == Phase.Playing;
 
+    public IReadOnlyList<Standing> FinalStandings { get; private set; } = Array.Empty<Standing>();
+
     public bool IsOver => phase == Phase.Ended;
 
     public float TimeLeft => timeLeft;
@@ -142,6 +144,7 @@ public partial class Match : Node3D
     public event Action<AuthorityMessage>? AuthorityResolved;
 
     // Packet seam for assertion suites; production sends through the connection.
+    internal Action? BeforeInboxAttach { get; init; }
     internal Action<byte[]>? AuthoritySendOverride { get; set; }
 
     /// <summary>When (on <see cref="Clock"/>) another player's shot last hit this player, and whose it was.</summary>
@@ -778,7 +781,7 @@ public partial class Match : Node3D
             var velocity = outward * tuning.DropToss + Vector3.Up * tuning.DropToss * 0.6f;
             var spin = new Vector3(rng.RandfRange(-1, 1), rng.RandfRange(-1, 1), rng.RandfRange(-1, 1)) * 2f;
             var transform = new Transform3D(new Basis(Vector3.Up, rng.RandfRange(0, Mathf.Tau)), position);
-            var id = BodySync.DropTankId(actor.Runtime.AllocationSlot, actor.Runtime.DropCounter++);
+            var id = actor.Runtime.AllocateDropId();
             actor.Runtime.DropPredictions.Add(id);
             SpawnDroppedTank(id, actor.ActorId, transform, velocity, spin);
             w.UInt(id).Transform(transform).Vec3(velocity).Vec3(spin).UInt(1).UInt(0);
@@ -965,6 +968,7 @@ public partial class Match : Node3D
                 break;
             case Msg.MatchEnd:
                 var standings = (IReadOnlyList<Standing>)message.Payload;
+                FinalStandings = standings;
                 phase = Phase.Ended;
                 foreach (var tank in LiveTanks) { tank.EndGather(); }
                 timeLeft = 0;

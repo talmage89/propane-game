@@ -36,6 +36,7 @@ public partial class Match
         public void AttachInbox(SessionContext session)
         {
             session.OnDetaching(() => match.Net.DetachMatch(match.Setup.Id, match.OnMessage));
+            match.BeforeInboxAttach?.Invoke();
             match.Net.AttachMatch(match.Setup.Id, match.OnMessage);
         }
         public void Ready(SessionContext session)
@@ -87,9 +88,14 @@ public partial class Match
             var owned = profile.OwnerPeerId == me;
             var character = new PlayerCharacter
             {
-                World = World, Name = $"Actor_{profile.Id}", IsRemote = !owned,
-                ActorId = profile.Id, OwnerPeerId = profile.OwnerPeerId, LifeId = profile.LifeId,
-                BodyColor = profile.Appearance.Color, Ammo = owned ? AmmoState.Starting(World.Tuning) : null,
+                World = World,
+                Name = $"Actor_{profile.Id}",
+                IsRemote = !owned,
+                ActorId = profile.Id,
+                OwnerPeerId = profile.OwnerPeerId,
+                LifeId = profile.LifeId,
+                BodyColor = profile.Appearance.Color,
+                Ammo = owned ? AmmoState.Starting(World.Tuning) : null,
                 InputLocked = owned,
             };
             Session.AddActor(character);

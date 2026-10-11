@@ -12,7 +12,7 @@ PORT ?= $(if $(SLOT),$(shell echo $$((24680 + $(SLOT)))),24680)
 SERVER ?= 127.0.0.1:$(PORT)
 
 .DEFAULT_GOAL := help
-.PHONY: help setup run build lint check test test-core test-behavior test-generator test-world test-full server bots bots-stop package deploy release-patch release-minor release-major
+.PHONY: help setup run build lint check test test-core test-behavior test-generator test-world test-full test-capacity server bots bots-stop package deploy release-patch release-minor release-major
 
 help: ## List the tasks
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN { FS = ":.*## " } { printf "  make %-14s %s\n", $$1, $$2 }'
@@ -44,6 +44,8 @@ test-core: build ## Run checker, platform, movement and unit assertions
 	python3 -B tools/dev/check_world_tests.py
 	python3 -B tools/dev/time_gate_tests.py
 	python3 -B tools/dev/check_scores_tests.py
+	python3 -B tools/dev/check_capacity_tests.py
+	python3 -B tools/dev/compare_tanks_tests.py
 	python3 -B tools/dev/compare_vents_tests.py
 	python3 -B tools/dev/compare_tank_paths_tests.py
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/core_tests.tscn
@@ -87,6 +89,9 @@ test-full: test ## Run the gate plus deep sweeps
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/player_range.tscn -- --scenario=melee-reloads --assert-motion --assert-grip
 	"$(GODOT)" --headless --path . res://scenes/dev/generator_tests.tscn -- --seeds=200 --large-seeds=100 --formation-seeds=6
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/bot_navigation_course.tscn -- --seeds=100
+
+test-capacity: build ## Repeat the separate-client tested-capacity gate (three clean and three faulted matches)
+	tools/dev/capacity_acceptance.sh
 
 server: build ## Run a multiplayer server here (PORT, default 24680, or this worktree's)
 	"$(GODOT)" --headless --path . -- --server --port=$(PORT)

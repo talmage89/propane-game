@@ -486,6 +486,8 @@ name, appearance, versioned controller configuration, presence, allocation slot 
 allocation slots are never reused in that lobby session, including across matches. Spawn slots are a separate,
 frozen match mapping. Drop entities use the actor's allocation slot, never its spawn position. Allocation fails
 before an id, life, epoch or publication counter can wrap. Local view ids are process-local and never transmitted.
+Returning to the waiting lobby advances surviving actors' lives for their next round, with one roster revision;
+actor ids and allocation slots remain stable. Ragdoll recovery is the same life, not a respawn.
 
 One peer may own several actors. Each has its own input, aim, ammo, pose/action sequence, grace and predictions;
 there is one shared world and one body synchronizer per peer. The server owns bank and standings. Attacker owners
@@ -494,6 +496,7 @@ and correction stay per peer. Delayed chains carry the initiating actor unchange
 causal request belongs to the same actor as its accepted root. Another actor on the same peer cannot borrow credit.
 Same-peer hits follow the same actor event handler as network hits. Predicted contacts and reliable echoes share
 an action id and are applied once.
+Profile updates, including the legacy `SetProfile` path, cannot edit the roster during a match.
 
 Roster requests are reliable `AddActor(RequestId, Kind, Name, Appearance, ControllerConfig)`,
 `UpdateActor(RequestId, ActorId, Name, Appearance, ControllerConfig)` and `RemoveActor(RequestId, ActorId)`.
@@ -519,6 +522,7 @@ Wire changes in this package:
 - `Shot` and `MeleeContact` add the victim's LifeId. Targets, `Score`, `PickupTaken` and `MatchEnd` standings use
   actor ids. `Drop` relays the actor envelope; accepted appearance comes from that actor's frozen profile.
 - Canonical `Authority` bodies add `CauseActorId`; body owners and authority request identities remain peers.
+  The refusal enum adds `DuplicateRequest` for a reused accepted explosion request.
   `PlayerLeft` identifies a departed peer and successor world authority; clients remove every actor of that peer.
 
 The server retains departed actors' banks for conservation and final standings, transfers surviving body ownership
@@ -526,3 +530,11 @@ with new epochs, and may transfer lobby creator controls. Original debug-tuning 
 The wire safety ceiling is 64 actors/peers, separate from capacity and the color presets. Hello, Welcome and Rejected
 retain their layouts. `Protocol.Version` remains **2** under the unreleased-cycle ruling; these changes require a
 minor release.
+
+The repeatable separate-client capacity gate and its measured evidence are in [network-soak.md](network-soak.md).
+
+ENet connection attempts retain their eight-second deadline. After handshake completion, both ends allow
+up to 30 seconds of stalled polling to tolerate synchronous world construction at the tested capacity.
+
+Both the adaptive minimum and hard maximum are set to 30 seconds for established peers; increasing only the
+hard maximum still permits early adaptive timeouts. See [Godot ENetPacketPeer timeout parameters](https://docs.godotengine.org/en/latest/classes/class_enetpacketpeer.html#class-enetpacketpeer-method-set-timeout).

@@ -273,11 +273,14 @@ public static class MessageCodec
         var players = ReadArray(r, r.Int(), Protocol.MaxWireActors, () => (ReadProfile(r), Range(r.Int(), 0, Protocol.MaxWireActors - 1)), min: 1);
         Unique(players.Select(p => p.Item1.Id).ToArray());
         Unique(players.Select(p => p.Item2).ToArray());
-        if (!players.Any(p => p.Item1.OwnerPeerId == host && p.Item1.Kind == ActorKind.Human)) { throw new InvalidDataException("host missing from match"); }
+        if (!players.Any(p => p.Item1.OwnerPeerId == host)) { throw new InvalidDataException("host missing from match"); }
         Unique(players.Select(p => p.Item1.AllocationSlot).ToArray());
         if (players.Any(p => !p.Item1.Present || !peers.Any(peer => peer.PeerId == p.Item1.OwnerPeerId)) ||
             !peers.Any(p => p.PeerId == creator) || peers.Any(p => p.DebugTuning && (p.PeerId != creator || !debug)))
+        {
             throw new InvalidDataException("invalid frozen capabilities or actor ownership");
+        }
+
         var decoded = PlanCodec.Decode(plan);
         if (decoded.Spawns.Count != players.Length || players.Any(p => p.Item2 >= decoded.Spawns.Count))
         {
@@ -292,8 +295,15 @@ public static class MessageCodec
         var name = r.String(); var appearance = r.Appearance(); var config = ReadController(r);
         var present = r.Bool(); var slot = Range(r.Int(), 0, BodySync.MaxAllocationSlots - 1); var life = Id(r.UInt());
         if (!config.ValidFor(kind)) throw new InvalidDataException("controller does not match actor kind");
-        return new(actor, name, appearance) { OwnerPeerId = owner, Kind = kind, ControllerConfig = config,
-            Present = present, AllocationSlot = slot, LifeId = life };
+        return new(actor, name, appearance)
+        {
+            OwnerPeerId = owner,
+            Kind = kind,
+            ControllerConfig = config,
+            Present = present,
+            AllocationSlot = slot,
+            LifeId = life
+        };
     }
     private static PlayerProfile[] ReadProfiles(NetReader r)
     {

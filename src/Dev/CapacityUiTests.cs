@@ -30,7 +30,8 @@ public partial class CapacityUiTests : Node
             InputSetup.Register();
             var count = (int)DevArgs.GetFloat("players", 16);
             var profiles = Enumerable.Range(0, count).Select(i => new PlayerProfile(1001 + i,
-                i == 0 ? "Creator" : $"Participant {i + 1:00}", AppearanceRecord.FromPalette(i)) { OwnerPeerId = 2 + i, AllocationSlot = i }).ToArray();
+                i == 0 ? "Creator" : $"Participant {i + 1:00}", AppearanceRecord.FromPalette(i))
+            { OwnerPeerId = 2 + i, AllocationSlot = i }).ToArray();
             net.Handle(MessageCodec.Encode(new NetMessage(Msg.Welcome, 0, 0, new WelcomeMessage(2, null)), true));
             net.Handle(MessageCodec.Encode(new NetMessage(Msg.LobbyList, 0, 0, new LobbyListMessage(16, Array.Empty<LobbySummary>())), true));
             net.Handle(MessageCodec.Encode(new NetMessage(Msg.LobbyState, 0, 0, new LobbyInfo(1, 2, 180,

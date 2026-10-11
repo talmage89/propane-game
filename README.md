@@ -203,6 +203,11 @@ $GODOT --headless res://scenes/dev/shutdown_tests.tscn
 $GODOT --headless --fixed-fps 60 res://scenes/dev/session_actors_tests.tscn
 $GODOT --fixed-fps 60 res://scenes/dev/session_actors_tests.tscn -- --capture-dir=/tmp/session-actors
 
+# Participant capacity: production lobby/results layouts (also use 2/8 entries and 1920x1080).
+$GODOT --resolution 1280x720 --fixed-fps 60 res://scenes/dev/capacity_ui_tests.tscn -- --players=16 --capture-dir="$PWD/build/capacity-ui"
+# Repeated sixteen-client acceptance and resource measurements: docs/network-soak.md.
+make test-capacity
+
 # Movement resolver: gait/target speed on each transition tick, lifecycle, jump buffer and coyote time;
 # injected gamepad actions and stick look.
 $GODOT --headless res://scenes/dev/movement_tests.tscn
@@ -404,7 +409,3 @@ rebuild them with Blender 5.1 (`import_rifle.py` needs only Python):
 | `build_props.py` | `assets/props/*.glb`: fences, grill, bins, mailbox, lamp, hydrant, patio heater and more |
 
 Each script's header gives its exact command line.
-
-Render lobby and results capacity layouts with `res://scenes/dev/capacity_ui_tests.tscn`,
-`--players=2|8|16`, `--resolution 1280x720|1920x1080` and `--capture-dir=$PWD/build/capacity-ui`.
-The harness asserts that every entry remains visible and panels fit the viewport.

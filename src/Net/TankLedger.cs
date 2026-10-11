@@ -72,6 +72,7 @@ public sealed class TankLedger
             {
                 State = State.Venting,
                 Vent = new VentParameters(puncture.Hole, puncture.Normal, puncture.Swirl),
+                CauseActorId = actorId,
             };
         }
         return Result(peer, puncture.Request, reason, new[] { puncture.Id });

@@ -16,26 +16,63 @@ public static class ParticipantServerTests
     private static void Assert(bool condition, string reason) => TestRunner.Assert(condition, reason);
     public static void Register(TestRunner runner)
     {
+        runner.Run("participants/rounds retain actor and allocation identities but advance lives", () =>
+        {
+            using var f = new ServerTests.Fixture();
+            var first = f.Setup;
+            f.Advance(11); f.Advance(20);
+            f.Packets.Clear();
+            f.Receive(new NetWriter(Msg.StartMatch).Snapshot(f.Tuning.Snapshot()));
+            var next = f.Packets.Select(p => p.Message.Payload).OfType<MatchSetup>().First();
+            Assert(next.Id != first.Id && next.RosterRevision > first.RosterRevision, "round/revision did not advance");
+            Assert(next.Players.All(p => first.Players.Any(old => old.Player.Id == p.Player.Id &&
+                old.Player.AllocationSlot == p.Player.AllocationSlot && p.Player.LifeId == old.Player.LifeId + 1)),
+                "round respawn reused actor identity or retained the old life");
+            foreach (var peer in next.Peers) f.Receive(new NetWriter(Msg.Loaded, next.Id), peer.PeerId);
+            f.Advance(); f.Advance();
+            var actor = next.Players.First(p => p.Player.OwnerPeerId == 2).Player;
+            f.Reject(MessageCodec.Encode(new NetMessage(Msg.Shot, next.Id, 0,
+                new ShotMessage(Vector3.Zero, Vector3.Up, Vector3.Forward, 0, 0, -1), actor.Id, actor.LifeId - 1, 1), false));
+        });
+        runner.Run("participants/creator can start with an owned bot actor", () =>
+        {
+            using var f = new ServerTests.Fixture(playing: false);
+            f.Advance(50); f.Advance(); f.Advance(20); f.Advance(2);
+            var human = f.Setup.Players.Single(p => p.Player.OwnerPeerId == 2).Player;
+            f.Receive(Request(Msg.RemoveActor, new RemoveActorMessage(1, human.Id)));
+            f.Packets.Clear();
+            f.Receive(new NetWriter(Msg.StartMatch).Snapshot(f.Tuning.Snapshot()));
+            Assert(f.Packets.Count == 1 && f.Packets[0].Message.Type == Msg.Notice, "creator without an actor started a match");
+            f.Receive(Request(Msg.AddActor, new AddActorMessage(2, ActorKind.Bot, "Creator bot", human.Appearance, ControllerConfig.Bot)));
+            f.Packets.Clear();
+            f.Receive(new NetWriter(Msg.StartMatch).Snapshot(f.Tuning.Snapshot()));
+            var setup = f.Packets.Select(p => p.Message.Payload).OfType<MatchSetup>().First();
+            Assert(setup.Id == f.Id + 1 && setup.Players.Count == 2 && setup.Players.Single(p => p.Player.OwnerPeerId == 2).Player.Kind == ActorKind.Bot,
+                "actor kind incorrectly restricted creator ownership");
+            var decoded = (MatchSetup)MessageCodec.Decode(MessageCodec.Encode(new NetMessage(Msg.MatchStart, setup.Id, 0, setup), true), true).Payload;
+            Assert(decoded.HostId == 2, "wire decoder conflated authority peer with human actor kind");
+        });
         runner.Run("participants/server owns revisions and idempotent roster requests", () =>
         {
             using var f = new ServerTests.Fixture(playing: false);
             f.Advance(50); f.Advance(); f.Advance(20); f.Advance(2); // Return to Waiting.
+            var revision = f.Packets.Select(p => p.Message.Payload).OfType<LobbyInfo>().Last().RosterRevision;
             f.Packets.Clear();
             var add = Request(Msg.AddActor, new AddActorMessage(1, ActorKind.Bot, "Embedded", AppearanceRecord.FromPalette(0), ControllerConfig.Bot));
             f.Receive(add);
             var roster = f.Packets.Select(p => p.Message.Payload).OfType<RosterStateMessage>().First();
             var bot = roster.Actors.Single(a => a.Kind == ActorKind.Bot);
-            Assert(roster.Revision == 3 && bot.OwnerPeerId == 2 && bot.Id != bot.OwnerPeerId, "actor ownership or revision incorrect");
+            Assert(roster.Revision == revision + 1 && bot.OwnerPeerId == 2 && bot.Id != bot.OwnerPeerId, "actor ownership or revision incorrect");
             f.Packets.Clear(); f.Receive(add);
-            Assert(f.Packets.Count == 1 && f.Packets[0].Message.Payload is ActorRequestResultMessage { Accepted: true, Revision: 3 }, "duplicate request mutated roster");
+            Assert(f.Packets.Count == 1 && f.Packets[0].Message.Payload is ActorRequestResultMessage { Accepted: true } duplicate && duplicate.Revision == revision + 1, "duplicate request mutated roster");
             f.Packets.Clear();
             f.Receive(Request(Msg.UpdateActor, new UpdateActorMessage(1, bot.Id, "Stolen", bot.Appearance, ControllerConfig.Bot)), 3);
-            Assert(f.Packets.Single().Message.Payload is ActorRequestResultMessage { Accepted: false, Revision: 3 }, "spoofed update accepted");
+            Assert(f.Packets.Single().Message.Payload is ActorRequestResultMessage { Accepted: false } spoof && spoof.Revision == revision + 1, "spoofed update accepted");
             f.Packets.Clear();
             f.Receive(Request(Msg.UpdateActor, new UpdateActorMessage(2, bot.Id, "Renamed", bot.Appearance, ControllerConfig.Bot)));
-            Assert(f.Packets.Any(p => p.Message.Payload is RosterStateMessage { Revision: 4 } r && r.Actors.Any(a => a.Name == "Renamed")), "update not broadcast");
+            Assert(f.Packets.Any(p => p.Message.Payload is RosterStateMessage r && r.Revision == revision + 2 && r.Actors.Any(a => a.Name == "Renamed")), "update not broadcast");
             f.Packets.Clear(); f.Receive(Request(Msg.RemoveActor, new RemoveActorMessage(3, bot.Id)));
-            Assert(f.Packets.Any(p => p.Message.Payload is RosterStateMessage { Revision: 5 } r && r.Actors.Count == 2), "remove not broadcast");
+            Assert(f.Packets.Any(p => p.Message.Payload is RosterStateMessage r && r.Revision == revision + 3 && r.Actors.Count == 2), "remove not broadcast");
             f.Packets.Clear(); f.Receive(Request(Msg.AddActor, new AddActorMessage(4, ActorKind.Bot, "Next", bot.Appearance, ControllerConfig.Bot)));
             var next = f.Packets.Select(p => p.Message.Payload).OfType<RosterStateMessage>().First().Actors.Single(a => a.Kind == ActorKind.Bot);
             Assert(next.Id > bot.Id && next.AllocationSlot > bot.AllocationSlot, "removed actor or allocation reused");
@@ -68,6 +105,9 @@ public static class ParticipantServerTests
             f.Packets.Clear();
             f.Receive(Request(Msg.AddActor, new AddActorMessage(2, ActorKind.Bot, "Late", bot.Appearance, ControllerConfig.Bot)));
             Assert(f.Packets.Single().Message.Payload is ActorRequestResultMessage { Accepted: false }, "match roster was mutable");
+            f.Packets.Clear();
+            f.Receive(new NetWriter(Msg.SetProfile).String("Frozen profile").Appearance(bot.Appearance));
+            Assert(f.Packets.Count == 0, "legacy profile request bypassed the frozen roster");
         });
         runner.Run("participants/departure removes every actor and retains departed banks", () =>
         {
@@ -132,7 +172,113 @@ public static class ParticipantServerTests
             Assert(root.Bodies.Single().CauseActorId == 101, "canonical blast lost attribution");
             var child = new PunctureMessage(BodySync.MapTankId(1), Transform3D.Identity, Vector3.Zero, Vector3.Zero, Vector3.Zero, Vector3.Up, 1, Cause: 10);
             Assert(ledger.Puncture(2, child, 102, true).Reason == ClaimRefusal.Cause, "same peer borrowed another actor's chain");
-            Assert(ledger.Puncture(2, child, 101, true).Reason == ClaimRefusal.None, "initiator could not continue chain");
+            var accepted = ledger.Puncture(2, child, 101, true);
+            Assert(accepted.Reason == ClaimRefusal.None && accepted.Bodies.Single().CauseActorId == 101,
+                "initiator could not continue chain or vent attribution was lost");
+            Assert(ledger.Transfer(2, 3).Single(b => b.Body.Id == child.Id).CauseActorId == 101,
+                "body transfer changed immutable initiating actor");
+        });
+        runner.Run("participants/delayed view stages its actor before buffered blast delivery", () =>
+        {
+            using var fixture = new ServerTests.Fixture();
+            var client = new NetClient();
+            client.Handle(MessageCodec.Encode(new NetMessage(Msg.Welcome, 0, 0, new WelcomeMessage(2, null)), true));
+            client.Handle(MessageCodec.Encode(new NetMessage(Msg.LobbyState, 0, 0, new LobbyInfo(1, 2, 10,
+                LobbyServer.LobbyPhase.Loading, fixture.Setup.Players.Select(p => p.Player).ToArray())), true));
+            client.Handle(MessageCodec.Encode(new NetMessage(Msg.MatchStart, fixture.Id, 0, fixture.Setup), true));
+            var own = fixture.Setup.Players.Single(p => p.Player.OwnerPeerId == 2).Player;
+            foreach (var message in new[]
+            {
+                new NetMessage(Msg.MatchGo, fixture.Id, 0, new FloatMessage(10)),
+                new NetMessage(Msg.Score, fixture.Id, 0, new ScoreMessage(own.Id, 8, 0)),
+                new NetMessage(Msg.Authority, fixture.Id, 0, new AuthorityMessage(3, 1, ClaimRefusal.None,
+                    new[] { new BodyAuthority(new BodyState(BodySync.MapTankId(0), Transform3D.Identity, Vector3.Zero, Vector3.Zero, 2),
+                        3, TankLedger.State.Exploded, true, null, new Vector3(400, .3f, 0), 2) })),
+            })
+            {
+                client.Handle(MessageCodec.Encode(message, true));
+            }
+
+            Match? delayed = null;
+            var throws = 0;
+            delayed = new Match
+            {
+                Net = client,
+                Setup = fixture.Setup,
+                CreateLocalView = false,
+                BeforeInboxAttach = () =>
+            {
+                delayed!.Player.Teleport(new Vector3(404, .05f, 0), 0);
+                delayed.Player.Ragdolled += (_, _, _) => throws++;
+            }
+            };
+            try
+            {
+                runner.AddChild(delayed);
+                Assert(throws == 1 && delayed.Player.IsRagdolled && client.InboxPressure.Packets == 3,
+                    $"buffered blast proof: throws={throws} ragdoll={delayed.Player.IsRagdolled} inbox={client.InboxPressure.Packets} position={delayed.Player.GlobalPosition} playing={delayed.IsPlaying} receivers={delayed.World.BlastReceivers.Count}");
+            }
+            finally { delayed.Free(); client.Free(); }
+        });
+        runner.Run("participants/capacity counts actors and only the waiting creator can select it", () =>
+        {
+            using var f = new ServerTests.Fixture(playing: false);
+            f.Advance(50); f.Advance(); f.Advance(20); f.Advance(2);
+            f.Packets.Clear();
+            f.Receive(Request(Msg.SetCapacity, new IntMessage(16)), 3);
+            Assert(f.Packets.Count == 0, "noncreator changed capacity");
+            f.Receive(Request(Msg.SetCapacity, new IntMessage(16)));
+            Assert(f.Packets.Any(p => p.Message.Payload is LobbyInfo { Capacity: 16 }), "creator cannot select tested ceiling");
+            for (uint request = 1; request <= 14; request++)
+                f.Receive(Request(Msg.AddActor, new AddActorMessage(request, ActorKind.Bot, $"Bot {request}", AppearanceRecord.FromPalette(0), ControllerConfig.Bot)));
+            var full = f.Packets.Select(p => p.Message.Payload).OfType<RosterStateMessage>().Last();
+            Assert(full.Actors.Count == 16, "capacity remained peer- or palette-derived");
+            f.Packets.Clear();
+            f.Receive(Request(Msg.AddActor, new AddActorMessage(15, ActorKind.Bot, "Excess", AppearanceRecord.FromPalette(0), ControllerConfig.Bot)));
+            Assert(f.Packets.Single().Message.Payload is ActorRequestResultMessage { Accepted: false }, "actor exceeded selected capacity");
+            f.Packets.Clear(); f.Receive(Request(Msg.SetCapacity, new IntMessage(2)));
+            Assert(f.Packets.Count == 0, "capacity shrank below actual roster");
+            foreach (var invalid in new[] { 1, 17 }) f.Reject(Request(Msg.SetCapacity, new IntMessage(invalid)));
+        });
+        runner.Run("participants/client ignores stale roster revisions and foreign lobbies", () =>
+        {
+            var client = new NetClient();
+            try
+            {
+                foreach (var type in new[] { Msg.Welcome, Msg.LobbyState })
+                    client.Handle(MessageCodec.Encode(ProtocolTests.Fixtures().Single(f => f.Type == type), true));
+                var lobby = client.Lobby!;
+                var updated = lobby.Members.Select(p => p with { Name = "Updated" }).ToArray();
+                void Feed(uint revision, int lobbyId, IReadOnlyList<PlayerProfile> actors) =>
+                    client.Handle(MessageCodec.Encode(new NetMessage(Msg.RosterState, 0, 0, new RosterStateMessage(lobbyId, revision, actors)), true));
+                Feed(3, lobby.Id, updated);
+                Feed(2, lobby.Id, lobby.Members);
+                Feed(4, lobby.Id + 1, lobby.Members);
+                client.Handle(MessageCodec.Encode(new NetMessage(Msg.LobbyState, 0, 0, lobby with { RosterRevision = 2 }), true));
+                Assert(client.RosterRevision == 3 && client.Roster.All(a => a.Name == "Updated"), "stale state overwrote the current roster");
+            }
+            finally { client.Free(); }
+        });
+        runner.Run("participants/delayed chain keeps the initiating actor after other actor actions", () =>
+        {
+            var tank = PropaneTank.Create(runner.World);
+            runner.World.Root.AddChild(tank);
+            try
+            {
+                tank.TakeShot(tank.ToGlobal(PropaneTank.LocalCenter), Vector3.Up, Vector3.Forward, 101);
+                Action? finish = null;
+                tank.FuseScheduleOverride = (_, callback) => finish = callback;
+                tank.ChainHit(Vector3.Zero, 0, 44, 102);
+                var other = PropaneTank.Create(runner.World);
+                runner.World.Root.AddChild(other);
+                try { other.TakeShot(other.ToGlobal(PropaneTank.LocalCenter), Vector3.Up, Vector3.Forward, 103); }
+                finally { other.Free(); }
+                Assert(finish != null && tank.CauseActorId == 102 && tank.ChainCause == 44, "fuse attribution was inferred from the last actor");
+                var scorer = 0; tank.Detonated += source => scorer = source.CauseActorId;
+                finish!();
+                Assert(scorer == 102, "delayed fuse changed its initiating actor");
+            }
+            finally { if (GodotObject.IsInstanceValid(tank)) tank.Free(); }
         });
         runner.Run("participants/wire rejects zero identities and malformed controller configuration", () =>
         {

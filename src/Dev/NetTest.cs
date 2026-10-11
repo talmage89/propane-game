@@ -15,7 +15,7 @@ namespace Propane.Dev;
 /// (<c>--role=host</c>, starting once <c>--players=N</c> have joined) or joins the first one (<c>--role=join</c>),
 /// then plays with <see cref="Bot"/>. It logs
 /// scores and, every few seconds, where it has every tank, so runs on several machines can be compared.
-/// Run: godot res://scenes/dev/net_test.tscn -- --server=127.0.0.1 --role=host --players=2 [--capture-dir=/tmp/n]
+/// Run: godot-mono res://scenes/dev/net_test.tscn -- --server=127.0.0.1 --role=host --players=2 [--capture-dir=$PWD/build/net-shots]
 /// Add <c>--host-server</c> to run the server in the same process.
 /// </summary>
 public partial class NetTest : Node
@@ -87,6 +87,8 @@ public partial class NetTest : Node
         {
             if (net.Lobby is { } lobby)
             {
+                if (role == "host" && net.IsCreator && lobby.Phase == LobbyServer.LobbyPhase.Waiting && lobby.Capacity < players)
+                    net.SetCapacity(players);
                 Log($"lobby {lobby.Id}: {string.Join(", ", lobby.Members.Select(m => $"{m.Name}/{m.Appearance.Color.ToHtml(false)}"))}, {lobby.Phase}");
                 if (DevArgs.Get("scenario") == "appearance" && lobby.Phase == LobbyServer.LobbyPhase.Waiting && lobby.Members.Count == players)
                 {
@@ -103,6 +105,7 @@ public partial class NetTest : Node
             appearanceMenus?.Show(UI.Menus.Screen.None);
             if (DevArgs.Get("scenario") == "appearance") { CheckAppearances(setup.Players.Select(p => p.Player)); }
             var delay = DevArgs.GetFloat("match-delay", 0);
+            if (DevArgs.Get("scenario") == "capacity" && DevArgs.Get("name") == $"Bot{players}") delay = 26;
             if (delay > 0)
             {
                 Log($"delaying match {setup.Id} construction by {delay} s");
@@ -114,7 +117,14 @@ public partial class NetTest : Node
                 RemoveChild(match);
                 match.QueueFree();
             }
-            match = new Match { Name = "Match", Net = net, Setup = setup, CreateLocalView = DisplayServer.GetName() != "headless" };
+            match = new Match
+            {
+                Name = "Match",
+                Net = net,
+                Setup = setup,
+                CreateLocalView = DisplayServer.GetName() != "headless",
+                BeforeInboxAttach = DevArgs.Get("scenario") == "capacity" ? () => PrepareCapacity(setup) : null
+            };
             match.Finished += () =>
             {
                 if (DevArgs.Get("scenario") is "duel" or "pickup" or "drop-refusal" or "puncture-race" or "appearance" or "gather" or "melee")
@@ -131,6 +141,8 @@ public partial class NetTest : Node
                 {
                     Log($"navigation finished: stuck={smart.StuckEvents} blacklist={smart.BlacklistedTargets} replans={smart.Replans} jumps={smart.Jumps}");
                 }
+                if (DevArgs.Get("scenario") == "capacity") FinishCapacity();
+                Digest();
                 Log($"finished match {match.Setup.Id}; final scores {ScoreLine()}");
                 RemoveChild(match);
                 match.QueueFree();
@@ -250,7 +262,11 @@ public partial class NetTest : Node
             ShutdownGuard.Quit(GetTree());
             return;
         }
-        if (DevArgs.Get("scenario") is "duel" or "drop-refusal" or "gather")
+        if (DevArgs.Get("scenario") == "capacity")
+        {
+            CapacityScenario(dt);
+        }
+        else if (DevArgs.Get("scenario") is "duel" or "drop-refusal" or "gather")
         {
             Duel(match, dt);
         }
@@ -1024,6 +1040,7 @@ public partial class NetTest : Node
         }
         var self = match.Player;
         Log($"tuning BlastRadius {match.World.Tuning.BlastRadius} PickupRespawnTime {match.World.Tuning.PickupRespawnTime}");
+        Log(CapacityMetrics.Sample("client", net));
         Log($"perf fps {Engine.GetFramesPerSecond():0} process {Performance.GetMonitor(Performance.Monitor.TimeProcess) * 1000:0.0} ms physics {Performance.GetMonitor(Performance.Monitor.TimePhysicsProcess) * 1000:0.0} ms bodies {Performance.GetMonitor(Performance.Monitor.Physics3DActiveObjects)}");
         Log($"digest clock {match.TimeLeft:0.0} me {self.GlobalPosition.X:0.0},{self.GlobalPosition.Z:0.0}{(self.IsRagdolled ? "R" : "")} ammo {self.Ammo?.Magazine}/{self.Ammo?.Reserve} scores {ScoreLine()} remotes {remotes}");
         Log($"tanks clock {match.TimeLeft:0.0} n {match.LiveTanks.Count()}{tanks}");

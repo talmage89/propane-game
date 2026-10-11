@@ -330,10 +330,16 @@ public sealed class BodySync
     }
 
     /// <summary>Id of a map tank by its index in the plan.</summary>
-    public static uint MapTankId(int index) => MapTankBase + (uint)index;
+    public const int MaxWorldEntities = 1 << 28;
+    public static uint MapTankId(int index) => WorldEntityId(MapTankBase, index);
 
     /// <summary>Id of a car by its index in the plan's props.</summary>
-    public static uint CarId(int propIndex) => CarBase + (uint)propIndex;
+    public static uint CarId(int propIndex) => WorldEntityId(CarBase, propIndex);
+    private static uint WorldEntityId(uint prefix, int index)
+    {
+        if (index < 0 || index >= MaxWorldEntities) throw new ArgumentOutOfRangeException(nameof(index), "entity allocation space exhausted");
+        return prefix + (uint)index;
+    }
 
     // Allocation slots belong to session actors, independently of their position in any round's spawn list.
     public const int MaxAllocationSlots = (int)((CarBase - DropTankBase) >> 20);

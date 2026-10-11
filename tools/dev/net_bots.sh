@@ -63,7 +63,7 @@ for i in $(seq 1 "$bots"); do
   fi
   display=(--headless)
   if (( i <= windowed )); then
-    display=(--resolution 960x540 --position $(( (i - 1) * 970 )),40)
+    display=(--disable-vsync --resolution 960x540 --position $(( (i - 1) * 970 )),40)
   fi
   timeout "$budget" "$godot" "${display[@]}" --path "$project" res://scenes/dev/net_test.tscn -- --server="$address" --port="$port" \
     --role="$role" --players="$bots" --length="$length" --name="Bot$i" --color=$((i - 1)) --brain="${brain:-smart}" --windowed "${appearance[@]}" "$@" >"$out/bot$i.log" 2>&1 &

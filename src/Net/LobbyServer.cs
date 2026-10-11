@@ -171,6 +171,7 @@ public partial class LobbyServer : Node
         if (now >= nextDiagnostics)
         {
             nextDiagnostics = now + 10;
+            if (Dev.DevArgs.Get("capacity-metrics") != null) Log(Dev.CapacityMetrics.Server(clients.Keys.Select(id => peerIds.Connection(id)).Where(c => c != null).Select(c => transport.Diagnostics(c!))));
             foreach (var id in clients.Keys)
             {
                 if (peerIds.Connection(id) is not { } connection) { continue; }
@@ -291,8 +292,13 @@ public partial class LobbyServer : Node
         {
             LeaveLobby(client);
         }
-        var lobby = new Lobby { Id = lobbyIds.Allocate(), CreatorId = client.Id, MatchLength = Tuning.SavedTemplate.MatchLengthDefault,
-            Capacity = Math.Clamp(Tuning.SavedTemplate.MaxPlayers, 2, Protocol.TestedActorCeiling) };
+        var lobby = new Lobby
+        {
+            Id = lobbyIds.Allocate(),
+            CreatorId = client.Id,
+            MatchLength = Tuning.SavedTemplate.MatchLengthDefault,
+            Capacity = Math.Clamp(Tuning.SavedTemplate.MaxPlayers, 2, Protocol.TestedActorCeiling)
+        };
         lobbies[lobby.Id] = lobby;
         Log($"{client.Name} created lobby {lobby.Id}");
         AddMember(lobby, client);
@@ -318,6 +324,11 @@ public partial class LobbyServer : Node
         }
         if (client.Lobby == lobby)
         {
+            return;
+        }
+        if (!lobby.Roster.CanAdd)
+        {
+            Notice(client, "The session identity space is exhausted. Create a new lobby.");
             return;
         }
         if (client.Lobby != null)
@@ -387,6 +398,7 @@ public partial class LobbyServer : Node
 
     private void SetProfile(Client client, string name, AppearanceRecord appearance)
     {
+        if (client.Lobby is { Phase: not LobbyPhase.Waiting }) return;
         client.Name = Protocol.CleanName(name);
         client.Appearance = appearance;
         if (client.Lobby != null)
@@ -402,7 +414,7 @@ public partial class LobbyServer : Node
     {
         var actors = lobby.Roster.Present.Select(PlayerProfile.From).ToArray();
         var state = new LobbyInfo(lobby.Id, lobby.CreatorId, lobby.MatchLength, lobby.Phase, actors, lobby.Capacity, lobby.Roster.Revision)
-            { Peers = lobby.Members.ToArray() };
+        { Peers = lobby.Members.ToArray() };
         var bytes = MessageCodec.Encode(new NetMessage(Msg.LobbyState, 0, 0, state), true);
         var roster = MessageCodec.Encode(new NetMessage(Msg.RosterState, 0, 0,
             new RosterStateMessage(lobby.Id, lobby.Roster.Revision, actors)), true);
@@ -413,7 +425,9 @@ public partial class LobbyServer : Node
     {
         var request = payload switch
         {
-            AddActorMessage a => a.RequestId, UpdateActorMessage a => a.RequestId, RemoveActorMessage a => a.RequestId,
+            AddActorMessage a => a.RequestId,
+            UpdateActorMessage a => a.RequestId,
+            RemoveActorMessage a => a.RequestId,
             _ => throw new InvalidDataException("unknown roster request"),
         };
         if (request <= client.LastActorRequest)
@@ -446,6 +460,7 @@ public partial class LobbyServer : Node
                 }
             }
             catch (InvalidOperationException) { reason = "The session identity space is exhausted. Create a new lobby."; }
+            catch (OverflowException) { reason = "The session identity space is exhausted. Create a new lobby."; }
         }
         var result = new ActorRequestResultMessage(request, accepted, lobby?.Roster.Revision ?? 1, accepted ? "" : reason);
         client.LastActorRequest = request;
@@ -486,6 +501,9 @@ public partial class LobbyServer : Node
         {
             return;
         }
+        var actors = lobby.Roster.Present;
+        if (actors.Count == 0 || actors.Count > lobby.Capacity || !actors.Any(a => a.OwnerPeerId == client.Id))
+        { Notice(client, "The creator needs an actor to start."); return; }
         // Everyone plays on the creator's tuning: the baked values in a release build, the live ones in debug.
         var tuning = Tuning.FromSnapshot(snapshot);
         var match = new MatchRun
@@ -497,9 +515,6 @@ public partial class LobbyServer : Node
             Length = lobby.MatchLength,
             HostId = client.Id
         };
-        var actors = lobby.Roster.Present;
-        if (actors.Count == 0 || actors.Count > lobby.Capacity || !actors.Any(a => a.OwnerPeerId == client.Id && a.Kind == ActorKind.Human))
-        { Notice(client, "The creator needs a human actor to start."); return; }
         match.Players.AddRange(actors.Select(a => a.OwnerPeerId).Distinct());
         foreach (var a in actors)
         {
@@ -527,7 +542,8 @@ public partial class LobbyServer : Node
         var setup = new MatchSetup(match.Id, planBytes, match.HostId, match.CreatorDebug, match.Length, snapshot,
             actors.Select((a, spawn) => (PlayerProfile.From(a), spawn)).ToArray())
         {
-            RosterRevision = lobby.Roster.Revision, CreatorId = match.CreatorId,
+            RosterRevision = lobby.Roster.Revision,
+            CreatorId = match.CreatorId,
             Peers = match.Players.Select(id => new PeerCapabilities(id, id == match.CreatorId && match.CreatorDebug)).ToArray(),
         };
         var bytes = MessageCodec.Encode(new NetMessage(Msg.MatchStart, match.Id, 0, setup), true);
@@ -607,6 +623,7 @@ public partial class LobbyServer : Node
                     var expected = initial + match.Tanks.MapDetonations + match.Tanks.DropDetonations - spills;
                     Log($"match {match.Id}: bank audit initial={initial} map={match.Tanks.MapDetonations} drops={match.Tanks.DropDetonations} " +
                         $"spills={spills} banked={banked} expected={expected} ok={banked == expected}");
+                    Log($"standings match {match.Id}: " + string.Join(" ", match.Scores.OrderBy(s => s.Key).Select(s => $"{s.Key}={s.Value}")));
                     Log($"lobby {lobby.Id}: match over, " + string.Join(", ", match.Scores.OrderByDescending(s => s.Value).Select(s => $"{match.Profiles[s.Key].Name} {s.Value}")));
                     Log($"lobby {lobby.Id}: tanks gained / lost to hits / lost to throws: " + string.Join(", ", match.Profiles.Keys.Select(id =>
                     {
@@ -618,6 +635,7 @@ public partial class LobbyServer : Node
             case LobbyPhase.Results:
                 if (now >= match.PhaseEnds)
                 {
+                    lobby.Roster.RespawnAll();
                     lobby.Phase = LobbyPhase.Waiting;
                     lobby.Match = null;
                     SendLobbyState(lobby);
@@ -761,7 +779,11 @@ public partial class LobbyServer : Node
     private static bool AcceptActor(Client client, MatchRun match, NetMessage message)
     {
         if (!match.Actors.TryGetValue(message.ActorId, out var actor) || !actor.Present ||
-            actor.OwnerPeerId != client.Id || actor.LifeId != message.LifeId || message.ActionId == 0) return false;
+            actor.OwnerPeerId != client.Id || actor.LifeId != message.LifeId || message.ActionId == 0)
+        {
+            return false;
+        }
+
         var key = (message.ActorId, message.Type == Msg.PlayerState);
         if (message.ActionId <= match.Actions.GetValueOrDefault(key)) return false;
         match.Actions[key] = message.ActionId;
