@@ -64,12 +64,12 @@ public static class LifecycleTests
                 Start(client, 7);
                 Feed(client, Msg.MatchGo, new FloatMessage(90));
                 client.LeaveLobby();
-                TestRunner.Assert(client.ActiveMatchId == 0 && !client.AttachMatch(7, _ => throw new Exception("old message")), "leave kept a pending match");
+                TestRunner.Assert(client.ActiveMatchId == 0 && !client.AttachMatch(7, _ => throw new InvalidOperationException("old message")), "leave kept a pending match");
                 client.Handle(MessageCodec.Encode(ProtocolTests.Fixtures().Single(f => f.Type == Msg.LobbyState), true));
                 Start(client, 8);
                 Feed(client, Msg.MatchGo, new FloatMessage(90), id: 8);
                 client.Disconnect();
-                TestRunner.Assert(client.ActiveMatchId == 0 && !client.AttachMatch(8, _ => throw new Exception("old message")), "disconnect kept a pending match");
+                TestRunner.Assert(client.ActiveMatchId == 0 && !client.AttachMatch(8, _ => throw new InvalidOperationException("old message")), "disconnect kept a pending match");
             }
             finally { client.Free(); }
         });
@@ -101,7 +101,7 @@ public static class LifecycleTests
             for (var i = 0; i < MatchInbox.MaxPackets; i++) { inbox.Receive(go with { MatchId = 8 }, 1); }
             TestRunner.Throws<MatchInbox.OverflowException>(() => inbox.Receive(go with { MatchId = 8 }, 1));
             inbox.Clear();
-            TestRunner.Assert(!inbox.Attach(8, _ => throw new Exception("uncleared")), "cleared queue can still attach");
+            TestRunner.Assert(!inbox.Attach(8, _ => throw new InvalidOperationException("uncleared")), "cleared queue can still attach");
         });
         runner.Run("lifecycle/overflow disconnects with a reason and clears the handoff", () =>
         {
@@ -114,7 +114,7 @@ public static class LifecycleTests
                 for (var i = 0; i <= MatchInbox.MaxPackets; i++) { Feed(client, Msg.Clock, new FloatMessage(0)); }
                 TestRunner.Assert(client.State == NetClient.Status.Offline && client.ActiveMatchId == 0, "overflow left the connection or queue alive");
                 TestRunner.Assert(reason != null && reason.Contains("message buffer"), "overflow did not explain the disconnect");
-                TestRunner.Assert(!client.AttachMatch(7, _ => throw new Exception("overflowed packet")), "overflowed queue can still attach");
+                TestRunner.Assert(!client.AttachMatch(7, _ => throw new InvalidOperationException("overflowed packet")), "overflowed queue can still attach");
             }
             finally { client.Free(); }
         });
