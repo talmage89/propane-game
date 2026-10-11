@@ -163,6 +163,10 @@ public partial class Tuning : Resource
     // ---------------------------------------------------------------- Player and ragdoll
     [ExportGroup("Player")]
     [Export(PropertyHint.Range, "0.0002,0.01,0.0001")] public float MouseSensitivity { get; set; } = 0.0022f;
+    /// <summary>Right stick look at full deflection, in degrees per second.</summary>
+    [Export(PropertyHint.Range, "10,720,5")] public float StickLookDegreesPerSecond { get; set; } = 180f;
+    [Export(PropertyHint.Range, "1,4,0.1")] public float StickLookCurve { get; set; } = 1.8f;
+    [Export(PropertyHint.Range, "0,0.9,0.01")] public float StickDeadzone { get; set; } = 0.2f;
     [Export(PropertyHint.Range, "1,20,0.1")] public float RunSpeed { get; set; } = 6f;
     [Export(PropertyHint.Range, "1,30,0.1")] public float SprintSpeed { get; set; } = 9.5f;
     [Export(PropertyHint.Range, "0.5,15,0.1")] public float AimMoveSpeed { get; set; } = 3.6f;

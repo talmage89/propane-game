@@ -11,6 +11,11 @@ public partial class MovementTests : Node
     private const float Dt = 1f / 120;
     private readonly StateTuning tuning = new(6, 9.5f, 0.98f, 0.12f, 0.12f, 1.3f, 0.3f);
     private int checks;
+    private readonly DeviceInput device;
+    private bool gameplayEnabled = true;
+    private bool padIntentMode;
+
+    public MovementTests() => device = new DeviceInput(() => gameplayEnabled);
 
     public override void _Ready() => Callable.From(RunTests).CallDeferred();
 
@@ -19,6 +24,11 @@ public partial class MovementTests : Node
         try
         {
             ResolverTests();
+            InputSetup.Register();
+            padIntentMode = true;
+            ResolverTests();
+            padIntentMode = false;
+            InputTests();
             GD.Print($"[movement-tests] PASS {checks} assertions");
             GetTree().Quit();
         }
@@ -36,8 +46,26 @@ public partial class MovementTests : Node
     }
 
     private PlayerState Tick(PlayerStateResolver r, StateIntent intent, bool ground = true, bool reload = false,
-        PlayerLifecycle lifecycle = PlayerLifecycle.Active, bool available = true, bool stagger = false) =>
-        r.Resolve(intent, new StatePhysics(lifecycle, ground, reload, stagger, available), tuning, Dt);
+        PlayerLifecycle lifecycle = PlayerLifecycle.Active, bool available = true, bool stagger = false)
+    {
+        if (padIntentMode)
+        {
+            Send(new InputEventJoypadMotion { Axis = JoyAxis.LeftX, AxisValue = intent.MoveX });
+            Send(new InputEventJoypadMotion { Axis = JoyAxis.LeftY, AxisValue = -intent.MoveY });
+            Send(new InputEventJoypadButton { ButtonIndex = JoyButton.LeftStick, Pressed = intent.Sprint });
+            Send(new InputEventJoypadMotion { Axis = JoyAxis.TriggerLeft, AxisValue = intent.AimHeld ? 1 : 0 });
+            Send(new InputEventJoypadButton { ButtonIndex = JoyButton.A, Pressed = false });
+            if (intent.JumpPressed) Send(new InputEventJoypadButton { ButtonIndex = JoyButton.A, Pressed = true });
+            Send(new InputEventJoypadMotion { Axis = JoyAxis.TriggerRight, AxisValue = 0 });
+            if (intent.Trigger) Send(new InputEventJoypadMotion { Axis = JoyAxis.TriggerRight, AxisValue = 1 });
+            var mapped = device.Read();
+            var padIntent = new StateIntent(mapped.Move.X, mapped.Move.Y, mapped.Sprint, mapped.Aim,
+                mapped.JumpPressed, mapped.FirePressed);
+            Check(intent == padIntent, $"gamepad intent mismatch: wanted {intent}, got {padIntent}");
+            intent = padIntent;
+        }
+        return r.Resolve(intent, new StatePhysics(lifecycle, ground, reload, stagger, available), tuning, Dt);
+    }
 
     private void Expect(PlayerState state, PlayerGait gait, float speed, string label)
     {
@@ -106,14 +134,74 @@ public partial class MovementTests : Node
         s = Tick(r, aim);
         Check(!s.Jump && s.EffectiveAim, "expired buffer lands aimed");
 
-        // Device-equivalent data has identical precedence; actual mappings/edges are exercised below.
-        var pad = new PlayerStateResolver();
-        r.Reset();
-        foreach (var input in new[] { sprint, aim, aim with { JumpPressed = true }, aim, sprint })
-        {
-            var grounded = !input.JumpPressed;
-            Check(Tick(r, input, grounded) == Tick(pad, input, grounded), "gamepad-equivalent intent");
-        }
     }
 
+    private void Send(InputEvent e)
+    {
+        Input.ParseInputEvent(e);
+        Input.FlushBufferedEvents();
+        device.Accumulate(e);
+    }
+
+    private void InputTests()
+    {
+        InputSetup.Register();
+        Check(InputMap.EventIsAction(new InputEventJoypadButton { Device = 2, ButtonIndex = JoyButton.A, Pressed = true },
+            InputSetup.Jump), "bindings accept any gamepad device");
+        Check(InputMap.EventIsAction(new InputEventJoypadMotion { Device = 2, Axis = JoyAxis.RightX, AxisValue = 1 },
+            InputSetup.LookRight), "look bindings accept any gamepad device");
+        gameplayEnabled = true;
+        Send(new InputEventJoypadMotion { Axis = JoyAxis.LeftY, AxisValue = -1 });
+        Send(new InputEventJoypadButton { ButtonIndex = JoyButton.LeftStick, Pressed = true });
+        Send(new InputEventJoypadMotion { Axis = JoyAxis.TriggerLeft, AxisValue = 1 });
+        Send(new InputEventJoypadButton { ButtonIndex = JoyButton.A, Pressed = true });
+        Send(new InputEventJoypadButton { ButtonIndex = JoyButton.X, Pressed = true });
+        Send(new InputEventJoypadMotion { Axis = JoyAxis.TriggerRight, AxisValue = 0.7f });
+        var intent = device.Read();
+        Check(intent.Move.Y == 1 && intent.Sprint && intent.Aim, $"pad move/sprint/aim actions: {intent.Move} sprint={intent.Sprint} aim={intent.Aim} mode={Input.MouseMode}");
+        Check(intent.JumpPressed && intent.ReloadPressed && intent.FirePressed && intent.FireHeld, $"pad action edges: jump={intent.JumpPressed} reload={intent.ReloadPressed} fire={intent.FirePressed} held={intent.FireHeld}");
+        var resolved = Tick(new PlayerStateResolver(), new StateIntent(intent.Move.X, intent.Move.Y,
+            intent.Sprint, intent.Aim, intent.JumpPressed));
+        Expect(resolved, PlayerGait.Sprint, 9.5f, "pad jump while aiming exact tick");
+        intent = device.Read();
+        Check(!intent.JumpPressed && !intent.FirePressed && !intent.ReloadPressed, "edges consumed exactly once");
+        Send(new InputEventJoypadMotion { Axis = JoyAxis.TriggerRight, AxisValue = 0.9f });
+        Check(!device.Read().FirePressed, "trigger motion while held is not another press");
+        Send(new InputEventJoypadMotion { Axis = JoyAxis.RightX, AxisValue = 0.1f });
+        Check(device.Read().LookStick == Vector2.Zero, "stick deadzone");
+        Send(new InputEventJoypadMotion { Axis = JoyAxis.RightX, AxisValue = 1 });
+        Check(device.Read().LookStick == Vector2.Right, "full stick rate");
+        var sixty = CameraRig.StickLookDelta(new Vector2(0.5f, 0), 1f / 60, 180, 2) * 60;
+        var oneTwenty = CameraRig.StickLookDelta(new Vector2(0.5f, 0), Dt, 180, 2) * 120;
+        Check(sixty.IsEqualApprox(oneTwenty) && Math.Abs(sixty.X - 45) < 0.001f, "look rate/curve independent of tick rate");
+        Send(new InputEventJoypadButton { ButtonIndex = JoyButton.A, Pressed = false });
+        Send(new InputEventJoypadButton { ButtonIndex = JoyButton.X, Pressed = false });
+        Send(new InputEventJoypadMotion { Axis = JoyAxis.TriggerRight, AxisValue = 0 });
+        Send(new InputEventJoypadMotion { Axis = JoyAxis.TriggerLeft, AxisValue = 0 });
+        Send(new InputEventJoypadButton { ButtonIndex = JoyButton.LeftStick, Pressed = false });
+        device.Read();
+        Send(new InputEventKey { PhysicalKeycode = Key.Shift, Pressed = true });
+        Send(new InputEventKey { PhysicalKeycode = Key.Space, Pressed = true, ShiftPressed = true });
+        Send(new InputEventKey { PhysicalKeycode = Key.R, Pressed = true, ShiftPressed = true });
+        Send(new InputEventMouseButton { ButtonIndex = MouseButton.Right, Pressed = true });
+        Send(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = true });
+        Send(new InputEventMouseMotion { ScreenRelative = new Vector2(12, -4) });
+        intent = device.Read();
+        Check(intent.Sprint && intent.JumpPressed && intent.ReloadPressed && intent.Aim && intent.FirePressed,
+            "keyboard/mouse actions with Shift modifier");
+        Check(intent.Look == new Vector2(12, -4) && device.Read().Look == Vector2.Zero, "mouse displacement consumed once");
+        Send(new InputEventKey { PhysicalKeycode = Key.Space, Pressed = true, Echo = true, ShiftPressed = true });
+        Check(!device.Read().JumpPressed, "keyboard echo is not a new jump");
+        Send(new InputEventJoypadMotion { Axis = JoyAxis.TriggerRight, AxisValue = 1 });
+        Check(!device.Read().FirePressed, "second device does not re-press an already held action");
+        Send(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = false });
+        Check(device.Read().FireHeld, "other device keeps fire action held");
+        Send(new InputEventJoypadMotion { Axis = JoyAxis.TriggerRight, AxisValue = 0 });
+        Check(!device.Read().FireHeld, "last device release clears fire action");
+        Send(new InputEventJoypadMotion { Axis = JoyAxis.TriggerRight, AxisValue = 1 });
+        Check(device.Read().FirePressed, "fresh trigger pull creates a new press");
+        gameplayEnabled = false;
+        intent = device.Read();
+        Check(intent.Move == Vector2.Zero && !intent.FireHeld && intent.LookStick == Vector2.Zero, "menus suppress gameplay");
+    }
 }

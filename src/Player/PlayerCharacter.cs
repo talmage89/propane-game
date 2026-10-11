@@ -295,9 +295,9 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         intent = (inputOverride ?? deviceInput).Read();
         if (InputLocked)
         {
-            intent = new PlayerIntent { Look = intent.Look };
+            intent = new PlayerIntent { Look = intent.Look, LookStick = intent.LookStick };
         }
-        CameraRig.Look(intent.Look);
+        CameraRig.Look(intent.Look, intent.LookStick, dt);
         if (Ammo != null)
         {
             Ammo.Update(dt);

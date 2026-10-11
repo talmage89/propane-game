@@ -59,18 +59,22 @@ then plays with every patch of that minor version.
 
 ## Controls
 
-| Input | Action |
-| --- | --- |
-| W A S D | Move |
-| Shift | Sprint |
-| Space | Jump |
-| Mouse | Look |
-| Left click | Fire (hold for full auto; toggle it in the tuning panel) |
-| Right click (hold) | Aim: rifle to the shoulder and a tight spread. The camera does not move. |
-| R | New suburb (single player); reload (multiplayer) |
-| Esc | Pause and show the controls (a match keeps running) |
-| F1 or ` | Tuning panel (live sliders; in a match, debug builds only, and it changes everyone's values) |
-| F11 or Alt+Enter | Fullscreen |
+| Keyboard / mouse | Gamepad (Xbox / PlayStation) | Action |
+| --- | --- | --- |
+| W A S D | Left stick | Move |
+| Shift (hold) | Left stick click (hold) | Sprint |
+| Space | A / Cross | Jump |
+| Mouse | Right stick | Look |
+| Left click | Right trigger | Fire (hold for full auto; toggle it in the tuning panel) |
+| Right click (hold) | Left trigger (hold) | Aim: rifle to the shoulder and a tight spread. The camera does not move. |
+| R | X / Square | New suburb (single player); reload (multiplayer) |
+| Esc | — | Pause and show the controls (a match keeps running) |
+| F1 or ` | — | Tuning panel (live sliders; in a match, debug builds only, and it changes everyone's values) |
+| F11 or Alt+Enter | — | Fullscreen |
+
+Gameplay buttons and stick axes use named actions ([Godot's controller input model](https://docs.godotengine.org/en/stable/tutorials/inputs/controllers_gamepads_joysticks.html)).
+Mouse look is displacement; stick look is a rate with separate sensitivity, radial curve and deadzone tuners.
+Menus still require a keyboard or mouse.
 
 ## Tuning
 
