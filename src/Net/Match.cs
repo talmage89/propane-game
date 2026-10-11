@@ -706,11 +706,8 @@ public partial class Match : Node3D
 
     private void SendPlayerState(double now)
     {
-        var s = player.CaptureNetState();
-        var flags = (byte)((s.Grounded ? 1 : 0) | ((byte)s.State << 1));
-        Send(new NetWriter(Msg.PlayerState, Setup.Id).Double(now).Vec3(s.Position).Vec3(s.Velocity).Float(s.Yaw).Vec3(s.AimTarget)
-            .Byte(ToByte(s.Aim)).Byte(ToByte(s.Sprint)).Byte(ToByte(s.Ready)).Byte(ToByte(s.Reload)).Byte(flags)
-            .Vec3(s.PelvisPosition).Vec3(s.PelvisVelocity).Byte(s.Staggers), reliable: false);
+        var message = new NetMessage(Msg.PlayerState, Setup.Id, 0, new PlayerStateMessage(now, player.CaptureNetState()));
+        Net.Send(MessageCodec.Encode(message, fromServer: false), reliable: false);
     }
 
     private void SendBodies(float dt, double now)
@@ -731,8 +728,6 @@ public partial class Match : Node3D
             Send(new NetWriter(Msg.BodyRest, Setup.Id).UInt(entry.Id).Transform(entry.Body.GlobalTransform).Double(now));
         }
     }
-
-    private static byte ToByte(float v) => (byte)Mathf.Clamp(Mathf.RoundToInt(v * 255f), 0, 255);
 
     // ------------------------------------------------------------------ Receiving
 

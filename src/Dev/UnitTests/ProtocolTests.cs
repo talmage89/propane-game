@@ -36,7 +36,8 @@ public static class ProtocolTests
             Packet(Msg.DropRefused, new DropRefusedMessage(new[] { BodySync.DropTankId(0, 0) })),
             Packet(Msg.PlayerState, new PlayerStateMessage(1, new PlayerNetState { Position = Vector3.One, Velocity = Vector3.Zero,
                 Yaw = 1, AimTarget = Vector3.Forward, Aim = 17 / 255f, Sprint = 1, Ready = 128 / 255f, Reload = 0,
-                Grounded = true, State = PlayerNetState.Mode.GettingUp, PelvisPosition = Vector3.Up, PelvisVelocity = Vector3.Down, Staggers = 2 })),
+                Grounded = true, State = PlayerNetState.Mode.GettingUp, PelvisPosition = Vector3.Up, PelvisVelocity = Vector3.Down, Staggers = 2,
+                Gait = PlayerGait.Creep, Support = PlayerSupport.Landing, Weapon = WeaponAction.Aim })),
             Packet(Msg.Shot, new ShotMessage(Vector3.Zero, Vector3.Up, Vector3.Forward, 7, 3, -1)),
             Packet(Msg.Puncture, new PunctureMessage(body.Id, body.Transform, body.Linear, body.Angular, Vector3.One, Vector3.Up, -1)),
             Packet(Msg.Explode, new ExplodeMessage(body.Id, Vector3.One)), Packet(Msg.Claim, new ClaimMessage(new[] { body.Id })),
@@ -60,6 +61,48 @@ public static class ProtocolTests
             RoundTrip(runner, fixture, fromServer);
             if (Protocol.IsRelay(fixture.Type)) { RoundTrip(runner, fixture, true); }
         }
+        runner.Run("protocol/player movement enums survive client and relay snapshots", () =>
+        {
+            var fixture = fixtures.Single(f => f.Type == Msg.PlayerState);
+            var original = (PlayerStateMessage)fixture.Payload;
+            foreach (var gait in Enum.GetValues<PlayerGait>())
+            {
+                foreach (var support in Enum.GetValues<PlayerSupport>())
+                {
+                    foreach (var weapon in Enum.GetValues<WeaponAction>())
+                    {
+                        foreach (var fromServer in new[] { false, true })
+                        {
+                            var state = original.State;
+                            state.Gait = gait; state.Support = support; state.Weapon = weapon;
+                            var message = fixture with { Payload = new PlayerStateMessage(original.Time, state) };
+                            var decoded = MessageCodec.Decode(MessageCodec.Encode(message, fromServer), fromServer);
+                            var actual = ((PlayerStateMessage)decoded.Payload).State;
+                            TestRunner.Assert(actual.Gait == gait && actual.Support == support && actual.Weapon == weapon,
+                                $"movement fields lost: {gait}/{support}/{weapon}, fromServer={fromServer}");
+                        }
+                    }
+                }
+            }
+        });
+        runner.Run("protocol/player movement enum ranges reject invalid bytes", () =>
+        {
+            var fixture = fixtures.Single(f => f.Type == Msg.PlayerState);
+            var maxima = new[] { (byte)PlayerGait.Creep, (byte)PlayerSupport.Landing, (byte)WeaponAction.Melee };
+            foreach (var fromServer in new[] { false, true })
+            {
+                for (var field = 0; field < maxima.Length; field++)
+                {
+                    foreach (var invalid in new[] { (byte)(maxima[field] + 1), byte.MaxValue })
+                    {
+                        var bytes = MessageCodec.Encode(fixture, fromServer);
+                        // The three enum bytes are the snapshot's trailing fields, in gait/support/weapon order.
+                        bytes[bytes.Length - 3 + field] = invalid;
+                        TestRunner.Throws<InvalidDataException>(() => MessageCodec.Decode(bytes, fromServer));
+                    }
+                }
+            }
+        });
         runner.Run("protocol/unknown and wrong direction", () =>
         {
             TestRunner.Throws<InvalidDataException>(() => MessageCodec.Decode(new byte[] { 255 }, false));

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -106,6 +107,12 @@ public partial class NetTest : Node
                 {
                     ScenarioAssert(scenarioPassed, "scenario ended before all assertions passed");
                 }
+                if (DevArgs.Get("scenario") == "movement" && role == "host" && !movementProved)
+                {
+                    GD.PushError("[net movement] FAIL match ended before movement proof completed");
+                    GetTree().Quit(1);
+                    return;
+                }
                 Log($"finished match {match.Setup.Id}; final scores {ScoreLine()}");
                 RemoveChild(match);
                 match.QueueFree();
@@ -129,6 +136,12 @@ public partial class NetTest : Node
             pickupTakenAt = -1;
             pickupMovedAway = false;
             scenarioPassed = scenarioFailed = false;
+            // Movement proof is per match, just like the duel/pickup assertions on a reused connection.
+            movementCamera = null;
+            sawRemoteCreep = sawRemoteSprint = sawRemoteAir = sawRemoteRestoredAim = movementProved = false;
+            capturedCreep = capturedSprint = capturedLanding = capturedRelease = false;
+            remoteGait = PlayerGait.Default;
+            remoteGaitTime = 0;
             Log($"match {setup.Id} ready with {setup.Players.Count} players; playing {match.IsPlaying}, over {match.IsOver}");
         };
         var name = DevArgs.Get("name") ?? (role == "host" ? "HostBot" : $"Bot{OS.GetProcessId() % 1000}");
@@ -176,6 +189,10 @@ public partial class NetTest : Node
         if (DevArgs.Get("scenario") is "duel" or "drop-refusal")
         {
             Duel(match, dt);
+        }
+        else if (DevArgs.Get("scenario") == "movement")
+        {
+            MovementScenario(match, dt);
         }
         else if (DevArgs.Get("scenario") == "pickup")
         {
@@ -476,6 +493,126 @@ public partial class NetTest : Node
         {
             director.Screenshot($"watch_{duelTime:000.0}");
         }
+    }
+
+    private Camera3D? movementCamera;
+    private bool sawRemoteCreep;
+    private bool sawRemoteSprint;
+    private bool sawRemoteAir;
+    private bool sawRemoteRestoredAim;
+    private bool movementProved;
+    private PlayerGait remoteGait;
+    private float remoteGaitTime;
+    private bool capturedCreep;
+    private bool capturedSprint;
+    private bool capturedLanding;
+    private bool capturedRelease;
+
+    /// <summary>Two-player gait/stance proof on the unobstructed void floor, seen through real snapshots.</summary>
+    private void MovementScenario(Match match, float dt)
+    {
+        if (!match.IsPlaying) return;
+        if (duelTime < 0)
+        {
+            duelTime = 0;
+            match.Player.InputOverride = duelInput;
+            match.Player.Teleport(new Vector3(role == "host" ? 20 : 0, 0.05f, -200), 0);
+            if (role != "host")
+            {
+                duelInput.Hold(0.5f, 8.5f, new PlayerIntent { Move = new Vector2(0, 1) });
+                duelInput.Hold(1.5f, 8.5f, new PlayerIntent { Sprint = true });
+                duelInput.Hold(1.5f, 3.0f, new PlayerIntent { Aim = true });
+                duelInput.Hold(4.5f, 7.5f, new PlayerIntent { Aim = true });
+                duelInput.Jump(5.0f);
+            }
+            else
+            {
+                movementCamera = new Camera3D { Fov = 40, Current = true };
+                match.AddChild(movementCamera);
+            }
+        }
+        duelTime += dt;
+        duelInput.Advance(dt);
+        if (role != "host") return;
+        var other = match.RemoteBodies.FirstOrDefault();
+        if (other == null) return;
+        var focus = other.GlobalPosition + Vector3.Up;
+        movementCamera!.LookAtFromPosition(focus + new Vector3(4, 0.5f, -1.5f), focus);
+        var state = other.ResolvedState;
+        var speed = new Vector2(other.Velocity.X, other.Velocity.Z).Length();
+        remoteGaitTime = remoteGait == state.Gait ? remoteGaitTime + dt : 0;
+        remoteGait = state.Gait;
+        if (!sawRemoteCreep && state.Gait == PlayerGait.Creep && state.EffectiveAim && Math.Abs(speed - Tuning.Current.CreepSpeed) < 0.15f)
+        {
+            sawRemoteCreep = true;
+            CaptureRemoteFrame("remote_00_creep");
+            Log($"remote creep: {state.Support}/{state.Weapon} speed={speed:0.00}");
+        }
+        if (!sawRemoteSprint && state.Gait == PlayerGait.Sprint && speed > Tuning.Current.SprintSpeed - 0.15f)
+        {
+            sawRemoteSprint = true;
+            CaptureRemoteFrame("remote_01_sprint");
+            Log($"remote sprint: {state.Support}/{state.Weapon} speed={speed:0.00}");
+        }
+        if (!sawRemoteAir && sawRemoteCreep && sawRemoteSprint &&
+            state.Support == PlayerSupport.Airborne && !state.EffectiveAim && other.AimAmount == 0)
+        {
+            sawRemoteAir = true;
+            CaptureRemoteFrame("remote_02_air");
+            Log($"remote air: {state.Gait}/{state.Weapon}");
+        }
+        if (sawRemoteAir && state.Grounded && state.EffectiveAim && state.Gait == PlayerGait.Creep)
+        {
+            sawRemoteRestoredAim = true;
+        }
+        // Each client can start its script on a different frame. Label screenshots from observed remote states,
+        // after the gait/rig blends settle, rather than the observer's script clock.
+        if (remoteGaitTime > 0.6f && state.Gait == PlayerGait.Creep && other.AimAmount > 0.99f)
+        {
+            if (!capturedCreep)
+            {
+                capturedCreep = true;
+                CaptureRemoteFrame("remote_03_creep_settled");
+            }
+            if (sawRemoteAir && !capturedLanding)
+            {
+                capturedLanding = true;
+                CaptureRemoteFrame("remote_06_landed_creep");
+            }
+        }
+        if (remoteGaitTime > 0.6f && state.Gait == PlayerGait.Sprint && state.Grounded)
+        {
+            if (!capturedSprint)
+            {
+                capturedSprint = true;
+                CaptureRemoteFrame("remote_04_sprint_settled");
+            }
+            if (capturedLanding && !capturedRelease)
+            {
+                capturedRelease = true;
+                CaptureRemoteFrame("remote_07_release_sprint");
+            }
+        }
+        if (!movementProved && duelTime >= 10)
+        {
+            movementProved = true;
+            if (!sawRemoteCreep || !sawRemoteSprint || !sawRemoteAir || !sawRemoteRestoredAim ||
+                !capturedCreep || !capturedSprint || !capturedLanding || !capturedRelease)
+            {
+                GD.PushError("[net movement] FAIL missing remote gait/support");
+                GetTree().Quit(1);
+                return;
+            }
+            Log("[net movement] PASS remote creep, sprint, air aim suppression and restored landing aim");
+        }
+    }
+
+    private async void CaptureRemoteFrame(string label)
+    {
+        if (DisplayServer.GetName() == "headless") return;
+        // Physics runs before animation/render. Read the frame after drawing the state that named it.
+        await ToSignal(RenderingServer.Singleton, RenderingServer.SignalName.FramePostDraw);
+        if (IsInsideTree()) director.Screenshot(label);
     }
 
     private bool Once(float at, float dt) => duelTime >= at && duelTime - dt < at;

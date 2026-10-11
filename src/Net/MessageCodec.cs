@@ -144,7 +144,8 @@ public static class MessageCodec
                 w.Double(p.Time).Vec3(s.Position).Vec3(s.Velocity).Float(s.Yaw).Vec3(s.AimTarget)
                     .Byte(ToByte(s.Aim)).Byte(ToByte(s.Sprint)).Byte(ToByte(s.Ready)).Byte(ToByte(s.Reload))
                     .Byte((byte)((s.Grounded ? 1 : 0) | ((byte)s.State << 1)))
-                    .Vec3(s.PelvisPosition).Vec3(s.PelvisVelocity).Byte(s.Staggers);
+                    .Vec3(s.PelvisPosition).Vec3(s.PelvisVelocity).Byte(s.Staggers)
+                    .Byte((byte)s.Gait).Byte((byte)s.Support).Byte((byte)s.Weapon);
                 break;
             case ShotMessage p: w.Vec3(p.End).Vec3(p.Normal).Vec3(p.Direction).Byte(p.Impact).Int(p.Victim).Int(p.PropIndex); break;
             case PunctureMessage p:
@@ -218,6 +219,9 @@ public static class MessageCodec
         var flags = Range(r.Byte(), 0, 5);
         state.Grounded = (flags & 1) != 0; state.State = (PlayerNetState.Mode)(flags >> 1);
         state.PelvisPosition = Vector(r); state.PelvisVelocity = Vector(r); state.Staggers = r.Byte();
+        state.Gait = (PlayerGait)Range(r.Byte(), (int)PlayerGait.Default, (int)PlayerGait.Creep);
+        state.Support = (PlayerSupport)Range(r.Byte(), (int)PlayerSupport.Grounded, (int)PlayerSupport.Landing);
+        state.Weapon = (WeaponAction)Range(r.Byte(), (int)WeaponAction.Carry, (int)WeaponAction.Melee);
         return new PlayerStateMessage(time, state);
     }
 

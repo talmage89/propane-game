@@ -196,7 +196,7 @@ public partial class Menus : CanvasLayer
         {
             layout.AddChild(new HSeparator());
             layout.AddChild(UiStyle.Text($"Propane {latest} is out.", 16, UiStyle.SoftInk, HorizontalAlignment.Center));
-            AddDownload($"Download {latest}");
+            AddDownload($"Download {latest}", latest);
         }
         AddMessage();
     }
@@ -247,7 +247,7 @@ public partial class Menus : CanvasLayer
         // Turned away by a newer server: offer the download that plays there.
         if (message.Length > 0 && Net.State == NetClient.Status.Offline && Net.RejectedBy is { } needed && BuildInfo.IsNewer(needed))
         {
-            AddDownload($"Download Propane {BuildInfo.Series(needed)}");
+            AddDownload($"Download Propane {BuildInfo.Series(needed)}", needed);
         }
     }
 
@@ -473,12 +473,12 @@ public partial class Menus : CanvasLayer
         }
     }
 
-    /// <summary>A button that opens the download page in the browser.</summary>
-    private void AddDownload(string text)
+    /// <summary>A button that downloads this platform's archive through the browser.</summary>
+    private void AddDownload(string text, string release)
     {
         var row = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.Center };
         var download = UiStyle.Button(text);
-        download.Pressed += () => OS.ShellOpen(BuildInfo.ReleasesUrl);
+        download.Pressed += () => OS.ShellOpen(BuildInfo.DownloadUrl(release, OS.GetName()));
         row.AddChild(download);
         layout.AddChild(row);
     }
@@ -511,7 +511,7 @@ public partial class Menus : CanvasLayer
         {
             return saved;
         }
-        var user = OS.GetEnvironment("USER");
+        var user = System.Environment.UserName;
         return Protocol.CleanName(user.Length > 0 ? char.ToUpperInvariant(user[0]) + user[1..] : "Player");
     }
 

@@ -63,7 +63,7 @@ public static class Protocol
     /// must bump at least the minor version (tools/release/check_version.sh enforces this). Hello, Welcome and
     /// Rejected never change shape (fields may only be appended), so any build can be told why it was turned away.
     /// </summary>
-    public const int Version = 4;
+    public const int Version = 2;
 
     public const int DefaultPort = 24680;
 

@@ -6,7 +6,7 @@ layout. Long expressions are not reflowed. Expression bodies and naming remain e
 build warnings. Run `dotnet format Propane.sln` to apply the baseline.
 
 `make lint` verifies formatting, then performs a full build with warnings as errors. A previous incremental build
-cannot hide warnings. `make check` runs lint before the tests, including with `make -j`. It stops on a
+cannot hide warnings. `make check` runs lint before the headless regression tests, including with `make -j`. It stops on a
 lint failure. Both tasks appear in `make`'s help listing.
 
 `Propane.csproj` pins analysis to .NET 10's default rules, with the recommended Reliability, Usage and Security
@@ -17,7 +17,7 @@ CA2000 (local disposal) and CA2213 (field disposal) are outside this baseline: t
 reference-counted lifetimes as ordinary CLR disposal. Excluding Godot-derived classes also hides CLR leaks inside
 those classes, so there are no such exclusions. These rules need an engine-aware ownership policy before they
 can be useful here. Disposable resources in new code still need an explicit lifetime.
-The CA2213 trial also flagged `CaptureDirector`'s Process and BlockingCollection; their shutdown lifetimes remain
+The CA2213 trial also flagged `CaptureDirector`'s Process and BlockingCollection; their disposal and shutdown lifetimes remain
 a separate audit item rather than being changed as part of the gate.
 
 Seven class-specific CA1001 suppressions preserve current lifetimes, with the reason beside each declaration:

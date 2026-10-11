@@ -1,3 +1,4 @@
+using System.Linq;
 using Godot;
 using Propane.Core;
 using Propane.Player;
@@ -20,6 +21,8 @@ public partial class PlayerRange : Node3D
 
     public override void _Ready()
     {
+        DisplayServer.WindowSetVsyncMode(DisplayServer.VSyncMode.Disabled);
+        ProcessPhysicsPriority = -10;
         DevArgs.Setup();
         InputSetup.Register();
         Core.DevLog.Enabled = DevArgs.Get("verbose-log") != null;
@@ -49,6 +52,26 @@ public partial class PlayerRange : Node3D
         var scenario = DevArgs.Get("scenario") ?? "stances";
         switch (scenario)
         {
+            case "creep":
+                // Two full strides after acceleration and gait/rig blends settle; 12 frames per stride.
+                var skeleton = player.FindChildren("*", "Skeleton3D", owned: false).OfType<Skeleton3D>()
+                    .Single(s => s.FindBone("foot_l") >= 0);
+                var animation = player.FindChildren("*", "AnimationPlayer", owned: false).OfType<AnimationPlayer>()
+                    .Single(p => p.HasAnimation("Walk"));
+                var period = (float)animation.GetAnimation("Walk").Length * 0.98f / Tuning.Current.CreepSpeed;
+                var end = 2f + period * 2;
+                script.Hold(0.25f, end + 0.5f, new PlayerIntent { Move = Vector2.Down, Aim = true });
+                var stride = new StrideProbe { Player = player, SampleFrom = 2f, SampleUntil = end };
+                skeleton.AddChild(stride);
+                for (var i = 0; i <= 24; i++)
+                {
+                    var label = $"creep_{i:00}";
+                    director.At(2f + period * i / 12, () => CaptureAfterDraw(director, label));
+                }
+                director.At(end + 0.1f, stride.Finish);
+                director.QuitAfter = end + 0.3f;
+                GD.Print($"[creep] speed={Tuning.Current.CreepSpeed:0.00} clip-scale={Tuning.Current.CreepSpeed / 0.98f:0.000} stride={period:0.000}s");
+                break;
             case "stances":
                 AddTank(new Vector3(1.5f, 0, -9f));
                 director.ShotAt(0.8f, "00_idle_hip");
@@ -65,6 +88,36 @@ public partial class PlayerRange : Node3D
                 director.ShotAt(7.2f, "06_sprint");
                 script.Hold(8.0f, 9.5f, new PlayerIntent { Move = new Vector2(1, 0), Aim = true });
                 director.ShotAt(9.0f, "07_strafe_aim");
+                break;
+            case "movement":
+            case "sprint-repro":
+                var repro = scenario == "sprint-repro";
+                if (repro)
+                {
+                    // Discovery sequence, including the second release after a recent shot.
+                    script.Hold(0.5f, 9.5f, new PlayerIntent { Move = new Vector2(0, 1), Sprint = true });
+                    script.Jump(1.0f);
+                    script.Hold(1.15f, 2.0f, new PlayerIntent { Aim = true });
+                    script.Hold(6.5f, 7.2f, new PlayerIntent { Aim = true });
+                    script.Fire(6.8f);
+                }
+                else
+                {
+                    script.Hold(0.3f, 6.0f, new PlayerIntent { Move = new Vector2(0, 1) });
+                    script.Hold(1.3f, 6.0f, new PlayerIntent { Sprint = true });
+                    script.Hold(2.3f, 4.8f, new PlayerIntent { Aim = true });
+                    script.Jump(3.3f);
+                    director.ShotAt(0.9f, "move_00_default");
+                    director.ShotAt(2.0f, "move_01_sprint");
+                    director.ShotAt(3.0f, "move_02_creep");
+                    director.ShotAt(3.65f, "move_03_air_aim_held");
+                    director.ShotAt(4.6f, "move_04_landed_creep");
+                    director.ShotAt(5.2f, "move_05_release_sprint");
+                    director.QuitAfter = 6.5f;
+                }
+                var probe = new MovementProbe { Player = player, Input = script };
+                AddChild(probe);
+                director.At(repro ? 9f : 6f, () => probe.Finish(!repro));
                 break;
             case "reload":
                 // A match's magazine: empty it (the bolt locks open), reload from empty, then a reload with rounds
@@ -100,6 +153,13 @@ public partial class PlayerRange : Node3D
     }
 
     public override void _PhysicsProcess(double delta) => script.Advance((float)delta);
+
+    private async void CaptureAfterDraw(CaptureDirector director, string label)
+    {
+        if (DisplayServer.GetName() == "headless") return;
+        await ToSignal(RenderingServer.Singleton, RenderingServer.SignalName.FramePostDraw);
+        if (IsInsideTree()) director.Screenshot(label);
+    }
 
     public override void _Process(double delta)
     {

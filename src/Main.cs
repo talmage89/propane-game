@@ -26,6 +26,13 @@ public partial class Main : Node
 
     public override void _Ready()
     {
+        // Official release templates disallow command-line scene overrides. Keep the same smoke test available in
+        // an untouched archive; its nested Main goes through the normal front end below.
+        if (DevArgs.Get("release-test") != null && GetParent() == GetTree().Root)
+        {
+            AddChild(new ReleaseTest());
+            return;
+        }
         if (DevArgs.Get("server") != null)
         {
             RunServer();

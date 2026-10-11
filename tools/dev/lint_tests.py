@@ -42,9 +42,10 @@ if [[ "${0##*/}" == dotnet && "$*" == *-warnaserror* && "$PROBE_FAIL" == build ]
         commands = log.read_text().splitlines()
         require(bool(commands) and commands[0] == "dotnet format Propane.sln --verify-no-changes", "format must run first", result.stdout)
         if failure == "none":
-            require(result.returncode == 0 and len(commands) == 4, "check did not finish in four tool calls", result.stdout)
+            require(result.returncode == 0 and len(commands) == 5, "check did not finish in five tool calls", result.stdout)
             require("-warnaserror" in commands[1] and "--no-incremental" in commands[1], "lint must rebuild with warnings as errors")
             require(commands[2].startswith("dotnet build ") and commands[3].startswith("godot --headless "), "tests ran before lint")
+            require("generator_tests.tscn" in commands[3] and "platform_tests.tscn" in commands[4], "check skipped a regression scene")
         else:
             require(result.returncode != 0 and len(commands) == (1 if failure == "format" else 2), "lint failure did not stop check", result.stdout)
     print("PASS: parallel make check orders lint before tests and stops on formatter/build failures")

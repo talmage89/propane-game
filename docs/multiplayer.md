@@ -75,7 +75,9 @@ transforms, body masses and collision shapes (fences included) in two fresh proc
 - *Scoring:* the server credits the point only for a tank in its ledger that has not already exploded. If two players claim the same tank, the first claim wins. Map tanks are registered from the plan; client-created drops are registered atomically before being relayed. Exploded ids remain reserved for the whole match.
 
 **Players:**
-- Each client owns its own player's movement and sends it to the others, who show it smoothed.
+- Each client owns its own player's movement and sends it to the others, who show it smoothed. Player snapshots
+  include discrete gait, support phase and weapon action alongside the blended rifle poses, so remote creep uses
+  the walk clip and remote sprint uses the sprint clip. Protocol 2 adds these three bytes; this needs a minor release.
 - The shooter's client decides whether a bullet hit a player.
 - The victim's client decides whether a blast ragdolls them, because it knows exactly where they were.
 - The victim's client spawns the dropped tanks and owns them until another player interacts with them.
@@ -102,7 +104,7 @@ because sender clocks are process-local.
 
 **Left to each client:** debris, small props and fence panels play out locally from the shared blasts. Cars are synced at a low rate, because players use them as cover.
 
-**Platforms.** Mac and Linux builds of the same minor version play together (0.2.0 with 0.2.5). A version check when a player connects turns away builds of another minor version or protocol, and says which version is needed (see Versions and releases in the README).
+**Platforms.** Windows, macOS and Linux builds of the same minor version play together (0.2.0 with 0.2.5). A version check when a player connects turns away builds of another minor version or protocol, and says which version is needed (see Versions and releases in the README).
 
 
 ## Playing
@@ -177,12 +179,13 @@ Details settled while building, within the decisions above:
 
 | Command | Checks |
 | --- | --- |
-| `make test` | Plain C# assertion suites (every wire message, malformed payloads, server ledger and permissions, lifecycle buffering and ownership), score-checker regressions, generator checks, and separate-process built-world hashes. Add suites under `src/Dev/UnitTests/` and register them with `TestRunner`; any failure prints its name and exits nonzero. |
+| `make test` | Plain C# assertion suites (every wire message, malformed payloads, server ledger and permissions, lifecycle buffering and ownership), score-checker regressions, movement and platform checks, generator checks (100 seeds), and separate-process built-world hashes. Add suites under `src/Dev/UnitTests/` and register them with `TestRunner`; any failure prints its name and exits nonzero. |
 | `godot --headless res://scenes/dev/generator_tests.tscn -- --seeds=100` | Match suburbs too: a start per player, spread apart and clear; ammo spots; tanks nearer the center; the plan unchanged through `PlanCodec`. |
 | `tools/dev/net_bots.sh -n 3 -l 60 -- --net-lag=120 --net-jitter=30 --net-loss=3` | A local server and bot players (`scenes/dev/net_test.tscn`) that run to tanks, shoot them and each other, and fetch ammo, under simulated lag and loss. `-w N` shows N of them in windows; `-S host:port` uses an existing server. |
 | `tools/dev/compare_tanks.py out/bot*.log` | Where each bot had every tank at the same match times: counts, states and drift. |
 | `tools/dev/check_scores.py out/server.log out/bot*.log` | Server conservation audit and identical per-player final scores on every bot; exits nonzero on a missing audit or disagreement. |
 | `net_bots.sh -n 2 -w 2 -s "--start-score=8" -- --scenario=duel --capture-dir=DIR` | Scripted close-up: hits with the grace period, dropped tanks, a blast that throws the victim, from both sides. |
+| `net_bots.sh -n 2 -l 45 -w 1 -- --scenario=movement --capture-dir=DIR` | Scripted remote creep, sprint, air aim suppression and held-aim landing through real snapshots; exits 1 on missing states. |
 | `net_bots.sh -n 1 -w 1 -- --scenario=pickup --capture-dir=DIR` | Taking an ammo can and its return. |
 | `net_bots.sh -n 2 -w 2 -l 10 -s "--start-score=8" -- --scenario=drop-refusal --net-lag=120 --net-jitter=30 --net-loss=3 --capture-dir=DIR` | The creator lowers the hit-drop count while a hit is in flight; the victim rolls back the refused drop, both clients keep one accepted tank and a bank of 7. |
 | `net_bots.sh -n 4 -l 120 -b smart,simple,smart,simple` | Bot brains against each other; the server log ends each match with tanks gained / lost to hits / lost to throws. Add `--bot-log` to log what each bot is doing. |
@@ -199,7 +202,9 @@ or the match ends before all checks complete. These assertions also run headless
 
 Results, 2026-10-09: with three bots under 120 ms round trip, 30 ms jitter and 3% loss, every bot agreed on which tanks existed and their states throughout; resting tanks matched exactly and venting tanks to within about half a meter. The same held through the Docker server on another machine, over the LAN and over a VPN. When the match's creator left mid-match, the others played on in step. A client with a different protocol was turned away with a message.
 
-Protocol 4 adds match ids, scalar tuning, timestamps on final body rests and drop refusal replies, and appends the debug flag to Hello; the next release must be a minor
-release. Every match-scoped request, event and relay carries its match id, and either side ignores a different id.
+Protocol 2 adds match ids, scalar tuning, timestamps on final body rests, drop refusal replies and discrete player
+movement states, and appends the debug flag to Hello. These changes share one unreleased protocol bump; the next
+release must be a minor release. Every match-scoped request, event and relay carries its match id, and either side
+ignores a different id.
 The server ends each match with a bank audit: initial test scores + detonated map tanks + re-detonated drops - spills
 must equal total banked, including the banks of departed players retained in the final standings.

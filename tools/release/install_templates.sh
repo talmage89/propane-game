@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Installs the Godot .NET export templates this project ships with: macOS (with an Apple Silicon only binary carved
-# out of the universal one) and Linux x86_64. Usage: tools/release/install_templates.sh <godot version, e.g. 4.7.2>
+# out of the universal one), Linux x86_64 and Windows x86_64. Usage: tools/release/install_templates.sh <godot version, e.g. 4.7.2>
 # Set TEMPLATE_CACHE to a directory to keep the downloaded archive between runs.
 set -euo pipefail
 
@@ -12,7 +12,11 @@ case "$(uname -s)" in
 esac
 target="$root/$version.stable.mono"
 
-if [[ -f "$target/macos.zip" ]] && unzip -l "$target/macos.zip" | grep -q 'godot_macos_release.arm64'; then
+# Check every installed platform: an older two-platform install must acquire Windows too.
+if [[ -f "$target/linux_release.x86_64" && -f "$target/linux_debug.x86_64" &&
+      -f "$target/windows_release_x86_64.exe" && -f "$target/windows_debug_x86_64.exe" &&
+      -f "$target/windows_release_x86_64_console.exe" && -f "$target/windows_debug_x86_64_console.exe" &&
+      -f "$target/macos.zip" ]] && unzip -l "$target/macos.zip" | grep -q 'godot_macos_release.arm64'; then
   echo "Templates already installed in $target"
   exit 0
 fi
@@ -25,10 +29,11 @@ if [[ ! -f "$archive" ]]; then
   mv "$archive.part" "$archive"
 fi
 
-work="$(mktemp -d)"
+work="$(mktemp -d "${TMPDIR:-/tmp}/propane-templates.XXXXXX")"
 trap 'rm -rf "$work"' EXIT
 unzip -q -o "$archive" templates/version.txt templates/icudt_godot.dat templates/macos.zip \
-  templates/linux_release.x86_64 templates/linux_debug.x86_64 -d "$work"
+  templates/linux_release.x86_64 templates/linux_debug.x86_64 \
+  'templates/windows_*_x86_64*.exe' -d "$work"
 cp "$work"/templates/* "$target/"
 
 # The official macOS template is universal only. Add arm64 slices so an arm64 preset finds its binary.

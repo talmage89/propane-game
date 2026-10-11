@@ -52,7 +52,8 @@ jolt_physics_3d/limits/max_contact_constraints=32768
 
 [rendering]
 
-rendering_device/driver.windows="d3d12"
+; Match Linux's Vulkan path: D3D12 RGB float curve textures are unsupported under Proton on some GPUs.
+rendering_device/driver.windows="vulkan"
 textures/vram_compression/import_etc2_astc=true
 lights_and_shadows/directional_shadow/size=8192
 lights_and_shadows/directional_shadow/soft_shadow_filter_quality=3
