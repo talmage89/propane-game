@@ -52,7 +52,7 @@ public partial class DroppedMagazine : RigidBody3D
         body.GlobalTransform = at;
         body.LinearVelocity = velocity;
         // Tumbles mostly end over end, as a magazine falls.
-        body.AngularVelocity = at.Basis * new Vector3((float)GD.RandRange(-4, -1), (float)GD.RandRange(-1, 1), (float)GD.RandRange(-1.5, 1.5));
+        body.AngularVelocity = at.Basis * new Vector3(world.Random.RandiRange(-4, -1), world.Random.RandiRange(-1, 1), world.Random.RandfRange(-1.5f, 1.5f));
 
         world.Magazines.RemoveAll(magazine => !IsInstanceValid(magazine));
         world.Magazines.Add(body);

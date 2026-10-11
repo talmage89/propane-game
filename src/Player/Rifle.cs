@@ -178,8 +178,8 @@ public partial class Rifle : Node3D
         flashTimer = FlashDuration;
         flashSprite.Visible = true;
         flashLight.Visible = true;
-        flashSprite.Scale = Vector3.One * (float)GD.RandRange(0.8, 1.2);
-        flashSprite.RotateObjectLocal(Vector3.Back, (float)GD.RandRange(0, Mathf.Tau));
+        flashSprite.Scale = Vector3.One * World.Random.RandfRange(0.8f, 1.2f);
+        flashSprite.RotateObjectLocal(Vector3.Back, World.Random.RandfRange(0, Mathf.Tau));
 
         boltLocked = lastRound;
         clip = lastRound ? "FireLast" : World.Tuning.FullAuto ? "Fire" : "FireSemi";

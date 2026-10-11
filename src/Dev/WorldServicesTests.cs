@@ -20,6 +20,12 @@ public partial class WorldServicesTests : Node
         DevArgs.MarkReady();
         try
         {
+            if (DevArgs.Get("scenario") == "random-isolation")
+            {
+                RandomIsolation();
+                ShutdownGuard.Quit(GetTree());
+                return;
+            }
             if (DevArgs.Get("scenario") == "single-player-hitstop")
             {
                 SinglePlayerHitstop();
@@ -58,6 +64,7 @@ public partial class WorldServicesTests : Node
             PresentationLifetime();
             TuningPanelIsolation();
             SinglePlayerHitstop();
+            RandomIsolation();
             GD.Print($"[world services] PASS two overlapping worlds, distinct tuning, events, blasts, callbacks, partial failure; 10 retirements stable at {baseline}");
             ShutdownGuard.Quit(GetTree());
         }
@@ -139,6 +146,29 @@ public partial class WorldServicesTests : Node
         }
         finally { game.Free(); }
         GD.Print("[world services] PASS real single-player explosion acquires hitstop and world retirement releases it");
+    }
+
+    private void RandomIsolation()
+    {
+        using var template = new Tuning();
+        using var a = new WorldContext(this, template);
+        using var b = new WorldContext(this, template);
+        a.Random.Seed = b.Random.Seed = 23;
+        var first = PropaneTank.Create(a);
+        var second = PropaneTank.Create(b);
+        first.NetId = second.NetId = 1; // Stable flutter consumes no random variation during entry.
+        a.Root.AddChild(first);
+        b.Root.AddChild(second);
+        var before = a.Random.State;
+        Assert(first.TakeShot(Vector3.Right * 0.15f, Vector3.Right, Vector3.Left), "random fixture tank did not puncture");
+        Assert(a.Random.State != before && b.Random.State == before, "puncture did not consume only its world's random stream");
+        var after = a.Random.State;
+        Assert(second.TakeShot(Vector3.Right * 0.15f, Vector3.Right, Vector3.Left), "second random fixture tank did not puncture");
+        Assert(a.Random.State == after && b.Random.State == after, "other-world puncture advanced the first world's stream");
+        a.Dispose();
+        Assert(!GodotObject.IsInstanceValid(a.Random), "retired world retained its random generator");
+        _ = b.Random.Randf();
+        GD.Print("[world services] PASS punctures consume independent seeded world streams and retirement leaves the survivor usable");
     }
 
     private void ConstructionFailure()

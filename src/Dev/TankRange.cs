@@ -237,7 +237,7 @@ public partial class TankRange : Node3D
         var tank = PropaneTank.Create(world);
         AddChild(tank);
         tank.GlobalPosition = position;
-        tank.RotateY((float)GD.RandRange(0, Mathf.Tau));
+        tank.RotateY(world.Random.RandfRange(0, Mathf.Tau));
         tanks.Add(tank);
     }
 

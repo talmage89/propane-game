@@ -1,7 +1,7 @@
 # World services
 
 `Game` and `Match` are facades around `WorldContext`. A context owns its `World3D`, root, content/effects roots,
-spawn service, tuning copy, events, blast receiver registry, simulation clock, deferred work, views, and mutable
+spawn service, tuning copy, random stream, events, blast receiver registry, simulation clock, deferred work, views, and mutable
 magazine/decal/light accounting. Consumers receive a context or tuning explicitly before entering the tree.
 Immutable asset, shader, material, mesh, collision and catalog caches remain shared.
 
@@ -18,6 +18,10 @@ its template. Matches validate and copy the creator-supplied snapshot without sw
 Unexported local bot dials are copied explicitly too: they remain local and never enter the match snapshot.
 The tuning panel receives an explicit `Target`: edits belong to that world; Save writes the target and updates the
 application template for future worlds. Unsaved world edits disappear when that world ends.
+
+Gameplay and effects draw from `World.Random`, an independently randomized generator disposed with its context.
+Tests can seed a context explicitly without advancing another world. Layout generation retains its own seeded
+generators; `FixedSeed` still controls layouts. Existing continuous ranges and discrete integer draws are preserved.
 
 `WorldClock` measures simulation seconds, advanced once per world physics tick with Godot's simulation delta.
 Tank drop shields and chain fuses use this clock, so fixed-FPS tests and hitstop cannot shorten their gameplay
@@ -38,7 +42,7 @@ root; retiring content removes its effects and cancels source callbacks before t
 
 `make test` discovers `[UnitSuite]` clock assertions and runs `world_services_tests.tscn`, which exercises two
 independent physics worlds at overlapping coordinates with different tuning. It asserts blast, event, spawn and callback isolation, survivor continuity, replacement safety, partial
-construction cleanup, tuning-panel target isolation, and exact node/object/orphan counts across ten retirements after
+construction cleanup, tuning-panel target isolation, independent seeded puncture streams, and exact node/object/orphan counts across ten retirements after
 warming immutable caches. A real single-player explosion also verifies hitstop admission and synchronous retirement
 of its presentation node and engine time-scale lease.
 

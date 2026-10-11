@@ -165,7 +165,7 @@ public partial class PropaneTank : RigidBody3D
         AddChild(mesh);
         GameAssets.ApplyTankMaterials(mesh);
         // In a match every copy of a tank flutters alike, so the copies drift apart less.
-        flutterPhase = NetId != 0 ? NetId % 997 * 0.1f : GD.Randf() * 100f;
+        flutterPhase = NetId != 0 ? NetId % 997 * 0.1f : World.Random.Randf() * 100f;
         SetProcess(false);
         if (pilePose != null) { pilePose = GlobalTransform; }
     }
@@ -212,7 +212,7 @@ public partial class PropaneTank : RigidBody3D
         switch (State)
         {
             case TankState.Intact:
-                Puncture(point, normal, GD.Randf() < 0.5f ? -1f : 1f);
+                Puncture(point, normal, World.Random.Randf() < 0.5f ? -1f : 1f);
                 ApplyImpulse(shotDirection * PunctureKick, point - GlobalPosition);
                 Punctured?.Invoke(this);
                 return true;
@@ -270,14 +270,14 @@ public partial class PropaneTank : RigidBody3D
         if (State == TankState.Intact)
         {
             var (point, normal) = SurfaceFacing(blastCenter);
-            Puncture(point, normal, GD.Randf() < 0.5f ? -1f : 1f);
+            Puncture(point, normal, World.Random.Randf() < 0.5f ? -1f : 1f);
             Punctured?.Invoke(this);
             return;
         }
         fuseLit = true;
         var tuning = World.Tuning;
         var closeness = Mathf.Clamp(distance / Mathf.Max(tuning.ChainRadius, 0.01f), 0, 1);
-        var fuse = Mathf.Lerp(tuning.ChainFuseMin, tuning.ChainFuseMax, closeness) * (float)GD.RandRange(0.85, 1.15);
+        var fuse = Mathf.Lerp(tuning.ChainFuseMin, tuning.ChainFuseMax, closeness) * World.Random.RandfRange(0.85f, 1.15f);
         var generation = ++fuseGeneration;
         void FinishFuse()
         {
@@ -441,7 +441,7 @@ public partial class PropaneTank : RigidBody3D
         var inherited = LinearVelocity;
         foreach (var piece in GameAssets.Debris)
         {
-            var body = DebrisBody.Create(piece);
+            var body = DebrisBody.Create(World, piece);
             ContentSpawn.InWorld(body);
             body.GlobalTransform = GlobalTransform;
             var pieceCenter = GlobalTransform * piece.Centroid;
@@ -473,6 +473,6 @@ public partial class PropaneTank : RigidBody3D
         };
         ContentSpawn.InWorld(decal);
         decal.GlobalPosition = groundPoint;
-        decal.RotateY((float)GD.RandRange(0, Mathf.Tau));
+        decal.RotateY(World.Random.RandfRange(0, Mathf.Tau));
     }
 }

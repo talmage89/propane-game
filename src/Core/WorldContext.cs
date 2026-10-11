@@ -23,6 +23,7 @@ public sealed class WorldContext : IDisposable
     {
         ViewRoot = owner;
         Tuning = template.Copy();
+        Random.Randomize();
         Networked = networked;
         Physics = new World3D();
         Root = new Node3D { Name = "World", ProcessMode = Node.ProcessModeEnum.Pausable };
@@ -60,6 +61,7 @@ public sealed class WorldContext : IDisposable
     public Viewport Viewport => presentation?.View ?? viewport;
     public World3D Physics { get; }
     public Tuning Tuning { get; }
+    public RandomNumberGenerator Random { get; } = new();
     public bool Networked { get; }
     public bool IsAlive { get; private set; } = true;
     public bool Paused { get; private set; }
@@ -220,6 +222,7 @@ public sealed class WorldContext : IDisposable
         Magazines.Clear();
         Decals.Clear();
         ShadowedFlashes = 0;
+        Random.Dispose();
         Tuning.Dispose();
         Physics.Dispose();
         if (stopErrors.Count > 0) { throw new AggregateException("world stop adapters failed", stopErrors); }

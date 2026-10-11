@@ -85,7 +85,7 @@ public static class ImpactEffect
         };
         world.Spawn.InWorld(decal);
         decal.GlobalTransform = new Transform3D(new Basis(along.Column0, along.Column2, -along.Column1), point);
-        decal.RotateObjectLocal(Vector3.Up, (float)GD.RandRange(0, Mathf.Tau));
+        decal.RotateObjectLocal(Vector3.Up, world.Random.RandfRange(0, Mathf.Tau));
         world.Decals.Enqueue(decal);
     }
 

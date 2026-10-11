@@ -358,7 +358,7 @@ public partial class MovementTests : Node
 
     private async Task FacadeTests()
     {
-        GD.Seed(1);
+        world.Random.Seed = 1;
         var floor = new StaticBody3D { CollisionLayer = Layers.Floor, CollisionMask = 0 };
         floor.AddChild(new CollisionShape3D { Shape = new WorldBoundaryShape3D() });
         AddChild(floor);

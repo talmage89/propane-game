@@ -22,7 +22,7 @@ public static class Warmup
         tank.Freeze = true;
         root.AddChild(tank);
         root.AddChild(new VentJet { World = world, ContentSpawn = world.Spawn, Name = "VentJet", Position = new Vector3(0, 0.3f, 0) });
-        var debris = DebrisBody.Create(GameAssets.Debris[0]);
+        var debris = DebrisBody.Create(world, GameAssets.Debris[0]);
         debris.Freeze = true;
         root.AddChild(debris);
 

@@ -685,7 +685,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         return null;
     }
 
-    private static Vector3 RandomInCone(Vector3 axis, float halfAngle)
+    private Vector3 RandomInCone(Vector3 axis, float halfAngle)
     {
         if (halfAngle <= 0.00001f)
         {
@@ -693,8 +693,8 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         }
         // Uniform over the cone's solid angle.
         var cosMax = Mathf.Cos(halfAngle);
-        var z = (float)GD.RandRange(cosMax, 1.0);
-        var phi = (float)GD.RandRange(0, Mathf.Tau);
+        var z = World.Random.RandfRange(cosMax, 1.0f);
+        var phi = World.Random.RandfRange(0, Mathf.Tau);
         var r = Mathf.Sqrt(1 - z * z);
         var basis = ImpactEffect.BasisAlong(axis);
         return (basis * new Vector3(r * Mathf.Cos(phi), r * Mathf.Sin(phi), z)).Normalized();
@@ -787,7 +787,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
             var launch = flat * speed * 0.8f + Vector3.Up * Mathf.Min(speed * 0.45f, MaxRagdollLift);
             // Feet are swept out from under the body: it pitches backward away from the blast.
             var tumbleAxis = flat.LengthSquared() > 0.0001f ? Vector3.Up.Cross(flat).Normalized() : Vector3.Right;
-            var spin = tumbleAxis * (float)GD.RandRange(2.5, 4.5) + Vector3.Up * (float)GD.RandRange(-2.0, 2.0);
+            var spin = tumbleAxis * World.Random.RandfRange(2.5f, 4.5f) + Vector3.Up * World.Random.RandfRange(-2.0f, 2.0f);
             BeginRagdoll(Velocity + launch, spin);
         }
         else if (blast.Distance < tuning.StaggerRadius)

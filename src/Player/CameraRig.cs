@@ -89,7 +89,7 @@ public partial class CameraRig : Node3D
     public void Kick(float degrees)
     {
         recoilPitch += degrees;
-        recoilYaw += (float)GD.RandRange(-1, 1) * degrees * World.Tuning.CameraRecoilSideShare;
+        recoilYaw += World.Random.RandiRange(-1, 1) * degrees * World.Tuning.CameraRecoilSideShare;
     }
 
     public void AddTrauma(float amount) => trauma = Mathf.Clamp(trauma + amount, 0, 1);
