@@ -51,6 +51,7 @@ test-core: build ## Run checker, platform, movement and unit assertions
 	"$(GODOT)" --headless --path . res://scenes/dev/shutdown_tests.tscn -- --paused --window-close --repeat-quit
 
 test-behavior: build ## Run isolated physics, navigation, menu, grip and feet probes
+	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/session_actors_tests.tscn
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/world_services_tests.tscn
 	"$(GODOT)" --headless --path . --fixed-fps 60 res://scenes/dev/blast_query_tests.tscn
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/upright_pile_tests.tscn

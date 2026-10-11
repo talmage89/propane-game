@@ -112,7 +112,7 @@ public partial class BotNavigationCourse : Node3D, IPlayerInputSource
         player.GlobalPosition = suburb.GlobalTransform * new Vector3(course == 1 ? 3 : (seed % 5 - 2) * 0.25f,
             Suburb.GroundHeight, course == 6 ? 0.385f : 7 + seed % 3 * 0.4f);
         player.Velocity = Vector3.Zero;
-        player.CameraRig.SetOrientation(0, 0);
+        player.Aim.SetOrientation(0, 0);
         goal = suburb.GlobalTransform * new Vector3((seed * 7 % 5 - 2) * 0.25f, Suburb.GroundHeight, -7 - seed % 2 * 0.3f);
         navigator.Reset();
         courseJumps = navigator.Jumps;
@@ -149,7 +149,7 @@ public partial class BotNavigationCourse : Node3D, IPlayerInputSource
         if (DevArgs.Get("baseline") != null)
         {
             var yaw = Mathf.RadToDeg(Mathf.Atan2(-to.X, -to.Z));
-            player.CameraRig.SetOrientation(yaw, 0);
+            player.Aim.SetOrientation(yaw, 0);
             intent.Move = Vector2.Down;
             var moved = here.DistanceTo(lastPosition);
             lastPosition = here;
@@ -175,7 +175,7 @@ public partial class BotNavigationCourse : Node3D, IPlayerInputSource
             if (move.Direction.LengthSquared() > 0)
             {
                 var yaw = Mathf.RadToDeg(Mathf.Atan2(-move.Direction.X, -move.Direction.Z));
-                player.CameraRig.SetOrientation(yaw, 0);
+                player.Aim.SetOrientation(yaw, 0);
                 intent.Move = Vector2.Down;
             }
             if (!player.IsOnFloor())

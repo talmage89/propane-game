@@ -90,6 +90,31 @@ public static class LifecycleTests
             }
             finally { client.Free(); }
         });
+        runner.Run("lifecycle/assembled match preserves the buffered phase presentation", () =>
+        {
+            using var server = new ServerTests.Fixture();
+            foreach (var ended in new[] { false, true })
+            {
+                var client = Client();
+                var setup = server.Setup;
+                Match? match = null;
+                try
+                {
+                    client.Handle(MessageCodec.Encode(new NetMessage(Msg.MatchStart, setup.Id, 0, setup), true));
+                    Feed(client, Msg.Countdown, new FloatMessage(4), setup.Id);
+                    Feed(client, Msg.MatchGo, new FloatMessage(90), setup.Id);
+                    if (ended) Feed(client, Msg.MatchEnd, new[] { new Standing(2, "Test", AppearanceRecord.FromPalette(1), 1, true) }, setup.Id);
+                    match = new Match { Net = client, Setup = setup, CreateLocalView = false };
+                    runner.AddChild(match);
+                    TestRunner.Assert(match.Session.IsAlive && (ended ? match.IsOver : match.IsPlaying), "buffered phase did not reach the assembled match");
+                    TestRunner.Assert(match.Player.InputLocked == ended, "readiness overwrote the buffered phase's input lock");
+                    match._Process(0);
+                    TestRunner.Assert(!match.FindChildren("*", "Label", owned: false).OfType<Label>()
+                        .Any(label => label.Text == "Waiting for everyone to arrive"), "readiness restored the obsolete loading notice after replay");
+                }
+                finally { match?.Session.Dispose(); match?.Free(); client.Free(); }
+            }
+        });
         runner.Run("lifecycle/stale packets and old cleanup cannot affect the next match", () =>
         {
             var client = Client();

@@ -94,7 +94,7 @@ public partial class MotionProbe : SkeletonModifier3D
             {
                 var before = burst == 0 ? 11.3 : 13.8;
                 var after = burst == 0 ? 13.3 : 16.0;
-                var camera = Player.CameraRig.Camera.GlobalBasis.GetRotationQuaternion();
+                var camera = Player.Aim.EyeTransform.Basis.GetRotationQuaternion();
                 if (time >= before && !cameraStarted[burst]) { cameraBefore[burst] = camera; cameraStarted[burst] = true; }
                 if (time >= after && !cameraFinished[burst])
                 {

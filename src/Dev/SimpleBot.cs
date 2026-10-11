@@ -76,12 +76,12 @@ public sealed class SimpleBot : IBotBrain
             _ => 9f,
         };
 
-        // Face the target: camera yaw so its forward runs along the flat direction, pitch from the camera.
-        var camera = player.CameraRig.Camera;
-        var view = targetPoint - camera.GlobalPosition;
+        // Face the target from the logical eye, whether or not the actor has a rendered view.
+        var aim = player.Aim;
+        var view = targetPoint - aim.EyeOrigin;
         var yaw = Mathf.RadToDeg(Mathf.Atan2(-view.X, -view.Z));
         var pitch = Mathf.RadToDeg(Mathf.Asin(Mathf.Clamp(view.Normalized().Y, -1, 1)));
-        player.CameraRig.SetOrientation(yaw, pitch);
+        player.Aim.SetOrientation(yaw, pitch);
 
         // In range but unable to hit it (a fence or house in the way): close in, then give up on it.
         if (blocked > 1.2f)
@@ -108,9 +108,9 @@ public sealed class SimpleBot : IBotBrain
         // Fire when the crosshair is on the target.
         if (target is not AmmoPickup && distance < 45f)
         {
-            var space = player.GetWorld3D().DirectSpaceState;
-            var forward = -camera.GlobalBasis.Z;
-            var start = camera.GlobalPosition + forward * 2.5f;
+            var space = player.World.Physics.DirectSpaceState;
+            var forward = -aim.EyeTransform.Basis.Z;
+            var start = aim.EyeOrigin + forward * 2.5f;
             var hit = space.IntersectRay(PhysicsRayQueryParameters3D.Create(start, start + forward * 60f, Layers.ShotMask));
             var collider = hit.Count > 0 ? hit["collider"].As<GodotObject>() : null;
             var onTarget = collider == target || target is PlayerCharacter pc && PlayerCharacter.Owning(collider) == pc;
@@ -158,7 +158,7 @@ public sealed class SimpleBot : IBotBrain
                 return pickup;
             }
         }
-        var space = player.GetWorld3D().DirectSpaceState;
+        var space = player.World.Physics.DirectSpaceState;
         var visible = match.RemoteBodies.Where(b => b.GlobalPosition.DistanceTo(here) < 30f &&
             space.IntersectRay(PhysicsRayQueryParameters3D.Create(here + Vector3.Up * 1.5f, b.GlobalPosition + Vector3.Up * 1.2f, Layers.World)).Count == 0)
             .OrderBy(b => b.GlobalPosition.DistanceTo(here)).FirstOrDefault();

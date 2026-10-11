@@ -131,7 +131,7 @@ public sealed class Bot : IBotBrain
             {
                 Face(player, Aim(close), dt);
                 var direction = Flat(close.GlobalPosition - here);
-                var forward = Flat(-player.CameraRig.Camera.GlobalBasis.Z).Normalized();
+                var forward = Flat(-player.Aim.EyeTransform.Basis.Z).Normalized();
                 intent.MeleePressed = player.CanMelee && MeleeContact.InArc(direction, forward, reach, tuning.MeleeHalfAngleDegrees);
                 MoveToward(player, direction);
                 Status = $"melee {close.PeerId} at {direction.Length():0.0} m";
@@ -372,8 +372,8 @@ public sealed class Bot : IBotBrain
         var forward = distance > 24f ? 1f : distance < 7f ? -0.6f : 0f;
         intent.Move = new Vector2(strafeSide * 0.8f, forward);
 
-        var camera = player.CameraRig.Camera;
-        var off = Mathf.RadToDeg((-camera.GlobalBasis.Z).AngleTo(aimPoint - camera.GlobalPosition));
+        var aim = player.Aim;
+        var off = Mathf.RadToDeg((-aim.EyeTransform.Basis.Z).AngleTo(aimPoint - aim.EyeOrigin));
         var reacted = fightTime > Mathf.Lerp(tuning.BotReactionEasy, tuning.BotReactionHard, Skill);
         var firing = reacted && off < 2f && CanSee(player, Aim(enemy));
         // Short bursts, letting the aim settle in between.
@@ -472,7 +472,7 @@ public sealed class Bot : IBotBrain
     /// </summary>
     private Vector3? FindVantage(PlayerCharacter player, Vector3 target, float near, float far)
     {
-        var space = player.GetWorld3D().DirectSpaceState;
+        var space = player.World.Physics.DirectSpaceState;
         var here = player.GlobalPosition;
         Vector3? best = null;
         var bestCost = float.MaxValue;
@@ -510,7 +510,7 @@ public sealed class Bot : IBotBrain
     /// <summary>The nearest spot within a short run that the shooter cannot see, if there is one.</summary>
     private Vector3? FindCover(PlayerCharacter player, PlayerCharacter shooter)
     {
-        var space = player.GetWorld3D().DirectSpaceState;
+        var space = player.World.Physics.DirectSpaceState;
         var here = player.GlobalPosition;
         var eye = shooter.GlobalPosition + Vector3.Up * 1.6f;
         Vector3? best = null;
@@ -559,8 +559,8 @@ public sealed class Bot : IBotBrain
     /// <summary>Turns the view toward a point with skill-dependent smoothing, including while fleeing.</summary>
     private void Face(PlayerCharacter player, Vector3 point, float dt)
     {
-        var camera = player.CameraRig.Camera;
-        var view = point - camera.GlobalPosition;
+        var aim = player.Aim;
+        var view = point - aim.EyeOrigin;
         if (view.LengthSquared() < 0.0001f)
         {
             return;
@@ -569,14 +569,14 @@ public sealed class Bot : IBotBrain
         var wantPitch = Mathf.RadToDeg(Mathf.Asin(Mathf.Clamp(view.Normalized().Y, -1, 1)));
         if (!hasView)
         {
-            yaw = player.CameraRig.Yaw;
-            pitch = player.CameraRig.Pitch;
+            yaw = player.Aim.Yaw;
+            pitch = player.Aim.Pitch;
             hasView = true;
         }
         var k = 1f - Mathf.Exp(-tuning.BotAimTurnSharpness * Mathf.Lerp(0.35f, 1f, Skill) * dt);
         yaw += Mathf.Wrap(wantYaw - yaw, -180f, 180f) * k;
         pitch = Mathf.Lerp(pitch, wantPitch, k);
-        player.CameraRig.SetOrientation(yaw, pitch);
+        player.Aim.SetOrientation(yaw, pitch);
     }
 
     private static Vector3 Aim(PlayerCharacter enemy) => enemy.IsRagdolled ? enemy.PelvisPosition : enemy.GlobalPosition + Vector3.Up * 1.15f;
@@ -584,10 +584,10 @@ public sealed class Bot : IBotBrain
     /// <summary>The crosshair is on the target, with nothing in the way.</summary>
     private static bool OnTarget(PlayerCharacter player, Node3D target)
     {
-        var camera = player.CameraRig.Camera;
-        var forward = -camera.GlobalBasis.Z;
-        var start = camera.GlobalPosition + forward * 2.5f;
-        var hit = player.GetWorld3D().DirectSpaceState.IntersectRay(PhysicsRayQueryParameters3D.Create(start, start + forward * 80f, Layers.ShotMask));
+        var aim = player.Aim;
+        var forward = -aim.EyeTransform.Basis.Z;
+        var start = aim.EyeOrigin + forward * 2.5f;
+        var hit = player.World.Physics.DirectSpaceState.IntersectRay(PhysicsRayQueryParameters3D.Create(start, start + forward * 80f, Layers.ShotMask));
         var collider = hit.Count > 0 ? hit["collider"].As<GodotObject>() : null;
         return collider == target || target is PlayerCharacter pc && PlayerCharacter.Owning(collider) == pc;
     }
@@ -595,7 +595,7 @@ public sealed class Bot : IBotBrain
     private static bool CanSee(PlayerCharacter player, Vector3 point)
     {
         var eye = player.GlobalPosition + Vector3.Up * 1.6f;
-        return player.GetWorld3D().DirectSpaceState.IntersectRay(PhysicsRayQueryParameters3D.Create(eye, point, Layers.World | Layers.Props)).Count == 0;
+        return player.World.Physics.DirectSpaceState.IntersectRay(PhysicsRayQueryParameters3D.Create(eye, point, Layers.World | Layers.Props)).Count == 0;
     }
 
     private static bool IsValid(Node3D? node) => node != null && GodotObject.IsInstanceValid(node) &&
@@ -612,7 +612,7 @@ public sealed class Bot : IBotBrain
         VisibleFrom(observer, observer.GlobalPosition + Vector3.Up * 1.6f, point);
 
     private static bool VisibleFrom(PlayerCharacter player, Vector3 eye, Vector3 point) =>
-        player.GetWorld3D().DirectSpaceState.IntersectRay(PhysicsRayQueryParameters3D.Create(eye, point, Layers.World | Layers.Props)).Count == 0;
+        player.World.Physics.DirectSpaceState.IntersectRay(PhysicsRayQueryParameters3D.Create(eye, point, Layers.World | Layers.Props)).Count == 0;
 
     private void Navigate(Match match, float dt)
     {
@@ -622,7 +622,7 @@ public sealed class Bot : IBotBrain
             // Combat strafing uses the same collision checks and recovery as travel. Standing to shoot is
             // intentional; reset its progress window so a later walk is never counted as already stuck.
             if (intent.Move.LengthSquared() < 0.01f && !navigator.Jumping) { navigator.Reset(); return; }
-            var basis = new Basis(Vector3.Up, Mathf.DegToRad(player.CameraRig.Yaw));
+            var basis = new Basis(Vector3.Up, Mathf.DegToRad(player.Aim.Yaw));
             var wish = basis * new Vector3(intent.Move.X, 0, -intent.Move.Y);
             navigationGoal = player.GlobalPosition + wish.Normalized() * tuning.BotRouteSpacing * 2;
         }
@@ -631,7 +631,7 @@ public sealed class Bot : IBotBrain
             tuning.RunSpeed, tuning.SprintSpeed, tuning.JumpVelocity, tuning.PlayerGravity, tuning.Acceleration, tuning.AirControl);
         var hazards = match.LiveTanks.Select(t => new NavigationHazard(t.GlobalPosition,
             t.State == PropaneTank.TankState.Venting ? tuning.RagdollRadius + tuning.BotVentClearance : tuning.BotTankClearance)).ToArray();
-        var world = new NavigationWorld(player.GetWorld3D().DirectSpaceState, capabilities, hazards, tuning.BotJumpMargin, tuning.BotJumpMinimumRange, player.GlobalPosition);
+        var world = new NavigationWorld(player.World.Physics.DirectSpaceState, capabilities, hazards, tuning.BotJumpMargin, tuning.BotJumpMinimumRange, player.GlobalPosition);
         var move = navigator.Navigate(world, new NavigationState(player.GlobalPosition, player.Velocity, player.IsOnFloor()),
             capabilities, navigationGoal.Value, tuning, dt);
         if (move.Failed)
@@ -649,7 +649,7 @@ public sealed class Bot : IBotBrain
             Face(player, player.GlobalPosition + move.Direction * 10 + Vector3.Up * 1.4f, dt);
             intent.Aim = false;
         }
-        var yawRad = Mathf.DegToRad(player.CameraRig.Yaw);
+        var yawRad = Mathf.DegToRad(player.Aim.Yaw);
         var forward = new Vector3(-Mathf.Sin(yawRad), 0, -Mathf.Cos(yawRad));
         var right = new Vector3(Mathf.Cos(yawRad), 0, -Mathf.Sin(yawRad));
         intent.Move = new Vector2(move.Direction.Dot(right), move.Direction.Dot(forward));
