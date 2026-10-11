@@ -15,29 +15,53 @@ public static class WorldBuildTests
 {
     public static void Register(TestRunner runner)
     {
-        runner.Run("world/repeated builds include fences", () =>
+        foreach (var formation in Enum.GetValues<PileFormation>())
         {
-            var settings = SuburbPlans.Match(new Tuning(), 4);
-            var plan = new SuburbGenerator(settings, new GameCatalog(), 23).Generate();
-            TestRunner.Assert(plan.Fences.Count > 0, "fixture has no fences");
-            var first = BuildHash(runner, plan, settings);
-            var second = BuildHash(runner, PlanCodec.Decode(PlanCodec.Encode(plan)), settings);
-            TestRunner.Assert(first == second, "world changed when rebuilt from the encoded plan");
-        });
+            runner.Run($"world/{formation}/repeated builds include fences and piles", () =>
+            {
+                var settings = Settings(formation);
+                var plan = Fixture(formation);
+                var first = BuildHash(runner, plan, settings);
+                var second = BuildHash(runner, PlanCodec.Decode(PlanCodec.Encode(plan)), settings);
+                TestRunner.Assert(first == second, "world changed when rebuilt from the encoded plan");
+            });
+        }
+    }
+
+    private static SuburbSettings Settings(PileFormation formation) => SuburbPlans.Match(new Tuning(), 4) with
+    {
+        RowsWeight = formation == PileFormation.Rows ? 1 : 0,
+        SquareWeight = formation == PileFormation.Square ? 1 : 0,
+        TriangularWeight = formation == PileFormation.Triangular ? 1 : 0,
+        TightWeight = formation == PileFormation.Cluster ? 1 : 0,
+    };
+
+    private static SuburbPlan Fixture(PileFormation formation)
+    {
+        var plan = new SuburbGenerator(Settings(formation), new GameCatalog(), 23).Generate();
+        TestRunner.Assert(plan.Fences.Count > 0, "fixture has no fences");
+        TestRunner.Assert(plan.Tanks.Count > 0 && plan.Tanks.All(t => t.Formation == formation), "fixture has wrong formations");
+        TestRunner.Assert(plan.Tanks.GroupBy(t => t.Pile).Any(p => p.Count() >= 5), "fixture has no substantial pile");
+        if (formation != PileFormation.Cluster)
+        {
+            TestRunner.Assert(plan.Tanks.Any(t => t.Elevation > PileBuilder.Radius * 2), "fixture has no upper tier");
+        }
+        return plan;
     }
 
     public static bool RunProcessMode(Node root)
     {
         if (DevArgs.Get("write-world-plan") is { } output)
         {
-            var plan = new SuburbGenerator(SuburbPlans.Match(new Tuning(), 4), new GameCatalog(), 23).Generate();
+            var formation = Enum.Parse<PileFormation>(DevArgs.Get("formation") ?? "Square");
+            var plan = Fixture(formation);
             File.WriteAllBytes(output, PlanCodec.Encode(plan));
             return true;
         }
         if (DevArgs.Get("hash-world-plan") is { } input)
         {
             var plan = PlanCodec.Decode(File.ReadAllBytes(input));
-            GD.Print($"[world] hash {BuildHash(root, plan, SuburbPlans.Match(new Tuning(), 4))} fences {plan.Fences.Count}");
+            GD.Print($"[world] hash {BuildHash(root, plan, SuburbPlans.Match(new Tuning(), 4))} fences {plan.Fences.Count} tanks {plan.Tanks.Count} formation {plan.Tanks[0].Formation}");
             return true;
         }
         return false;

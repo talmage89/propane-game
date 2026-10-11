@@ -66,7 +66,9 @@ clients can still be told why they were rejected.
 
 Construction choices are pure functions of that plan and the shared tuning. Fence style and color use explicit
 integer mixing of the run's coordinates and seed, never a process-salted hash. `make test` hashes the built meshes,
-transforms, body masses and collision shapes (fences included) in two fresh processes using one saved plan.
+transforms, body masses and collision shapes (fences and piles included) in two fresh processes using a saved plan
+for each formation. Compressed plans are validated before match setup: inflation is capped at 8 MiB, collection
+and string limits apply inside the plan, and starts must agree with the player assignments.
 
 **Tanks:**
 - *Puncture:* the shooter's client punctures the tank at once. It then sends the cause to everyone: the hole position and normal, the jet's lean, and the bullet's push. Every client starts the same vent from the same starting point.

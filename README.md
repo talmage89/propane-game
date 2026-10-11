@@ -159,7 +159,7 @@ $GODOT --headless res://scenes/dev/movement_tests.tscn
 # all four formations, and supply/start safety at 2, 8, 16, 24 and 32 players. Exits 1 on failure.
 $GODOT --headless res://scenes/dev/generator_tests.tscn -- --seeds=200
 
-# Plain C# assertion suites; make test runs these, the generator, and two separate builds of one saved plan.
+# Plain C# assertion suites; make test runs these, the generator, and two separate builds of a saved plan for each formation.
 $GODOT --headless res://scenes/dev/unit_tests.tscn
 tools/dev/check_world.sh
 

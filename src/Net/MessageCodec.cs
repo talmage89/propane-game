@@ -197,6 +197,11 @@ public static class MessageCodec
         Unique(players.Select(p => p.Item1.Id).ToArray());
         Unique(players.Select(p => p.Item2).ToArray());
         if (!players.Any(p => p.Item1.Id == host)) { throw new InvalidDataException("host missing from match"); }
+        var decoded = PlanCodec.Decode(plan);
+        if (decoded.Spawns.Count != players.Length || players.Any(p => p.Item2 >= decoded.Spawns.Count))
+        {
+            throw new InvalidDataException("match players and plan starts disagree");
+        }
         return new MatchSetup(matchId, plan, host, debug, length, tuning, players);
     }
 

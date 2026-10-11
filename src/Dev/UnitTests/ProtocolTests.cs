@@ -27,7 +27,7 @@ public static class ProtocolTests
             Packet(Msg.Rejected, new RejectedMessage("Update", "0.3.0")),
             Packet(Msg.LobbyList, new LobbyListMessage(5, new[] { new LobbySummary(1, "Test", 1, LobbyServer.LobbyPhase.Waiting) })),
             Packet(Msg.LobbyState, new LobbyInfo(1, 2, 90, LobbyServer.LobbyPhase.Waiting, new[] { profile })),
-            Packet(Msg.MatchStart, new MatchSetup(7, new byte[] { 1, 2, 3 }, 2, true, 90, snapshot, new[] { (profile, 0) })),
+            Packet(Msg.MatchStart, new MatchSetup(7, PlanCodec.Encode(PlanTests.Fixture()), 2, true, 90, snapshot, new[] { (profile, 0) })),
             Packet(Msg.Countdown, new FloatMessage(4)), Packet(Msg.MatchGo, new FloatMessage(90)), Packet(Msg.Clock, new FloatMessage(42)),
             Packet(Msg.Score, new ScoreMessage(2, 3, -1)), Packet(Msg.Notice, new TextMessage("Test")),
             Packet(Msg.PickupTaken, new PickupMessage(0, 2)), Packet(Msg.PickupRespawn, new IntMessage(0)),
