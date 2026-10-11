@@ -19,6 +19,8 @@ public partial class TestRunner : Node
                 return;
             }
             WorldBuildTests.Register(this);
+            ProtocolTests.Register(this);
+            ServerTests.Register(this);
         }
         catch (Exception e)
         {

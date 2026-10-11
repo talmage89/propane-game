@@ -83,17 +83,56 @@ public partial class Tuning : Resource
         return tuning;
     }
 
-    /// <summary>Sets the values in a snapshot that this build knows; unknown names are ignored.</summary>
+    private static System.Collections.Generic.Dictionary<string, (Variant.Type Type, double Min, double Max)>? schema;
+
+    /// <summary>Validates every entry before any value changes. Export hints define inclusive network limits.</summary>
+    public static void ValidateSnapshot(Godot.Collections.Dictionary values, bool complete = false)
+    {
+        if (schema == null)
+        {
+            schema = new();
+            using var defaults = new Tuning();
+            var names = new System.Collections.Generic.HashSet<string>(ValueNames(defaults));
+            foreach (var entry in defaults.GetPropertyList())
+            {
+                var name = entry["name"].AsString();
+                if (!names.Contains(name)) { continue; }
+                var type = (Variant.Type)entry["type"].AsInt64();
+                var range = entry["hint_string"].AsString().Split(',');
+                var min = type == Variant.Type.Int ? int.MinValue : double.MinValue;
+                var max = type == Variant.Type.Int ? int.MaxValue : double.MaxValue;
+                if ((PropertyHint)entry["hint"].AsInt64() == PropertyHint.Range)
+                {
+                    min = double.Parse(range[0], System.Globalization.CultureInfo.InvariantCulture);
+                    max = double.Parse(range[1], System.Globalization.CultureInfo.InvariantCulture);
+                }
+                schema[name] = (type, min, max);
+            }
+        }
+        if (complete && values.Count != schema.Count) { throw new System.IO.InvalidDataException("incomplete tuning snapshot"); }
+        foreach (var (key, value) in values)
+        {
+            if (key.VariantType != Variant.Type.String || !schema.TryGetValue(key.AsString(), out var spec) || value.VariantType != spec.Type)
+            {
+                throw new System.IO.InvalidDataException($"unknown tuner or wrong type: {key}");
+            }
+            if (spec.Type == Variant.Type.Bool) { continue; }
+            var number = value.AsDouble();
+            if (!double.IsFinite(number) || number < spec.Min || number > spec.Max)
+            {
+                throw new System.IO.InvalidDataException($"tuner outside declared range: {key}");
+            }
+        }
+    }
+
+    /// <summary>Atomically applies a validated snapshot; unknown names and invalid values are refused.</summary>
     public void Apply(Godot.Collections.Dictionary values)
     {
-        var known = new System.Collections.Generic.HashSet<string>(ValueNames(this));
+        ValidateSnapshot(values);
         foreach (var (key, value) in values)
         {
             var name = key.AsString();
-            if (known.Contains(name))
-            {
-                Set(name, value);
-            }
+            Set(name, value);
         }
     }
 

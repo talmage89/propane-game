@@ -69,7 +69,7 @@ then plays with every patch of that minor version.
 | Right click (hold) | Aim: rifle to the shoulder and a tight spread. The camera does not move. |
 | R | New suburb (single player); reload (multiplayer) |
 | Esc | Pause and show the controls (a match keeps running) |
-| F1 or ` | Tuning panel (live sliders; in a match, debug builds only, and it changes everyone's values) |
+| F1 or ` | Tuning panel (live sliders; in a match, the creator's debug build only, and it changes everyone's values) |
 | F11 or Alt+Enter | Fullscreen |
 
 ## Tuning
@@ -143,6 +143,7 @@ $GODOT res://scenes/dev/menu_test.tscn -- --capture-dir=/tmp/m
 # Logs go to build/net (-o picks another directory).
 GODOT=$GODOT tools/dev/net_bots.sh -n 3 -l 60 -- --net-lag=120 --net-jitter=30 --net-loss=3
 tools/dev/compare_tanks.py build/net/bot*.log
+tools/dev/check_scores.py build/net/server.log build/net/bot*.log
 ```
 
 `net_test.tscn` scenarios: bots playing (default), `duel` (hits, drops and a thrown player, filmed from both sides)

@@ -96,11 +96,11 @@ public partial class NetTest : Node
             match = new Match { Name = "Match", Net = net, Setup = setup };
             match.Finished += () =>
             {
-                Log($"finished; final scores {ScoreLine()}");
+                Log($"finished match {match.Setup.Id}; final scores {ScoreLine()}");
                 match.QueueFree();
                 match = null;
                 matches++;
-                started = false;
+                started = matches >= matchesWanted;
                 if (matches >= matchesWanted)
                 {
                     GetTree().CreateTimer(1.0).Timeout += () => GetTree().Quit();
@@ -132,7 +132,7 @@ public partial class NetTest : Node
             var name = tune[..split];
             var value = float.Parse(tune[(split + 1)..], System.Globalization.CultureInfo.InvariantCulture);
             Tuning.Current.Set(name, value);
-            net.Send(new NetWriter(Msg.TuningSet).String(name).Bytes(GD.VarToBytes(value)));
+            net.Send(new NetWriter(Msg.TuningSet, match.Setup.Id).String(name).Scalar(value));
             Log($"sent tuning {name} = {value}");
         }
         var leaveAt = DevArgs.GetFloat("leave-at", -1);
