@@ -13,6 +13,24 @@ while explicitly presenting that fixture's context.
 The presentation viewport owns the bridge in metadata. When several contexts present there, retirement restores
 the most recently presented live context, or the viewport's original world when none remain, in either teardown order.
 
+`WorldSpace` is an offscreen simulation viewport and receives no application device events. `Game` and `Match`
+forward their application viewport's `_UnhandledInput` to the local player's `AccumulateDeviceInput`, before
+handling their own shortcuts or mouse recapture. UI consumes events first; remote, disabled and retired actors
+cannot accumulate them. `DeviceInput` retains capture gating and the existing pause/focus reset behavior.
+Do not broadcast input into simulation viewports: input belongs to the local view, not every world or actor.
+When device input moves to `LocalView`, that view should own this application-viewport callback instead of the
+facades. The callback audit found no other production input handlers under `WorldSpace`: `Main`, the facades,
+`MenuNavigation` and `HsvColorSlider` already live in the application viewport.
+
+`menu_test.tscn -- --scenario=input` injects mouse motion, key presses and complete mouse-button clicks through
+`Input.ParseInputEvent`, including menu navigation with Tab/Enter. It checks exact camera displacement, jump,
+melee, single-click fire, single-player suburb replacement, match reload and logical Escape on physical Caps Lock
+in both facades. It also checks paused input and physical/logical system shortcut bindings. This runs in
+`make test`. Headless Godot cannot capture a pointer, so that run substitutes only `DeviceInput`'s existing
+capture predicate with menu visibility; rendered runs use the default production input source and capture frames
+before/after the turn, in the jump, and with the remapped pause menu open. Gameplay keys stay physical; pause,
+tuning and fullscreen shortcuts accept both physical and logical keys to honor desktop remaps.
+
 `Tuning.SavedTemplate` is an application composition/UI accessor, never the gameplay target. Each context copies
 its template. Matches validate and copy the creator-supplied snapshot without swapping any process-wide override.
 Unexported local bot dials are copied explicitly too: they remain local and never enter the match snapshot.

@@ -457,6 +457,7 @@ public partial class Match : Node3D
     public override void _UnhandledInput(InputEvent @event)
     {
         if (World is not { IsAlive: true }) { return; }
+        player.AccumulateDeviceInput(@event);
         if (@event.IsActionPressed(InputSetup.Pause))
         {
             if (tuningPanel?.Visible == true)
