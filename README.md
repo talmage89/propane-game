@@ -131,6 +131,13 @@ $GODOT --headless res://scenes/dev/generator_tests.tscn -- --seeds=200
 # Platform download URLs and recorder arguments, including Windows paths and non-English locales. Exits 1 on failure.
 $GODOT --headless res://scenes/dev/platform_tests.tscn
 
+# Release smoke test: main menu and single player; fails on a missing button, empty suburb or timeout.
+$GODOT --resolution 1280x720 res://scenes/dev/release_test.tscn -- --windowed --capture-dir=/tmp/release
+# --scenario=network --connect=host:port creates a lobby, waits for a second player, then plays a 30-second match.
+# Official export templates disallow scene overrides. The same test runs in an untouched archive with
+# ./Propane.x86_64 -- --release-test --capture-dir=/tmp/release (Propane.exe on Windows).
+# Add --scenario=network --connect=host:port --name=Tester to test against another client on a source server.
+
 # The real game with a scripted player. Scenarios: loop (default), clear (destroys every tank), ragdoll, shoot,
 # tour (camera in tight spots), spots (visits each tank), settle (props that move on their own), dissolve, menus,
 # readme (a chain reaction captured as frames for the README GIF; seed 23 is the one in docs/).
