@@ -8,6 +8,8 @@ public sealed class DropPredictions
 {
     private readonly HashSet<uint> pending = new();
     public int UnconfirmedCount { get; private set; }
+    /// <summary>Local bodies whose server creation echo is still pending, independently of the bank debit.</summary>
+    public IReadOnlySet<uint> PendingIds => pending;
 
     public void Add(uint id)
     {

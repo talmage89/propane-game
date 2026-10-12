@@ -237,6 +237,14 @@ tools/dev/check_world.sh
 
 # Scoped worlds: overlapping physics/tuning, events/spawns/callbacks, pause/reveal/hitstop and leak-free teardown.
 $GODOT --headless --fixed-fps 60 res://scenes/dev/world_services_tests.tscn
+# Native vent correction: fresh observers add no speculative jet impulse; stale/predicted/owned vents keep thrust.
+$GODOT --headless --fixed-fps 60 res://scenes/dev/body_correction_tests.tscn
+# Native server entry: explicit debug --tune overrides reach lobby admission.
+$GODOT --headless res://scenes/dev/server_tuning_tests.tscn -- --server --port=24680 --tune.MaxPlayers=6
+# Native debug seed: the transmitted plan must use the requested candidate seed.
+$GODOT --headless res://scenes/dev/server_seed_tests.tscn -- --server --port=24680 --match-seed=23
+# Native client delivery between physics steps without process frames.
+$GODOT --headless res://scenes/dev/transport_physics_tests.tscn -- --server --port=24680
 # Clear/replace proof: shooting sequence, finish remaining fixture tanks, assert automatic replacement.
 $GODOT --fixed-fps 60 res://scenes/dev/game_test.tscn -- --scenario=clear --quit=32 --capture-dir=/tmp/clear
 # Real menu lifetime: ten single-player and ten solo-match retirements with exact node/object/orphan counts.
@@ -336,18 +344,19 @@ $GODOT res://scenes/dev/menu_test.tscn -- --scenario=devices --capture-dir=/tmp/
 # single-click fire, R/new suburb or reload, and remapped Escape. Assertions also run headlessly in make test.
 $GODOT --fixed-fps 60 --resolution 1280x720 res://scenes/dev/menu_test.tscn -- --scenario=input --port=24681 --windowed --capture-dir="$PWD/build/input"
 
-# Multiplayer: a local server and bot players under simulated lag and loss, then compare what each bot saw.
+# Multiplayer: a local server and bot players under simulated lag and loss; asserts tank agreement and scores.
 # Logs go to build/net (-o picks another directory).
 GODOT=$GODOT tools/dev/net_bots.sh -n 3 -l 60 -- --net-lag=120 --net-jitter=30 --net-loss=3
-tools/dev/compare_tanks.py build/net/bot*.log
-tools/dev/check_scores.py build/net/server.log build/net/bot*.log
+# -t clean uses tighter tank limits; -k skips both post-run checks.
+# Rerun a comparison: tools/dev/compare_tanks.py [--profile clean] build/net/bot*.log
 ```
 
 `net_test.tscn` scenarios: bots playing (default), `melee` (five-tank and zero-bank knockdowns and both get-ups),
 `duel` (hits, drops and a thrown player, filmed from both sides),
 `pickup` (an ammo can taken and returning), and `movement` (remote creep, sprint, jumping and held-aim landing,
 with assertions and labeled frames), `drop-refusal` (rolling back a refused predicted drop), and `puncture-race`
-(canonical vent adoption and trajectory assertions after two simultaneous bullet contacts).
+(canonical vent adoption and trajectory assertions after two simultaneous bullet contacts), and `vent-contact`
+(eight owner-started, rapidly spinning vents on clear floor, with contact and trajectory logs).
 `tools/dev/compare_vents.py` compares its logs.
 [docs/multiplayer.md](docs/multiplayer.md) lists the commands.
 

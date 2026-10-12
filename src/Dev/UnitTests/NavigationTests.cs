@@ -1,8 +1,10 @@
 using System;
 using System.Linq;
 using Godot;
+using Propane.Bots;
 using Propane.Core;
 using Propane.Navigation;
+using Propane.Tank;
 
 namespace Propane.Dev.UnitTests;
 
@@ -37,6 +39,21 @@ internal static class NavigationTests
 
     public static void Register(TestRunner runner)
     {
+        runner.Run("navigation ignores a freed tank when abandoning its route", () =>
+        {
+            using var bot = new BankingBot();
+            var gone = PropaneTank.Create(runner.World);
+            gone.Free();
+            bot.Blacklist(gone, 10);
+            TestRunner.Assert(bot.BlacklistedTargets == 0, "freed target was blacklisted");
+            var live = new Node3D();
+            try
+            {
+                bot.Blacklist(live, 10);
+                TestRunner.Assert(bot.BlacklistedTargets == 1, "live target could not be blacklisted");
+            }
+            finally { live.Free(); }
+        });
         using var shape = new CapsuleShape3D { Radius = 0.32f, Height = 1.8f };
         using var tuning = Tuning.LoadBaked();
         var caps = new NavigationCapabilities(shape, Vector3.Up * 0.9f, shape.Radius, tuning.RunSpeed,

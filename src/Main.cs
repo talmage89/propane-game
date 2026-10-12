@@ -82,6 +82,8 @@ public partial class Main : Node
     {
         // A headless server has nothing to draw: tick often enough for snappy relays without spinning a core.
         Engine.MaxFps = 120;
+        // Dev admission probes need their explicit tuners before the first client connects.
+        if (OS.IsDebugBuild()) { DevArgs.Setup(); }
         var port = (int)DevArgs.GetFloat("port", Protocol.DefaultPort);
         var server = new LobbyServer
         {
