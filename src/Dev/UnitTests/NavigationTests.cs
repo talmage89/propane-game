@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using Godot;
+using Propane.Bots;
 using Propane.Core;
 using Propane.Navigation;
 using Propane.Tank;
@@ -40,7 +41,7 @@ internal static class NavigationTests
     {
         runner.Run("navigation ignores a freed tank when abandoning its route", () =>
         {
-            var bot = new Bot();
+            using var bot = new BankingBot();
             var gone = PropaneTank.Create(runner.World);
             gone.Free();
             bot.Blacklist(gone, 10);

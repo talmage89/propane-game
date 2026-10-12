@@ -83,6 +83,8 @@ public partial class PlayerCharacter
         var end = hit.Count > 0 ? hit["position"].AsVector3() : start + direction * tuning.ShotRange;
 
         // The bullet really leaves the muzzle: something between the muzzle and the target blocks it first.
+        // Movement resolves facing before this shot. Fit the muzzle in the same body frame the render uses.
+        visual.Rotation = new Vector3(0, facingYaw, 0);
         rig.AlignShot(end);
         var muzzle = rifle.MuzzlePosition;
         var toEnd = end - muzzle;
@@ -115,6 +117,7 @@ public partial class PlayerCharacter
         var normal = hit["normal"].AsVector3();
         var collider = hit["collider"].As<GodotObject>();
         var shotDir = (end - muzzle).Normalized();
+        ShotImpacting?.Invoke(new ShotReport(muzzle, end, normal, shotDir, collider, true));
         switch (collider)
         {
             case PropaneTank tank:

@@ -23,6 +23,7 @@ public partial class Tuning
     public float BotCoverDetourCost { get; set; } = 3f;
     public float BotTankClearance { get; set; } = 1.8f;
     public float BotTargetRetryTime { get; set; } = 8f;
+    public float BotStuckAimTime { get; set; } = 4f;
     public float BotTurnSharpness { get; set; } = 12f;
     public float BotSprintDistance { get; set; } = 8f;
     public float BotRecoilControlSpeed { get; set; } = 2.8f;

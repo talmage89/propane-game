@@ -148,6 +148,9 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
     /// <summary>The player fired (this game's player only).</summary>
     public event Action<ShotReport>? Fired;
 
+    /// <summary>Local adapters attribute contact before its tank lifecycle and child blasts run.</summary>
+    public event Action<ShotReport>? ShotImpacting;
+
     public event Action<uint, Vector3>? MeleeStarted;
     public event Action<MeleeHit>? MeleeHit;
     public float MeleeProgress => IsRemote ? remoteState.Melee : ResolvedState.MeleeProgress;
@@ -220,6 +223,11 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         skeleton.AddChild(feet);
         rig = new RifleRig { World = World, Name = "RifleRig", Rifle = rifle, Pose = animator.Pose };
         skeleton.AddChild(rig);
+        rig.RemoteShotAligned += end =>
+        {
+            rifle.Fire();
+            World.Spawn.Effect(Tracer.Create(rifle.MuzzlePosition, end));
+        };
         handFollow = new RifleHandFollow { Name = "RifleHandFollow", Rifle = rifle, Rig = rig, Blend = poseBlend };
         skeleton.AddChild(handFollow);
 
@@ -722,9 +730,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
     /// <summary>Plays the muzzle flash and tracer of another player's shot.</summary>
     public void RemoteShot(Vector3 end)
     {
-        rig.AlignShot(end);
-        rifle.Fire();
-        World.Spawn.Effect(Tracer.Create(rifle.MuzzlePosition, end));
+        rig.QueueRemoteShot(end);
         rig.Kick();
         readyAmount = 1f;
     }
