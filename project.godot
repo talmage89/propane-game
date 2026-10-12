@@ -57,6 +57,10 @@ jolt_physics_3d/limits/max_contact_constraints=32768
 
 [rendering]
 
+; 8192 instance-uniform meshes: 16-player suburbs, actors, debris and overlapping menu retirement.
+; Godot reserves 16 vec4 slots per mesh; this is a 2 MiB storage buffer.
+limits/global_shader_variables/buffer_size=131072
+
 ; Match Linux's Vulkan path: D3D12 RGB float curve textures are unsupported under Proton on some GPUs.
 rendering_device/driver.windows="vulkan"
 textures/vram_compression/import_etc2_astc=true

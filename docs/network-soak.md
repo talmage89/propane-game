@@ -4,6 +4,13 @@
 proof, measurements, verifier fixes and unresolved ordinary-play failures. The staged capacity gate passes;
 those failures still block merge approval.
 
+The renderer reserves 16 uniform slots per shader-bearing mesh. The project budgets 131072 slots (8192 meshes,
+2 MiB of GPU storage); ordinary sixteen-player destruction exhausted the default 4096-mesh budget during return
+to the lobby. `check_shader_capacity.py` allocates and retires 6000 production-material meshes twice. Its headless
+assertion runs in `make test`; use `--rendered --output "$PWD/build/shader-capacity"` to prove native allocation
+and inspect the capture. Both paths require successful assertions and clean engine logs. This technical buffer
+budget changes no effect or gameplay values. See [Godot's allocator](https://github.com/godotengine/godot/blob/master/servers/rendering/renderer_rd/storage_rd/material_storage.cpp).
+
 `net_bots.sh` runs `compare_tanks.py` and `check_scores.py` after every local match. Either failure makes the
 launcher fail. `-k` skips both checks, including for an existing server (`-S`), whose audit log must be
 obtained separately. Deliberate late construction or early-leave probes also need `-k`, since their captures
