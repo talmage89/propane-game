@@ -258,7 +258,6 @@ public partial class MenuDeviceInputTest : Node
         await Frames().ConfigureAwait(true);
         await Click("Free tuning").ConfigureAwait(true);
         Check(lab.TuningPanel.Visible && lab.World.Paused && !lab.Overlay.MenuVisible, "clicking Free tuning opens the paused panel");
-        var template = Main.SavedTuning.RunSpeed;
         var panel = lab.TuningPanel;
         var scroll = panel.FindChildren("*", "ScrollContainer", owned: false).OfType<ScrollContainer>().Single();
         Check(FocusInside(scroll), "the tuning panel opens with its focused control in view");
@@ -276,18 +275,31 @@ public partial class MenuDeviceInputTest : Node
         Check(inView && scrolled > 0, "controller navigation keeps the focused tuning row in view while it scrolls");
         scroll.ScrollVertical = 0;
         await Frames(2).ConfigureAwait(true);
-        var slider = panel.FindChildren("*", "HSlider", owned: false).OfType<HSlider>().First();
+        // The mouse wheel scrolls the long list and never edits the slider under the pointer, focused or not.
+        scroll.ScrollVertical = 0;
+        await Frames(2).ConfigureAwait(true);
+        await WheelOverFirstSlider(scroll, "Lab tuning").ConfigureAwait(true);
+        panel.FindChildren("*", "HSlider", owned: false).OfType<HSlider>().First().GrabFocus();
+        await WheelOverFirstSlider(scroll, "focused Lab tuning").ConfigureAwait(true);
+        scroll.ScrollVertical = 0;
+        await Frames(2).ConfigureAwait(true);
+        // A gameplay dial dragged with the mouse changes this session and never the saved template.
+        var slider = panel.FindChildren("*", "HSlider", owned: false).OfType<HSlider>()
+            .Single(s => s.GetParent().GetChildren().OfType<Label>().Any(label => label.Text == "Melee windup"));
+        scroll.EnsureControlVisible(slider);
+        await Frames(2).ConfigureAwait(true);
+        var saved = Main.SavedTuning.MeleeWindup;
         var before = slider.Value;
         await ClickAt(new Vector2(slider.GetGlobalRect().Position.X + slider.GetGlobalRect().Size.X * 0.9f, slider.GetGlobalRect().GetCenter().Y)).ConfigureAwait(true);
-        Check(slider.Value > before, "clicking a tuning slider's track moves it");
-        var runSpeed = lab.World.Tuning.RunSpeed;
+        Check(slider.Value > before && lab.World.Tuning.MeleeWindup > saved && Main.SavedTuning.MeleeWindup == saved,
+            "clicking a tuning slider's track edits only the session");
         await Click("Defaults").ConfigureAwait(true);
         using (var defaults = new Tuning())
         {
-            Check(lab.World.Tuning.RunSpeed == defaults.RunSpeed && lab.World.Tuning.LabBotSkill == defaults.LabBotSkill,
+            Check(lab.World.Tuning.MeleeWindup == defaults.MeleeWindup && lab.World.Tuning.LabBotSkill == defaults.LabBotSkill,
                 "clicking Defaults restores the session's dials");
         }
-        Check(Main.SavedTuning.RunSpeed == template && runSpeed >= 0, "mouse edits and Defaults leave the saved template alone");
+        Check(Main.SavedTuning.MeleeWindup == saved, "mouse edits and Defaults leave the saved template alone");
         await Click("Close tuning").ConfigureAwait(true);
         Check(!panel.Visible && !lab.World.Paused, "clicking Close tuning resumes");
         TapKey(Key.Escape);
@@ -318,12 +330,30 @@ public partial class MenuDeviceInputTest : Node
         Check(panel.FindChildren("*", "HSlider", owned: false).OfType<HSlider>().All(s => s.FocusMode == Control.FocusModeEnum.None) &&
             panel.FindChildren("*", "CheckButton", owned: false).OfType<CheckButton>().All(t => t.FocusMode == Control.FocusModeEnum.None),
             "the single-player tuning panel keeps its sliders and switches out of keyboard focus");
+        await WheelOverFirstSlider(panel.FindChildren("*", "ScrollContainer", owned: false).OfType<ScrollContainer>().Single(),
+            "single-player tuning").ConfigureAwait(true);
         TapKey(Key.F1);
         await Frames().ConfigureAwait(true);
         TapKey(Key.Escape);
         await Frames().ConfigureAwait(true);
         await Click("Main menu").ConfigureAwait(true);
         await Wait(() => Menus.Current == Menus.Screen.Main, "main menu after single player").ConfigureAwait(true);
+    }
+
+    /// <summary>One wheel notch with the pointer on the first visible slider: the list scrolls and the dial stays put.</summary>
+    private async Task WheelOverFirstSlider(ScrollContainer scroll, string name)
+    {
+        var slider = scroll.FindChildren("*", "HSlider", owned: false).OfType<HSlider>()
+            .First(candidate => candidate.IsVisibleInTree() && scroll.GetGlobalRect().Encloses(candidate.GetGlobalRect()));
+        var value = slider.Value;
+        var offset = scroll.ScrollVertical;
+        var at = GetTree().Root.GetFinalTransform() * slider.GetGlobalRect().GetCenter();
+        Send(new InputEventMouseMotion { Position = at, GlobalPosition = at });
+        await Frames(1).ConfigureAwait(true);
+        Send(new InputEventMouseButton { ButtonIndex = MouseButton.WheelDown, Pressed = true, Position = at, GlobalPosition = at, Factor = 1 });
+        Send(new InputEventMouseButton { ButtonIndex = MouseButton.WheelDown, Pressed = false, Position = at, GlobalPosition = at });
+        await Frames(3).ConfigureAwait(true);
+        Check(scroll.ScrollVertical > offset && slider.Value == value, $"the wheel scrolls the {name} list without editing the slider under it");
     }
 
     /// <summary>The focused control lies inside the scroll container's visible rectangle.</summary>

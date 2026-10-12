@@ -163,6 +163,8 @@ public partial class TuningPanel : CanvasLayer
             // Only the Lab's panel has controller navigation. Elsewhere the game keeps running with it open, and a
             // focused slider or switch would take arrow and Space presses meant for the player.
             FocusMode = IncludeLabDials ? Control.FocusModeEnum.All : Control.FocusModeEnum.None,
+            // The wheel scrolls this long list. A slider that also took it changed a dial a step per notch.
+            Scrollable = false,
             CustomMinimumSize = new Vector2(0, 22),
         };
         var value = UiStyle.Text("", 16, UiStyle.SoftInk, HorizontalAlignment.Right);
