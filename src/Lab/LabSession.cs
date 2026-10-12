@@ -299,7 +299,8 @@ public partial class LabSession : Node3D
             {
                 World = session.World,
                 Name = "Player",
-                PeerId = 1,
+                ActorId = 1,
+                OwnerPeerId = 1,
                 Ammo = lab.Scenario.Banking ? AmmoState.Starting(session.World.Tuning) : null
             };
             session.AddActor(lab.Player);
@@ -311,7 +312,8 @@ public partial class LabSession : Node3D
                 {
                     World = session.World,
                     Name = "BankingBot",
-                    PeerId = 2,
+                    ActorId = 2,
+                    OwnerPeerId = 1,
                     Ammo = AmmoState.Starting(session.World.Tuning),
                     BodyColor = new Color(0.26f, 0.58f, 0.8f)
                 };

@@ -116,8 +116,10 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
     /// <summary>Another player's body in a match, driven by their game. Set before adding to the tree.</summary>
     public bool IsRemote { get; init; }
 
-    /// <summary>The player's id in a match (0 in single player).</summary>
-    public int PeerId { get; set; }
+    /// <summary>Session actor and owning connection; zero only in offline fixtures.</summary>
+    public int ActorId { get; set; }
+    public int OwnerPeerId { get; set; }
+    public uint LifeId { get => Runtime.LifeId; set => Runtime.LifeId = value; }
 
     /// <summary>Rounds in the magazine and reserve, in a match. Null means unlimited (single player).</summary>
     public AmmoState? Ammo { get => Runtime.Ammo; set => Runtime.Ammo = value; }
@@ -350,7 +352,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
                 {
                     Ammo?.CancelReload();
                     meleeContact.Begin();
-                    meleeSwing++;
+                    meleeSwing = checked(meleeSwing + 1);
                     meleeDirection = Forward(Mathf.DegToRad(Aim.Yaw));
                     MeleeStarted?.Invoke(meleeSwing, meleeDirection);
                 }

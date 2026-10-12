@@ -346,9 +346,9 @@ public partial class Menus : CanvasLayer
             name.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
             row.AddChild(name);
             var inMatch = lobby.Phase != LobbyServer.LobbyPhase.Waiting;
-            row.AddChild(UiStyle.Text(inMatch ? "in a match" : $"{lobby.Players} / {Net.LobbyCapacity}", 18, UiStyle.SoftInk));
+            row.AddChild(UiStyle.Text(inMatch ? "in a match" : $"{lobby.Players} / {lobby.Capacity}", 18, UiStyle.SoftInk));
             var join = UiStyle.Button("Join");
-            join.Disabled = inMatch || lobby.Players >= Net.LobbyCapacity;
+            join.Disabled = inMatch || lobby.Players >= lobby.Capacity;
             var id = lobby.Id;
             join.SetMeta("focus_key", $"lobby_{id}");
             join.Pressed += () => Net.JoinLobby(id);
@@ -388,25 +388,34 @@ public partial class Menus : CanvasLayer
             return;
         }
         var tuning = Net.Template;
-        var creator = lobby.Members.FirstOrDefault(m => m.Id == lobby.CreatorId);
+        var creator = lobby.Members.FirstOrDefault(m => m.OwnerPeerId == lobby.CreatorId && m.Kind == ActorKind.Human);
         layout.AddChild(UiStyle.Title($"{(creator?.Name ?? "?").ToUpperInvariant()}'S LOBBY", 34));
-        layout.AddChild(UiStyle.Text(lobby.Phase == LobbyServer.LobbyPhase.Waiting ? $"{lobby.Members.Count} of {Net.LobbyCapacity} players" : "A match is on",
+        layout.AddChild(UiStyle.Text(lobby.Phase == LobbyServer.LobbyPhase.Waiting ? $"{lobby.Members.Count} of {lobby.Capacity} players" : "A match is on",
             16, UiStyle.SoftInk, HorizontalAlignment.Center));
         AddHostingNote();
         layout.AddChild(new HSeparator());
+        var compact = lobby.Members.Count > 4;
+        layout.CustomMinimumSize = new Vector2(compact ? 720 : 520, 0);
+        layout.AddThemeConstantOverride("separation", compact ? 6 : 12);
+        var roster = new GridContainer { Columns = compact ? 2 : 1 };
+        roster.AddThemeConstantOverride("h_separation", 24);
+        roster.AddThemeConstantOverride("v_separation", 2);
+        layout.AddChild(roster);
         foreach (var member in lobby.Members)
         {
             var row = new HBoxContainer();
             row.AddThemeConstantOverride("separation", 12);
             row.AddChild(UiStyle.ColorSample(member.Appearance.Color, 20, member.Id.ToString(System.Globalization.CultureInfo.InvariantCulture)));
-            var label = UiStyle.Text(member.Name + (member.Id == Net.MyId ? "  (you)" : ""), 20);
+            var label = UiStyle.Text(member.Name + (member.Kind == ActorKind.Bot ? "  (bot)" : member.OwnerPeerId == Net.MyId ? "  (you)" : ""), compact ? 18 : 20);
+            label.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
+            label.CustomMinimumSize = new Vector2(compact ? 200 : 260, 0);
             label.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
             row.AddChild(label);
-            if (member.Id == lobby.CreatorId)
+            if (member.OwnerPeerId == lobby.CreatorId && member.Kind == ActorKind.Human)
             {
-                row.AddChild(UiStyle.Text("starts the match", 15, UiStyle.SoftInk));
+                row.AddChild(UiStyle.Text(compact ? "creator" : "starts the match", 15, UiStyle.SoftInk));
             }
-            layout.AddChild(row);
+            roster.AddChild(row);
         }
         layout.AddChild(new HSeparator());
 
@@ -523,7 +532,31 @@ public partial class Menus : CanvasLayer
             longer.Pressed += () => Net.SetMatchLength(Mathf.Min(tuning.MatchLengthMax, lobby.MatchLength + step));
             length.AddChild(longer);
         }
-        layout.AddChild(length);
+        var settings = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.Center };
+        settings.AddThemeConstantOverride("separation", 24);
+        settings.AddChild(length);
+        var capacity = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.Center };
+        capacity.AddThemeConstantOverride("separation", 8);
+        capacity.AddChild(UiStyle.Text("Capacity", 20));
+        if (Net.IsCreator)
+        {
+            var fewer = UiStyle.Button("−");
+            fewer.SetMeta("focus_key", "capacity_down");
+            fewer.Disabled = lobby.Phase != LobbyServer.LobbyPhase.Waiting || lobby.Capacity <= Mathf.Max(2, lobby.Members.Count);
+            fewer.Pressed += () => Net.SetCapacity(lobby.Capacity - 1);
+            capacity.AddChild(fewer);
+        }
+        capacity.AddChild(UiStyle.Text($"{lobby.Capacity} / {Net.LobbyCapacity}", 20, UiStyle.Ink));
+        if (Net.IsCreator)
+        {
+            var more = UiStyle.Button("+");
+            more.SetMeta("focus_key", "capacity_up");
+            more.Disabled = lobby.Phase != LobbyServer.LobbyPhase.Waiting || lobby.Capacity >= Net.LobbyCapacity;
+            more.Pressed += () => Net.SetCapacity(lobby.Capacity + 1);
+            capacity.AddChild(more);
+        }
+        settings.AddChild(capacity);
+        layout.AddChild(settings);
 
         var buttons = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.Center };
         buttons.AddThemeConstantOverride("separation", 10);

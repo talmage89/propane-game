@@ -64,7 +64,7 @@ public partial class NetTest
         {
             appearanceTime = 0;
             match.Player.InputOverride = new ScriptedInput();
-            var slot = match.Setup.Players.Single(p => p.Player.Id == net.MyId).Spawn;
+            var slot = match.Setup.Players.Single(p => p.Player.OwnerPeerId == net.MyId).Spawn;
             var road = match.Suburb.Plan.Roads.OrderByDescending(r => r.Length).First();
             var center = Suburb.ToWorld((road.A + road.B) / 2, 0.02f);
             var along = new Vector3(road.Direction.X, 0, road.Direction.Y);
@@ -81,11 +81,11 @@ public partial class NetTest
             }
         }
         appearanceTime += dt;
-        var own = match.Setup.Players.Single(p => p.Player.Id == net.MyId);
+        var own = match.Setup.Players.Single(p => p.Player.OwnerPeerId == net.MyId);
         ScenarioAssert(match.Player.BodyColor == own.Player.Appearance.Color, "appearance: local body differs");
         foreach (var remote in match.RemoteBodies)
         {
-            var profile = match.Setup.Players.Single(p => p.Player.Id == remote.PeerId).Player;
+            var profile = match.Setup.Players.Single(p => p.Player.Id == remote.ActorId).Player;
             ScenarioAssert(remote.BodyColor == profile.Appearance.Color, $"appearance: remote body differs for {profile.Name}");
         }
         if (!appearanceDropped && appearanceTime >= 2)
@@ -94,8 +94,8 @@ public partial class NetTest
             var toward = (match.Player.View?.CameraRig.Camera.GlobalPosition ?? match.Player.Aim.EyeOrigin) - match.Player.GlobalPosition;
             toward.Y = 0;
             var at = match.Player.GlobalPosition + toward.Normalized() * 1.3f;
-            var body = new BodyState(BodySync.DropTankId(own.Spawn, 900000), new Transform3D(Basis.Identity, at), Vector3.Zero, Vector3.Zero);
-            net.Send(MessageCodec.Encode(new NetMessage(Msg.Drop, match.Setup.Id, 0, new DropMessage(0, new[] { body })), false));
+            var body = new BodyState(BodySync.DropTankId(own.Player.AllocationSlot, 900000), new Transform3D(Basis.Identity, at), Vector3.Zero, Vector3.Zero);
+            net.Send(MessageCodec.Encode(new NetMessage(Msg.Drop, match.Setup.Id, 0, new DropMessage(0, new[] { body }), match.Player.ActorId, match.Player.LifeId, checked(++match.Player.Runtime.ActionSequence)), false));
         }
         if (!appearanceGlowChecked && appearanceTime >= 2.5f)
         {

@@ -14,6 +14,7 @@ public sealed class NetTransport : IPacketTransport
     private readonly ENetMultiplayerPeer peer = new();
     private readonly ProtocolPeerMap peerIds;
     private readonly Dictionary<int, ConnectionHandle> connections = new();
+    private readonly Dictionary<ConnectionHandle, int> backendIds = new();
     private readonly HashSet<ConnectionHandle> connected = new();
     private readonly Dictionary<ConnectionHandle, PacketCounters> counters = new();
     private readonly Queue<(ConnectionHandle Connection, DisconnectReason Reason)> disconnected = new();
@@ -54,7 +55,8 @@ public sealed class NetTransport : IPacketTransport
         var connection = new ConnectionHandle();
         connections.Add(id, connection);
         counters.Add(connection, new PacketCounters());
-        peerIds.Bind(connection, id);
+        backendIds.Add(connection, id);
+        peerIds.Issue(connection);
         return connection;
     }
 
@@ -93,7 +95,7 @@ public sealed class NetTransport : IPacketTransport
         if (!connected.Contains(connection)) { return; }
         // Both ends need the longer minimum while the client constructs its world. Once it
         // reports ready, live players should not linger for the entire construction grace.
-        peer.GetPeer(peerIds.PeerId(connection))?.SetTimeout(32, loading ? 20000 : 3000, loading ? 30000 : 8000);
+        peer.GetPeer(backendIds[connection])?.SetTimeout(32, loading ? 20000 : 3000, loading ? 30000 : 8000);
     }
 
     private static TrafficClass ReliableTraffic(int channel) => channel switch
@@ -108,7 +110,7 @@ public sealed class NetTransport : IPacketTransport
     {
         if (!open || !connected.Contains(connection)) { return SendResult.Closed; }
         if (bytes.Length > MaxPayloadSize) { return SendResult.Oversized; }
-        var id = peerIds.PeerId(connection);
+        var id = backendIds[connection];
         if (peer.GetPeer(id) is not { } target || target.GetState() != ENetPacketPeer.PeerState.Connected) { return SendResult.Closed; }
         peer.SetTargetPeer(id);
         peer.TransferChannel = Channel(traffic);
@@ -159,7 +161,7 @@ public sealed class NetTransport : IPacketTransport
             while (count-- > 0 && disconnected.TryDequeue(out var item))
             {
                 try { Disconnected?.Invoke(item.Connection, item.Reason); }
-                finally { peerIds.Forget(item.Connection); counters.Remove(item.Connection); }
+                finally { peerIds.Forget(item.Connection); backendIds.Remove(item.Connection); counters.Remove(item.Connection); }
             }
         }
         finally { pollMs = Stopwatch.GetElapsedTime(started).TotalMilliseconds; }
@@ -168,7 +170,7 @@ public sealed class NetTransport : IPacketTransport
     public void Disconnect(ConnectionHandle connection, DisconnectReason reason)
     {
         if (!connections.ContainsValue(connection)) { return; }
-        var id = peerIds.PeerId(connection);
+        var id = backendIds[connection];
         // Keep the supplied reason locally. The remote application rejection travels in Msg.Rejected unchanged.
         if (open) { peer.DisconnectPeer(id); }
         Retire(connection, reason);
@@ -176,7 +178,7 @@ public sealed class NetTransport : IPacketTransport
 
     private void Retire(ConnectionHandle connection, DisconnectReason reason)
     {
-        connections.Remove(peerIds.PeerId(connection));
+        connections.Remove(backendIds[connection]);
         connected.Remove(connection);
         peerIds.Retire(connection);
         disconnected.Enqueue((connection, reason));
@@ -191,7 +193,7 @@ public sealed class NetTransport : IPacketTransport
     public TransportDiagnostics Diagnostics(ConnectionHandle connection)
     {
         if (!counters.TryGetValue(connection, out var stats)) { return default; }
-        var target = open && connected.Contains(connection) ? peer.GetPeer(peerIds.PeerId(connection)) : null;
+        var target = open && connected.Contains(connection) ? peer.GetPeer(backendIds[connection]) : null;
         return stats.Snapshot(pollMs, rtt: target?.GetStatistic(ENetPacketPeer.PeerStatistic.RoundTripTime) ?? 0,
             nativeLoss: target == null ? null : target.GetStatistic(ENetPacketPeer.PeerStatistic.PacketLoss) / ENetPacketPeer.PacketLossScale) with
         {

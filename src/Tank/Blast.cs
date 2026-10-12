@@ -50,7 +50,7 @@ public static class Blast
             }
             using (EffectProfile.Measure(EffectProfile.System.BlastPush))
             {
-                if (Push(space, sight, body, center, radius, tuning, rng, chain, source?.BlastRequest ?? 0))
+                if (Push(space, sight, body, center, radius, tuning, rng, chain, source?.BlastRequest ?? 0, source?.CauseActorId ?? 0))
                 {
                     pushed.Add(body);
                 }
@@ -115,7 +115,7 @@ public static class Blast
 
     /// <summary>Pushes one body; returns whether it moved it.</summary>
     private static bool Push(PhysicsDirectSpaceState3D space, PhysicsRayQueryParameters3D sight, RigidBody3D body, Vector3 center, float radius,
-        Tuning tuning, RandomNumberGenerator rng, bool chain, uint cause)
+        Tuning tuning, RandomNumberGenerator rng, bool chain, uint cause, int causeActorId)
     {
         var state = PhysicsServer3D.BodyGetDirectState(body.GetRid());
         var massCenter = state != null ? body.GlobalPosition + state.CenterOfMass : body.GlobalPosition;
@@ -127,7 +127,7 @@ public static class Blast
 
         if (chain && body is PropaneTank tank && distance <= tuning.ChainRadius)
         {
-            tank.ChainHit(center, distance, cause);
+            tank.ChainHit(center, distance, cause, causeActorId);
         }
 
         var falloff = Mathf.Pow(1f - distance / radius, tuning.BlastFalloff);

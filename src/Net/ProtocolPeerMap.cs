@@ -3,14 +3,17 @@ using System.Collections.Generic;
 
 namespace Propane.Net;
 
-/// <summary>
-/// Protocol 2 compatibility bridge: ENet's remote peer id is still the player's wire id. Only this map joins
-/// transport handles to game ids. A6 can issue ids here without teaching gameplay about ENet or Steam handles.
-/// Each backend binds before Connected and retains bindings through Disconnected; Clear begins a new listen.
-/// </summary>
+/// <summary>Server-issued peer ids, independent of backend connection ids. Bind supports injected transports.</summary>
 public sealed class ProtocolPeerMap
 {
     private readonly Dictionary<ConnectionHandle, int> ids = new();
+    private readonly IdentitySequence sequence = new(2);
+    public int Issue(ConnectionHandle connection)
+    {
+        var id = sequence.Allocate();
+        Bind(connection, id);
+        return id;
+    }
     private readonly Dictionary<int, ConnectionHandle> connections = new();
     public void Bind(ConnectionHandle connection, int peerId)
     {

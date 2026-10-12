@@ -72,7 +72,7 @@ for i in $(seq 1 "$bots"); do
   fi
   display=(--headless)
   if (( i <= windowed )); then
-    display=(--resolution 960x540 --position $(( (i - 1) * 970 )),40)
+    display=(--disable-vsync --resolution 960x540 --position $(( (i - 1) * 970 )),40)
   fi
   timeout "$budget" "$godot" "${display[@]}" --path "$project" res://scenes/dev/net_test.tscn -- --server="$address" --port="$port" \
     --tank-check --role="$role" --players="$bots" --length="$length" --name="Bot$i" --color=$((i - 1)) --brain="${brain:-smart}" --windowed "${appearance[@]}" "$@" >"$out/bot$i.log" 2>&1 &
@@ -90,11 +90,18 @@ if (( checks )); then
     echo "FAIL engine or protocol errors in network logs" >&2
     status=1
   fi
-  if (( bots >= 2 )); then
-    python3 -B "$project/tools/dev/compare_tanks.py" --profile "$profile" "$out"/bot*.log || status=1
+  client_logs=("$out"/bot*.log)
+  # The capacity fixture intentionally retires its creator before completion. Its dedicated
+  # checker proves that departure; all survivors still use the ordinary continuous tank gate.
+  if [[ " $* " == *" --scenario=capacity "* ]] && grep -q "capacity creator departure" "$out/bot1.log"; then
+    client_logs=()
+    for i in $(seq 2 "$bots"); do client_logs+=("$out/bot$i.log"); done
+  fi
+  if (( ${#client_logs[@]} >= 2 )); then
+    python3 -B "$project/tools/dev/compare_tanks.py" --profile "$profile" "${client_logs[@]}" || status=1
   else
     echo "tank comparison skipped: only one bot"
   fi
-  python3 -B "$project/tools/dev/check_scores.py" "$out/server.log" "$out"/bot*.log || status=1
+  python3 -B "$project/tools/dev/check_scores.py" "$out/server.log" "${client_logs[@]}" || status=1
 fi
 exit "$status"

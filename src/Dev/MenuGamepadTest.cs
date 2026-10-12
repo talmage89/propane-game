@@ -106,7 +106,7 @@ public partial class MenuGamepadTest : Node
         await Navigate($"color_{(originalColor.LegacyIndex + 1) % Protocol.PlayerColors.Length}").ConfigureAwait(true);
         var colorKey = MenuNavigation.Key(Focus);
         await Press(JoyButton.A).ConfigureAwait(true);
-        await Wait(() => Net.Lobby!.Members.Single(m => m.Id == Net.MyId).Appearance != originalColor, "preset update acknowledged").ConfigureAwait(true);
+        await Wait(() => Net.Lobby!.Members.Single(m => m.OwnerPeerId == Net.MyId && m.Kind == ActorKind.Human).Appearance != originalColor, "preset update acknowledged").ConfigureAwait(true);
         CheckFocus(colorKey);
         // Cancel is transactional; a separate Apply sends/persists the exact preview bytes.
         await Navigate("custom_color").ConfigureAwait(true);
@@ -159,9 +159,9 @@ public partial class MenuGamepadTest : Node
         await Shot("07_custom_color_preview").ConfigureAwait(true);
         await Navigate("Use color").ConfigureAwait(true);
         await Press(JoyButton.A).ConfigureAwait(true);
-        await Wait(() => Net.Lobby!.Members.Single(m => m.Id == Net.MyId).Appearance == selected, "custom color acknowledged").ConfigureAwait(true);
+        await Wait(() => Net.Lobby!.Members.Single(m => m.OwnerPeerId == Net.MyId && m.Kind == ActorKind.Human).Appearance == selected, "custom color acknowledged").ConfigureAwait(true);
         CheckSaved(selected, "gamepad HSV record saved on disk");
-        CheckSample(Menus, Net.MyId, selected, "lobby renders custom color");
+        CheckSample(Menus, Net.Lobby!.Members.First(m => m.OwnerPeerId == Net.MyId).Id, selected, "lobby renders custom color");
         CheckFocus("custom_color");
         await Shot("07_lobby_color").ConfigureAwait(true);
         await Navigate("match_length").ConfigureAwait(true);
@@ -268,7 +268,7 @@ public partial class MenuGamepadTest : Node
         Main.GetNode<LobbyServer>("HostedServer").AdvanceMatches(MonotonicClock.Now + 2000);
         await Wait(() => Main.GetNode<Match>("Match").IsOver, "server ended real match").ConfigureAwait(true);
         var actualResults = Main.GetNode<ResultsScreen>("Match/Results");
-        CheckSample(actualResults, Net.MyId, selected, "real results render custom color");
+        CheckSample(actualResults, Main.GetNode<Match>("Match").Player.ActorId, selected, "real results render custom color");
         await Shot("12_custom_results").ConfigureAwait(true);
         Net.LeaveLobby();
         // The match's results timer owns scene cleanup; keep the next independent overlay test isolated.
@@ -361,7 +361,7 @@ public partial class MenuGamepadTest : Node
         await MouseColor("hsv_saturation", 0.75f).ConfigureAwait(true);
         Check(Picker.Selected == hsvColor, "raising saturation restores hue from gray");
         await Click("Use color").ConfigureAwait(true);
-        await Wait(() => Net.Lobby!.Members.Single(m => m.Id == Net.MyId).Appearance == hsvColor, "mouse HSV color acknowledged").ConfigureAwait(true);
+        await Wait(() => Net.Lobby!.Members.Single(m => m.OwnerPeerId == Net.MyId && m.Kind == ActorKind.Human).Appearance == hsvColor, "mouse HSV color acknowledged").ConfigureAwait(true);
         CheckSaved(hsvColor, "mouse HSV record saved on disk");
         await Click("custom_color").ConfigureAwait(true);
         Check(Picker.Selected == hsvColor, "reopened picker restores accepted HSV color");
@@ -380,8 +380,8 @@ public partial class MenuGamepadTest : Node
         }
         await TypeHex("12ABEF").ConfigureAwait(true);
         await Click("Use color").ConfigureAwait(true);
-        await Wait(() => Net.Lobby!.Members.Single(m => m.Id == Net.MyId).Appearance == custom, "mouse custom color acknowledged").ConfigureAwait(true);
-        CheckSample(Menus, Net.MyId, custom, "mouse lobby renders custom color");
+        await Wait(() => Net.Lobby!.Members.Single(m => m.OwnerPeerId == Net.MyId && m.Kind == ActorKind.Human).Appearance == custom, "mouse custom color acknowledged").ConfigureAwait(true);
+        CheckSample(Menus, Net.Lobby!.Members.First(m => m.OwnerPeerId == Net.MyId).Id, custom, "mouse lobby renders custom color");
         CheckSaved(custom, "mouse hex record saved on disk");
         await Shot("02_mouse_custom_lobby").ConfigureAwait(true);
         await Click("Start match").ConfigureAwait(true);
@@ -390,7 +390,7 @@ public partial class MenuGamepadTest : Node
         await Shot("03_mouse_custom_character").ConfigureAwait(true);
         Main.GetNode<LobbyServer>("HostedServer").AdvanceMatches(MonotonicClock.Now + 2000);
         await Wait(() => Main.GetNode<Match>("Match").IsOver, "mouse real match ended").ConfigureAwait(true);
-        CheckSample(Main.GetNode<ResultsScreen>("Match/Results"), Net.MyId, custom, "mouse results render custom color");
+        CheckSample(Main.GetNode<ResultsScreen>("Match/Results"), Main.GetNode<Match>("Match").Player.ActorId, custom, "mouse results render custom color");
         await Shot("04_mouse_custom_results").ConfigureAwait(true);
     }
 

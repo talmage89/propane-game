@@ -14,9 +14,11 @@ public interface IBankingBotWorld
     bool IsPlaying { get; }
     float TimeLeft { get; }
     int MyScore { get; }
+    /// <summary>Banks keyed by actor id, including other actors owned by this peer.</summary>
     IReadOnlyDictionary<int, int> Scores { get; }
     double Now { get; }
     double LastHitTime { get; }
+    /// <summary>Actor id of the last shooter, independent of its owning peer.</summary>
     int LastHitBy { get; }
     IEnumerable<PlayerCharacter> RemoteBodies { get; }
     IReadOnlyList<AmmoPickup> Pickups { get; }

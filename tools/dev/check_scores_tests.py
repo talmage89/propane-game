@@ -42,6 +42,12 @@ class ScoreChecks(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.run_check(self.audit, self.final, "")
 
+    def test_equal_totals_and_client_agreement_cannot_hide_wrong_server_attribution(self):
+        standings = "standings match 1: 2=1 3=9\n"
+        with self.assertRaisesRegex(ValueError, "disagree with server"):
+            self.run_check(self.audit + standings, self.final, self.final)
+        self.run_check(self.audit + "standings match 1: 2=9 3=1\n", self.final, self.final)
+
     def test_every_consecutive_match_is_checked(self):
         second_audit = self.audit.replace("match 1", "match 2")
         second_final = "finished match 2; final scores 2=4 3=6\n"

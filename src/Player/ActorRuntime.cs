@@ -19,7 +19,7 @@ public sealed class ActorRuntime : IDisposable
     public PlayerStateResolver Resolver { get; } = new();
     public PlayerState ResolvedState { get; set; }
     public uint MeleeSequence { get; set; }
-    // Publication count stays local; Protocol 2 player snapshots still use their existing timestamps.
+    // Poses use a separate wire sequence stream from reliable actions, retaining their sampling timestamps.
     public uint ReplicationSequence { get; set; }
     public float SendTimer { get; set; }
     public IPlayerInputSource? IntentSource { get; set; }
@@ -27,7 +27,17 @@ public sealed class ActorRuntime : IDisposable
     public double LastHitTime { get; set; } = -100;
     public int LastHitBy { get; set; }
     public int SpawnSlot { get; set; }
+    public int AllocationSlot { get; set; }
+    public uint LifeId { get; set; } = 1;
+    public uint ActionSequence { get; set; }
+    public bool AmmoFullShown { get; set; }
     public int DropCounter { get; set; }
+    public uint AllocateDropId()
+    {
+        var id = BodySync.DropTankId(AllocationSlot, DropCounter);
+        DropCounter = checked(DropCounter + 1);
+        return id;
+    }
     public DropPredictions DropPredictions { get; } = new();
     public SnapshotBuffer? Snapshots => (IntentSource as ReplicatedIntent)?.Snapshots;
     private bool disposed;

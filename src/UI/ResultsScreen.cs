@@ -7,7 +7,7 @@ namespace Propane.UI;
 /// <summary>The final standings when a match ends, shown until everyone goes back to the lobby.</summary>
 public partial class ResultsScreen : CanvasLayer
 {
-    private VBoxContainer rows = null!;
+    private GridContainer rows = null!;
     private Label title = null!;
     private Label footer = null!;
     private float left;
@@ -33,8 +33,9 @@ public partial class ResultsScreen : CanvasLayer
         layout.AddChild(title);
         layout.AddChild(UiStyle.Text("Tanks banked", 22, UiStyle.SoftInk, HorizontalAlignment.Center));
         layout.AddChild(new HSeparator());
-        rows = new VBoxContainer();
-        rows.AddThemeConstantOverride("separation", 10);
+        rows = new GridContainer { Columns = 1 };
+        rows.AddThemeConstantOverride("h_separation", 24);
+        rows.AddThemeConstantOverride("v_separation", 6);
         layout.AddChild(rows);
         layout.AddChild(new HSeparator());
         footer = UiStyle.Text("", 19, UiStyle.SoftInk, HorizontalAlignment.Center);
@@ -58,6 +59,8 @@ public partial class ResultsScreen : CanvasLayer
         {
             child.QueueFree();
         }
+        rows.Columns = standings.Count > 4 ? 2 : 1;
+        var compact = rows.Columns == 2;
         var best = standings.Count > 0 ? standings[0].Score : 0;
         var winners = 0;
         foreach (var s in standings)
@@ -77,20 +80,22 @@ public partial class ResultsScreen : CanvasLayer
                 rank = i + 1;
                 previous = s.Score;
             }
-            var row = new HBoxContainer();
+            var row = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
             row.AddThemeConstantOverride("separation", 12);
-            var place = UiStyle.Text($"{rank}", 32, UiStyle.SoftInk);
+            var place = UiStyle.Text($"{rank}", compact ? 24 : 32, UiStyle.SoftInk);
             place.CustomMinimumSize = new Vector2(40, 0);
             row.AddChild(place);
-            row.AddChild(UiStyle.ColorSample(s.Appearance.Color, 26, s.Id.ToString(System.Globalization.CultureInfo.InvariantCulture)));
-            var name = UiStyle.Text(s.Name + (s.Id == me ? "  (you)" : "") + (s.Present ? "" : "  (left)"), 32, s.Present ? UiStyle.Ink : UiStyle.SoftInk);
+            row.AddChild(UiStyle.ColorSample(s.Appearance.Color, compact ? 22 : 26, s.Id.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+            var name = UiStyle.Text(s.Name + (s.Id == me ? "  (you)" : "") + (s.Present ? "" : "  (left)"), compact ? 24 : 32, s.Present ? UiStyle.Ink : UiStyle.SoftInk);
+            name.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
+            name.CustomMinimumSize = new Vector2(compact ? 240 : 360, 0);
             name.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
             if (s.Score == best)
             {
                 name.AddThemeFontOverride("font", UiStyle.BoldFont);
             }
             row.AddChild(name);
-            var points = UiStyle.Text(s.Score.ToString(), 38, UiStyle.Ink, HorizontalAlignment.Right);
+            var points = UiStyle.Text(s.Score.ToString(), compact ? 28 : 38, UiStyle.Ink, HorizontalAlignment.Right);
             points.AddThemeFontOverride("font", UiStyle.BoldFont);
             row.AddChild(points);
             rows.AddChild(row);

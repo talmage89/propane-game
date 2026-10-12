@@ -27,8 +27,14 @@ public partial class ServerTuningTests : Node
             }
             Assert(client.State == NetClient.Status.Connected, "native capacity probe did not connect");
             Assert(advertised, "native server did not advertise lobby admission");
-            Assert(client.LobbyCapacity == 6, $"server ignored --tune.MaxPlayers=6: advertised {client.LobbyCapacity}");
-            GD.Print("[server tuning] PASS native lobby advertises the requested six-player capacity");
+            Assert(client.LobbyCapacity == Protocol.TestedActorCeiling, "server did not advertise the independent tested ceiling");
+            client.CreateLobby();
+            for (var frame = 0; frame < 600 && client.Lobby == null; frame++)
+            {
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            }
+            Assert(client.Lobby?.Capacity == 6, $"server ignored --tune.MaxPlayers=6: selected {client.Lobby?.Capacity}");
+            GD.Print("[server tuning] PASS native lobby selects the requested six-actor default below the tested ceiling");
             ShutdownGuard.Quit(GetTree());
         }
         catch (Exception error)

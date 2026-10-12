@@ -35,6 +35,19 @@ class TankChecks(unittest.TestCase):
         self.assertLess(result["moving_peak"], 1e-10)
         self.assertGreater(result["body_pairs"], 100)
 
+    def test_delayed_capacity_keeps_the_ten_second_startup_ceiling(self):
+        def delayed(length, start):
+            early = log(length=length)
+            late = {1: [sample for sample in early[1] if sample.time >= start]}
+            return [early, late]
+        # The measured delayed builder missed 9.6 s: a 90 s match requires 81 s of play.
+        with self.assertRaisesRegex(ValueError, 'missing play coverage'):
+            compare(delayed(90, 9.6))
+        # A longer capture requires 110 s and still rejects starts beyond the existing 10 s ceiling.
+        self.assertFalse(compare(delayed(120, 9.6))["failures"])
+        with self.assertRaisesRegex(ValueError, 'missing play coverage'):
+            compare(delayed(120, 10.1))
+
     def test_short_lifecycle_and_position_transients_pass(self):
         def transient(time, tanks):
             if 1 <= time < 1.2:

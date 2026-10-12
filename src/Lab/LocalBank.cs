@@ -43,7 +43,7 @@ public partial class LocalBank : Node
             {
                 if (!IsPlaying) return;
                 if (shot.Collider is PropaneTank { Invulnerable: false } tank && tank.State != PropaneTank.TankState.Exploded)
-                    directShots[tank] = actor.PeerId;
+                    directShots[tank] = actor.ActorId;
                 else if (PlayerCharacter.Owning(shot.Collider) is { } victim && victim != actor) Hit(actor, victim);
             }
             void Thrown(Vector3 at, Vector3 velocity, Vector3 spin) => Spill(actor, World.Tuning.RagdollDropCount,
@@ -133,7 +133,7 @@ public partial class LocalBank : Node
     private void Hit(PlayerCharacter shooter, PlayerCharacter victim)
     {
         victim.Runtime.LastHitTime = World.Clock.Now;
-        victim.Runtime.LastHitBy = shooter.PeerId;
+        victim.Runtime.LastHitBy = shooter.ActorId;
         if (World.Clock.Now < victim.Runtime.GraceUntil) return;
         victim.Runtime.GraceUntil = World.Clock.Now + World.Tuning.HitGraceTime;
         Hits++;
@@ -146,9 +146,9 @@ public partial class LocalBank : Node
     private void Spill(PlayerCharacter actor, int wanted, Vector3 origin, Vector3 away)
     {
         if (!IsPlaying) return;
-        var count = Mathf.Min(wanted, scores[actor.PeerId]);
+        var count = Mathf.Min(wanted, scores[actor.ActorId]);
         if (count <= 0) return;
-        scores[actor.PeerId] -= count;
+        scores[actor.ActorId] -= count;
         SpilledTotal += count;
         var tuning = World.Tuning;
         var rng = World.Random;
@@ -190,7 +190,7 @@ public partial class LocalBank : Node
         public PlayerCharacter Player => actor;
         public bool IsPlaying => bank.IsPlaying;
         public float TimeLeft => bank.TimeLeft;
-        public int MyScore => bank.scores[actor.PeerId];
+        public int MyScore => bank.scores[actor.ActorId];
         public IReadOnlyDictionary<int, int> Scores => bank.scores;
         public double Now => World.Clock.Now;
         public double LastHitTime => actor.Runtime.LastHitTime;
