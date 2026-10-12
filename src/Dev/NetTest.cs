@@ -239,6 +239,13 @@ public partial class NetTest : Node
                     yaw + (slot % 2 == 0 ? 0 : Mathf.Pi));
             }
             match.Player.MeleeStarted += (swing, _) => Log($"melee swing {swing}");
+            if (DevArgs.Get("trace-recovery") != null)
+            {
+                var recoveryActorId = match.Player.ActorId;
+                var recoveryMatch = match;
+                match.Player.Ragdolled += (_, _, _) => Log($"recovery ragdoll actor={recoveryActorId} remaining={recoveryMatch.TimeLeft:0.000}");
+                match.Player.GotUp += (_, _) => Log($"recovery get-up actor={recoveryActorId} remaining={recoveryMatch.TimeLeft:0.000}");
+            }
             match.Player.MeleeHit += hit => Log($"melee contact {hit.Swing} victim {PlayerCharacter.Owning(hit.Collider)?.ActorId ?? 0}");
             clock = 0;
             tankCheckNext = 0;

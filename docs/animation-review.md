@@ -46,6 +46,11 @@ holding the preceding pose. Scratch timing counters located the long callback co
 search; a fresh isolated course stayed much cheaper. Profile repeated transitions and fallback frequency
 before claiming multiplayer performance, alongside the strict soak and full Lab gates.
 
+For unstaged network recovery proof, `net_test` accepts `--trace-recovery`: it logs each owned actor's natural
+ragdoll/get-up events and remaining match time. Pass it through `tools/dev/net_bots.sh` after `--`. This observes
+ordinary play; it does not force a recovery. Require an observed get-up during play as well as clean engine logs
+before treating a stress run as recovery coverage.
+
 Tuners are fresh **code defaults**, independent of saved settings or project `tuning.tres`. Direct current-build runs
 accept explicit `--tune.Name=value` overrides for pose research; comparison commands use defaults. Differences in a build's
 camera code remain visible in the player view. Side view has fixed framing. `--cases=a,b` limits a run; `--view=player`
