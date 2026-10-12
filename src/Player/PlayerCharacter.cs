@@ -269,6 +269,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         airTime = 0;
         animator.Reset();
         feet.Reset();
+        rig.ResetPresentation();
         GlobalPosition = position;
         Velocity = Vector3.Zero;
         knockback = Vector3.Zero;

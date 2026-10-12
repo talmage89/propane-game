@@ -185,10 +185,10 @@ public partial class PlayerRange : Node3D
                     AddFootSurface(new Vector3(0, 0.06f, -6.4f), new Vector3(3, 0.12f, 0.8f));
                     AddFootSurface(new Vector3(0, 0.03f, -7.3f), new Vector3(3, 0.12f, 1), 6);
                 });
-                director.At(15.8f, () => { player.Teleport(new Vector3(0, 0.24f, -4.5f), 0); events.SkipNextPose = true; if (motion != null) motion.SkipNextPose = true; });
-                director.At(19.7f, () => { player.Teleport(new Vector3(0.05f, 0.24f, -6), Mathf.Pi / 2); events.SkipNextPose = true; if (motion != null) motion.SkipNextPose = true; });
+                director.At(15.8f, () => { player.Teleport(new Vector3(0, 0.24f, -4.5f), 0); events.SkipNextPose = true; if (motion != null) motion.SkipNextPose = true; if (grip != null) grip.SkipNextPose = true; });
+                director.At(19.7f, () => { player.Teleport(new Vector3(0.05f, 0.24f, -6), Mathf.Pi / 2); events.SkipNextPose = true; if (motion != null) motion.SkipNextPose = true; if (grip != null) grip.SkipNextPose = true; });
                 director.At(20.35f, events.AssertSplitSupport);
-                director.At(20.6f, () => { player.Teleport(new Vector3(0, 0, -8.5f), Mathf.Pi / 2); events.SkipNextPose = true; if (motion != null) motion.SkipNextPose = true; });
+                director.At(20.6f, () => { player.Teleport(new Vector3(0, 0, -8.5f), Mathf.Pi / 2); events.SkipNextPose = true; if (motion != null) motion.SkipNextPose = true; if (grip != null) grip.SkipNextPose = true; });
                 script.Hold(20.7f, 21.5f, new PlayerIntent { Aim = true });
                 script.Look(20.7f, 21.5f, new Vector2(Mathf.Pi / 2 / world.Tuning.MouseSensitivity / 0.8f, 0));
                 script.Hold(21.6f, 24.5f, new PlayerIntent { Move = Vector2.Up, Aim = true });

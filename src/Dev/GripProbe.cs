@@ -14,6 +14,7 @@ public partial class GripProbe : SkeletonModifier3D
 {
     public PlayerCharacter Player { get; init; } = null!;
     public bool RequireCoverage { get; init; }
+    public bool SkipNextPose { get; set; }
     private readonly HashSet<string> coverage = new();
 
     public static GripProbe Attach(PlayerCharacter player, bool requireCoverage = false)
@@ -23,10 +24,14 @@ public partial class GripProbe : SkeletonModifier3D
         bones.AddChild(probe);
         return probe;
     }
-    private readonly StringBuilder csv = new("time,gait,pitch,ready,aim,sprint,reload,recoil,right_m,left_m,right_deg,left_deg,penetration_m,eye_m\n");
+    private readonly StringBuilder csv = new("time,gait,pitch,ready,aim,sprint,reload,recoil,right_m,left_m,right_deg,left_deg,penetration_m,eye_m,stock_head_m,stock_shoulder_m,gaze_deg,stock_body_m,arm_body_m,reach_margin_m\n");
     private readonly float[] maxima = new float[6];
     private int count;
     private float settledEye;
+    private RifleClearance? body;
+    private float headGap = float.PositiveInfinity, shoulderGap = float.PositiveInfinity, shoulderMax, gaze;
+    private float stockBodyGap = float.PositiveInfinity, armBodyGap = float.PositiveInfinity;
+    private float armPairGap = float.PositiveInfinity;
     private float reachMargin = float.PositiveInfinity;
     private Vector3 previousBlends;
     private double previousSampleTime;
@@ -37,6 +42,26 @@ public partial class GripProbe : SkeletonModifier3D
     private double worstTime;
     private readonly List<(Vector3 Vertex, int[] Bones, float[] Weights)> skinSamples = new();
     private Transform3D[] inverseRest = Array.Empty<Transform3D>();
+
+    // Independently minimize the convex tapered-segment distance. Unlike the production sampling
+    // objective, this searches both continuous axes and includes their endpoints.
+    private static float TaperGap(Vector3 a, Vector3 b, float ar, float br, Vector3 c, Vector3 d, float cr, float dr)
+    {
+        static float Minimum(Func<float, float> value)
+        {
+            var low = 0f;
+            var high = 1f;
+            for (var i = 0; i < 18; i++)
+            {
+                var left = Mathf.Lerp(low, high, 1f / 3);
+                var right = Mathf.Lerp(low, high, 2f / 3);
+                if (value(left) < value(right)) high = right;
+                else low = left;
+            }
+            return Mathf.Min(value((low + high) / 2), Mathf.Min(value(0), value(1)));
+        }
+        return Minimum(x => Minimum(y => a.Lerp(b, x).DistanceTo(c.Lerp(d, y)) - Mathf.Lerp(ar, br, x) - Mathf.Lerp(cr, dr, y)));
+    }
 
     public override void _ProcessModificationWithDelta(double delta)
     {
@@ -60,8 +85,44 @@ public partial class GripProbe : SkeletonModifier3D
         var right = (bones.GlobalTransform * bones.GetBoneGlobalPose(bones.FindBone("hand_r"))).Orthonormalized();
         var left = (bones.GlobalTransform * bones.GetBoneGlobalPose(bones.FindBone("hand_l"))).Orthonormalized();
         var eye = RifleRig.EyePosition(bones, Player.World.Tuning);
+        body ??= new RifleClearance(bones);
+        body.UpdatePose(bones);
+        var currentHead = body.HeadGap(bones, rifle.GlobalTransform, Player.World.Tuning);
+        var currentShoulder = body.ShoulderGap(bones, rifle.GlobalTransform, Player.World.Tuning);
+        var headDirection = (bones.GlobalTransform * bones.GetBoneGlobalPose(bones.FindBone("Head"))).Basis.Column2.Normalized();
+        var currentGaze = Mathf.RadToDeg(Mathf.Acos(Mathf.Clamp(headDirection.Dot(-rifle.GlobalBasis.Column2.Normalized()), -1, 1)));
+        var currentStockBody = body.StockBodyGap(bones, rifle.GlobalTransform, Player.World.Tuning);
+        var currentArmBody = float.PositiveInfinity;
+        var currentReach = float.PositiveInfinity;
+        if (rig.Weight >= 0.999f)
+        {
+            var ar = bones.GetBoneGlobalPose(bones.FindBone("upperarm_r")).Origin;
+            var br = bones.GetBoneGlobalPose(bones.FindBone("lowerarm_r")).Origin;
+            var cr = bones.GetBoneGlobalPose(bones.FindBone("hand_r")).Origin;
+            var al = bones.GetBoneGlobalPose(bones.FindBone("upperarm_l")).Origin;
+            var bl = bones.GetBoneGlobalPose(bones.FindBone("lowerarm_l")).Origin;
+            var cl = bones.GetBoneGlobalPose(bones.FindBone("hand_l")).Origin;
+            var radius = Player.World.Tuning.RifleArmRadius;
+            var wristRadius = Player.World.Tuning.RifleWristRadius;
+            var pairGap = Mathf.Min(Mathf.Min(TaperGap(ar, br, radius, radius, al, bl, radius, radius),
+                TaperGap(ar, br, radius, radius, bl, cl, radius, wristRadius)),
+                Mathf.Min(TaperGap(br, cr, radius, wristRadius, al, bl, radius, radius),
+                    TaperGap(br, cr, radius, wristRadius, bl, cl, radius, wristRadius)));
+            armPairGap = Mathf.Min(armPairGap, pairGap);
+            headGap = Mathf.Min(headGap, currentHead);
+            stockBodyGap = Mathf.Min(stockBodyGap, currentStockBody);
+            foreach (var side in new[] { "r", "l" })
+            {
+                var armGap = body.ArmGap(bones,
+                    bones.GetBoneGlobalPose(bones.FindBone("upperarm_" + side)).Origin,
+                    bones.GetBoneGlobalPose(bones.FindBone("lowerarm_" + side)).Origin,
+                    bones.GetBoneGlobalPose(bones.FindBone("hand_" + side)).Origin, Player.World.Tuning);
+                armBodyGap = Mathf.Min(armBodyGap, armGap);
+                currentArmBody = Mathf.Min(currentArmBody, armGap);
+            }
+        }
         var blends = new Vector3(rig.AimAmount, rig.ReadyAmount, rig.SprintAmount);
-        if (count > 0)
+        if (count > 0 && !SkipNextPose)
         {
             var change = (blends - previousBlends).Abs();
             var limit = Player.World.Tuning.RifleStanceBlendSpeed * (float)(time - previousSampleTime) + 0.00001f;
@@ -72,6 +133,7 @@ public partial class GripProbe : SkeletonModifier3D
             }
         }
         previousBlends = blends;
+        SkipNextPose = false;
         previousSampleTime = time;
         if (rig.Weight >= 0.999f)
         {
@@ -81,6 +143,7 @@ public partial class GripProbe : SkeletonModifier3D
                 var lower = bones.GetBoneGlobalPose(bones.FindBone($"lowerarm_{side}")).Origin;
                 var wrist = bones.GetBoneGlobalPose(bones.FindBone($"hand_{side}")).Origin;
                 reachMargin = Mathf.Min(reachMargin, upper.DistanceTo(lower) + lower.DistanceTo(wrist) - upper.DistanceTo(wrist));
+                currentReach = Mathf.Min(currentReach, upper.DistanceTo(lower) + lower.DistanceTo(wrist) - upper.DistanceTo(wrist));
             }
         }
         var meleeTime = Player.MeleeProgress * (Player.World.Tuning.MeleeWindup + Player.World.Tuning.MeleeActive + Player.World.Tuning.MeleeRecovery);
@@ -104,6 +167,9 @@ public partial class GripProbe : SkeletonModifier3D
         if (rig.Weight >= 0.999f && rig.AimAmount >= 0.999f && rig.Recoil < 0.01f && rig.Reload == 0)
         {
             settledEye = Mathf.Max(settledEye, values[5]);
+            shoulderGap = Mathf.Min(shoulderGap, currentShoulder);
+            shoulderMax = Mathf.Max(shoulderMax, currentShoulder);
+            gaze = Mathf.Max(gaze, currentGaze);
             coverage.Add("settled-aim");
         }
         if (rig.ReadyAmount > 0.99f && rig.AimAmount < 0.01f && rig.Reload == 0) coverage.Add("ready");
@@ -140,7 +206,7 @@ public partial class GripProbe : SkeletonModifier3D
             }
         }
         count++;
-        csv.AppendLine(FormattableString.Invariant($"{time:F6},{Player.ResolvedState.Gait},{(Player.IsRemote ? (float?)null : Player.Aim.Pitch) ?? 0:F3},{rig.ReadyAmount:F3},{rig.AimAmount:F3},{rig.SprintAmount:F3},{rig.Reload:F3},{rig.Recoil:F3},{values[0]:F6},{values[1]:F6},{values[2]:F4},{values[3]:F4},{values[4]:F6},{values[5]:F6}"));
+        csv.AppendLine(FormattableString.Invariant($"{time:F6},{Player.ResolvedState.Gait},{(Player.IsRemote ? (float?)null : Player.Aim.Pitch) ?? 0:F3},{rig.ReadyAmount:F3},{rig.AimAmount:F3},{rig.SprintAmount:F3},{rig.Reload:F3},{rig.Recoil:F3},{values[0]:F6},{values[1]:F6},{values[2]:F4},{values[3]:F4},{values[4]:F6},{values[5]:F6},{currentHead:F6},{currentShoulder:F6},{currentGaze:F3},{currentStockBody:F6},{currentArmBody:F6},{currentReach:F6}"));
 
     }
 
@@ -189,13 +255,13 @@ public partial class GripProbe : SkeletonModifier3D
             var inSkeleton = bones.GlobalTransform.AffineInverse() * mesh.GlobalTransform;
             for (var surface = 0; surface < mesh.Mesh.GetSurfaceCount(); surface++)
             {
-                var arrays = mesh.Mesh.SurfaceGetArrays(surface);
+                using var arrays = mesh.Mesh.SurfaceGetArrays(surface);
                 var vertices = arrays[(int)Mesh.ArrayType.Vertex].AsVector3Array();
                 var ids = arrays[(int)Mesh.ArrayType.Bones].AsInt32Array();
                 var weights = arrays[(int)Mesh.ArrayType.Weights].AsFloat32Array();
                 var perVertex = ids.Length / vertices.Length;
-                // Sample every fourth vertex of the actual skinned palms and fingers, including their surface.
-                for (var v = 0; v < vertices.Length; v += 4)
+                // Inspect every hand vertex so re-exported vertex ordering cannot change coverage.
+                for (var v = 0; v < vertices.Length; v++)
                 {
                     var indices = Enumerable.Range(0, perVertex).Select(j => boneMap[ids[v * perVertex + j]]).ToArray();
                     var w = weights.Skip(v * perVertex).Take(perVertex).ToArray();
@@ -264,7 +330,7 @@ public partial class GripProbe : SkeletonModifier3D
     public void Finish()
     {
         var assert = DevArgs.Get("assert-grip") != null;
-        failed |= count < 100 || maxima[0] > 0.003f || maxima[1] > 0.003f || maxima[2] > 0.1f || maxima[3] > 0.1f || maxima[4] > 0.0005f || maxima[5] > 0.035f || settledEye > 0.003f;
+        failed |= count < 100 || maxima[0] > 0.003f || maxima[1] > 0.003f || maxima[2] > 0.1f || maxima[3] > 0.1f || maxima[4] > 0.0005f;
         if (RequireCoverage)
         {
             foreach (var required in new[] { "carry", "ready", "aim", "settled-aim", "sprint", "recoil", "empty-reload", "tactical-reload", "pitch-down", "pitch-up", "Default", "Sprint", "Creep" })
@@ -288,7 +354,15 @@ public partial class GripProbe : SkeletonModifier3D
             }
         }
         failed |= !float.IsFinite(reachMargin) || reachMargin < Player.World.Tuning.RifleReachMargin - 0.0005f;
+        // Anatomical contact replaces the old exact optic weld, which translated the stock through the
+        // head. Keep the independent harness's 5 mm surface tolerance and 25 mm shoulder contact bound.
+        failed |= !float.IsFinite(headGap) || headGap < -0.005f;
+        failed |= !float.IsFinite(stockBodyGap) || stockBodyGap < -0.005f || !float.IsFinite(armBodyGap) || armBodyGap < -0.005f;
+        failed |= !float.IsFinite(armPairGap) || armPairGap < -0.005f;
+        if (coverage.Contains("settled-aim"))
+            failed |= !float.IsFinite(shoulderGap) || shoulderGap < -0.005f || shoulderMax > 0.025f || gaze > 30;
         GD.Print(FormattableString.Invariant($"[grip] minimum reach margin={reachMargin:F6}m"));
+        GD.Print(FormattableString.Invariant($"[grip body] head-gap={headGap:F6}m shoulder={shoulderGap:F6}..{shoulderMax:F6}m gaze={gaze:F3}deg stock-body={stockBodyGap:F6}m arm-body={armBodyGap:F6}m arm-pair={armPairGap:F6}m"));
         GD.Print(FormattableString.Invariant($"[grip] {(assert && failed ? "FAIL" : assert ? "PASS" : "MEASURED")} frames={count} right={maxima[0]:F6}m left={maxima[1]:F6}m rotation={maxima[2]:F4}/{maxima[3]:F4}deg penetration={maxima[4]:F6}m eye={maxima[5]:F6}m settled-eye={settledEye:F6}m"));
         GD.Print($"[grip] worst penetration time={worstTime:F6} bone={worstBone} point={worstPoint}");
         var directory = DevArgs.Get("capture-dir");
