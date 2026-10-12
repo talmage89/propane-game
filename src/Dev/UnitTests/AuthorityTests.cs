@@ -33,16 +33,17 @@ public static class AuthorityTests
 
     public static void Register(TestRunner runner)
     {
-        foreach (var sleeping in new[] { false, true })
+        foreach (var (sleeping, botVictim) in new[] { (false, false), (true, false), (false, true), (true, true) })
         {
-            runner.Run($"authority/unconfirmed {(sleeping ? "resting" : "moving")} drops defer publication until creation", () =>
+            runner.Run($"authority/unconfirmed {(sleeping ? "resting" : "moving")} drops from {(botVictim ? "bot" : "human")} defer publication until creation", () =>
             {
-                using var f = new MatchFixture(runner);
+                using var f = new MatchFixture(runner, bots: 1);
+                var victim = botVictim ? f.Match.Session.OwnedActors.Single(a => a.Character != f.Match.Player).Character : f.Match.Player;
                 f.Match.OnMessage(new NetMessage(Msg.MatchGo, f.Server.Id, 0, new FloatMessage(60)));
-                f.Match.OnMessage(new NetMessage(Msg.Score, f.Server.Id, 0, new ScoreMessage(f.Match.Player.ActorId, 5, 0)));
-                f.Match.Player.Runtime.GraceUntil = 0;
+                f.Match.OnMessage(new NetMessage(Msg.Score, f.Server.Id, 0, new ScoreMessage(victim.ActorId, 5, 0)));
+                victim.Runtime.GraceUntil = 0;
                 f.Match.OnMessage(new NetMessage(Msg.Shot, f.Server.Id, 3,
-                    new ShotMessage(Vector3.Zero, Vector3.Up, Vector3.Forward, 0, f.Match.Player.ActorId, -1), f.Server.ActorId(3), 1, 1));
+                    new ShotMessage(Vector3.Zero, Vector3.Up, Vector3.Forward, 0, victim.ActorId, -1), f.Server.ActorId(3), 1, 1));
                 var drops = f.Match.LiveTanks.Where(t => t.NetId >= BodySync.DropTankBase && t.NetId < BodySync.CarBase).ToArray();
                 TestRunner.Assert(drops.Length > 0, "production shot did not create predicted drops");
                 foreach (var drop in drops) { drop.Sleeping = sleeping; }
@@ -53,13 +54,13 @@ public static class AuthorityTests
                 TestRunner.Assert(known.Sequence > 0, "pending drops blocked a registered body's stream");
                 TestRunner.Assert(drops.All(t => f.Match.Bodies.Get(t.NetId) is { Sequence: 0, PublishRequired: true }),
                     "unregistered drop published or consumed its required first state");
-                f.Match.OnMessage(new NetMessage(Msg.Score, f.Server.Id, 0, new ScoreMessage(f.Match.Player.ActorId, 5 - drops.Length, -drops.Length)));
+                f.Match.OnMessage(new NetMessage(Msg.Score, f.Server.Id, 0, new ScoreMessage(victim.ActorId, 5 - drops.Length, -drops.Length)));
                 f.Server.Clock.Seconds += .1;
                 f.Match._PhysicsProcess(1.0 / 60);
                 TestRunner.Assert(drops.All(t => f.Match.Bodies.Get(t.NetId)!.Sequence == 0),
                     "bank debit released publication before creation confirmation");
                 var states = drops.Select(t => new BodyState(t.NetId, t.GlobalTransform, t.LinearVelocity, t.AngularVelocity)).ToArray();
-                f.Match.OnMessage(new NetMessage(Msg.Drop, f.Server.Id, 2, new DropMessage(0, states), f.Match.Player.ActorId, 1, 1));
+                f.Match.OnMessage(new NetMessage(Msg.Drop, f.Server.Id, 2, new DropMessage(0, states), victim.ActorId, 1, 1));
                 f.Match._PhysicsProcess(1.0 / 60);
                 TestRunner.Assert(drops.All(t => f.Match.Bodies.Get(t.NetId) is { Sequence: 1, PublishRequired: false }),
                     "confirmation lost the first moving checkpoint or final rest");
@@ -877,12 +878,13 @@ public static class AuthorityTests
 
     private sealed class MatchFixture : IDisposable
     {
-        public readonly ServerTests.Fixture Server = new();
+        public readonly ServerTests.Fixture Server;
         private readonly NetClient client;
         public readonly Match Match;
         private readonly Queue<byte[]> sent = new();
-        public MatchFixture(TestRunner runner, Tuning? template = null)
+        public MatchFixture(TestRunner runner, Tuning? template = null, int bots = 0)
         {
+            Server = new ServerTests.Fixture(bots: bots);
             client = new NetClient(PacketTransports.CreateClient(), Server.Clock) { Template = template ?? Tuning.SavedTemplate };
             client.Handle(MessageCodec.Encode(new NetMessage(Msg.Welcome, 0, 0, new WelcomeMessage(2, null)), true));
             Match = new Match { Net = client, Setup = Server.Setup, Clock = Server.Clock, AuthoritySendOverride = sent.Enqueue };

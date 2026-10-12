@@ -547,7 +547,8 @@ report bullet/melee contacts; victim owners apply grace, blast distance/throws a
 and correction stay per peer. Delayed chains carry the initiating actor unchanged; the ledger validates that a
 causal request belongs to the same actor as its accepted root. Another actor on the same peer cannot borrow credit.
 Same-peer hits follow the same actor event handler as network hits. Predicted contacts and reliable echoes share
-an action id and are applied once.
+an action id and are applied once. Body publication waits for creation confirmation for every owned actor's
+drops, including bots; bank confirmation alone does not release that wait.
 Profile updates, including the legacy `SetProfile` path, cannot edit the roster during a match.
 
 Roster requests are reliable `AddActor(RequestId, Kind, Name, Appearance, ControllerConfig)`,

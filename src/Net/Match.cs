@@ -71,6 +71,7 @@ public partial class Match : Node3D
     private readonly Dictionary<uint, uint> pendingBodies = new();
     private readonly HashSet<uint> sentExplosions = new();
     private uint nextRequest;
+    private readonly HashSet<uint> unconfirmedDrops = new();
 
     private readonly Dictionary<int, RigidBody3D> looseProps = new();
     private readonly List<AmmoPickup> pickups = new();
@@ -888,7 +889,9 @@ public partial class Match : Node3D
 
     private void SendBodies(double now)
     {
-        var (moving, rested) = bodies.Collect(now, player.Runtime.DropPredictions.PendingIds);
+        unconfirmedDrops.Clear();
+        foreach (var owned in Session.OwnedActors) unconfirmedDrops.UnionWith(owned.DropPredictions.PendingIds);
+        var (moving, rested) = bodies.Collect(now, unconfirmedDrops);
         foreach (var stream in moving.GroupBy(entry => entry.PublishReliably ? entry.CheckpointTraffic : TrafficClass.UnreliableBodyStates))
         {
             var entries = stream.ToList();
