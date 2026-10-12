@@ -43,3 +43,8 @@ to relocate isolated vents' light across the world. Unmerged energy plus proxy e
 flash lights and their existing three-shadow limit are unaffected. At 40 vents or fewer, every original vent
 light remains unchanged. All three new presentation dials enter match tuning snapshots (minor-release scope);
 no network message changes and no `Protocol.Version` change.
+
+Blast query paging preserves engine hit order, duplicate shapes and caller exclusions. It uses a managed RID
+hash set on full pages instead of repeated native linear searches, and skips exclusion work on the final short
+page because no more query is needed. Queries still visit every body and apply the same impulses and chain rules.
+The dense-query harness asserts 1,100 bodies across multiple pages, caller exclusions and short-page hit order.

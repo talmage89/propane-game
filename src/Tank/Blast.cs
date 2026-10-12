@@ -46,9 +46,12 @@ public static class Blast
             {
                 continue;
             }
-            if (Push(space, body, center, radius, tuning, rng, chain, source?.BlastRequest ?? 0))
+            using (EffectProfile.Measure(EffectProfile.System.BlastPush))
             {
-                pushed.Add(body);
+                if (Push(space, body, center, radius, tuning, rng, chain, source?.BlastRequest ?? 0))
+                {
+                    pushed.Add(body);
+                }
             }
         }
 
@@ -85,18 +88,26 @@ public static class Blast
     /// <summary>Full pages are ambiguous: exclude their bodies and keep querying until a short page proves completion.</summary>
     internal static IEnumerable<Godot.Collections.Dictionary> QueryAll(PhysicsDirectSpaceState3D space, PhysicsShapeQueryParameters3D query)
     {
+        var excluded = query.Exclude;
+        HashSet<Rid>? excludedIds = null;
         while (true)
         {
-            var page = space.IntersectShape(query, MaxQueryResults);
-            var excluded = query.Exclude;
-            foreach (var hit in page)
+            Godot.Collections.Array<Godot.Collections.Dictionary> page;
+            using (EffectProfile.Measure(EffectProfile.System.BlastQuery)) page = space.IntersectShape(query, MaxQueryResults);
+            // A short final page needs no further query. Avoid native array searches and copies for it entirely.
+            if (page.Count == MaxQueryResults)
             {
-                var rid = hit["rid"].AsRid();
-                if (!excluded.Contains(rid)) { excluded.Add(rid); }
-                yield return hit;
+                using var profile = EffectProfile.Measure(EffectProfile.System.BlastExclusions);
+                excludedIds ??= new HashSet<Rid>(excluded);
+                foreach (var hit in page)
+                {
+                    var rid = hit["rid"].AsRid();
+                    if (excludedIds.Add(rid)) excluded.Add(rid);
+                }
+                query.Exclude = excluded;
             }
-            query.Exclude = excluded;
-            if (page.Count < MaxQueryResults) { yield break; }
+            foreach (var hit in page) yield return hit;
+            if (page.Count < MaxQueryResults) yield break;
         }
     }
 

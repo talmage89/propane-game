@@ -48,6 +48,26 @@ public partial class BlastQueryTests : Node3D
             var query = new PhysicsShapeQueryParameters3D { Shape = new SphereShape3D { Radius = 4 }, Transform = new Transform3D(Basis.Identity, Vector3.Up), CollisionMask = Layers.Pushable };
             var seen = Blast.QueryAll(GetWorld3D().DirectSpaceState, query).Select(h => h["collider_id"].AsUInt64()).Distinct().Count();
             Require(seen == bodies.Count, $"truncated blast query {seen}/{bodies.Count}");
+            var excluded = new PhysicsShapeQueryParameters3D
+            {
+                Shape = query.Shape,
+                Transform = query.Transform,
+                CollisionMask = query.CollisionMask,
+                Exclude = new Godot.Collections.Array<Rid> { bodies[0].GetRid(), bodies[500].GetRid() }
+            };
+            var remaining = Blast.QueryAll(GetWorld3D().DirectSpaceState, excluded).Select(h => h["collider_id"].AsUInt64()).Distinct().ToArray();
+            Require(remaining.Length == bodies.Count - 2 && !remaining.Contains(bodies[0].GetInstanceId()) &&
+                !remaining.Contains(bodies[500].GetInstanceId()), "paging lost the caller's initial exclusions");
+            var shortPage = new PhysicsShapeQueryParameters3D
+            {
+                Shape = new SphereShape3D { Radius = .04f },
+                Transform = new Transform3D(Basis.Identity, bodies[0].GlobalPosition),
+                CollisionMask = Layers.Pushable
+            };
+            var direct = GetWorld3D().DirectSpaceState.IntersectShape(shortPage, 512).Select(h => h["rid"].AsRid()).ToArray();
+            Require(direct.Length is > 0 and < 512, "short-page fixture must stay below the query limit");
+            var paged = Blast.QueryAll(GetWorld3D().DirectSpaceState, shortPage).Select(h => h["rid"].AsRid()).ToArray();
+            Require(paged.SequenceEqual(direct), "short-page query changed the engine's hit order or duplicate shapes");
             Blast.Detonate(world, Vector3.Up, null, false);
         });
         director.At(0.3f, () =>
