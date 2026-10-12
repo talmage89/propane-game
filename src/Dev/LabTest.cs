@@ -521,11 +521,18 @@ public partial class LabTest : Node
         var collections = Enumerable.Range(0, 3).Select(GC.CollectionCount).ToArray();
         var hide = DevArgs.Get("profile-hide");
         Assert(hide is null or "particles" or "smoke" or "lights" or "shadows" or "decals", "unknown diagnostic exclusion");
+        var excludedLights = new LightExclusion { ProcessPriority = int.MaxValue };
+        if (hide == "lights") AddChild(excludedLights);
         void Hide(Node node)
         {
             if (node is GpuParticles3D particle && hide == "particles") particle.Visible = false;
             if (node is GpuParticles3D puff && hide == "smoke" && (puff.DrawPass1 as PrimitiveMesh)?.Material is ShaderMaterial material && material.Shader.ResourcePath == "res://shaders/fx_smoke.gdshader") puff.Visible = false;
-            if (node is OmniLight3D light && hide == "lights") light.Visible = false;
+            if (node is OmniLight3D light && hide == "lights")
+            {
+                excludedLights.Lights.Add(light);
+                light.TreeExiting += () => excludedLights.Lights.Remove(light);
+                light.Visible = false;
+            }
             if (node is OmniLight3D shadow && hide == "shadows") shadow.ShadowEnabled = false;
             if (node is Decal decal && hide == "decals") decal.Visible = false;
         }
@@ -578,6 +585,7 @@ public partial class LabTest : Node
         }
         EffectProfile.Enabled = false;
         if (hide != null) GetTree().NodeAdded -= Hide;
+        excludedLights.Free();
         if (DevArgs.Get("metrics") is { } path)
             File.WriteAllLines(path, new[] { string.Join(",", series.Keys) }.Concat(rows));
         GD.Print($"[lab measure] tanks={count} phase={phase} live={lab.LiveTanks.Count()} allocated_bytes={GC.GetTotalAllocatedBytes() - allocated} gc={string.Join(",", collections.Select((v, i) => GC.CollectionCount(i) - v))}");
@@ -588,6 +596,16 @@ public partial class LabTest : Node
         }
         capture.Screenshot($"stack_{count}");
         lab.Session.Dispose(); lab.Free();
+    }
+
+    // Apply after effects and the clustering service, which update light visibility each frame.
+    private sealed partial class LightExclusion : Node
+    {
+        public List<OmniLight3D> Lights { get; } = new();
+        public override void _Process(double delta)
+        {
+            foreach (var light in Lights) light.Visible = false;
+        }
     }
 
     private sealed class ScriptedPlayer(LabSession lab) : IPlayerInputSource
