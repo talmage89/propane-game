@@ -34,7 +34,7 @@ public partial class RifleRig : SkeletonModifier3D
     private Quaternion[] desiredBones = null!;
     private Vector3[] previousPositions = null!, desiredPositions = null!;
     private int[] upperBones = null!;
-    private Transform3D lastRifle, lastChest;
+    private Transform3D lastRifle, lastChest, lastUpperParent;
     private float lastReloadPhase;
     private bool meleeReloadForward, hadMelee;
     private bool hasUpperPose;
@@ -66,6 +66,7 @@ public partial class RifleRig : SkeletonModifier3D
     private float alignmentRemaining;
     /// <summary>Exact aligned shot placement, retained until the firing frame has posed both grips.</summary>
     private Transform3D? shotPose;
+    private Transform3D shotSkeletonFrame;
     private Vector3 lastShoulderR, lastShoulderL, lastNeck;
 
     /// <summary>Place the barrel and both reachable grips before the authoritative muzzle obstruction ray.</summary>
@@ -73,6 +74,10 @@ public partial class RifleRig : SkeletonModifier3D
     {
         var skeleton = GetSkeleton();
         if (skeleton == null || Rifle == null || !resolved) return;
+        // Physics can fire on the first tick after a reload finishes, before presentation clears its
+        // magazine/bolt contact. Fit the firing foregrip that this frame will actually render.
+        reloadPhase = reloadTarget = lastReloadPhase = 0;
+        Rifle.PreviewReloadContact(0);
         var from = skeleton.GlobalTransform;
         var shoulderR = from * (hasUpperPose ? lastShoulderR : skeleton.GetBoneGlobalPose(upperR).Origin);
         var shoulderL = from * (hasUpperPose ? lastShoulderL : skeleton.GetBoneGlobalPose(upperL).Origin);
@@ -86,6 +91,7 @@ public partial class RifleRig : SkeletonModifier3D
         // The obstruction origin now agrees with the aligned model. Preserve it for this rendered firing frame.
         Rifle.GlobalTransform = Rifle.AlignBarrel(pose, Rifle.MuzzleLocal.Origin, target);
         shotPose = Rifle.GlobalTransform;
+        shotSkeletonFrame = from;
         alignmentRemaining = 1 / Mathf.Max(World.Tuning.FireRate, 0.1f) + 1f / Engine.PhysicsTicksPerSecond;
     }
 
@@ -416,6 +422,18 @@ public partial class RifleRig : SkeletonModifier3D
         var releasingReload = Reload == 0 && !Melee && lastReloadPhase > 0 || Melee && meleeReloadForward;
         var proposedReload = releasingReload ? 1 : Reload;
         var fittedReload = proposedReload;
+        if (shotPose != null)
+        {
+            // Animation can advance the hips after physics fitted this muzzle against the cached shoulders.
+            // Movement can also advance the body between physics ticks. Preserve the fitting frame in world
+            // space, then rebase it into this skeleton and parent before easing toward this clip sample.
+            var root = spine[0];
+            var previousRoot = from.AffineInverse() * shotSkeletonFrame * lastUpperParent *
+                new Transform3D(new Basis(previousBones![root]), previousPositions[root]);
+            var rebased = s.GetBoneGlobalPose(s.GetBoneParent(root)).AffineInverse() * previousRoot;
+            previousBones[root] = rebased.Basis.Orthonormalized().GetRotationQuaternion();
+            previousPositions[root] = rebased.Origin;
+        }
         for (var attempt = 0; attempt < 12; attempt++)
         {
             foreach (var bone in upperBones)
@@ -470,6 +488,14 @@ public partial class RifleRig : SkeletonModifier3D
             s.SetBonePoseRotation(lowerL, previousBones[lowerL]);
             var oldR = from * s.GetBoneGlobalPose(lowerR).Origin;
             var oldL = from * s.GetBoneGlobalPose(lowerL).Origin;
+            // A fixed firing muzzle can put a trial torso outside arm reach while turning. Reject that
+            // trial before invoking IK; only the final trial reports a genuinely unreachable contact.
+            if (attempt < 11 && (right.Origin.DistanceTo(shoulderR) >= ArmLength(s, upperR, lowerR, handR) ||
+                left.Origin.DistanceTo(shoulderL) >= ArmLength(s, upperL, lowerL, handL)))
+            {
+                amount *= 0.5f;
+                continue;
+            }
             SolveTwoBone(s, upperR, lowerR, handR, to * right, to * oldR.Lerp(poleR, amount));
             SolveTwoBone(s, upperL, lowerL, handL, to * left, to * oldL.Lerp(poleL, amount));
             if (TrackingBarrelThisFrame && fittedAim >= 0.99f)
@@ -503,6 +529,7 @@ public partial class RifleRig : SkeletonModifier3D
 
     private void CacheBones(Skeleton3D skeleton)
     {
+        lastUpperParent = skeleton.GetBoneGlobalPose(skeleton.GetBoneParent(spine[0]));
         lastNeck = skeleton.GetBoneGlobalPose(neck).Origin;
         lastShoulderR = skeleton.GetBoneGlobalPose(upperR).Origin;
         lastShoulderL = skeleton.GetBoneGlobalPose(upperL).Origin;

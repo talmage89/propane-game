@@ -148,6 +148,9 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
     /// <summary>The player fired (this game's player only).</summary>
     public event Action<ShotReport>? Fired;
 
+    /// <summary>Local adapters attribute contact before its tank lifecycle and child blasts run.</summary>
+    public event Action<ShotReport>? ShotImpacting;
+
     public event Action<uint, Vector3>? MeleeStarted;
     public event Action<MeleeHit>? MeleeHit;
     public float MeleeProgress => IsRemote ? remoteState.Melee : ResolvedState.MeleeProgress;

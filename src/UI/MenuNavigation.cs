@@ -265,7 +265,9 @@ public partial class MenuNavigation : Node
         // Rebuilt lists need a laid-out frame. Include row padding so the focus outline stays inside the clip.
         for (var parent = owner?.GetParent(); parent != null && parent != Screen; parent = parent.GetParent())
         {
-            if (parent is MarginContainer margin)
+            // A margin around the whole scrolled list (the tuning panel's gutter) is not a row's padding. Revealing
+            // it scrolls to the bottom of the list, away from the control that has focus.
+            if (parent is MarginContainer margin && margin.GetParent() is not ScrollContainer)
             {
                 target = margin;
             }
@@ -281,6 +283,7 @@ public partial class MenuNavigation : Node
         var owner = GetViewport().GuiGetFocusOwner();
         if (owner is BaseButton { Disabled: false } button)
         {
+            if (button.ToggleMode) button.ButtonPressed = !button.ButtonPressed;
             button.EmitSignal(BaseButton.SignalName.Pressed);
         }
         else if (owner is LineEdit field)

@@ -47,8 +47,14 @@ Requires Godot 4.7.2 (.NET edition) and the .NET 10 SDK.
 [docs/code-quality.md](docs/code-quality.md) describes the formatting and analyzer baseline and its regression
 checks. The gate follows the existing code's style and checks correctness without API design or naming churn.
 
-The game opens maximized on the main menu: Single player, Multiplayer or Quit. In play it captures the mouse; click
+The game opens maximized on the main menu: Single player, Multiplayer, Lab or Quit. In play it captures the mouse; click
 the window to recapture it after switching away.
+
+## Lab
+
+Choose **Lab** for an upright huge stack, a marked shooting range, a local duel against the banking bot, or free
+session tuning. Void is the default; duel and free tuning also offer a suburb. Each starter can reset and has a
+controller-accessible controls menu. Unsaved tuning changes stay in that Lab session. [Lab controls and verification](docs/lab.md).
 
 ## Multiplayer
 
@@ -160,9 +166,10 @@ setting. These shared plan and tuner changes require the next release to be mino
 
 | Path | Contents |
 | --- | --- |
-| `src/Main.cs` | The root: the menus over their backdrop, then single player, a match, or the multiplayer server. |
+| `src/Main.cs` | The root: menus over their backdrop, then single player, Lab, a match, or the server. |
 | `src/Game.cs` | Single player: the void, player, HUD, menus, and the suburb swap with its dissolve and materialize. |
 | `src/Net` | Multiplayer: the server, the client connection, the match world, body sync, ammo pickups. |
+| `src/Lab`, `src/Bots` | Shipped Lab scenarios, local bank adapter and camera-free banking brain. |
 | `src/Session` | Ordered session assembly, actors, local views and retirement. |
 | `src/Core` | Tuning, input map, physics and render layers, shared assets, events, spawn roots. |
 | `src/World` | The void environment, the model catalog, and the suburb builder. `Plan/` holds the pure-data generator. |

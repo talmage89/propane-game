@@ -7,6 +7,8 @@ public partial class ControlsReference : VBoxContainer
 {
     private bool gamepad;
     public bool Match { get; init; }
+    public bool Compact { get; init; }
+    public string? ResetAction { get; init; }
 
     public override void _Ready() => Rebuild();
 
@@ -32,7 +34,7 @@ public partial class ControlsReference : VBoxContainer
                      ("Space", "A / Cross", "Jump"), ("Mouse", "Right stick", "Look"),
                      ("Left click", "Right trigger", "Fire"), ("Right click", "Left trigger", "Aim (tighter spread)"),
                      ("F / mouse thumb", "Right stick click", "Rifle-butt strike"),
-                     ("R", "X / Square", Match ? "Reload" : "New suburb"), ("Esc", "Start / Options", "Resume / pause"),
+                     ("R", "X / Square", ResetAction ?? (Match ? "Reload" : "New suburb")), ("Esc", "Start / Options", "Resume / pause"),
                  })
         {
             AddRow(gamepad ? pad : keyboard, action);
@@ -55,11 +57,11 @@ public partial class ControlsReference : VBoxContainer
     private void AddRow(string keys, string action)
     {
         var row = new HBoxContainer();
-        var key = UiStyle.Text(keys, 19);
+        var key = UiStyle.Text(keys, Compact ? 16 : 19);
         key.AddThemeFontOverride("font", UiStyle.BoldFont);
-        key.CustomMinimumSize = new Vector2(230, 0);
+        key.CustomMinimumSize = new Vector2(Compact ? 205 : 230, 0);
         row.AddChild(key);
-        row.AddChild(UiStyle.Text(action, 19, UiStyle.SoftInk));
+        row.AddChild(UiStyle.Text(action, Compact ? 16 : 19, UiStyle.SoftInk));
         AddChild(row);
     }
 }
