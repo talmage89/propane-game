@@ -347,7 +347,10 @@ public partial class Tuning : Resource
     [Export(PropertyHint.Range, "0,10,0.05")] public float MoveSpreadDegrees { get; set; } = 1.6f;
     [Export(PropertyHint.Range, "0,5,0.05")] public float ShotBloomDegrees { get; set; } = 0.7f;
     [Export(PropertyHint.Range, "0,60,0.5")] public float BloomRecovery { get; set; } = 9f;
-    [Export(PropertyHint.Range, "0,5,0.05")] public float RecoilKickDegrees { get; set; } = 0.7f;
+    [Export(PropertyHint.Range, "0,5,0.05")] public float RecoilKickDegrees { get; set; } = 0.28f;
+    [Export(PropertyHint.Range, "0,1,0.01")] public float RecoilReturnShare { get; set; } = 0.125f;
+    [Export(PropertyHint.Range, "0,10,0.1")] public float RecoilSettleSpeed { get; set; } = 1f;
+    [Export(PropertyHint.Range, "0,1,0.01")] public float RecoilYawDegrees { get; set; } = 0.175f;
     [Export(PropertyHint.Range, "10,1000,10")] public float ShotRange { get; set; } = 400f;
     [Export(PropertyHint.Range, "0,200,1")] public float BulletImpulse { get; set; } = 30f;
 
@@ -412,6 +415,8 @@ public partial class Tuning : Resource
     [Export(PropertyHint.Range, "30,1440,10")] public float RifleAimTurnSpeed { get; set; } = 360f;
     [Export(PropertyHint.Range, "1,60,1")] public float RifleMotionResponse { get; set; } = 14f;
     [Export(PropertyHint.Range, "60,1440,10")] public float PoseAngularSpeed { get; set; } = 600f;
+    /// <summary>Body pose speed on a shot; wrists follow instantaneous barrel alignment.</summary>
+    [Export(PropertyHint.Range, "600,3600,10")] public float RifleShotPoseAngularSpeed { get; set; } = 2400f;
     [Export(PropertyHint.Range, "60,2400,10")] public float FootPoseRecoverySpeed { get; set; } = 1500f;
     [Export(PropertyHint.Range, "0.1,2,0.01")] public float RifleReloadPhaseSpeed { get; set; } = 0.75f;
     [Export(PropertyHint.Range, "1,15,0.1")] public float RifleRecoilFrequency { get; set; } = 5f;
@@ -419,8 +424,7 @@ public partial class Tuning : Resource
     [Export(PropertyHint.Range, "0,4,0.01")] public float RifleRecoilImpulse { get; set; } = 2f;
     [Export(PropertyHint.Range, "0,1,0.01")] public float RifleRecoilTorsoShare { get; set; } = 0.65f;
 
-    [Export(PropertyHint.Range, "1,30,0.1")] public float CameraRecoilRecovery { get; set; } = 7f;
-    [Export(PropertyHint.Range, "0,1,0.01")] public float CameraRecoilSideShare { get; set; } = 0.15f;
+    [Export(PropertyHint.Range, "0,5,0.01")] public float CameraRecoilKickDegrees { get; set; } = 0.35f;
 
     // Visual recoil; both wrists stay attached.
     [Export(PropertyHint.Range, "0,0.1,0.001")] public float RifleRecoilBack { get; set; } = 0.045f;

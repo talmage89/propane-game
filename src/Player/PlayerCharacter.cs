@@ -729,6 +729,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
     /// <summary>Plays the muzzle flash and tracer of another player's shot.</summary>
     public void RemoteShot(Vector3 end)
     {
+        rig.AlignShot(end);
         rifle.Fire();
         World.Spawn.Effect(Tracer.Create(rifle.MuzzlePosition, end));
         rig.Kick();

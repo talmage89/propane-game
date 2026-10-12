@@ -9,6 +9,7 @@ public partial class CameraRig : Node3D
     public required WorldContext World { get; init; }
     public LogicalAim? Aim { get; init; }
     private LogicalAim aim = null!;
+    private readonly RecoilSpring recoil = new();
     public Camera3D Camera { get; private set; } = null!;
     public Vector3 Target { get => aim.Target; set => aim.Target = value; }
     public Godot.Collections.Array<Rid> Exclude => aim.Exclude;
@@ -37,13 +38,15 @@ public partial class CameraRig : Node3D
     public static Vector2 StickLookDelta(Vector2 stick, float dt, float degreesPerSecond, float curve) =>
         LogicalAim.StickLookDelta(stick, dt, degreesPerSecond, curve);
     public void Kick(float degrees) => aim.Kick(degrees);
+    public void KickPresentation(float scale) => recoil.Kick(World.Tuning.RifleRecoilFrequency, World.Tuning.CameraRecoilKickDegrees * scale);
     public void AddTrauma(float amount) => aim.AddTrauma(amount);
 
     public override void _Process(double delta)
     {
         if (Aim == null) aim.Advance(delta);
         GlobalTransform = aim.Transform;
-        Camera.Transform = aim.EyeOffset;
+        recoil.Update((float)delta, World.Tuning.RifleRecoilFrequency, World.Tuning.RifleRecoilDamping);
+        Camera.Transform = aim.EyeOffset * new Transform3D(new Basis(Vector3.Right, Mathf.DegToRad(recoil.Position)), Vector3.Zero);
         Camera.Fov = World.Tuning.FieldOfView;
     }
 }
