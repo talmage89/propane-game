@@ -45,6 +45,12 @@ public static class EffectResourceTests
             var repeat = ExplosionEffect.Create(world, Vector3.Zero, 0).GetChildren().OfType<GpuParticles3D>().ToArray();
             Assert(particles.Length == 5 && repeat.Select((p, i) => p.ProcessMaterial == particles[i].ProcessMaterial).All(v => v),
                 "explosions did not share all five particle process resources");
+            first._Process(1d / 60); explosion._Process(1d / 60);
+            var allocated = GC.GetAllocatedBytesForCurrentThread();
+            for (var frame = 0; frame < 5; frame++)
+            { first._Process(1d / 60); explosion._Process(1d / 60); }
+            Assert(GC.GetAllocatedBytesForCurrentThread() == allocated,
+                "steady vent/explosion updates allocated shader parameter names");
             other.Tuning.FireballScale *= 2;
             var larger = ExplosionEffect.Create(other, Vector3.Zero, 0).GetChildren().OfType<GpuParticles3D>().First();
             Assert(((ParticleProcessMaterial)larger.ProcessMaterial).InitialVelocityMax ==

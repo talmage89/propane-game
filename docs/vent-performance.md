@@ -27,6 +27,9 @@ Use `--fixed-fps 60` for those visual comparisons; omit it for throughput measur
 
 ## Implementation
 
+Steady vent and explosion updates reuse shader parameter names instead of allocating their C# wrappers.
+The light manager writes each source and proxy's final visibility once, avoiding off/on renderer updates every frame.
+
 Particle draw meshes and growth/shrink curves are shared immutable resources. Vent and explosion process
 materials cache only the most recent scale; a tuning edit builds a new resource without mutating emitters already
 in flight. CPU-generated scorch/hole/glow textures are built at session assembly. Lab starts the same effect

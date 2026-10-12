@@ -21,6 +21,9 @@ public partial class VentJet : Node3D
     private static ParticleProcessMaterial? sharedFlameProcess;
     private static ParticleProcessMaterial? sharedSmokeProcess;
 
+    private static readonly StringName flickerParameter = new("flicker");
+    private static readonly StringName opacityParameter = new("opacity");
+
     private GpuParticles3D flames = null!;
     private GpuParticles3D smoke = null!;
     private OmniLight3D light = null!;
@@ -150,8 +153,8 @@ public partial class VentJet : Node3D
         var flicker = 0.78f + 0.12f * Mathf.Sin(time * 31f) + 0.07f * Mathf.Sin(time * 53f + 1.3f) + 0.05f * Mathf.Sin(time * 97f);
         light.LightEnergy = World.Tuning.VentLightEnergy * flicker * ignition;
         core.Scale = Vector3.One * (0.85f + 0.3f * flicker);
-        jetMaterial.SetShaderParameter("flicker", (0.75f + 0.35f * flicker) * ignition);
-        coreMaterial.SetShaderParameter("opacity", ignition);
+        jetMaterial.SetShaderParameter(flickerParameter, (0.75f + 0.35f * flicker) * ignition);
+        coreMaterial.SetShaderParameter(opacityParameter, ignition);
     }
 
     /// <summary>Stops the jet. The smoke already in the air drifts on and fades, even after the tank is gone.</summary>

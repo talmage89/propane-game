@@ -49,9 +49,12 @@ public partial class VentLightBudget : Node3D
         var count = sources.Count;
         var limit = Math.Clamp(World.Tuning.VentLightClusterCount, 1, 64);
         var crowded = count > Math.Max(limit, World.Tuning.VentLightMergeThreshold);
-        foreach (var source in sources) source.Visible = !crowded;
-        foreach (var proxy in proxies) proxy.Visible = false;
-        if (!crowded) return;
+        if (!crowded)
+        {
+            foreach (var source in sources) source.Visible = true;
+            foreach (var proxy in proxies) proxy.Visible = false;
+            return;
+        }
         if (positions.Length < count)
         {
             positions = new Vector3[count];
@@ -75,7 +78,9 @@ public partial class VentLightBudget : Node3D
         var camera = World.Viewport.GetCamera3D();
         Cluster(positions.AsSpan(0, count), energies.AsSpan(0, count),
             camera?.GlobalPosition ?? positions[0], seeds, centers, totals, World.Tuning.VentLightMergeRadius, groups.AsSpan(0, count));
-        for (var i = 0; i < count; i++) if (groups[i] < 0) sources[i].Visible = true;
+        // Write the final state once. Toggling distant sources off and back on dirties renderer visibility.
+        for (var i = 0; i < count; i++) sources[i].Visible = groups[i] < 0;
+        for (var i = limit; i < proxies.Count; i++) proxies[i].Visible = false;
         for (var i = 0; i < limit; i++)
         {
             var proxy = proxies[i];
