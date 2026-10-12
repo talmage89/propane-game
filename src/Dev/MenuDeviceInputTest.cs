@@ -44,6 +44,8 @@ public partial class MenuDeviceInputTest : Node
             await Activate("Main menu").ConfigureAwait(true);
             await Wait(() => Menus.Current == Menus.Screen.Main, "main menu").ConfigureAwait(true);
             await LabInput().ConfigureAwait(true);
+            await LabMouse().ConfigureAwait(true);
+            await SinglePlayerAfterLab().ConfigureAwait(true);
             await Activate("Multiplayer").ConfigureAwait(true);
             await Activate("Host on this computer").ConfigureAwait(true);
             await Wait(() => Menus.Current == Menus.Screen.Browser, "host browser").ConfigureAwait(true);
@@ -208,6 +210,132 @@ public partial class MenuDeviceInputTest : Node
         await Frames().ConfigureAwait(true);
         await PadActivate("Main menu").ConfigureAwait(true);
         await Wait(() => Menus.Current == Menus.Screen.Main, "Lab gamepad main return").ConfigureAwait(true);
+    }
+
+    /// <summary>The Lab's menus and panels with real mouse clicks, which keyboard and controller runs never exercise.</summary>
+    private async Task LabMouse()
+    {
+        await Click("Lab").ConfigureAwait(true);
+        await Click("Duel vs a banking bot").ConfigureAwait(true);
+        await Click("Environment: Void").ConfigureAwait(true);
+        Check(FindButton("Environment: Suburb") != null, "mouse selects the suburb");
+        await Click("Environment: Suburb").ConfigureAwait(true);
+        // The menu keeps its earlier choice (the controller run left it on Hard); each click moves on to the next.
+        await Click("Difficulty: Hard").ConfigureAwait(true);
+        Check(FindButton("Difficulty: Easy") != null, "mouse lowers the difficulty");
+        await Click("Enter Lab").ConfigureAwait(true);
+        var lab = Main.GetNode<LabSession>("Lab");
+        lab.PauseOnFocusLoss = false;
+        Check(lab.EnvironmentKind == LabEnvironment.Void && lab.World.Tuning.LabBotSkill < 0.3f && lab.Bank != null,
+            "mouse launches the easy void duel");
+        EnableHeadlessInput(lab.Player, lab.Overlay.MenuLayer);
+        TapKey(Key.Escape);
+        await Frames().ConfigureAwait(true);
+        Check(lab.Overlay.MenuVisible && lab.World.Paused, "Escape opens the Lab controls");
+        await Click("Reset scenario").ConfigureAwait(true);
+        await Frames(8).ConfigureAwait(true);
+        Check(lab.ResetCount == 1 && !lab.World.Paused && !lab.Overlay.MenuVisible, "clicking Reset rebuilds and resumes");
+        EnableHeadlessInput(lab.Player, lab.Overlay.MenuLayer);
+        TapKey(Key.Escape);
+        await Frames().ConfigureAwait(true);
+        await Click("Free tuning").ConfigureAwait(true);
+        Check(lab.TuningPanel.Visible && lab.World.Paused && !lab.Overlay.MenuVisible, "clicking Free tuning opens the paused panel");
+        var template = Main.SavedTuning.RunSpeed;
+        var panel = lab.TuningPanel;
+        var scroll = panel.FindChildren("*", "ScrollContainer", owned: false).OfType<ScrollContainer>().Single();
+        Check(FocusInside(scroll), "the tuning panel opens with its focused control in view");
+        // Walk the whole list: the focused row must stay visible, and scrolling must start once rows pass the edge.
+        var inView = true;
+        var scrolled = 0;
+        for (var i = 0; i < 450 && inView; i++)
+        {
+            Send(new InputEventJoypadButton { ButtonIndex = JoyButton.DpadDown, Pressed = true });
+            Send(new InputEventJoypadButton { ButtonIndex = JoyButton.DpadDown, Pressed = false });
+            await Frames(2).ConfigureAwait(true);
+            inView = GetViewport().GuiGetFocusOwner() is not { } focus || !scroll.IsAncestorOf(focus) || FocusInside(scroll);
+            scrolled = Math.Max(scrolled, scroll.ScrollVertical);
+        }
+        Check(inView && scrolled > 0, "controller navigation keeps the focused tuning row in view while it scrolls");
+        scroll.ScrollVertical = 0;
+        await Frames(2).ConfigureAwait(true);
+        var slider = panel.FindChildren("*", "HSlider", owned: false).OfType<HSlider>().First();
+        var before = slider.Value;
+        await ClickAt(new Vector2(slider.GetGlobalRect().Position.X + slider.GetGlobalRect().Size.X * 0.9f, slider.GetGlobalRect().GetCenter().Y)).ConfigureAwait(true);
+        Check(slider.Value > before, "clicking a tuning slider's track moves it");
+        var runSpeed = lab.World.Tuning.RunSpeed;
+        await Click("Defaults").ConfigureAwait(true);
+        using (var defaults = new Tuning())
+        {
+            Check(lab.World.Tuning.RunSpeed == defaults.RunSpeed && lab.World.Tuning.LabBotSkill == defaults.LabBotSkill,
+                "clicking Defaults restores the session's dials");
+        }
+        Check(Main.SavedTuning.RunSpeed == template && runSpeed >= 0, "mouse edits and Defaults leave the saved template alone");
+        await Click("Close tuning").ConfigureAwait(true);
+        Check(!panel.Visible && !lab.World.Paused, "clicking Close tuning resumes");
+        TapKey(Key.Escape);
+        await Frames().ConfigureAwait(true);
+        await Click("Resume Lab").ConfigureAwait(true);
+        Check(!lab.Overlay.MenuVisible && !lab.World.Paused, "clicking Resume Lab resumes");
+        TapKey(Key.Escape);
+        await Frames().ConfigureAwait(true);
+        await Click("Lab menu").ConfigureAwait(true);
+        await Wait(() => !Main.HasNode("Lab") && Main.GetNode<LabMenu>("LabMenu").Visible, "mouse leaves the Lab").ConfigureAwait(true);
+        await Click("Main menu").ConfigureAwait(true);
+        await Wait(() => Menus.Current == Menus.Screen.Main, "mouse returns to the main menu").ConfigureAwait(true);
+    }
+
+    /// <summary>A single-player game started after leaving the Lab plays normally, and its tuning panel stays unfocusable.</summary>
+    private async Task SinglePlayerAfterLab()
+    {
+        await Click("Single player").ConfigureAwait(true);
+        var game = Main.GetNode<Game>("Game");
+        game.PauseOnFocusLoss = false;
+        EnableHeadlessInput(game.Player, game.GetNode<PauseMenu>("Pause"));
+        await Wait(() => !game.InTransition && game.Player.IsOnFloor(), "single player after the Lab is ready").ConfigureAwait(true);
+        await Gameplay(game.Player, "single-after-lab").ConfigureAwait(true);
+        var panel = game.GetNode<TuningPanel>("Tuning");
+        TapKey(Key.F1);
+        await Frames().ConfigureAwait(true);
+        Check(panel.Visible, "F1 opens the single-player tuning panel");
+        Check(panel.FindChildren("*", "HSlider", owned: false).OfType<HSlider>().All(s => s.FocusMode == Control.FocusModeEnum.None) &&
+            panel.FindChildren("*", "CheckButton", owned: false).OfType<CheckButton>().All(t => t.FocusMode == Control.FocusModeEnum.None),
+            "the single-player tuning panel keeps its sliders and switches out of keyboard focus");
+        TapKey(Key.F1);
+        await Frames().ConfigureAwait(true);
+        TapKey(Key.Escape);
+        await Frames().ConfigureAwait(true);
+        await Click("Main menu").ConfigureAwait(true);
+        await Wait(() => Menus.Current == Menus.Screen.Main, "main menu after single player").ConfigureAwait(true);
+    }
+
+    /// <summary>The focused control lies inside the scroll container's visible rectangle.</summary>
+    private bool FocusInside(ScrollContainer scroll)
+    {
+        var focus = GetViewport().GuiGetFocusOwner();
+        return focus != null && scroll.IsAncestorOf(focus) && scroll.GetGlobalRect().Grow(1).Encloses(focus.GetGlobalRect());
+    }
+
+    private Button? FindButton(string text) => GetTree().Root.FindChildren("*", "Button", owned: false).OfType<Button>()
+        .FirstOrDefault(b => b.Text == text && b.IsVisibleInTree());
+
+    private async Task Click(string text)
+    {
+        await Frames().ConfigureAwait(true);
+        var button = FindButton(text) ?? throw new InvalidOperationException($"missing button {text}");
+        if (button.Disabled) throw new InvalidOperationException($"button {text} is disabled");
+        await ClickAt(button.GetGlobalRect().GetCenter()).ConfigureAwait(true);
+    }
+
+    /// <summary>A complete left click at a canvas position, delivered through the application window like a mouse.</summary>
+    private async Task ClickAt(Vector2 canvasPosition)
+    {
+        var position = GetTree().Root.GetFinalTransform() * canvasPosition;
+        Send(new InputEventMouseMotion { Position = position, GlobalPosition = position });
+        await Frames(1).ConfigureAwait(true);
+        Send(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = true, Position = position, GlobalPosition = position, ButtonMask = MouseButtonMask.Left });
+        await Frames(1).ConfigureAwait(true);
+        Send(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = false, Position = position, GlobalPosition = position });
+        await Frames(3).ConfigureAwait(true);
     }
 
     private async Task PadActivate(string text)

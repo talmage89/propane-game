@@ -133,6 +133,7 @@ public partial class TuningPanel : CanvasLayer
         }
         if (IncludeLabDials)
         {
+            list.AddChild(new Control { CustomMinimumSize = new Vector2(0, 6) });
             list.AddChild(UiStyle.Text("LAB · LAYOUT APPLIES ON RESET", 15, UiStyle.Accent));
             foreach (var property in typeof(Tuning).GetProperties())
             {
@@ -159,7 +160,9 @@ public partial class TuningPanel : CanvasLayer
             MaxValue = max,
             Step = step,
             SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
-            FocusMode = Control.FocusModeEnum.All,
+            // Only the Lab's panel has controller navigation. Elsewhere the game keeps running with it open, and a
+            // focused slider or switch would take arrow and Space presses meant for the player.
+            FocusMode = IncludeLabDials ? Control.FocusModeEnum.All : Control.FocusModeEnum.None,
             CustomMinimumSize = new Vector2(0, 22),
         };
         var value = UiStyle.Text("", 16, UiStyle.SoftInk, HorizontalAlignment.Right);
@@ -184,7 +187,7 @@ public partial class TuningPanel : CanvasLayer
         var row = new HBoxContainer();
         var label = UiStyle.Text(Pretty(property), 16);
         label.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
-        var toggle = new CheckButton { FocusMode = Control.FocusModeEnum.All };
+        var toggle = new CheckButton { FocusMode = IncludeLabDials ? Control.FocusModeEnum.All : Control.FocusModeEnum.None };
         toggle.Toggled += on =>
         {
             Target.Set(property, on);
