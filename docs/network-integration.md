@@ -244,11 +244,11 @@ ticks with no clock advance. The full unit suite passes 227 tests, zero failures
 and make build has zero warnings/errors. These prove the timing defect and its
 correction, not that this was the isolated soak's only cause. Subsequent native
 verification must still pass the unchanged agreement limits.
-The first native repeat uses the failed run's map seed, 1341647191, with the
-same 4-bot/90-second 120/30/3 schedule. It passes 1,998 grids/342,637 body
+The first native follow-up requested FixedSeed=1341647191, but multiplayer
+ignores that single-player tuner: the transmitted layout was seed 331150887.
+With the same 4-bot/90-second 120/30/3 schedule, it It passes 1,998 grids/342,637 body
 pairs with no unobserved grids, final drift 0/0.194 m and a 0.95-second
-longest episode; all score audits agree. This repeats the layout, not the
-real-time action schedule, so it does not establish a deterministic replay.
+longest episode; all score audits agree. This is a new layout and action schedule, not a repeat of the failed layout.
 
 The completion review found that the retirement comparer initially enforced
 only the resting intact position bound. A fourth synthetic retirement regression
@@ -291,7 +291,7 @@ both drift 0.000002 m and pass. The existing owner/stale/predicted jet assertion
 also pass; make build reports zero warnings/errors.
 
 The `vent-contact-axis=mixed` fixture alternates vertical and horizontal initial
-spin using the existing VentMaxSpin. Two 2-bot/30-second, FixedSeed=23, 120/30/3
+spin using the existing VentMaxSpin. Two 2-bot/30-second, 120/30/3
 runs pass their unchanged final checks before/after (0.150/0.197 m). Across
 5,440 vent pair grids after the first six play seconds, median/p95/p99/maximum
 root drift is 0.098/0.202/0.255/0.461 m before and
@@ -302,11 +302,11 @@ reduction; the force-free regression proves the mathematical defect directly.
 Logs retain both results under `build/vna-center-floor-before` and `-after`.
 No resting, intact, free-flight or venting bound has been relaxed.
 
-The native repeat of the failed layout (seed 797598340, 4 bots, 90 seconds,
-120/30/3 and melee-start) passes 1,999 grids/262,962 pairs with no unobserved
+The native follow-up requested FixedSeed=797598340, but used random layout
+430818032 (4 bots, 90 seconds, 120/30/3 and melee-start). It passes 1,999 grids/262,962 pairs with no unobserved
 grids, final rest/moving drift 0/0.158 m, and longest episode 1.50 s.
-All four bots agree with the server audit (21 banked). This is a new action
-schedule on the same layout, not a deterministic replay or a substitute for
+All four bots agree with the server audit (21 banked). This is a new layout and action
+schedule, not a repeat of the failed layout or a substitute for
 the final ten-fault/five-clean matrix.
 
 ```sh
@@ -349,14 +349,31 @@ After the fix, registered-body publications continue, a bank debit alone does
 not release the drops, and a creation echo releases exactly one required state.
 All 231 unit assertions pass, with zero build warnings/errors.
 
-A native 4-bot/90-second 120/30/3 repeat of layout 2113692991 passes:
+A native 4-bot/90-second 120/30/3 follow-up requested FixedSeed=2113692991,
+but used random layout 1710049523. It passes:
 1,998 grids/282,791 body pairs, no unobserved grids, final rest/moving
 0.001/0.242 m, longest episode 0.60 s, and all scores agree (27 spilled,
 14 banked). Unknown-ID body-batch rejections fall from four to zero. This is a
-layout repeat with a new action schedule, not a deterministic replay.
+new layout and action schedule, not a repeat of the failed layout.
 The final gates and complete matrix are repeated after this last product fix.
 
 ```sh
 godot-mono --headless --path . res://scenes/dev/unit_tests.tscn
 tools/dev/net_bots.sh -p 25090 -n 4 -l 90 -s '--tune.FixedSeed=2113692991' -o "$PWD/build/vna-drop-native" -- --melee-start --digest-every=0.5 --net-lag=120 --net-jitter=30 --net-loss=3 --tank-motion-trace --tank-authority-trace
 ```
+
+
+## Controlled debug match seeds
+
+The integration review found that earlier claimed layout repeats used
+`--tune.FixedSeed`, which applies only to single-player generation. Those
+claims above are corrected against the actual server logs. Debug servers now
+accept `--match-seed=<int32>` as the existing generator's initial candidate;
+invalid layouts still retry through the existing generator. Verify the actual
+seed printed by the server before calling a run a layout repeat. Release seed
+selection, generation rules, message shapes and tuners are unchanged.
+
+The native server fixture checks the actual transmitted PlanCodec seed against
+`--match-seed=23`. Before the selector, it fails with seed 919984183; afterward
+it passes with seed 23. Its client uses ordinary process frames, independently
+of the separate client physics-poll correction.

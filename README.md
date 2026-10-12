@@ -232,6 +232,8 @@ $GODOT --headless --fixed-fps 60 res://scenes/dev/world_services_tests.tscn
 $GODOT --headless --fixed-fps 60 res://scenes/dev/body_correction_tests.tscn
 # Native server entry: explicit debug --tune overrides reach lobby admission.
 $GODOT --headless res://scenes/dev/server_tuning_tests.tscn -- --server --port=24680 --tune.MaxPlayers=6
+# Native debug seed: the transmitted plan must use the requested candidate seed.
+$GODOT --headless res://scenes/dev/server_seed_tests.tscn -- --server --port=24680 --match-seed=23
 # Clear/replace proof: shooting sequence, finish remaining fixture tanks, assert automatic replacement.
 $GODOT --fixed-fps 60 res://scenes/dev/game_test.tscn -- --scenario=clear --quit=32 --capture-dir=/tmp/clear
 # Real menu lifetime: ten single-player and ten solo-match retirements with exact node/object/orphan counts.

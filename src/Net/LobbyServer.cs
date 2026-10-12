@@ -444,7 +444,8 @@ public partial class LobbyServer : Node
         }
 
         var started = Time.GetTicksMsec();
-        var seed = random.Next();
+        var seed = OS.IsDebugBuild() && int.TryParse(Dev.DevArgs.Get("match-seed"), out var requestedSeed)
+            ? requestedSeed : random.Next();
         var settings = SuburbPlans.Match(tuning, match.Players.Count);
         var plan = SuburbPlans.Generate(settings, seed, () => random.Next());
         var planBytes = PlanCodec.Encode(plan);

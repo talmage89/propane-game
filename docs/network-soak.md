@@ -198,3 +198,8 @@ The probe explicitly requires same-machine clients. At the end of the original a
 ownership/collision causes remained unverified; that package changed dev logging, verification and documentation
 only. The subsequent [correction investigation](network-corrections.md) records replication fixes and their
 verification. Message shapes, suburb construction, tuner defaults and `Protocol.Version` (2) remain unchanged.
+
+Debug servers accept `-s '--match-seed=23'` in `net_bots.sh` to select the
+initial generator candidate. Check the actual seed in `server.log`: an invalid
+layout may retry. `--tune.FixedSeed` does not select multiplayer layouts. Fixed
+layouts still do not reproduce real-time bot actions or packet schedules.

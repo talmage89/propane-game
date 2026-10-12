@@ -59,6 +59,7 @@ fi
               "game_test.tscn -- --scenario=gather --tune.FixedSeed=23",
               "game_test.tscn -- --scenario=clear --quit=32 --tune.FixedSeed=23",
               "world_services_tests.tscn", "body_correction_tests.tscn", "server_tuning_tests.tscn -- --server --tune.MaxPlayers=6",
+              "server_seed_tests.tscn -- --server --match-seed=23",
               "session_actors_tests.tscn", "upright_pile_tests.tscn", "melee_range.tscn",
               "animation_review.tscn -- --cases=walk_000,jog_000,creep_000,creep_180,creep_090,sprint,aim_idle",
               "player_range.tscn -- --scenario=melee --assert-motion --assert-grip",
