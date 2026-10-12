@@ -10,6 +10,7 @@ public partial class LabOverlay : CanvasLayer
     public required LabSession Lab { get; init; }
     private Label status = null!;
     private Label hint = null!;
+    private Label title = null!;
     private Label result = null!;
     private Label ammo = null!;
     private Button resume = null!;
@@ -60,7 +61,8 @@ public partial class LabOverlay : CanvasLayer
         var layout = new VBoxContainer { CustomMinimumSize = new Vector2(520, 0) };
         layout.AddThemeConstantOverride("separation", 10);
         panel.AddChild(layout);
-        layout.AddChild(UiStyle.Title(Lab.Scenario.Name.ToUpperInvariant(), 32));
+        title = UiStyle.Title(Lab.Scenario.Name.ToUpperInvariant(), 32);
+        layout.AddChild(title);
         result = UiStyle.Text("Paused", 18, UiStyle.SoftInk, HorizontalAlignment.Center);
         layout.AddChild(result);
         layout.AddChild(new HSeparator());
@@ -103,8 +105,10 @@ public partial class LabOverlay : CanvasLayer
         {
             resume.Disabled = !bank.IsPlaying;
             status.Text = $"You  {bank.Scores[1]}    ·    Bot  {bank.Scores[2]}    ·    {Mathf.CeilToInt(bank.TimeLeft) / 60}:{Mathf.CeilToInt(bank.TimeLeft) % 60:00}";
-            result.Text = bank.IsPlaying ? "Paused · the clock is stopped" : bank.Scores[1] == bank.Scores[2] ? "Time’s up · tied bank" :
-                bank.Scores[1] > bank.Scores[2] ? "Time’s up · you win" : "Time’s up · bot wins";
+            // The round's result takes the panel's title; the controls below stay for resetting or leaving.
+            title.Text = bank.IsPlaying ? Lab.Scenario.Name.ToUpperInvariant() : bank.Scores[1] == bank.Scores[2] ? "TIED" :
+                bank.Scores[1] > bank.Scores[2] ? "YOU WIN" : "BOT WINS";
+            result.Text = bank.IsPlaying ? "Paused · the clock is stopped" : $"Time’s up · you banked {bank.Scores[1]}, the bot {bank.Scores[2]}";
         }
         else
         {

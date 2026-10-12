@@ -183,7 +183,7 @@ public partial class LabSession : Node3D
         start = new Vector3(0, 0.05f, World.Tuning.LabStackDistance);
         startYaw = 0;
         AddPile(Vector3.Zero, World.Tuning.LabStackCount);
-        Marker(Vector3.Zero, "HUGE STACK", tanks.Max(t => t.Position.Y) + PileBuilder.Height + 0.5f);
+        Marker(Vector3.Zero, "HUGE STACK", tanks.Max(t => t.Position.Y) + PileBuilder.Height + 0.5f, scale: World.Tuning.LabStackDistance / 10);
     }
 
     internal void BuildRange()
@@ -196,7 +196,9 @@ public partial class LabSession : Node3D
             var distance = tuning.LabRangeStep * (lane + 1);
             var at = new Vector3((lane - (tuning.LabRangeLanes - 1) / 2f) * tuning.LabLaneSpacing, 0, start.Z - distance);
             AddPile(at, lane % 2 == 0 ? 1 : tuning.LabRangePileCount);
-            Marker(at, $"{distance:0} m", tanks.Where(t => t.Position.DistanceTo(at) < 2).Select(t => t.Position.Y).DefaultIfEmpty(0).Max() + PileBuilder.Height + 0.5f);
+            // Labels grow with distance so every lane reads at about the same size from the firing line.
+            Marker(at, $"{distance:0} m", tanks.Where(t => t.Position.DistanceTo(at) < 2).Select(t => t.Position.Y).DefaultIfEmpty(0).Max() + PileBuilder.Height + 0.5f,
+                scale: Mathf.Max(1, distance / 10));
         }
         World.ContentRoot.AddChild(new MeshInstance3D
         {
@@ -225,10 +227,11 @@ public partial class LabSession : Node3D
             var angle = (i + 0.5f) * Mathf.Tau / tuning.LabDuelPiles;
             AddPile(new Vector3(Mathf.Cos(angle), 0, Mathf.Sin(angle)) * tuning.LabArenaRadius * 0.55f, tuning.LabDuelPileCount);
         }
+        // Half a step off the start points, so neither actor begins standing on a marker.
         for (var i = 0; i < 8; i++)
         {
-            var angle = i * Mathf.Tau / 8;
-            Marker(new Vector3(Mathf.Cos(angle), 0, Mathf.Sin(angle)) * tuning.LabArenaRadius, i == 2 ? "TANK BANK" : "•", 0.02f, floorText: true);
+            var angle = (i + 0.5f) * Mathf.Tau / 8;
+            Marker(new Vector3(Mathf.Cos(angle), 0, Mathf.Sin(angle)) * tuning.LabArenaRadius, null, 0, floorText: true);
         }
     }
 
@@ -246,7 +249,8 @@ public partial class LabSession : Node3D
         }
     }
 
-    private void Marker(Vector3 at, string text, float height, bool floorText = false)
+    /// <summary>An orange disk on the floor, with a label unless <paramref name="text"/> is null.</summary>
+    private void Marker(Vector3 at, string? text, float height, bool floorText = false, float scale = 1)
     {
         World.ContentRoot.AddChild(new MeshInstance3D
         {
@@ -255,13 +259,15 @@ public partial class LabSession : Node3D
             MaterialOverride = new StandardMaterial3D { AlbedoColor = UiStyle.Accent, Roughness = 1 },
             CastShadow = GeometryInstance3D.ShadowCastingSetting.Off
         });
+        if (text == null) return;
         World.ContentRoot.AddChild(new Label3D
         {
-            Position = at + Vector3.Up * height,
+            // A larger label grows about its own center, so lift it by the extra half-height to stay clear of the pile.
+            Position = at + Vector3.Up * (floorText ? height : height + 0.19f * (scale - 1)),
             RotationDegrees = floorText ? new Vector3(-90, 0, 0) : Vector3.Zero,
             Text = text,
             FontSize = 64,
-            PixelSize = 0.006f,
+            PixelSize = 0.006f * scale,
             Modulate = UiStyle.Ink,
             OutlineModulate = Colors.White,
             Billboard = floorText ? BaseMaterial3D.BillboardModeEnum.Disabled : BaseMaterial3D.BillboardModeEnum.Enabled,

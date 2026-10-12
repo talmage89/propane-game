@@ -8,16 +8,18 @@ the rest of Propane. Huge stack and Range use void; the banking duel and Free tu
   entering, or change **Lab stack count** in tuning and reset. First shots puncture; second shots and blasts use
   the ordinary chain rules. The stack starts intact, so the first blast punctures its intact neighbors.
   The shipped range is 24–40 tanks, capped by crowded vent rendering on the measured hardware, not body capacity.
-- **Range** alternates single tanks and small upright piles at marked distances from the orange firing line.
+- **Range** alternates single tanks and small upright piles at marked distances from the orange firing line; each
+  distance label grows with its distance, so the far lanes read from the line.
   Move along the line to line up with a lane; practice shots, punctures, melee and blast throws. Reset respawns
   the entire fixture and clears its debris.
 - **Duel vs a banking bot** runs two owned actors in one offline world. The bot has no camera and uses the
   existing banking brain. Easy, Normal and Hard change its skill, not tank/player physics. The default is three
   minutes; bank most to win. Bullets spill with hit grace, melee/blasts spill on the victim's ordinary ragdoll
   event, drops have the match's shield, ammo cans replenish, and delayed chains credit their initiating shooter.
-  The void arena is marked on the floor; its markings are reference points, not walls or a new boundary rule.
-  A bot whose rifle ray stays blocked for `BotStuckAimTime` (4 s) without moving gives up that pile for
-  `BotTargetRetryTime`: the vantage search can see past a loose fence panel that still stops the shot.
+  The void arena is marked by a ring of floor disks, half a step off both start points; the markings are reference
+  points, not walls or a new boundary rule. A bot whose rifle ray stays blocked for `BotStuckAimTime` (4 s) without
+  moving gives up that pile for `BotTargetRetryTime`: the vantage search can see past a loose fence panel that still
+  stops the shot. The round's result replaces the controls panel's title when the clock ends.
 - **Free tuning** opens the tuning panel after a short settling delay on a range fixture or a generated suburb.
   Opening it manually cancels that introductory opening. It is also available in every
   other starter through F1/` or the Lab controls menu. Opening it pauses this world and its clock. Sliders and
@@ -54,10 +56,12 @@ its Protocol 2 dev adapter. The factory and session retain ordered teardown on r
 `python3 -B tools/dev/check_lab.py` is the fast gate: one lifecycle cycle per allowed pair, local rules, the bot's
 aim-stall probe and a 15-second scripted duel. It requires a success marker, exit 0 and no engine warnings/errors. `--full` performs
 10 entry/reset/exit cycles for all six pairs and 180-second bot-versus-bot soaks in both environments. Both are
-wired into `make test` / `make test-full`. `menu_test --scenario=input` also injects real keyboard, mouse and
-controller events through Lab menus, movement/combat, reset, local tuning dials and Defaults without template edits.
-It clicks through the menus and the controls and tuning panels with the mouse, walks the tuning list with the D-pad
-and checks the focused row stays in view, and then starts single player and a hosted match.
+wired into `make test` / `make test-full`. `--full` also sweeps every layout dial to both slider ends, and all at once,
+through every scenario and environment (`--scenario=dials`). `menu_test --scenario=input` also injects real keyboard,
+mouse and controller events through Lab menus, movement/combat, reset, local tuning dials and Defaults without
+template edits. It clicks through the menus and the controls and tuning panels with the mouse, walks the tuning list
+with the D-pad and checks the focused row stays in view, and then starts single player and a hosted match.
+`--scenario=aimstall` puts a shot-stopping prop in front of the bot and asserts it leaves the pile.
 The local rules probe also asserts firing
 foregrip contacts after a stale reload pose and after animation and body frames advance between shot fitting and rendering.
 Fixtures, captures, soaks and measurements load the game's baked tuning rather than C# defaults.
@@ -70,6 +74,10 @@ godot-mono --fixed-fps 60 --resolution 1920x1080 res://scenes/dev/lab_test.tscn 
   --scenario=frames --windowed --capture-dir="$PWD/build/lab-1920x1080"
 godot-mono --fixed-fps 60 --resolution 1280x720 res://scenes/dev/lab_test.tscn -- \
   --scenario=frames --windowed --capture-dir="$PWD/build/lab-1280x720"
+godot-mono --fixed-fps 60 --disable-vsync --resolution 1920x1080 res://scenes/dev/lab_test.tscn -- \
+  --scenario=stackfire --windowed --capture-dir="$PWD/build/lab-stackfire"
+godot-mono --fixed-fps 60 --resolution 1920x1080 res://scenes/dev/lab_test.tscn -- \
+  --scenario=duel --duel-seconds=30 --seconds=40 --windowed --capture-dir="$PWD/build/lab-duel-end"
 godot-mono --disable-vsync --resolution 1920x1080 res://scenes/dev/lab_test.tscn -- \
   --scenario=measure --count=40 --phase=idle --windowed
 ```

@@ -80,14 +80,20 @@ public partial class LabMenu : CanvasLayer
         else
         {
             var scenario = selected;
-            Button($"Environment: {environment}", () =>
+            if (scenario.Environments.Count > 1)
             {
-                if (scenario.Environments.Count > 1)
+                Button($"Environment: {environment}", () =>
+                {
                     environment = environment == LabEnvironment.Void ? LabEnvironment.Suburb : LabEnvironment.Void;
-                Rebuild("environment");
-            }, "environment", scenario.Environments.Count == 1);
-            layout.AddChild(UiStyle.Text(scenario.Environments.Count == 1 ? "Void · a clear floor, an open sky, and no houses." :
-                "Void is the default. Suburb adds houses, cover, and loose props.", 16, UiStyle.SoftInk, HorizontalAlignment.Center));
+                    Rebuild("environment");
+                }, "environment");
+                layout.AddChild(UiStyle.Text("Void is the default. Suburb adds houses, cover, and loose props.", 16, UiStyle.SoftInk, HorizontalAlignment.Center));
+            }
+            else
+            {
+                layout.AddChild(UiStyle.Text($"Environment: {scenario.Environments[0]}", 22, UiStyle.Ink, HorizontalAlignment.Center));
+                layout.AddChild(UiStyle.Text("A clear floor, an open sky, and no houses.", 16, UiStyle.SoftInk, HorizontalAlignment.Center));
+            }
             if (scenario.Id == "stack")
             {
                 var row = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.Center };
@@ -108,13 +114,14 @@ public partial class LabMenu : CanvasLayer
                 layout.AddChild(UiStyle.Text("Local tank bank · one bot · three minutes · no server needed", 16, UiStyle.SoftInk, HorizontalAlignment.Center));
             }
             layout.AddChild(new HSeparator());
-            Button("Enter Lab", () => StartRequested?.Invoke(scenario, environment, draft));
+            Button("Enter Lab", () => StartRequested?.Invoke(scenario, environment, draft), "enter");
             Button("Back to scenarios", Back);
             layout.AddChild(UiStyle.Text("Reset and free tuning are available in every scenario.", 16, UiStyle.SoftInk, HorizontalAlignment.Center));
         }
         layout.AddChild(UiStyle.Text("D-pad / stick or arrows: navigate   ·   A / Enter: choose   ·   B / Esc: back", 14, UiStyle.SoftInk,
             HorizontalAlignment.Center));
-        navigation.Configure(focus);
+        // Choosing a scenario lands on Enter Lab, so a second press starts it rather than changing an option.
+        navigation.Configure(focus ?? (selected != null ? "enter" : null));
     }
 
     private void Button(string text, Action action, string? key = null, bool disabled = false, Node? parent = null)

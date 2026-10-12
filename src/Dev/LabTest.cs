@@ -33,7 +33,9 @@ public partial class LabTest : Node
                 case "duel": await Duel().ConfigureAwait(true); break;
                 case "soak": await Duel(soak: true).ConfigureAwait(true); break;
                 case "measure": await Measure().ConfigureAwait(true); break;
+                case "stackfire": await StackFire().ConfigureAwait(true); break;
                 case "aimstall": await AimStall().ConfigureAwait(true); break;
+                case "dials": await Dials().ConfigureAwait(true); break;
                 default: await Lifetime().ConfigureAwait(true); break;
             }
             template.Dispose();
@@ -88,6 +90,60 @@ public partial class LabTest : Node
         }
     }
 
+    /// <summary>
+    /// A player can drag any layout slider to either end and press Reset: each end, and every dial at once, must
+    /// still build a playable fixture in every scenario and environment, and survive a reset.
+    /// </summary>
+    private async Task Dials()
+    {
+        var dials = new System.Collections.Generic.List<(System.Reflection.PropertyInfo Property, LabDialAttribute Dial)>();
+        foreach (var property in typeof(Tuning).GetProperties())
+        {
+            if (Attribute.GetCustomAttribute(property, typeof(LabDialAttribute)) is LabDialAttribute dial) dials.Add((property, dial));
+        }
+        Assert(dials.Count > 0, "no Lab dials found");
+        var cases = new System.Collections.Generic.List<(string Name, (System.Reflection.PropertyInfo Property, double Value)[] Settings)>();
+        foreach (var (property, dial) in dials)
+        {
+            cases.Add((property.Name, [(property, dial.Min)]));
+            cases.Add((property.Name, [(property, dial.Max)]));
+        }
+        cases.Add(("all minimums", dials.Select(entry => (entry.Property, entry.Dial.Min)).ToArray()));
+        cases.Add(("all maximums", dials.Select(entry => (entry.Property, entry.Dial.Max)).ToArray()));
+        var sessions = 0;
+        foreach (var (name, settings) in cases)
+        {
+            foreach (var scenario in LabScenarios.All)
+            {
+                foreach (var environment in scenario.Environments)
+                {
+                    using var tuning = template.Copy();
+                    foreach (var (property, value) in settings)
+                        property.SetValue(tuning, Convert.ChangeType(value, property.PropertyType, System.Globalization.CultureInfo.InvariantCulture));
+                    var lab = new LabSession
+                    {
+                        Scenario = scenario,
+                        EnvironmentKind = environment,
+                        Template = tuning,
+                        PauseOnFocusLoss = false,
+                        TestRandomSeed = 23,
+                        Name = "Lab"
+                    };
+                    AddChild(lab);
+                    var label = $"{scenario.Id}/{environment} with {name}";
+                    Assert(lab.Initialized && lab.LiveTanks.Any(), $"{label} built no fixture");
+                    await Frames(20).ConfigureAwait(true);
+                    lab.Reset();
+                    await Frames(10).ConfigureAwait(true);
+                    Assert(lab.Player.IsOnFloor() && lab.LiveTanks.Any(), $"{label} did not survive a reset");
+                    lab.Session.Dispose(); lab.Free();
+                    sessions++;
+                }
+            }
+        }
+        GD.Print($"[lab dials] {sessions} sessions at both slider ends and all-at-once, each built and reset");
+    }
+
     private async Task Cycle(LabScenario scenario, LabEnvironment environment)
     {
         var lab = Enter(scenario, environment);
@@ -120,12 +176,24 @@ public partial class LabTest : Node
         var main = new Main { SavedTuning = template };
         AddChild(main);
         await Frames(60).ConfigureAwait(true);
+        capture.Screenshot("main_menu");
         Press("Lab");
         await Frames(12).ConfigureAwait(true);
         capture.Screenshot("lab_menu");
-        Press("Huge stack");
-        await Frames(12).ConfigureAwait(true);
-        capture.Screenshot("stack_options");
+        foreach (var scenario in LabScenarios.All)
+        {
+            Press(scenario.Name);
+            await Frames(12).ConfigureAwait(true);
+            capture.Screenshot($"options_{scenario.Id}");
+            if (scenario.Environments.Count > 1)
+            {
+                Press("Environment: Void");
+                await Frames(12).ConfigureAwait(true);
+                capture.Screenshot($"options_{scenario.Id}_suburb");
+            }
+            Press("Back to scenarios");
+            await Frames(6).ConfigureAwait(true);
+        }
         main.Free();
         foreach (var scenario in LabScenarios.All)
         {
@@ -143,6 +211,21 @@ public partial class LabTest : Node
                 lab.SetMenu(true);
                 await Frames(8).ConfigureAwait(true);
                 capture.Screenshot($"{scenario.Id}_{environment}_controls");
+                if (environment == LabEnvironment.Void)
+                {
+                    // The controls follow the last device used: a controller press switches every hint.
+                    Input.ParseInputEvent(new InputEventJoypadButton { ButtonIndex = JoyButton.DpadDown, Pressed = true });
+                    Input.ParseInputEvent(new InputEventJoypadButton { ButtonIndex = JoyButton.DpadDown, Pressed = false });
+                    await Frames(8).ConfigureAwait(true);
+                    capture.Screenshot($"{scenario.Id}_{environment}_controls_pad");
+                    lab.SetMenu(false);
+                    await Frames(8).ConfigureAwait(true);
+                    capture.Screenshot($"{scenario.Id}_{environment}_player_pad");
+                    // Back to the keyboard hints before the next scenario, which the live overlay must see.
+                    Input.ParseInputEvent(new InputEventKey { PhysicalKeycode = Key.A, Keycode = Key.A, Pressed = true });
+                    Input.ParseInputEvent(new InputEventKey { PhysicalKeycode = Key.A, Keycode = Key.A, Pressed = false });
+                    await Frames(3).ConfigureAwait(true);
+                }
                 lab.Session.Dispose(); lab.Free();
                 await Collect().ConfigureAwait(true);
             }
@@ -151,6 +234,7 @@ public partial class LabTest : Node
 
     private async Task Duel(bool soak = false)
     {
+        if (DevArgs.Get("duel-seconds") != null) template.LabDuelSeconds = DevArgs.GetFloat("duel-seconds", 180);
         var lab = Enter(LabScenarios.Get("duel"), DevArgs.Get("environment") == "suburb" ? LabEnvironment.Suburb : LabEnvironment.Void);
         if (soak) lab.Bank!.AttachBot(lab.Player);
         else lab.Player.InputOverride = new ScriptedPlayer(lab);
@@ -170,6 +254,53 @@ public partial class LabTest : Node
         Assert(bank.Scores.Values.Sum() + lab.LiveTanks.Count() == bank.InitialSupply, "bank conservation");
         Assert(lab.Opponent!.View == null && !lab.World.Networked, "duel needs camera/network");
         capture.Screenshot(soak ? "duel_soak_end" : "duel_bot_bank");
+        if (!bank.IsPlaying)
+        {
+            await Frames(20).ConfigureAwait(true);
+            capture.Screenshot("duel_round_end");
+            Assert(lab.World.Paused && lab.Overlay.MenuVisible, "round end must pause and show the Lab menu");
+        }
+        lab.Session.Dispose(); lab.Free();
+    }
+
+    /// <summary>Real shots into the shipped maximum stack, through the whole chain, with frame times and frames.</summary>
+    private async Task StackFire()
+    {
+        template.LabStackCount = Tuning.LabStackMaximum;
+        var lab = Enter(LabScenarios.Get("stack"), LabEnvironment.Void);
+        await Frames(90).ConfigureAwait(true);
+        capture.Screenshot("stack_before");
+        var start = lab.LiveTanks.Count();
+        Assert(start == Tuning.LabStackMaximum, "stack must start at the shipped maximum");
+        var target = lab.LiveTanks.OrderBy(t => t.GlobalPosition.DistanceSquaredTo(lab.Player.GlobalPosition)).First();
+        await FireAt(lab.Player, () => target.GlobalTransform * PropaneTank.LocalCenter).ConfigureAwait(true);
+        Assert(target.State == PropaneTank.TankState.Venting, "first shot must puncture the stack tank");
+        capture.Screenshot("stack_punctured");
+        await FireAt(lab.Player, () => target.GlobalTransform * PropaneTank.LocalCenter).ConfigureAwait(true);
+        var frames = new System.Collections.Generic.List<double>();
+        var last = Time.GetTicksUsec();
+        async Task Run(int count, string shots)
+        {
+            for (var i = 0; i < count; i++)
+            {
+                await Frames(1).ConfigureAwait(true);
+                var now = Time.GetTicksUsec(); frames.Add((now - last) / 1000d); last = now;
+                if (shots.Length > 0 && i is 10 or 60 or 240) capture.Screenshot($"{shots}_{i:000}");
+            }
+        }
+        await Run(180, "stack_blast").ConfigureAwait(true);
+        Assert(lab.LiveTanks.Count() < start && lab.LiveTanks.Count() > 0, "the first blast should leave a venting stack");
+        // Shoot venting tanks until the rest go up, as a player would.
+        for (var shot = 0; shot < 12 && lab.LiveTanks.Count() > start / 4; shot++)
+        {
+            var next = lab.LiveTanks.OrderBy(t => t.GlobalPosition.DistanceSquaredTo(lab.Player.GlobalPosition)).First();
+            await FireAt(lab.Player, () => next.GlobalTransform * PropaneTank.LocalCenter).ConfigureAwait(true);
+            await Run(90, shot == 0 ? "stack_chain" : "").ConfigureAwait(true);
+        }
+        await Run(240, "stack_end").ConfigureAwait(true);
+        frames.Sort();
+        GD.Print($"[lab stackfire] tanks {start} -> {lab.LiveTanks.Count()} median_ms={frames[frames.Count / 2]:F1} p95_ms={frames[(int)(frames.Count * .95)]:F1} max_ms={frames[^1]:F1}");
+        Assert(lab.LiveTanks.Count() <= start / 4, "shooting the stack should chain most of it");
         lab.Session.Dispose(); lab.Free();
     }
 
