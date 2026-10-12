@@ -179,7 +179,13 @@ public partial class NetClient : Node
         SetState(Status.Offline, null);
     }
 
-    public override void _Process(double delta)
+    public override void _Process(double delta) => PollNetwork();
+
+    // Catch-up physics can keep running between scarce process frames. Service packet delivery
+    // and ENet ACKs there too; otherwise real-time publications still queue behind a slow frame.
+    public override void _PhysicsProcess(double delta) => PollNetwork();
+
+    private void PollNetwork()
     {
         transport.Poll();
         var now = clock.Seconds;

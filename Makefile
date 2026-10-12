@@ -54,6 +54,7 @@ test-core: build ## Run checker, platform, movement and unit assertions
 test-behavior: build ## Run isolated physics, navigation, menu, grip and feet probes
 	"$(GODOT)" --headless --path . res://scenes/dev/server_tuning_tests.tscn -- --server --tune.MaxPlayers=6 --port=$(PORT)
 	"$(GODOT)" --headless --path . res://scenes/dev/server_seed_tests.tscn -- --server --match-seed=23 --port=$(PORT)
+	"$(GODOT)" --headless --path . res://scenes/dev/transport_physics_tests.tscn -- --server --port=$(PORT)
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/body_correction_tests.tscn
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/session_actors_tests.tscn
 	python3 -B tools/dev/animation_review_tests.py

@@ -329,6 +329,29 @@ public static class TransportTests
 
     private static void RegisterClientTests(TestRunner runner)
     {
+        runner.Run("transport/client services catch-up physics without a process frame", () =>
+        {
+            var network = new LoopbackNetwork();
+            var clock = new Clock();
+            var rawServer = network.Create();
+            var rawClient = network.Create();
+            var server = new LobbyServer(new ServerTransport(rawServer, rawServer.PeerIds), clock) { Port = Endpoint.Port };
+            var client = new NetClient(rawClient, clock);
+            try
+            {
+                server.Start(); client._Ready(); client.Connect("", Endpoint.Port, "Physics", 0);
+                for (var step = 0; step < 6; step++) { client._PhysicsProcess(1.0 / 120); server._Process(0); }
+                Assert(client.State == NetClient.Status.Connected, "physics steps did not service the handshake");
+                client.CreateLobby();
+                for (var step = 0; step < 4; step++) { client._PhysicsProcess(1.0 / 120); server._Process(0); }
+                Assert(client.Lobby != null, "physics steps did not deliver queued reliable control");
+                var before = client.Diagnostics.PacketsOut;
+                clock.Seconds += 1.1;
+                for (var step = 0; step < 8; step++) { client._PhysicsProcess(1.0 / 120); client._Process(0); }
+                Assert(client.Diagnostics.PacketsOut == before + 1, "catch-up and process polls multiplied the ping rate");
+            }
+            finally { client._ExitTree(); server._ExitTree(); client.Free(); server.Free(); }
+        });
         runner.Run("transport/loading grace ends on readiness even after the loading deadline", () =>
         {
             var network = new LoopbackNetwork();

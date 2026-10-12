@@ -367,6 +367,12 @@ rather than treating the zero managed queue as the native queue. ENet native rel
 available. Diagnostics and id bindings last through the disconnect callback, then are released. ENet send acceptance
 reflects Godot PutPacket, which exposes no native send-buffer limit.
 
+Clients service the packet transport from both process and physics callbacks.
+Catch-up physics can continue while process frames are scarce; delivering
+reliable ownership/checkpoints and ENet ACKs there prevents a slow rendered
+frame from stalling an otherwise active network stream. Both paths use one
+monotonic ping deadline, so extra polls do not increase the ping rate.
+
 `FaultPacketTransport` decorates any backend with an injected monotonic clock and seeded random schedule. Lag and
 jitter delay both directions; loss applies only to outgoing unreliable messages, preserving the existing CLI's loss
 meaning. Reliable order is independent per connection and direction. Its per-connection incoming and outgoing

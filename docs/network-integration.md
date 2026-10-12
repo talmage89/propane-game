@@ -246,7 +246,7 @@ correction, not that this was the isolated soak's only cause. Subsequent native
 verification must still pass the unchanged agreement limits.
 The first native follow-up requested FixedSeed=1341647191, but multiplayer
 ignores that single-player tuner: the transmitted layout was seed 331150887.
-With the same 4-bot/90-second 120/30/3 schedule, it It passes 1,998 grids/342,637 body
+With the same 4-bot/90-second 120/30/3 schedule, it passes 1,998 grids/342,637 body
 pairs with no unobserved grids, final drift 0/0.194 m and a 0.95-second
 longest episode; all score audits agree. This is a new layout and action schedule, not a repeat of the failed layout.
 
@@ -377,3 +377,39 @@ The native server fixture checks the actual transmitted PlanCodec seed against
 `--match-seed=23`. Before the selector, it fails with seed 919984183; afterward
 it passes with seed 23. Its client uses ordinary process frames, independently
 of the separate client physics-poll correction.
+
+
+## Packet delivery during catch-up physics
+
+After the drop fix, ten faulted 4-bot/90-second captures passed (largest final
+moving error 0.368 m, longest episode 1.25 s). The second clean capture failed
+a 1.55 s ownership/position episode against the unchanged 1.50 s clean limit.
+It used layout 832642757. Scores and final positions agreed, but the earlier
+episode reached 5.435 m and cannot be dismissed as a final floor-vent residual.
+
+The receiving bot reported 1–2 FPS while catch-up physics continued at
+103–105 ms per step. A grant arrived 331 ms after owner activation, and reliable
+samples remained undelivered for up to 441 ms; RTT reached 399 ms. Publication
+on a monotonic clock alone cannot fix client delivery polled only in _Process.
+NetClient now polls the same transport in _PhysicsProcess too, with unchanged
+monotonic timeout and ping deadlines. Server dispatch, message shapes, gameplay,
+tuners and comparison bounds stay unchanged.
+
+The production loopback regression invokes only client physics callbacks for
+handshake and lobby creation, then mixes eight physics/process polls at one
+clock value and requires exactly one ping. It fails before the fix and all
+232 unit assertions pass afterward. The native regression disables client
+process callbacks and requires actual UDP handshake and reliable lobby control:
+before it fails the handshake; afterward both succeed.
+
+A verified-layout clean repeat requests `-s '--match-seed=832642757'`; the
+server confirms actual seed 832642757. Four bots over 90 seconds pass 1,999
+grids/286,449 body pairs, zero unobserved grids, final rest/moving error
+0.001/0.100 m and longest episode 0.10 s; all scores agree (17 banked).
+The earlier failing episode was 1.55 s. Real-time bot actions differ, so this
+is supporting native evidence alongside the direct regressions, not a replay.
+
+```sh
+godot-mono --headless --path . res://scenes/dev/transport_physics_tests.tscn -- --server --port=25090
+tools/dev/net_bots.sh -p 25090 -n 4 -l 90 -t clean -s '--match-seed=832642757' -o "$PWD/build/vna-polled-clean-repro" -- --melee-start --digest-every=0.5 --tank-motion-trace --tank-authority-trace
+```
