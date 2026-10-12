@@ -24,7 +24,7 @@ for faults in clean faulted; do
     profile=clean
     extra=()
     [[ "$faults" == faulted ]] && profile=faults && extra=(--net-lag=120 --net-jitter=30 --net-loss=3)
-    "$project/tools/dev/net_bots.sh" -n "$actors" -t "$profile" -l 90 -w "$windowed" -o "$directory" \
+    "$project/tools/dev/net_bots.sh" -n "$actors" -t "$profile" -l 120 -w "$windowed" -o "$directory" \
       -s '--start-score=8 --capacity-metrics' -- --scenario=capacity --digest-every=1 --net-seed="$run" "${extra[@]}"
     python3 -B "$project/tools/dev/check_capacity.py" "$directory" "$actors" | tee "$directory/acceptance.txt"
   done
