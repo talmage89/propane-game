@@ -50,6 +50,7 @@ public partial class Menus : CanvasLayer
     public int HostPort { get; set; } = Protocol.DefaultPort;
 
     public event Action? SinglePlayerRequested;
+    public event Action? LabRequested;
 
     /// <summary>Run a server in this game and join it, on the given port.</summary>
     public event Action<int>? HostRequested;
@@ -217,6 +218,9 @@ public partial class Menus : CanvasLayer
         var multi = UiStyle.Button("Multiplayer");
         multi.Pressed += () => Show(Net.State == NetClient.Status.Connected ? Net.Lobby != null ? Screen.Lobby : Screen.Browser : Screen.Connect);
         layout.AddChild(multi);
+        var lab = UiStyle.Button("Lab");
+        lab.Pressed += () => LabRequested?.Invoke();
+        layout.AddChild(lab);
         var quit = UiStyle.Button("Quit");
         quit.Pressed += () => ShutdownGuard.Quit(GetTree());
         layout.AddChild(quit);

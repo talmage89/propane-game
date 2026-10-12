@@ -1,0 +1,135 @@
+using System;
+using Godot;
+using Propane.Core;
+using Propane.UI;
+
+namespace Propane.Lab;
+
+/// <summary>Scenario registry front end, using the same keyboard/controller navigation as the main menu.</summary>
+public partial class LabMenu : CanvasLayer
+{
+    public Tuning Template { get; init; } = Tuning.SavedTemplate;
+    public event Action? BackRequested;
+    public event Action<LabScenario, LabEnvironment, Tuning>? StartRequested;
+    private VBoxContainer layout = null!;
+    private MenuNavigation navigation = null!;
+    private LabScenario? selected;
+    private LabEnvironment environment;
+    private Tuning draft = null!;
+
+    public override void _Ready()
+    {
+        Layer = 40;
+        draft = Template.Copy();
+        var center = new CenterContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
+        center.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+        AddChild(center);
+        var panel = new PanelContainer();
+        panel.AddThemeStyleboxOverride("panel", UiStyle.Panel(0.96f));
+        center.AddChild(panel);
+        layout = new VBoxContainer { CustomMinimumSize = new Vector2(620, 0) };
+        layout.AddThemeConstantOverride("separation", 10);
+        panel.AddChild(layout);
+        navigation = new MenuNavigation { Screen = this, Root = layout, Back = Back };
+        AddChild(navigation);
+        Rebuild();
+    }
+
+    public override void _ExitTree() => draft.Dispose();
+    public override void _UnhandledInput(InputEvent e)
+    {
+        if (Visible && e.IsActionPressed(InputSetup.Pause)) { Back(); GetViewport().SetInputAsHandled(); }
+    }
+
+    public void ShowScenarios()
+    {
+        using var previous = draft;
+        draft = Template.Copy();
+        draft.CopyLocalTunersFrom(previous);
+        Visible = true;
+        selected = null;
+        Rebuild();
+    }
+
+    private void Back()
+    {
+        if (selected != null) { selected = null; Rebuild(); }
+        else
+        {
+            BackRequested?.Invoke();
+        }
+    }
+
+    private void Rebuild(string? focus = null)
+    {
+        foreach (var child in layout.GetChildren()) { layout.RemoveChild(child); child.QueueFree(); }
+        layout.AddChild(UiStyle.Title(selected == null ? "THE LAB" : selected.Name.ToUpperInvariant(), 40));
+        layout.AddChild(UiStyle.Text(selected == null ? "A clean slate. Try something loud." : selected.Description, 16, UiStyle.SoftInk,
+            HorizontalAlignment.Center));
+        layout.AddChild(new HSeparator());
+        if (selected == null)
+        {
+            foreach (var scenario in LabScenarios.All)
+            {
+                Button(scenario.Name, () => { selected = scenario; environment = LabEnvironment.Void; Rebuild(); });
+                layout.AddChild(UiStyle.Text(scenario.Description, 16, UiStyle.SoftInk, HorizontalAlignment.Center));
+            }
+            layout.AddChild(new HSeparator());
+            Button("Main menu", () => BackRequested?.Invoke());
+        }
+        else
+        {
+            var scenario = selected;
+            if (scenario.Environments.Count > 1)
+            {
+                Button($"Environment: {environment}", () =>
+                {
+                    environment = environment == LabEnvironment.Void ? LabEnvironment.Suburb : LabEnvironment.Void;
+                    Rebuild("environment");
+                }, "environment");
+                layout.AddChild(UiStyle.Text("Void is the default. Suburb adds houses, cover, and loose props.", 16, UiStyle.SoftInk, HorizontalAlignment.Center));
+            }
+            else
+            {
+                layout.AddChild(UiStyle.Text($"Environment: {scenario.Environments[0]}", 22, UiStyle.Ink, HorizontalAlignment.Center));
+                layout.AddChild(UiStyle.Text("A clear floor, an open sky, and no houses.", 16, UiStyle.SoftInk, HorizontalAlignment.Center));
+            }
+            if (scenario.Id == "stack")
+            {
+                var row = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.Center };
+                layout.AddChild(row);
+                Button("−", () => { draft.LabStackCount = Mathf.Max(Tuning.LabStackMinimum, draft.LabStackCount - Tuning.LabStackStep); Rebuild("smaller"); }, "smaller", draft.LabStackCount <= Tuning.LabStackMinimum, row);
+                row.AddChild(UiStyle.Text($"{draft.LabStackCount} tanks", 22));
+                Button("+", () => { draft.LabStackCount = Mathf.Min(Tuning.LabStackMaximum, draft.LabStackCount + Tuning.LabStackStep); Rebuild("larger"); }, "larger", draft.LabStackCount >= Tuning.LabStackMaximum, row);
+                layout.AddChild(UiStyle.Text($"{Tuning.LabStackMinimum}–{Tuning.LabStackMaximum} tanks · bigger stacks cost more during a blast.", 16, UiStyle.SoftInk, HorizontalAlignment.Center));
+            }
+            if (scenario.Banking)
+            {
+                var difficulty = draft.LabBotSkill <= 0.3f ? "Easy" : draft.LabBotSkill >= 0.9f ? "Hard" : "Normal";
+                Button($"Difficulty: {difficulty}", () =>
+                {
+                    draft.LabBotSkill = difficulty == "Easy" ? 0.6f : difficulty == "Normal" ? 1 : 0.2f;
+                    Rebuild("difficulty");
+                }, "difficulty");
+                layout.AddChild(UiStyle.Text("Local tank bank · one bot · three minutes · no server needed", 16, UiStyle.SoftInk, HorizontalAlignment.Center));
+            }
+            layout.AddChild(new HSeparator());
+            Button("Enter Lab", () => StartRequested?.Invoke(scenario, environment, draft), "enter");
+            Button("Back to scenarios", Back);
+            layout.AddChild(UiStyle.Text("Reset and free tuning are available in every scenario.", 16, UiStyle.SoftInk, HorizontalAlignment.Center));
+        }
+        layout.AddChild(UiStyle.Text("D-pad / stick or arrows: navigate   ·   A / Enter: choose   ·   B / Esc: back", 14, UiStyle.SoftInk,
+            HorizontalAlignment.Center));
+        // Choosing a scenario lands on Enter Lab, so a second press starts it rather than changing an option.
+        navigation.Configure(focus ?? (selected != null ? "enter" : null));
+    }
+
+    private void Button(string text, Action action, string? key = null, bool disabled = false, Node? parent = null)
+    {
+        var button = UiStyle.Button(text);
+        button.Disabled = disabled;
+        if (key != null) button.SetMeta("focus_key", key);
+        button.Pressed += action;
+        (parent ?? layout).AddChild(button);
+    }
+}
