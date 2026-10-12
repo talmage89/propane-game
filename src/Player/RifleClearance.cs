@@ -127,7 +127,7 @@ public sealed class RifleClearance
                 var (_, volumeCenter, volumeRadius) = body[j];
                 var normalized = (bodyFrames[j] * point - volumeCenter) / volumeRadius;
                 var distance = EllipsoidDistance(bodyFrames[j] * point - volumeCenter, volumeRadius,
-                    tuning.RifleStockRadius + (margin ?? tuning.RifleHeadClearance)) - tuning.RifleStockRadius;
+                    tuning.RifleStockRadius + (margin ?? tuning.RifleBodyClearance)) - tuning.RifleStockRadius;
                 if (distance >= gap) continue;
                 gap = distance;
                 LastStockBodyBone = body[j].Bone;
@@ -158,7 +158,7 @@ public sealed class RifleClearance
     /// alternates these surface objectives with anatomical reach and elbow clearance.</summary>
     public Transform3D Project(Skeleton3D skeleton, Transform3D rifle, Tuning tuning, float shouldered = 0, Vector3? rightGrip = null, Vector3? leftGrip = null, float? minimumGap = null)
     {
-        var minimum = minimumGap ?? tuning.RifleHeadClearance;
+        var minimum = minimumGap ?? tuning.RifleBodyClearance;
         var wristMinimum = minimumGap ?? tuning.RifleLimbClearance;
         if (shouldered > 0)
         {

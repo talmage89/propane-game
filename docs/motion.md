@@ -16,6 +16,15 @@ head. Carry, low ready, aimed hold and reload placement are tuners. The sprint c
 above the moving thighs. The original wrist frames, finger curls, curved magazine/bolt contacts and get-up handoff
 remain the contact definitions.
 
+Carry follows eased aim yaw and pitch with a 5-degree muzzle dip and 3-degree yaw offset, retaining
+its lower stock position. Moving carry follows 55% of pitch to keep the relaxed arms clear during abrupt
+up/down looks while running. Get-up first recovers a carry in the chest frame before following aim.
+It seeks the firing clearance reserve before the trigger press, so the first hip shot needs a small lift instead
+of rotating the arms from an across-body hold. Fire, recoil and the primary endpoint still happen immediately.
+`player_range --scenario=recoil --stance=hip --assert-first-hip` requires at most 15 degrees of first-frame arm
+change at the default −10-degree pitch and a shot within one rendered frame of the scheduled press; the raw
+angle and timing are reported. Close floor endpoints can require a larger immediate firing correction.
+
 ## Constraint fit
 
 `RifleClearance` derives ellipsoid proxies from the mannequin skin for pelvis, spine, head and thighs. It samples
@@ -45,6 +54,11 @@ seated magazine. Transit clearance leaves a margin between densely sampled phase
 Get-up trials also retain their applied handoff progress when the pose is held. Clearance fades in with the rig,
 so an initially physical hand can transfer its rifle without an immediate stock correction snapping the wrist.
 
+The first fractional get-up sample captures the current right wrist before `RifleHandFollow` runs. Its previous
+frame's rifle is not a valid handoff for a newly sampled get-up pose. The anatomical reach margin fades with the
+handoff, while the numerical solve reserve remains. The reach scene exercises a presentation stall followed by
+a 0.0025 return weight and delayed echoes.
+
 [Recoil](recoil.md) owns persistent player-controlled climb and barrel alignment. The fit clears both reachable
 grips before the authoritative muzzle ray. The rendered firing pose retains that exact world muzzle and carries
 the shoulder frame through actor translation, facing and authored pelvis motion. A shot also keeps its stock
@@ -52,6 +66,62 @@ above the pelvis's leg-swing region before that ray: a low sprint carry otherwis
 next rendered thigh pose, especially below 60 fps. The two arms follow the rigid
 aligned rifle immediately, as R19 requires; body/head and digit bounds remain measured. This does not change the
 recoil spring, camera, firing eligibility, damage or spread rules.
+
+Firing clearance search retains the best reachable, already aligned candidate. A final clearance nudge is only
+a trial: exhausting the search cannot select it as an authoritative muzzle outside arm reach. The fit seeks
+the extra firing reserve first, then required body clearance, ranking tested candidates by actual body/limb
+clearance rather than sacrificing an arm to the optional reserve. Held firing poses refit barrel tracking
+between shots without extending the tracking clock or firing again. Remote echoes
+retain the queued presentation ordering and close-endpoint fallback described in [recoil](recoil.md).
+
+## Presentation tuners
+
+All added controls have runtime consumers. They are shared match data. The authored redo removes the procedural
+step generators and also removes four obsolete controls: `CombatSpineTwistDegrees`, `FootMinimumSeparation`,
+`LandingCompression` and `RifleAimPelvisSteady`. The feet probe retains its independent 120 mm separation
+calibration. `RifleBodyClearance` names the stock's constraint against all body proxies, including the head.
+
+| Tuner | Default | Purpose |
+| --- | ---: | --- |
+| `BackWalkStrideLength`, `SideWalkStrideLength` | 0.93, 0.69 m | Distance per authored backward/side walk cycle. |
+| `BackJogStrideLength`, `SideJogStrideLength` | 3.6, 2.6 m | Distance per authored backward/side jog cycle. |
+| `TurnStrideDegrees` | 90° | Facing change per turn cycle. |
+| `TurnPoseThresholdDegrees` | 20°/s | Standing turn activation threshold. |
+| `TurnVelocityResponse` | 12/s | Filtering of displayed facing speed. |
+| `TurnInitialPhase` | 0.45 cycle | Initial lifted-foot phase of a standing turn. |
+| `FootKneeSeparation` | 0.16 m | Minimum knee-center separation in terrain correction. |
+| `FootCorrectionLimit` | 0.08 m | Maximum planar correction before releasing a contact. |
+| `FootPlantHeight` | 0.03 m | Authored ankle height above the sole eligible for support. |
+| `FootPlantSpeed` | 2 m/s | Maximum authored world ankle speed eligible for support. |
+| `FootPlantReachTolerance` | 0.0001 m | Contact reach residual before releasing its promise. |
+| `FootCorrectionReleaseSpeed` | 0.6 m/s | Recovery of a released foot offset. |
+| `RifleAuthoredYawShare` | 0.35 | Captured chest yaw retained under aim. |
+| `RifleAimedAuthoredRollShare` | 0.65 | Captured chest roll retained when shouldered. |
+| `RifleAimCounterSwayShare` | 1 | Aimed lateral counterlean share. |
+| `RifleAimCounterLeanDegrees` | 10° | Maximum lateral counterlean. |
+| `RifleCarryAimPitchShare` | 0.55 | Fraction of eased aim pitch followed by moving relaxed carry. |
+| `RifleClearanceLimit` | 0.08 m | Maximum displacement per skin-clearance projection. |
+| `RifleNeckLeanDegrees` | 30° | Neck rotation limit when approaching the cheek contact. |
+| `RifleBodyClearance` | 0.006 m | Stock clearance against skin-derived body volumes. |
+| `RifleShotClearance` | 0.035 m | Pre-shot stock/wrist reserve against the next clip sample. |
+| `RifleShotStockAbovePelvis` | 0.2 m | Stock floor above the pelvis before a firing fit. |
+| `RifleStockRadius` | 0.018 m | Rounded stock core radius. |
+| `RifleShoulderRadius` | 0.055 m | Shoulder-pocket capsule radius. |
+| `RifleShoulderContactLength` | 0.14 m | Proximal upper-arm length used for the shoulder pocket. |
+| `RifleShoulderContactGap` | 0.008 m | Desired shouldered-stock gap. |
+| `RifleShoulderMinimumGap`, `RifleShoulderMaximumGap` | 0, 0.025 m | Allowed shouldered-stock gap interval. |
+| `RifleShoulderReachDegrees` | 25° | Scapular protraction limit from the desired clavicle pose. |
+| `RifleShoulderPoseShare` | 0.5 | Share of the body angular budget for each clavicle. |
+| `RifleScapulaClearance` | 0.005 m | Shoulder-root clearance against the torso. |
+| `RifleArmRadius`, `RifleWristRadius` | 0.035, 0.02 m | Upper/forearm and tapered wrist proxy radii. |
+| `RifleLimbClearance` | 0.005 m | Arm/body and arm/arm clearance goal. |
+| `RifleSolveReserve` | 0.001 m | Numerical reserve between accepted contact and reach boundary. |
+| `RifleCarryArmAngularSpeed` | 1200°/s | Ordinary carrying-arm transition budget. |
+
+Changed defaults retain their existing controls: jog stride 2.4→5 m; hip pitch share 0.3→0.55; aimed blade
+38→28°; shoulder raise 30→15°; shoulder inboard 0.10→0.03 m and up 0.11→0.075 m; sprint stock drop
+0.12→0.04 m; reload transit clearance 0.10→0.13 m. The integration review also changes carry dip 23→5° and
+yaw 15→3°, relative to eased aim. These control presentation, not movement or combat eligibility.
 
 These volumes are regression proxies, not exact mesh collision shapes. The head/shoulder harness tolerates 5 mm
 of proxy uncertainty; its shoulder upper bound is 25 mm. Skin-derived body and arm clearance are checked in the

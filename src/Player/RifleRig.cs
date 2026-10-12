@@ -38,7 +38,7 @@ public partial class RifleRig : SkeletonModifier3D
     private Quaternion[] desiredBones = null!;
     private Vector3[] previousPositions = null!, desiredPositions = null!;
     private int[] upperBones = null!;
-    private Transform3D lastRifle, lastChest, lastUpperParent;
+    private Transform3D lastRifle, lastChest;
     private float lastReloadPhase;
     private bool meleeReloadForward, hadMelee;
     private bool hasUpperPose;
@@ -95,7 +95,6 @@ public partial class RifleRig : SkeletonModifier3D
     private Vector3 lastShoulderR, lastShoulderL;
     private Transform3D lastPelvisFrame, firingSkeletonFrame;
     private Vector3 lastElbowR, lastElbowL, lastWristR, lastWristL;
-    private Vector3 lastNeck;
     private readonly Queue<Vector3> remoteShots = new();
     public event Action<Vector3>? RemoteShotAligned;
 
@@ -117,10 +116,12 @@ public partial class RifleRig : SkeletonModifier3D
         var from = skeleton.GlobalTransform;
         var shoulderR = from * (hasUpperPose ? lastShoulderR : skeleton.GetBoneGlobalPose(upperR).Origin);
         var shoulderL = from * (hasUpperPose ? lastShoulderL : skeleton.GetBoneGlobalPose(upperL).Origin);
-        var margin = (World.Tuning.RifleReachMargin + World.Tuning.RifleSolveReserve) * Weight * Weight;
+        var margin = World.Tuning.RifleReachMargin * Weight * Weight + World.Tuning.RifleSolveReserve;
         var pivot = LeftHandTransform(Transform3D.Identity, Rifle.LeftHandLocal, Rifle.LeftGripBasis).Origin.Lerp(Rifle.EyeLocal.Origin, AimAmount);
         var pose = AlignPlacement(Rifle.GlobalTransform, target, pivot, shoulderR, shoulderL,
             ArmLength(skeleton, upperR, lowerR, handR) - margin, ArmLength(skeleton, upperL, lowerL, handL) - margin);
+        var reachablePose = Rifle.AlignBarrel(pose, Rifle.MuzzleLocal.Origin, target);
+        var bestGap = float.NegativeInfinity;
         var to = from.AffineInverse();
         // The first shot can interrupt a low sprint carry before the next rendered gait pose. Keeping
         // the stock above the pelvis's leg-swing region clears that transition before the muzzle ray,
@@ -131,10 +132,13 @@ public partial class RifleRig : SkeletonModifier3D
         for (var fit = 0; fit < 48; fit++)
         {
             var previous = pose;
+            // Try the extra firing reserve first. At close endpoints it can compete with
+            // limb reach; the second half still requires the documented body clearance.
+            var stockReserve = fit < 24 ? World.Tuning.RifleShotClearance : World.Tuning.RifleBodyClearance;
             pose = clearance.Project(skeleton, pose, World.Tuning,
                 rightGrip: RightHandTransform(Transform3D.Identity).Origin,
                 leftGrip: LeftHandTransform(Transform3D.Identity, Rifle.LeftHandLocal, Rifle.LeftGripBasis).Origin,
-                minimumGap: World.Tuning.RifleShotClearance);
+                minimumGap: stockReserve);
             pose.Origin += Vector3.Up * Mathf.Max(0, thighCeiling - StockFloor(pose));
             pose = AlignPlacement(pose, target, pivot, shoulderR, shoulderL,
                 ArmLength(skeleton, upperR, lowerR, handR) - margin, ArmLength(skeleton, upperL, lowerL, handL) - margin);
@@ -152,10 +156,17 @@ public partial class RifleRig : SkeletonModifier3D
                 wristL.DistanceTo(lastShoulderL) <= ArmLength(skeleton, upperL, lowerL, handL) - margin + 0.000001f;
             var pairGap = RifleClearance.ArmPairGap(new(lastShoulderR, elbowR, wristR), new(lastShoulderL, elbowL, wristL), World.Tuning);
             var stockGap = clearance.StockBodyGap(skeleton, pose, World.Tuning);
+            if (reachable)
+            {
+                var gap = Mathf.Min(stockGap - World.Tuning.RifleBodyClearance,
+                    Mathf.Min(contact.Gap - World.Tuning.RifleLimbClearance, pairGap - World.Tuning.RifleLimbClearance));
+                gap = Mathf.Min(gap, StockFloor(pose) - thighCeiling);
+                if (gap > bestGap) { reachablePose = pose; bestGap = gap; }
+            }
             if (contact.Gap >= World.Tuning.RifleLimbClearance && pairGap >= World.Tuning.RifleLimbClearance && reachable &&
                 StockFloor(pose) >= thighCeiling - 0.000001f &&
-                (stockGap >= World.Tuning.RifleShotClearance ||
-                 stockGap >= World.Tuning.RifleHeadClearance && pose.Origin.DistanceSquaredTo(previous.Origin) < 1e-12f &&
+                (stockGap >= stockReserve ||
+                 stockGap >= World.Tuning.RifleBodyClearance && pose.Origin.DistanceSquaredTo(previous.Origin) < 1e-12f &&
                  pose.Basis.IsEqualApprox(previous.Basis)))
             {
                 // Seek the firing reserve before accepting the fit: the next authored leg pose can move
@@ -171,7 +182,9 @@ public partial class RifleRig : SkeletonModifier3D
             }
         }
         // The obstruction origin now agrees with the aligned model. Preserve it for this rendered firing frame.
-        Rifle.GlobalTransform = Rifle.AlignBarrel(pose, Rifle.MuzzleLocal.Origin, target);
+        // A final clearance nudge can exhaust the bounded search. It is a trial, not a reachable
+        // firing pose: retain the best already aligned candidate before choosing the muzzle ray.
+        Rifle.GlobalTransform = reachablePose;
         shotPose = Rifle.GlobalTransform;
         firingSkeletonFrame = from;
         alignmentRemaining = 1 / Mathf.Max(World.Tuning.FireRate, 0.1f) + 1f / Engine.PhysicsTicksPerSecond;
@@ -295,6 +308,13 @@ public partial class RifleRig : SkeletonModifier3D
         if (!hasStance)
         {
             CacheBones(skeleton);
+            if (hasPhysicalHandoff)
+            {
+                // HandFollow runs after this modifier. On the first get-up sample its rifle still
+                // belongs to the previous hand sample; capture this sample's rigid wrist contact.
+                var hand = (fromSkeleton * skeleton.GetBoneGlobalPose(handR)).Orthonormalized();
+                Rifle.GlobalTransform = hand * RightHandInRifle.AffineInverse();
+            }
             handoffRifle = toSkeleton * Rifle.GlobalTransform;
             handoffLeft = skeleton.GetBoneGlobalPose(handL);
             handoffChest = skeleton.GetBoneGlobalPose(spine[2]);
@@ -426,9 +446,16 @@ public partial class RifleRig : SkeletonModifier3D
         var hipBasis = Basis.LookingAt(hipDir, Vector3.Up).Rotated(hipDir, Mathf.DegToRad(tuning.RifleReadyRollDegrees));
         var hipPocket = shoulder + chestRight * tuning.RifleHipOutboard - chestUp * tuning.RifleHipDown + chestForward * tuning.RifleHipForward;
         var hip = new Transform3D(hipBasis, hipPocket - hipBasis * Rifle.ButtLocal.Origin);
-        // Relaxed carry between shots: muzzle dipped and angled across the body, so the rifle reads clearly
-        // from the over-the-shoulder camera instead of pointing straight down the view.
-        var relaxedDir = CarryDirection(chestForward, chestRight, tuning.RifleCarryPitchDegrees, tuning.RifleCarryYawDegrees);
+        // Carry stays near the eased aim so an immediate first shot needs only a small visible lift.
+        // The stock remains below the shoulder; sprint and reload retain their separate placements.
+        var carryPitchShare = Mathf.Lerp(1, tuning.RifleCarryAimPitchShare, Pose.Moving);
+        var carryDir = new Vector3(hipDir.X, 0, hipDir.Z).Normalized().Slerp(hipDir, carryPitchShare).Normalized();
+        var carryRight = carryDir.Cross(Vector3.Up).Normalized();
+        var relaxedDir = carryDir.Rotated(carryRight, -Mathf.DegToRad(tuning.RifleCarryPitchDegrees))
+            .Rotated(Vector3.Up, Mathf.DegToRad(tuning.RifleCarryYawDegrees));
+        // Recover the physical hand in the chest frame before turning the carry toward aim.
+        if (hasPhysicalHandoff)
+            relaxedDir = CarryDirection(chestForward, chestRight, tuning.RifleCarryPitchDegrees, tuning.RifleCarryYawDegrees);
         var relaxedBasis = Basis.LookingAt(relaxedDir, Vector3.Up).Rotated(relaxedDir, Mathf.DegToRad(tuning.RifleCarryRollDegrees));
         var relaxed = new Transform3D(relaxedBasis, hipPocket - relaxedBasis * Rifle.ButtLocal.Origin);
         hip = relaxed.InterpolateWith(hip, Mathf.SmoothStep(0, 1, Mathf.Max(ReadyAmount, AimAmount)));
@@ -602,15 +629,20 @@ public partial class RifleRig : SkeletonModifier3D
             // Shoulder placement owns the rifle. An exact eye weld pulls its stock through this mannequin's
             // broad cheek; preserve the gaze and clear the skin instead of translating back to the optic.
             var shouldered = Reload == 0 && !Melee ? fittedAim * Weight : 0;
+            float? carryClearance = Reload == 0 && !Melee && !hasPhysicalHandoff && fittedAim < .01f && SprintAmount < .01f
+                ? World.Tuning.RifleShotClearance : null;
             var clearRifle = clearance.Project(s, rifle, World.Tuning, shouldered,
                 Weight >= 0.999f ? RightHandTransform(Transform3D.Identity).Origin : null,
-                Weight >= 0.999f ? LeftHandTransform(Transform3D.Identity, Rifle!.LeftHandLocal, Rifle.LeftGripBasis).Origin : null);
+                Weight >= 0.999f ? LeftHandTransform(Transform3D.Identity, Rifle!.LeftHandLocal, Rifle.LeftGripBasis).Origin : null,
+                minimumGap: carryClearance);
             rifle = Weight < 0.999f ? rifle.InterpolateWith(clearRifle, Weight * Weight) : clearRifle;
             if (Weight < 0.999f)
                 leftStart = from * s.GetBoneGlobalPose(spine[2]) * handoffChest.AffineInverse() * handoffLeft;
             var shoulderR = from * s.GetBoneGlobalPose(upperR).Origin;
             var shoulderL = from * s.GetBoneGlobalPose(upperL).Origin;
-            var margin = (World.Tuning.RifleReachMargin + World.Tuning.RifleSolveReserve) * Weight * Weight;
+            // The anatomical margin fades with the handoff, but float roundoff still needs a reserve
+            // at its first fractional sample (especially at match-sized world coordinates).
+            var margin = World.Tuning.RifleReachMargin * Weight * Weight + World.Tuning.RifleSolveReserve;
             // Bound reload progress with the coherent pose. Sampling the authored curved contact path keeps
             // the hand clear of the receiver; interpolating wrist frames would cut across that clearance.
             fittedReload = Mathf.Lerp(lastReloadPhase, proposedReload, amount);
@@ -653,8 +685,9 @@ public partial class RifleRig : SkeletonModifier3D
                 else
                 {
                     clearRifle = clearance.Project(s, rifle, World.Tuning, shouldered,
-                Weight >= 0.999f ? RightHandTransform(Transform3D.Identity).Origin : null,
-                Weight >= 0.999f ? LeftHandTransform(Transform3D.Identity, Rifle!.LeftHandLocal, Rifle.LeftGripBasis).Origin : null);
+                        Weight >= 0.999f ? RightHandTransform(Transform3D.Identity).Origin : null,
+                        Weight >= 0.999f ? LeftHandTransform(Transform3D.Identity, Rifle!.LeftHandLocal, Rifle.LeftGripBasis).Origin : null,
+                        minimumGap: carryClearance);
                     rifle = Weight < 0.999f ? rifle.InterpolateWith(clearRifle, Weight * Weight) : clearRifle;
                     if (TrackingBarrelThisFrame && Reload == 0 && !Melee)
                     {
@@ -687,7 +720,7 @@ public partial class RifleRig : SkeletonModifier3D
                 if (Weight >= 0.999f && shotPose != null)
                 {
                     solved &= arm.Gap >= World.Tuning.RifleLimbClearance - 0.000001f &&
-                        clearance.StockBodyGap(s, rifle, World.Tuning) >= World.Tuning.RifleHeadClearance - 0.000001f;
+                        clearance.StockBodyGap(s, rifle, World.Tuning) >= World.Tuning.RifleBodyClearance - 0.000001f;
                 }
 
                 if (Weight >= 0.999f && shotPose == null && arm.Gap < World.Tuning.RifleLimbClearance - 0.000001f)
@@ -698,7 +731,7 @@ public partial class RifleRig : SkeletonModifier3D
                     continue;
                 }
                 if (Weight >= 0.999f && shotPose == null &&
-                    (clearance.StockBodyGap(s, rifle, World.Tuning) < World.Tuning.RifleHeadClearance - 0.000001f ||
+                    (clearance.StockBodyGap(s, rifle, World.Tuning) < World.Tuning.RifleBodyClearance - 0.000001f ||
                      shouldered >= 0.999f && (clearance.ShoulderGap(s, rifle, World.Tuning) > World.Tuning.RifleShoulderMaximumGap ||
                          clearance.ShoulderGap(s, rifle, World.Tuning) < World.Tuning.RifleShoulderMinimumGap - 0.000001f)))
                 {
@@ -766,6 +799,14 @@ public partial class RifleRig : SkeletonModifier3D
                 s.SetBonePoseRotation(bone, previousBones![bone]);
                 s.SetBonePosePosition(bone, previousPositions[bone]);
             }
+            if (TrackingBarrelThisFrame && shotPose == null)
+            {
+                // A held body still has to track between shots. Fit against its cached shoulders,
+                // then preserve that frame exactly as for a shot, without emitting or delaying fire.
+                var remaining = alignmentRemaining;
+                AlignShot(AimTarget);
+                alignmentRemaining = remaining;
+            }
             if (shotPose != null)
             {
                 HoldFiringBody(s, to, 0);
@@ -790,7 +831,8 @@ public partial class RifleRig : SkeletonModifier3D
                 var solvedRight = SolveTwoBone(s, upperR, lowerR, handR, to * RightTarget, rightPole);
                 var leftPole = clearance.ElbowPole(s, upperL, lowerL, handL, to * LeftTarget.Origin, to * poleL, World.Tuning,
                     new RifleClearance.Arm(s.GetBoneGlobalPose(upperR).Origin, s.GetBoneGlobalPose(lowerR).Origin, to * RightTarget.Origin));
-                if (!solvedRight || !SolveTwoBone(s, upperL, lowerL, handL, to * LeftTarget, leftPole))
+                var solvedLeft = SolveTwoBone(s, upperL, lowerL, handL, to * LeftTarget, leftPole);
+                if (!solvedRight || !solvedLeft)
                 {
                     throw new InvalidOperationException("Unreachable authoritative firing pose");
                 }
@@ -803,6 +845,7 @@ public partial class RifleRig : SkeletonModifier3D
         lastChest = s.GetBoneGlobalPose(spine[2]);
         aimBlend = lastFitAim = fittedAim;
         lastFitWeight = Weight;
+        if (accepted && Weight >= .999f) hasPhysicalHandoff = false;
     }
 
     private void HoldFiringBody(Skeleton3D skeleton, Transform3D toSkeleton, float amount)
@@ -861,13 +904,14 @@ public partial class RifleRig : SkeletonModifier3D
 
     private void CacheBones(Skeleton3D skeleton)
     {
+        // Trials refresh clearance before IK, but a held pose restores different torso/head bones.
+        // Physics firing must query the final displayed body, together with these cached shoulders.
+        clearance.UpdatePose(skeleton);
         lastPelvisFrame = skeleton.GetBoneGlobalPose(pelvis);
         lastElbowR = skeleton.GetBoneGlobalPose(lowerR).Origin;
         lastElbowL = skeleton.GetBoneGlobalPose(lowerL).Origin;
         lastWristR = skeleton.GetBoneGlobalPose(handR).Origin;
         lastWristL = skeleton.GetBoneGlobalPose(handL).Origin;
-        lastUpperParent = skeleton.GetBoneGlobalPose(skeleton.GetBoneParent(spine[0]));
-        lastNeck = skeleton.GetBoneGlobalPose(neck).Origin;
         lastShoulderR = skeleton.GetBoneGlobalPose(upperR).Origin;
         lastShoulderL = skeleton.GetBoneGlobalPose(upperL).Origin;
         previousBones ??= new Quaternion[skeleton.GetBoneCount()];
@@ -997,8 +1041,9 @@ public partial class RifleRig : SkeletonModifier3D
         // endpoint on the positive barrel ray and intersect that ray's two wrist-reach intervals.
         // This fallback preserves the endpoint and both grips; the ordinary cheek/pivot fit above
         // remains unchanged. A delayed remote echo need not admit its observer's current cheek hold.
-        foreach (var center in new[] { shoulderR, shoulderL, (shoulderR + shoulderL) * .5f })
+        for (var choice = 0; choice < 3; choice++)
         {
+            var center = choice == 0 ? shoulderR : choice == 1 ? shoulderL : (shoulderR + shoulderL) * .5f;
             var forward = (target - center).Normalized();
             if (forward.LengthSquared() < .5f) continue;
             var basis = new Basis(new Quaternion(-rifle.Basis.Z.Normalized(), forward)) * rifle.Basis;

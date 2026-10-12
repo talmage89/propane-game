@@ -89,7 +89,7 @@ test-behavior: build ## Run isolated physics, navigation, menu, grip and feet pr
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/player_range.tscn -- --scenario=movement --assert-motion --assert-grip
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/player_range.tscn -- --scenario=motion --assert-motion --assert-grip
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/player_range.tscn -- --scenario=recoil --stance=aim --assert-grip --assert-motion
-	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/player_range.tscn -- --scenario=recoil --stance=hip --assert-grip --assert-motion
+	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/player_range.tscn -- --scenario=recoil --stance=hip --assert-grip --assert-motion --assert-first-hip
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/player_range.tscn -- --scenario=recoil --stance=creep --assert-grip --assert-motion
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/player_range.tscn -- --scenario=recoil --stance=hip --burst-start=0 --assert-grip --assert-motion
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/player_range.tscn -- --scenario=bot-recoil --magazines=2
@@ -106,7 +106,7 @@ test-full: test ## Run the gate plus deep sweeps
 	@mkdir -p build/animation-review-full
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/animation_review.tscn -- --metrics=$(CURDIR)/build/animation-review-full/metrics.csv --assert-motion --assert-grip
 	python3 -B tools/dev/animation_metrics.py build/animation-review-full/metrics.csv --output build/animation-review-full/results.json --strict
-	tools/dev/net_bots.sh -o "$(CURDIR)/build/rifle-soak-gate" -n 4 -w 0 -l 90 -s '--match-seed=25' -- --melee-start --net-seed=2 --net-lag=120 --net-jitter=30 --net-loss=3
+	tools/dev/net_bots.sh -p "$(PORT)" -o "$(CURDIR)/build/rifle-soak-gate" -n 4 -w 0 -l 90 -s '--match-seed=25' -- --melee-start --net-seed=2 --net-lag=120 --net-jitter=30 --net-loss=3
 	GODOT="$(GODOT)" python3 -B tools/dev/check_lab.py --full
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/upright_pile_tests.tscn -- --deep --awake
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/menu_test.tscn -- --scenario=lifetime --port=$(PORT)

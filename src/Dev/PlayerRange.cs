@@ -319,7 +319,7 @@ public partial class PlayerRange : Node3D
                     foreach (var (t, label) in new (float, string)[]
                     {
                         (16.04f, "aim_down_fire"), (17.04f, "aim_up_fire"),
-                        (18.6f, "carry_down"), (19.6f, "carry_up"), (21.1f, "run_down"), (22.1f, "run_up"),
+                        (18.6f, "carry_down"), (19.6f, "carry_up"), (21.1f, "run_down"), (21.55f, "run_pitch_transition"), (22.1f, "run_up"),
                         (24.1f, "sprint_down"), (25.1f, "sprint_up"), (27.1f, "ready_down_fire"), (28.1f, "ready_up_fire"),
                         (30.3f, "sprint_reload"), (31.8f, "sprint_return"), (34.5f, "reload_down"), (37.3f, "reload_up"),
                     })
@@ -414,7 +414,7 @@ public partial class PlayerRange : Node3D
             {
                 if (!player.ResolvedState.Active || rig.Weight < 0.999f)
                 {
-                    GD.PushError("[handoff] FAIL get-up did not return to a complete rifle hold");
+                    GD.PushError($"[handoff] FAIL get-up did not return to a complete rifle hold: active={player.ResolvedState.Active} weight={rig.Weight:F6}");
                     ShutdownGuard.Quit(GetTree(), 1);
                     return;
                 }

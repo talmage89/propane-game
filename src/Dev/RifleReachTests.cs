@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Godot;
 using Propane.Core;
 using Propane.Player;
+using Propane.World;
 using static Propane.Dev.UnitTests.TestRunner;
 
 namespace Propane.Dev;
@@ -22,6 +23,9 @@ public partial class RifleReachTests : Node3D
     private int echoes, presented;
     private int samples, shotFrames;
     private float maxResidual, maxAngle, maxMuzzleError;
+    private Camera3D? observer;
+    private CaptureDirector? capture;
+    private bool capturedHandoff;
 
     public override void _ExitTree() => world.Dispose();
 
@@ -33,6 +37,14 @@ public partial class RifleReachTests : Node3D
         world.SetContentRoot(this);
         remote = new PlayerCharacter { World = world, IsRemote = true };
         AddChild(remote);
+        if (DisplayServer.GetName() != "headless")
+        {
+            AddChild(new VoidEnvironment { Follow = remote });
+            observer = new Camera3D { Current = true, Fov = 40 };
+            AddChild(observer);
+            capture = new CaptureDirector();
+            AddChild(capture);
+        }
         remote.SetPhysicsProcess(false); // Explicitly order snapshot application and reliable echoes below.
         skeleton = remote.FindChildren("*", "Skeleton3D", owned: false).OfType<Skeleton3D>().Single(s => s.FindBone("hand_l") >= 0);
         rig = skeleton.GetNode<RifleRig>("RifleRig");
@@ -105,6 +117,12 @@ public partial class RifleReachTests : Node3D
             remote.SetRemoteState(new PlayerNetState { State = PlayerNetState.Mode.GettingUp });
             await Frames(20).ConfigureAwait(true);
             remote.RemoteGetUp(Vector3.Zero, 0);
+            stage = "first fractional get-up sample after a presentation stall";
+            // Physics can reach the rig's return window before rendering samples the next get-up
+            // pose. A tiny initial weight must start with this hand, not the last HandFollow frame.
+            remote._PhysicsProcess(.792);
+            rig.Weight = .0025f;
+            await Frames(1).ConfigureAwait(true);
             var handoffShots = 0;
             for (var frame = 0; frame < 180; frame++)
             {
@@ -116,6 +134,7 @@ public partial class RifleReachTests : Node3D
                 }
                 await Frames(1).ConfigureAwait(true);
             }
+            Assert(rig.Weight >= .999f, $"remote get-up held below full carry: {rig.Weight:F6}");
             Assert(handoffShots >= 3 && presented == echoes && shotFrames == 112 + handoffShots,
                 $"missing final echo frames: {handoffShots} get-up, {shotFrames} frames, {presented}/{echoes} effects");
             GD.Print($"[rifle reach] PASS samples={samples} shots={shotFrames} wrist={maxResidual:F6}m barrel={maxAngle:F6}deg muzzle={maxMuzzleError:F6}m");
@@ -163,6 +182,11 @@ public partial class RifleReachTests : Node3D
     {
         try
         {
+            if (!capturedHandoff && stage == "first fractional get-up sample after a presentation stall")
+            {
+                capturedHandoff = true;
+                CaptureHandoff();
+            }
             if (samples++ < 2) return;
             if (rig.Weight <= .001f) return;
             foreach (var side in new[] { "r", "l" })
@@ -188,5 +212,19 @@ public partial class RifleReachTests : Node3D
             }
         }
         catch (Exception error) { failure ??= error; }
+    }
+
+    public override void _Process(double delta)
+    {
+        if (observer == null) return;
+        var focus = remote.GlobalPosition + Vector3.Up;
+        observer.LookAtFromPosition(focus + new Vector3(3.4f, .3f, .4f), focus);
+    }
+
+    private async void CaptureHandoff()
+    {
+        if (capture == null) return;
+        await ToSignal(RenderingServer.Singleton, RenderingServer.SignalName.FramePostDraw);
+        capture.ScreenshotAsync("getup_handoff");
     }
 }

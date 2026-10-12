@@ -264,7 +264,6 @@ public partial class Tuning : Resource
     [Export(PropertyHint.Range, "0,2,0.05")] public float LandingMinAirTime { get; set; } = 0.3f;
     [Export(PropertyHint.Range, "0,1,0.01")] public float LandingTraumaPerSecond { get; set; } = 0.15f;
     [Export(PropertyHint.Range, "0,1,0.01")] public float LandingTraumaMax { get; set; } = 0.25f;
-    [Export(PropertyHint.Range, "0,120,1")] public float CombatSpineTwistDegrees { get; set; } = 70f;
     [Export(PropertyHint.Range, "0,180,1")] public float CombatTurnDegrees { get; set; } = 50f;
     [Export(PropertyHint.Range, "0,1,0.01")] public float MovingInputThreshold { get; set; } = 0.1f;
     [Export(PropertyHint.Range, "0,1,0.01")] public float FacingInputThreshold { get; set; } = 0.2f;
@@ -297,7 +296,6 @@ public partial class Tuning : Resource
     [Export(PropertyHint.Range, "1,90,1")] public float TurnPoseThresholdDegrees { get; set; } = 20f;
     [Export(PropertyHint.Range, "1,40,1")] public float TurnVelocityResponse { get; set; } = 12f;
     [Export(PropertyHint.Range, "0,0.5,0.01")] public float TurnInitialPhase { get; set; } = 0.45f;
-    [Export(PropertyHint.Range, "0.05,0.4,0.01")] public float FootMinimumSeparation { get; set; } = 0.12f;
     [Export(PropertyHint.Range, "0.14,0.3,0.001")] public float FootKneeSeparation { get; set; } = 0.16f;
     [Export(PropertyHint.Range, "0.001,0.1,0.001")] public float FootGroundTolerance { get; set; } = 0.025f;
     [Export(PropertyHint.Range, "0.01,0.2,0.001")] public float FootCorrectionLimit { get; set; } = 0.08f;
@@ -311,7 +309,6 @@ public partial class Tuning : Resource
     [Export(PropertyHint.Range, "0.1,2,0.01")] public float FootProbeUp { get; set; } = 0.5f;
     [Export(PropertyHint.Range, "0.1,2,0.01")] public float FootProbeDown { get; set; } = 0.65f;
     [Export(PropertyHint.Range, "0.1,10,0.1")] public float FootResetDistance { get; set; } = 0.5f;
-    [Export(PropertyHint.Range, "0,0.3,0.01")] public float LandingCompression { get; set; } = 0.08f;
     [Export(PropertyHint.Range, "0.05,0.4,0.01")] public float TakeoffPoseTime { get; set; } = 0.12f;
     [Export(PropertyHint.Range, "0,1,0.01")] public float TakeoffClipStart { get; set; } = 0.14f;
     [Export(PropertyHint.Range, "0.1,10,0.1")] public float TakeoffClipSpeed { get; set; } = 2.5f;
@@ -381,7 +378,7 @@ public partial class Tuning : Resource
 
     [Export(PropertyHint.Range, "0,0.15,0.001")] public float RifleClearanceLimit { get; set; } = 0.08f;
     [Export(PropertyHint.Range, "0,60,1")] public float RifleNeckLeanDegrees { get; set; } = 30f;
-    [Export(PropertyHint.Range, "0,0.03,0.001")] public float RifleHeadClearance { get; set; } = 0.006f;
+    [Export(PropertyHint.Range, "0,0.03,0.001")] public float RifleBodyClearance { get; set; } = 0.006f;
     [Export(PropertyHint.Range, "0,0.06,0.001")] public float RifleShotClearance { get; set; } = 0.035f;
     [Export(PropertyHint.Range, "0,0.3,0.01")] public float RifleShotStockAbovePelvis { get; set; } = 0.2f;
     [Export(PropertyHint.Range, "0.005,0.04,0.001")] public float RifleStockRadius { get; set; } = 0.018f;
@@ -406,8 +403,9 @@ public partial class Tuning : Resource
     [Export(PropertyHint.Range, "0,0.4,0.001")] public float RifleHipDown { get; set; } = 0.17f;
     [Export(PropertyHint.Range, "-0.2,0.2,0.001")] public float RifleHipOutboard { get; set; } = -0.07f;
     [Export(PropertyHint.Range, "-0.1,0.2,0.001")] public float RifleHipForward { get; set; } = 0.02f;
-    [Export(PropertyHint.Range, "0,80,1")] public float RifleCarryPitchDegrees { get; set; } = 23f;
-    [Export(PropertyHint.Range, "-60,60,1")] public float RifleCarryYawDegrees { get; set; } = 15f;
+    [Export(PropertyHint.Range, "0,1,0.01")] public float RifleCarryAimPitchShare { get; set; } = 0.55f;
+    [Export(PropertyHint.Range, "0,80,1")] public float RifleCarryPitchDegrees { get; set; } = 5f;
+    [Export(PropertyHint.Range, "-60,60,1")] public float RifleCarryYawDegrees { get; set; } = 3f;
     [Export(PropertyHint.Range, "-60,60,1")] public float RifleCarryRollDegrees { get; set; } = -10f;
     [Export(PropertyHint.Range, "-60,60,1")] public float RifleReadyRollDegrees { get; set; } = -8f;
     [Export(PropertyHint.Range, "0,80,1")] public float RifleSprintPitchDegrees { get; set; } = 38f;
@@ -432,7 +430,6 @@ public partial class Tuning : Resource
     [Export(PropertyHint.Range, "0,1,0.01")] public float RifleWalkSwayScale { get; set; } = 0.25f;
     [Export(PropertyHint.Range, "0,2,0.01")] public float RifleSprintSwayScale { get; set; } = 1.35f;
     [Export(PropertyHint.Range, "0,1,0.01")] public float RifleAimSwayScale { get; set; } = 0.025f;
-    [Export(PropertyHint.Range, "0,1,0.01")] public float RifleAimPelvisSteady { get; set; } = 0.95f;
     [Export(PropertyHint.Range, "30,1440,10")] public float RifleAimTurnSpeed { get; set; } = 360f;
     [Export(PropertyHint.Range, "1,60,1")] public float RifleMotionResponse { get; set; } = 14f;
     [Export(PropertyHint.Range, "60,1440,10")] public float PoseAngularSpeed { get; set; } = 600f;

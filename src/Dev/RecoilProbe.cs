@@ -25,6 +25,10 @@ public partial class RecoilProbe : SkeletonModifier3D
     private float Yaw => Mathf.RadToDeg(Mathf.Atan2(-Player.Aim.Forward.X, -Player.Aim.Forward.Z));
     private int shots, renderedShots, airShots;
     private ShotReport? pendingShot;
+    private readonly int[] armBones = new int[6];
+    private readonly Quaternion[] previousArms = new Quaternion[6];
+    private bool hasArms, capturedBefore;
+    private float firstArmAngle, firstShotTime;
 
     public static RecoilProbe Attach(PlayerCharacter player, CaptureDirector capture)
     {
@@ -38,12 +42,16 @@ public partial class RecoilProbe : SkeletonModifier3D
     {
         rifle = Player.GetNode<Rifle>("Rifle");
         initialPitch = maximumPitch = Player.Aim.Pitch;
+        var skeleton = GetSkeleton();
+        var names = new[] { "upperarm_r", "lowerarm_r", "hand_r", "upperarm_l", "lowerarm_l", "hand_l" };
+        for (var i = 0; i < names.Length; i++) armBones[i] = skeleton.FindBone(names[i]);
         Player.Fired += Shot;
     }
 
     private void Shot(ShotReport shot)
     {
         shots++;
+        if (shots == 1) firstShotTime = time;
         if (!Player.ResolvedState.Grounded) airShots++;
         pendingShot = shot;
         var angle = Mathf.RadToDeg(rifle.BarrelForward.AngleTo(shot.End - shot.Muzzle));
@@ -60,6 +68,20 @@ public partial class RecoilProbe : SkeletonModifier3D
     {
         time += (float)delta;
         maximumPitch = Mathf.Max(maximumPitch, Player.Aim.Pitch);
+        var skeleton = GetSkeleton();
+        for (var i = 0; i < armBones.Length; i++)
+        {
+            var current = skeleton.GetBonePoseRotation(armBones[i]).Normalized();
+            if (hasArms && shots == 1 && pendingShot != null)
+                firstArmAngle = Mathf.Max(firstArmAngle, Mathf.RadToDeg(previousArms[i].AngleTo(current)));
+            previousArms[i] = current;
+        }
+        hasArms = true;
+        if (!capturedBefore && shots == 0 && time >= DevArgs.GetFloat("burst-start", 1) - 1f / 60)
+        {
+            capturedBefore = true;
+            CaptureAfterDraw("before_first");
+        }
         var angle = "";
         var muzzleError = "";
         if (pendingShot is ShotReport shot)
@@ -105,6 +127,11 @@ public partial class RecoilProbe : SkeletonModifier3D
             expectedRetained <= 0 || Math.Abs(retained - expectedRetained) > 0.01f || maximumPitch <= initialPitch || Player.Ammo!.Magazine != 0 ||
             DevArgs.Get("stance") == "air" && airShots == 0;
         GD.Print(FormattableString.Invariant($"[recoil] {(failed ? "FAIL" : "PASS")} shots={shots} rendered={renderedShots} air-shots={airShots} peak={maximumPitch - initialPitch:F6} retained={retained:F6} last-before-kick={lastShotPitch - initialPitch:F6} shot-angle={maxAngle:F6} render-angle={maxRenderAngle:F6} ready-frames={readyFrames} ready-angle={maxReadyAngle:F6} muzzle-error={maxMuzzleError:F6}m"));
+        var firstHip = DevArgs.Get("assert-first-hip") != null;
+        var firstFailed = !hasArms || DevArgs.Get("stance") != "hip" || !float.IsFinite(firstArmAngle) || firstArmAngle > 15 ||
+            Math.Abs(firstShotTime - DevArgs.GetFloat("burst-start", 1)) > 1f / 60;
+        GD.Print(FormattableString.Invariant($"[first shot] arm={firstArmAngle:F6}deg time={firstShotTime:F6}s{(firstHip ? firstFailed ? " FAIL" : " PASS" : "")}"));
+        failed |= firstHip && firstFailed;
         if (DevArgs.Get("capture-dir") is string directory)
         {
             DirAccess.MakeDirRecursiveAbsolute(directory);

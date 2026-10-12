@@ -199,7 +199,8 @@ public partial class LocomotionProbe : SkeletonModifier3D
         if (expectedEpisodes > 0)
         {
             GD.Print(FormattableString.Invariant($"[feet] ankle-separation-min={minimumSeparation:F6}m settled-min={minimumSettledSeparation:F6}m"));
-            failed |= minimumSeparation < 0 || minimumSettledSeparation < Player.World.Tuning.FootMinimumSeparation - 0.003f;
+            // Independent 120 mm anatomical calibration, not a dead production tuner.
+            failed |= minimumSeparation < 0 || minimumSettledSeparation < .12f - .003f;
         }
         GD.Print(FormattableString.Invariant($"[feet] pose-max={maxAngle:F3}deg bone={worstBone} episode={worstLabel} time={worstTime:F3} episodes={episodes.Length} rate-max={maxAngleRate:F1}deg/s"));
         var directory = DevArgs.Get("capture-dir");

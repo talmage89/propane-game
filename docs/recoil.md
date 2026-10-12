@@ -55,14 +55,15 @@ reach, even in the fitting frame. When that correction would violate reach, an a
 two arms' reach intervals along a positive barrel ray ending at the original endpoint. It translates the rifle
 within that intersection, keeping both contacts and exact alignment. The ordinary pivot/cheek fit is unchanged;
 in the fallback, grip reach takes priority over a cheek hold that the current body frame cannot supply. No endpoint
-is moved and no shot waits for a pose transition. The first hip-shot arm snap remains the existing mechanism.
+is moved and no shot waits for a pose transition. The authored animation rig carries near eased aim and seeks
+the firing clearance reserve before the trigger press, reducing the first hip-shot arm snap.
 
 `rifle_reach_tests` applies echo/snapshot orderings explicitly, across eight body facings, relocation, displayed
 reload, melee, reload completion, 80 close endpoints in hip/aimed holds at match-sized coordinates and get-up handoff. It checks final wrists (3 mm), barrel/endpoint angle (0.05 degrees), emitted tracer
 origin (0.1 mm) and delivery of every echo. `make check` runs this fast deterministic scene; `make test-full` also
 runs a faulted four-bot 90-second match. The network launcher fails any run with logged engine or protocol errors,
-including rifle reach/contact errors, even when tanks and scores agree. This is a presentation hotfix: no shared
-tuners or messages change, and `Protocol.Version` stays 2.
+including rifle reach/contact errors, even when tanks and scores agree. The reach hotfix itself changes no shared tuners or messages, and `Protocol.Version` stays 2.
+The authored animation redo changes the presentation tuner schema and therefore requires a minor release.
 
 ### Measured curves
 
