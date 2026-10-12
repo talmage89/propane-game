@@ -188,7 +188,11 @@ public partial class Match : Node3D
         if (World is not { IsAlive: true } || World.Paused) { return; }
         // The first complete frame includes physics setup and shader warm-up. Reporting from
         // construction's packet callback would end native loading grace before that work finishes.
-        if (loadingFrames > 0 && --loadingFrames == 0) Send(new NetWriter(Msg.Loaded, Setup.Id));
+        if (loadingFrames > 0 && --loadingFrames == 0)
+        {
+            Send(new NetWriter(Msg.Loaded, Setup.Id));
+            if (!World.IsAlive) return; // A required-send failure can synchronously retire the session.
+        }
         var dt = (float)delta;
         var tuning = World.Tuning;
         if (revealing)

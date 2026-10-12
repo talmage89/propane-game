@@ -121,37 +121,50 @@ public static class ParticipantServerTests
             Assert(standings.Count == 3 && departed.All(id => standings.Any(s => s.Id == id && !s.Present && s.Score == 4)), "departed standings erased bank");
             f.Reject(new NetWriter(Msg.TuningSet, f.Id).String("BlastRadius").Scalar(5f).ToArray(), 3);
         });
-        runner.Run("participants/readiness waits for the first complete frame", () =>
+        foreach (var failSend in new[] { false, true })
         {
-            using var f = new ServerTests.Fixture();
-            var network = new LoopbackNetwork();
-            var server = network.Create();
-            var transport = network.Create();
-            var endpoint = new PacketEndpoint("", 1);
-            server.Listen(endpoint, 1);
-            var client = new NetClient(transport, f.Clock);
-            Match? match = null;
-            try
+            runner.Run($"participants/readiness {(failSend ? "stops after send failure" : "waits for the first complete frame")}", () =>
             {
-                client._Ready();
-                client.Connect(endpoint.Address, endpoint.Port, "Builder", 0);
-                for (var i = 0; i < 4; i++) { client._Process(0); server.Poll(); }
-                client.Handle(MessageCodec.Encode(new NetMessage(Msg.Welcome, 0, 0, new WelcomeMessage(2, null)), true));
-                var loaded = 0;
-                server.Packet += (_, _, bytes) => { if ((Msg)bytes.Span[0] == Msg.Loaded) loaded++; };
-                match = new Match { Net = client, Setup = f.Setup, CreateLocalView = false };
-                runner.AddChild(match);
-                server.Poll();
-                Assert(loaded == 0, "construction prematurely ended native loading grace");
-                match._Process(0); server.Poll();
-                Assert(loaded == 0, "readiness preceded initial physics and shader work");
-                match._Process(0); server.Poll();
-                Assert(loaded == 1, "completed first frame never reported readiness");
-                match._Process(0); server.Poll();
-                Assert(loaded == 1, "readiness was reported more than once");
-            }
-            finally { match?.Free(); client._ExitTree(); client.Free(); server.Close(); }
-        });
+                using var f = new ServerTests.Fixture();
+                var network = new LoopbackNetwork();
+                var server = network.Create();
+                var transport = network.Create();
+                var endpoint = new PacketEndpoint("", 1);
+                server.Listen(endpoint, 1);
+                var client = new NetClient(transport, f.Clock);
+                Match? match = null;
+                try
+                {
+                    client._Ready();
+                    client.Connect(endpoint.Address, endpoint.Port, "Builder", 0);
+                    for (var i = 0; i < 4; i++) { client._Process(0); server.Poll(); }
+                    client.Handle(MessageCodec.Encode(new NetMessage(Msg.Welcome, 0, 0, new WelcomeMessage(2, null)), true));
+                    var loaded = 0;
+                    server.Packet += (_, _, bytes) => { if ((Msg)bytes.Span[0] == Msg.Loaded) loaded++; };
+                    match = new Match { Net = client, Setup = f.Setup, CreateLocalView = false };
+                    runner.AddChild(match);
+                    server.Poll();
+                    Assert(loaded == 0, "construction prematurely ended native loading grace");
+                    match._Process(0); server.Poll();
+                    Assert(loaded == 0, "readiness preceded initial physics and shader work");
+                    if (failSend)
+                    {
+                        transport.BlockSends = true;
+                        client.StatusChanged += (status, _) => { if (status == NetClient.Status.Offline) match.Session.Dispose(); };
+                        match._Process(0);
+                        Assert(!match.World.IsAlive && client.State == NetClient.Status.Offline && loaded == 0,
+                            "failed readiness did not retire the match");
+                        return;
+                    }
+                    match._Process(0); server.Poll();
+                    Assert(loaded == 1, "completed first frame never reported readiness");
+                    match._Process(0); server.Poll();
+                    Assert(loaded == 1, "readiness was reported more than once");
+                }
+                finally { match?.Free(); client._ExitTree(); client.Free(); server.Close(); }
+            });
+        }
+
         runner.Run("participants/same-peer shot and melee use one event path and dedupe echoes", () =>
         {
             using var f = new ServerTests.Fixture(bots: 1);
