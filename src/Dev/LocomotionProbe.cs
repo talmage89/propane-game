@@ -28,6 +28,7 @@ public partial class LocomotionProbe : SkeletonModifier3D
     private readonly bool[] previousContacts = new bool[2];
     private float maxAngleRate;
     private bool invalid;
+    private bool rotationFailed;
     private Quaternion[] previous = Array.Empty<Quaternion>();
     private double time;
     private float maxAngle;
@@ -61,6 +62,7 @@ public partial class LocomotionProbe : SkeletonModifier3D
         previousRoot = Player.GlobalPosition;
         if (teleported) GD.Print($"[feet] excluded setup teleport angular sample at {time:F3}s");
         var angle = 0f;
+        var rig = s.GetNode<RifleRig>("RifleRig");
         for (var i = 0; i < previous.Length; i++)
         {
             var q = s.GetBonePoseRotation(i).Normalized();
@@ -69,6 +71,15 @@ public partial class LocomotionProbe : SkeletonModifier3D
             {
                 var difference = previous[i].Inverse() * q;
                 var degrees = Mathf.RadToDeg(2 * Mathf.Atan2(new Vector3(difference.X, difference.Y, difference.Z).Length(), Mathf.Abs(difference.W)));
+                // R19 fits the hands to an already chosen firing barrel. Match MotionProbe's existing
+                // exception for those joints; feet and every ordinary carry joint keep the 1500 degree/s bound.
+                var name = s.GetBoneName(i).ToString();
+                var alignedArm = rig.TrackingBarrelThisFrame && (name.StartsWith("upperarm_", StringComparison.Ordinal) ||
+                    name.StartsWith("lowerarm_", StringComparison.Ordinal) || name.StartsWith("hand_", StringComparison.Ordinal));
+                var shotBody = rig.AlignedShotThisFrame && (name.StartsWith("spine_", StringComparison.Ordinal) ||
+                    name.StartsWith("clavicle_", StringComparison.Ordinal) || name == "neck_01" || name == "Head");
+                if (!alignedArm)
+                    rotationFailed |= degrees / delta > (shotBody ? Player.World.Tuning.RifleShotPoseAngularSpeed : 1500f) + 0.01f;
                 angle = Mathf.Max(angle, degrees);
                 if (degrees > maxAngle) { maxAngle = degrees; worstBone = s.GetBoneName(i); worstLabel = Label; worstTime = time; }
             }
@@ -183,7 +194,7 @@ public partial class LocomotionProbe : SkeletonModifier3D
             foreach (var phase in Enum.GetValues<JumpPose>())
                 if (!jumpPhases.Contains(phase)) { failed = true; GD.PushError($"[feet] missing jump phase {phase}"); }
         }
-        failed |= episodes.Length < expectedEpisodes || !float.IsFinite(maxAngle) || !float.IsFinite(maxAngleRate) || maxAngleRate > 1500.01f;
+        failed |= episodes.Length < expectedEpisodes || !float.IsFinite(maxAngle) || !float.IsFinite(maxAngleRate) || rotationFailed;
         failed |= assert && contacts.Count < Mathf.Max(1, expectedEpisodes);
         if (expectedEpisodes > 0)
         {

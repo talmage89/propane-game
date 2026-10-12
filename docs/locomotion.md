@@ -58,6 +58,8 @@ must be at most 0.05 m/s in every settled episode; saved-contact residual must b
 saved-contact drift at most 0.02 m/s. Coverage requirements prevent passing by withholding all contacts. The
 maximum local joint rate remains 1500 degrees/s (25 degrees at 60 Hz). Signed ankle separation stays positive,
 and settled separation must meet the tuned minimum within 3 mm.
+As in `MotionProbe`, joints following R19's already chosen firing barrel use its existing arm/body exceptions;
+the reported maximum still includes those joints. Feet retain the 1500 degree/s limit during shots too.
 
 `feet-events` uses the local controller for creep starts/stops, backpedal, reversals, standing turns, gait changes,
 jumps and separate support on a slab/curb boundary. It requires both feet to lift during turns, all jump phases,
