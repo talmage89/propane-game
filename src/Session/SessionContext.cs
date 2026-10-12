@@ -13,6 +13,9 @@ public sealed class SessionContext : IDisposable
 {
     private readonly List<ActorRuntime> actors = new();
     private readonly List<Node> views = new();
+    private readonly Net.IdentitySequence actorIds = new();
+    private readonly Dictionary<int, ActorRuntime> registry = new();
+    private readonly HashSet<int> retired = new();
     private readonly List<Action> detach = new();
     private readonly List<Action> unsubscribe = new();
     private readonly List<Action> stop = new();
@@ -43,12 +46,22 @@ public sealed class SessionContext : IDisposable
     public IEnumerable<ActorRuntime> OwnedActors => actors.Where(actor => !actor.Character.IsRemote);
     public IReadOnlyList<LocalView> LocalViews => views.OfType<LocalView>().ToArray();
 
-    // The registry is independent of peer identity. A6 supplies durable actor ids and ownership routing.
+    public ActorRuntime? Actor(int actorId) => registry.GetValueOrDefault(actorId);
+
+    // Network ids come from the frozen server roster. Offline actors use the same nonrecycling registry.
     public ActorRuntime AddActor(PlayerCharacter character)
     {
         EnsureAlive();
         if (character.World != World) throw new ArgumentException("actor belongs to another world", nameof(character));
         var actor = character.Runtime;
+        var id = character.ActorId;
+        if (id == 0 && !World.Networked)
+        {
+            do { id = actorIds.Allocate(); } while (registry.ContainsKey(id) || retired.Contains(id));
+            character.ActorId = id;
+        }
+        if (id <= 0 || registry.ContainsKey(id) || retired.Contains(id)) throw new ArgumentException("actor identity is absent or reused", nameof(character));
+        registry.Add(id, actor);
         actors.Add(actor);
         World.Root.AddChild(character);
         if (!character.Initialized) throw new InvalidOperationException("actor did not complete initialization");
@@ -59,6 +72,8 @@ public sealed class SessionContext : IDisposable
     {
         EnsureAlive();
         if (!actors.Remove(actor)) return;
+        registry.Remove(actor.Character.ActorId);
+        retired.Add(actor.Character.ActorId);
         foreach (var view in LocalViews.Where(view => view.Actor == actor.Character)) CloseView(view);
         if (GodotObject.IsInstanceValid(actor.Character)) actor.Character.Free();
         actor.Dispose();
@@ -128,6 +143,8 @@ public sealed class SessionContext : IDisposable
             Run(actors[i].Dispose);
         }
         actors.Clear();
+        registry.Clear();
+        retired.Clear();
         Run(World.Dispose);
         cancellation.Dispose();
         if (errors.Count > 0) throw new AggregateException("session retirement failed", errors);

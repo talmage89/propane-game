@@ -135,9 +135,8 @@ camera/HUD/device source without retiring the actor.
 
 Ammo, intent, the movement resolver, resolved state, logical aim, swing/publication sequence, snapshot buffer,
 hit grace and drop predictions now belong to each actor. Match interpolation iterates the session registry.
-There remains exactly one owned actor per connection in Tank Bank's Protocol 2 adapter; scoring, relayed targets,
-slot-derived drop ids and `Match.Player` still use today's peer identity. A6 must supply actor/peer/life ids and
-replace that wire routing, including same-peer contact deduplication. No message or tuner changes here.
+A6 routes actor ids and lives independently of peer ids, including scoring, contact targets, snapshots and drop
+allocation. Several owned actors share one body synchronizer; views remain process-local.
 Headless `net_test` attaches no local view, so the existing smart/simple bots and network scenarios run on actors
 with no camera. Rendered runs attach the same view used by the shipped facades.
 
@@ -154,3 +153,11 @@ routing through `Input.ParseInputEvent`, movement yaw, camera following, shot di
 survivor continuity after closing one view. A third, camera-free actor navigates, shoots a tank twice, strikes a prop and recovers from the blast ragdoll.
 The unit suite injects failure into every factory stage and checks cancellation, adapter/node retirement order,
 completion after a throwing stop adapter and device isolation. Both run in `make test`.
+
+A6's `ParticipantRoster` supplies server-owned actor records and monotonic allocation slots. Actor ids and lives
+are independent of peer ids; retired ids/slots are never recycled. Drop entity ids use allocation slots, with
+explicit exhaustion checks instead of masked counters. The ENet adapter keeps its backend ids private and issues
+protocol peer ids through `ProtocolPeerMap`.
+
+Actor lookup uses the session identity registry; retired actor ids cannot be reattached. Offline sessions allocate
+positive actor ids through the same registry. Local views allocate process-local ids, including fixture views.

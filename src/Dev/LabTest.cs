@@ -313,6 +313,8 @@ public partial class LabTest : Node
         template.PickupRespawnTime = .1f;
         var lab = Enter(LabScenarios.Get("duel"), LabEnvironment.Void);
         var bot = lab.Opponent!;
+        Assert(lab.Player.ActorId == 1 && bot.ActorId == 2 && lab.Player.OwnerPeerId == bot.OwnerPeerId,
+            "local human and bot need distinct actors on the same peer");
         bot.InputOverride = new IdleInput();
         lab.Player.InputOverride = new IdleInput();
         lab.Player.Teleport(new Vector3(0, .05f, 18), 0);
@@ -357,6 +359,8 @@ public partial class LabTest : Node
         Assert(lab.Bank!.Scores[1] == 2 && !lab.LiveTanks.Any(), "root and delayed chain must credit the shooter");
         lab.Player.InputOverride = new IdleInput();
         await FireAt(bot, () => lab.Player.GlobalPosition + Vector3.Up * 1.2f).ConfigureAwait(true);
+        Assert(lab.Player.Runtime.LastHitBy == bot.ActorId && bot.ActorId != bot.OwnerPeerId,
+            "same-peer hit attribution used the peer instead of the bot actor");
         var afterHit = lab.Bank.Scores[1];
         Assert(afterHit == Mathf.Max(0, 2 - lab.World.Tuning.HitDropCount) && lab.LiveTanks.All(t => t.Invulnerable), "hit spill/count/shield");
         await FireAt(bot, () => lab.Player.GlobalPosition + Vector3.Up * 1.2f).ConfigureAwait(true);

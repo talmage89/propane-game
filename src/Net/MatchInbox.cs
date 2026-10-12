@@ -18,12 +18,16 @@ public sealed class MatchInbox
     private int pendingBytes;
 
     public int MatchId { get; private set; }
+    public int PeakPackets { get; private set; }
+    public int PeakBytes { get; private set; }
+    public int Overflows { get; private set; }
 
     public void Begin(int id)
     {
         if (id <= 0) { throw new ArgumentOutOfRangeException(nameof(id)); }
         Clear();
         MatchId = id;
+        PeakPackets = PeakBytes = Overflows = 0;
     }
 
     public void Clear()
@@ -42,9 +46,11 @@ public sealed class MatchInbox
             receiver(message);
             return;
         }
-        if (wireBytes < 0 || pending.Count >= MaxPackets || wireBytes > MaxBytes - pendingBytes) { throw new OverflowException(); }
+        if (wireBytes < 0 || pending.Count >= MaxPackets || wireBytes > MaxBytes - pendingBytes) { Overflows++; throw new OverflowException(); }
         pending.Enqueue((message, wireBytes));
         pendingBytes += wireBytes;
+        PeakPackets = Math.Max(PeakPackets, pending.Count);
+        PeakBytes = Math.Max(PeakBytes, pendingBytes);
     }
 
     /// <summary>Called only after the scene has all bodies, UI and callbacks. Replays each queued event once.</summary>

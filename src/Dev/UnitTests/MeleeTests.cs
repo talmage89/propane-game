@@ -1,4 +1,5 @@
 using System.IO;
+using System.Linq;
 using Godot;
 using Propane.Core;
 using Propane.Net;
@@ -97,13 +98,13 @@ public static class MeleeTests
             foreach (var direction in new[] { Vector3.Up, Vector3.Zero, Vector3.Forward * 2, new Vector3(float.NaN, 0, 0) })
             {
                 TestRunner.Throws<InvalidDataException>(() => MessageCodec.Decode(MessageCodec.Encode(
-                    new NetMessage(Msg.MeleeStart, 1, 0, new MeleeStartMessage(1, direction)), false), false));
+                    new NetMessage(Msg.MeleeStart, 1, 0, new MeleeStartMessage(1, direction), 2, 1, 1), false), false));
             }
 
             foreach (var (victim, prop) in new[] { (0, -1), (3, 1), (-1, -1), (3, -2) })
             {
                 TestRunner.Throws<InvalidDataException>(() => MessageCodec.Decode(MessageCodec.Encode(
-                    new NetMessage(Msg.MeleeContact, 1, 0, new MeleeContactMessage(1, victim, prop)), false), false));
+                    new NetMessage(Msg.MeleeContact, 1, 0, new MeleeContactMessage(1, victim, prop), 2, 1, 1), false), false));
             }
         });
         runner.Run("melee/server production relay enforces phase, membership, target and cooldown", () =>
@@ -113,18 +114,18 @@ public static class MeleeTests
                 new MeleeStartMessage(swing, Vector3.Forward)), false);
             byte[] Hit(int victim, uint swing = 1) => MessageCodec.Encode(new NetMessage(Msg.MeleeContact, f.Id, 0,
                 new MeleeContactMessage(swing, victim, -1)), false);
-            f.Reject(Hit(3));
+            f.Reject(Hit(f.ActorId(3)));
             f.Reject(Start(1), peer: 999);
             f.Receive(Start(1));
-            TestRunner.Assert(f.Packets.Count == 1 && f.Packets[0].Peer == 3 && f.Packets[0].Message.Sender == 2, "start not relayed");
+            TestRunner.Assert(f.Packets.Count == 2 && f.Packets.Any(p => p.Peer == 3 && p.Message.Sender == 2), "start not relayed");
             f.Reject(Start(2));
-            f.Reject(Hit(999)); f.Reject(Hit(2)); f.Reject(Hit(3, 2));
-            f.Receive(Hit(3));
-            TestRunner.Assert(f.Packets.Count == 1 && f.Packets[0].Message.Payload is MeleeContactMessage, "hit not relayed");
-            f.Reject(Hit(3));
+            f.Reject(Hit(999)); f.Reject(Hit(f.ActorId(2))); f.Reject(Hit(3, 2));
+            f.Receive(Hit(f.ActorId(3)));
+            TestRunner.Assert(f.Packets.Count == 2 && f.Packets.All(p => p.Message.Payload is MeleeContactMessage), "hit not relayed");
+            f.Reject(Hit(f.ActorId(3)));
             using var loading = new ServerTests.Fixture(playing: false);
             loading.Reject(Start(1));
-            loading.Reject(Hit(3));
+            loading.Reject(Hit(f.ActorId(3)));
             loading.Receive(new NetWriter(Msg.Loaded, loading.Id));
             loading.Receive(new NetWriter(Msg.Loaded, loading.Id), peer: 3);
             loading.Advance();
@@ -134,7 +135,7 @@ public static class MeleeTests
             loading.Reject(Start(1)); // Expired play, before the next phase tick.
             loading.Advance();
             loading.Reject(Start(1)); // Results.
-            loading.Reject(Hit(3));
+            loading.Reject(Hit(f.ActorId(3)));
         });
     }
 

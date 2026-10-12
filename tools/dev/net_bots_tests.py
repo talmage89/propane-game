@@ -23,6 +23,9 @@ else:
     fault = os.environ["NAS_FAULT"]
     if fault == "process" and second:
         sys.exit(7)
+    if "--scenario=capacity" in sys.argv and not second:
+        print("capacity creator departure")
+        sys.exit(0)
     if fault == "engine" and second:
         print("ERROR: rifle contact failure")
     for tick in range(61):
@@ -50,6 +53,13 @@ else:
     def test_skip_flag_and_process_failure_preserved(self):
         self.assertEqual(self.run_launcher("tank", "-k").returncode, 0)
         self.assertEqual(self.run_launcher("process", "-k").returncode, 7)
+
+    def test_capacity_only_omits_its_intentionally_departed_creator(self):
+        result = self.run_launcher("none", "--", "--scenario=capacity")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("tank comparison skipped", result.stdout)
+        result = self.run_launcher("process", "--", "--scenario=capacity")
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
 
     def test_remote_requires_separate_audit(self):
         result = self.run_launcher("none", "-S", "localhost:24680")

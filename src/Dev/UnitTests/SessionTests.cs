@@ -76,6 +76,27 @@ public static class SessionTests
             });
         }
 
+        runner.Run("session/actor and process-local view identities are never recycled", () =>
+        {
+            var adapter = new Assembly(new List<string>(), null);
+            using var session = SessionFactory.Build(runner, runner.World.Tuning, adapter, adapter, _ => { }, present: false);
+            var first = session.Actors.Single();
+            var id = first.Character.ActorId;
+            var viewId = session.LocalViews.Single().LocalViewId;
+            Assert(id > 0 && session.Actor(id) == first && viewId > 0, "session identity registry is missing");
+            session.RemoveActor(first);
+            Assert(session.Actor(id) == null, "retired actor remains registered");
+            var reused = new PlayerCharacter { World = session.World, ActorId = id };
+            try { Throws<ArgumentException>(() => session.AddActor(reused)); }
+            finally { reused.Runtime.Dispose(); reused.Free(); }
+            var next = session.AddActor(new PlayerCharacter { World = session.World });
+            Assert(next.Character.ActorId > id, "offline actor id was recycled");
+            var view = session.AddLocalView(next, session.World.ViewRoot);
+            Assert(view.LocalViewId > viewId, "local view id was recycled");
+            var another = new Assembly(new List<string>(), null);
+            using var second = SessionFactory.Build(runner, runner.World.Tuning, another, another, _ => { }, present: false);
+            Assert(second.LocalViews.Single().LocalViewId > view.LocalViewId, "view ids repeat across sessions");
+        });
         runner.Run("session/assembly and reverse node retirement", () =>
         {
             var log = new List<string>();

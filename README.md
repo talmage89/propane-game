@@ -7,7 +7,7 @@ around you. There is no health and no score.
 
 ![Thrown by a chain reaction](docs/readme_still.jpg)
 
-Multiplayer is **tank bank**, a free-for-all for 2–5 players: every tank you blow up is banked as a point, and getting
+Multiplayer is **tank bank**, a free-for-all with creator-selected capacity (2–16 players, default 5): every tank you blow up is banked as a point, and getting
 shot (or thrown by a blast) spills your tanks back out for anyone to take. Most banked when the clock runs out wins.
 
 [design/VISION.md](design/VISION.md) is what the game is and must stay. [docs/multiplayer.md](docs/multiplayer.md) gives
@@ -60,7 +60,7 @@ controller-accessible controls menu. Unsaved tuning changes stay in that Lab ses
 
 Choose Multiplayer, type your name and the server's address (`host` or `host:port`, UDP port 24680 by default), then
 create a lobby or join one. Everyone picks a name and any color in the lobby (duplicates are allowed), and whoever
-created it sets the match length and starts. **Host on this computer** runs a server inside your game instead; the
+created it sets capacity and match length and starts. **Host on this computer** runs a server inside your game instead; the
 lobby then shows the addresses friends can use. Versions with the same major and minor number play together
 (0.2.0 with 0.2.5); the server turns away others and says which version it needs.
 
@@ -157,8 +157,7 @@ Rebuilt piles use `PileBuilder`'s upright cluster: every count fits, and removin
 Match settings use the actual player count. Tank supply is `MpTankCount + MpTanksPerPlayer × players`, ammo cans are
 `PickupCount + PickupsPerPlayer × players`, and map width is `MpMapSizeBase + MpMapSizePerPlayer × players`. Pile
 limits gain `floor(MpPileSizePerPlayer × players)`. `MpStartSpacing` is a hard minimum between clear road starts;
-invalid settings fail generation instead of placing players on top of one another. The lobby cap remains a separate
-setting. These shared plan and tuner changes require the next release to be minor (`Protocol.Version` is 2).
+invalid settings fail generation instead of placing players on top of one another. Lobby capacity is a separate creator setting, bounded by the tested technical ceiling of 16. These shared plan and tuner changes require the next release to be minor (`Protocol.Version` is 2).
 
 [World services](docs/world-services.md) documents scoped ownership, cleanup, and simulation/network clock boundaries.
 
@@ -214,6 +213,12 @@ $GODOT --headless res://scenes/dev/shutdown_tests.tscn
 # Session actors: two assigned views on one World3D, independent shots/melee, view closure and a camera-free bot.
 $GODOT --headless --fixed-fps 60 res://scenes/dev/session_actors_tests.tscn
 $GODOT --fixed-fps 60 res://scenes/dev/session_actors_tests.tscn -- --capture-dir=/tmp/session-actors
+
+# Participant capacity: production lobby/results layouts and real keyboard/mouse/gamepad delivery.
+# Repeat with 2/8 entries and 1920x1080; make test covers all counts headlessly.
+$GODOT --resolution 1280x720 --fixed-fps 60 res://scenes/dev/capacity_ui_tests.tscn -- --players=16 --capture-dir="$PWD/build/capacity-ui"
+# Repeated sixteen-client acceptance and resource measurements: docs/network-soak.md.
+make test-capacity
 
 # Movement resolver: gait/target speed on each transition tick, lifecycle, jump buffer and coyote time;
 # injected gamepad actions and stick look.

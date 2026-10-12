@@ -36,11 +36,12 @@ public partial class Match
         public void AttachInbox(SessionContext session)
         {
             session.OnDetaching(() => match.Net.DetachMatch(match.Setup.Id, match.OnMessage));
+            match.BeforeInboxAttach?.Invoke();
             match.Net.AttachMatch(match.Setup.Id, match.OnMessage);
         }
         public void Ready(SessionContext session)
         {
-            match.Send(new NetWriter(Msg.Loaded, match.Setup.Id));
+            match.loadingFrames = 2;
         }
     }
 
@@ -84,35 +85,24 @@ public partial class Match
             scores[profile.Id] = 0;
             var spawn = plan.Spawns.Count > 0 ? plan.Spawns[slot % plan.Spawns.Count] : new SpawnPoint(plan.Spawn, plan.SpawnYaw);
             var position = Suburb.ToWorld(spawn.Position, 0.05f);
-            if (profile.Id == me)
+            var owned = profile.OwnerPeerId == me;
+            var character = new PlayerCharacter
             {
-                var player = new PlayerCharacter
-                {
-                    World = World,
-                    Name = "Player",
-                    PeerId = me,
-                    BodyColor = profile.Appearance.Color,
-                    Ammo = AmmoState.Starting(World.Tuning),
-                    InputLocked = true,
-                };
-                Session.AddActor(player);
-                player.Runtime.SpawnSlot = slot;
-                player.Teleport(position, spawn.Yaw + Mathf.Pi);
-            }
-            else
-            {
-                var body = new PlayerCharacter
-                {
-                    World = World,
-                    Name = $"Remote_{profile.Id}",
-                    IsRemote = true,
-                    PeerId = profile.Id,
-                    BodyColor = profile.Appearance.Color,
-                };
-                Session.AddActor(body);
-                body.Teleport(position, spawn.Yaw + Mathf.Pi);
-                body.Runtime.IntentSource = new ReplicatedIntent(World.Tuning);
-            }
+                World = World,
+                Name = $"Actor_{profile.Id}",
+                IsRemote = !owned,
+                ActorId = profile.Id,
+                OwnerPeerId = profile.OwnerPeerId,
+                LifeId = profile.LifeId,
+                BodyColor = profile.Appearance.Color,
+                Ammo = owned ? AmmoState.Starting(World.Tuning) : null,
+                InputLocked = owned,
+            };
+            Session.AddActor(character);
+            character.Runtime.SpawnSlot = slot;
+            character.Runtime.AllocationSlot = profile.AllocationSlot;
+            character.Teleport(position, spawn.Yaw + Mathf.Pi);
+            if (!owned) character.Runtime.IntentSource = new ReplicatedIntent(World.Tuning);
         }
         if (!Session.OwnedActors.Any())
         {
@@ -137,7 +127,7 @@ public partial class Match
         menu.ResumeRequested += CloseMenu;
         menu.LeaveRequested += () => World.Defer(() => LeaveRequested?.Invoke(), whilePaused: true);
         Session.AddView(this, menu);
-        if (OS.IsDebugBuild() && Setup.CreatorDebug && Setup.HostId == me)
+        if (OS.IsDebugBuild() && Setup.CreatorDebug && Setup.CreatorId == me)
         {
             tuningPanel = new TuningPanel { Target = World.Tuning, Name = "Tuning", Note = "Changes apply to everyone in the match", UseDeclaredRanges = true };
             tuningPanel.ValueChanged += (name, value) => Send(new NetWriter(Msg.TuningSet, Setup.Id).String(name).Scalar(value));
@@ -166,28 +156,30 @@ public partial class Match
             }
         }
 
-        player.Fired += OnFired;
-        player.Ragdolled += OnRagdolled;
-        player.GotUp += OnGotUp;
-        player.MeleeStarted += OnMeleeStarted;
-        player.MeleeHit += OnMeleeHit;
-        player.PushedBody += OnPushedBody;
-
-        World.Events.LocalBlast += OnLocalBlast;
-        Session.OnUnsubscribing(() =>
+        foreach (var owned in Session.OwnedActors)
         {
-            player.Fired -= OnFired;
-            player.Ragdolled -= OnRagdolled;
-            player.GotUp -= OnGotUp;
-            player.MeleeStarted -= OnMeleeStarted;
-            player.MeleeHit -= OnMeleeHit;
-            player.PushedBody -= OnPushedBody;
-            World.Events.LocalBlast -= OnLocalBlast;
-        });
+            var actor = owned.Character;
+            void Fired(ShotReport shot) => OnFired(actor, shot);
+            void Ragdolled(Vector3 at, Vector3 velocity, Vector3 spin) => OnRagdolled(actor, at, velocity, spin);
+            void GotUp(Vector3 root, float yaw) => Send(ActorWriter(Msg.GetUp, actor).Vec3(root).Float(yaw));
+            void MeleeStarted(uint swing, Vector3 direction) => SendActor(actor, Msg.MeleeStart, new MeleeStartMessage(swing, direction), predict: true);
+            void MeleeHit(MeleeHit hit) => OnMeleeHit(actor, hit);
+            void Pushed(RigidBody3D body) => Claim(new[] { body });
+            actor.Fired += Fired;
+            actor.Ragdolled += Ragdolled;
+            actor.GotUp += GotUp;
+            actor.MeleeStarted += MeleeStarted;
+            actor.MeleeHit += MeleeHit;
+            actor.PushedBody += Pushed;
+            Session.OnUnsubscribing(() =>
+            {
+                actor.Fired -= Fired; actor.Ragdolled -= Ragdolled; actor.GotUp -= GotUp;
+                actor.MeleeStarted -= MeleeStarted; actor.MeleeHit -= MeleeHit; actor.PushedBody -= Pushed;
+            });
+        }
+        World.Events.LocalBlast += OnLocalBlast;
+        Session.OnUnsubscribing(() => World.Events.LocalBlast -= OnLocalBlast);
     }
-    private void OnGotUp(Vector3 root, float yaw) => Send(new NetWriter(Msg.GetUp, Setup.Id).Vec3(root).Float(yaw));
-    private void OnMeleeStarted(uint swing, Vector3 direction) => Send(new NetWriter(Msg.MeleeStart, Setup.Id).UInt(swing).Vec3(direction));
-    private void OnPushedBody(RigidBody3D body) => Claim(new[] { body });
 
     private void PreparePresentation()
     {
@@ -200,7 +192,7 @@ public partial class Match
         CaptureMouse(true);
         ShowNotice("Waiting for everyone to arrive", 30f);
         // Prepare loading presentation before the handoff, so buffered Countdown/Go/End remain authoritative.
-        // Loaded is sent only after replay in the mode's Ready stage.
+        // The Ready stage schedules Loaded after replay and the first complete frame.
         GD.Print($"[match] seed {plan.Seed}: {plan.Lots.Count} lots, {plan.Tanks.Count} tanks, {pickups.Count} pickups, {Setup.Players.Count} players, host {Setup.HostId}, me {me}");
     }
 }

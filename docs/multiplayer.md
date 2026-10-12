@@ -313,7 +313,7 @@ The server is the game itself started with `-- --server` (and `--headless`). It 
 | `src/Net/MessageCodec.cs`, `TankLedger.cs` | Complete, typed wire decoding and the server's tank existence/lifecycle ledger. |
 | `src/Net/MatchInbox.cs` | Per-match buffering until scene initialization, with generation-safe cleanup. |
 | `src/Net/BuildInfo.cs`, `UpdateCheck.cs` | Versions and who plays together; the launch check for a newer release. |
-| `src/Net/Match.cs` | A match on one player's machine: everything this player sends, and playing what the others send. |
+| `src/Net/Match.cs` | A peer's shared match world: actions from its owned actors and playback of other actors' events. |
 | `src/Net/BodySync.cs` | Ownership and corrections for tanks and cars. |
 | `src/Net/SnapshotBuffer.cs` | Smooth playback of other players, `InterpolationDelay` behind. |
 | `src/Net/PlanCodec.cs` | Packs a suburb plan for sending. |
@@ -331,9 +331,9 @@ reliable class, with no ordering across classes. On receive, the adapter uses na
 existing type byte to distinguish disposable body states. Epoch/sequence validation handles overtaking motion.
 No application packet layout, player id, tuner or gameplay rule changed. Protocol 2 remains unreleased.
 
-Connection handles are opaque objects and are never reused. `ProtocolPeerMap` is the compatibility bridge between
-these handles and the existing wire player ids (still ENet peer ids). The client learns its player id from Welcome.
-Server-issued peer/actor identities are deferred to A6. Discovery, lobbies and invites are application services;
+Connection handles are opaque objects and are never reused. `ProtocolPeerMap` allocates server-issued peer ids
+independently of ENet's native ids; the client learns its peer id from Welcome. The server-owned roster assigns
+separate actor ids, and a peer may own several actors. Discovery, lobbies and invites are application services;
 `PacketEndpoint.Address` is backend-interpreted, with an ENet hostname/IP and port today.
 
 Every transport callback runs inside main-thread `Poll`. Receive memory is borrowed until the callback returns;
@@ -354,7 +354,8 @@ code. Supporting more precise ENet remote reasons would require a lower-level ad
 Native endpoints normally use a 3 s minimum/8 s maximum ACK timeout. The server extends only the builder's
 connection to 20/30 s before sending MatchStart, and the client does so before invoking its construction callback.
 `IPacketTransport.SetLoading` carries this policy through decorators; backends without native ACK deadlines may
-ignore it. Loaded restores the short timeout at both ends, including a late Loaded after countdown or Go.
+ignore it. Clients report `Loaded` after their first complete frame, so initial physics and shader work retain
+loading grace. Loaded restores the short timeout at both ends, including a late Loaded after countdown or Go.
 Leaving construction also restores it. A silent failed endpoint therefore does not keep a live-match player
 present for the construction grace. Explicit disconnects remain immediate. ENet's retry schedule can defer
 the check until its next retransmission; these are ACK timeout parameters, not exact wall-clock disconnect times.
@@ -528,3 +529,64 @@ The later [tank assertion and correction work](network-corrections.md) adds auto
 the replication causes identified by repeated soaks.
 The [independent integration review](network-integration.md) records A4 integration, native regressions,
 remaining capacity limits and the verification matrix for this branch.
+
+comparison report, not a threshold assertion. Those transients converged; this package does not revise body sync.
+
+## Participants (A6, unreleased Protocol 2)
+
+A connection handle stays inside the transport. The server issues a monotonic positive **PeerId**, independent of
+ENet's identifiers. A lobby owns a revisioned participant roster: **ActorId**, **OwnerPeerId**, Human/Bot kind,
+name, appearance, versioned controller configuration, presence, allocation slot and **LifeId**. Actor ids and
+allocation slots are never reused in that lobby session, including across matches. Spawn slots are a separate,
+frozen match mapping. Drop entities use the actor's allocation slot, never its spawn position. Allocation fails
+before an id, life, epoch or publication counter can wrap. Local view ids are process-local and never transmitted.
+Returning to the waiting lobby advances surviving actors' lives for their next round, with one roster revision;
+actor ids and allocation slots remain stable. If a round completion or departure encounters exhausted life or
+roster-revision space, the server retires that lobby and rejects its peers with a reconnect notice; subsequent
+ticks and fresh lobbies remain usable.
+Ragdoll recovery is the same life, not a respawn.
+
+One peer may own several actors. Each has its own input, aim, ammo, pose/action sequence, grace and predictions;
+there is one shared world and one body synchronizer per peer. The server owns bank and standings. Attacker owners
+report bullet/melee contacts; victim owners apply grace, blast distance/throws and spills. Shared body ownership
+and correction stay per peer. Delayed chains carry the initiating actor unchanged; the ledger validates that a
+causal request belongs to the same actor as its accepted root. Another actor on the same peer cannot borrow credit.
+Same-peer hits follow the same actor event handler as network hits. Predicted contacts and reliable echoes share
+an action id and are applied once. Body publication waits for creation confirmation for every owned actor's
+drops, including bots; bank confirmation alone does not release that wait.
+Profile updates, including the legacy `SetProfile` path, cannot edit the roster during a match.
+
+Roster requests are reliable `AddActor(RequestId, Kind, Name, Appearance, ControllerConfig)`,
+`UpdateActor(RequestId, ActorId, Name, Appearance, ControllerConfig)` and `RemoveActor(RequestId, ActorId)`.
+Only the owning peer may update/remove an actor. The server replies with
+`ActorRequestResult(RequestId, Accepted, Revision, Reason)` and broadcasts full
+`RosterState(LobbyId, Revision, Actors)`. Repeated requests do not mutate the roster; stale revisions are ignored.
+Controller configuration is three bytes: schema version (1), Device/Bot kind, and difficulty (0–2; Device uses 0).
+A8 supplies the lobby bot controls and runtime brains.
+
+Wire changes in this package:
+
+- `LobbyList` advertises the tested actor ceiling; each summary adds its selected capacity and counts actors.
+- `SetCapacity(Int32)` changes a waiting lobby's capacity for its creator, from 2 through the tested ceiling.
+- `LobbyState` adds capacity, roster revision and the peer membership list; its entries are full actor profiles.
+- A full actor profile is `ActorId, OwnerPeerId, Kind, Name, Appearance, ControllerConfig, Present,
+  AllocationSlot, LifeId`. Actor/peer/slot ids are Int32; revision/life/action counters are UInt32.
+- `MatchStart` adds the roster revision, original creator peer and frozen peer capabilities before its actor/spawn
+  list. It freezes accepted profiles, allocation slots, lives, unique starts and initial world authority. Loading
+  acknowledgments and broadcasts operate once per participating peer; generation and supplies count actors.
+- `PlayerState`, `Shot`, `MeleeStart`, `MeleeContact`, `Puncture`, `Explode`, `Drop`, `Ragdoll`, `GetUp` and
+  `ClaimPickup` add `ActorId, LifeId, ActionId` after MatchId, before the server-inserted sender peer. Poses use a
+  separate sequence stream from reliable actor actions. Both ends reject stale lives and repeated sequences.
+- `Shot` and `MeleeContact` add the victim's LifeId. Targets, `Score`, `PickupTaken` and `MatchEnd` standings use
+  actor ids. `Drop` relays the actor envelope; accepted appearance comes from that actor's frozen profile.
+- Canonical `Authority` bodies add `CauseActorId`; body owners and authority request identities remain peers.
+  The refusal enum adds `DuplicateRequest` for a reused accepted explosion request.
+  `PlayerLeft` identifies a departed peer and successor world authority; clients remove every actor of that peer.
+
+The server retains departed actors' banks for conservation and final standings, transfers surviving body ownership
+with new epochs, and may transfer lobby creator controls. Original debug-tuning capability does not transfer.
+The wire safety ceiling is 64 actors/peers, separate from capacity and the color presets. Hello, Welcome and Rejected
+retain their layouts. `Protocol.Version` remains **2** under the unreleased-cycle ruling; these changes require a
+minor release.
+
+The repeatable separate-client capacity gate and its measured evidence are in [network-soak.md](network-soak.md).

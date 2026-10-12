@@ -16,7 +16,7 @@ namespace Propane.Dev;
 /// then plays with <see cref="Bot"/>. It logs
 /// scores and coarse tank digests. <c>--tank-check</c> adds frequent samples on the shared OS monotonic
 /// clock for assertions across same-machine clients; <c>--tank-check-nudge=Name</c> injects a physical divergence.
-/// Run: godot res://scenes/dev/net_test.tscn -- --server=127.0.0.1 --role=host --players=2 [--capture-dir=/tmp/n]
+/// Run: godot-mono res://scenes/dev/net_test.tscn -- --server=127.0.0.1 --role=host --players=2 [--capture-dir=$PWD/build/net-shots]
 /// Add <c>--host-server</c> to run the server in the same process.
 /// </summary>
 public partial class NetTest : Node
@@ -98,6 +98,8 @@ public partial class NetTest : Node
             }
             if (net.Lobby is { } lobby)
             {
+                if (role == "host" && net.IsCreator && lobby.Phase == LobbyServer.LobbyPhase.Waiting && lobby.Capacity < players)
+                    net.SetCapacity(players);
                 Log($"lobby {lobby.Id}: {string.Join(", ", lobby.Members.Select(m => $"{m.Name}/{m.Appearance.Color.ToHtml(false)}"))}, {lobby.Phase}");
                 if (DevArgs.Get("scenario") == "appearance" && lobby.Phase == LobbyServer.LobbyPhase.Waiting && lobby.Members.Count == players)
                 {
@@ -114,6 +116,7 @@ public partial class NetTest : Node
             appearanceMenus?.Show(UI.Menus.Screen.None);
             if (DevArgs.Get("scenario") == "appearance") { CheckAppearances(setup.Players.Select(p => p.Player)); }
             var delay = DevArgs.GetFloat("match-delay", 0);
+            if (DevArgs.Get("scenario") == "capacity" && DevArgs.Get("name") == $"Bot{players}") delay = 26;
             if (delay > 0)
             {
                 Log($"delaying match {setup.Id} construction by {delay} s");
@@ -131,7 +134,14 @@ public partial class NetTest : Node
                 Log("tank-check loading stall 9s");
                 System.Threading.Thread.Sleep(TimeSpan.FromSeconds(9));
             }
-            match = new Match { Name = "Match", Net = net, Setup = setup, CreateLocalView = DisplayServer.GetName() != "headless" };
+            match = new Match
+            {
+                Name = "Match",
+                Net = net,
+                Setup = setup,
+                CreateLocalView = DisplayServer.GetName() != "headless",
+                BeforeInboxAttach = DevArgs.Get("scenario") == "capacity" ? () => PrepareCapacity(setup) : null
+            };
             match.Finished += () =>
             {
                 if (DevArgs.Get("scenario") is "duel" or "pickup" or "drop-refusal" or "puncture-race" or "appearance" or "gather" or "melee" or "body-stream" or "vent-contact")
@@ -148,6 +158,8 @@ public partial class NetTest : Node
                 {
                     Log($"navigation finished: stuck={smart.StuckEvents} blacklist={smart.BlacklistedTargets} replans={smart.Replans} jumps={smart.Jumps}");
                 }
+                if (DevArgs.Get("scenario") == "capacity") FinishCapacity();
+                Digest();
                 if (!tankCheckFinal) { LogTankCheck(final: true); }
                 LogTankCheck(completion: true);
                 Log($"finished match {match.Setup.Id}; final scores {ScoreLine()}");
@@ -182,6 +194,12 @@ public partial class NetTest : Node
                 raceVent = canonical.Vent;
             };
             AddChild(match);
+            if (DevArgs.Get("tank-check-ready-stall") == net.PlayerName)
+            {
+                // Readiness can be sent from packet delivery while construction still blocks native ACK service.
+                Log("tank-check readiness callback stall 9s");
+                System.Threading.Thread.Sleep(TimeSpan.FromSeconds(9));
+            }
             if (DevArgs.Get("gather-trace") != null && match.World.Root.FindChild("Gather", true, false) is TankGather gatherProbe)
             {
                 gatherProbe.Trace = text => Log($"gather-trace time {TankCheckTime():0.000000} {text}");
@@ -211,9 +229,9 @@ public partial class NetTest : Node
             {
                 // Stage before countdown so snapshots settle before the ordinary brains choose any targets.
                 var peers = setup.Players.OrderBy(p => p.Player.Id).ToList();
-                var slot = peers.FindIndex(p => p.Player.Id == match.Player.PeerId);
+                var slot = peers.FindIndex(p => p.Player.Id == match.Player.ActorId);
                 var anchorId = peers[slot / 2 * 2].Player.Id;
-                var anchor = match.Player.PeerId == anchorId ? match.Player : match.RemoteBodies.First(p => p.PeerId == anchorId);
+                var anchor = match.Player.ActorId == anchorId ? match.Player : match.RemoteBodies.First(p => p.ActorId == anchorId);
                 var yaw = anchor.FacingYaw;
                 var forward = new Vector3(-Mathf.Sin(yaw), 0, -Mathf.Cos(yaw));
                 // Use a normal clear spawn so navigation still has useful routes after the initial knockdowns.
@@ -221,7 +239,7 @@ public partial class NetTest : Node
                     yaw + (slot % 2 == 0 ? 0 : Mathf.Pi));
             }
             match.Player.MeleeStarted += (swing, _) => Log($"melee swing {swing}");
-            match.Player.MeleeHit += hit => Log($"melee contact {hit.Swing} victim {PlayerCharacter.Owning(hit.Collider)?.PeerId ?? 0}");
+            match.Player.MeleeHit += hit => Log($"melee contact {hit.Swing} victim {PlayerCharacter.Owning(hit.Collider)?.ActorId ?? 0}");
             clock = 0;
             tankCheckNext = 0;
             tankCheckFinal = false;
@@ -296,7 +314,11 @@ public partial class NetTest : Node
             ShutdownGuard.Quit(GetTree());
             return;
         }
-        if (DevArgs.Get("scenario") is "duel" or "drop-refusal" or "gather")
+        if (DevArgs.Get("scenario") == "capacity")
+        {
+            CapacityScenario(dt);
+        }
+        else if (DevArgs.Get("scenario") is "duel" or "drop-refusal" or "gather")
         {
             Duel(match, dt);
         }
@@ -415,7 +437,7 @@ public partial class NetTest : Node
             ScenarioAssert(tank.State == PropaneTank.TankState.Intact && match.Bodies.Get(id)!.Epoch == 1, "race: contender received a puncture before its simultaneous contact");
             var normal = role == "host" ? Vector3.Right : Vector3.Left;
             var hole = PropaneTank.LocalCenter + normal * 0.15f;
-            tank.TakeShot(tank.ToGlobal(hole), tank.GlobalBasis * normal, -(tank.GlobalBasis * normal));
+            tank.TakeShot(tank.ToGlobal(hole), tank.GlobalBasis * normal, -(tank.GlobalBasis * normal), match.Player.ActorId);
             Log($"race contact tick {raceTick} hole {Vector(tank.HoleLocal)} swirl {tank.SwirlSign}");
         }
         if (raceCamera != null)
@@ -512,7 +534,7 @@ public partial class NetTest : Node
         var gathering = DevArgs.Get("scenario") == "gather";
         if (gathering)
         {
-            var dropper = match.Setup.Players.Single(p => p.Player.Id != match.Bodies.Host).Player;
+            var dropper = match.Setup.Players.Single(p => p.Player.OwnerPeerId != match.Bodies.Host).Player;
             foreach (var tank in match.LiveTanks.Where(IsDrop))
             {
                 var mesh = tank.GetNode<MeshInstance3D>("Mesh");
@@ -602,7 +624,7 @@ public partial class NetTest : Node
         }
         if (Once(3.5f, dt))
         {
-            var victimId = host ? match.RemoteBodies.First().PeerId : net.MyId;
+            var victimId = host ? match.RemoteBodies.First().ActorId : match.Player.ActorId;
             ScenarioAssert(match.Scores[victimId] == (refusal ? 7 : 6) && match.LiveTanks.Count(IsDrop) == (refusal ? 1 : 2),
                 refusal ? "drop-refusal: rejected prediction changed the bank or left a phantom tank" : "duel: three hits must spill exactly two tanks (one hit inside grace)");
             if (refusal)
@@ -670,23 +692,44 @@ public partial class NetTest : Node
             director.Screenshot($"shooter_{duelTime:00.0}");
         }
         if (refusal || gathering) { return; }
-        // Drops keep moving under lag. Follow one tank every frame, retrying until its detonation is observed;
-        // a fixed aim/fire gap used to miss the first shot and puncture a different tank with the second.
+        if (DevArgs.Get("duel-blocked") != null && Once(3.7f, dt))
+        {
+            var dropped = match.LiveTanks.Where(IsDrop).OrderBy(k => k.NetId).First();
+            var away = dropped.GlobalPosition - victim.GlobalPosition;
+            away.Y = 0;
+            ScenarioAssert(away.Length() > .2f, "duel: blocked-lane fixture has no drop offset");
+            player.Teleport(victim.GlobalPosition - away.Normalized() * 14f, player.FacingYaw);
+            var hit = DuelRay(match, dropped, player.GlobalPosition);
+            ScenarioAssert(PlayerCharacter.Owning(hit) == victim, "duel: fixture did not put the victim in the firing lane");
+            Log("duel: victim-blocked firing lane staged");
+        }
+        // Drops keep moving under lag and can land behind the victim. Keep a clear firing lane on the road;
+        // blindly chasing the nearest drop can shoot the victim until their bank is empty instead.
         if (duelTime >= 4f && duelBlastAt < 0)
         {
+            var target = match.LiveTanks.FirstOrDefault(k => k.NetId == duelTank);
+            if (target != null && DuelRay(match, target, player.GlobalPosition) != target)
+            {
+                duelTank = null;
+                target = null;
+            }
             if (duelTank == null)
             {
-                var dropped = match.LiveTanks.Where(IsDrop).Where(k => !k.Invulnerable)
-                    .OrderBy(k => k.GlobalPosition.DistanceTo(player.GlobalPosition)).FirstOrDefault();
-                if (dropped != null)
+                var lanes = new[] { shooterSpot, World.Suburb.ToWorld(mid + road.Direction * 21f, 0.05f) };
+                foreach (var dropped in match.LiveTanks.Where(IsDrop).Where(k => !k.Invulnerable)
+                             .OrderBy(k => k.GlobalPosition.DistanceTo(player.GlobalPosition)))
                 {
-                    duelTank = dropped.NetId;
-                    duelShotLeft = 0.3f; // Let the rifle align before the first shot.
-                    dropped.Detonated += _ => duelBlastAt = duelTime;
-                    Log($"duel: tracking dropped tank {dropped.NetId:x}");
+                    var lane = lanes.FirstOrDefault(at => DuelRay(match, dropped, at) == dropped, Vector3.Inf);
+                    if (!lane.IsFinite()) continue;
+                    if (player.GlobalPosition.DistanceTo(lane) > .1f) player.Teleport(lane, player.FacingYaw);
+                    target = dropped;
+                    duelTank = target.NetId;
+                    duelShotLeft = 0.3f; // Let the rifle align after changing the lane or target.
+                    target.Detonated += _ => duelBlastAt = duelTime;
+                    Log($"duel: tracking dropped tank {target.NetId:x} from a clear firing lane");
+                    break;
                 }
             }
-            var target = match.LiveTanks.FirstOrDefault(k => k.NetId == duelTank);
             if (target != null)
             {
                 AimAt(player, target.GlobalTransform * PropaneTank.LocalCenter);
@@ -706,6 +749,15 @@ public partial class NetTest : Node
                 director.Screenshot($"shooter_{t:00.0}");
             }
         }
+    }
+
+    private static GodotObject? DuelRay(Match match, PropaneTank target, Vector3 standing)
+    {
+        using var ray = PhysicsRayQueryParameters3D.Create(standing + Vector3.Up * 1.4f,
+            target.GlobalTransform * PropaneTank.LocalCenter, Layers.ShotMask,
+            new Godot.Collections.Array<Rid> { match.Player.GetRid() });
+        var hit = match.World.Physics.DirectSpaceState.IntersectRay(ray);
+        return hit.Count > 0 ? hit["collider"].As<GodotObject>() : null;
     }
 
     /// <summary>Walks into the nearest ammo pickup and films it vanishing and building back up.</summary>
@@ -880,7 +932,7 @@ public partial class NetTest : Node
         }
         if (Once(4, dt))
         {
-            ScenarioAssert(meleeFirstDown && match.Scores[target.PeerId] == 0 && match.LiveTanks.Count(IsDrop) == 5,
+            ScenarioAssert(meleeFirstDown && match.Scores[target.ActorId] == 0 && match.LiveTanks.Count(IsDrop) == 5,
                 "melee: first knockdown must spill exactly five tanks from a five-tank bank");
             if (victim) ScenarioAssert(meleeThrows == 1, "melee: repeated active contacts threw victim twice");
         }
@@ -891,7 +943,7 @@ public partial class NetTest : Node
         }
         if (Once(14, dt))
         {
-            ScenarioAssert(meleeSecondDown && match.Scores[target.PeerId] == 0 && match.LiveTanks.Count(IsDrop) == 5,
+            ScenarioAssert(meleeSecondDown && match.Scores[target.ActorId] == 0 && match.LiveTanks.Count(IsDrop) == 5,
                 "melee: zero-bank victim must ragdoll without another drop");
             if (victim) ScenarioAssert(meleeThrows == 2, "melee: missing zero-bank throw");
         }
@@ -1123,18 +1175,19 @@ public partial class NetTest : Node
             var p = tank.GlobalPosition;
             tanks.Append($" {tank.NetId:x}:{(tank.State == PropaneTank.TankState.Venting ? "V" : "I")}:{p.X:0.00},{p.Y:0.00},{p.Z:0.00}");
         }
-        var remotes = string.Join(" ", match.RemoteBodies.Select(b => $"{b.PeerId}@{b.GlobalPosition.X:0.0},{b.GlobalPosition.Z:0.0}{(b.IsRagdolled ? "R" : "")}"));
+        var remotes = string.Join(" ", match.RemoteBodies.Select(b => $"{b.ActorId}@{b.GlobalPosition.X:0.0},{b.GlobalPosition.Z:0.0}{(b.IsRagdolled ? "R" : "")}"));
         foreach (var body in match.RemoteBodies)
         {
             var bones = body.FindChildren("Physical_*", "PhysicalBone3D", owned: false).OfType<PhysicalBone3D>().ToList();
             if (bones.Count > 0)
             {
                 var far = bones.Max(b => b.GlobalPosition.DistanceTo(body.GlobalPosition));
-                Log($"bones of {body.PeerId}: farthest {far:0.00} m from the body, ragdolled {body.IsRagdolled}, layer {bones[0].CollisionLayer}");
+                Log($"bones of {body.ActorId}: farthest {far:0.00} m from the body, ragdolled {body.IsRagdolled}, layer {bones[0].CollisionLayer}");
             }
         }
         var self = match.Player;
         Log($"tuning BlastRadius {match.World.Tuning.BlastRadius} PickupRespawnTime {match.World.Tuning.PickupRespawnTime}");
+        Log(CapacityMetrics.Sample("client", net));
         Log($"perf fps {Engine.GetFramesPerSecond():0} process {Performance.GetMonitor(Performance.Monitor.TimeProcess) * 1000:0.0} ms physics {Performance.GetMonitor(Performance.Monitor.TimePhysicsProcess) * 1000:0.0} ms bodies {Performance.GetMonitor(Performance.Monitor.Physics3DActiveObjects)}");
         Log($"digest clock {match.TimeLeft:0.0} me {self.GlobalPosition.X:0.0},{self.GlobalPosition.Z:0.0}{(self.IsRagdolled ? "R" : "")} ammo {self.Ammo?.Magazine}/{self.Ammo?.Reserve} scores {ScoreLine()} remotes {remotes}");
         Log($"tanks clock {match.TimeLeft:0.0} n {match.LiveTanks.Count()}{tanks}");

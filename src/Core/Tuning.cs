@@ -574,7 +574,8 @@ public partial class Tuning : Resource
     [Export(PropertyHint.Range, "30,900,5")] public float MatchLengthMin { get; set; } = 60f;
     [Export(PropertyHint.Range, "30,1800,5")] public float MatchLengthMax { get; set; } = 600f;
     [Export(PropertyHint.Range, "5,120,5")] public float MatchLengthStep { get; set; } = 30f;
-    [Export(PropertyHint.Range, "1,8,1")] public int MaxPlayers { get; set; } = 5;
+    /// <summary>Initial actor capacity of a new lobby; the creator can select up to the tested ceiling.</summary>
+    [Export(PropertyHint.Range, "2,16,1")] public int MaxPlayers { get; set; } = 5;
     /// <summary>Seconds between everyone having the suburb loaded and the match timer starting.</summary>
     [Export(PropertyHint.Range, "0,10,0.5")] public float CountdownTime { get; set; } = 4f;
     /// <summary>How long the results show before everyone returns to the lobby.</summary>
