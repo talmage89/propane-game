@@ -55,6 +55,8 @@ The integrated branch still failed an independent rendered four-bot observer mat
 `--melee-start`, match seed 25): three initial-pose reach exceptions and two right-wrist contact errors.
 Its five ordinary four-bot soak passes do not cover this failure. Keep the engine-error gate strict and
 reproduce the observer/relocation path before claiming complete presentation robustness.
+The final isolated `make test-full` and an independent repeat also failed the 120 Hz grip sweep with
+missing `aim-down` coverage. A passing settled 36-case metric table does not cover that down-aim transition.
 
 Tuners are fresh **code defaults**, independent of saved settings or project `tuning.tres`. Direct current-build runs
 accept explicit `--tune.Name=value` overrides for pose research; comparison commands use defaults. Differences in a build's
