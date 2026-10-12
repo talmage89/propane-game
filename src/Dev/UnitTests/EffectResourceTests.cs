@@ -61,7 +61,7 @@ public static class EffectResourceTests
             OmniLight3D Light(WorldContext owner, float x)
             {
                 var light = new OmniLight3D { Position = Vector3.Right * x, LightEnergy = 2 };
-                owner.Root.AddChild(light);
+                owner.ContentRoot.AddChild(light);
                 VentLightBudget.Register(owner, light);
                 return light;
             }
@@ -77,6 +77,22 @@ public static class EffectResourceTests
             budget.Remove(third); third.Free(); budget._Process(0);
             Assert(first.Visible && second.Visible && proxies.All(p => !p.Visible),
                 "falling below the threshold did not restore ordinary lighting");
+            var outgoing = world.ContentRoot;
+            var incoming = new Node3D(); world.Root.AddChild(incoming); world.SetContentRoot(incoming);
+            world.RetireContent(outgoing);
+            Assert(GodotObject.IsInstanceValid(budget) && budget.IsInsideTree(), "retiring a suburb retired the world light service");
+            budget._Process(0);
+            Assert(proxies.All(p => !p.Visible), "retiring content retained its proxy light energy");
+            var replacement = Light(world, 3);
+            Assert(isolated.Visible && other.EffectsRoot.GetChildren().OfType<VentLightBudget>().Count() == 1,
+                "another world lost its service during content retirement");
+            budget._Process(0);
+            Assert(replacement.Visible && world.EffectsRoot.GetChildren().OfType<VentLightBudget>().Single() == budget,
+                "the next suburb could not reuse the surviving world service");
+            var nested = new Node3D(); incoming.AddChild(nested); replacement.Reparent(nested);
+            var next = Light(world, 4); var last = Light(world, 5); budget._Process(0);
+            Assert(!replacement.Visible && !next.Visible && !last.Visible && proxies.Where(p => p.Visible).Sum(p => p.LightEnergy) == 6,
+                "source re-entry lost registration or duplicated its emitted energy");
             var bodies = world.Root.FindChildren("*", "RigidBody3D", owned: false).Count;
             Warmup.RunEffects(world, world.Root, Vector3.Down * 400);
             Assert(world.Root.FindChildren("*", "RigidBody3D", owned: false).Count == bodies,

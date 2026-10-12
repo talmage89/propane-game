@@ -24,7 +24,6 @@ public partial class VentJet : Node3D
     private GpuParticles3D flames = null!;
     private GpuParticles3D smoke = null!;
     private OmniLight3D light = null!;
-    private VentLightBudget lightBudget = null!;
     private MeshInstance3D core = null!;
     private ShaderMaterial coreMaterial = null!;
     private MeshInstance3D jet = null!;
@@ -92,10 +91,8 @@ public partial class VentJet : Node3D
             Position = new Vector3(0, 0, 0.45f * scale),
         };
         AddChild(light);
-        lightBudget = VentLightBudget.Register(World, light);
+        VentLightBudget.Register(World, light);
     }
-
-    public override void _ExitTree() => lightBudget.Remove(light);
 
     private static void PrepareProcesses(float scale)
     {

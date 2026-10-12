@@ -22,14 +22,23 @@ public partial class VentLightBudget : Node3D
 
     public static VentLightBudget Register(WorldContext world, OmniLight3D light)
     {
+        world.EnsureAlive();
         var budget = worlds.GetValue(world, static owner =>
         {
             var node = new VentLightBudget { World = owner, Name = "VentLights", ProcessPriority = 100 };
-            owner.Spawn.Effect(node);
+            // This service outlives each suburb's content. RetireContent must only remove its sources.
+            owner.EffectsRoot.AddChild(node);
             return node;
         });
         budget.sources.Add(light);
+        light.TreeExiting += () => budget.Remove(light);
+        light.TreeEntered += () => { if (world.IsAlive && !budget.sources.Contains(light)) budget.sources.Add(light); };
         return budget;
+    }
+
+    public override void _ExitTree()
+    {
+        if (worlds.TryGetValue(World, out var current) && ReferenceEquals(current, this)) worlds.Remove(World);
     }
 
     public void Remove(OmniLight3D light) => sources.Remove(light);

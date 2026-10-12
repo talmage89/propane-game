@@ -41,7 +41,8 @@ energy-weighted centers. Seeds begin near the camera and then spread across the 
 `VentLightMergeRadius` (2 m) from every seed keeps its individual light: this is a soft budget, not permission
 to relocate isolated vents' light across the world. Unmerged energy plus proxy energy equals the original total;
 flash lights and their existing three-shadow limit are unaffected. At 40 vents or fewer, every original vent
-light remains unchanged. All three new presentation dials enter match tuning snapshots (minor-release scope);
+light remains unchanged. The manager belongs to the world rather than a suburb; source retirement unregisters
+lights automatically, source re-entry restores registration, and rebuilding content reuses the surviving service. All three new presentation dials enter match tuning snapshots (minor-release scope);
 no network message changes and no `Protocol.Version` change.
 
 Blast query paging preserves engine hit order, duplicate shapes and caller exclusions. It uses a managed RID
