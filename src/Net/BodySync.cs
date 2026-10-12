@@ -52,6 +52,7 @@ public sealed class BodySync
         public bool PublishReliably;
         internal TrafficClass CheckpointTraffic = TrafficClass.ReliableBodyStates3;
         internal double LastReliablePublication;
+        internal double? SettledMismatchSince;
         internal (int Sender, BodyState Body, bool IsRest, double Received, double Updated)? Future;
         internal (BodyState Body, bool IsRest)? Latest;
     }
@@ -91,6 +92,7 @@ public sealed class BodySync
 
     internal static void MarkPending(Entry entry, bool predictMotion = true)
     {
+        entry.SettledMismatchSince = null;
         entry.ClaimPending = true;
         entry.ObserveWhilePending = !predictMotion;
         if (predictMotion)
@@ -185,6 +187,7 @@ public sealed class BodySync
             entry.LastSequence = 0;
             entry.LastGatherSequence = 0;
             entry.HasTarget = false;
+            entry.SettledMismatchSince = null;
             entry.PublishRequired = authority.Owner == Me;
             entry.Latest = null;
         }
@@ -276,6 +279,7 @@ public sealed class BodySync
             }
             if (!entry.HasTarget || !ObservesOwner(entry) || !GodotObject.IsInstanceValid(entry.Body))
             {
+                entry.SettledMismatchSince = null;
                 continue;
             }
             var body = entry.Body;
@@ -285,6 +289,7 @@ public sealed class BodySync
                 // The owner went quiet without a rest state (lost packets): leave the body to local physics.
                 Trace?.Invoke(entry, $"stale age={age:0.000} quiet={now - entry.TargetUpdated:0.000}");
                 entry.HasTarget = false;
+                entry.SettledMismatchSince = null;
                 continue;
             }
             var lead = entry.TargetRest ? 0f : (float)System.Math.Min(age, MaxExtrapolation);
@@ -338,6 +343,27 @@ public sealed class BodySync
                         Trace?.Invoke(entry, $"obstructed-snap age={age:0.000} error={error.Length():0.000}");
                         continue;
                     }
+                }
+            }
+            // An intact owner may remain awake at rest (nearby contact keeps its island awake).
+            // Floor friction can consume the observer's steering forever without an obstructing ray.
+            // Recover only a persistently settled mismatch; moving, gathering and venting copies
+            // retain their ordinary correction, and this does not fabricate a reliable rest state.
+            var settledMismatch = !entry.TargetRest && body is Tank.PropaneTank
+            { State: Tank.PropaneTank.TankState.Intact, Gathering: false, AtRest: true } &&
+                entry.TargetLinear.Length() <= tuning.GatherRestSpeed &&
+                entry.TargetAngular.Length() <= tuning.GatherRestSpin &&
+                (error.Length() > tuning.GatherRestDistance || Mathf.Abs(angle) > Mathf.DegToRad(tuning.GatherRestAngle));
+            if (!settledMismatch) { entry.SettledMismatchSince = null; }
+            else
+            {
+                entry.SettledMismatchSince ??= now;
+                if (now - entry.SettledMismatchSince >= blend * 3)
+                {
+                    Snap(body, new Transform3D(new Basis(targetRotation), targetPosition), entry.TargetLinear, entry.TargetAngular);
+                    entry.SettledMismatchSince = null;
+                    Trace?.Invoke(entry, $"settled-contact-snap age={age:0.000} error={error.Length():0.000}");
+                    continue;
                 }
             }
             if (error.Length() > tuning.SnapDistance)

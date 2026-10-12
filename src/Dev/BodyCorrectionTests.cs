@@ -64,6 +64,7 @@ public partial class BodyCorrectionTests : Node3D
             for (var tick = 0; tick < 30; tick++) { await ToSignal(GetTree(), SceneTree.SignalName.PhysicsFrame); }
             Assert(observer.LinearVelocity.Length() > .01f, "confirmed ownership retained observer force suppression");
             await CheckSpinningCenters().ConfigureAwait(true);
+            await CheckSettledContact().ConfigureAwait(true);
             GD.Print($"[body correction] PASS fresh observer impulse {freshSpeed:0.000000} m/s, owner peak {ownerSpeed:0.000} m/s; stale, predicted and granted-owner jets resume");
             ShutdownGuard.Quit(GetTree());
         }
@@ -72,6 +73,45 @@ public partial class BodyCorrectionTests : Node3D
             GD.PushError($"[body correction] FAIL {error}");
             ShutdownGuard.Quit(GetTree(), 1);
         }
+    }
+
+    private async Task CheckSettledContact()
+    {
+        var floor = new StaticBody3D { CollisionLayer = Layers.Floor, Position = new Vector3(20, -.5f, 0) };
+        floor.AddChild(new CollisionShape3D { Shape = new BoxShape3D { Size = new Vector3(10, 1, 10) } });
+        world.Root.AddChild(floor);
+        var owner = PropaneTank.Create(world);
+        world.Root.AddChild(owner);
+        owner.CanSleep = false;
+        owner.CollisionLayer = 0;
+        owner.CollisionMask = Layers.Floor;
+        owner.GlobalTransform = new Transform3D(new Basis(Vector3.Forward, Mathf.Pi / 2), new Vector3(20, .6f, 0));
+        for (var tick = 0; tick < 360; tick++) { await ToSignal(GetTree(), SceneTree.SignalName.PhysicsFrame); }
+        Assert(owner.AtRest, "native contact owner did not settle");
+        var observer = PropaneTank.Create(world);
+        world.Root.AddChild(observer);
+        observer.CanSleep = false;
+        observer.CollisionLayer = 0;
+        observer.CollisionMask = Layers.Floor;
+        observer.GlobalTransform = new Transform3D(new Basis(Vector3.Right, .45f) * owner.GlobalBasis,
+            owner.GlobalPosition + Vector3.Up * .15f);
+        var sync = new BodySync(world.Tuning, 4, 2);
+        sync.Register(1, observer, true, 2);
+        var peak = 0f;
+        var final = 0f;
+        for (var tick = 0; tick < 720; tick++)
+        {
+            await ToSignal(GetTree(), SceneTree.SignalName.PhysicsFrame);
+            var now = tick / 120.0;
+            sync.OnState(2, new BodyState(1, owner.GlobalTransform, owner.LinearVelocity,
+                owner.AngularVelocity, 1, (uint)tick + 1), false, now);
+            sync.Correct(now);
+            final = observer.GlobalPosition.DistanceTo(owner.GlobalPosition);
+            if (tick > 360) { peak = Mathf.Max(peak, final); }
+        }
+        GD.Print($"[body correction] settled intact floor contact drift last-half peak={peak:0.000000}m final={final:0.000000}m");
+        Assert(peak < .05f, $"awake settled owner left its observer trapped in floor contact: {peak:0.000000}m");
+        Assert(sync.Get(1) is { TargetRest: false }, "native contact recovery fabricated a rest publication");
     }
 
     private async Task CheckSpinningCenters()

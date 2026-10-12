@@ -279,6 +279,51 @@ public static class AuthorityTests
             tank._PhysicsProcess(1.0 / 60);
             TestRunner.Assert(tank.AngularVelocity.Length() <= spin.Length() + .001f, "new owner escaped its spin limit");
         });
+        runner.Run("authority/settled intact contact recovers despite continuous awake publications", () =>
+        {
+            using var f = new MatchFixture(runner);
+            var tank = f.Match.LiveTanks.Single(t => t.NetId == Id);
+            var pose = tank.GlobalTransform;
+            var stalled = new Transform3D(new Basis(Vector3.Forward, .45f) * pose.Basis, pose.Origin + Vector3.Up * .15f);
+            f.Match.Bodies.OnAuthority(new BodyAuthority(new BodyState(Id, pose, Vector3.Zero, Vector3.Zero, 2, 0),
+                3, TankLedger.State.Intact, false, null, Vector3.Zero), 0);
+            tank.GlobalTransform = stalled;
+            for (var tick = 0; tick < 120; tick++)
+            {
+                var now = tick / 120.0;
+                // Native floor contact consumes the observer's steering while the owner remains awake.
+                tank.LinearVelocity = tank.AngularVelocity = Vector3.Zero;
+                f.Match.Bodies.OnState(3, new BodyState(Id, pose, Vector3.Zero, Vector3.Zero, 2, (uint)tick + 1), false, now);
+                f.Match.Bodies.Correct(now);
+            }
+            TestRunner.Assert(tank.GlobalTransform.IsEqualApprox(pose), "fresh low-motion stream left an intact copy wedged in contact");
+            TestRunner.Assert(f.Match.Bodies.Get(Id) is { TargetRest: false } && !tank.Sleeping,
+                "contact recovery converted an awake owner publication into a rest");
+        });
+        runner.Run("authority/owner motion restarts settled contact recovery", () =>
+        {
+            using var f = new MatchFixture(runner);
+            var tank = f.Match.LiveTanks.Single(t => t.NetId == Id);
+            var pose = tank.GlobalTransform;
+            var stalled = pose.Translated(Vector3.Up * .15f);
+            f.Match.Bodies.OnAuthority(new BodyAuthority(new BodyState(Id, pose, Vector3.Zero, Vector3.Zero, 2, 0),
+                3, TankLedger.State.Intact, false, null, Vector3.Zero), 0);
+            tank.GlobalTransform = stalled;
+            uint sequence = 0;
+            void Tick(double now, Vector3 ownerVelocity)
+            {
+                tank.LinearVelocity = tank.AngularVelocity = Vector3.Zero;
+                f.Match.Bodies.OnState(3, new BodyState(Id, pose, ownerVelocity, Vector3.Zero, 2, ++sequence), false, now);
+                f.Match.Bodies.Correct(now);
+            }
+            Tick(0, Vector3.Zero);
+            Tick(.6, Vector3.Right);
+            Tick(.61, Vector3.Zero);
+            Tick(1.2, Vector3.Zero);
+            TestRunner.Assert(tank.GlobalTransform.IsEqualApprox(stalled), "old stationary interval survived resumed owner motion");
+            Tick(1.5, Vector3.Zero);
+            TestRunner.Assert(tank.GlobalTransform.IsEqualApprox(pose), "new stationary interval could not recover contact");
+        });
         runner.Run("authority/rest remains authoritative after observer settles and drifts locally", () =>
         {
             using var body = new BodyFixture(runner);

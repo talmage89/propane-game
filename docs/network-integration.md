@@ -413,3 +413,43 @@ is supporting native evidence alongside the direct regressions, not a replay.
 godot-mono --headless --path . res://scenes/dev/transport_physics_tests.tscn -- --server --port=25090
 tools/dev/net_bots.sh -p 25090 -n 4 -l 90 -t clean -s '--match-seed=832642757' -o "$PWD/build/vna-polled-clean-repro" -- --melee-start --digest-every=0.5 --tank-motion-trace --tank-authority-trace
 ```
+
+
+## Settled intact contact recovery
+
+The first final matrix after client physics polling passed faulted runs 1 and 2,
+then run 3 failed a resting intact drop, 20100004. Three pairs stayed
+0.119–0.168 m apart for 3.15–3.20 s, despite agreeing scores and final error
+0.008/0.188 m. This failure is retained in `build/vna-polled-final-fault-3-run.log`.
+Its actual layout seed is 930682136. Run 4 passed before the batch was stopped.
+
+The owner continued publishing: sequence 51–78, speed 0–0.005 m/s. The failed
+observer received sequence 47–78 with receipt silence only 0.002–0.082 s. Its
+root stayed roughly 0.15 m high and 0.46 rad tilted, with actual speed/spin
+nearly zero. A ray from observer mass center to sampled owner center found
+no obstruction. Velocity steering was consumed by contact rather than delayed
+by the network; a low-motion owner need not be natively Sleeping.
+
+Correction now recovers a persistent settled mismatch on a remote intact tank.
+Both owner motion and observer motion must satisfy the existing gather rest
+speed/spin tuners; existing rest distance/angle tuners define pose mismatch.
+After three CorrectionBlendTime intervals, the copy takes the owner pose and
+motion. Resumed motion restarts the interval; epochs and local predictions
+clear it. This does not fabricate a rest message or change owner physics,
+gather rules, vent physics, tuners or comparison bounds.
+
+The direct production regression supplies fresh awake states on every tick
+while contact consumes observer steering. It fails before (233 tests, one
+failure) and passes afterward. A second regression requires resumed owner
+motion to restart the settling window; all 234 tests pass. A native flat-floor
+case already passed before and is a safety check, not a reproduction of the
+failed map contact: last-half peak/final root drift is 0.005530 m before and
+0.000056 m after. Custom/automatic spinning centers remain at 0.000002 m drift
+and the fresh observer jet remains 0 m/s; owner, stale and prediction jets run.
+
+The verified-layout repeat requests `-s '--match-seed=930682136'`; its actual
+server seed is 930682136. Four bots over 90 seconds at 120/30/3 pass 1,997
+grids/334,868 body pairs, no unobserved grids, final rest/moving 0.001/0.154 m
+and longest episode 0.50 s. All scores agree (10 banked). Actions differ from
+the failed run, so this supports the direct regression rather than replaying
+the exact failed contact.

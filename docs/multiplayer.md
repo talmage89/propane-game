@@ -367,6 +367,13 @@ rather than treating the zero managed queue as the native queue. ENet native rel
 available. Diagnostics and id bindings last through the disconnect callback, then are released. ENet send acceptance
 reflects Godot PutPacket, which exposes no native send-buffer limit.
 
+A settled intact observer can remain wedged in floor contact even while its
+awake owner sends fresh near-zero motion. If both copies stay within the
+existing gather rest speed/spin thresholds and pose error persists for three
+correction blend times, correction applies the owner pose directly. Owner
+motion restarts that interval. This affects only the remote intact copy; it
+does not mark an owner stream resting, sleep the copy, or change gather rules.
+
 Clients service the packet transport from both process and physics callbacks.
 Catch-up physics can continue while process frames are scarce; delivering
 reliable ownership/checkpoints and ENet ACKs there prevents a slow rendered
