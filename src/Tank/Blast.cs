@@ -23,6 +23,8 @@ public static class Blast
         var radius = tuning.BlastRadius;
         var space = world.Physics.DirectSpaceState;
         var rng = new RandomNumberGenerator();
+        // All sight lines share this blast's origin and mask; only the target changes.
+        var sight = PhysicsRayQueryParameters3D.Create(center, center, Layers.BlastOccluders);
         var exclude = new Godot.Collections.Array<Rid>();
         if (source != null)
         {
@@ -48,7 +50,7 @@ public static class Blast
             }
             using (EffectProfile.Measure(EffectProfile.System.BlastPush))
             {
-                if (Push(space, body, center, radius, tuning, rng, chain, source?.BlastRequest ?? 0))
+                if (Push(space, sight, body, center, radius, tuning, rng, chain, source?.BlastRequest ?? 0))
                 {
                     pushed.Add(body);
                 }
@@ -69,7 +71,7 @@ public static class Blast
                     continue;
                 }
                 var falloff = Mathf.Pow(Mathf.Clamp(1f - distance / reach, 0, 1), tuning.BlastFalloff);
-                if (IsOccluded(space, center, target))
+                if (IsOccluded(space, sight, target))
                 {
                     falloff *= tuning.BlastOcclusion;
                 }
@@ -112,7 +114,7 @@ public static class Blast
     }
 
     /// <summary>Pushes one body; returns whether it moved it.</summary>
-    private static bool Push(PhysicsDirectSpaceState3D space, RigidBody3D body, Vector3 center, float radius,
+    private static bool Push(PhysicsDirectSpaceState3D space, PhysicsRayQueryParameters3D sight, RigidBody3D body, Vector3 center, float radius,
         Tuning tuning, RandomNumberGenerator rng, bool chain, uint cause)
     {
         var state = PhysicsServer3D.BodyGetDirectState(body.GetRid());
@@ -129,7 +131,7 @@ public static class Blast
         }
 
         var falloff = Mathf.Pow(1f - distance / radius, tuning.BlastFalloff);
-        if (IsOccluded(space, center, massCenter))
+        if (IsOccluded(space, sight, massCenter))
         {
             falloff *= tuning.BlastOcclusion;
         }
@@ -164,9 +166,9 @@ public static class Blast
         return (away + Vector3.Up * tuning.BlastUpwardBias).Normalized();
     }
 
-    private static bool IsOccluded(PhysicsDirectSpaceState3D space, Vector3 from, Vector3 to)
+    private static bool IsOccluded(PhysicsDirectSpaceState3D space, PhysicsRayQueryParameters3D sight, Vector3 to)
     {
-        var ray = PhysicsRayQueryParameters3D.Create(from, to, Layers.BlastOccluders);
-        return space.IntersectRay(ray).Count > 0;
+        sight.To = to;
+        return space.IntersectRay(sight).Count > 0;
     }
 }

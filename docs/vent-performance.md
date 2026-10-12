@@ -48,7 +48,9 @@ no network message changes and no `Protocol.Version` change.
 Blast query paging preserves engine hit order, duplicate shapes and caller exclusions. It uses a managed RID
 hash set on full pages instead of repeated native linear searches, and skips exclusion work on the final short
 page because no more query is needed. Queries still visit every body and apply the same impulses and chain rules.
-The dense-query harness asserts 1,100 bodies across multiple pages, caller exclusions and short-page hit order.
+One ray-query resource belongs to each detonation: its origin and mask remain fixed while synchronous sight checks update only the target. Nested detonations receive their own resource.
+The dense-query harness asserts 1,100 bodies across multiple pages, caller exclusions, short-page hit order and
+occluded/clear receivers on opposite sides of a wall across successive detonations.
 
 `tools/dev/measure_vents.py --baseline=<scratch project> --output=<absolute directory>` alternates two builds
 back to back, twice at 32/64/128/40 tanks in idle/blast/chain phases. It preserves 600 raw samples per run, logs,

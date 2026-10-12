@@ -41,6 +41,13 @@ public partial class BlastQueryTests : Node3D
             AddChild(body); bodies.Add(body);
         }
 
+        var wall = new StaticBody3D { CollisionLayer = Layers.World, Position = new Vector3(1, 1, 0) };
+        wall.AddChild(new CollisionShape3D { Shape = new BoxShape3D { Size = new Vector3(.3f, 2, 2) } });
+        AddChild(wall);
+        var blocked = new Receiver(new Vector3(2, 1, 0));
+        var clear = new Receiver(new Vector3(-2, 1, 0));
+        world.Register(blocked); world.Register(clear);
+
         world.SetContentRoot(this);
         var director = new CaptureDirector { QuitAfter = 1 }; AddChild(director);
         director.At(0.2f, () =>
@@ -69,11 +76,29 @@ public partial class BlastQueryTests : Node3D
             var paged = Blast.QueryAll(GetWorld3D().DirectSpaceState, shortPage).Select(h => h["rid"].AsRid()).ToArray();
             Require(paged.SequenceEqual(direct), "short-page query changed the engine's hit order or duplicate shapes");
             Blast.Detonate(world, Vector3.Up, null, false);
+            Require(blocked.Hits.Count == 1 && clear.Hits.Count == 1 &&
+                Mathf.IsEqualApprox(blocked.Hits[0].Falloff, clear.Hits[0].Falloff * world.Tuning.BlastOcclusion),
+                "reused sight query lost the receiver's occlusion or target");
+            var opposite = new Vector3(10, 1, 0);
+            Blast.Detonate(world, opposite, null, false);
+            var reach = Mathf.Max(world.Tuning.BlastRadius, Mathf.Max(world.Tuning.RagdollRadius, world.Tuning.StaggerRadius));
+            var nearFalloff = Mathf.Pow(1 - opposite.DistanceTo(blocked.BlastTargetPosition) / reach, world.Tuning.BlastFalloff);
+            var farFalloff = Mathf.Pow(1 - opposite.DistanceTo(clear.BlastTargetPosition) / reach, world.Tuning.BlastFalloff);
+            Require(blocked.Hits.Count == 2 && clear.Hits.Count == 2 && Mathf.IsEqualApprox(blocked.Hits[1].Falloff, nearFalloff) &&
+                Mathf.IsEqualApprox(clear.Hits[1].Falloff, farFalloff * world.Tuning.BlastOcclusion),
+                "the next blast retained the previous sight query origin or target");
         });
         director.At(0.3f, () =>
         {
             Require(bodies.All(b => b.LinearVelocity.Length() > 1), "dense blast failed to push every body");
             GD.Print($"[blast query] PASS dense blast: {bodies.Count} bodies, duplicate shapes, complete query and push");
         });
+    }
+
+    private sealed class Receiver(Vector3 position) : IBlastReceiver
+    {
+        public Vector3 BlastTargetPosition => position;
+        public List<BlastInfo> Hits { get; } = new();
+        public void ReceiveBlast(BlastInfo blast) => Hits.Add(blast);
     }
 }
