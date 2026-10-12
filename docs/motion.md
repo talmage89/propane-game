@@ -35,6 +35,8 @@ away from a solved contact would detach the hands. Failed candidates reduce the 
 body and carrying-arm rates; the final motion probe still enforces its 1500 degrees/s ordinary-pose bound. The
 previous elbow is a destination, while the candidate supplies the twist reference. Reload trials follow the curved
 contact path, including its final return; ammo, eligibility and reload completion remain authoritative.
+The returning contact and left finger poses advance together so a speed-limited thumb cannot lag into the
+seated magazine. Transit clearance leaves a margin between densely sampled phases while retaining the curls.
 Get-up trials also retain their applied handoff progress when the pose is held. Clearance fades in with the rig,
 so an initially physical hand can transfer its rifle without an immediate stock correction snapping the wrist.
 
@@ -60,7 +62,8 @@ godot-mono --fixed-fps 60 --resolution 1280x720 --path . res://scenes/dev/player
 ```
 
 `motion` covers analog walking, jogging, sprint, creep, bursts, walking reload and ragdoll/get-up. `grip-sweep`
-adds both pitch limits in every hold and both reload types. The final modifier requires wrist position error at
+adds both pitch limits in every hold and both reload types. `make test-full` repeats that sweep at 30 and 120 fps,
+exposing collisions between the ordinary 60 Hz samples. The final modifier requires wrist position error at
 most 3 mm, orientation error at most 0.1 degree, sampled hand penetration at most 0.5 mm and the tuned reach
 margin within 0.5 mm. Coverage requirements catch a stalled reload or a pose that never reaches an aimed hold.
 Body/arm and independent continuous tapered arm-pair gaps must be at least −5 mm; fully aimed gaze error must

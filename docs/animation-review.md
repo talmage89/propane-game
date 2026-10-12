@@ -19,15 +19,16 @@ commit and harness hashes are recorded. No checkout switches or asset replacemen
 checkout's `build/`. Pillow and ffmpeg are optional review dependencies; headless tests need only Python's standard
 library and Godot. No downloads or recordings are required by CI.
 
-Each three-second case starts at the origin. Real input moves between 0.25 and 2.65 seconds, including acceleration
+Each three-second case starts at the origin. Scripted controller intent moves between 0.25 and 2.65 seconds, including acceleration
 and stopping. Walk uses 0.25 analog input (1.5 m/s); jog uses full input (6 m/s); aimed creep is 1.6 m/s. Directions
 are 0 forward, 45 forward/right, 90 right, 135 back/right, 180 back, 225 back/left, 270 left, 315 forward/left.
 The complete 34-case matrix includes idle, those 24 combinations, sprint, start/stop, a continuous aimed reversal,
 stationary half-turn and return, jumping while holding aim, a burst, tactical reload, melee and stationary aim.
 Teleports separate cases; they are not pivots. Reload starts with 20 rounds. The release has no melee; its slot is
 explicitly marked unavailable. Only its review fixture normalizes the older 3.6 m/s aim speed to 1.6 m/s.
+Device delivery is checked separately by `menu_test --scenario=input`, which injects real keyboard and mouse events.
 
-Tuners are fresh **code defaults**, independent of saved settings or ignored `tuning.tres`. Direct current-build runs
+Tuners are fresh **code defaults**, independent of saved settings or project `tuning.tres`. Direct current-build runs
 accept explicit `--tune.Name=value` overrides for pose research; comparison commands use defaults. Differences in a build's
 camera code remain visible in the player view. Side view has fixed framing. `--cases=a,b` limits a run; `--view=player`
 uses the real player camera. `--capture-dir=$PWD/build/...` saves 12 samples per simulated second. The tool creates

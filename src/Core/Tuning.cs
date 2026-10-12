@@ -472,7 +472,7 @@ public partial class Tuning : Resource
     [Export(PropertyHint.Range, "0,1,0.01")] public float RifleMagazineTravel { get; set; } = 0.5f;
     [Export(PropertyHint.Range, "0,0.2,0.001")] public float RifleMagazineGripDown { get; set; } = 0.1f;
     [Export(PropertyHint.Range, "-0.1,0.1,0.001")] public float RifleMagazineGripBack { get; set; } = -0.012f;
-    [Export(PropertyHint.Range, "0,0.2,0.001")] public float RifleReloadClearance { get; set; } = 0.115f;
+    [Export(PropertyHint.Range, "0,0.2,0.001")] public float RifleReloadClearance { get; set; } = 0.13f;
     [Export(PropertyHint.Range, "0,0.2,0.001")] public float RifleBoltApproachClearance { get; set; } = 0.10f;
     [Export(PropertyHint.Range, "0,0.95,0.01")] public float RifleForegripThumbCloseStart { get; set; } = 0.7f;
     [Export(PropertyHint.Range, "0.1,1,0.01")] public float RifleMagazineThumbRelease { get; set; } = 0.7f;

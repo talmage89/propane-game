@@ -698,7 +698,26 @@ public partial class RifleRig : SkeletonModifier3D
 
                 largest = Mathf.Max(largest, differenceAngle);
             }
-            if (solved && largest <= limit)
+            var digitsFit = true;
+            if (Weight >= 0.999f && fittedReload > 0 && !Melee)
+            {
+                // The contact path and thumb opening must advance together. Clamping digits only after
+                // accepting a returning wrist can leave the still-curled thumb inside the seated magazine
+                // at intermediate reload phases, even with correct wrist position and orientation.
+                PoseFingers(s);
+                var digitLimit = Mathf.DegToRad(World.Tuning.PoseAngularSpeed) * dt;
+                for (var finger = 0; finger < 5; finger++)
+                {
+                    for (var joint = 0; joint < 3; joint++)
+                    {
+                        var bone = fingers[finger, joint];
+                        var difference = previousBones![bone].Inverse() * s.GetBonePoseRotation(bone).Normalized();
+                        var angle = 2 * Mathf.Atan2(new Vector3(difference.X, difference.Y, difference.Z).Length(), Mathf.Abs(difference.W));
+                        digitsFit &= angle <= digitLimit + 0.000001f;
+                    }
+                }
+            }
+            if (solved && largest <= limit && digitsFit)
             {
                 Rifle.GlobalTransform = rifle;
                 RightTarget = right;

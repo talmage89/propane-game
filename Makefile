@@ -93,6 +93,8 @@ test-world: build ## Compare all formations built in two fresh processes
 	tools/dev/check_world.sh
 
 test-full: test ## Run the gate plus deep sweeps
+	"$(GODOT)" --headless --fixed-fps 30 --path . res://scenes/dev/player_range.tscn -- --scenario=grip --grip-sweep --assert-grip --assert-motion
+	"$(GODOT)" --headless --fixed-fps 120 --path . res://scenes/dev/player_range.tscn -- --scenario=grip --grip-sweep --assert-grip --assert-motion
 	@mkdir -p build/animation-review-full
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/animation_review.tscn -- --metrics=$(CURDIR)/build/animation-review-full/metrics.csv --assert-motion --assert-grip
 	python3 -B tools/dev/animation_metrics.py build/animation-review-full/metrics.csv --output build/animation-review-full/results.json --strict
