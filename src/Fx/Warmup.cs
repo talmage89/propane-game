@@ -14,7 +14,8 @@ public static class Warmup
 
     public static void Run(WorldContext world, Node3D parent, Vector3 at)
     {
-        var root = RunEffects(world, parent, at);
+        // Preserve the match warm-up flash lifetime and its existing shadow-slot accounting.
+        var root = RunEffects(world, parent, at, retireFlash: false);
         var tank = PropaneTank.Create(world);
         tank.Freeze = true;
         root.AddChild(tank);
@@ -24,7 +25,9 @@ public static class Warmup
     }
 
     /// <summary>Warm presentation without adding physics bodies, for the Lab's existing fixture.</summary>
-    public static Node3D RunEffects(WorldContext world, Node3D parent, Vector3 at)
+    public static Node3D RunEffects(WorldContext world, Node3D parent, Vector3 at) => RunEffects(world, parent, at, retireFlash: true);
+
+    private static Node3D RunEffects(WorldContext world, Node3D parent, Vector3 at, bool retireFlash)
     {
         var root = new Node3D { Name = "Warmup" };
         parent.AddChild(root);
@@ -35,8 +38,8 @@ public static class Warmup
         ImpactEffect.Spawn(world, at + Vector3.Up, Vector3.Up, metal: true, leaveDecal: false);
         ImpactEffect.Spawn(world, at + Vector3.Up, Vector3.Up, metal: false, leaveDecal: false);
 
-        // Retire the flash too: an invisible warm-up must not reserve a shadow slot during the first real blast.
-        world.Schedule(root, Lifetime, () => { root.QueueFree(); explosion.QueueFree(); });
+        // Lab had no warm-up flash before this path: retire it before it can affect a real blast's shadows.
+        world.Schedule(root, Lifetime, () => { root.QueueFree(); if (retireFlash) explosion.QueueFree(); });
         return root;
     }
 }

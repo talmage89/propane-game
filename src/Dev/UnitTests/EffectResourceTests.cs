@@ -97,6 +97,14 @@ public static class EffectResourceTests
             Warmup.RunEffects(world, world.Root, Vector3.Down * 400);
             Assert(world.Root.FindChildren("*", "RigidBody3D", owned: false).Count == bodies,
                 "presentation warm-up added a physics body");
+            var labFlash = world.EffectsRoot.GetChildren().OfType<ExplosionEffect>().Single();
+            world.Clock.Advance(1.6);
+            Assert(labFlash.IsQueuedForDeletion(), "Lab warm-up retained its new invisible flash");
+            Warmup.Run(other, other.Root, Vector3.Down * 400);
+            var matchFlash = other.EffectsRoot.GetChildren().OfType<ExplosionEffect>().Single();
+            other.Clock.Advance(1.6);
+            Assert(!matchFlash.IsQueuedForDeletion() && other.ShadowedFlashes == 1,
+                "match warm-up changed its original flash lifetime or shadow allocation");
         });
         runner.Run("effects/cluster energy and weighted centers", () =>
         {

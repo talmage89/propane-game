@@ -30,7 +30,8 @@ Use `--fixed-fps 60` for those visual comparisons; omit it for throughput measur
 Particle draw meshes and growth/shrink curves are shared immutable resources. Vent and explosion process
 materials cache only the most recent scale; a tuning edit builds a new resource without mutating emitters already
 in flight. CPU-generated scorch/hole/glow textures are built at session assembly. Lab starts the same effect
-warm-up as the game, without adding physics bodies, and the hidden flash retires with its warm-up root.
+warm-up as the game, without adding physics bodies, and its hidden flash retires with its warm-up root. The match's existing warm-up
+flash lifetime and shadow-slot accounting remain unchanged.
 
 Smoke discards only exactly zero-opacity fragments, including completely depth-faded or lifetime-faded fragments,
 before noise work and Forward+ lighting. Particle counts, lifetimes, colors, trajectories, smoke density, light
