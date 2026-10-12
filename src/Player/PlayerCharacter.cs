@@ -223,6 +223,11 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         skeleton.AddChild(feet);
         rig = new RifleRig { World = World, Name = "RifleRig", Rifle = rifle, Pose = animator.Pose };
         skeleton.AddChild(rig);
+        rig.RemoteShotAligned += end =>
+        {
+            rifle.Fire();
+            World.Spawn.Effect(Tracer.Create(rifle.MuzzlePosition, end));
+        };
         handFollow = new RifleHandFollow { Name = "RifleHandFollow", Rifle = rifle, Rig = rig, Blend = poseBlend };
         skeleton.AddChild(handFollow);
 
@@ -732,9 +737,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
     /// <summary>Plays the muzzle flash and tracer of another player's shot.</summary>
     public void RemoteShot(Vector3 end)
     {
-        rig.AlignShot(end);
-        rifle.Fire();
-        World.Spawn.Effect(Tracer.Create(rifle.MuzzlePosition, end));
+        rig.QueueRemoteShot(end);
         rig.Kick();
         readyAmount = 1f;
     }

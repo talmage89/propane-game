@@ -52,6 +52,7 @@ test-core: build ## Run checker, platform, movement and unit assertions
 	"$(GODOT)" --headless --path . res://scenes/dev/shutdown_tests.tscn -- --paused --window-close --repeat-quit
 
 test-behavior: build ## Run isolated physics, navigation, menu, grip and feet probes
+	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/rifle_reach_tests.tscn
 	"$(GODOT)" --headless --path . res://scenes/dev/server_tuning_tests.tscn -- --server --tune.MaxPlayers=6 --port=$(PORT)
 	"$(GODOT)" --headless --path . res://scenes/dev/server_seed_tests.tscn -- --server --match-seed=23 --port=$(PORT)
 	"$(GODOT)" --headless --path . res://scenes/dev/transport_physics_tests.tscn -- --server --port=$(PORT)
@@ -97,6 +98,7 @@ test-world: build ## Compare all formations built in two fresh processes
 	tools/dev/check_world.sh
 
 test-full: test ## Run the gate plus deep sweeps
+	tools/dev/net_bots.sh -o "$(CURDIR)/build/rifle-soak-gate" -n 4 -w 0 -l 90 -s '--match-seed=25' -- --melee-start --net-seed=2 --net-lag=120 --net-jitter=30 --net-loss=3
 	GODOT="$(GODOT)" python3 -B tools/dev/check_lab.py --full
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/upright_pile_tests.tscn -- --deep --awake
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/menu_test.tscn -- --scenario=lifetime --port=$(PORT)
