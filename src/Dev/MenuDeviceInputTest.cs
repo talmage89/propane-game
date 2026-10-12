@@ -216,6 +216,17 @@ public partial class MenuDeviceInputTest : Node
     private async Task LabMouse()
     {
         await Click("Lab").ConfigureAwait(true);
+        // Escape backs out one level at a time: option page, scenario list, main menu.
+        await Click("Range").ConfigureAwait(true);
+        Check(FindButton("Enter Lab") != null && GetViewport().GuiGetFocusOwner() == FindButton("Enter Lab"),
+            "a scenario's option page opens with Enter Lab focused");
+        TapKey(Key.Escape);
+        await Frames().ConfigureAwait(true);
+        Check(FindButton("Huge stack") != null && FindButton("Enter Lab") == null, "Escape returns from options to the scenario list");
+        TapKey(Key.Escape);
+        await Frames().ConfigureAwait(true);
+        Check(Menus.Current == Menus.Screen.Main && FindButton("Huge stack") == null, "Escape returns from the Lab menu to the main menu");
+        await Click("Lab").ConfigureAwait(true);
         await Click("Duel vs a banking bot").ConfigureAwait(true);
         await Click("Environment: Void").ConfigureAwait(true);
         Check(FindButton("Environment: Suburb") != null, "mouse selects the suburb");

@@ -24,6 +24,7 @@ public partial class LabTest : Node
         template = Tuning.LoadBaked();
         template.FixedSeed = 23;
         template.LabStackCount = 32;
+        if (DevArgs.Get("bot-skill") != null) template.LabBotSkill = DevArgs.GetFloat("bot-skill", template.LabBotSkill);
         try
         {
             switch (DevArgs.Get("scenario") ?? "lifetime")
