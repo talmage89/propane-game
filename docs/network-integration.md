@@ -483,3 +483,136 @@ godot-mono --headless --fixed-fps 60 --path . res://scenes/dev/body_correction_t
 godot-mono --fixed-fps 60 --resolution 960x540 --path . res://scenes/dev/body_correction_tests.tscn
 tools/dev/net_bots.sh -p 25087 -n 2 -l 45 -w 2 -s '--start-score=8 --match-seed=1477546872' -o "$PWD/build/vna-gather-fixed" -- --scenario=gather --tune.DropScatter=0.2 --tune.DropToss=1 --net-lag=120 --net-jitter=30 --net-loss=3 --capture-dir="$PWD/build/vna-gather-fixed/shots"
 ```
+
+
+## Final independent proof
+
+The final shared implementation is 336b953; 5d35a5c adds only the gather probe's
+unset-uniform correction and regression. All matrix captures below run the
+final shared code through the unchanged comparer. The corrected gather case
+and both final gates run with 5d35a5c. Logs and reviewed frames remain in build.
+
+Ten faulted and five clean 4-bot/90-second melee-start captures all pass:
+4,090,209 body-pair checks, no unobserved pair grids, no final lifecycle or
+completion disagreement, and all server score audits agree. These are a new
+complete matrix, not selected successes from earlier failed sets.
+
+| Capture | Grids / body pairs | Final rest / moving (m) | Longest episode (s) | Result |
+| --- | ---: | ---: | ---: | --- |
+| fault 1 | 1998 / 270,676 | 0.000 / 0.246 | 0.55 | PASS |
+| fault 2 | 1999 / 267,798 | 0.000 / 0.089 | 0.70 | PASS |
+| fault 3 | 1996 / 183,565 | 0.000 / 0.182 | 0.65 | PASS |
+| fault 4 | 1999 / 291,792 | 0.000 / 0.118 | 0.45 | PASS |
+| fault 5 | 1999 / 144,382 | 0.001 / 0.161 | 0.60 | PASS |
+| fault 6 | 1996 / 251,069 | 0.006 / 0.133 | 1.90 | PASS |
+| fault 7 | 1996 / 419,561 | 0.001 / 0.259 | 0.75 | PASS |
+| fault 8 | 2000 / 216,231 | 0.000 / 0.047 | 0.60 | PASS |
+| fault 9 | 1995 / 254,077 | 0.005 / 0.216 | 0.75 | PASS |
+| fault 10 | 1999 / 345,151 | 0.001 / 0.197 | 0.65 | PASS |
+| clean 1 | 1996 / 285,049 | 0.001 / 0.000 | 0.15 | PASS |
+| clean 2 | 1996 / 328,271 | 0.001 / 0.068 | 0.70 | PASS |
+| clean 3 | 1999 / 343,892 | 0.001 / 0.086 | 0.10 | PASS |
+| clean 4 | 1997 / 217,064 | 0.000 / 0.000 | 1.20 | PASS |
+| clean 5 | 1996 / 271,631 | 0.001 / 0.073 | 0.75 | PASS |
+
+The faulted moving maximum is 0.259 m; the clean moving maximum is 0.086 m.
+Fault 6's longest episode is resting drop 20100007 at 0.140–0.147 m across
+three pairs for 1.90 s, just below the unchanged 2.00 s fault limit. Clean 4
+reaches 1.20 s against 1.50 s. Preserve these margins when reviewing future
+performance changes; passing this finite sample is not a guarantee against
+every later machine stall. No resting, intact, venting or free-flight limit
+has been relaxed. The floor-vent residual does not need a distinct final bound.
+
+The 6-bot/90-second 120/30/3 capture passes 1,998 grids/751,747 body pairs,
+zero gaps, final 0.005/0.239 m and longest episode 1.85 s; all six scores agree.
+The 4-bot/90-second 250/50/5 capture also passes: 1,999 grids/270,945 body pairs,
+zero gaps, final 0.001/0.345 m, longest episode 0.95 s, and all scores agree.
+These use `vna-settled-final-six-bot` and `-heavy-fault`. No unknown-ID body
+batch rejection appears in the completed matrix/stress server logs.
+
+| Final probe | Result |
+| --- | --- |
+| Loading stall (9 s) | PASS, 899 grids, final 0/0 m, episode 0.25 s, scores agree |
+| Melee (35 s, grip/motion asserted) | PASS, 900 grids, final 0/0 m, episode 0.20 s |
+| Duel (35 s) | PASS, 900 grids, final 0/0.249 m, episode 0.40 s |
+| Gather (45 s, both rendered, corrected probe) | PASS, 1,100 grids, final 0/0 m, both shields/glides/ownership/stable pile asserted |
+| Puncture race (20 s, both rendered) | PASS, 599 grids, final 0/0.141 m, episode 0.25 s |
+| compare_vents.py | PASS, 278 pairs, median/p95/max 0.097/0.211/0.346 m, canonical vent agrees |
+| Rotating lanes (20 s, first lane stalled 2 s, all disposable samples lost) | PASS, 599 grids, final 0/0 m |
+| Mixed-axis floor vents (30 s, 120/30/3) | PASS, 799 grids, final 0/0.170 m, episode 0.15 s |
+| Rendered menu input | PASS, 66 real-device assertions, zero failures |
+| Native silent client / server | PASS, detection 4.242 / 3.320 s (10 s cap); dev 6.311 / 3.349 s, pre-fix branch client 25.208 s |
+| Native protocol / minor-version mismatch | PASS, clean rejection before match assembly; version view offers download |
+| Planted 2 m resting error | Expected FAIL, 19.15 s at 2.000 m while both scores agree |
+
+The first final gather probe and its diagnostic repeat fail on the unset shader
+override, as recorded above. The corrected repeat passes; those failures are
+not renamed or discarded. The planted error is deliberately expected to fail.
+All other final scenario probes pass.
+
+Commands (TMPDIR is the worktree's build/vna-scratch; outputs use absolute
+worktree-local paths):
+
+```sh
+make build
+make check
+make test-full
+# Ten independent faulted runs, with N=1..10 and unique output directories:
+tools/dev/net_bots.sh -p 25085 -n 4 -l 90 -t faults -o "$PWD/build/vna-settled-final-fault-N" -- --melee-start --digest-every=0.5 --tank-motion-trace --tank-authority-trace --net-lag=120 --net-jitter=30 --net-loss=3
+# Five clean runs, with N=1..5:
+tools/dev/net_bots.sh -p 25085 -n 4 -l 90 -t clean -o "$PWD/build/vna-settled-final-clean-N" -- --melee-start --digest-every=0.5 --tank-motion-trace --tank-authority-trace
+# Fault 1 adds -w 1, --shot-every=30 and --capture-dir=<absolute output>/shots.
+tools/dev/net_bots.sh -p 25085 -n 6 -l 90 -s '--tune.MaxPlayers=6' -o "$PWD/build/vna-settled-final-six-bot" -- --melee-start --digest-every=0.5 --tank-motion-trace --tank-authority-trace --net-lag=120 --net-jitter=30 --net-loss=3
+tools/dev/net_bots.sh -p 25085 -n 4 -l 90 -o "$PWD/build/vna-settled-final-heavy-fault" -- --melee-start --digest-every=0.5 --tank-motion-trace --tank-authority-trace --net-lag=250 --net-jitter=50 --net-loss=5
+# Scenario runs use --net-lag=120 --net-jitter=30 --net-loss=3 and port 25087:
+tools/dev/net_bots.sh -p 25087 -n 2 -l 35 -s '--start-score=5' -o "$PWD/build/vna-settled-final-scenario-load-stall" -- --scenario=melee --tank-check-load-stall=Bot2 --net-lag=120 --net-jitter=30 --net-loss=3
+tools/dev/net_bots.sh -p 25087 -n 2 -l 35 -w 1 -s '--start-score=5' -o "$PWD/build/vna-settled-final-scenario-melee" -- --scenario=melee --assert-grip --assert-motion --net-lag=120 --net-jitter=30 --net-loss=3 --capture-dir="$PWD/build/vna-settled-final-scenario-melee/shots"
+tools/dev/net_bots.sh -p 25087 -n 2 -l 35 -w 2 -s '--start-score=8' -o "$PWD/build/vna-settled-final-scenario-duel" -- --scenario=duel --net-lag=120 --net-jitter=30 --net-loss=3 --capture-dir="$PWD/build/vna-settled-final-scenario-duel/shots"
+# Gather's exact command is in the preceding section.
+tools/dev/net_bots.sh -p 25087 -n 2 -l 20 -w 2 -o "$PWD/build/vna-settled-final-scenario-puncture-race" -- --scenario=puncture-race --net-lag=120 --net-jitter=30 --net-loss=3 --capture-dir="$PWD/build/vna-settled-final-scenario-puncture-race/shots"
+python3 -B tools/dev/compare_vents.py "$PWD"/build/vna-settled-final-scenario-puncture-race/bot*.log
+tools/dev/net_bots.sh -p 25087 -n 2 -l 20 -s '--net-loss=100 --net-body-stall=2000' -o "$PWD/build/vna-settled-final-scenario-lanes" -- --scenario=body-stream
+tools/dev/net_bots.sh -p 25087 -n 2 -l 30 -s '--match-seed=23' -o "$PWD/build/vna-settled-final-scenario-vent-contact" -- --scenario=vent-contact --vent-contact-axis=mixed --tune.FixedSeed=23 --net-lag=120 --net-jitter=30 --net-loss=3 --tank-motion-trace
+godot-mono --fixed-fps 60 --resolution 1280x720 --path . res://scenes/dev/menu_test.tscn -- --scenario=input --port=25086 --capture-dir="$PWD/build/vna-settled-final-input"
+python3 -B tools/dev/check_liveness.py --output="$PWD/build/vna-settled-final-liveness-client" --silent=client
+python3 -B tools/dev/check_liveness.py --output="$PWD/build/vna-settled-final-liveness-server" --silent=server
+# The native rejection probes start/stop each server as its own process group:
+godot-mono --headless --path . -- --server --port=25088
+godot-mono --headless --path . res://scenes/dev/net_test.tscn -- --role=join --server=127.0.0.1 --port=25088 --fake-protocol=1 --quit=15
+# Stop that server, start a separate fake-version server, and run the UI probe:
+godot-mono --headless --path . -- --server --port=25088 --fake-version=9.9.0
+godot-mono --fixed-fps 60 --resolution 1280x720 --path . res://scenes/dev/menu_test.tscn -- --scenario=rejection --server-address=127.0.0.1:25088 --capture-dir="$PWD/build/vna-settled-final-rejection-version/shots"
+tools/dev/net_bots.sh -p 25087 -n 2 -l 35 -s '--start-score=5' -o "$PWD/build/vna-settled-final-nudge" -- --scenario=melee --tank-check-nudge=Bot2
+```
+
+Personally reviewed fault 1's Bot1_030.0.png and Bot1_060.0.png: actor/rifle,
+readable HUD, loose tanks, debris, and a remote actor render normally. Reviewed
+melee_host_2_06.png (throw), victim_throw_0.80.png (blast and spill),
+Bot2_race_600.png (canonical jet), and gather's victim_02.5.png,
+gather_host_shimmer.png and gather_host_settled.png (blue shield, glide,
+upright pile). Match input's before/after-turn, jump and remapped-pause frames
+show the delivered device paths; 01_version_rejected.png shows a clean update
+message and download button. Frames are under the corresponding capture
+directories above. No recording or baseline copy is required to repeat these
+commands. Windows/macOS native execution and 16-peer admission remain unverified.
+
+Final `make check` and `make test-full` both exit zero on 5d35a5c. Build has
+zero warnings/errors; the unit runner passes 234 assertions in 15 suites, and
+the tank comparer passes all 24 regressions. Deep piles cover 53 fixtures,
+738 tanks and 120 simulated seconds: maximum drift 0.001669 m and tilt
+0.151 degrees. Lifetime checks pass ten single-player and ten solo-match
+cycles with zero orphans. Generator checks pass 200 ordinary seeds, 200
+two-player layouts, 100 each at 8/16/24/32 players, and six seeds per forced
+formation/size. Separate-process hashes agree for all four formations.
+Navigation passes 700/700 courses, zero stuck, mean 3.20 s and 600 jumps.
+Logs are `build/vna-reviewed-final-check.log` and
+`build/vna-reviewed-final-test-full.log`. The earlier whitespace-only lint
+failure was corrected in the contact commit before either final gate.
+
+Integration's dev base remains d2aa9c9. Dev advanced afterward with the
+independent R19 recoil correction; this work does not depend on it. Participants
+work must reconcile its Match/lobby changes and rerun the gate after landing.
+Native ENet queue-depth/admission bounds and 16-peer performance remain the
+capacity follow-ups described above. No gameplay rule, design file, tuner
+default, release version or Protocol.Version was changed by these integration
+fixes. Shared replication changes still require a minor release.
