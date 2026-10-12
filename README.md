@@ -302,6 +302,8 @@ $GODOT --fixed-fps 60 res://scenes/dev/player_range.tscn -- --scenario=melee --v
 $GODOT --headless --fixed-fps 60 res://scenes/dev/player_range.tscn -- --scenario=melee-reloads --assert-grip --assert-motion
 # Motion: all gaits, hip/aimed bursts, walking reload and get-up into run, captured at 60 Hz.
 $GODOT --fixed-fps 60 res://scenes/dev/player_range.tscn -- --scenario=motion --view=side --assert-motion --assert-grip --capture-dir="$PWD/build/motion"
+# Final remote firing contacts through snapshot relocation/turns, delayed reload echoes and catch-up delivery.
+$GODOT --headless --fixed-fps 60 res://scenes/dev/rifle_reach_tests.tscn
 # Full-auto magazine, persistent aim climb and shot/rendered barrel alignment; aim, hip or creep.
 $GODOT --fixed-fps 60 --resolution 1280x720 res://scenes/dev/player_range.tscn -- --scenario=recoil --stance=aim --view=player --assert-grip --assert-motion --capture-dir="$PWD/build/rcl-player"
 # Ten magazines against a player capsule with the production bot aim controller.
@@ -347,7 +349,8 @@ $GODOT --fixed-fps 60 --resolution 1280x720 res://scenes/dev/menu_test.tscn -- -
 # Multiplayer: a local server and bot players under simulated lag and loss; asserts tank agreement and scores.
 # Logs go to build/net (-o picks another directory).
 GODOT=$GODOT tools/dev/net_bots.sh -n 3 -l 60 -- --net-lag=120 --net-jitter=30 --net-loss=3
-# -t clean uses tighter tank limits; -k skips both post-run checks.
+# Logged engine/protocol errors also fail the run. make test-full includes a 90-second faulted rifle soak.
+# -t clean uses tighter tank limits; -k skips post-run checks.
 # Rerun a comparison: tools/dev/compare_tanks.py [--profile clean] build/net/bot*.log
 ```
 
