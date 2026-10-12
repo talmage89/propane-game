@@ -33,8 +33,10 @@ public sealed class ParticipantRoster
     private readonly IdentitySequence slots;
     private readonly uint firstLife;
     private readonly Dictionary<int, ActorRecord> records = new();
-    public ParticipantRoster(int firstActor = 1, int actorCeiling = int.MaxValue, int firstSlot = 0, uint firstLife = 1)
+    public ParticipantRoster(int firstActor = 1, int actorCeiling = int.MaxValue, int firstSlot = 0, uint firstLife = 1,
+        uint firstRevision = 0)
     {
+        Revision = firstRevision;
         this.firstLife = firstLife > 0 ? firstLife : throw new ArgumentOutOfRangeException(nameof(firstLife));
         actors = new(firstActor, actorCeiling);
         slots = new(firstSlot + 1, BodySync.MaxAllocationSlots);

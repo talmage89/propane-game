@@ -299,9 +299,10 @@ public static class ServerTests
         public readonly int Id;
         public readonly MatchSetup Setup;
 
-        public Fixture(bool debug = true, bool playing = true, int bots = 0)
+        public Fixture(bool debug = true, bool playing = true, int bots = 0, Func<ParticipantRoster>? rosterFactory = null)
         {
             Server = new LobbyServer(PacketTransports.CreateServer(), Clock) { StartScore = 4 };
+            if (rosterFactory != null) Server.RosterFactory = rosterFactory;
             Server.SendOverride = (peer, bytes, _) => Packets.Add((peer, MessageCodec.Decode(bytes, true)));
             for (var peer = 2; peer <= 3; peer++)
             {

@@ -14,8 +14,62 @@ public static class ParticipantServerTests
 {
     private static byte[] Request(Msg type, object payload) => MessageCodec.Encode(new NetMessage(type, 0, 0, payload), false);
     private static void Assert(bool condition, string reason) => TestRunner.Assert(condition, reason);
+    private static void AssertFreshLobby(ServerTests.Fixture f)
+    {
+        f.Server.RosterFactory = () => new ParticipantRoster();
+        f.Server.OnConnected(4);
+        f.Receive(new NetWriter(Msg.Hello).Int(Protocol.Version).String(BuildInfo.GameVersion).String("test")
+            .String("Fresh peer").Int(0).Bool(true), 4);
+        Assert(f.Packets.Any(p => p.Peer == 4 && p.Message.Payload is LobbyListMessage list && list.Lobbies.Count == 0),
+            "exhausted lobby remains advertised");
+        f.Packets.Clear();
+        f.Receive(new NetWriter(Msg.CreateLobby), 4);
+        Assert(f.Packets.Any(p => p.Message.Payload is LobbyInfo lobby &&
+            lobby.Members.Single().LifeId == 1 && lobby.Id != 1), "exhaustion prevented a fresh lobby");
+    }
     public static void Register(TestRunner runner)
     {
+        foreach (var counter in new[] { "life", "revision" })
+        {
+            runner.Run($"participants/{counter} exhaustion retires the lobby without aborting server ticks", () =>
+            {
+                using var f = new ServerTests.Fixture(rosterFactory: () => counter == "life"
+                    ? new ParticipantRoster(firstLife: uint.MaxValue)
+                    : new ParticipantRoster(firstRevision: uint.MaxValue - 2));
+                Assert(counter == "life" ? f.Setup.Players.All(p => p.Player.LifeId == uint.MaxValue)
+                    : f.Setup.RosterRevision == uint.MaxValue, "fixture did not reach the exhausted counter");
+                f.Advance(11);
+                f.Packets.Clear();
+                var capture = f.Server.SendOverride!;
+                f.Server.SendOverride = (peer, bytes, traffic) =>
+                {
+                    capture(peer, bytes, traffic);
+                    if (MessageCodec.Decode(bytes, true).Payload is RejectedMessage) f.Server.OnDisconnected(peer);
+                };
+                f.Advance(20);
+                f.Advance(20); // No repeated overflow on subsequent server frames.
+                Assert(f.Packets.Count(p => p.Message.Payload is RejectedMessage r && r.Reason.Contains("Reconnect")) == 2,
+                    "exhausted participants were not told to reconnect");
+                AssertFreshLobby(f);
+            });
+        }
+        runner.Run("participants/revision exhaustion during departure retires the lobby", () =>
+        {
+            using var f = new ServerTests.Fixture(rosterFactory: () => new ParticipantRoster(firstRevision: uint.MaxValue - 2));
+            Assert(f.Setup.RosterRevision == uint.MaxValue, "fixture did not exhaust revision space");
+            var capture = f.Server.SendOverride!;
+            f.Server.SendOverride = (peer, bytes, traffic) =>
+            {
+                capture(peer, bytes, traffic);
+                if (MessageCodec.Decode(bytes, true).Payload is RejectedMessage) f.Server.OnDisconnected(peer);
+            };
+            f.Packets.Clear();
+            f.Server.OnDisconnected(2);
+            f.Advance(100);
+            Assert(f.Packets.Count(p => p.Peer == 3 && p.Message.Payload is RejectedMessage) == 1,
+                "exhausted departure did not reject its survivor exactly once");
+            AssertFreshLobby(f);
+        });
         runner.Run("participants/rounds retain actor and allocation identities but advance lives", () =>
         {
             using var f = new ServerTests.Fixture();

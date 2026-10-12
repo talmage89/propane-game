@@ -541,7 +541,10 @@ allocation slots are never reused in that lobby session, including across matche
 frozen match mapping. Drop entities use the actor's allocation slot, never its spawn position. Allocation fails
 before an id, life, epoch or publication counter can wrap. Local view ids are process-local and never transmitted.
 Returning to the waiting lobby advances surviving actors' lives for their next round, with one roster revision;
-actor ids and allocation slots remain stable. Ragdoll recovery is the same life, not a respawn.
+actor ids and allocation slots remain stable. If a round completion or departure encounters exhausted life or
+roster-revision space, the server retires that lobby and rejects its peers with a reconnect notice; subsequent
+ticks and fresh lobbies remain usable.
+Ragdoll recovery is the same life, not a respawn.
 
 One peer may own several actors. Each has its own input, aim, ammo, pose/action sequence, grace and predictions;
 there is one shared world and one body synchronizer per peer. The server owns bank and standings. Attacker owners

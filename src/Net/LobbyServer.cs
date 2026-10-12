@@ -53,7 +53,7 @@ public partial class LobbyServer : Node
         public LobbyPhase Phase;
         public MatchRun? Match;
         public int Capacity;
-        public ParticipantRoster Roster = new();
+        public ParticipantRoster Roster = null!;
     }
 
     private sealed class MatchRun
@@ -102,6 +102,7 @@ public partial class LobbyServer : Node
 
     // Legacy handler tests bypass the connection layer; transport tests use the injected interface.
     internal Action<int, byte[], TrafficClass>? SendOverride { get; set; }
+    internal Func<ParticipantRoster> RosterFactory { get; set; } = () => new();
 
     public int Port { get; set; } = Protocol.DefaultPort;
 
@@ -301,7 +302,8 @@ public partial class LobbyServer : Node
             Id = lobbyIds.Allocate(),
             CreatorId = client.Id,
             MatchLength = Tuning.SavedTemplate.MatchLengthDefault,
-            Capacity = Math.Clamp(Tuning.SavedTemplate.MaxPlayers, 2, Protocol.TestedActorCeiling)
+            Capacity = Math.Clamp(Tuning.SavedTemplate.MaxPlayers, 2, Protocol.TestedActorCeiling),
+            Roster = RosterFactory()
         };
         lobbies[lobby.Id] = lobby;
         Log($"{client.Name} created lobby {lobby.Id}");
@@ -357,7 +359,12 @@ public partial class LobbyServer : Node
         client.Lobby = null;
         if (client.Connection != null) { transport.SetLoading(client.Connection, false); }
         lobby.Members.Remove(client.Id);
-        lobby.Roster.RemovePeer(client.Id);
+        try { lobby.Roster.RemovePeer(client.Id); }
+        catch (OverflowException)
+        {
+            RetireExhaustedLobby(lobby);
+            return;
+        }
         if (lobby.Match is { } match && match.Players.Remove(client.Id))
         {
             if (match.HostId == client.Id && match.Players.Count > 0)
@@ -642,7 +649,12 @@ public partial class LobbyServer : Node
             case LobbyPhase.Results:
                 if (now >= match.PhaseEnds)
                 {
-                    lobby.Roster.RespawnAll();
+                    try { lobby.Roster.RespawnAll(); }
+                    catch (OverflowException)
+                    {
+                        RetireExhaustedLobby(lobby);
+                        return;
+                    }
                     lobby.Phase = LobbyPhase.Waiting;
                     lobby.Match = null;
                     SendLobbyState(lobby);
@@ -650,6 +662,27 @@ public partial class LobbyServer : Node
                 }
                 break;
         }
+    }
+
+    private void RetireExhaustedLobby(Lobby lobby)
+    {
+        // No roster mutation is possible at exhaustion. Detach peers before disconnect callbacks can
+        // attempt to remove their actors, and retire the round once instead of throwing every frame.
+        const string reason = "This lobby needs to close. Reconnect to create a new lobby.";
+        lobbies.Remove(lobby.Id);
+        lobby.Match = null;
+        var members = clients.Values.Where(c => c.Lobby == lobby).ToArray();
+        foreach (var client in members) client.Lobby = null;
+        lobby.Members.Clear();
+        foreach (var client in members)
+        {
+            if (client.Connection != null) transport.SetLoading(client.Connection, false);
+            Send(client.Id, new NetWriter(Msg.Rejected).String(reason).String(BuildInfo.GameVersion), traffic: TrafficClass.ReliableOrdered);
+            client.KickAt = clock.Seconds + 1;
+            client.Rejection = new DisconnectReason(DisconnectKind.ApplicationRejected, reason);
+        }
+        Log($"lobby {lobby.Id} closed: participant identity space exhausted");
+        BroadcastLobbyList();
     }
 
     private void ClaimPickup(Client client, int actorId, int index)
