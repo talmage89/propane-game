@@ -1,0 +1,170 @@
+--- a/src/Tank/VentJet.cs
++++ b/src/Tank/VentJet.cs
+@@ -29,6 +29,7 @@
+
+     public override void _Ready()
+     {
++        using var profile = EffectProfile.Measure(EffectProfile.System.VentCreate);
+         var scale = World.Tuning.VentFlameScale;
+
+         // Many small, short-lived puffs overlap into one continuous tongue of flame. They live in world space,
+@@ -128,6 +129,7 @@
+
+     public override void _Process(double delta)
+     {
++        using var profile = EffectProfile.Measure(EffectProfile.System.VentProcess);
+         time += (float)delta;
+         smoke.GlobalPosition = GlobalTransform * smokeOffset;
+         ignition = Mathf.Min(1f, ignition + (float)delta * 6f);
+--- a/src/Fx/ExplosionEffect.cs
++++ b/src/Fx/ExplosionEffect.cs
+@@ -53,6 +53,7 @@
+
+     public override void _Ready()
+     {
++        using var profile = EffectProfile.Measure(EffectProfile.System.ExplosionCreate);
+         var tuning = World.Tuning;
+         var scale = tuning.FireballScale;
+         var groundOffset = groundHeight - GlobalPosition.Y;
+@@ -136,6 +137,7 @@
+
+     public override void _Process(double delta)
+     {
++        using var profile = EffectProfile.Measure(EffectProfile.System.ExplosionProcess);
+         elapsed += (float)delta;
+         UpdateLayers(elapsed);
+         if (elapsed > Lifetime)
+--- a/src/Tank/Blast.cs
++++ b/src/Tank/Blast.cs
+@@ -1,6 +1,7 @@
+ using System.Collections.Generic;
+ using Godot;
+ using Propane.Core;
++using Propane.Fx;
+
+ namespace Propane.Tank;
+
+@@ -16,6 +17,7 @@
+     /// </summary>
+     public static void Detonate(WorldContext world, Vector3 center, PropaneTank? source, bool chain = true)
+     {
++        using var profile = EffectProfile.Measure(EffectProfile.System.Blast);
+         world.EnsureAlive();
+         var tuning = world.Tuning;
+         var radius = tuning.BlastRadius;
+@@ -44,29 +46,36 @@
+             {
+                 continue;
+             }
+-            if (Push(space, body, center, radius, tuning, rng, chain, source?.BlastRequest ?? 0))
++            using (EffectProfile.Measure(EffectProfile.System.BlastPush))
+             {
+-                pushed.Add(body);
++                if (Push(space, body, center, radius, tuning, rng, chain, source?.BlastRequest ?? 0))
++                {
++                    pushed.Add(body);
++                }
+             }
+         }
+
+-        foreach (var receiver in new List<IBlastReceiver>(world.BlastReceivers))
++        using (EffectProfile.Measure(EffectProfile.System.BlastReceivers))
+         {
+-            if (!world.IsAlive) { return; }
+-            if (!world.IsRegistered(receiver)) { continue; }
+-            var target = receiver.BlastTargetPosition;
+-            var distance = center.DistanceTo(target);
+-            var reach = Mathf.Max(radius, Mathf.Max(tuning.RagdollRadius, tuning.StaggerRadius));
+-            if (distance > reach)
++            foreach (var receiver in new List<IBlastReceiver>(world.BlastReceivers))
+             {
+-                continue;
++                if (!world.IsAlive) { return; }
++                if (!world.IsRegistered(receiver)) { continue; }
++                var target = receiver.BlastTargetPosition;
++                var distance = center.DistanceTo(target);
++                var reach = Mathf.Max(radius, Mathf.Max(tuning.RagdollRadius, tuning.StaggerRadius));
++                if (distance > reach)
++                {
++                    continue;
++                }
++                var falloff = Mathf.Pow(Mathf.Clamp(1f - distance / reach, 0, 1), tuning.BlastFalloff);
++                if (IsOccluded(space, center, target))
++                {
++                    falloff *= tuning.BlastOcclusion;
++                }
++                receiver.ReceiveBlast(new BlastInfo(center, PushDirection(center, target, tuning, rng), distance, falloff));
+             }
+-            var falloff = Mathf.Pow(Mathf.Clamp(1f - distance / reach, 0, 1), tuning.BlastFalloff);
+-            if (IsOccluded(space, center, target))
+-            {
+-                falloff *= tuning.BlastOcclusion;
+-            }
+-            receiver.ReceiveBlast(new BlastInfo(center, PushDirection(center, target, tuning, rng), distance, falloff));
++
+         }
+
+         world.Events.RaiseExplosion(center);
+@@ -81,12 +90,16 @@
+     {
+         while (true)
+         {
+-            var page = space.IntersectShape(query, MaxQueryResults);
++            Godot.Collections.Array<Godot.Collections.Dictionary> page;
++            using (EffectProfile.Measure(EffectProfile.System.BlastQuery)) page = space.IntersectShape(query, MaxQueryResults);
+             var excluded = query.Exclude;
+             foreach (var hit in page)
+             {
+-                var rid = hit["rid"].AsRid();
+-                if (!excluded.Contains(rid)) { excluded.Add(rid); }
++                using (EffectProfile.Measure(EffectProfile.System.BlastExclusions))
++                {
++                    var rid = hit["rid"].AsRid();
++                    if (!excluded.Contains(rid)) { excluded.Add(rid); }
++                }
+                 yield return hit;
+             }
+             query.Exclude = excluded;
+--- a/src/Tank/PropaneTank.cs
++++ b/src/Tank/PropaneTank.cs
+@@ -295,6 +295,7 @@
+
+     public override void _PhysicsProcess(double delta)
+     {
++        using var profile = EffectProfile.Measure(EffectProfile.System.TankPhysics);
+         if (Gathering) { UpdateGatherShimmer(); }
+         if (State == TankState.Intact && !Gathering)
+         {
+@@ -443,6 +444,7 @@
+
+     private void SpawnDebris(Vector3 center)
+     {
++        using var profile = EffectProfile.Measure(EffectProfile.System.Debris);
+         var tuning = World.Tuning;
+         var rng = new RandomNumberGenerator();
+         var inherited = LinearVelocity;
+@@ -462,6 +464,7 @@
+
+     private void SpawnScorch(Vector3 groundPoint)
+     {
++        using var profile = EffectProfile.Measure(EffectProfile.System.Scorch);
+         var size = World.Tuning.ScorchSize;
+         if (size <= 0)
+         {
+--- a/src/Tank/DebrisBody.cs
++++ b/src/Tank/DebrisBody.cs
+@@ -1,5 +1,6 @@
+ using Godot;
+ using Propane.Core;
++using Propane.Fx;
+
+ namespace Propane.Tank;
+
+@@ -36,6 +37,7 @@
+
+     public override void _Process(double delta)
+     {
++        using var profile = EffectProfile.Measure(EffectProfile.System.DebrisProcess);
+         age += (float)delta;
+         var heat = Mathf.Clamp(1f - age / CoolDownTime, 0, 1);
+         mesh.SetInstanceShaderParameter("heat", heat);

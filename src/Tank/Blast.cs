@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using Godot;
 using Propane.Core;
+using Propane.Fx;
 
 namespace Propane.Tank;
 
@@ -16,11 +17,14 @@ public static class Blast
     /// </summary>
     public static void Detonate(WorldContext world, Vector3 center, PropaneTank? source, bool chain = true)
     {
+        using var profile = EffectProfile.Measure(EffectProfile.System.Blast);
         world.EnsureAlive();
         var tuning = world.Tuning;
         var radius = tuning.BlastRadius;
         var space = world.Physics.DirectSpaceState;
         var rng = new RandomNumberGenerator();
+        // All sight lines share this blast's origin and mask; only the target changes.
+        var sight = PhysicsRayQueryParameters3D.Create(center, center, Layers.BlastOccluders);
         var exclude = new Godot.Collections.Array<Rid>();
         if (source != null)
         {
@@ -44,29 +48,36 @@ public static class Blast
             {
                 continue;
             }
-            if (Push(space, body, center, radius, tuning, rng, chain, source?.BlastRequest ?? 0, source?.CauseActorId ?? 0))
+            using (EffectProfile.Measure(EffectProfile.System.BlastPush))
             {
-                pushed.Add(body);
+                if (Push(space, sight, body, center, radius, tuning, rng, chain, source?.BlastRequest ?? 0, source?.CauseActorId ?? 0))
+                {
+                    pushed.Add(body);
+                }
             }
         }
 
-        foreach (var receiver in new List<IBlastReceiver>(world.BlastReceivers))
+        using (EffectProfile.Measure(EffectProfile.System.BlastReceivers))
         {
-            if (!world.IsAlive) { return; }
-            if (!world.IsRegistered(receiver)) { continue; }
-            var target = receiver.BlastTargetPosition;
-            var distance = center.DistanceTo(target);
-            var reach = Mathf.Max(radius, Mathf.Max(tuning.RagdollRadius, tuning.StaggerRadius));
-            if (distance > reach)
+            foreach (var receiver in new List<IBlastReceiver>(world.BlastReceivers))
             {
-                continue;
+                if (!world.IsAlive) { return; }
+                if (!world.IsRegistered(receiver)) { continue; }
+                var target = receiver.BlastTargetPosition;
+                var distance = center.DistanceTo(target);
+                var reach = Mathf.Max(radius, Mathf.Max(tuning.RagdollRadius, tuning.StaggerRadius));
+                if (distance > reach)
+                {
+                    continue;
+                }
+                var falloff = Mathf.Pow(Mathf.Clamp(1f - distance / reach, 0, 1), tuning.BlastFalloff);
+                if (IsOccluded(space, sight, target))
+                {
+                    falloff *= tuning.BlastOcclusion;
+                }
+                receiver.ReceiveBlast(new BlastInfo(center, PushDirection(center, target, tuning, rng), distance, falloff));
             }
-            var falloff = Mathf.Pow(Mathf.Clamp(1f - distance / reach, 0, 1), tuning.BlastFalloff);
-            if (IsOccluded(space, center, target))
-            {
-                falloff *= tuning.BlastOcclusion;
-            }
-            receiver.ReceiveBlast(new BlastInfo(center, PushDirection(center, target, tuning, rng), distance, falloff));
+
         }
 
         world.Events.RaiseExplosion(center);
@@ -79,23 +90,31 @@ public static class Blast
     /// <summary>Full pages are ambiguous: exclude their bodies and keep querying until a short page proves completion.</summary>
     internal static IEnumerable<Godot.Collections.Dictionary> QueryAll(PhysicsDirectSpaceState3D space, PhysicsShapeQueryParameters3D query)
     {
+        var excluded = query.Exclude;
+        HashSet<Rid>? excludedIds = null;
         while (true)
         {
-            var page = space.IntersectShape(query, MaxQueryResults);
-            var excluded = query.Exclude;
-            foreach (var hit in page)
+            Godot.Collections.Array<Godot.Collections.Dictionary> page;
+            using (EffectProfile.Measure(EffectProfile.System.BlastQuery)) page = space.IntersectShape(query, MaxQueryResults);
+            // A short final page needs no further query. Avoid native array searches and copies for it entirely.
+            if (page.Count == MaxQueryResults)
             {
-                var rid = hit["rid"].AsRid();
-                if (!excluded.Contains(rid)) { excluded.Add(rid); }
-                yield return hit;
+                using var profile = EffectProfile.Measure(EffectProfile.System.BlastExclusions);
+                excludedIds ??= new HashSet<Rid>(excluded);
+                foreach (var hit in page)
+                {
+                    var rid = hit["rid"].AsRid();
+                    if (excludedIds.Add(rid)) excluded.Add(rid);
+                }
+                query.Exclude = excluded;
             }
-            query.Exclude = excluded;
-            if (page.Count < MaxQueryResults) { yield break; }
+            foreach (var hit in page) yield return hit;
+            if (page.Count < MaxQueryResults) yield break;
         }
     }
 
     /// <summary>Pushes one body; returns whether it moved it.</summary>
-    private static bool Push(PhysicsDirectSpaceState3D space, RigidBody3D body, Vector3 center, float radius,
+    private static bool Push(PhysicsDirectSpaceState3D space, PhysicsRayQueryParameters3D sight, RigidBody3D body, Vector3 center, float radius,
         Tuning tuning, RandomNumberGenerator rng, bool chain, uint cause, int causeActorId)
     {
         var state = PhysicsServer3D.BodyGetDirectState(body.GetRid());
@@ -112,7 +131,7 @@ public static class Blast
         }
 
         var falloff = Mathf.Pow(1f - distance / radius, tuning.BlastFalloff);
-        if (IsOccluded(space, center, massCenter))
+        if (IsOccluded(space, sight, massCenter))
         {
             falloff *= tuning.BlastOcclusion;
         }
@@ -147,9 +166,9 @@ public static class Blast
         return (away + Vector3.Up * tuning.BlastUpwardBias).Normalized();
     }
 
-    private static bool IsOccluded(PhysicsDirectSpaceState3D space, Vector3 from, Vector3 to)
+    private static bool IsOccluded(PhysicsDirectSpaceState3D space, PhysicsRayQueryParameters3D sight, Vector3 to)
     {
-        var ray = PhysicsRayQueryParameters3D.Create(from, to, Layers.BlastOccluders);
-        return space.IntersectRay(ray).Count > 0;
+        sight.To = to;
+        return space.IntersectRay(sight).Count > 0;
     }
 }

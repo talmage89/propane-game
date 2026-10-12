@@ -1,5 +1,6 @@
 using Godot;
 using Propane.Core;
+using Propane.Fx;
 
 namespace Propane.Tank;
 
@@ -7,6 +8,9 @@ namespace Propane.Tank;
 public partial class DebrisBody : RigidBody3D
 {
     private const float CoolDownTime = 3.5f;
+
+    private static readonly StringName heatParameter = new("heat");
+    private static readonly StringName sootParameter = new("soot");
 
     private MeshInstance3D mesh = null!;
     private float age;
@@ -29,16 +33,17 @@ public partial class DebrisBody : RigidBody3D
         body.mesh = new MeshInstance3D { Mesh = piece.Mesh, Layers = RenderLayers.Actors };
         body.AddChild(body.mesh);
         GameAssets.ApplyTankMaterials(body.mesh);
-        body.mesh.SetInstanceShaderParameter("heat", 1f);
-        body.mesh.SetInstanceShaderParameter("soot", world.Random.RandfRange(0.3f, 0.6f));
+        body.mesh.SetInstanceShaderParameter(heatParameter, 1f);
+        body.mesh.SetInstanceShaderParameter(sootParameter, world.Random.RandfRange(0.3f, 0.6f));
         return body;
     }
 
     public override void _Process(double delta)
     {
+        using var profile = EffectProfile.Measure(EffectProfile.System.DebrisProcess);
         age += (float)delta;
         var heat = Mathf.Clamp(1f - age / CoolDownTime, 0, 1);
-        mesh.SetInstanceShaderParameter("heat", heat);
+        mesh.SetInstanceShaderParameter(heatParameter, heat);
         if (heat <= 0)
         {
             SetProcess(false);

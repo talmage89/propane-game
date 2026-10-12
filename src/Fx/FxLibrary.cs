@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Godot;
 
 namespace Propane.Fx;
@@ -5,6 +6,9 @@ namespace Propane.Fx;
 /// <summary>Shared textures, meshes and materials for particle effects, built once in code.</summary>
 public static class FxLibrary
 {
+    private static readonly Dictionary<Material, QuadMesh> particleQuads = new();
+    private static readonly Dictionary<(float, float, float), CurveTexture> growCurves = new();
+    private static readonly Dictionary<float, CurveTexture> shrinkCurves = new();
     private static NoiseTexture2D? noise;
     private static QuadMesh? quad;
     private static ShaderMaterial? fireMaterial;
@@ -85,6 +89,15 @@ public static class FxLibrary
     /// <summary>A soft white radial dot for flashes and glows.</summary>
     public static ImageTexture SoftDotTexture => softDotTexture ??= BuildSoftDot(64);
 
+    /// <summary>Build CPU-generated textures while assembling the session, before the first shot or blast.</summary>
+    public static void Preload()
+    {
+        _ = Noise;
+        _ = SoftDotTexture;
+        _ = ScorchTexture;
+        _ = BulletHoleTexture;
+    }
+
     private static ShaderMaterial Make(string shaderPath, System.Action<ShaderMaterial> configure)
     {
         var material = new ShaderMaterial { Shader = GD.Load<Shader>(shaderPath) };
@@ -97,8 +110,11 @@ public static class FxLibrary
     public static GpuParticles3D Particles(Material material, ParticleProcessMaterial process, int amount, float lifetime,
         bool oneShot)
     {
-        var draw = (QuadMesh)Quad.Duplicate();
-        draw.Material = material;
+        if (!particleQuads.TryGetValue(material, out var draw))
+        {
+            draw = new QuadMesh { Size = Vector2.One, Material = material };
+            particleQuads.Add(material, draw);
+        }
         return new GpuParticles3D
         {
             Amount = Mathf.Max(1, amount),
@@ -118,22 +134,28 @@ public static class FxLibrary
     /// <summary>A curve that rises from <paramref name="start"/> to 1 with an ease-out shape.</summary>
     public static CurveTexture GrowCurve(float start, float end = 1f, float easeOut = 0.25f)
     {
+        if (growCurves.TryGetValue((start, end, easeOut), out var cached)) return cached;
         // Curves clamp their points to MaxValue (1 by default), which would silently cap growth.
         var curve = new Curve { MaxValue = Mathf.Max(1f, end * 1.25f) };
         curve.AddPoint(new Vector2(0, start), 0, (end - start) * 3f);
         curve.AddPoint(new Vector2(easeOut, start + (end - start) * 0.75f));
         curve.AddPoint(new Vector2(1, end));
-        return new CurveTexture { Curve = curve };
+        var texture = new CurveTexture { Curve = curve };
+        growCurves.Add((start, end, easeOut), texture);
+        return texture;
     }
 
     /// <summary>A curve that holds at 1 then falls to 0.</summary>
     public static CurveTexture ShrinkCurve(float holdUntil = 0.5f)
     {
+        if (shrinkCurves.TryGetValue(holdUntil, out var cached)) return cached;
         var curve = new Curve();
         curve.AddPoint(new Vector2(0, 1));
         curve.AddPoint(new Vector2(holdUntil, 0.85f));
         curve.AddPoint(new Vector2(1, 0));
-        return new CurveTexture { Curve = curve };
+        var texture = new CurveTexture { Curve = curve };
+        shrinkCurves.Add(holdUntil, texture);
+        return texture;
     }
 
     private static ImageTexture BuildScorch(int size)

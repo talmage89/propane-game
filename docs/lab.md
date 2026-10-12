@@ -93,26 +93,25 @@ other rendered scenes or heavy CPU tests; fixed-FPS captures are independent of 
 
 ## Stack budget
 
-On a GTX 1660 at 1920×1080 (Forward+), each row samples 600 real frames after 180 warm-up frames, with seed 23
-and baked gameplay/effect tuning. These are throughput runs, without `--fixed-fps`. Wall timings include the
-gamescope backend's 60 Hz fallback and shared-machine scheduling; GPU timings help distinguish rendering cost.
+The crowded-effect optimization retains the shipped adjustable range at **24–40 tanks**. A repeated comparison
+on the GTX 1660 at 1920×1080, Forward+, seed 23 and baked tuning measured these pooled results (two back-to-back
+before/after repeats, each with 180 warm-up frames and 600 samples):
 
-| Tanks | Intact GPU p95 (ms) | Ordinary blast median / p95 (ms) | Blast GPU p95 (ms) |
+| Tanks | Ordinary blast GPU p95 before → after (ms) | Blast wall p95 before → after (ms) | Primed chain wall p95 before → after (ms) |
 | ---: | ---: | ---: | ---: |
-| 32 | 6.7 | 16.8 / 26.3 | 26.0 |
-| 40 | 6.6 | 24.8 / 37.1 | 36.4 |
-| 48 | 6.6 | 38.2 / 49.9 | 49.3 |
-| 64 | 6.7 | 48.9 / 61.2 | 58.1 |
-| 128 | 7.1 | 132.9 / 160.7 | 158.3 |
-| 256 | 7.4 | — | — |
-| 512 | 8.4 | — | — |
-| 1,024 | 9.9 | — | — |
+| 32 | 26.4 → 22.2 | 29.7 → 25.7 | 86.8 → 78.7 |
+| 40 | 37.5 → 37.5 | 43.0 → 38.5 | 107.4 → 99.1 |
+| 64 | 62.6 → 58.6 | 67.0 → 61.5 | 129.4 → 40.0 |
+| 128 | 193.1 → 138.5 | 199.2 → 219.0 | 292.6 → 484.5 |
 
-Forty is a conservative usable ceiling near a 30 FPS blast budget, not a promise of uninterrupted 60 FPS.
-Fully primed 32/40/48-tank chains measured p95 18.6/23.0/44.6 ms with worst frames 289/293/681 ms; the burst
-can hitch even below the cap. Idle bodies alone are cheap, but their persistent overlapping vents make a
-substantially larger shipped stack impractical on this GPU. No effect dial or tank rule was reduced to hide
-that limit. Larger stacks need a rendering optimization before raising the cap; review this limit on other GPUs.
+Shared one-minute CPU load ranged from 5.89 to 38.00, with 0–3 other rendered Godot processes; wall results,
+especially chain spikes, cannot establish an isolated hardware limit. The 128-tank 16.7 ms p95 / 50 ms worst
+requirements remain unmet. Forty is still near a 30 FPS blast budget, not a promise of uninterrupted 60 FPS,
+and no larger product ceiling is justified. The original idle sweep reached 1,024 tanks at GPU p95 9.9 ms
+(wall p95 18.4 ms); that size was not repeated in this comparison. Resting bodies remain cheap; persistent lit smoke
+and chain CPU/physics bursts remain expensive. Gameplay values and particle counts are unchanged. See
+[crowded effect profiling](vent-performance.md) for every phase's GPU/wall p50, p95 and worst, profiler breakdown,
+load records, rendered suburb matches, visual comparisons and reproducible baseline commands.
 
 The measurement registry callback deliberately permits 24–1,024 tanks while retaining the actual Lab fixture
 builder. It can profile beyond the product ceiling without relaxing the shipped menus or tuning validation.
