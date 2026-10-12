@@ -41,7 +41,7 @@ public partial class Match
         }
         public void Ready(SessionContext session)
         {
-            match.Send(new NetWriter(Msg.Loaded, match.Setup.Id));
+            match.loadingFrames = 2;
         }
     }
 
@@ -192,7 +192,7 @@ public partial class Match
         CaptureMouse(true);
         ShowNotice("Waiting for everyone to arrive", 30f);
         // Prepare loading presentation before the handoff, so buffered Countdown/Go/End remain authoritative.
-        // Loaded is sent only after replay in the mode's Ready stage.
+        // The Ready stage schedules Loaded after replay and the first complete frame.
         GD.Print($"[match] seed {plan.Seed}: {plan.Lots.Count} lots, {plan.Tanks.Count} tanks, {pickups.Count} pickups, {Setup.Players.Count} players, host {Setup.HostId}, me {me}");
     }
 }

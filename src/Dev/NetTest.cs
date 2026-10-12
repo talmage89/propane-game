@@ -194,6 +194,12 @@ public partial class NetTest : Node
                 raceVent = canonical.Vent;
             };
             AddChild(match);
+            if (DevArgs.Get("tank-check-ready-stall") == net.PlayerName)
+            {
+                // Readiness can be sent from packet delivery while construction still blocks native ACK service.
+                Log("tank-check readiness callback stall 9s");
+                System.Threading.Thread.Sleep(TimeSpan.FromSeconds(9));
+            }
             if (DevArgs.Get("gather-trace") != null && match.World.Root.FindChild("Gather", true, false) is TankGather gatherProbe)
             {
                 gatherProbe.Trace = text => Log($"gather-trace time {TankCheckTime():0.000000} {text}");

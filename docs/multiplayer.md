@@ -354,7 +354,8 @@ code. Supporting more precise ENet remote reasons would require a lower-level ad
 Native endpoints normally use a 3 s minimum/8 s maximum ACK timeout. The server extends only the builder's
 connection to 20/30 s before sending MatchStart, and the client does so before invoking its construction callback.
 `IPacketTransport.SetLoading` carries this policy through decorators; backends without native ACK deadlines may
-ignore it. Loaded restores the short timeout at both ends, including a late Loaded after countdown or Go.
+ignore it. Clients report `Loaded` after their first complete frame, so initial physics and shader work retain
+loading grace. Loaded restores the short timeout at both ends, including a late Loaded after countdown or Go.
 Leaving construction also restores it. A silent failed endpoint therefore does not keep a live-match player
 present for the construction grace. Explicit disconnects remain immediate. ENet's retry schedule can defer
 the check until its next retransmission; these are ACK timeout parameters, not exact wall-clock disconnect times.

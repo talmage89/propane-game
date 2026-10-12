@@ -92,6 +92,7 @@ public partial class Match : Node3D
 
     private Phase phase = Phase.Loading;
     private int me;
+    private int loadingFrames;
     private float revealTime;
     private bool revealing = true;
     private float countdownLeft;
@@ -185,6 +186,9 @@ public partial class Match : Node3D
     public override void _Process(double delta)
     {
         if (World is not { IsAlive: true } || World.Paused) { return; }
+        // The first complete frame includes physics setup and shader warm-up. Reporting from
+        // construction's packet callback would end native loading grace before that work finishes.
+        if (loadingFrames > 0 && --loadingFrames == 0) Send(new NetWriter(Msg.Loaded, Setup.Id));
         var dt = (float)delta;
         var tuning = World.Tuning;
         if (revealing)
