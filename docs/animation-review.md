@@ -33,6 +33,13 @@ requiring head pitch at most 30 degrees at the default camera pitch. Settled gai
 uninitialized rig looking at the world origin. Device delivery is checked separately by
 `menu_test --scenario=input`, which injects real keyboard and mouse events.
 
+The recoil scene's `--assert-first-hip` checks the six arm joints' first-shot change (at most 15 degrees) and
+unchanged trigger timing at the default −10-degree pitch. It does not cover steep pitch limits. The ordinary
+motion probe exempts arms during exact barrel tracking, although its reported maximum still includes them;
+that exemption cannot establish a smooth first-shot transition. Inspect the rendered transition at steep
+angles as well. The independent −60-degree hip probe still reports a visible first-shot arm jump of about
+78 degrees, an unresolved visual acceptance issue.
+
 Tuners are fresh **code defaults**, independent of saved settings or project `tuning.tres`. Direct current-build runs
 accept explicit `--tune.Name=value` overrides for pose research; comparison commands use defaults. Differences in a build's
 camera code remain visible in the player view. Side view has fixed framing. `--cases=a,b` limits a run; `--view=player`

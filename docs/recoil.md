@@ -46,8 +46,9 @@ snapshot relocation/facing and can still see a reload contact that presentation 
 emitting the flash/tracer together inside the modifier keeps the firing muzzle, cached upper root and foregrip
 in one frame. A delayed echo also owns the firing frame's weapon presentation if the displayed snapshot has
 already entered melee; the character restores that action on the next frame. Firing also clears the old
-reload-return direction, so restoring melee cannot restart an obsolete magazine contact. Local shots keep their immediate authoritative fit and obstruction query; shot endpoints and
-logical recoil are unchanged. Multiple echoes in a catch-up frame each emit their effects; the last pose renders.
+reload-return direction, so restoring melee cannot restart an obsolete magazine contact. Local shots keep their
+immediate authoritative fit and obstruction query; received echo endpoints and logical recoil are unchanged.
+Multiple echoes in a catch-up frame each emit their effects; the last pose renders.
 
 A second failure occurred at close endpoints: alternating barrel alignment about the muzzle with restoring a
 contact pivot can oscillate across the endpoint. The final exact barrel correction then puts the wrists outside
@@ -64,6 +65,19 @@ origin (0.1 mm) and delivery of every echo. `make check` runs this fast determin
 runs a faulted four-bot 90-second match. The network launcher fails any run with logged engine or protocol errors,
 including rifle reach/contact errors, even when tanks and scores agree. The reach hotfix itself changes no shared tuners or messages, and `Protocol.Version` stays 2.
 The authored animation redo changes the presentation tuner schema and therefore requires a minor release.
+
+### Animation redo accuracy review
+
+The animation branch's independent comparison with the reach hotfix (`729c8c8`) preserves the nine owner
+magazines' climb and retention. All barrel/tracer checks remain within 0.05 degrees. It does **not**
+preserve deterministic bot hit counts: at 8/20 m, easy bots change from 164/100 to 166/115 hits, hard bots from
+188/182 to 197/184, and simple bots from 193/194 to 204/194, each out of 300 shots.
+
+An instrumented 60-shot comparison finds identical primary ray inputs and random state. On shot 55 both
+primary rays miss, but the new carry's different muzzle origin makes its secondary obstruction ray hit the
+target. Rifle placement therefore affects gameplay outcomes even when logical aim, spread, timing and the hit
+query rules are unchanged. Matching the old counts is an unresolved acceptance requirement; changing or
+decoupling that obstruction path requires a gameplay decision before the animation redo can land.
 
 ### Measured curves
 
