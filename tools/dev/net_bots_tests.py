@@ -26,6 +26,8 @@ else:
     if "--scenario=capacity" in sys.argv and not second:
         print("capacity creator departure")
         sys.exit(0)
+    if fault == "engine" and second:
+        print("ERROR: rifle contact failure")
     for tick in range(61):
         phase = "P" if tick < 40 else "E"
         x = 2 if fault == "tank" and second else 0
@@ -42,7 +44,7 @@ else:
 
     def test_pass_and_both_independent_failures(self):
         for fault, status, output in (("none", 0, "PASS tanks"), ("tank", 1, "FAIL tanks"),
-                                      ("score", 1, "individual scores disagree"), ("process", 1, "no tank-check samples")):
+                                      ("score", 1, "individual scores disagree"), ("engine", 1, "FAIL engine or protocol"), ("process", 1, "no tank-check samples")):
             with self.subTest(fault=fault):
                 result = self.run_launcher(fault)
                 self.assertEqual(result.returncode, status, result.stdout + result.stderr)

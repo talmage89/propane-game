@@ -86,6 +86,10 @@ done
 echo "bots finished (status $status); logs in $out"
 grep -h "match over" "$out/server.log" 2>/dev/null || true
 if (( checks )); then
+  if grep -nE '(^ERROR:|bad [A-Za-z]+ message|\[net\] bad message:)' "$out"/*.log; then
+    echo "FAIL engine or protocol errors in network logs" >&2
+    status=1
+  fi
   client_logs=("$out"/bot*.log)
   # The capacity fixture intentionally retires its creator before completion. Its dedicated
   # checker proves that departure; all survivors still use the ordinary continuous tank gate.
