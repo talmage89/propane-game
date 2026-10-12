@@ -40,6 +40,12 @@ that exemption cannot establish a smooth first-shot transition. Inspect the rend
 angles as well. The independent −60-degree hip probe still reports a visible first-shot arm jump of about
 78 degrees, an unresolved visual acceptance issue.
 
+Fixed-step footage also cannot establish the rig's frame-time budget. Independent sequential navigation
+diagnostics reproduced ordinary carry exhausting all 12 trials of 12 contact projections and repeatedly
+holding the preceding pose. Scratch timing counters located the long callback cost in that coherent-pose
+search; a fresh isolated course stayed much cheaper. Profile repeated transitions and fallback frequency
+before claiming multiplayer performance, alongside the strict soak and full Lab gates.
+
 Tuners are fresh **code defaults**, independent of saved settings or project `tuning.tres`. Direct current-build runs
 accept explicit `--tune.Name=value` overrides for pose research; comparison commands use defaults. Differences in a build's
 camera code remain visible in the player view. Side view has fixed framing. `--cases=a,b` limits a run; `--view=player`
