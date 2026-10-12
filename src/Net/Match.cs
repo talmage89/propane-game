@@ -246,7 +246,7 @@ public partial class Match : Node3D
             owned.SendTimer = Mathf.Max(0, owned.SendTimer + 1f / Mathf.Max(World.Tuning.PlayerSendRate, 1f));
             SendPlayerState(owned.Character, now);
         }
-        SendBodies(dt, now);
+        SendBodies(now);
         CheckPickups();
     }
 
@@ -412,9 +412,9 @@ public partial class Match : Node3D
     }
 
     /// <summary>One atomic request for all disturbed bodies, with each body's expected epoch and proposed pose.</summary>
-    internal uint Claim(IEnumerable<GodotObject> disturbed, uint cause = 0, bool atomic = false)
+    internal uint Claim(IEnumerable<GodotObject> disturbed, uint cause = 0, bool atomic = false, bool predictMotion = true)
     {
-        var claims = atomic ? bodies.ClaimGroup(disturbed) : bodies.Claim(disturbed);
+        var claims = atomic ? bodies.ClaimGroup(disturbed, predictMotion) : bodies.Claim(disturbed);
         if (claims.Count == 0) { return 0; }
         var request = NewRequest();
         QueueAuthority(new AuthorityRequest(Msg.Claim, request, cause, claims.Select(c => c.Id).ToArray(),
@@ -424,7 +424,7 @@ public partial class Match : Node3D
 
     private void GrantGather(IReadOnlyList<PropaneTank> members, Action<Func<PropaneTank, bool>?> done)
     {
-        var request = Claim(members, atomic: true);
+        var request = Claim(members, atomic: true, predictMotion: false);
         if (request == 0) { done(null); return; }
         gatherRequests.Add(request);
         void Resolve(AuthorityMessage result)
@@ -475,7 +475,11 @@ public partial class Match : Node3D
     {
         foreach (var id in request.Ids)
         {
-            if (bodies.Get(id) is { } entry) { request.Expected[id] = entry.Epoch; entry.ClaimPending = true; entry.HasTarget = false; }
+            if (bodies.Get(id) is { } entry)
+            {
+                request.Expected[id] = entry.Epoch;
+                BodySync.MarkPending(entry, predictMotion: request.Type != Msg.Claim || !entry.ObserveWhilePending);
+            }
         }
         outgoingAuthority.Add(request);
         if (request.Type != Msg.Puncture || request.Cause == 0) { FlushAuthority(); }
@@ -559,7 +563,7 @@ public partial class Match : Node3D
             var gatherGrant = result.Peer == me && result.Reason == ClaimRefusal.None && gatherRequests.Contains(result.Request);
             if (!gatherGrant && entry != null && authority.Body.Epoch > entry.Epoch &&
                 entry.Body is PropaneTank changed && IsInstanceValid(changed)) { changed.Disturb(); }
-            if (entry != null && !bodies.OnAuthority(authority, out authority)) { continue; }
+            if (entry != null && !bodies.OnAuthority(authority, out authority, Clock.Seconds)) { continue; }
             if (authority.State == TankLedger.State.Exploded)
             {
                 foreach (var canceled in outgoingAuthority.Where(r => r.Type != Msg.Claim && r.Ids.Contains(id)).ToArray())
@@ -598,7 +602,7 @@ public partial class Match : Node3D
                 suburb.AddTank(tank);
                 if (pilePose is { } pose) { tank.MarkPile(pose); }
                 Track(tank, authority.Owner, replace: entry != null);
-                if (entry == null) { bodies.OnAuthority(authority); }
+                if (entry == null) { bodies.OnAuthority(authority, Clock.Seconds); }
             }
             if (result.Reason != ClaimRefusal.None) { tank!.CancelChainFuse(); }
             var wasIntact = tank!.State == PropaneTank.TankState.Intact;
@@ -882,19 +886,23 @@ public partial class Match : Node3D
         Net.Send(MessageCodec.Encode(message, fromServer: false), TrafficClass.UnreliablePlayerPoses);
     }
 
-    private void SendBodies(float dt, double now)
+    private void SendBodies(double now)
     {
-        var (moving, rested) = bodies.Collect(dt);
-        for (var start = 0; start < moving.Count; start += StatesPerMessage)
+        var (moving, rested) = bodies.Collect(now, player.Runtime.DropPredictions.PendingIds);
+        foreach (var stream in moving.GroupBy(entry => entry.PublishReliably ? entry.CheckpointTraffic : TrafficClass.UnreliableBodyStates))
         {
-            var batch = moving.Skip(start).Take(StatesPerMessage).ToList();
-            var w = new NetWriter(Msg.BodyStates, Setup.Id).Double(Net.BodySampleTime(now)).UShort((ushort)batch.Count);
-            foreach (var entry in batch)
+            var entries = stream.ToList();
+            for (var start = 0; start < entries.Count; start += StatesPerMessage)
             {
-                w.UInt(entry.Id).Transform(entry.Body.GlobalTransform).Vec3(entry.Body.LinearVelocity).Vec3(entry.Body.AngularVelocity)
-                    .UInt(entry.Epoch).UInt(checked(++entry.Sequence));
+                var batch = entries.Skip(start).Take(StatesPerMessage).ToList();
+                var w = new NetWriter(Msg.BodyStates, Setup.Id).Double(Net.BodySampleTime(now)).UShort((ushort)batch.Count);
+                foreach (var entry in batch)
+                {
+                    w.UInt(entry.Id).Transform(entry.Body.GlobalTransform).Vec3(entry.Body.LinearVelocity).Vec3(entry.Body.AngularVelocity)
+                        .UInt(entry.Epoch).UInt(checked(++entry.Sequence));
+                }
+                Send(w, stream.Key);
             }
-            Send(w, TrafficClass.UnreliableBodyStates);
         }
         foreach (var entry in rested)
         {

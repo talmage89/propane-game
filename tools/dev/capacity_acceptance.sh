@@ -21,9 +21,10 @@ export TMPDIR="$out/tmp"
 for faults in clean faulted; do
   for run in $(seq 1 "$repeats"); do
     directory="$out/$faults-$run"
+    profile=clean
     extra=()
-    [[ "$faults" == faulted ]] && extra=(--net-lag=120 --net-jitter=30 --net-loss=3)
-    "$project/tools/dev/net_bots.sh" -n "$actors" -l 60 -w "$windowed" -o "$directory" \
+    [[ "$faults" == faulted ]] && profile=faults && extra=(--net-lag=120 --net-jitter=30 --net-loss=3)
+    "$project/tools/dev/net_bots.sh" -n "$actors" -t "$profile" -l 60 -w "$windowed" -o "$directory" \
       -s '--start-score=8 --capacity-metrics' -- --scenario=capacity --digest-every=1 --net-seed="$run" "${extra[@]}"
     python3 -B "$project/tools/dev/check_capacity.py" "$directory" "$actors" | tee "$directory/acceptance.txt"
   done

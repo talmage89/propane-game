@@ -25,6 +25,7 @@ public partial class Tuning
     public float BotTargetRetryTime { get; set; } = 8f;
     public float BotTurnSharpness { get; set; } = 12f;
     public float BotSprintDistance { get; set; } = 8f;
+    public float BotRecoilControlSpeed { get; set; } = 2.8f;
     public float BotAimTurnSharpness { get; set; } = 18f;
     public float BotAimErrorEasy { get; set; } = 1.1f;
     public float BotAimErrorHard { get; set; } = 0.22f;

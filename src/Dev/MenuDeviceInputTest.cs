@@ -169,6 +169,25 @@ public partial class MenuDeviceInputTest : Node
         Check(shots == 2, $"{mode} complete trigger tap shoots");
         await Frames(20).ConfigureAwait(true);
         Check(shots == 2, $"{mode} trigger tap is consumed");
+        // Deliver a held trigger and corrective mouse motion through the real application viewport.
+        var lookUp = new Vector2(0, -(25 - player.Aim.Pitch) / sensitivity);
+        Send(new InputEventMouseMotion { Relative = lookUp, ScreenRelative = lookUp });
+        await Frames().ConfigureAwait(true);
+        var burstStart = player.Aim.Pitch;
+        var beforeBurst = shots;
+        Send(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = true });
+        await Frames(60).ConfigureAwait(true);
+        Send(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = false });
+        await Frames().ConfigureAwait(true);
+        Check(shots - beforeBurst >= 10 && player.Aim.Pitch > burstStart + 2, $"{mode} held mouse fires and climbs");
+        capture.Screenshot($"{mode}_burst_climb");
+        var afterBurst = shots;
+        await Frames(120).ConfigureAwait(true);
+        Check(shots == afterBurst && player.Aim.Pitch > burstStart + 2, $"{mode} released trigger stops; climb persists");
+        var pull = new Vector2(0, (player.Aim.Pitch - burstStart) / sensitivity);
+        Send(new InputEventMouseMotion { Relative = pull, ScreenRelative = pull });
+        await Frames().ConfigureAwait(true);
+        Check(Math.Abs(player.Aim.Pitch - burstStart) < 0.1f, $"{mode} real mouse pull controls recoil");
         player.Fired -= Shot;
     }
 

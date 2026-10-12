@@ -33,6 +33,324 @@ public static class AuthorityTests
 
     public static void Register(TestRunner runner)
     {
+        foreach (var sleeping in new[] { false, true })
+        {
+            runner.Run($"authority/unconfirmed {(sleeping ? "resting" : "moving")} drops defer publication until creation", () =>
+            {
+                using var f = new MatchFixture(runner);
+                f.Match.OnMessage(new NetMessage(Msg.MatchGo, f.Server.Id, 0, new FloatMessage(60)));
+                f.Match.OnMessage(new NetMessage(Msg.Score, f.Server.Id, 0, new ScoreMessage(f.Match.Player.ActorId, 5, 0)));
+                f.Match.Player.Runtime.GraceUntil = 0;
+                f.Match.OnMessage(new NetMessage(Msg.Shot, f.Server.Id, 3,
+                    new ShotMessage(Vector3.Zero, Vector3.Up, Vector3.Forward, 0, f.Match.Player.ActorId, -1), f.Server.ActorId(3), 1, 1));
+                var drops = f.Match.LiveTanks.Where(t => t.NetId >= BodySync.DropTankBase && t.NetId < BodySync.CarBase).ToArray();
+                TestRunner.Assert(drops.Length > 0, "production shot did not create predicted drops");
+                foreach (var drop in drops) { drop.Sleeping = sleeping; }
+                var known = f.Match.Bodies.Get(Id)!;
+                known.Body.Sleeping = false;
+                f.Server.Clock.Seconds += .1;
+                f.Match._PhysicsProcess(1.0 / 60);
+                TestRunner.Assert(known.Sequence > 0, "pending drops blocked a registered body's stream");
+                TestRunner.Assert(drops.All(t => f.Match.Bodies.Get(t.NetId) is { Sequence: 0, PublishRequired: true }),
+                    "unregistered drop published or consumed its required first state");
+                f.Match.OnMessage(new NetMessage(Msg.Score, f.Server.Id, 0, new ScoreMessage(f.Match.Player.ActorId, 5 - drops.Length, -drops.Length)));
+                f.Server.Clock.Seconds += .1;
+                f.Match._PhysicsProcess(1.0 / 60);
+                TestRunner.Assert(drops.All(t => f.Match.Bodies.Get(t.NetId)!.Sequence == 0),
+                    "bank debit released publication before creation confirmation");
+                var states = drops.Select(t => new BodyState(t.NetId, t.GlobalTransform, t.LinearVelocity, t.AngularVelocity)).ToArray();
+                f.Match.OnMessage(new NetMessage(Msg.Drop, f.Server.Id, 2, new DropMessage(0, states), f.Match.Player.ActorId, 1, 1));
+                f.Match._PhysicsProcess(1.0 / 60);
+                TestRunner.Assert(drops.All(t => f.Match.Bodies.Get(t.NetId) is { Sequence: 1, PublishRequired: false }),
+                    "confirmation lost the first moving checkpoint or final rest");
+                f.Match._PhysicsProcess(1.0 / 60);
+                TestRunner.Assert(drops.All(t => f.Match.Bodies.Get(t.NetId)!.Sequence == 1),
+                    "confirmation repeatedly published without elapsed network time");
+            });
+        }
+        runner.Run("authority/rotating an offset body does not translate its mass center", () =>
+        {
+            using var body = new BodyFixture(runner);
+            body.Body.CenterOfMassMode = RigidBody3D.CenterOfMassModeEnum.Custom;
+            body.Body.CenterOfMass = Vector3.Up * .19f;
+            var center = Vector3.Up * 10;
+            var rotated = new Basis(Vector3.Forward, Mathf.Pi / 2);
+            body.Body.GlobalTransform = new Transform3D(rotated, center - rotated * body.Body.CenterOfMass);
+            var pose = new Transform3D(Basis.Identity, center - body.Body.CenterOfMass);
+            var sync = new BodySync(Tuning.SavedTemplate, 4, 2);
+            sync.Register(Id, body.Body, true, 2);
+            sync.OnState(2, new BodyState(Id, pose, Vector3.Zero, Vector3.Zero, 1, 1), false, 1);
+            sync.Correct(1);
+            TestRunner.Assert(body.Body.LinearVelocity.Length() < .0001f,
+                "orientation error accelerated an already aligned mass center");
+            TestRunner.Assert(body.Body.AngularVelocity.Length() > 1, "orientation error was not corrected");
+        });
+        runner.Run("authority/spinning motion extrapolates around the mass center", () =>
+        {
+            using var body = new BodyFixture(runner);
+            body.Body.CenterOfMassMode = RigidBody3D.CenterOfMassModeEnum.Custom;
+            body.Body.CenterOfMass = Vector3.Up * .19f;
+            var center = Vector3.Up * 10;
+            body.Body.GlobalPosition = center - body.Body.CenterOfMass - Vector3.Right * 100;
+            var pose = new Transform3D(Basis.Identity, center - body.Body.CenterOfMass);
+            var sync = new BodySync(Tuning.SavedTemplate, 4, 2);
+            sync.Register(Id, body.Body, true, 2);
+            sync.OnState(2, new BodyState(Id, pose, Vector3.Right * 10, Vector3.Forward * 10, 1, 1), false, 1);
+            sync.Correct(1.1);
+            var actual = body.Body.GlobalTransform * body.Body.CenterOfMass;
+            TestRunner.Assert(actual.DistanceTo(center + Vector3.Right) < .0001f,
+                "extrapolated rotation displaced the translating mass center");
+        });
+        runner.Run("authority/pending gather lease still applies the resting owner", () =>
+        {
+            using var body = new BodyFixture(runner);
+            var sync = new BodySync(Tuning.SavedTemplate, 4, 2);
+            sync.Register(Id, body.Body, true, 2);
+            var rest = Pose(Id, 1, 1) with { Linear = Vector3.Zero, Angular = Vector3.Zero };
+            sync.OnState(2, rest, true, 1);
+            sync.Correct(2);
+            sync.ClaimGroup(new[] { body.Body }, predictMotion: false);
+            body.Body.GlobalPosition += Vector3.Right * .3f;
+            sync.Correct(2.1);
+            TestRunner.Assert(body.Body.GlobalTransform.IsEqualApprox(rest.Transform), "lease abandoned the resting owner");
+            sync.Claim(new[] { body.Body }); // A real push during the lease must still predict locally.
+            body.Body.GlobalPosition += Vector3.Right;
+            var pushed = body.Body.GlobalTransform;
+            sync.Correct(2.2);
+            TestRunner.Assert(body.Body.GlobalTransform.IsEqualApprox(pushed), "gather lease erased a genuine predicted impulse");
+        });
+        runner.Run("authority/match queue preserves a nonpredictive gather target", () =>
+        {
+            using var f = new MatchFixture(runner);
+            var tank = f.Match.LiveTanks.Single(t => t.NetId == Id);
+            f.Match.Bodies.OnAuthority(Grant(3, 2) with { Rest = true }, 0);
+            f.Match.Bodies.Correct(1);
+            f.Match.Claim(new[] { tank }, atomic: true, predictMotion: false);
+            TestRunner.Assert(f.Match.Bodies.Get(Id) is { ClaimPending: true, HasTarget: true, TargetRest: true },
+                "production authority queue discarded the gather rest target");
+        });
+        runner.Run("authority/frozen gather motion never publishes a premature rest", () =>
+        {
+            using var f = new MatchFixture(runner);
+            var tank = f.Match.LiveTanks.Single(t => t.NetId == Id);
+            var entry = f.Match.Bodies.Get(Id)!;
+            tank.BeginGather();
+            tank.Sleeping = true; // Native frozen bodies can sleep while the owner moves their transform.
+            var flight = f.Match.Bodies.Collect(.1);
+            TestRunner.Assert(flight.Moving.Contains(entry) && !flight.Rested.Contains(entry),
+                "frozen glide published a rest that ends observer gathering");
+            tank.EndGather();
+            tank.Sleeping = true;
+            var settled = f.Match.Bodies.Collect(.1);
+            TestRunner.Assert(settled.Rested.Contains(entry), "actual gather completion lost its final rest");
+        });
+        runner.Run("authority/each body's checkpoints advance independent retransmission lanes", () =>
+        {
+            using var body = new BodyFixture(runner);
+            var sync = new BodySync(Tuning.SavedTemplate, 2, 2);
+            sync.Register(Id, body.Body, true, 2);
+            body.Body.Sleeping = false;
+            var lanes = new HashSet<int>();
+            for (var i = 0; i < 3; i++)
+            {
+                var sample = sync.Collect((i + 1) * .3).Moving.Single();
+                TestRunner.Assert(sample.PublishReliably, "probe did not collect a checkpoint");
+                lanes.Add(NetTransport.Channel(sample.CheckpointTraffic));
+            }
+            TestRunner.Assert(lanes.Count == 3 && !lanes.Contains(NetTransport.Channel(TrafficClass.ReliableOrdered)),
+                "new owner checkpoints remain behind an older checkpoint's retransmission");
+        });
+        runner.Run("authority/solid geometry cannot trap a fresh observer across a wall", () =>
+        {
+            using var body = new BodyFixture(runner.World.Root);
+            var wall = new StaticBody3D { CollisionLayer = Layers.World };
+            using var shape = new BoxShape3D { Size = new Vector3(.1f, 10, 10) };
+            wall.AddChild(new CollisionShape3D { Shape = shape });
+            runner.World.Root.AddChild(wall);
+            try
+            {
+                var from = new Vector3(-1, 2, 0);
+                var pose = new Transform3D(Basis.Identity, new Vector3(1, 2, 0));
+                using var ray = PhysicsRayQueryParameters3D.Create(from, pose.Origin, Layers.World);
+                TestRunner.Assert(runner.World.Physics.DirectSpaceState.IntersectRay(ray).Count > 0, "wall fixture was not visible to native physics");
+                var sync = new BodySync(Tuning.SavedTemplate, 4, 2);
+                sync.Register(Id, body.Body, true, 2);
+                body.Body.GlobalPosition = from;
+                sync.OnState(2, new BodyState(Id, pose, Vector3.Right, Vector3.Zero, 1, 1), false, 1);
+                sync.Correct(1);
+                TestRunner.Assert(body.Body.GlobalTransform.IsEqualApprox(pose), "fresh observer steered into a wall instead of recovering the owner pose");
+                // Free-space copies still ease: obstruction does not lower the normal snap threshold.
+                var clearFrom = from + Vector3.Forward * 20;
+                var clearPose = new Transform3D(Basis.Identity, pose.Origin + Vector3.Forward * 20);
+                using var clearRay = PhysicsRayQueryParameters3D.Create(clearFrom, clearPose.Origin, Layers.World);
+                TestRunner.Assert(runner.World.Physics.DirectSpaceState.IntersectRay(clearRay).Count == 0, "free-space fixture was obstructed");
+                body.Body.GlobalPosition = clearFrom;
+                sync.OnState(2, new BodyState(Id, clearPose, Vector3.Right, Vector3.Zero, 1, 2), false, 2);
+                sync.Correct(2);
+                TestRunner.Assert(body.Body.GlobalPosition.IsEqualApprox(clearFrom) && body.Body.LinearVelocity.X > 1,
+                    "unobstructed observer lost ordinary smoothing");
+            }
+            finally { wall.Free(); }
+        });
+        runner.Run("authority/moving owners periodically checkpoint through disposable loss", () =>
+        {
+            using var body = new BodyFixture(runner);
+            body.Body.Sleeping = false;
+            var sync = new BodySync(Tuning.SavedTemplate, 2, 2);
+            sync.Register(Id, body.Body, true, 2);
+            var first = sync.Collect(.01).Moving.Single();
+            TestRunner.Assert(first.PublishReliably, "new owner started with only disposable movement");
+            var reliable = 0;
+            var disposable = 0;
+            var silence = 0.0;
+            for (var step = 0; step < 120; step++)
+            {
+                silence += 1.0 / 60;
+                foreach (var entry in sync.Collect(.01 + (step + 1) / 60.0).Moving)
+                {
+                    if (entry.PublishReliably) { reliable++; silence = 0; }
+                    else { disposable++; }
+                }
+                TestRunner.Assert(silence <= .35, "moving reliable checkpoint exceeded correction freshness");
+            }
+            TestRunner.Assert(reliable >= 6 && disposable > reliable, "checkpoint cadence replaced the disposable motion stream");
+        });
+        runner.Run("authority/match publications keep real-time cadence when physics falls behind", () =>
+        {
+            using var f = new MatchFixture(runner);
+            var tank = f.Match.LiveTanks.Single(t => t.NetId == Id);
+            var entry = f.Match.Bodies.Get(Id)!;
+            tank.Sleeping = false;
+            var lastCheckpoint = f.Server.Clock.Seconds;
+            for (var step = 0; step < 60; step++)
+            {
+                f.Server.Clock.Seconds += .1;
+                var sequence = entry.Sequence;
+                f.Match._PhysicsProcess(1.0 / 120);
+                TestRunner.Assert(entry.Sequence > sequence, "simulation delta throttled a due wall-clock publication");
+                if (entry.PublishReliably) { lastCheckpoint = f.Server.Clock.Seconds; }
+                TestRunner.Assert(f.Server.Clock.Seconds - lastCheckpoint <= .35,
+                    "slow physics left reliable motion beyond the correction freshness budget");
+            }
+            var beforeCatchup = entry.Sequence;
+            for (var step = 0; step < 8; step++) { f.Match._PhysicsProcess(1.0 / 120); }
+            TestRunner.Assert(entry.Sequence == beforeCatchup,
+                "catch-up physics emitted old poses without any elapsed network time");
+        });
+        runner.Run("authority/reliable grant steers observers before owner publications", () =>
+        {
+            using var body = new BodyFixture(runner);
+            var sync = new BodySync(Tuning.SavedTemplate, 4, 2);
+            sync.Register(Id, body.Body, true, 2);
+            body.Body.GlobalPosition = Vector3.One * 20;
+            sync.OnAuthority(Grant(3, 2), 0);
+            sync.Correct(0);
+            TestRunner.Assert(body.Body.GlobalTransform.IsEqualApprox(Pose(Id).Transform), "grant did not supply an observer correction before owner motion");
+            var rest = Grant(2, 3) with { Rest = true };
+            sync.OnAuthority(rest, 0);
+            sync.Correct(1);
+            TestRunner.Assert(body.Body.GlobalTransform.IsEqualApprox(rest.Body.Transform) && sync.Get(Id) is { HasTarget: true, TargetRest: true },
+                "resting handoff lost the new owner's last word");
+        });
+        runner.Run("authority/vent spin limit does not erase observer steering", () =>
+        {
+            using var f = new MatchFixture(runner);
+            var tank = f.Match.LiveTanks.Single(t => t.NetId == Id);
+            tank.PunctureRemote(Vector3.Zero, Vector3.Right, 1);
+            tank.GlobalTransform = new Transform3D(Basis.Identity, tank.GlobalPosition);
+            var spin = Vector3.Up * f.Match.World.Tuning.VentMaxSpin;
+            var target = new Transform3D(new Basis(Vector3.Up, .5f), tank.GlobalPosition);
+            // This fixture's host owns the initial tank; grant the observer stream explicitly.
+            f.Match.Bodies.OnAuthority(new BodyAuthority(new BodyState(Id, target, Vector3.Zero, spin, 2, 0),
+                3, TankLedger.State.Venting, false, new VentParameters(Vector3.Zero, Vector3.Right, 1), Vector3.Zero));
+            f.Match.Bodies.OnState(3, new BodyState(Id, target, Vector3.Zero, spin, 2, 1), false, 1);
+            f.Match.Bodies.Correct(1);
+            var steering = tank.AngularVelocity;
+            TestRunner.Assert(steering.Length() > spin.Length(), "fixture did not require steering beyond owner spin");
+            tank._PhysicsProcess(1.0 / 60);
+            TestRunner.Assert(tank.AngularVelocity.IsEqualApprox(steering), "vent spin limiter erased observer correction");
+            f.Match.Bodies.Correct(2);
+            tank._PhysicsProcess(1.0 / 60);
+            TestRunner.Assert(tank.AngularVelocity.Length() <= spin.Length() + .001f, "stale observer escaped the ordinary spin limit");
+            f.Match.Bodies.OnAuthority(new BodyAuthority(new BodyState(Id, target, Vector3.Zero, spin, 3, 0),
+                2, TankLedger.State.Venting, false, new VentParameters(Vector3.Zero, Vector3.Right, 1), Vector3.Zero));
+            f.Match.Bodies.Correct(3);
+            tank.AngularVelocity = steering;
+            tank._PhysicsProcess(1.0 / 60);
+            TestRunner.Assert(tank.AngularVelocity.Length() <= spin.Length() + .001f, "new owner escaped its spin limit");
+        });
+        runner.Run("authority/settled intact contact recovers despite continuous awake publications", () =>
+        {
+            using var f = new MatchFixture(runner);
+            var tank = f.Match.LiveTanks.Single(t => t.NetId == Id);
+            var pose = tank.GlobalTransform;
+            var stalled = new Transform3D(new Basis(Vector3.Forward, .45f) * pose.Basis, pose.Origin + Vector3.Up * .15f);
+            f.Match.Bodies.OnAuthority(new BodyAuthority(new BodyState(Id, pose, Vector3.Zero, Vector3.Zero, 2, 0),
+                3, TankLedger.State.Intact, false, null, Vector3.Zero), 0);
+            tank.GlobalTransform = stalled;
+            for (var tick = 0; tick < 120; tick++)
+            {
+                var now = tick / 120.0;
+                // Native floor contact consumes the observer's steering while the owner remains awake.
+                tank.LinearVelocity = tank.AngularVelocity = Vector3.Zero;
+                f.Match.Bodies.OnState(3, new BodyState(Id, pose, Vector3.Zero, Vector3.Zero, 2, (uint)tick + 1), false, now);
+                f.Match.Bodies.Correct(now);
+            }
+            TestRunner.Assert(tank.GlobalTransform.IsEqualApprox(pose), "fresh low-motion stream left an intact copy wedged in contact");
+            TestRunner.Assert(f.Match.Bodies.Get(Id) is { TargetRest: false } && !tank.Sleeping,
+                "contact recovery converted an awake owner publication into a rest");
+        });
+        runner.Run("authority/owner motion restarts settled contact recovery", () =>
+        {
+            using var f = new MatchFixture(runner);
+            var tank = f.Match.LiveTanks.Single(t => t.NetId == Id);
+            var pose = tank.GlobalTransform;
+            var stalled = pose.Translated(Vector3.Up * .15f);
+            f.Match.Bodies.OnAuthority(new BodyAuthority(new BodyState(Id, pose, Vector3.Zero, Vector3.Zero, 2, 0),
+                3, TankLedger.State.Intact, false, null, Vector3.Zero), 0);
+            tank.GlobalTransform = stalled;
+            uint sequence = 0;
+            void Tick(double now, Vector3 ownerVelocity)
+            {
+                tank.LinearVelocity = tank.AngularVelocity = Vector3.Zero;
+                f.Match.Bodies.OnState(3, new BodyState(Id, pose, ownerVelocity, Vector3.Zero, 2, ++sequence), false, now);
+                f.Match.Bodies.Correct(now);
+            }
+            Tick(0, Vector3.Zero);
+            Tick(.6, Vector3.Right);
+            Tick(.61, Vector3.Zero);
+            Tick(1.2, Vector3.Zero);
+            TestRunner.Assert(tank.GlobalTransform.IsEqualApprox(stalled), "old stationary interval survived resumed owner motion");
+            Tick(1.5, Vector3.Zero);
+            TestRunner.Assert(tank.GlobalTransform.IsEqualApprox(pose), "new stationary interval could not recover contact");
+        });
+        runner.Run("authority/rest remains authoritative after observer settles and drifts locally", () =>
+        {
+            using var body = new BodyFixture(runner);
+            var sync = new BodySync(Tuning.SavedTemplate, 4, 2);
+            sync.Register(Id, body.Body, true, 2);
+            var rest = Pose(Id, 1, 1) with { Linear = Vector3.Zero, Angular = Vector3.Zero };
+            body.Body.GlobalTransform = rest.Transform;
+            body.Body.Sleeping = true;
+            sync.OnState(2, rest, true, 1);
+            sync.Correct(2);
+            TestRunner.Assert(body.Body.GlobalTransform.IsEqualApprox(rest.Transform), $"rest was not applied to observer: {body.Body.GlobalTransform} vs {rest.Transform}");
+            body.Body.GlobalPosition += Vector3.Right * .3f;
+            body.Body.Sleeping = true;
+            sync.Correct(3);
+            TestRunner.Assert(body.Body.GlobalTransform.IsEqualApprox(rest.Transform), "settled observer forgot the owner's last word");
+            sync.OnState(2, rest with { Sequence = 2, Linear = Vector3.Right }, false, 4);
+            TestRunner.Assert(sync.Get(Id) is { TargetRest: false, LastSequence: 2 }, "newer owner wake could not release rest");
+        });
+        runner.Run("authority/initial sleeping owner publishes its resting pose", () =>
+        {
+            using var body = new BodyFixture(runner);
+            body.Body.Sleeping = true;
+            var sync = new BodySync(Tuning.SavedTemplate, 2, 2);
+            sync.Register(Id, body.Body, true, 2);
+            TestRunner.Assert(sync.Collect(.01).Rested.SingleOrDefault()?.Id == Id, "initially asleep owner never sent an authoritative rest");
+            TestRunner.Assert(sync.Collect(.01).Rested.Count == 0, "unchanged sleep repeated its reliable publication");
+        });
         runner.Run("authority/match copies local bot dials beside creator tuning", () =>
         {
             using var local = new Tuning { TankMass = 7, BotRouteSpacing = 9 };
@@ -154,6 +472,22 @@ public static class AuthorityTests
             TestRunner.Assert(sync.Get(Id) is { TargetReceived: 5, TargetRest: true }, "relay transit changed resting settle time");
             sync.OnState(3, motion with { Sequence = 3 }, false, 6, 0);
             TestRunner.Assert(sync.Get(Id) is { LastSequence: 4, TargetRest: true }, "timestamp overrode sequence ordering");
+        });
+        runner.Run("authority/motion freshness starts at receipt rather than sampling time", () =>
+        {
+            foreach (var overtakesGrant in new[] { false, true })
+            {
+                using var body = new BodyFixture(runner);
+                var sync = new BodySync(Tuning.SavedTemplate, 4, 2);
+                sync.Register(Id, body.Body, true, 2);
+                if (!overtakesGrant) { sync.OnAuthority(Grant(3, 2)); }
+                sync.OnState(3, Pose(Id, 2, 1), false, 10, .3);
+                if (overtakesGrant) { sync.OnAuthority(Grant(3, 2)); }
+                sync.Correct(10.4);
+                TestRunner.Assert(sync.Get(Id)!.HasTarget, "fresh delayed motion expired before the owner's silence timeout");
+                sync.Correct(10.51);
+                TestRunner.Assert(!sync.Get(Id)!.HasTarget, "quiet owner kept steering beyond the receipt timeout");
+            }
         });
         runner.Run("authority/future motion survives overtaking its reliable grant", () =>
         {

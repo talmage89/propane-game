@@ -70,6 +70,20 @@ public partial class Rifle : Node3D
     public Transform3D MagWellLocal { get; private set; }
 
     public Vector3 MuzzlePosition => GlobalTransform * MuzzleLocal.Origin;
+    public Vector3 BarrelForward => -GlobalBasis.Z.Normalized();
+
+    /// <summary>Rotate about the muzzle so alignment preserves the obstruction ray's origin.</summary>
+    public static Transform3D AlignBarrel(Transform3D rifle, Vector3 muzzleLocal, Vector3 target)
+    {
+        var muzzle = rifle * muzzleLocal;
+        var direction = target - muzzle;
+        if (direction.LengthSquared() < 0.000001f) return rifle;
+        var rotation = new Basis(new Quaternion(-rifle.Basis.Z.Normalized(), direction.Normalized()));
+        var basis = rotation * rifle.Basis;
+        return new Transform3D(basis, muzzle - basis * muzzleLocal);
+    }
+
+    public void AlignBarrel(Vector3 target) => GlobalTransform = AlignBarrel(GlobalTransform, MuzzleLocal.Origin, target);
 
     /// <summary>Where the left hand belongs in rifle space: the foregrip, or the magazine and bolt catch mid-reload.</summary>
     public Vector3 LeftHandLocal { get; private set; }

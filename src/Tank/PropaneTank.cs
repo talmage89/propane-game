@@ -45,6 +45,9 @@ public partial class PropaneTank : RigidBody3D
     private float ventAge;
     private bool fuseLit;
     private float flutterPhase;
+    // Fresh owner velocities replace speculative observer jet impulses. Their rotation-error steering
+    // must also survive integration; owners, stale observers and local predictions keep ordinary physics.
+    internal bool CorrectingMotion { get; set; }
     private double invulnerableUntil;
     private Color shieldColor = Colors.White;
 
@@ -317,6 +320,10 @@ public partial class PropaneTank : RigidBody3D
         }
         var tuning = World.Tuning;
         ventAge += (float)delta;
+        // BodySync has already supplied the owner's velocity plus positional/angular steering.
+        // Applying this copy's phase-shifted jet afterward adds another impulse, particularly harmful
+        // when rapidly changing floor contact turns a small rotation error into a different force.
+        if (CorrectingMotion) { return; }
         var ramp = tuning.VentThrustRampTime > 0 ? Mathf.Clamp(ventAge / tuning.VentThrustRampTime, 0, 1) : 1f;
         var t = ventAge + flutterPhase;
         var flutter = 1f + tuning.VentThrustFlutter * (0.6f * Mathf.Sin(t * 23f) + 0.4f * Mathf.Sin(t * 37f + 2f));

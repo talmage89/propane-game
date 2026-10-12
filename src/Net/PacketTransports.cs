@@ -20,10 +20,11 @@ public static class PacketTransports
         var jitter = Dev.DevArgs.GetFloat("net-jitter", 0) / 1000.0;
         var loss = Dev.DevArgs.GetFloat("net-loss", 0) / 100.0;
         var stall = Dev.DevArgs.GetFloat("net-reliable-stall", 0) / 1000.0;
-        if (lag > 0 || jitter > 0 || loss > 0 || stall > 0)
+        var bodyStall = Dev.DevArgs.GetFloat("net-body-stall", 0) / 1000.0;
+        if (lag > 0 || jitter > 0 || loss > 0 || stall > 0 || bodyStall > 0)
         {
             transport = new FaultPacketTransport(transport, MonotonicClock.Instance,
-                (int)Dev.DevArgs.GetFloat("net-seed", 1), new PacketFaults(lag, jitter, loss, stall));
+                (int)Dev.DevArgs.GetFloat("net-seed", 1), new PacketFaults(lag, jitter, loss, stall, bodyStall));
         }
         return transport;
     }

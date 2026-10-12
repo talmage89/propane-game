@@ -101,11 +101,15 @@ The character's `CameraRig` accessor remains a convenience for existing rendered
 
 The aim split preserves the old ray, including its over-the-shoulder origin, wall pull-in, target smoothing,
 render-frame updates and the chest-plane projection that keeps shots from starting behind the character.
-Camera recoil (pitch and random sideways kick), explosion/landing shake (rotation and displacement), and their
-recovery affected the ray before this extraction, so all remain in logical aim. Movement, facing and melee
-continue to use input yaw, excluding transient recoil yaw and shake. A camera renders the resulting transform.
+Shot recoil displaces logical pitch and yaw immediately. Most pitch and all sideways displacement remain until
+look input pulls them back; only a small pitch budget settles slowly. Movement, facing and melee use that logical
+yaw. Explosion/landing shake (rotation and displacement) retains its existing effect on the ray. A camera renders
+the resulting transform and adds its own short recoil spring; that extra rotation never reaches logical aim.
 Rifle/torso sway and the rifle recoil spring remain body presentation; they still affect muzzle placement and
-its obstruction ray, never the primary aim ray. FOV affects projection/crosshair only. Hitstop remains the existing
+its obstruction ray, never the primary aim ray. Before the obstruction ray, the rig aligns a reachable rifle pose
+to the sampled endpoint; afterward the barrel rotates about the same muzzle to follow any nearer obstruction.
+The firing frame retains that pose, and intervening burst frames track logical aim. See [recoil](recoil.md).
+FOV affects projection/crosshair only. Hitstop remains the existing
 exclusive offline-world time-scale lease: it changes simulation timing, never an aim angle.
 
 ## Session assembly

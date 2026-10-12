@@ -14,6 +14,44 @@ public static class ServerTests
 {
     public static void Register(TestRunner runner)
     {
+        runner.Run("server/moving checkpoints retain reliable delivery on the second leg", () =>
+        {
+            using var f = new Fixture();
+            var traffic = new List<TrafficClass>();
+            f.Server.SendOverride = (_, _, delivery) => traffic.Add(delivery);
+            byte[] Packet(uint sequence) => MessageCodec.Encode(new NetMessage(Msg.BodyStates, f.Id, 0,
+                new BodyStatesMessage(0, new[] { new BodyState(BodySync.MapTankId(0), Transform3D.Identity,
+                    Vector3.Right, Vector3.Zero, 1, sequence) })), false);
+            f.Server.OnReceived(2, Packet(1), TrafficClass.ReliableOrdered);
+            TestRunner.Assert(traffic.Single() == TrafficClass.ReliableOrdered, "server discarded moving checkpoint reliability");
+            traffic.Clear();
+            f.Server.OnReceived(2, Packet(2), TrafficClass.ReliableBodyStates);
+            TestRunner.Assert(traffic.Single() == TrafficClass.ReliableBodyStates, "server merged checkpoint and control lanes");
+            foreach (var lane in new[] { TrafficClass.ReliableBodyStates2, TrafficClass.ReliableBodyStates3 })
+            {
+                traffic.Clear();
+                f.Server.OnReceived(2, Packet(lane == TrafficClass.ReliableBodyStates2 ? 3u : 4u), lane);
+                TestRunner.Assert(traffic.Single() == lane, "server merged an alternate checkpoint lane");
+            }
+            traffic.Clear();
+            f.Server.OnReceived(2, Packet(5), TrafficClass.UnreliableBodyStates);
+            TestRunner.Assert(traffic.Single() == TrafficClass.UnreliableBodyStates, "server made ordinary snapshots reliable");
+        });
+        runner.Run("server/loading relays the owner's final rest to clients still building", () =>
+        {
+            using var f = new Fixture(playing: false);
+            var id = BodySync.MapTankId(0);
+            var pose = new Transform3D(Basis.Identity, new Vector3(1, .3f, 2));
+            f.Receive(new NetWriter(Msg.BodyRest, f.Id).UInt(id).Transform(pose).Double(1).UInt(1).UInt(1));
+            TestRunner.Assert(f.Packets.Single() is { Peer: 3, Message.Payload: BodyRestMessage rest } && rest.Transform == pose,
+                "loading discarded the owner's only final rest");
+            f.Packets.Clear();
+            f.Receive(MessageCodec.Encode(new NetMessage(Msg.BodyStates, f.Id, 0,
+                new BodyStatesMessage(0, new[] { new BodyState(id, pose, Vector3.Right, Vector3.Zero, 1, 2) })), false));
+            TestRunner.Assert(f.Packets.Single().Message.Payload is BodyStatesMessage, "loading discarded owner movement");
+            f.Reject(new NetWriter(Msg.BodyRest, f.Id).UInt(id).Transform(Transform3D.Identity).Double(2).UInt(1).UInt(3).ToArray(), peer: 3);
+            f.Reject(new NetWriter(Msg.BodyRest, f.Id).UInt(id).Transform(Transform3D.Identity).Double(2).UInt(1).UInt(1).ToArray());
+        });
         runner.Run("server/truncated messages never relay or mutate", () =>
         {
             using var f = new Fixture();

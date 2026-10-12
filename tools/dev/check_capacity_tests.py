@@ -23,6 +23,10 @@ class CapacityChecks(unittest.TestCase):
                     logs[f"bot{i}"] += "capacity creator departure\ncapacity contested puncture\ncapacity root explosion\n"
                 else:
                     logs[f"bot{i}"] += "capacity PASS actors=4\ncapacity transfer\nfinished match 1; final scores 1=8 2=8 3=8 4=8\ntanks clock 0.0 n 1 1:I:0,0,0\n"
+                if i > 1:
+                    for tick in range(71):
+                        phase = "P" if tick < 40 else "E"
+                        logs[f"bot{i}"] += f"tank-check match 1 time {tick / 10:.6f} phase {phase} final {tick == 70} length 4 n 1 1:I:R:0,0,0\n"
                 if i == 4:
                     logs[f"bot{i}"] += "delaying match\n"
             change(logs)
@@ -46,7 +50,7 @@ class CapacityChecks(unittest.TestCase):
                          ("2/102/1/1/1", "1/101/1/1/0"), ("2/102/1/1/1", "2/102/0/1/1"),
                          ("capacity all actors loaded", ""), ("capacity quiescence", ""),
                          ("capacity transfer", ""), ("capacity throw", ""), ("overflows=0", "overflows=1"),
-                         ("final scores 1=8 2=8", "final scores 1=7 2=9"), ("1:I:0,0,0", "2:I:0,0,0")):
+                         ("final scores 1=8 2=8", "final scores 1=7 2=9"), ("1:I:R:0,0,0", "2:I:R:0,0,0")):
             with self.subTest(old=old), self.assertRaises(ValueError):
                 self.run_check(lambda logs: logs.update(bot2=logs["bot2"].replace(old, new)))
 if __name__ == "__main__":

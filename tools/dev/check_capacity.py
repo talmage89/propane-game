@@ -7,7 +7,7 @@ import statistics
 import sys
 
 from check_scores import check as check_scores
-from compare_tanks import check as check_tanks
+from compare_tanks import compare as compare_tanks, load as load_tanks
 
 
 def check(directory, actors):
@@ -60,7 +60,10 @@ def check(directory, actors):
         raise ValueError("server standings do not cover the frozen actor roster")
     print(f"expected disposable drop-before-registration snapshot rejections: {len(disposable_rejections)}")
     check_scores([str(server), *map(str, clients[1:])])
-    check_tanks(list(map(str, clients[1:])))
+    tanks = compare_tanks([load_tanks(path) for path in clients[1:]])
+    if tanks["failures"]:
+        raise ValueError("; ".join(tanks["failures"][:20]))
+    print(f"PASS tank agreement: {tanks['grids']} grids, {tanks['body_pairs']} body pairs")
     metrics = re.compile(r"metrics (server|client) process=(\S+)ms physics=(\S+)ms rss=(\d+)B in=(\d+)B out=(\d+)B queue=(\d+)/(\d+)B drops=(\d+) inbox=(\d+)/(\d+)B overflows=(\d+)")
     for role, logs in (("server", [server_text]), ("client", texts)):
         samples = [m for text in logs for m in metrics.finditer(text) if m[1] == role]

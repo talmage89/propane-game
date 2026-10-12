@@ -4,8 +4,7 @@ using Propane.Core;
 namespace Propane.Player;
 
 /// <summary>
-/// Camera-independent aiming state. The historical orbit, collision, recoil and shake all affected shot rays;
-/// retain their calculation and render-frame timing even for actors with no view.
+/// Camera-independent aiming state. Persistent recoil belongs to input orientation; weapon and camera kick are presentation only.
 /// </summary>
 public sealed class LogicalAim : System.IDisposable
 {
@@ -27,8 +26,7 @@ public sealed class LogicalAim : System.IDisposable
 
     private float yaw;
     private float pitch = -8f;
-    private float recoilPitch;
-    private float recoilYaw;
+    private float recoilSettle;
     private float trauma;
     private float shakeTime;
     private float currentDistance;
@@ -51,7 +49,7 @@ public sealed class LogicalAim : System.IDisposable
 
     public float Yaw => yaw;
 
-    public float Pitch => pitch + recoilPitch;
+    public float Pitch => pitch;
 
     /// <summary>Jumps straight to the target next frame instead of easing there, for teleports.</summary>
     public void Snap()
@@ -59,13 +57,15 @@ public sealed class LogicalAim : System.IDisposable
         hasTarget = false;
         currentDistance = World.Tuning.CameraDistance;
         trauma = 0;
-        recoilPitch = recoilYaw = 0;
+        recoilSettle = 0;
     }
 
     public void SetOrientation(float yawDegrees, float pitchDegrees)
     {
         yaw = yawDegrees;
-        pitch = pitchDegrees;
+        pitch = Mathf.Clamp(pitchDegrees, PitchMin, PitchMax);
+        recoilSettle = 0;
+        RefreshOrientation();
     }
 
     public void Look(Vector2 mouseDelta, Vector2 stick = default, float dt = 0)
@@ -73,8 +73,15 @@ public sealed class LogicalAim : System.IDisposable
         var sensitivity = Mathf.RadToDeg(World.Tuning.MouseSensitivity);
         var displacement = mouseDelta * sensitivity + StickLookDelta(stick, dt,
             World.Tuning.StickLookDegreesPerSecond, World.Tuning.StickLookCurve);
-        yaw -= displacement.X;
-        pitch = Mathf.Clamp(pitch - displacement.Y, PitchMin, PitchMax);
+        Rotate(-displacement);
+    }
+
+    /// <summary>Device-independent look displacement in degrees; bots use it to pull against recoil.</summary>
+    public void Rotate(Vector2 degrees)
+    {
+        yaw += degrees.X;
+        pitch = Mathf.Clamp(pitch + degrees.Y, PitchMin, PitchMax);
+        RefreshOrientation();
     }
 
     /// <summary>Radial response preserves stick direction; rate integration is independent of tick frequency.</summary>
@@ -84,11 +91,22 @@ public sealed class LogicalAim : System.IDisposable
         return length > 0 ? stick.Normalized() * Mathf.Pow(length, curve) * degreesPerSecond * dt : Vector2.Zero;
     }
 
-    /// <summary>Transient view kick. Recovery leaves the player's input orientation unchanged.</summary>
+    /// <summary>Move the player's aim immediately. Only a small bounded part can settle automatically.</summary>
     public void Kick(float degrees)
     {
-        recoilPitch += degrees;
-        recoilYaw += World.Random.RandiRange(-1, 1) * degrees * World.Tuning.CameraRecoilSideShare;
+        var before = pitch;
+        pitch = Mathf.Clamp(pitch + degrees, PitchMin, PitchMax);
+        recoilSettle += (pitch - before) * World.Tuning.RecoilReturnShare;
+        yaw += World.Random.RandfRange(-1, 1) * World.Tuning.RecoilYawDegrees
+            * (World.Tuning.RecoilKickDegrees > 0 ? degrees / World.Tuning.RecoilKickDegrees : 0);
+        RefreshOrientation();
+    }
+
+    private void RefreshOrientation()
+    {
+        Transform = new Transform3D(new Basis(Vector3.Up, Mathf.DegToRad(yaw))
+            * new Basis(Vector3.Right, Mathf.DegToRad(pitch)), Transform.Origin);
+        EyeTransform = Transform * EyeOffset;
     }
 
     public void AddTrauma(float amount) => trauma = Mathf.Clamp(trauma + amount, 0, 1);
@@ -98,9 +116,9 @@ public sealed class LogicalAim : System.IDisposable
         var dt = (float)delta;
         var tuning = World.Tuning;
 
-        var recoilReturn = Mathf.Exp(-tuning.CameraRecoilRecovery * dt);
-        recoilPitch *= recoilReturn;
-        recoilYaw *= recoilReturn;
+        var settled = recoilSettle * (1 - Mathf.Exp(-tuning.RecoilSettleSpeed * dt));
+        recoilSettle -= settled;
+        pitch = Mathf.Clamp(pitch - settled, PitchMin, PitchMax);
 
         if (!hasTarget)
         {
@@ -109,7 +127,7 @@ public sealed class LogicalAim : System.IDisposable
         }
         smoothedTarget = smoothedTarget.Lerp(Target, 1f - Mathf.Exp(-FollowSharpness * dt));
 
-        var basis = new Basis(Vector3.Up, Mathf.DegToRad(yaw + recoilYaw)) * new Basis(Vector3.Right, Mathf.DegToRad(Pitch));
+        var basis = new Basis(Vector3.Up, Mathf.DegToRad(yaw)) * new Basis(Vector3.Right, Mathf.DegToRad(Pitch));
         var right = basis.Column0;
         var back = basis.Column2;
 

@@ -214,7 +214,13 @@ public partial class NetClient : Node
         SetState(Status.Offline, null);
     }
 
-    public override void _Process(double delta)
+    public override void _Process(double delta) => PollNetwork();
+
+    // Catch-up physics can keep running between scarce process frames. Service packet delivery
+    // and ENet ACKs there too; otherwise real-time publications still queue behind a slow frame.
+    public override void _PhysicsProcess(double delta) => PollNetwork();
+
+    private void PollNetwork()
     {
         transport.Poll();
         var now = clock.Seconds;
@@ -235,7 +241,11 @@ public partial class NetClient : Node
     {
         if (server == null) { return SendResult.Closed; }
         var result = transport.Send(server, traffic, message);
-        if (traffic == TrafficClass.ReliableOrdered && result != SendResult.Success)
+        if (result == SendResult.Success && message.Length > 0 && (Msg)message[0] is Msg.Loaded or Msg.LeaveLobby)
+        {
+            transport.SetLoading(server, false);
+        }
+        if (traffic.IsReliable() && result != SendResult.Success)
         {
             Drop(new DisconnectReason(DisconnectKind.TransportFailure, $"Could not send a required message ({result}). Please reconnect."));
         }
@@ -350,6 +360,7 @@ public partial class NetClient : Node
                     if (State != Status.Connected || Lobby == null || setup.Id <= lastMatchId || !setup.Players.Any(p => p.Player.OwnerPeerId == MyId)) { return; }
                     lastMatchId = setup.Id;
                     inbox.Begin(setup.Id);
+                    if (server != null) { transport.SetLoading(server, true); }
                     MatchStarting?.Invoke(setup);
                     break;
                 case PongMessage pong:

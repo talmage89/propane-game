@@ -116,9 +116,11 @@ A foot modifier plants world-space contacts, steps in the travel direction and a
 remote clips follow displayed snapshot displacement. Jump poses follow latched takeoff, vertical velocity and
 impact-scaled landing. See [the locomotion review](docs/locomotion.md) for measurements and captures. The node
 facade owns collisions, ammo and lifecycle transitions; the resolver has no scene or engine dependencies.
-Rifle and torso sway follow that stride; walk is subtle and aimed creep stays steady. Shots add spring momentum,
-with the shoulder absorbing the kick and the camera returning fully. Contact-aware upper-body blends keep hands
-attached through stance changes, reload and get-up. See [the motion review](docs/motion.md) for captures and bounds.
+Rifle and torso sway follow that stride; walk is subtle and aimed creep stays steady. Shots climb the logical aim;
+the player pulls against the retained recoil. Short rifle and camera springs supply the visible kick. During a
+burst the barrel tracks each shot, with both hands attached. Contact-aware upper-body blends retain contacts
+through stance changes, reload and get-up. See [the recoil review](docs/recoil.md) for climb, barrel-angle and bot
+measurements, and [the motion review](docs/motion.md) for the other captures and bounds.
 A throw immediately clears weapon poses and cancels reload, so get-up cannot restore a pose from before the throw.
 
 ## Tuning
@@ -185,6 +187,8 @@ the engine tears down its C# bindings and native servers. Static caches remain a
 
 ## Dev harnesses
 
+The [animation review harness](docs/animation-review.md) compares controller-driven motion and external CC0 clip candidates from both review views, with calibrated metrics and any-two-build media.
+
 Each scene in `scenes/dev` is a scripted test. Arguments after `--` are read by `src/Dev/DevArgs.cs`;
 `--capture-dir=<dir>` saves screenshots, `--record=<file.mp4>` films the window in real time (needs ffmpeg on `PATH`,
 including `ffmpeg.exe` on Windows; a game in a match stays in step, unlike Godot's `--write-movie`), and
@@ -230,6 +234,14 @@ tools/dev/check_world.sh
 
 # Scoped worlds: overlapping physics/tuning, events/spawns/callbacks, pause/reveal/hitstop and leak-free teardown.
 $GODOT --headless --fixed-fps 60 res://scenes/dev/world_services_tests.tscn
+# Native vent correction: fresh observers add no speculative jet impulse; stale/predicted/owned vents keep thrust.
+$GODOT --headless --fixed-fps 60 res://scenes/dev/body_correction_tests.tscn
+# Native server entry: explicit debug --tune overrides reach lobby admission.
+$GODOT --headless res://scenes/dev/server_tuning_tests.tscn -- --server --port=24680 --tune.MaxPlayers=6
+# Native debug seed: the transmitted plan must use the requested candidate seed.
+$GODOT --headless res://scenes/dev/server_seed_tests.tscn -- --server --port=24680 --match-seed=23
+# Native client delivery between physics steps without process frames.
+$GODOT --headless res://scenes/dev/transport_physics_tests.tscn -- --server --port=24680
 # Clear/replace proof: shooting sequence, finish remaining fixture tanks, assert automatic replacement.
 $GODOT --fixed-fps 60 res://scenes/dev/game_test.tscn -- --scenario=clear --quit=32 --capture-dir=/tmp/clear
 # Real menu lifetime: ten single-player and ten solo-match retirements with exact node/object/orphan counts.
@@ -286,7 +298,13 @@ $GODOT --fixed-fps 60 res://scenes/dev/player_range.tscn -- --scenario=melee --v
 # Deeper cancellation sweep of both reloads (also in make test-full).
 $GODOT --headless --fixed-fps 60 res://scenes/dev/player_range.tscn -- --scenario=melee-reloads --assert-grip --assert-motion
 # Motion: all gaits, hip/aimed bursts, walking reload and get-up into run, captured at 60 Hz.
-$GODOT --fixed-fps 60 res://scenes/dev/player_range.tscn -- --scenario=motion --view=side --assert-motion --assert-grip --capture-dir=/tmp/motion
+$GODOT --fixed-fps 60 res://scenes/dev/player_range.tscn -- --scenario=motion --view=side --assert-motion --assert-grip --capture-dir="$PWD/build/motion"
+# Full-auto magazine, persistent aim climb and shot/rendered barrel alignment; aim, hip or creep.
+$GODOT --fixed-fps 60 --resolution 1280x720 res://scenes/dev/player_range.tscn -- --scenario=recoil --stance=aim --view=player --assert-grip --assert-motion --capture-dir="$PWD/build/rcl-player"
+# Ten magazines against a player capsule with the production bot aim controller.
+$GODOT --headless --fixed-fps 60 res://scenes/dev/player_range.tscn -- --scenario=bot-recoil --skill=1 --distance=20
+# Real device delivery: held mouse burst, retained climb and mouse pull-down in single and network views.
+$GODOT --headless --fixed-fps 60 res://scenes/dev/menu_test.tscn -- --scenario=input
 # Player scenarios: stances (default), reload, ragdoll, creep (two measured strides), movement (labeled gait/jump transitions),
 # sprint-repro (discovery sequence, exact-tick assertions and transition log), grip (all rifle contacts).
 # feet (all eight body-relative directions in every gait) and feet-events (local starts/stops/turns/jumps/terrain)
@@ -323,18 +341,19 @@ $GODOT res://scenes/dev/menu_test.tscn -- --scenario=devices --capture-dir=/tmp/
 # single-click fire, R/new suburb or reload, and remapped Escape. Assertions also run headlessly in make test.
 $GODOT --fixed-fps 60 --resolution 1280x720 res://scenes/dev/menu_test.tscn -- --scenario=input --port=24681 --windowed --capture-dir="$PWD/build/input"
 
-# Multiplayer: a local server and bot players under simulated lag and loss, then compare what each bot saw.
+# Multiplayer: a local server and bot players under simulated lag and loss; asserts tank agreement and scores.
 # Logs go to build/net (-o picks another directory).
 GODOT=$GODOT tools/dev/net_bots.sh -n 3 -l 60 -- --net-lag=120 --net-jitter=30 --net-loss=3
-tools/dev/compare_tanks.py build/net/bot*.log
-tools/dev/check_scores.py build/net/server.log build/net/bot*.log
+# -t clean uses tighter tank limits; -k skips both post-run checks.
+# Rerun a comparison: tools/dev/compare_tanks.py [--profile clean] build/net/bot*.log
 ```
 
 `net_test.tscn` scenarios: bots playing (default), `melee` (five-tank and zero-bank knockdowns and both get-ups),
 `duel` (hits, drops and a thrown player, filmed from both sides),
 `pickup` (an ammo can taken and returning), and `movement` (remote creep, sprint, jumping and held-aim landing,
 with assertions and labeled frames), `drop-refusal` (rolling back a refused predicted drop), and `puncture-race`
-(canonical vent adoption and trajectory assertions after two simultaneous bullet contacts).
+(canonical vent adoption and trajectory assertions after two simultaneous bullet contacts), and `vent-contact`
+(eight owner-started, rapidly spinning vents on clear floor, with contact and trajectory logs).
 `tools/dev/compare_vents.py` compares its logs.
 [docs/multiplayer.md](docs/multiplayer.md) lists the commands.
 
