@@ -692,23 +692,44 @@ public partial class NetTest : Node
             director.Screenshot($"shooter_{duelTime:00.0}");
         }
         if (refusal || gathering) { return; }
-        // Drops keep moving under lag. Follow one tank every frame, retrying until its detonation is observed;
-        // a fixed aim/fire gap used to miss the first shot and puncture a different tank with the second.
+        if (DevArgs.Get("duel-blocked") != null && Once(3.7f, dt))
+        {
+            var dropped = match.LiveTanks.Where(IsDrop).OrderBy(k => k.NetId).First();
+            var away = dropped.GlobalPosition - victim.GlobalPosition;
+            away.Y = 0;
+            ScenarioAssert(away.Length() > .2f, "duel: blocked-lane fixture has no drop offset");
+            player.Teleport(victim.GlobalPosition - away.Normalized() * 14f, player.FacingYaw);
+            var hit = DuelRay(match, dropped, player.GlobalPosition);
+            ScenarioAssert(PlayerCharacter.Owning(hit) == victim, "duel: fixture did not put the victim in the firing lane");
+            Log("duel: victim-blocked firing lane staged");
+        }
+        // Drops keep moving under lag and can land behind the victim. Keep a clear firing lane on the road;
+        // blindly chasing the nearest drop can shoot the victim until their bank is empty instead.
         if (duelTime >= 4f && duelBlastAt < 0)
         {
+            var target = match.LiveTanks.FirstOrDefault(k => k.NetId == duelTank);
+            if (target != null && DuelRay(match, target, player.GlobalPosition) != target)
+            {
+                duelTank = null;
+                target = null;
+            }
             if (duelTank == null)
             {
-                var dropped = match.LiveTanks.Where(IsDrop).Where(k => !k.Invulnerable)
-                    .OrderBy(k => k.GlobalPosition.DistanceTo(player.GlobalPosition)).FirstOrDefault();
-                if (dropped != null)
+                var lanes = new[] { shooterSpot, World.Suburb.ToWorld(mid + road.Direction * 21f, 0.05f) };
+                foreach (var dropped in match.LiveTanks.Where(IsDrop).Where(k => !k.Invulnerable)
+                             .OrderBy(k => k.GlobalPosition.DistanceTo(player.GlobalPosition)))
                 {
-                    duelTank = dropped.NetId;
-                    duelShotLeft = 0.3f; // Let the rifle align before the first shot.
-                    dropped.Detonated += _ => duelBlastAt = duelTime;
-                    Log($"duel: tracking dropped tank {dropped.NetId:x}");
+                    var lane = lanes.FirstOrDefault(at => DuelRay(match, dropped, at) == dropped, Vector3.Inf);
+                    if (!lane.IsFinite()) continue;
+                    if (player.GlobalPosition.DistanceTo(lane) > .1f) player.Teleport(lane, player.FacingYaw);
+                    target = dropped;
+                    duelTank = target.NetId;
+                    duelShotLeft = 0.3f; // Let the rifle align after changing the lane or target.
+                    target.Detonated += _ => duelBlastAt = duelTime;
+                    Log($"duel: tracking dropped tank {target.NetId:x} from a clear firing lane");
+                    break;
                 }
             }
-            var target = match.LiveTanks.FirstOrDefault(k => k.NetId == duelTank);
             if (target != null)
             {
                 AimAt(player, target.GlobalTransform * PropaneTank.LocalCenter);
@@ -728,6 +749,15 @@ public partial class NetTest : Node
                 director.Screenshot($"shooter_{t:00.0}");
             }
         }
+    }
+
+    private static GodotObject? DuelRay(Match match, PropaneTank target, Vector3 standing)
+    {
+        using var ray = PhysicsRayQueryParameters3D.Create(standing + Vector3.Up * 1.4f,
+            target.GlobalTransform * PropaneTank.LocalCenter, Layers.ShotMask,
+            new Godot.Collections.Array<Rid> { match.Player.GetRid() });
+        var hit = match.World.Physics.DirectSpaceState.IntersectRay(ray);
+        return hit.Count > 0 ? hit["collider"].As<GodotObject>() : null;
     }
 
     /// <summary>Walks into the nearest ammo pickup and films it vanishing and building back up.</summary>

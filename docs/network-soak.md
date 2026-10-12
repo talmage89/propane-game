@@ -11,6 +11,11 @@ assertion runs in `make test`; use `--rendered --output "$PWD/build/shader-capac
 and inspect the capture. Both paths require successful assertions and clean engine logs. This technical buffer
 budget changes no effect or gameplay values. See [Godot's allocator](https://github.com/godotengine/godot/blob/master/servers/rendering/renderer_rd/storage_rd/material_storage.cpp).
 
+The duel fixture checks its firing ray and chooses a clear road lane when the victim blocks a spilled tank.
+`--duel-blocked --tune.DropScatter=0 --tune.DropToss=0` deliberately stages that obstruction after the ordinary
+hit/grace assertions. Its two-round native regression runs in `make test-full`, through the same tank and score
+gates, without changing the gameplay rules or assertion bounds.
+
 `net_bots.sh` runs `compare_tanks.py` and `check_scores.py` after every local match. Either failure makes the
 launcher fail. `-k` skips both checks, including for an existing server (`-S`), whose audit log must be
 obtained separately. Deliberate late construction or early-leave probes also need `-k`, since their captures
