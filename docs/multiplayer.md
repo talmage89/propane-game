@@ -114,8 +114,11 @@ and string limits apply inside the plan, and starts must agree with the player a
   vent parameters while preserving its current position and velocity; owner corrections reconcile its trajectory.
   An intact observer already moving from a relayed blast also keeps that motion when adopting the child vent;
   snapping to the puncture's pre-blast pose would erase the accepted push until owner publications arrive.
-- *Ownership:* whoever punctured a venting tank owns it and sends its position and velocity at a set rate. Other clients ease toward that position, and snap only if they have drifted far.
-- *Sleeping tanks:* intact tanks sleep, so they stay in sync without any messages.
+- *Ownership:* whoever punctured a venting tank owns it and sends its position and velocity at a set rate. Other clients ease toward that position, snapping if they drift far or solid geometry blocks recovery to the actual owner sample.
+- *Sleeping tanks:* the owner publishes an initial pose and a reliable final rest when it stops. These states
+  also relay during loading and buffer until each client has built its bodies. Observers retain that resting
+  target until newer movement, an epoch change or a local predicted claim replaces it; local collisions cannot
+  permanently displace a resting copy after its owner's final publication.
 - *Detonation:* whoever detonates the first tank in a chain runs the whole chain on their client and sends each explosion with its position. Other clients play those explosions and don't run chain reactions themselves for remote blasts.
 - *Scoring:* the server credits the point only for a tank in its ledger that has not already exploded. If two players claim the same tank, the first claim wins. Map tanks are registered from the plan; client-created drops are registered atomically before being relayed. Exploded ids remain reserved for the whole match.
 
@@ -148,18 +151,36 @@ positions. Those remain decisions of the distributed client authorities.
 
 The ledger also owns each body's peer and monotonically increasing epoch. Every accepted ownership or lifecycle
 claim increments that body's epoch, including another grant to the same peer; departure transfers get new epochs.
-Movement and reliable rests carry a per-body sequence within the epoch. Neither side compares owner clocks:
+Moving publications use monotonic network time for send rates and checkpoint deadlines, so slow or catch-up
+physics cannot stretch freshness intervals or burst old samples. They include a reliable checkpoint every 0.25 s
+plus up to one normal send interval, and immediately
+when publication is required. The server preserves its delivery class on the second leg; other moving samples
+remain disposable. Native ENet throttling can suppress those samples beyond injected loss. Checkpoints and
+reliable rests carry the same per-body sequence within the epoch. Neither side compares owner clocks:
 old epochs and duplicate/older sequences cannot replace a newer state or wake a completed rest. A client retains
-one newest future state per body when an unreliable publication overtakes its reliable grant.
+one newest future state per body when a motion publication overtakes its reliable grant.
 Moving batches use sampling timestamps on the sender's ping-estimated server clock. The server bounds these to
 the existing 0.3 s extrapolation window; zero means no ping yet and falls back to relay time. Receivers use their
 own server clock estimate to include both transport legs in bounded motion extrapolation. This also survives
 motion overtaking its grant. Rest settling uses receipt time; clocks never order states.
+The reliable canonical grant/refusal supplies an observer correction target before the owner publishes again;
+an overtaking newer publication keeps its sampling and receipt times. Motion expires after 0.5 s without a
+receipt, independently of sampling transit. Fresh vent observers use the owner's velocities and retain
+rotation-error steering through the spin limiter. They do not add their own jet impulse after that correction;
+vent presentation and age still advance. Owners, stale observers and predicted local claims keep the ordinary
+jet force and gameplay spin limit. A local claim or grant releases observer force suppression immediately.
+Linear velocity describes a body's mass center, which can differ from its node origin. Correction extrapolates
+and steers that center, rotates the local offset, and converts back to a node transform for a snap. Rotation error
+alone must not translate an already aligned mass center. Custom tank centers and native automatic centers use
+the same model; captures still compare the original node positions.
 
 `Claim` requests carry expected epochs and proposed poses for the complete group. The server validates every member
 before granting any, so later grouped interactions can include bodies already owned without a partial handoff.
 A local group with a pending member is left unpredicted for its caller to retry. Prediction never publishes movement until a grant is
 confirmed. `Puncture` and `Explode` use the same expected-epoch path; each request has a peer-local request ID.
+Predicted drops likewise defer body publications until the server's creation echo; a bank debit alone does not
+confirm creation. Deferred bodies retain their required first checkpoint or rest. This prevents independent
+body lanes from overtaking registration and invalidating a batch of otherwise registered bodies.
 
 `Authority` broadcasts accepted canonical state and replies only to the claimant on refusal. Reasons distinguish
 stale epochs, exploded tanks, wrong phases, incompatible lifecycle transitions, refused chain causes and unknown
@@ -303,10 +324,12 @@ The server is the game itself started with `-- --server` (and `--headless`). It 
 
 `NetClient` and `LobbyServer` accept an `IPacketTransport` before entering the tree. `PacketTransports` selects
 ENet for production; the unit suites inject an in-memory loopback with a manual monotonic clock. Gameplay sends
-`ReliableOrdered`, `UnreliablePlayerPoses` or `UnreliableBodyStates`, never backend channel numbers. ENet maps all
-three to channel zero with the original reliability modes; ping and clock samples remain disposable/unreliable.
-On receive, the legacy channel cannot distinguish the two unreliable classes; the ENet adapter recognizes body
-state messages by their existing type byte. No packet layout, player id, tuner or gameplay rule changed.
+`ReliableOrdered`, three `ReliableBodyStates` lanes, `UnreliablePlayerPoses` or `UnreliableBodyStates`, never backend
+channel numbers. ENet keeps control and disposable traffic on channel zero; reliable body checkpoints rotate per
+body through channels one to three, so a checkpoint retry cannot block control. Ordering is per connection and
+reliable class, with no ordering across classes. On receive, the adapter uses native reliability/channel for checkpoints and the
+existing type byte to distinguish disposable body states. Epoch/sequence validation handles overtaking motion.
+No application packet layout, player id, tuner or gameplay rule changed. Protocol 2 remains unreleased.
 
 Connection handles are opaque objects and are never reused. `ProtocolPeerMap` is the compatibility bridge between
 these handles and the existing wire player ids (still ENet peer ids). The client learns its player id from Welcome.
@@ -328,6 +351,13 @@ notices remain notices on an otherwise live connection. `NetClient.LastDisconnec
 and does not distinguish an established peer timeout from a remote close: these report `TransportFailure` with an
 unavailable code. A failed connection/Hello deadline reports `Timeout`. Local reasons and open errors keep any known
 code. Supporting more precise ENet remote reasons would require a lower-level adapter and is deferred.
+Native endpoints normally use a 3 s minimum/8 s maximum ACK timeout. The server extends only the builder's
+connection to 20/30 s before sending MatchStart, and the client does so before invoking its construction callback.
+`IPacketTransport.SetLoading` carries this policy through decorators; backends without native ACK deadlines may
+ignore it. Loaded restores the short timeout at both ends, including a late Loaded after countdown or Go.
+Leaving construction also restores it. A silent failed endpoint therefore does not keep a live-match player
+present for the construction grace. Explicit disconnects remain immediate. ENet's retry schedule can defer
+the check until its next retransmission; these are ACK timeout parameters, not exact wall-clock disconnect times.
 
 `NetClient.Diagnostics` exposes the local connection counters; server logs include per-connection payload
 packets/bytes accepted out and received in, RTT, managed queue
@@ -336,6 +366,19 @@ headers, ENet retransmissions and ACKs. Native ENet queue depth is unavailable t
 rather than treating the zero managed queue as the native queue. ENet native reliable-loss ratio is shown when
 available. Diagnostics and id bindings last through the disconnect callback, then are released. ENet send acceptance
 reflects Godot PutPacket, which exposes no native send-buffer limit.
+
+A settled intact observer can remain wedged in floor contact even while its
+awake owner sends fresh near-zero motion. If both copies stay within the
+existing gather rest speed/spin thresholds and pose error persists for three
+correction blend times, correction applies the owner pose directly. Owner
+motion restarts that interval. This affects only the remote intact copy; it
+does not mark an owner stream resting, sleep the copy, or change gather rules.
+
+Clients service the packet transport from both process and physics callbacks.
+Catch-up physics can continue while process frames are scarce; delivering
+reliable ownership/checkpoints and ENet ACKs there prevents a slow rendered
+frame from stalling an otherwise active network stream. Both paths use one
+monotonic ping deadline, so extra polls do not increase the ping rate.
 
 `FaultPacketTransport` decorates any backend with an injected monotonic clock and seeded random schedule. Lag and
 jitter delay both directions; loss applies only to outgoing unreliable messages, preserving the existing CLI's loss
@@ -354,14 +397,14 @@ The contract was checked against [Steam's ISteamNetworkingSockets](https://partn
 message boundaries, send acceptance/errors, reliable ordering within a lane and connection status/end reasons fit.
 A future adapter must marshal status callbacks into Poll, release native receive messages after the borrowed callback,
 advertise its own message-size limit (not ENet's 16 MiB), and map Steam send-buffer limits to Backpressure. Use one
-reliable lane to retain today's ordering and disable Nagle to retain ENet's immediate flush. Steam can retain remote
+independent reliable control and body lanes to retain their ordering and disable Nagle to retain ENet's immediate flush. Steam can retain remote
 reason codes and queue statistics that Godot's ENet wrapper cannot. No Steam SDK, lobby, invite or relay implementation
 is included.
 
 Details settled while building, within the decisions above:
 
 - **Remote players** are full copies of the character (animation, rifle, ragdoll) driven by the states their own game sends. A thrown player's ragdoll falls on its own on every screen, steered after the real one; it gets up where the real one got up. Shots hit other players' bodies and limbs. Players pass through each other.
-- **Ownership** goes to whoever last disturbed a body (a shot, a puncture, a blast, a push, a drop); the match's creator owns everything nobody has touched, and a player's bodies pass to the creator (or the next player) if they leave. Claims go through the server as atomic groups with expected epochs; accepted grants are broadcast in one order. A handoff clears the former owner's correction target and sequence boundary. The new owner sends its final state even if its copy was already asleep, so nobody is left correcting toward the former owner forever.
+- **Ownership** goes to whoever last disturbed a body (a shot, a puncture, a blast, a push, a drop); the match's creator owns everything nobody has touched, and a player's bodies pass to the creator (or the next player) if they leave. Claims go through the server as atomic groups with expected epochs; accepted grants are broadcast in one order. A handoff resets the sequence boundary and supplies the new canonical observer target. The new owner sends its final state even if its copy was already asleep, so nobody is left correcting toward the former owner forever.
 - **Dropped tanks** glow in the dropper's color while they ignore bullets and chain reactions.
 - **Tuning in a match:** everyone plays on the creator's values: the baked ones in a release build, the creator's live ones in a debug build. Only that original creator's debug build gets F1 and may change the match's values. Hosting succession does not transfer this permission. Hello appends a debug-build flag, captured at match start; this is a client capability declaration, not remote build attestation. Tuning crosses the wire as named bool/int/float scalars, with exact exported types and inclusive declared ranges checked before applying the whole snapshot or a change. `FixedSeed` accepts the full int32 range. Each match owns a separate validated tuning instance; it never replaces the application saved template. The panel targets that match instance, and Save also updates the application template for future worlds.
 - **Starting values** (all tuners): 20 base tanks plus 4 per player; pile limits of 5–12 plus floor(0.25 × players), near the central 40 m; a 190 m base map plus 4 m per player, with clear starts at least 12 m apart; a 30-round magazine, 60 in reserve, at most 150, a 1.6 s reload; 3 base ammo cans plus 1 per player, of 30 rounds that come back after 20 s; a 2:30 match after a 4 s countdown; results for 10 s.
@@ -372,10 +415,10 @@ Details settled while building, within the decisions above:
 | --- | --- |
 | `make test` | Plain C# assertion suites (every wire message, malformed payloads, server ledger and permissions, lifecycle buffering and ownership, transport faults/reconnect/lifetime), score-checker regressions, movement, gamepad menu, device switching and platform checks, generator checks (20 seeds plus large layouts and forced formations), and separate-process built-world hashes. `make test-full` adds deeper layout, navigation and lifetime sweeps. Add suites under `src/Dev/UnitTests/` and mark them `[UnitSuite]` for discovery; any failure prints its name and exits nonzero. |
 | `godot --headless res://scenes/dev/generator_tests.tscn -- --seeds=100` | All four formations; 2, 8, 16, 24 and 32 players; exact supply counts, clear separated reachable starts, hull overlaps and supports, and exact `PlanCodec` round trips. |
-| `tools/dev/net_bots.sh -n 3 -l 60 -- --net-lag=120 --net-jitter=30 --net-loss=3` | A local server and bot players (`scenes/dev/net_test.tscn`) that run to tanks, shoot them and each other, and fetch ammo, under simulated lag and loss. `-w N` shows N of them in windows; `-S host:port` uses an existing server. |
-| `tools/dev/compare_tanks.py out/bot*.log` | Where each bot had every tank at the same match times: counts, states and drift. |
-| `python3 -B tools/dev/compare_tank_paths.py out/bot*.log` | Add `--tank-trajectories` to a same-machine bot run: roughly 60 ms wall timestamps, linear interpolation to common times, playing drift distributions and final identity/state assertions. Skips intervals over 200 ms and lifecycle changes. Independent match countdowns in the coarse digest can differ; use this probe for drift comparisons. |
+| `tools/dev/net_bots.sh -n 3 -l 60 -- --net-lag=120 --net-jitter=30 --net-loss=3` | A local server and bot players (`scenes/dev/net_test.tscn`) that run to tanks, shoot them and each other, and fetch ammo, under simulated lag and loss. `-w N` shows N of them in windows; `-S host:port -k` uses an existing server (audit it separately with its server log). Tank agreement and score checks run automatically; either failure fails the command. `-k` skips checks, `-t clean` uses tighter tank limits. |
+| `tools/dev/compare_tanks.py [--profile clean] out/bot*.log` | Same-machine shared monotonic samples interpolated to a 50 ms grid, all peer pairs, bounded lifecycle/moving/resting disagreement and settled final agreement. Missing samples, gaps or incomplete matches fail. `--details` prints disagreement intervals. Replaces the coarse countdown and tank-path comparers. See [calibration](network-soak.md) for limits and observed failures on dev. |
 | `tools/dev/check_scores.py out/server.log out/bot*.log` | Server conservation audit and identical per-player final scores on every bot; exits nonzero on a missing audit or disagreement. |
+| `python3 -B tools/dev/check_liveness.py --output=build/liveness [--silent=server]` | Stops a native client or server process during play without sending Leave; asserts detection within 10 s. Run after `make build`; separate-process logs stay in the chosen directory. `--project` and `--maximum` allow historical baseline measurements. |
 | `net_bots.sh -n 2 -l 45 -s "--start-score=8" -- --scenario=gather --tune.DropScatter=0.2 --tune.DropToss=1 --net-lag=120 --net-jitter=30 --net-loss=3` | Two bot hits spill two close tanks from the joiner; both clients require an intact stable gathered pile owned by the world authority. Scatter/toss are fixture overrides to keep the drops within the gather radius. Add `-w 2` and `--capture-dir=DIR` to verify both clients' shield colors and shimmer as well as the glide; headless clients assert gameplay state without shader readback. |
 | `net_bots.sh -n 2 -w 2 -s "--start-score=8" -- --scenario=duel --capture-dir=DIR` | Scripted close-up: hits with the grace period, dropped tanks, a blast that throws the victim, from both sides. |
 | `net_bots.sh -n 2 -l 35 -w 1 -- --scenario=movement --assert-motion --assert-feet --assert-grip` | Remote creep, sprint, air aim suppression, held-aim landing, hip/aimed bursts and walking reload through real snapshots; final contact and rotation assertions. Headless runs need at least 18 seconds; rendered runs allow 35 seconds for loading and capture stalls. |
@@ -383,9 +426,12 @@ Details settled while building, within the decisions above:
 | `net_bots.sh -n 1 -w 1 -- --scenario=pickup --capture-dir=DIR` | Taking an ammo can and its return. |
 | `net_bots.sh -n 2 -w 2 -l 20 -- --scenario=puncture-race --net-lag=120 --net-jitter=30 --net-loss=3 --capture-dir=DIR` | Two opposed bullet contacts on simulation tick 180; both copies must still be intact. Every client asserts canonical hole, normal, swirl and lean, and bounded owner correction error over time. A third bot observes without shooting. |
 | `python3 -B tools/dev/compare_vents.py out/bot*.log` | Identical canonical vent parameters and at least 100 overlapping, time-aligned trajectory samples per pair; exits nonzero if maximum drift exceeds the default snap distance (3 m, a test tolerance). |
+| `net_bots.sh -n 2 -l 30 -- --scenario=vent-contact --net-lag=120 --net-jitter=30 --net-loss=3 --tank-motion-trace` | Eight isolated owner-started vents spin on clear floor. Asserts canonical ownership and vent state, logs actual collider contacts, speed and spin, and checks agreement through the final grid. |
+| `godot-mono --headless --fixed-fps 60 --path . res://scenes/dev/body_correction_tests.tscn` | Native integration asserts zero extra jet impulse for fresh observers, ordinary owner thrust, and immediate thrust restoration for stale, predicted and granted ownership. |
+| `net_bots.sh -n 6 -l 90 -s '--tune.MaxPlayers=6' -- --melee-start --net-lag=120 --net-jitter=30 --net-loss=3` | Six-player agreement probe. The explicit debug server tuner raises admission capacity before anyone connects; release admission and tuner defaults are unchanged. |
 | `net_bots.sh -n 2 -w 2 -l 10 -s "--start-score=8" -- --scenario=drop-refusal --net-lag=120 --net-jitter=30 --net-loss=3 --capture-dir=DIR` | The creator lowers the hit-drop count while a hit is in flight; the victim rolls back the refused drop, both clients keep one accepted tank and a bank of 7. |
 | `net_bots.sh -n 4 -l 120 -b smart,simple,smart,simple` | Bot brains against each other; the server log ends each match with tanks gained / lost to hits / lost to throws. Add `--bot-log` to log what each bot is doing. |
-| `net_bots.sh -n 2 -l 10 -- --match-delay=26` | Builds after the server's loading timeout and Go; the ready log must already say `playing True`. Use `--matches=2` without the delay to exercise another round on the same connection. |
+| `net_bots.sh -k -n 2 -l 10 -- --match-delay=26` | Skips the complete-match audit for this intentionally incomplete capture. Builds after the server's loading timeout and Go; the ready log must already say `playing True`. Use `--matches=2` without the delay to exercise another round on the same connection. |
 | `godot res://scenes/dev/menu_test.tscn -- --capture-dir=DIR` | Clicks through every menu, a solo match, leaving it, and single player and back. |
 | `menu_test.tscn -- --scenario=gamepad --capture-dir=DIR` | Joypad-only navigation, name/address defaults, hosting, browsing and joining, color and match length, single-player pause/resume, a solo debug match, overlays and results. Asserts focus and outcomes; also runs headlessly in `make test`, using the checkout's hosting port. |
 | `menu_test.tscn -- --scenario=mouse --capture-dir=DIR` | Actual mouse/keyboard color entry, exact preview/accepted/saved bytes, lobby sample, solo debug character and real server results. Runs headlessly in `make test`. |
@@ -464,7 +510,7 @@ Allow 35 seconds for rendered runs. The melee harness reads frames back asynchro
 so screenshots do not skip contact or stall the connection. For a four-bot 90-second soak, use
 `-n 4 -w 0 -l 90 -- --melee-start --bot-log --digest-every=0.5 --net-lag=120 --net-jitter=30 --net-loss=3`.
 `--melee-start` places smart bots in close pairs once, then their ordinary brains control the entire match; the
-accepted swing/contact logs show actual use. Audit that run with the same two scripts and all four bot logs.
+accepted swing/contact logs show actual use. The launcher audits that run automatically with both scripts and all four bot logs.
 `make test` runs the pure resolver/geometry/contact/server/wire assertions, real wall/tank/prop contact fixture,
 input bindings and device reference checks, plus the local strike grip/rotation probe. `make test-full` adds ten
 reload cancellations spanning early/late progress in both reload clips.
@@ -476,4 +522,8 @@ including strikes while repositioning for tanks, followed by ordinary navigation
 final standings agreed: 20 map gains + 34 drop gains - 50 spills = 4 banked. The 407 tank comparisons ended with
 identical ids/states and at most 0.165 m drift. During active chains the diagnostic reported transient differences
 up to five states and 5.862 m drift; it is a
-comparison report, not a threshold assertion. Those transients converged; this package does not revise body sync.
+comparison report, not a threshold assertion. Those transients converged in the original melee package.
+The later [tank assertion and correction work](network-corrections.md) adds automatic failure checks and fixes
+the replication causes identified by repeated soaks.
+The [independent integration review](network-integration.md) records A4 integration, native regressions,
+remaining capacity limits and the verification matrix for this branch.

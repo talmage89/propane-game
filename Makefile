@@ -45,12 +45,17 @@ test-core: build ## Run checker, platform, movement and unit assertions
 	python3 -B tools/dev/time_gate_tests.py
 	python3 -B tools/dev/check_scores_tests.py
 	python3 -B tools/dev/compare_vents_tests.py
-	python3 -B tools/dev/compare_tank_paths_tests.py
+	python3 -B tools/dev/compare_tanks_tests.py
+	python3 -B tools/dev/net_bots_tests.py
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/core_tests.tscn
 	"$(GODOT)" --headless --path . res://scenes/dev/shutdown_tests.tscn
 	"$(GODOT)" --headless --path . res://scenes/dev/shutdown_tests.tscn -- --paused --window-close --repeat-quit
 
 test-behavior: build ## Run isolated physics, navigation, menu, grip and feet probes
+	"$(GODOT)" --headless --path . res://scenes/dev/server_tuning_tests.tscn -- --server --tune.MaxPlayers=6 --port=$(PORT)
+	"$(GODOT)" --headless --path . res://scenes/dev/server_seed_tests.tscn -- --server --match-seed=23 --port=$(PORT)
+	"$(GODOT)" --headless --path . res://scenes/dev/transport_physics_tests.tscn -- --server --port=$(PORT)
+	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/body_correction_tests.tscn
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/session_actors_tests.tscn
 	python3 -B tools/dev/animation_review_tests.py
 	@mkdir -p build/animation-review-gate

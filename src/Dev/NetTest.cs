@@ -14,7 +14,8 @@ namespace Propane.Dev;
 /// A multiplayer client driven by a bot, for testing matches without people. It connects, creates a lobby
 /// (<c>--role=host</c>, starting once <c>--players=N</c> have joined) or joins the first one (<c>--role=join</c>),
 /// then plays with <see cref="Bot"/>. It logs
-/// scores and, every few seconds, where it has every tank, so runs on several machines can be compared.
+/// scores and coarse tank digests. <c>--tank-check</c> adds frequent samples on the shared OS monotonic
+/// clock for assertions across same-machine clients; <c>--tank-check-nudge=Name</c> injects a physical divergence.
 /// Run: godot res://scenes/dev/net_test.tscn -- --server=127.0.0.1 --role=host --players=2 [--capture-dir=/tmp/n]
 /// Add <c>--host-server</c> to run the server in the same process.
 /// </summary>
@@ -29,7 +30,11 @@ public partial class NetTest : Node
     private bool started;
     private float clock;
     private float digestTimer;
-    private float trajectoryTimer;
+    private double tankCheckNext;
+    private bool tankCheckFinal;
+    private double motionTraceNext;
+    private PropaneTank? nudgedTank;
+    private Vector3 nudgedPosition;
     private float shotTimer;
     private int matches;
     private int matchesWanted = 1;
@@ -85,6 +90,12 @@ public partial class NetTest : Node
         }
         net.LobbyChanged += () =>
         {
+            // The server retires replication before each client's delayed results timer ends.
+            // Finish the live trajectory here; still check exact completion identities/rest poses below.
+            if (!tankCheckFinal && match?.IsOver == true && net.Lobby?.Phase == LobbyServer.LobbyPhase.Waiting)
+            {
+                LogTankCheck(final: true);
+            }
             if (net.Lobby is { } lobby)
             {
                 Log($"lobby {lobby.Id}: {string.Join(", ", lobby.Members.Select(m => $"{m.Name}/{m.Appearance.Color.ToHtml(false)}"))}, {lobby.Phase}");
@@ -114,10 +125,16 @@ public partial class NetTest : Node
                 RemoveChild(match);
                 match.QueueFree();
             }
+            if (DevArgs.Get("tank-check-load-stall") == net.PlayerName)
+            {
+                // Native transport regression: a legitimate construction frame can outlast an 8 s timeout.
+                Log("tank-check loading stall 9s");
+                System.Threading.Thread.Sleep(TimeSpan.FromSeconds(9));
+            }
             match = new Match { Name = "Match", Net = net, Setup = setup, CreateLocalView = DisplayServer.GetName() != "headless" };
             match.Finished += () =>
             {
-                if (DevArgs.Get("scenario") is "duel" or "pickup" or "drop-refusal" or "puncture-race" or "appearance" or "gather" or "melee")
+                if (DevArgs.Get("scenario") is "duel" or "pickup" or "drop-refusal" or "puncture-race" or "appearance" or "gather" or "melee" or "body-stream" or "vent-contact")
                 {
                     ScenarioAssert(scenarioPassed, "scenario ended before all assertions passed");
                 }
@@ -131,6 +148,8 @@ public partial class NetTest : Node
                 {
                     Log($"navigation finished: stuck={smart.StuckEvents} blacklist={smart.BlacklistedTargets} replans={smart.Replans} jumps={smart.Jumps}");
                 }
+                if (!tankCheckFinal) { LogTankCheck(final: true); }
+                LogTankCheck(completion: true);
                 Log($"finished match {match.Setup.Id}; final scores {ScoreLine()}");
                 RemoveChild(match);
                 match.QueueFree();
@@ -148,8 +167,14 @@ public partial class NetTest : Node
             raceVent = null;
             raceCamera = null;
             raceWorst = 0;
+            ventContactTick = 0;
             match.AuthorityResolved += result =>
             {
+                if (DevArgs.Get("tank-authority-trace") != null)
+                {
+                    var bodies = string.Join(" ", result.Bodies.Select(b => $"{b.Body.Id:x}:{b.Owner}:{b.Body.Epoch}:{b.Body.Sequence}:{b.State}:{b.Rest}"));
+                    Log(FormattableString.Invariant($"authority-trace match {setup.Id} time {TankCheckTime():0.000000} peer {result.Peer} request {result.Request} reason {result.Reason} bodies {bodies}"));
+                }
                 if (DevArgs.Get("scenario") != "puncture-race") { return; }
                 var canonical = result.Bodies.FirstOrDefault(b => b.Body.Id == BodySync.MapTankId(0));
                 if (canonical?.State != TankLedger.State.Venting) { return; }
@@ -157,6 +182,24 @@ public partial class NetTest : Node
                 raceVent = canonical.Vent;
             };
             AddChild(match);
+            if (DevArgs.Get("gather-trace") != null && match.World.Root.FindChild("Gather", true, false) is TankGather gatherProbe)
+            {
+                gatherProbe.Trace = text => Log($"gather-trace time {TankCheckTime():0.000000} {text}");
+            }
+
+            if (DevArgs.Get("tank-trace") != null)
+            {
+                match.Bodies.Trace = (entry, reason) =>
+                {
+                    if (!entry.IsTank || !IsInstanceValid(entry.Body)) { return; }
+                    if (DevArgs.Get("tank-trace") is { Length: > 0 } selected && entry.Id.ToString("x") != selected) { return; }
+                    var body = entry.Body;
+                    var p = body.GlobalPosition;
+                    var target = entry.Target.Origin;
+                    var angle = entry.HasTarget ? body.GlobalBasis.Orthonormalized().GetRotationQuaternion().AngleTo(entry.Target.Basis.GetRotationQuaternion()) : 0;
+                    Log(FormattableString.Invariant($"tank-trace match {match.Setup.Id} time {TankCheckTime():0.000000} id {entry.Id:x} {reason} owner={entry.Owner} epoch={entry.Epoch} sequence={entry.Sequence} last={entry.LastSequence} pending={entry.ClaimPending} sleeping={body.Sleeping} target={entry.HasTarget}/{entry.TargetRest} pos={p.X:0.000},{p.Y:0.000},{p.Z:0.000} goal={target.X:0.000},{target.Y:0.000},{target.Z:0.000} speed={body.LinearVelocity.Length():0.000} goal-speed={entry.TargetLinear.Length():0.000} spin={body.AngularVelocity.Length():0.000} goal-spin={entry.TargetAngular.Length():0.000} angle={angle:0.000} gather={(body as PropaneTank)?.Gathering} revision={(body as PropaneTank)?.Disturbance}"));
+                };
+            }
             match.Player.InputOverride = bot;
             if (DisplayServer.GetName() == "headless")
             {
@@ -180,6 +223,9 @@ public partial class NetTest : Node
             match.Player.MeleeStarted += (swing, _) => Log($"melee swing {swing}");
             match.Player.MeleeHit += hit => Log($"melee contact {hit.Swing} victim {PlayerCharacter.Owning(hit.Collider)?.PeerId ?? 0}");
             clock = 0;
+            tankCheckNext = 0;
+            tankCheckFinal = false;
+            nudgedTank = null;
             duelTime = -1;
             gatherPositions.Clear();
             gatherShields.Clear();
@@ -266,6 +312,14 @@ public partial class NetTest : Node
         {
             PunctureRace(match);
         }
+        else if (DevArgs.Get("scenario") == "body-stream")
+        {
+            BodyStreamScenario(match);
+        }
+        else if (DevArgs.Get("scenario") == "vent-contact")
+        {
+            VentContactScenario(match);
+        }
         else if (DevArgs.Get("scenario") == "movement")
         {
             MovementScenario(match, dt);
@@ -287,13 +341,33 @@ public partial class NetTest : Node
             }
         }
 
-        digestTimer -= dt;
-        trajectoryTimer -= dt;
-        if (DevArgs.Get("tank-trajectories") != null && trajectoryTimer <= 0)
+        // A physical divergence fixture, opt-in on one named peer. Holding the pose defeats corrections
+        // intentionally; it tests the verifier through real scene state, rather than falsifying its log.
+        if (DevArgs.Get("tank-check-nudge") == net.PlayerName && match.IsPlaying && clock >= 20)
         {
-            trajectoryTimer = 0.05f;
-            LogTankTrajectory();
+            if (nudgedTank == null)
+            {
+                nudgedTank = match.LiveTanks.FirstOrDefault(t => t.State == PropaneTank.TankState.Intact && t.AtRest);
+                if (nudgedTank != null)
+                {
+                    nudgedPosition = nudgedTank.GlobalPosition + Vector3.Right * 2;
+                    Log($"tank-check injected nudge {nudgedTank.NetId:x}");
+                }
+            }
+            if (IsInstanceValid(nudgedTank) && nudgedTank!.State == PropaneTank.TankState.Intact)
+            {
+                nudgedTank.GlobalPosition = nudgedPosition;
+                nudgedTank.LinearVelocity = nudgedTank.AngularVelocity = Vector3.Zero;
+                nudgedTank.Sleeping = true;
+            }
         }
+        var sampleTime = TankCheckTime();
+        if (DevArgs.Get("tank-check") != null && !tankCheckFinal && sampleTime >= tankCheckNext)
+        {
+            tankCheckNext = sampleTime + 0.05;
+            LogTankCheck();
+        }
+        digestTimer -= dt;
         if (digestTimer <= 0)
         {
             digestTimer = DevArgs.GetFloat("digest-every", 5f);
@@ -385,6 +459,10 @@ public partial class NetTest : Node
 
     private static string Vector(Vector3 v) => FormattableString.Invariant($"{v.X:R},{v.Y:R},{v.Z:R}");
 
+    // No instance override exists until the new tank's first process update. Its material's
+    // shield is transparent; converting Nil directly to Color instead fabricates opaque black.
+    internal static Color ReadShieldColor(Variant value) => value.VariantType == Variant.Type.Nil ? Colors.Transparent : value.AsColor();
+
     private readonly Dictionary<uint, Vector3> gatherPositions = new();
     private readonly HashSet<uint> gatherShields = new();
     private readonly HashSet<uint> gatherGlides = new();
@@ -438,7 +516,7 @@ public partial class NetTest : Node
             foreach (var tank in match.LiveTanks.Where(IsDrop))
             {
                 var mesh = tank.GetNode<MeshInstance3D>("Mesh");
-                var glow = mesh.GetInstanceShaderParameter("shield_color").AsColor();
+                var glow = ReadShieldColor(mesh.GetInstanceShaderParameter("shield_color"));
                 if (tank.Invulnerable)
                 {
                     ScenarioAssert(!tank.Gathering, "gather: shielded drop gathered");
@@ -447,7 +525,7 @@ public partial class NetTest : Node
                     else if (glow.A > 0)
                     {
                         ScenarioAssert(new Color(glow, 1) == dropper.Appearance.Color,
-                            "gather: shielded drop lost accepted appearance");
+                            FormattableString.Invariant($"gather: shielded drop lost accepted appearance: tank {tank.NetId:x} glow={glow.R:R},{glow.G:R},{glow.B:R},{glow.A:R} expected={dropper.Appearance.Color.R:R},{dropper.Appearance.Color.G:R},{dropper.Appearance.Color.B:R}"));
                         gatherShields.Add(tank.NetId);
                     }
                 }
@@ -496,7 +574,7 @@ public partial class NetTest : Node
         }
         if (gathering && Once(40, dt))
         {
-            ScenarioAssert(gatherShields.Count == 2 && gatherGlides.Count == 2, "gather: did not observe both drop shields and glides");
+            ScenarioAssert(gatherShields.Count == 2 && gatherGlides.Count == 2, $"gather: did not observe both drop shields and glides (shields {gatherShields.Count}, glides {gatherGlides.Count})");
             ScenarioAssert(gatherPositions.Count == 2 && match.LiveTanks.Where(IsDrop).All(t =>
                 gatherPositions.TryGetValue(t.NetId, out var position) && position.DistanceTo(t.GlobalPosition) <= 0.006f && t.AtRest), "gather: final pile unstable");
             scenarioPassed = !scenarioFailed;
@@ -1031,18 +1109,100 @@ public partial class NetTest : Node
 
     private string ScoreLine() => match == null ? "" : string.Join(" ", match.Scores.Select(s => $"{s.Key}={s.Value}"));
 
-    /// <summary>Same-machine wall time avoids comparing independently corrected match countdowns.</summary>
-    private void LogTankTrajectory()
+    private PropaneTank? streamTank;
+    private Vector3 streamOrigin;
+    private float streamStarted;
+
+    // Native replication fixture: straight flight isolates packet delivery from collisions/vent chaos.
+    // Only the host drives the owner; observers must learn motion through the actual transport.
+    private void BodyStreamScenario(Match current)
     {
-        if (match == null) { return; }
-        var sampleTime = Time.GetUnixTimeFromSystem();
+        if (streamTank == null)
+        {
+            streamTank = current.LiveTanks.OrderBy(t => t.NetId).First();
+            streamOrigin = streamTank.GlobalPosition;
+            streamStarted = clock;
+            streamTank.GravityScale = 0;
+            streamTank.LinearDamp = streamTank.AngularDamp = 0;
+            streamTank.CollisionMask = 0;
+        }
+        if (role == "host")
+        {
+            var flight = Mathf.Min(clock - streamStarted, 15);
+            streamTank.GlobalPosition = streamOrigin + Vector3.Right * (flight * 8);
+            streamTank.LinearVelocity = flight < 15 ? Vector3.Right * 8 : Vector3.Zero;
+            streamTank.AngularVelocity = Vector3.Zero;
+            streamTank.Sleeping = flight >= 15;
+        }
+        if (!scenarioPassed && clock - streamStarted >= 10)
+        {
+            ScenarioAssert(streamTank.GlobalPosition.DistanceTo(streamOrigin) > 40,
+                "body-stream: observer did not receive owner movement");
+            scenarioPassed = !scenarioFailed;
+            if (scenarioPassed) { Log("body-stream: authoritative movement received"); }
+        }
+    }
+
+    // Stopwatch uses the OS monotonic clock shared by processes on this machine. Match.TimeLeft is a
+    // packet-corrected countdown, unsuitable for alignment. This dev probe is for net_bots' local clients.
+    private static double TankCheckTime() => (double)System.Diagnostics.Stopwatch.GetTimestamp() / System.Diagnostics.Stopwatch.Frequency;
+
+    private void LogTankCheck(bool final = false, bool completion = false)
+    {
+        if (match == null || DevArgs.Get("tank-check") == null) { return; }
+        var sampleTime = TankCheckTime();
         var tanks = new StringBuilder();
+        var count = 0;
         foreach (var tank in match.LiveTanks.OrderBy(t => t.NetId))
         {
             var p = tank.GlobalPosition;
-            tanks.Append(FormattableString.Invariant($" {tank.NetId:x}:{(tank.State == PropaneTank.TankState.Venting ? "V" : "I")}:{p.X:0.000},{p.Y:0.000},{p.Z:0.000}"));
+            var resting = tank.AtRest && !tank.Gathering;
+            tanks.Append(FormattableString.Invariant($" {tank.NetId:x}:{(tank.State == PropaneTank.TankState.Venting ? "V" : "I")}:{(resting ? "R" : "M")}:{p.X:0.000},{p.Y:0.000},{p.Z:0.000}"));
+            count++;
         }
-        Log(FormattableString.Invariant($"tank-sample time {sampleTime:0.000000} playing {match.IsPlaying} clock {match.TimeLeft:0.000} n {match.LiveTanks.Count()}{tanks}"));
+        var phase = match.IsPlaying ? "P" : match.IsOver ? "E" : "L";
+        var kind = completion ? "completion" : final ? "final" : "check";
+        Log(FormattableString.Invariant($"tank-{kind} match {match.Setup.Id} time {sampleTime:0.000000} phase {phase} final {final || completion} length {match.Setup.Length:0.000} n {count}{tanks}"));
+        if (final) { tankCheckFinal = true; }
+        if (DevArgs.Get("tank-motion-trace") != null && (final || sampleTime >= motionTraceNext))
+        {
+            motionTraceNext = sampleTime + .25;
+            LogMotionTrace(sampleTime);
+        }
+    }
+
+    private void LogMotionTrace(double sampleTime)
+    {
+        if (match == null) { return; }
+        var now = match.Clock.Seconds;
+        var d = net.Diagnostics;
+        Log(FormattableString.Invariant($"net-trace time {sampleTime:0.000000} throttle={d.NativeThrottle:0.000}/{d.NativeThrottleLimit:0.000} rtt={d.RoundTripMilliseconds:0.000} variance={d.NativeRttVariance:0.000}"));
+        foreach (var entry in match.Bodies.Entries)
+        {
+            if (!entry.IsTank || !IsInstanceValid(entry.Body) || entry.Body.Sleeping || entry.HasTarget && entry.TargetRest) { continue; }
+            var body = entry.Body;
+            var p = body.GlobalPosition;
+            var center = body.GlobalTransform * body.CenterOfMass;
+            var lead = (float)Math.Clamp(now - entry.TargetReceived, 0, BodySync.MaxExtrapolation);
+            var sampledCenter = entry.Target * body.CenterOfMass;
+            var goalCenter = entry.HasTarget ? sampledCenter + entry.TargetLinear * lead : center;
+            var rotation = entry.Target.Basis.GetRotationQuaternion();
+            if (lead > 0 && entry.TargetAngular.LengthSquared() > .0001f)
+            {
+                rotation = new Quaternion(entry.TargetAngular.Normalized(), entry.TargetAngular.Length() * lead) * rotation;
+            }
+            var goal = entry.HasTarget ? goalCenter - new Basis(rotation) * body.CenterOfMass : p;
+            var barrier = "none";
+            if (entry.HasTarget && center.DistanceSquaredTo(sampledCenter) > .0001f)
+            {
+                using var ray = PhysicsRayQueryParameters3D.Create(center, sampledCenter,
+                    Layers.World | Layers.Props | Layers.Floor, new Godot.Collections.Array<Rid> { body.GetRid() });
+                var hit = match.World.Physics.DirectSpaceState.IntersectRay(ray);
+                if (hit.Count > 0 && hit["collider"].As<GodotObject>() is Node collider) { barrier = collider.Name; }
+            }
+            var angle = entry.HasTarget ? body.GlobalBasis.Orthonormalized().GetRotationQuaternion().AngleTo(entry.Target.Basis.GetRotationQuaternion()) : 0;
+            Log(FormattableString.Invariant($"motion-trace match {match.Setup.Id} time {sampleTime:0.000000} id {entry.Id:x} owner={entry.Owner} epoch={entry.Epoch} sequence={entry.Sequence} last={entry.LastSequence} pending={entry.ClaimPending} target={entry.HasTarget} sample-age={now - entry.TargetReceived:0.000} quiet={now - entry.TargetUpdated:0.000} pos={p.X:0.000},{p.Y:0.000},{p.Z:0.000} goal={goal.X:0.000},{goal.Y:0.000},{goal.Z:0.000} center={center.X:0.000},{center.Y:0.000},{center.Z:0.000} goal-center={goalCenter.X:0.000},{goalCenter.Y:0.000},{goalCenter.Z:0.000} speed={body.LinearVelocity.Length():0.000} spin={body.AngularVelocity.Length():0.000} goal-spin={entry.TargetAngular.Length():0.000} angle={angle:0.000} barrier={barrier}"));
+        }
     }
 
     private void Log(string text) => GD.Print($"[nettest {net.PlayerName} {Time.GetTicksMsec() / 1000.0:0.00}] {text}");

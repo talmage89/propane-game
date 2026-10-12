@@ -11,6 +11,24 @@ public enum TrafficClass
     // Includes disposable ping/clock samples, which also used ENet's unreliable channel zero.
     UnreliablePlayerPoses,
     UnreliableBodyStates,
+    // Independently ordered checkpoints: newer poses can bypass a retry on another lane.
+    ReliableBodyStates,
+    ReliableBodyStates2,
+    ReliableBodyStates3,
+}
+
+public static class TrafficReliability
+{
+    public static bool IsReliable(this TrafficClass traffic) =>
+        traffic is TrafficClass.ReliableOrdered or TrafficClass.ReliableBodyStates or
+            TrafficClass.ReliableBodyStates2 or TrafficClass.ReliableBodyStates3;
+
+    internal static TrafficClass NextBodyCheckpoint(TrafficClass current) => current switch
+    {
+        TrafficClass.ReliableBodyStates => TrafficClass.ReliableBodyStates2,
+        TrafficClass.ReliableBodyStates2 => TrafficClass.ReliableBodyStates3,
+        _ => TrafficClass.ReliableBodyStates,
+    };
 }
 
 public enum SendResult { Success, Closed, Oversized, Backpressure }
@@ -32,14 +50,15 @@ public readonly record struct OpenResult(bool Success, string? Detail = null, in
 /// </summary>
 public readonly record struct TransportDiagnostics(long PacketsIn, long BytesIn, long PacketsOut, long BytesOut,
     double RoundTripMilliseconds, int QueuedPackets, long QueuedBytes, long Drops, double PollMilliseconds,
-    long? NativeQueueBytes = null, double? NativeLoss = null);
+    long? NativeQueueBytes = null, double? NativeLoss = null, double? NativeThrottle = null,
+    double? NativeThrottleLimit = null, double? NativeRttVariance = null);
 
 /// <summary>
 /// Main-thread message transport. Every callback runs only inside Poll (including local disconnect/close).
 /// Send copies/consumes bytes before returning Success; Success means accepted, not delivered. A non-success
 /// send accepts nothing. Packet memory is borrowed for the duration of the callback: copy it before retaining.
-/// ReliableOrdered preserves send order per connection; the other classes may reorder or disappear. No ordering
-/// is promised across classes. Disconnect/Close invalidate handles immediately and discard queued packets;
+/// Each reliable class preserves send order per connection, independently; disposable classes may reorder or
+/// disappear. No ordering is promised across classes. Disconnect/Close invalidate handles immediately and discard queued packets;
 /// notifications are deferred to Poll. Diagnostics remain available through Disconnected, then expire.
 /// </summary>
 public interface IPacketTransport
@@ -52,6 +71,8 @@ public interface IPacketTransport
     OpenResult Connect(PacketEndpoint endpoint, out ConnectionHandle? connection);
     void Poll();
     SendResult Send(ConnectionHandle connection, TrafficClass traffic, ReadOnlyMemory<byte> bytes);
+    /// <summary>Allow a construction stall until readiness; backends without native ACK deadlines may ignore it.</summary>
+    void SetLoading(ConnectionHandle connection, bool loading) { }
     void Disconnect(ConnectionHandle connection, DisconnectReason reason);
     void Close();
     TransportDiagnostics Diagnostics(ConnectionHandle connection);

@@ -95,7 +95,7 @@ public partial class LobbyServer : Node
     private int nextMatchId = 1;
 
     // Legacy handler tests bypass the connection layer; transport tests use the injected interface.
-    internal Action<int, byte[], bool>? SendOverride { get; set; }
+    internal Action<int, byte[], TrafficClass>? SendOverride { get; set; }
 
     public int Port { get; set; } = Protocol.DefaultPort;
 
@@ -146,7 +146,7 @@ public partial class LobbyServer : Node
     }
 
     private void OnPacket(ConnectionHandle connection, TrafficClass traffic, ReadOnlyMemory<byte> bytes) =>
-        OnReceived(peerIds.PeerId(connection), bytes.ToArray());
+        OnReceived(peerIds.PeerId(connection), bytes.ToArray(), traffic);
 
     public override void _Process(double delta)
     {
@@ -164,12 +164,12 @@ public partial class LobbyServer : Node
         AdvanceMatches(now);
         if (now >= nextDiagnostics)
         {
-            nextDiagnostics = now + 10;
+            nextDiagnostics = now + (Dev.DevArgs.Get("net-throttle-trace") != null ? .25 : 10);
             foreach (var id in clients.Keys)
             {
                 if (peerIds.Connection(id) is not { } connection) { continue; }
                 var d = transport.Diagnostics(connection);
-                Log($"net peer {id} in {d.PacketsIn}/{d.BytesIn}B out {d.PacketsOut}/{d.BytesOut}B rtt {d.RoundTripMilliseconds:0.0}ms queue {d.QueuedPackets}/{d.QueuedBytes}B drops {d.Drops} poll {d.PollMilliseconds:0.000}ms native-queue {d.NativeQueueBytes?.ToString() ?? "unavailable"} loss {d.NativeLoss?.ToString("0.000") ?? "unavailable"}");
+                Log($"net peer {id} in {d.PacketsIn}/{d.BytesIn}B out {d.PacketsOut}/{d.BytesOut}B rtt {d.RoundTripMilliseconds:0.0}ms queue {d.QueuedPackets}/{d.QueuedBytes}B drops {d.Drops} poll {d.PollMilliseconds:0.000}ms native-queue {d.NativeQueueBytes?.ToString() ?? "unavailable"} loss {d.NativeLoss?.ToString("0.000") ?? "unavailable"} throttle {d.NativeThrottle?.ToString("0.000") ?? "unavailable"}/{d.NativeThrottleLimit?.ToString("0.000") ?? "unavailable"} variance {d.NativeRttVariance?.ToString("0.0") ?? "unavailable"}ms");
             }
         }
     }
@@ -195,7 +195,7 @@ public partial class LobbyServer : Node
         }
     }
 
-    internal void OnReceived(int from, byte[] data)
+    internal void OnReceived(int from, byte[] data, TrafficClass? incoming = null)
     {
         if (!clients.TryGetValue(from, out var client)) { return; }
         Msg? type = data.Length > 0 ? (Msg)data[0] : null;
@@ -206,7 +206,7 @@ public partial class LobbyServer : Node
             if (Protocol.IsMatch(message.Type) && client.Lobby?.Match?.Id != message.MatchId) { return; }
             if (Protocol.IsRelay(message.Type))
             {
-                Relay(client, message);
+                Relay(client, message, incoming);
                 return;
             }
             switch (message.Type)
@@ -230,7 +230,11 @@ public partial class LobbyServer : Node
                     break;
                 case Msg.StartMatch: StartMatch(client, (Godot.Collections.Dictionary)message.Payload); break;
                 case Msg.Loaded:
-                    if (client.Lobby is { Phase: LobbyPhase.Loading, Match: { } match }) { match.Loaded.Add(client.Id); }
+                    if (client.Lobby?.Match is { } match)
+                    {
+                        match.Loaded.Add(client.Id);
+                        if (client.Connection != null) { transport.SetLoading(client.Connection, false); }
+                    }
                     break;
                 case Msg.ClaimPickup: ClaimPickup(client, ((IntMessage)message.Payload).Value); break;
                 case Msg.Ping:
@@ -320,6 +324,7 @@ public partial class LobbyServer : Node
     {
         var lobby = client.Lobby!;
         client.Lobby = null;
+        if (client.Connection != null) { transport.SetLoading(client.Connection, false); }
         lobby.Members.Remove(client.Id);
         if (lobby.Match is { } match && match.Players.Remove(client.Id))
         {
@@ -439,7 +444,8 @@ public partial class LobbyServer : Node
         }
 
         var started = Time.GetTicksMsec();
-        var seed = random.Next();
+        var seed = OS.IsDebugBuild() && int.TryParse(Dev.DevArgs.Get("match-seed"), out var requestedSeed)
+            ? requestedSeed : random.Next();
         var settings = SuburbPlans.Match(tuning, match.Players.Count);
         var plan = SuburbPlans.Generate(settings, seed, () => random.Next());
         var planBytes = PlanCodec.Encode(plan);
@@ -463,6 +469,7 @@ public partial class LobbyServer : Node
         var bytes = w.ToArray();
         foreach (var id in match.Players)
         {
+            if (clients[id].Connection is { } connection) { transport.SetLoading(connection, true); }
             Send(id, bytes, traffic: TrafficClass.ReliableOrdered);
         }
         lobby.Match = match;
@@ -574,10 +581,11 @@ public partial class LobbyServer : Node
     /// Resolves authority requests into ordered canonical grants/refusals, and forwards other match messages with
     /// the sender inserted. Accepted explosions and drops also change the bank.
     /// </summary>
-    private void Relay(Client client, NetMessage message)
+    private void Relay(Client client, NetMessage message, TrafficClass? incoming)
     {
         if (client.Lobby is not { Match: { } match } lobby || !match.Players.Contains(client.Id)) { return; }
         if (lobby.Phase is not (LobbyPhase.Countdown or LobbyPhase.Playing or LobbyPhase.Results) &&
+            !(lobby.Phase == LobbyPhase.Loading && message.Type is Msg.BodyStates or Msg.BodyRest) &&
             message.Type is not (Msg.Claim or Msg.Puncture or Msg.Explode or Msg.Drop)) { return; }
         var includeSender = false;
         switch (message.Payload)
@@ -674,7 +682,7 @@ public partial class LobbyServer : Node
         var traffic = message.Type switch
         {
             Msg.PlayerState => TrafficClass.UnreliablePlayerPoses,
-            Msg.BodyStates => TrafficClass.UnreliableBodyStates,
+            Msg.BodyStates => incoming is { } delivery && delivery.IsReliable() ? delivery : TrafficClass.UnreliableBodyStates,
             _ => TrafficClass.ReliableOrdered,
         };
         foreach (var id in match.Players)
@@ -685,6 +693,12 @@ public partial class LobbyServer : Node
 
     private void PublishAuthority(MatchRun match, AuthorityMessage result)
     {
+        if (Dev.DevArgs.Get("tank-authority-trace") != null)
+        {
+            var time = (double)System.Diagnostics.Stopwatch.GetTimestamp() / System.Diagnostics.Stopwatch.Frequency;
+            var bodies = string.Join(" ", result.Bodies.Select(b => $"{b.Body.Id:x}:{b.Owner}:{b.Body.Epoch}:{b.Body.Sequence}:{b.State}:{b.Rest}"));
+            Log(FormattableString.Invariant($"authority-trace match {match.Id} time {time:0.000000} peer {result.Peer} request {result.Request} reason {result.Reason} bodies {bodies}"));
+        }
         var bytes = MessageCodec.Encode(new NetMessage(Msg.Authority, match.Id, 0, result), fromServer: true);
         if (result.Reason == ClaimRefusal.None)
         {
@@ -721,11 +735,11 @@ public partial class LobbyServer : Node
 
     private void Send(int peer, byte[] bytes, TrafficClass traffic = TrafficClass.ReliableOrdered)
     {
-        if (SendOverride != null) { SendOverride(peer, bytes, traffic == TrafficClass.ReliableOrdered); }
+        if (SendOverride != null) { SendOverride(peer, bytes, traffic); }
         else if (peerIds.Connection(peer) is { } connection)
         {
             var result = transport.Send(connection, traffic, bytes);
-            if (traffic == TrafficClass.ReliableOrdered && result is SendResult.Backpressure or SendResult.Oversized)
+            if (traffic.IsReliable() && result is SendResult.Backpressure or SendResult.Oversized)
             {
                 transport.Disconnect(connection, new DisconnectReason(DisconnectKind.TransportFailure,
                     $"Could not send a required message ({result}). Please reconnect."));
