@@ -56,6 +56,14 @@ One ray-query resource belongs to each detonation: its origin and mask remain fi
 The dense-query harness asserts 1,100 bodies across multiple pages, caller exclusions, short-page hit order and
 occluded/clear receivers on opposite sides of a wall across successive detonations.
 
+Recreate the measured baseline from common dev revision `729c8c8`; the overlay adds timers to original effect paths
+and copies the current dev harness, without any optimized effect, tuning or warm-up code:
+
+```sh
+python3 -B tools/dev/prepare_vent_baseline.py --ref=729c8c8 --output="$PWD/build/pv-before"
+python3 -B tools/dev/measure_vents.py --baseline=build/pv-before --output="$PWD/build/pv-measurements"
+```
+
 `tools/dev/measure_vents.py --baseline=<scratch project> --output=<absolute directory>` alternates two builds
 back to back, twice at 32/64/128/40 tanks in idle/blast/chain phases. It preserves 600 raw samples per run, logs,
 before/after machine load and a summary CSV; missing GPU samples, engine errors or a failed scene abort it.
