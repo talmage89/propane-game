@@ -6,7 +6,7 @@ using Godot;
 
 namespace Propane.Net;
 
-/// <summary>ENet adapter. Channel zero and its reliability modes retain Protocol 2's wire behavior.</summary>
+/// <summary>ENet adapter. Control uses channel zero; reliable body checkpoints use three independent ordered channels.</summary>
 [SuppressMessage("Design", "CA1001", Justification = "Close releases the ENet connection; the RefCounted peer remains reusable for reconnects.")]
 public sealed class NetTransport : IPacketTransport
 {
@@ -32,6 +32,7 @@ public sealed class NetTransport : IPacketTransport
         this.peerIds = peerIds;
         peer.PeerConnected += id =>
         {
+            peer.GetPeer((int)id)?.SetTimeout(32, 3000, 8000);
             var connection = connections.GetValueOrDefault((int)id) ?? Add((int)id);
             connected.Add(connection);
             Connected?.Invoke(connection);
@@ -76,9 +77,32 @@ public sealed class NetTransport : IPacketTransport
         server = false;
         open = error == Error.Ok;
         connection = open ? Add(ServerId) : null;
-        if (open) { peer.GetPeer(ServerId)?.SetTimeout(32, 3000, 8000); }
         return new OpenResult(open, open ? null : error.ToString(), (int)error);
     }
+
+    internal static int Channel(TrafficClass traffic) => traffic switch
+    {
+        TrafficClass.ReliableBodyStates => 1,
+        TrafficClass.ReliableBodyStates2 => 2,
+        TrafficClass.ReliableBodyStates3 => 3,
+        _ => 0,
+    };
+
+    public void SetLoading(ConnectionHandle connection, bool loading)
+    {
+        if (!connected.Contains(connection)) { return; }
+        // Both ends need the longer minimum while the client constructs its world. Once it
+        // reports ready, live players should not linger for the entire construction grace.
+        peer.GetPeer(peerIds.PeerId(connection))?.SetTimeout(32, loading ? 20000 : 3000, loading ? 30000 : 8000);
+    }
+
+    private static TrafficClass ReliableTraffic(int channel) => channel switch
+    {
+        1 => TrafficClass.ReliableBodyStates,
+        2 => TrafficClass.ReliableBodyStates2,
+        3 => TrafficClass.ReliableBodyStates3,
+        _ => TrafficClass.ReliableOrdered,
+    };
 
     public SendResult Send(ConnectionHandle connection, TrafficClass traffic, ReadOnlyMemory<byte> bytes)
     {
@@ -87,8 +111,8 @@ public sealed class NetTransport : IPacketTransport
         var id = peerIds.PeerId(connection);
         if (peer.GetPeer(id) is not { } target || target.GetState() != ENetPacketPeer.PeerState.Connected) { return SendResult.Closed; }
         peer.SetTargetPeer(id);
-        peer.TransferChannel = 0;
-        peer.TransferMode = traffic == TrafficClass.ReliableOrdered ? MultiplayerPeer.TransferModeEnum.Reliable : MultiplayerPeer.TransferModeEnum.Unreliable;
+        peer.TransferChannel = Channel(traffic);
+        peer.TransferMode = traffic.IsReliable() ? MultiplayerPeer.TransferModeEnum.Reliable : MultiplayerPeer.TransferModeEnum.Unreliable;
         var error = peer.PutPacket(bytes.ToArray());
         // Godot exposes no native send-buffer limit. Admission errors it does return still reject the send.
         if (error != Error.Ok) { return error is Error.Unconfigured or Error.InvalidParameter ? SendResult.Closed : SendResult.Backpressure; }
@@ -120,12 +144,13 @@ public sealed class NetTransport : IPacketTransport
                 {
                     var id = peer.GetPacketPeer();
                     var reliable = peer.GetPacketMode() == MultiplayerPeer.TransferModeEnum.Reliable;
+                    var channel = peer.GetPacketChannel();
                     var bytes = peer.GetPacket();
                     if (!connections.TryGetValue(id, out var connection) || !connected.Contains(connection)) { continue; }
                     var stats = counters[connection];
                     stats.PacketsIn++;
                     stats.BytesIn += bytes.Length;
-                    Packet?.Invoke(connection, reliable ? TrafficClass.ReliableOrdered :
+                    Packet?.Invoke(connection, reliable ? ReliableTraffic(channel) :
                         bytes.Length > 0 && bytes[0] == (byte)Msg.BodyStates ? TrafficClass.UnreliableBodyStates : TrafficClass.UnreliablePlayerPoses, bytes);
                 }
             }
@@ -168,6 +193,11 @@ public sealed class NetTransport : IPacketTransport
         if (!counters.TryGetValue(connection, out var stats)) { return default; }
         var target = open && connected.Contains(connection) ? peer.GetPeer(peerIds.PeerId(connection)) : null;
         return stats.Snapshot(pollMs, rtt: target?.GetStatistic(ENetPacketPeer.PeerStatistic.RoundTripTime) ?? 0,
-            nativeLoss: target == null ? null : target.GetStatistic(ENetPacketPeer.PeerStatistic.PacketLoss) / ENetPacketPeer.PacketLossScale);
+            nativeLoss: target == null ? null : target.GetStatistic(ENetPacketPeer.PeerStatistic.PacketLoss) / ENetPacketPeer.PacketLossScale) with
+        {
+            NativeThrottle = target?.GetStatistic(ENetPacketPeer.PeerStatistic.PacketThrottle) / ENetPacketPeer.PacketThrottleScale,
+            NativeThrottleLimit = target?.GetStatistic(ENetPacketPeer.PeerStatistic.PacketThrottleLimit) / ENetPacketPeer.PacketThrottleScale,
+            NativeRttVariance = target?.GetStatistic(ENetPacketPeer.PeerStatistic.RoundTripTimeVariance)
+        };
     }
 }

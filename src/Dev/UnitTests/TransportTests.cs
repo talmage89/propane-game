@@ -47,6 +47,66 @@ public static class TransportTests
 
     public static void Register(TestRunner runner)
     {
+        runner.Run("transport/new checkpoint lanes pass a blocked older snapshot", () =>
+        {
+            using var p = new Pair(new PacketFaults(BodyStall: 2, Loss: 1));
+            Assert(TrafficClass.ReliableBodyStates2.IsReliable() && TrafficClass.ReliableBodyStates3.IsReliable(),
+                "replacement checkpoints are still disposable");
+            p.Send(1, TrafficClass.ReliableBodyStates);
+            p.Send(2, TrafficClass.ReliableBodyStates2);
+            p.Send(3, TrafficClass.ReliableBodyStates3);
+            p.Pump(.1);
+            Assert(p.AtServer.Select(n => n.Bytes[0]).SequenceEqual(new byte[] { 2, 3 }),
+                "older snapshot blocked its replacements");
+            p.Pump(2);
+            Assert(p.AtServer.Select(n => n.Bytes[0]).SequenceEqual(new byte[] { 2, 3, 1 }),
+                "late reliable snapshot disappeared");
+        });
+        runner.Run("transport/stalled motion checkpoints cannot delay reliable control", () =>
+        {
+            Assert(NetTransport.Channel(TrafficClass.ReliableBodyStates) != NetTransport.Channel(TrafficClass.ReliableOrdered),
+                "native checkpoints still share control retransmission ordering");
+            using var p = new Pair(new PacketFaults(BodyStall: 2, Loss: 1));
+            p.Send(1, TrafficClass.ReliableBodyStates);
+            p.Send(2);
+            p.Pump(.1);
+            Assert(p.AtServer.Select(n => n.Bytes[0]).SequenceEqual(new byte[] { 2 }), "body stall held a control message behind its checkpoint");
+            p.Pump(2);
+            Assert(p.AtServer.Select(n => n.Bytes[0]).SequenceEqual(new byte[] { 2, 1 }) &&
+                p.AtServer.Last().Traffic == TrafficClass.ReliableBodyStates, "independent reliable checkpoint disappeared under disposable loss");
+        });
+        runner.Run("transport/checkpoint backend pressure preserves each lane without blocking control", () =>
+        {
+            using var p = new Pair(new PacketFaults());
+            p.RawClient.BlockTraffic = TrafficClass.ReliableBodyStates;
+            p.Send(1, TrafficClass.ReliableBodyStates);
+            p.Send(2);
+            p.Send(3, TrafficClass.ReliableBodyStates);
+            p.Send(4);
+            p.Pump();
+            Assert(p.AtServer.Select(n => n.Bytes[0]).SequenceEqual(new byte[] { 2, 4 }), "checkpoint pressure blocked ordered control");
+            p.RawClient.BlockTraffic = null;
+            p.Pump();
+            Assert(p.AtServer.Select(n => n.Bytes[0]).SequenceEqual(new byte[] { 2, 4, 1, 3 }), "checkpoint retry reordered or lost its lane");
+        });
+        runner.Run("transport/both reliable lanes retain independent order through jitter", () =>
+        {
+            using var p = new Pair(new PacketFaults(.05, .3, Loss: 1));
+            for (byte i = 0; i < 40; i++)
+            {
+                p.Send(i);
+                p.Send((byte)(i + 100), TrafficClass.ReliableBodyStates);
+                p.Server.Send(p.ServerHandle, TrafficClass.ReliableOrdered, new byte[] { i });
+                p.Server.Send(p.ServerHandle, TrafficClass.ReliableBodyStates, new byte[] { (byte)(i + 100) });
+            }
+            p.Pump(.4);
+            var ordered = Enumerable.Range(0, 40).Select(i => (byte)i);
+            Assert(p.AtServer.Where(n => n.Traffic == TrafficClass.ReliableOrdered).Select(n => n.Bytes[0]).SequenceEqual(ordered), "control lane reordered");
+            Assert(p.AtServer.Where(n => n.Traffic == TrafficClass.ReliableBodyStates).Select(n => (byte)(n.Bytes[0] - 100)).SequenceEqual(ordered), "checkpoint lane reordered");
+            p.Pump(.4);
+            Assert(p.AtClient.Where(n => n[0] < 100).Select(n => n[0]).SequenceEqual(ordered) &&
+                p.AtClient.Where(n => n[0] >= 100).Select(n => (byte)(n[0] - 100)).SequenceEqual(ordered), "incoming lane order failed");
+        });
         runner.Run("transport/reliable order survives seeded jitter in both directions", () =>
         {
             using var p = new Pair(new PacketFaults(.05, .3));
@@ -269,6 +329,74 @@ public static class TransportTests
 
     private static void RegisterClientTests(TestRunner runner)
     {
+        runner.Run("transport/client services catch-up physics without a process frame", () =>
+        {
+            var network = new LoopbackNetwork();
+            var clock = new Clock();
+            var rawServer = network.Create();
+            var rawClient = network.Create();
+            var server = new LobbyServer(new ServerTransport(rawServer, rawServer.PeerIds), clock) { Port = Endpoint.Port };
+            var client = new NetClient(rawClient, clock);
+            try
+            {
+                server.Start(); client._Ready(); client.Connect("", Endpoint.Port, "Physics", 0);
+                for (var step = 0; step < 6; step++) { client._PhysicsProcess(1.0 / 120); server._Process(0); }
+                Assert(client.State == NetClient.Status.Connected, "physics steps did not service the handshake");
+                client.CreateLobby();
+                for (var step = 0; step < 4; step++) { client._PhysicsProcess(1.0 / 120); server._Process(0); }
+                Assert(client.Lobby != null, "physics steps did not deliver queued reliable control");
+                var before = client.Diagnostics.PacketsOut;
+                clock.Seconds += 1.1;
+                for (var step = 0; step < 8; step++) { client._PhysicsProcess(1.0 / 120); client._Process(0); }
+                Assert(client.Diagnostics.PacketsOut == before + 1, "catch-up and process polls multiplied the ping rate");
+            }
+            finally { client._ExitTree(); server._ExitTree(); client.Free(); server.Free(); }
+        });
+        runner.Run("transport/loading grace ends on readiness even after the loading deadline", () =>
+        {
+            var network = new LoopbackNetwork();
+            var clock = new Clock();
+            var rawServer = network.Create();
+            var rawClient = network.Create();
+            var serverTransport = new FaultPacketTransport(rawServer, clock, 1, new PacketFaults());
+            var clientTransport = new FaultPacketTransport(rawClient, clock, 2, new PacketFaults());
+            var server = new LobbyServer(new ServerTransport(serverTransport, rawServer.PeerIds), clock) { Port = Endpoint.Port };
+            var client = new NetClient(clientTransport, clock);
+            try
+            {
+                server.Start(); client._Ready(); client.Connect("", Endpoint.Port, "Builder", 0);
+                void Pump() { client._Process(0); server._Process(0); }
+                for (var i = 0; i < 6; i++) { Pump(); }
+                client.CreateLobby();
+                for (var i = 0; i < 4; i++) { Pump(); }
+                MatchSetup? setup = null;
+                client.MatchStarting += value => setup = value;
+                client.StartMatch();
+                for (var i = 0; i < 4; i++) { Pump(); }
+                Assert(setup != null && rawServer.Loading.Values.Single() && rawClient.Loading.Values.Single(),
+                    "construction did not extend both native endpoints through the decorator");
+                var events = new List<Msg>();
+                client.AttachMatch(setup!.Id, message => events.Add(message.Type));
+                clock.Seconds += 25;
+                for (var i = 0; i < 4; i++) { Pump(); }
+                clock.Seconds += 5;
+                for (var i = 0; i < 4; i++) { Pump(); }
+                Assert(events.Contains(Msg.MatchGo) && rawServer.Loading.Values.Single(),
+                    "countdown revoked a late builder's grace before readiness");
+                client.Send(new NetWriter(Msg.Loaded, setup!.Id));
+                for (var i = 0; i < 4; i++) { Pump(); }
+                Assert(!rawServer.Loading.Values.Single() && !rawClient.Loading.Values.Single(),
+                    "a late Loaded left the live match with construction disconnect latency");
+                // Leaving releases an unfinished loading grace without Loaded.
+                clientTransport.SetLoading(rawClient.Loading.Keys.Single(), true);
+                serverTransport.SetLoading(rawServer.Loading.Keys.Single(), true);
+                client.LeaveLobby();
+                for (var i = 0; i < 4; i++) { Pump(); }
+                Assert(!rawServer.Loading.Values.Single() && !rawClient.Loading.Values.Single(),
+                    "leaving construction retained a long timeout");
+            }
+            finally { client._ExitTree(); server._ExitTree(); client.Free(); server.Free(); }
+        });
         runner.Run("transport/client and server handshake, lobby, disconnect and reconnect", () =>
         {
             var network = new LoopbackNetwork();

@@ -580,8 +580,10 @@ public sealed class Bot : IBotBrain
                                                  node is not PropaneTank { State: PropaneTank.TankState.Exploded } &&
                                                  node is not AmmoPickup { Available: false };
 
-    private void Blacklist(Node3D node, float seconds)
+    internal void Blacklist(Node3D node, float seconds)
     {
+        // Fleeing can bypass retargeting while a previous tank is freed by an authoritative explosion.
+        if (!GodotObject.IsInstanceValid(node)) { return; }
         blacklist[node.GetInstanceId()] = clock + seconds;
         BlacklistedTargets++;
     }
