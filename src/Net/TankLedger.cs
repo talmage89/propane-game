@@ -16,7 +16,7 @@ public sealed class TankLedger
 {
     public enum State { Intact, Venting, Exploded }
     private readonly Dictionary<uint, BodyAuthority> bodies = new();
-    private readonly HashSet<(int Peer, uint Request)> explosions = new();
+    private readonly Dictionary<(int Peer, uint Request), int> explosions = new();
     private readonly Dictionary<uint, (uint Epoch, uint Sequence)> gathers = new();
 
     public TankLedger(SuburbPlan plan, int host)
@@ -57,9 +57,10 @@ public sealed class TankLedger
         return Result(peer, claim.Request, reason, claim.Bodies.Select(c => c.Id));
     }
 
-    public AuthorityMessage Puncture(int peer, PunctureMessage puncture, bool allowed)
+    public AuthorityMessage Puncture(int peer, PunctureMessage puncture, int actorId, bool allowed)
     {
         var reason = Check(peer, puncture.Cause, new[] { (puncture.Id, puncture.Epoch) }, allowed);
+        if (reason == ClaimRefusal.None && puncture.Cause != 0 && explosions[(peer, puncture.Cause)] != actorId) reason = ClaimRefusal.Cause;
         if (reason == ClaimRefusal.None && (puncture.Id >= BodySync.CarBase || bodies[puncture.Id].State != State.Intact))
         {
             reason = ClaimRefusal.Lifecycle;
@@ -71,20 +72,23 @@ public sealed class TankLedger
             {
                 State = State.Venting,
                 Vent = new VentParameters(puncture.Hole, puncture.Normal, puncture.Swirl),
+                CauseActorId = actorId,
             };
         }
         return Result(peer, puncture.Request, reason, new[] { puncture.Id });
     }
 
-    public AuthorityMessage Detonate(int peer, ExplodeMessage explosion, bool allowed)
+    public AuthorityMessage Detonate(int peer, ExplodeMessage explosion, int actorId, bool allowed)
     {
         var reason = Check(peer, explosion.Cause, new[] { (explosion.Id, explosion.Epoch) }, allowed);
+        if (reason == ClaimRefusal.None && explosions.ContainsKey((peer, explosion.Request))) reason = ClaimRefusal.DuplicateRequest;
+        if (reason == ClaimRefusal.None && explosion.Cause != 0 && explosions[(peer, explosion.Cause)] != actorId) reason = ClaimRefusal.Cause;
         if (reason == ClaimRefusal.None && explosion.Id >= BodySync.CarBase) { reason = ClaimRefusal.Lifecycle; }
         if (reason == ClaimRefusal.None)
         {
             var current = bodies[explosion.Id];
-            bodies[explosion.Id] = Grant(current, peer, current.Body, rest: true) with { State = State.Exploded, Center = explosion.Center };
-            explosions.Add((peer, explosion.Request));
+            bodies[explosion.Id] = Grant(current, peer, current.Body, rest: true) with { State = State.Exploded, Center = explosion.Center, CauseActorId = actorId };
+            explosions.Add((peer, explosion.Request), actorId);
             if (explosion.Id < BodySync.DropTankBase) { MapDetonations++; }
             else { DropDetonations++; }
         }
@@ -149,7 +153,7 @@ public sealed class TankLedger
         var group = expected.ToArray();
         if (group.Any(item => !bodies.ContainsKey(item.Id))) { return ClaimRefusal.UnknownBody; }
         if (!allowed) { return ClaimRefusal.WrongPhase; }
-        if (cause != 0 && !explosions.Contains((peer, cause))) { return ClaimRefusal.Cause; }
+        if (cause != 0 && !explosions.ContainsKey((peer, cause))) { return ClaimRefusal.Cause; }
         if (group.Any(item => bodies[item.Id].State == State.Exploded)) { return ClaimRefusal.Exploded; }
         if (group.Any(item => bodies[item.Id].Body.Epoch != item.Epoch)) { return ClaimRefusal.StaleEpoch; }
         return ClaimRefusal.None;

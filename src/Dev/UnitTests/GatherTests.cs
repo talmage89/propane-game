@@ -162,7 +162,7 @@ public static class GatherTests
             Assert(ledger.Get(state.Id)!.Body.Sequence == 0, "partial group mutated");
             Assert(ledger.Gather(2, 2, message, true), "valid gather refused");
             Assert(!ledger.Gather(2, 2, message, true), "duplicate accepted");
-            ledger.Puncture(2, new PunctureMessage(state.Id, state.Transform, Vector3.Zero, Vector3.Zero, Vector3.Right, Vector3.Right, 1), true);
+            ledger.Puncture(2, new PunctureMessage(state.Id, state.Transform, Vector3.Zero, Vector3.Zero, Vector3.Right, Vector3.Right, 1), 102, true);
             Assert(!ledger.Gather(2, 2, message with { Bodies = new[] { state with { Epoch = 2, Sequence = 2 } } }, true), "venting gather accepted");
         });
     }

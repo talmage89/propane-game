@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 using Godot;
 using Propane.Core;
@@ -136,6 +137,9 @@ public partial class SessionActorsTests : Node
     private async Task Run()
     {
         await Ticks(6).ConfigureAwait(true);
+        Require(actors.Select(a => a.ActorId).Distinct().Count() == actors.Length && actors.All(a => a.ActorId > 0 && session.Actor(a.ActorId) == a.Runtime),
+            "offline actor identities are missing or shared");
+        Require(views[0].LocalViewId > 0 && views[1].LocalViewId > views[0].LocalViewId, "local view identities are missing or reused");
         Require(views[0].CameraRig.GetWorld3D() == session.World.Physics && views[1].CameraRig.GetWorld3D() == session.World.Physics,
             "views did not share the simulation World3D");
         var yaw = actors[0].Aim.Yaw;
@@ -189,6 +193,9 @@ public partial class SessionActorsTests : Node
         session.CloseView(views[0]);
         Require(GodotObject.IsInstanceValid(first) && first.Runtime.IntentSource == null && session.LocalViews.Count == 1,
             "closing a view retired its actor or kept the device");
+        var replacement = session.AddLocalView(first.Runtime, GetViewport());
+        Require(replacement.LocalViewId > views[1].LocalViewId, "closing a view recycled its identity");
+        session.CloseView(replacement);
         var before = actors[1].GlobalPosition;
         Send(new InputEventJoypadMotion { Device = 7, Axis = JoyAxis.LeftY, AxisValue = -1 });
         await Ticks(30).ConfigureAwait(true);

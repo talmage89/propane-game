@@ -12,7 +12,7 @@ PORT ?= $(if $(SLOT),$(shell echo $$((24680 + $(SLOT)))),24680)
 SERVER ?= 127.0.0.1:$(PORT)
 
 .DEFAULT_GOAL := help
-.PHONY: help setup run build lint check test test-core test-behavior test-generator test-world test-full server bots bots-stop package deploy release-patch release-minor release-major
+.PHONY: help setup run build lint check test test-core test-behavior test-generator test-world test-full test-capacity server bots bots-stop package deploy release-patch release-minor release-major
 
 help: ## List the tasks
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN { FS = ":.*## " } { printf "  make %-14s %s\n", $$1, $$2 }'
@@ -46,6 +46,7 @@ test-core: build ## Run checker, platform, movement and unit assertions
 	python3 -B tools/dev/check_world_tests.py
 	python3 -B tools/dev/time_gate_tests.py
 	python3 -B tools/dev/check_scores_tests.py
+	python3 -B tools/dev/check_capacity_tests.py
 	python3 -B tools/dev/compare_vents_tests.py
 	python3 -B tools/dev/compare_tanks_tests.py
 	python3 -B tools/dev/net_bots_tests.py
@@ -54,6 +55,7 @@ test-core: build ## Run checker, platform, movement and unit assertions
 	"$(GODOT)" --headless --path . res://scenes/dev/shutdown_tests.tscn -- --paused --window-close --repeat-quit
 
 test-behavior: build ## Run isolated physics, navigation, menu, grip and feet probes
+	GODOT="$(GODOT)" python3 -B tools/dev/check_shader_capacity.py
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/rifle_reach_tests.tscn
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/animation_review.tscn -- --cases=walk_000 --assert-motion --assert-spawn
 	"$(GODOT)" --headless --path . res://scenes/dev/server_tuning_tests.tscn -- --server --tune.MaxPlayers=6 --port=$(PORT)
@@ -62,6 +64,7 @@ test-behavior: build ## Run isolated physics, navigation, menu, grip and feet pr
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/body_correction_tests.tscn
 	GODOT="$(GODOT)" python3 -B tools/dev/check_lab.py
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/session_actors_tests.tscn
+	for count in 2 8 16; do "$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/capacity_ui_tests.tscn -- --players=$$count || exit; done
 	python3 -B tools/dev/animation_review_tests.py
 	@mkdir -p build/animation-review-gate
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/animation_review.tscn -- --cases=walk_000,jog_000,creep_000,creep_180,creep_090,sprint,aim_idle --metrics=$(CURDIR)/build/animation-review-gate/metrics.csv
@@ -108,14 +111,19 @@ test-full: test ## Run the gate plus deep sweeps
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/animation_review.tscn -- --metrics=$(CURDIR)/build/animation-review-full/metrics.csv --assert-motion --assert-grip
 	python3 -B tools/dev/animation_metrics.py build/animation-review-full/metrics.csv --output build/animation-review-full/results.json --strict
 	tools/dev/net_bots.sh -p "$(PORT)" -o "$(CURDIR)/build/rifle-soak-gate" -n 4 -w 0 -l 90 -s '--match-seed=25' -- --melee-start --net-seed=2 --net-lag=120 --net-jitter=30 --net-loss=3
+	tools/dev/net_bots.sh -p "$(PORT)" -n 2 -w 0 -l 20 -s '--start-score=8 --match-seed=23' -o "$(CURDIR)/build/duel-lane-gate" -- --scenario=duel --matches=2 --duel-blocked --tune.DropScatter=0 --tune.DropToss=0 --net-lag=120 --net-jitter=30 --net-loss=3
 	GODOT="$(GODOT)" python3 -B tools/dev/check_lab.py --full
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/upright_pile_tests.tscn -- --deep --awake
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/menu_test.tscn -- --scenario=lifetime --port=$(PORT)
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/player_range.tscn -- --scenario=melee-reloads --assert-motion --assert-grip
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/player_range.tscn -- --scenario=recoil --stance=air --assert-grip --assert-motion
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/player_range.tscn -- --scenario=bot-recoil
+	tools/dev/net_bots.sh -p "$(PORT)" -n 2 -l 20 -o "$(CURDIR)/build/loading-readiness-gate" -- --scenario=body-stream --tank-check-ready-stall=Bot2
 	"$(GODOT)" --headless --path . res://scenes/dev/generator_tests.tscn -- --seeds=200 --large-seeds=100 --formation-seeds=6
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/bot_navigation_course.tscn -- --seeds=100
+
+test-capacity: build ## Repeat the separate-client tested-capacity gate (three clean and three faulted matches)
+	tools/dev/capacity_acceptance.sh
 
 server: build ## Run a multiplayer server here (PORT, default 24680, or this worktree's)
 	"$(GODOT)" --headless --path . -- --server --port=$(PORT)

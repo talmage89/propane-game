@@ -131,7 +131,7 @@ public sealed class BankingBot : IPlayerInputSource, System.IDisposable
                 var forward = Flat(-player.Aim.EyeTransform.Basis.Z).Normalized();
                 intent.MeleePressed = player.CanMelee && MeleeContact.InArc(direction, forward, reach, tuning.MeleeHalfAngleDegrees);
                 MoveToward(player, direction);
-                Status = $"melee {close.PeerId} at {direction.Length():0.0} m";
+                Status = $"melee {close.ActorId} at {direction.Length():0.0} m";
                 Navigate(match, dt);
                 return;
             }
@@ -141,8 +141,8 @@ public sealed class BankingBot : IPlayerInputSource, System.IDisposable
         //    line of sight. A shooter holding more gets shot back.
         if (match.MyScore > 0 && match.Now - match.LastHitTime < 2.5)
         {
-            var shooter = match.RemoteBodies.FirstOrDefault(b => b.PeerId == match.LastHitBy);
-            if (shooter != null && match.Scores.GetValueOrDefault(shooter.PeerId) < match.MyScore && CanSee(shooter, here + Vector3.Up * 1.2f))
+            var shooter = match.RemoteBodies.FirstOrDefault(b => b.ActorId == match.LastHitBy);
+            if (shooter != null && match.Scores.GetValueOrDefault(shooter.ActorId) < match.MyScore && CanSee(shooter, here + Vector3.Up * 1.2f))
             {
                 coverTimer -= dt;
                 if (cover == null || coverTimer <= 0 && CanSeeFrom(shooter, cover.Value + Vector3.Up * 1.2f))
@@ -166,7 +166,7 @@ public sealed class BankingBot : IPlayerInputSource, System.IDisposable
         if (protecting)
         {
             var watcher = match.RemoteBodies.Where(e => !e.IsRagdolled && e.GlobalPosition.DistanceTo(here) < 45f &&
-                                                        match.Scores.GetValueOrDefault(e.PeerId) <= match.MyScore && CanSee(e, here + Vector3.Up * 1.2f))
+                                                        match.Scores.GetValueOrDefault(e.ActorId) <= match.MyScore && CanSee(e, here + Vector3.Up * 1.2f))
                 .OrderBy(e => e.GlobalPosition.DistanceTo(here)).FirstOrDefault();
             if (watcher != null)
             {
@@ -181,7 +181,7 @@ public sealed class BankingBot : IPlayerInputSource, System.IDisposable
                     Face(player, cover.Value + Vector3.Up * 1.4f, dt);
                     MoveToward(player, Flat(cover.Value - here));
                     intent.Sprint = true;
-                    Status = $"protecting {match.MyScore}: hiding from {watcher.PeerId}";
+                    Status = $"protecting {match.MyScore}: hiding from {watcher.ActorId}";
                     Navigate(match, dt);
                     return;
                 }
@@ -244,7 +244,7 @@ public sealed class BankingBot : IPlayerInputSource, System.IDisposable
     private static bool Protecting(IBankingBotWorld match)
     {
         var mine = match.MyScore;
-        var best = match.Scores.Where(s => s.Key != match.Player.PeerId).Select(s => s.Value).DefaultIfEmpty(0).Max();
+        var best = match.Scores.Where(s => s.Key != match.Player.ActorId).Select(s => s.Value).DefaultIfEmpty(0).Max();
         return mine >= 4 && (mine > best || match.TimeLeft < 40f);
     }
 
@@ -280,11 +280,11 @@ public sealed class BankingBot : IPlayerInputSource, System.IDisposable
         // Players worth shooting: in sight, in range, with tanks to spill.
         foreach (var enemy in match.RemoteBodies)
         {
-            var banked = match.Scores.GetValueOrDefault(enemy.PeerId);
+            var banked = match.Scores.GetValueOrDefault(enemy.ActorId);
             var distance = enemy.GlobalPosition.DistanceTo(here);
             // A fight costs ammo and invites return fire: worth it for a real bank, for a cheap close one, or
             // against whoever just shot this bot.
-            var avenging = enemy.PeerId == match.LastHitBy && match.Now - match.LastHitTime < 3;
+            var avenging = enemy.ActorId == match.LastHitBy && match.Now - match.LastHitTime < 3;
             var worth = protecting ? banked > match.MyScore : banked >= 3 || banked >= 1 && distance < 18f || avenging && banked > 0;
             if (blacklist.ContainsKey(enemy.GetInstanceId()) || !worth || distance > PlayerRange || !CanSee(player, Aim(enemy)))
             {
@@ -322,7 +322,7 @@ public sealed class BankingBot : IPlayerInputSource, System.IDisposable
             // A pile with a rival beside it: setting it off throws them, spilling five.
             foreach (var enemy in match.RemoteBodies)
             {
-                if (!enemy.IsRagdolled && match.Scores.GetValueOrDefault(enemy.PeerId) > 0 &&
+                if (!enemy.IsRagdolled && match.Scores.GetValueOrDefault(enemy.ActorId) > 0 &&
                     enemy.GlobalPosition.DistanceTo(at) < tuning.RagdollRadius)
                 {
                     score += 30f;
@@ -382,7 +382,7 @@ public sealed class BankingBot : IPlayerInputSource, System.IDisposable
             intent.FireHeld = true;
             intent.FirePressed = true;
         }
-        Status = $"fighting {enemy.PeerId} at {distance:0.0} m, error {error:0.00} m, firing {firing}";
+        Status = $"fighting {enemy.ActorId} at {distance:0.0} m, error {error:0.00} m, firing {firing}";
     }
 
     private void Demolish(IBankingBotWorld match, PlayerCharacter player, PropaneTank tank, float dt)

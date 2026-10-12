@@ -9,10 +9,20 @@ def check(paths):
     if len(paths) < 2:
         raise ValueError("provide a server log and at least one bot log")
     audits = {}
+    server_standings = {}
     with open(paths[0], errors="replace") as source:
         for line in source:
             match = re.search(r"match (\d+): bank audit initial=(\d+) map=(\d+) drops=(\d+) spills=(\d+) banked=(\d+) expected=(-?\d+) ok=(True|False)", line)
             if not match:
+                standing = re.search(r"standings match (\d+): (.*)", line)
+                if standing:
+                    scores = {}
+                    for entry in standing[2].split():
+                        parsed = re.fullmatch(r"([1-9]\d*)=(\d+)", entry)
+                        if not parsed or int(parsed[1]) in scores:
+                            raise ValueError("malformed or duplicate server standing")
+                        scores[int(parsed[1])] = int(parsed[2])
+                    server_standings[int(standing[1])] = scores
                 continue
             match_id, initial, original, drops, spills, banked, expected = map(int, match.groups()[:-1])
             if initial + original + drops - spills != banked or expected != banked or match[8] != "True":
@@ -41,6 +51,8 @@ def check(paths):
             scores = finished.get(match_id)
             if scores is None or sum(scores.values()) != banked:
                 raise ValueError(f"{path}: match {match_id} final scores {scores}, server bank {banked}")
+            if match_id in server_standings and scores != server_standings[match_id]:
+                raise ValueError(f"{path}: match {match_id} individual scores disagree with server: {scores}, expected {server_standings[match_id]}")
             if match_id in agreed and scores != agreed[match_id]:
                 raise ValueError(f"{path}: match {match_id} individual scores disagree: {scores}, expected {agreed[match_id]}")
             agreed[match_id] = scores

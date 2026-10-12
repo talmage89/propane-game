@@ -72,6 +72,7 @@ public partial class PropaneTank : RigidBody3D
 
     /// <summary>Immutable initiating explosion request for a network chain; 0 for a direct shot.</summary>
     public uint ChainCause { get; private set; }
+    public int CauseActorId { get; private set; }
 
     /// <summary>Assigned by the match before this explosion starts its child chain.</summary>
     public uint BlastRequest { get; set; }
@@ -205,13 +206,14 @@ public partial class PropaneTank : RigidBody3D
     /// A bullet hit at a world point with the surface normal there. Returns false if the tank ignored it (it is
     /// shielded or already gone).
     /// </summary>
-    public bool TakeShot(Vector3 point, Vector3 normal, Vector3 shotDirection)
+    public bool TakeShot(Vector3 point, Vector3 normal, Vector3 shotDirection, int causeActorId = 0)
     {
         if (Invulnerable)
         {
             return false;
         }
         ChainCause = 0;
+        CauseActorId = causeActorId;
         switch (State)
         {
             case TankState.Intact:
@@ -263,13 +265,14 @@ public partial class PropaneTank : RigidBody3D
     }
 
     /// <summary>A blast went off within chain range: punctures an intact tank, or detonates a venting one after a fuse.</summary>
-    public void ChainHit(Vector3 blastCenter, float distance, uint cause = 0)
+    public void ChainHit(Vector3 blastCenter, float distance, uint cause = 0, int causeActorId = 0)
     {
         if (State == TankState.Exploded || fuseLit || Invulnerable)
         {
             return;
         }
         ChainCause = cause;
+        CauseActorId = causeActorId;
         if (State == TankState.Intact)
         {
             var (point, normal) = SurfaceFacing(blastCenter);
@@ -333,6 +336,7 @@ public partial class PropaneTank : RigidBody3D
     }
 
     /// <summary>Blows the tank apart: effects, debris, scorch, and the blast itself, which can set off other tanks.</summary>
+    public void Detonate(int causeActorId) { CauseActorId = causeActorId; Detonate(); }
     public void Detonate() => Explode(GlobalTransform * LocalCenter, chain: true);
 
     /// <summary>

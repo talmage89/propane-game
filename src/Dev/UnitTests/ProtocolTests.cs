@@ -25,6 +25,12 @@ public static class ProtocolTests
             Packet(Msg.CreateLobby, new EmptyMessage()), Packet(Msg.JoinLobby, new IntMessage(1)), Packet(Msg.LeaveLobby, new EmptyMessage()),
             Packet(Msg.SetProfile, new ProfileMessage("Test", AppearanceRecord.FromPalette(1))), Packet(Msg.SetMatchLength, new FloatMessage(90)),
             Packet(Msg.StartMatch, snapshot), Packet(Msg.Loaded, new EmptyMessage()), Packet(Msg.ClaimPickup, new IntMessage(0)),
+            Packet(Msg.SetCapacity, new IntMessage(16)),
+            Packet(Msg.AddActor, new AddActorMessage(1, ActorKind.Bot, "Bot", profile.Appearance, ControllerConfig.Bot)),
+            Packet(Msg.UpdateActor, new UpdateActorMessage(2, profile.Id, "New", profile.Appearance, ControllerConfig.Human)),
+            Packet(Msg.RemoveActor, new RemoveActorMessage(3, profile.Id)),
+            Packet(Msg.RosterState, new RosterStateMessage(1, 4, new[] { profile })),
+            Packet(Msg.ActorRequestResult, new ActorRequestResultMessage(3, true, 4, "")),
             Packet(Msg.Ping, new TimeMessage(1)), Packet(Msg.Welcome, new WelcomeMessage(2, BuildInfo.GameVersion)),
             Packet(Msg.Rejected, new RejectedMessage("Update", "0.3.0")),
             Packet(Msg.LobbyList, new LobbyListMessage(5, new[] { new LobbySummary(1, "Test", 1, LobbyServer.LobbyPhase.Waiting) })),
@@ -55,7 +61,7 @@ public static class ProtocolTests
         };
     }
 
-    private static NetMessage Packet(Msg type, object payload) => new(type, Protocol.IsMatch(type) ? 7 : 0, Protocol.IsRelay(type) ? 2 : 0, payload);
+    private static NetMessage Packet(Msg type, object payload) => new(type, Protocol.IsMatch(type) ? 7 : 0, Protocol.IsRelay(type) ? 2 : 0, payload, Protocol.IsActorMessage(type) ? 2 : 0, Protocol.IsActorMessage(type) ? 1u : 0, Protocol.IsActorMessage(type) ? 1u : 0);
 
     public static void Register(TestRunner runner)
     {
@@ -64,7 +70,7 @@ public static class ProtocolTests
             Enum.GetValues<Msg>().Order().SequenceEqual(fixtures.Select(f => f.Type).Order()), "missing or duplicate message fixture"));
         foreach (var fixture in fixtures)
         {
-            var fromServer = fixture.Type is >= Msg.Welcome and <= Msg.Authority;
+            var fromServer = fixture.Type is >= Msg.Welcome and <= Msg.ActorRequestResult;
             RoundTrip(runner, fixture, fromServer);
             if (Protocol.IsRelay(fixture.Type) && fixture.Type is not (Msg.Claim or Msg.Puncture or Msg.Explode)) { RoundTrip(runner, fixture, true); }
         }
