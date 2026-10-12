@@ -68,12 +68,12 @@ The authored animation redo changes the presentation tuner schema and therefore 
 
 ### Animation redo accuracy review
 
-The animation branch's independent comparison with the reach hotfix (`729c8c8`) preserves the nine owner
+The animation branch's independent comparison with integrated dev (`3a204a8`) preserves the nine owner
 magazines' climb and retention. All barrel/tracer checks remain within 0.05 degrees. It does **not**
 preserve deterministic bot hit counts: at 8/20 m, easy bots change from 164/100 to 166/115 hits, hard bots from
 188/182 to 197/184, and simple bots from 193/194 to 204/194, each out of 300 shots.
 
-An instrumented 60-shot comparison finds identical primary ray inputs and random state. On shot 55 both
+An instrumented 60-shot comparison finds identical primary ray inputs and random state. On shots 55 and 59 both
 primary rays miss, but the new carry's different muzzle origin makes its secondary obstruction ray hit the
 target. Rifle placement therefore affects gameplay outcomes even when logical aim, spread, timing and the hit
 query rules are unchanged. Matching the old counts is an unresolved acceptance requirement; changing or
