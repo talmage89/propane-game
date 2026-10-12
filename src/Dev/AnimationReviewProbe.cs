@@ -21,7 +21,7 @@ public partial class AnimationReviewProbe : SkeletonModifier3D
     public override void _Ready()
     {
         writer = new StreamWriter(Output);
-        writer.WriteLine("case,time,localTime,speed,aim,hipAimYaw,leftX,leftY,leftZ,rightX,rightY,rightZ,pelvisY,headY,kneeGap,thighGap,stockHead,stockShoulder");
+        writer.WriteLine("case,time,localTime,speed,aim,hipAimYaw,leftX,leftY,leftZ,rightX,rightY,rightZ,pelvisY,headY,kneeGap,thighGap,stockHead,stockShoulder,phase");
     }
 
     public override void _ProcessModificationWithDelta(double delta)
@@ -62,9 +62,14 @@ public partial class AnimationReviewProbe : SkeletonModifier3D
             var thighGap = SegmentGap(Bone("thigh_l"), Bone("calf_l"), Bone("thigh_r"), Bone("calf_r"));
             var episode = CaseAt(Clock.Now);
             var speed = new Vector2(Player.Velocity.X, Player.Velocity.Z).Length();
+#if PROPANE_REVIEW_RELEASE
+            var phase = 0f;
+#else
+            var phase = bones.GetNode<FootPlacement>("Feet").Pose.Phase;
+#endif
             var values = new[] { Clock.Now, episode.LocalTime, speed, Player.AimAmount, yaw,
                 left.X, left.Y, left.Z, right.X, right.Y, right.Z, Bone("pelvis").Y - Player.GlobalPosition.Y,
-                Bone("Head").Y - Player.GlobalPosition.Y, kneeGap, thighGap, head, shoulder };
+                Bone("Head").Y - Player.GlobalPosition.Y, kneeGap, thighGap, head, shoulder, phase };
             if (values.Any(v => !float.IsFinite(v))) throw new InvalidOperationException("non-finite final pose");
             writer!.WriteLine(episode.Name + "," + string.Join(",", values.Select(v => v.ToString("R", System.Globalization.CultureInfo.InvariantCulture))));
         }
@@ -119,7 +124,7 @@ public partial class AnimationReviewProbe : SkeletonModifier3D
         return p.DistanceTo(a + axis * Mathf.Clamp((p - a).Dot(axis) / axis.LengthSquared(), 0, 1));
     }
 
-    private static float SegmentGap(Vector3 a, Vector3 b, Vector3 c, Vector3 d)
+    internal static float SegmentGap(Vector3 a, Vector3 b, Vector3 c, Vector3 d)
     {
         // Convex distance along one segment; ternary search avoids parallel-segment singularities.
         var low = 0f;

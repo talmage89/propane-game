@@ -57,7 +57,7 @@ test-behavior: build ## Run isolated physics, navigation, menu, grip and feet pr
 	python3 -B tools/dev/animation_review_tests.py
 	@mkdir -p build/animation-review-gate
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/animation_review.tscn -- --cases=walk_000,jog_000,creep_000,creep_180,creep_090,sprint,aim_idle --metrics=$(CURDIR)/build/animation-review-gate/metrics.csv
-	python3 -B tools/dev/animation_metrics.py build/animation-review-gate/metrics.csv --output build/animation-review-gate/results.json
+	python3 -B tools/dev/animation_metrics.py build/animation-review-gate/metrics.csv --output build/animation-review-gate/results.json --strict
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/world_services_tests.tscn
 	"$(GODOT)" --headless --path . --fixed-fps 60 res://scenes/dev/blast_query_tests.tscn
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/upright_pile_tests.tscn
@@ -93,6 +93,9 @@ test-world: build ## Compare all formations built in two fresh processes
 	tools/dev/check_world.sh
 
 test-full: test ## Run the gate plus deep sweeps
+	@mkdir -p build/animation-review-full
+	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/animation_review.tscn -- --metrics=$(CURDIR)/build/animation-review-full/metrics.csv --assert-motion --assert-grip
+	python3 -B tools/dev/animation_metrics.py build/animation-review-full/metrics.csv --output build/animation-review-full/results.json --strict
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/upright_pile_tests.tscn -- --deep --awake
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/menu_test.tscn -- --scenario=lifetime --port=$(PORT)
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/player_range.tscn -- --scenario=melee-reloads --assert-motion --assert-grip

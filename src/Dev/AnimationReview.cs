@@ -87,6 +87,12 @@ public partial class AnimationReview : Node3D
         caption.AddThemeFontSizeOverride("font_size", 22);
         canvas.AddChild(caption);
         var director = new CaptureDirector();
+#if !PROPANE_REVIEW_RELEASE
+        var motion = DevArgs.Get("motion-metrics") != null || DevArgs.Get("assert-motion") != null
+            ? MotionProbe.Attach(player) : null;
+        var grip = DevArgs.Get("grip-metrics") != null || DevArgs.Get("assert-grip") != null
+            ? GripProbe.Attach(player) : null;
+#endif
         var cursor = 0f;
         var filter = DevArgs.Get("cases")?.Split(',');
         void Case(string name, Action<float> schedule, float length = 3)
@@ -94,7 +100,15 @@ public partial class AnimationReview : Node3D
             if (filter != null && !filter.Contains(name)) return;
             var start = cursor;
             cases.Add((name, start, start + length));
-            director.At(start, () => player.Teleport(Vector3.Zero, 0));
+            director.At(start, () =>
+            {
+                player.Teleport(Vector3.Zero, 0);
+#if !PROPANE_REVIEW_RELEASE
+                if (motion != null) motion.SkipNextPose = true;
+                // Older comparison builds lack this property and retain their original spawn handling.
+                grip?.GetType().GetProperty("SkipNextPose")?.SetValue(grip, true);
+#endif
+            });
             schedule(start);
             // A dense sequence also serves as a deterministic 12 fps review film; --record remains available.
             for (var i = 1; i < length * 12; i++) director.ShotAt(start + i / 12f, $"{name}_{i:000}");
@@ -164,6 +178,10 @@ public partial class AnimationReview : Node3D
                 GD.Print($"[animation-review] controller coverage: burst={burstShots}, jump={jumped}, reload={reloaded}, melee={struck}");
             }
         });
+#if !PROPANE_REVIEW_RELEASE
+        if (motion != null) director.At(cursor - 0.01f, motion.Finish);
+        if (grip != null) director.At(cursor - 0.01f, grip.Finish);
+#endif
         director.QuitAfter = cursor;
         AddChild(director);
         var path = DevArgs.Get("metrics");

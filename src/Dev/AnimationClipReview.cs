@@ -9,7 +9,7 @@ using Propane.World;
 
 namespace Propane.Dev;
 
-/// <summary>Plays external CC0 candidates on the packaged mannequin without changing the packaged asset or rig.</summary>
+/// <summary>Plays external licensed candidates on the packaged mannequin without changing the packaged asset or rig.</summary>
 public partial class AnimationClipReview : Node3D
 {
     private AnimationPlayer animations = null!;
@@ -48,6 +48,7 @@ public partial class AnimationClipReview : Node3D
             InputSetup.Register();
             character = new PlayerCharacter { World = world, InputOverride = new ScriptedInput() };
             AddChild(character);
+            LocalView.Attach(character, this).Hud.ShowHud(false);
             model = character.GetNode<Node3D>("Visual/Model");
             foreach (var tree in model.FindChildren("*", "AnimationTree", owned: false).OfType<AnimationTree>()) tree.Active = false;
             foreach (var feet in model.FindChildren("*", "SkeletonModifier3D", owned: false).OfType<FootPlacement>()) feet.Active = false;
@@ -149,7 +150,7 @@ public partial class AnimationClipReview : Node3D
                 current = label;
                 localTime = 0;
                 animations.Play("candidate/" + imported, customSpeed: reverse ? -1 : 1, fromEnd: reverse);
-                caption.Text = $"{DevArgs.Get("label") ?? "CC0 candidate"} / {view} / {token} / {(character == null ? "raw authored pose" : "clip + current hands; stationary preview")}";
+                caption.Text = $"{DevArgs.Get("label") ?? "external candidate"} / {view} / {token} / {(character == null ? "raw authored pose" : "clip + current hands; stationary preview")}";
             });
             for (var i = 1; i < length * 12; i++) director.ShotAt(time + i / 12f, $"{label}_{i:000}");
             start += length;

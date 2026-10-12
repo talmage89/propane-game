@@ -1,8 +1,7 @@
 # Animation review
 
 This is the acceptance harness for the authored directional rifle redo.
-The fixture attaches a local view for A4's separated camera ownership. Visual thresholds are pending until
-that redo; numerical checks support the owner's rendered review, not replace it.
+The fixture attaches a local view for A4's separated camera ownership. The strict gate is enabled in CI; numerical checks support the owner's rendered review, not replace it.
 
 ## Controller review
 
@@ -50,9 +49,8 @@ is a frame-time benchmark. Inspect all sheets and action footage before asking t
 `make test` samples the seven named gate cases at 60 Hz in a final skeleton modifier, after feet, rifle and hands.
 It rejects missing bones, non-finite values, incomplete windows, insufficient contact observations and skipped
 frames. Python unit tests reject frozen feet, dropped samples and ineffective collision bounds. Each settled window
-is 0.8–2.5 seconds: acceleration, stopping and teleport frames are excluded. A metric JSON lists each visual pass
-or pending failure. `--strict` makes any visual failure return nonzero; enable this in CI only when the redo is
-accepted. An improvement is reported as a pass rather than rejected as an unexpected success.
+is 0.8–2.5 seconds: acceleration, stopping and teleport frames are excluded. A metric JSON lists every visual check and measured value. `--strict` makes any visual failure return nonzero.
+`make test-full` measures all 34 cases with motion and grip assertions and runs the same strict checks. An improvement is reported as a pass rather than rejected as an unexpected success.
 
 The immutable calibration in `tools/dev/animation_calibration.json` comes from `v0.2.0` (`7170a13c8d44`) through
 this harness. Bare authored UAL1 clips independently cross-check it: Walk ankle correlation −0.597 and head
@@ -85,7 +83,7 @@ no free source clip shoulders a rifle, so an empirical rifle-clip calibration is
 
 ## External clip review
 
-Official free CC0 source archives are kept outside the repository in a shared `assets-src/` directory. Its
+Recorded Quaternius CC0 and 100STYLE CC BY 4.0 sources are kept outside the repository in a shared `assets-src/` directory. Its
 `SOURCES.md` records stable download URLs, licenses and archive SHA-256 values. See [source choices](animation-sources.md).
 Inventory every clip, including the separate root-motion variants:
 
@@ -111,5 +109,6 @@ Burst/reload footage also remains the review fixture for the later recoil packag
 aim-ray alignment there without forcing every spread bullet to follow the bore, and distinguish weapon kick
 return from player-controlled aim recovery.
 
-No assets are committed by this package. Rebuilding the character, authoring derivatives, solving aim/body
-clearance, smaller foot IK and stronger melee belong to later packages after A4 and owner clip approval.
+The rebuilt mannequin includes authored directional and turn derivatives. The owner approves its look before
+landing; passing metrics alone does not supply that approval. [Locomotion](locomotion.md) describes the bounded
+terrain correction, and [motion](motion.md) describes rifle contact and clearance checks.

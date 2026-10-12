@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Final-pose review metrics; standard library only. Visual acceptance is pending until the animation redo."""
+"""Final-pose review metrics; standard library only. Calibrated bounds supplement rendered owner review."""
 import argparse
 import csv
 import json
@@ -80,16 +80,16 @@ def evaluate(result, calibration):
             for metric, (low, high) in limits.items():
                 value = values[metric]
                 checks.append({'case': case, 'metric': metric, 'value': value, 'minimum': low, 'maximum': high,
-                               'pass': low <= value <= high, 'status': 'pending-redo'})
+                               'pass': low <= value <= high, 'status': 'pass' if low <= value <= high else 'fail'})
         if case.startswith('creep_') or case == 'aim_idle':
             for metric in ('stock_head', 'stock_shoulder'):
                 low, high = calibration['clearance'][metric]
                 checks.append({'case': case, 'metric': metric, 'value': values[metric], 'minimum': low,
-                               'maximum': high, 'pass': low <= values[metric] <= high, 'status': 'pending-redo'})
+                               'maximum': high, 'pass': low <= values[metric] <= high, 'status': 'pass' if low <= values[metric] <= high else 'fail'})
         if case in ('creep_180', 'creep_090', 'creep_270'):
             high = calibration['hip_aim_yaw']
             checks.append({'case': case, 'metric': 'hip_aim_yaw', 'value': values['hip_aim_yaw'], 'maximum': high,
-                           'pass': values['hip_aim_yaw'] <= high, 'status': 'pending-redo'})
+                           'pass': values['hip_aim_yaw'] <= high, 'status': 'pass' if values['hip_aim_yaw'] <= high else 'fail'})
     return checks
 
 
@@ -97,7 +97,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('csv', type=Path)
     parser.add_argument('--output', type=Path)
-    parser.add_argument('--strict', action='store_true', help='make pending visual failures return nonzero')
+    parser.add_argument('--strict', action='store_true', help='make visual failures return nonzero')
     args = parser.parse_args()
     measured = measure(args.csv)
     calibration = json.loads(CALIBRATION.read_text())
@@ -110,8 +110,8 @@ def main():
         args.output.write_text(json.dumps(report, indent=2))
     failed = [c for c in checks if not c['pass']]
     for check in failed:
-        print(f"PENDING {check['case']}: {check['metric']}={check['value']:.5f}")
-    print(f'PASS data coverage; {len(checks) - len(failed)}/{len(checks)} visual checks pass, {len(failed)} pending redo')
+        print(f"FAIL {check['case']}: {check['metric']}={check['value']:.5f}")
+    print(f'PASS data coverage; {len(checks) - len(failed)}/{len(checks)} visual checks pass, {len(failed)} failures')
     if args.strict and failed:
         raise SystemExit(1)
 

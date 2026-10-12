@@ -188,14 +188,14 @@ the engine tears down its C# bindings and native servers. Static caches remain a
 
 ## Dev harnesses
 
-The [animation review harness](docs/animation-review.md) compares controller-driven motion and external CC0 clip candidates from both review views, with calibrated metrics and any-two-build media.
+The [animation review harness](docs/animation-review.md) compares all 34 controller cases from both review views, with a strict calibrated gate and release/dev/candidate media. External sources include Quaternius CC0 and 100STYLE CC BY 4.0.
 
 Each scene in `scenes/dev` is a scripted test. Arguments after `--` are read by `src/Dev/DevArgs.cs`;
 `--capture-dir=<dir>` saves screenshots, `--record=<file.mp4>` films the window in real time (needs ffmpeg on `PATH`,
 including `ffmpeg.exe` on Windows; a game in a match stays in step, unlike Godot's `--write-movie`), and
 `--tune.<Name>=<value>` overrides any tuning value. `game_test` and `player_range` also accept
 `--effects-seed=<integer>` to seed their world random stream before constructing content for paired captures. For example,
-`tools/dev/net_bots.sh -n 4 -l 90 -w 1 -- --record=/tmp/bots.mp4` films a match from the first bot.
+`tools/dev/net_bots.sh -n 4 -l 90 -w 1 -- --record=$PWD/build/bots.mp4` films a match from the first bot.
 
 ```sh
 GODOT=/Applications/Godot_mono.app/Contents/MacOS/Godot
@@ -206,7 +206,7 @@ $GODOT --headless res://scenes/dev/shutdown_tests.tscn
 
 # Session actors: two assigned views on one World3D, independent shots/melee, view closure and a camera-free bot.
 $GODOT --headless --fixed-fps 60 res://scenes/dev/session_actors_tests.tscn
-$GODOT --fixed-fps 60 res://scenes/dev/session_actors_tests.tscn -- --capture-dir=/tmp/session-actors
+$GODOT --fixed-fps 60 res://scenes/dev/session_actors_tests.tscn -- --capture-dir=$PWD/build/session-actors
 
 # Movement resolver: gait/target speed on each transition tick, lifecycle, jump buffer and coyote time;
 # injected gamepad actions and stick look.
@@ -220,7 +220,7 @@ $GODOT --headless res://scenes/dev/generator_tests.tscn -- --seeds=200
 # Bot navigation: real picket/privacy fences, gates, bins, cars, piles, houses and touching-fence recovery.
 # Asserts >=95% success, walking through a direct gate, planned fence jumps and tank clearance.
 $GODOT --headless --fixed-fps 60 res://scenes/dev/bot_navigation_course.tscn -- --seeds=100
-$GODOT --fixed-fps 60 res://scenes/dev/bot_navigation_course.tscn -- --seeds=5 --capture-dir=/tmp/bot-fences
+$GODOT --fixed-fps 60 res://scenes/dev/bot_navigation_course.tscn -- --seeds=5 --capture-dir=$PWD/build/bot-fences
 # --baseline compares direct movement plus the old stuck recovery; --first-seed=39 --seeds=1 replays one seed.
 # --nav-log traces waypoints/replans. make test runs five seeds; docs/bot-navigation.md describes the component.
 
@@ -231,10 +231,10 @@ tools/dev/check_world.sh
 # Scoped worlds: overlapping physics/tuning, events/spawns/callbacks, pause/reveal/hitstop and leak-free teardown.
 $GODOT --headless --fixed-fps 60 res://scenes/dev/world_services_tests.tscn
 # Clear/replace proof: shooting sequence, finish remaining fixture tanks, assert automatic replacement.
-$GODOT --fixed-fps 60 res://scenes/dev/game_test.tscn -- --scenario=clear --quit=32 --capture-dir=/tmp/clear
+$GODOT --fixed-fps 60 res://scenes/dev/game_test.tscn -- --scenario=clear --quit=32 --capture-dir=$PWD/build/clear
 # Real menu lifetime: ten single-player and ten solo-match retirements with exact node/object/orphan counts.
 $GODOT --headless --fixed-fps 60 res://scenes/dev/menu_test.tscn -- --scenario=lifetime
-$GODOT --fixed-fps 60 res://scenes/dev/menu_test.tscn -- --scenario=lifetime --capture-dir=/tmp/menu-lifetime
+$GODOT --fixed-fps 60 res://scenes/dev/menu_test.tscn -- --scenario=lifetime --capture-dir=$PWD/build/menu-lifetime
 
 # Blast-query completeness: 1,100 rigid bodies and duplicate collision shapes; asserts every body is pushed.
 $GODOT --headless --fixed-fps 60 res://scenes/dev/blast_query_tests.tscn
@@ -243,33 +243,33 @@ $GODOT --headless --fixed-fps 60 res://scenes/dev/blast_query_tests.tscn
 $GODOT --headless res://scenes/dev/platform_tests.tscn
 
 # Release smoke test: main menu and single player; fails on a missing button, empty suburb or timeout.
-$GODOT --resolution 1280x720 res://scenes/dev/release_test.tscn -- --windowed --capture-dir=/tmp/release
+$GODOT --resolution 1280x720 res://scenes/dev/release_test.tscn -- --windowed --capture-dir=$PWD/build/release
 # --scenario=network --connect=host:port creates a lobby, waits for a second player, then plays a 30-second match.
 # Official export templates disallow scene overrides. The same test runs in an untouched archive with
-# ./Propane.x86_64 -- --release-test --capture-dir=/tmp/release (Propane.exe on Windows).
+# ./Propane.x86_64 -- --release-test --capture-dir=$PWD/build/release (Propane.exe on Windows).
 # Add --scenario=network --connect=host:port --name=Tester to test against another client on a source server.
 
 # Custom color with mouse/keyboard: presets, HSV click/drag, exact hex, saved settings, preview and match.
-$GODOT res://scenes/dev/menu_test.tscn -- --scenario=mouse --capture-dir=/tmp/menu-color
+$GODOT res://scenes/dev/menu_test.tscn -- --scenario=mouse --capture-dir=$PWD/build/menu-color
 
 # The real game with a scripted player. Scenarios: loop (default), clear (destroys every tank), ragdoll, shoot,
 # tour (camera in tight spots), spots (visits each tank), settle (fails on tank drift >6 mm or rotation >0.5 degrees),
 # dissolve, menus,
 # readme (a chain reaction captured as frames for the README GIF; seed 23 is the one in docs/).
-$GODOT --fixed-fps 60 --resolution 1280x720 res://scenes/dev/game_test.tscn -- --capture-dir=/tmp/g --scenario=ragdoll
+$GODOT --fixed-fps 60 --resolution 1280x720 res://scenes/dev/game_test.tscn -- --capture-dir=$PWD/build/g --scenario=ragdoll
 
 # Soak: punctures every tank, then detonates them all at once, and reports frame times. Run without --fixed-fps.
 $GODOT res://scenes/dev/soak.tscn
 
 # Tank close-ups (scenarios: full, vent, blast, look), the character and rifle rig, the world kit, map overviews.
-$GODOT --fixed-fps 60 res://scenes/dev/tank_range.tscn -- --capture-dir=/tmp/t --scenario=blast
+$GODOT --fixed-fps 60 res://scenes/dev/tank_range.tscn -- --capture-dir=$PWD/build/t --scenario=blast
 # Gathering: separate close groups, isolated single, frozen vent, shielded drop, house/player clearance,
 # shot/bump/blast interruption and settled-pile stability. These and the following probes run in make test.
-$GODOT --fixed-fps 60 res://scenes/dev/gather_range.tscn -- --capture-dir=/tmp/gather
+$GODOT --fixed-fps 60 res://scenes/dev/gather_range.tscn -- --capture-dir=$PWD/build/gather
 $GODOT --headless --fixed-fps 60 res://scenes/dev/gather_range.tscn -- --scenario=grant-races
 # A real single-player rifle blast knocks intact tanks loose, then they gather; seed 23 fixes the road fixture.
 # Once the knock is proven, the fixture removes random blast fragments so departure paths stay clear.
-$GODOT --fixed-fps 60 res://scenes/dev/game_test.tscn -- --scenario=gather --tune.FixedSeed=23 --capture-dir=/tmp/gather-game
+$GODOT --fixed-fps 60 res://scenes/dev/game_test.tscn -- --scenario=gather --tune.FixedSeed=23 --capture-dir=$PWD/build/gather-game
 # Upright pyramids: every physics tick for 120 simulated seconds, player passes, gather neighbors and toppling.
 $GODOT --headless --fixed-fps 60 res://scenes/dev/upright_pile_tests.tscn
 # --deep --awake adds 64/128-tank contact trials (make test-full).
@@ -277,12 +277,12 @@ $GODOT --headless --fixed-fps 60 res://scenes/dev/upright_pile_tests.tscn
 # --hit=shot|blast|shove captures a disturbance and falling from player height.
 # --awake tests contact settling; --chain=fresh requires intact neighbors in range to puncture and keep venting.
 # --chain=primed first punctures each tank, then requires venting neighbors in range to detonate after the fuse.
-$GODOT --fixed-fps 60 res://scenes/dev/tank_range.tscn -- --capture-dir=/tmp/pile --formation=Square --chain=fresh
-$GODOT --fixed-fps 60 res://scenes/dev/player_range.tscn -- --capture-dir=/tmp/p
+$GODOT --fixed-fps 60 res://scenes/dev/tank_range.tscn -- --capture-dir=$PWD/build/pile --formation=Square --chain=fresh
+$GODOT --fixed-fps 60 res://scenes/dev/player_range.tscn -- --capture-dir=$PWD/build/p
 # Melee: wall occlusion, one hit per swing, and an intact tank/loose prop shoved by the real collision path.
 $GODOT --headless --fixed-fps 60 res://scenes/dev/melee_range.tscn
 # Four strikes from carry/aim/sprint/reload, with final grip and rotation assertions; side or player view.
-$GODOT --fixed-fps 60 res://scenes/dev/player_range.tscn -- --scenario=melee --view=side --assert-grip --assert-motion --capture-dir=/tmp/wpmelee-side
+$GODOT --fixed-fps 60 res://scenes/dev/player_range.tscn -- --scenario=melee --view=side --assert-grip --assert-motion --capture-dir=$PWD/build/wpmelee-side
 # Deeper cancellation sweep of both reloads (also in make test-full).
 $GODOT --headless --fixed-fps 60 res://scenes/dev/player_range.tscn -- --scenario=melee-reloads --assert-grip --assert-motion
 # Motion: all gaits, hip/aimed bursts, walking reload and get-up into run, captured at 60 Hz.
@@ -299,32 +299,32 @@ $GODOT --headless --fixed-fps 60 res://scenes/dev/menu_test.tscn -- --scenario=i
 # write final-pose feet.csv and drift/angular metrics.
 # --assert-feet enforces contacts, continuity and jump timing in make test; --feet-corrections exercises snapshot snaps.
 # --view=rifleleft or rifleright follows the rifle up close.
-$GODOT --fixed-fps 60 res://scenes/dev/player_range.tscn -- --capture-dir=/tmp/p --scenario=reload --view=rifleleft
-$GODOT --fixed-fps 60 res://scenes/dev/player_range.tscn -- --capture-dir=/tmp/movement --scenario=movement --view=side
+$GODOT --fixed-fps 60 res://scenes/dev/player_range.tscn -- --capture-dir=$PWD/build/p --scenario=reload --view=rifleleft
+$GODOT --fixed-fps 60 res://scenes/dev/player_range.tscn -- --capture-dir=$PWD/build/movement --scenario=movement --view=side
 $GODOT --headless res://scenes/dev/player_range.tscn -- --scenario=sprint-repro
 # Rifle contacts: all holds, both reloads, every gait, full pitch and recoil. Also runs in make test.
 $GODOT --headless --fixed-fps 60 res://scenes/dev/player_range.tscn -- --scenario=grip --grip-sweep --assert-grip
 # Repeat rendered with --view=rifleleft, rifleright, side and player. Writes per-frame grip.csv.
-$GODOT --fixed-fps 60 res://scenes/dev/player_range.tscn -- --scenario=grip --grip-sweep --grip-metrics --view=rifleleft --capture-dir=/tmp/grip
+$GODOT --fixed-fps 60 res://scenes/dev/player_range.tscn -- --scenario=grip --grip-sweep --grip-metrics --view=rifleleft --capture-dir=$PWD/build/grip
 # Compare aimed walk speeds from the side and the player camera (--view=player).
 # Captures 12 frames per stride and writes final world-space foot/toe samples to stride.csv.
-$GODOT --fixed-fps 60 res://scenes/dev/player_range.tscn -- --scenario=creep --view=side --tune.CreepSpeed=1.6 --capture-dir=/tmp/creep
-$GODOT --fixed-fps 60 res://scenes/dev/world_lab.tscn -- --capture-dir=/tmp/w
-$GODOT --fixed-fps 60 res://scenes/dev/suburb_preview.tscn -- --capture-dir=/tmp/s
+$GODOT --fixed-fps 60 res://scenes/dev/player_range.tscn -- --scenario=creep --view=side --tune.AimMoveSpeed=1.6 --capture-dir=$PWD/build/creep
+$GODOT --fixed-fps 60 res://scenes/dev/world_lab.tscn -- --capture-dir=$PWD/build/w
+$GODOT --fixed-fps 60 res://scenes/dev/suburb_preview.tscn -- --capture-dir=$PWD/build/s
 # --players=16 previews a scaled match instead of single player; --formation=Square forces a formation.
 
 # Every menu screen, a solo match, and single player and back (keyboard/mouse).
-$GODOT res://scenes/dev/menu_test.tscn -- --capture-dir=/tmp/m
+$GODOT res://scenes/dev/menu_test.tscn -- --capture-dir=$PWD/build/m
 # Return from single player or leave a match, then press the real main-menu Quit button.
 # Fails with exit 1 if the Quit button leaves the menu running.
-$GODOT --fixed-fps 30 res://scenes/dev/menu_test.tscn -- --quit-after=single --capture-dir=/tmp/quit-single
-$GODOT --fixed-fps 30 res://scenes/dev/menu_test.tscn -- --quit-after=match --capture-dir=/tmp/quit-match
+$GODOT --fixed-fps 30 res://scenes/dev/menu_test.tscn -- --quit-after=single --capture-dir=$PWD/build/quit-single
+$GODOT --fixed-fps 30 res://scenes/dev/menu_test.tscn -- --quit-after=match --capture-dir=$PWD/build/quit-match
 # Joypad events only: focus, text defaults, hosting/joining, color/length updates, pause/resume, results and repeat.
 # Fails with exit 1 on a missing focus target, incorrect outcome or timeout; also runs headlessly in make test.
 # --port=<port> overrides local hosting for parallel runs (make test uses this checkout's port).
-$GODOT --fixed-fps 60 res://scenes/dev/menu_test.tscn -- --scenario=gamepad --capture-dir=/tmp/pad
+$GODOT --fixed-fps 60 res://scenes/dev/menu_test.tscn -- --scenario=gamepad --capture-dir=$PWD/build/pad
 # Switch devices while paused and verify the reference and reload hints in both directions.
-$GODOT res://scenes/dev/menu_test.tscn -- --scenario=devices --capture-dir=/tmp/devices
+$GODOT res://scenes/dev/menu_test.tscn -- --scenario=devices --capture-dir=$PWD/build/devices
 # Real keyboard/mouse events through the root viewport in single player and a solo match: turn, jump, melee,
 # single-click fire, R/new suburb or reload, and remapped Escape. Assertions also run headlessly in make test.
 $GODOT --fixed-fps 60 --resolution 1280x720 res://scenes/dev/menu_test.tscn -- --scenario=input --port=24681 --windowed --capture-dir="$PWD/build/input"
@@ -404,13 +404,14 @@ The release and development shell tools require a Unix environment (Linux or mac
 ## Assets
 
 The tank, its debris and the fireball flipbook come from the propane-tank Blender project, and the rifle from the
-rifle Blender project; the other models are CC0 kits (see [CREDITS.md](CREDITS.md)). The scripts in `tools/blender`
-rebuild them with Blender 5.1 (`import_rifle.py` needs only Python):
+rifle Blender project; the other models are CC0 kits. Directional character motion uses Ian Mason's 100STYLE
+under CC BY 4.0 (see [CREDITS.md](CREDITS.md)). The scripts in `tools/blender` rebuild them with Blender 5.1
+(the character builder uses 5.2; `import_rifle.py` needs only Python):
 
 | Script | Builds |
 | --- | --- |
 | `export_tank.py` | `assets/tank/tank.glb` and `debris.glb` (with convex hulls) from the tank project's Unreal export |
-| `build_character.py` | `assets/character/mannequin.glb`: the Quaternius mannequin with animations from both libraries |
+| `build_character.py` | `assets/character/mannequin.glb`: the Quaternius mannequin and libraries, with retargeted 100STYLE neutral backpedal and sidestep clips |
 | `import_rifle.py` | `assets/rifle`: the rifle (one skinned mesh, its clips and sockets), a lone magazine for dropped magazines, and the textures both share, from the rifle project's export |
 | `build_props.py` | `assets/props/*.glb`: fences, grill, bins, mailbox, lamp, hydrant, patio heater and more |
 
