@@ -196,6 +196,10 @@ public partial class Tuning : Resource
     [Export(PropertyHint.Range, "1,50,0.5")] public float VentMaxSpin { get; set; } = 12f;
     [Export(PropertyHint.Range, "0.1,4,0.05")] public float VentFlameScale { get; set; } = 1.6f;
     [Export(PropertyHint.Range, "0,40,0.5")] public float VentLightEnergy { get; set; } = 6f;
+    /// <summary>Keep individual vent lights through ordinary counts; merge only beyond this crowded threshold.</summary>
+    [Export(PropertyHint.Range, "0,1024,1")] public int VentLightMergeThreshold { get; set; } = 40;
+    [Export(PropertyHint.Range, "1,64,1")] public int VentLightClusterCount { get; set; } = 8;
+    [Export(PropertyHint.Range, "0,5,0.1")] public float VentLightMergeRadius { get; set; } = 2f;
     [Export(PropertyHint.Range, "1,60,0.5")] public float TankMass { get; set; } = 17f;
 
     // ---------------------------------------------------------------- Blast physics

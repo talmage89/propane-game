@@ -22,6 +22,10 @@ void vertex() {
 }
 
 void fragment() {
+	float fade_in = smoothstep(0.0, 0.08, age);
+	float fade_out = 1.0 - smoothstep(0.55, 1.0, age);
+	float soft = fx_soft_fade(SCREEN_UV, VERTEX, INV_PROJECTION_MATRIX, softness);
+	if (fade_in == 0.0 || fade_out == 0.0 || soft == 0.0 || density == 0.0 || COLOR.a == 0.0) { discard; }
 	vec2 p = UV * 2.0 - 1.0;
 	float r = length(p);
 	vec2 nuv = UV * 0.55 + vec2(seed * 5.3, seed * 9.7) + vec2(TIME * 0.015, -TIME * 0.03);
@@ -30,13 +34,14 @@ void fragment() {
 	float shape = 1.0 - r + (n - 0.5) * 0.8 + (n2 - 0.5) * 0.3;
 	float erode = 0.1 + age * erosion;
 	float a = smoothstep(erode, erode + 0.45, shape);
+	// Zero-opacity fragments cannot contribute to blend_mix. Kill them before Forward+'s light loop,
+	// which otherwise evaluates every nearby vent light even in the transparent corners of each puff.
+	if (a == 0.0) { discard; }
 	// Fake volume: a normal that bulges toward the camera, so the sun shades the puff.
 	vec3 bulge = normalize(vec3(p * 0.9, sqrt(max(0.0, 1.0 - r * r)) + 0.35));
 	NORMAL = bulge;
 	ALBEDO = tint.rgb * COLOR.rgb * (0.85 + n * 0.3);
 	EMISSION = vec3(1.0, 0.38, 0.08) * ember_glow * pow(1.0 - smoothstep(0.0, 0.18, age), 2.0) * (0.5 + n);
-	float fade_in = smoothstep(0.0, 0.08, age);
-	float fade_out = 1.0 - smoothstep(0.55, 1.0, age);
-	float soft = fx_soft_fade(SCREEN_UV, VERTEX, INV_PROJECTION_MATRIX, softness);
 	ALPHA = clamp(a * density * fade_in * fade_out * soft * COLOR.a, 0.0, 1.0);
+	if (ALPHA == 0.0) { discard; }
 }

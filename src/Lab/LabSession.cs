@@ -350,6 +350,7 @@ public partial class LabSession : Node3D
         public void Ready(SessionContext session)
         {
             if (!lab.CreateLocalView) return;
+            Warmup.RunEffects(session.World, session.World.Root, new Vector3(0, -400, 0));
             Capture(true);
             if (lab.Scenario.OpensTuning)
                 session.World.Schedule(lab, session.World.Tuning.LabTuningOpenDelay, () => { if (!lab.tuningVisited) lab.OpenTuning(); });

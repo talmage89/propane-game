@@ -24,3 +24,22 @@ controlled rendering exclusion. Only newly created effect nodes are excluded; th
 render CPU, process, physics, object counts, compilation monitors, allocations and collection counts are printed.
 `--scenario=effects --count=1|8|128 --capture-dir=<absolute path>` captures a single vent and primed chains.
 Use `--fixed-fps 60` for those visual comparisons; omit it for throughput measurements.
+
+## Implementation
+
+Particle draw meshes and growth/shrink curves are shared immutable resources. Vent and explosion process
+materials cache only the most recent scale; a tuning edit builds a new resource without mutating emitters already
+in flight. CPU-generated scorch/hole/glow textures are built at session assembly. Lab starts the same effect
+warm-up as the game, without adding physics bodies, and the hidden flash retires with its warm-up root.
+
+Smoke discards only exactly zero-opacity fragments, including completely depth-faded or lifetime-faded fragments,
+before noise work and Forward+ lighting. Particle counts, lifetimes, colors, trajectories, smoke density, light
+energy and every existing gameplay/effect dial stay unchanged.
+
+Above `VentLightMergeThreshold` (40), at most `VentLightClusterCount` (8) proxy lights combine nearby vents at
+energy-weighted centers. Seeds begin near the camera and then spread across the sources. A source farther than
+`VentLightMergeRadius` (2 m) from every seed keeps its individual light: this is a soft budget, not permission
+to relocate isolated vents' light across the world. Unmerged energy plus proxy energy equals the original total;
+flash lights and their existing three-shadow limit are unaffected. At 40 vents or fewer, every original vent
+light remains unchanged. All three new presentation dials enter match tuning snapshots (minor-release scope);
+no network message changes and no `Protocol.Version` change.

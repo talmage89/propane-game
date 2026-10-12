@@ -14,23 +14,29 @@ public static class Warmup
 
     public static void Run(WorldContext world, Node3D parent, Vector3 at)
     {
-        var root = new Node3D { Name = "Warmup" };
-        parent.AddChild(root);
-        root.GlobalPosition = at;
-
+        var root = RunEffects(world, parent, at);
         var tank = PropaneTank.Create(world);
         tank.Freeze = true;
         root.AddChild(tank);
-        root.AddChild(new VentJet { World = world, ContentSpawn = world.Spawn, Name = "VentJet", Position = new Vector3(0, 0.3f, 0) });
         var debris = DebrisBody.Create(world, GameAssets.Debris[0]);
         debris.Freeze = true;
         root.AddChild(debris);
+    }
 
-        ExplosionEffect.Create(world, at, at.Y);
+    /// <summary>Warm presentation without adding physics bodies, for the Lab's existing fixture.</summary>
+    public static Node3D RunEffects(WorldContext world, Node3D parent, Vector3 at)
+    {
+        var root = new Node3D { Name = "Warmup" };
+        parent.AddChild(root);
+        root.GlobalPosition = at;
+        root.AddChild(new VentJet { World = world, ContentSpawn = world.Spawn, Name = "VentJet", Position = new Vector3(0, 0.3f, 0) });
+        var explosion = ExplosionEffect.Create(world, at, at.Y);
         world.Spawn.Effect(Tracer.Create(at, at + Vector3.Forward * 5f));
         ImpactEffect.Spawn(world, at + Vector3.Up, Vector3.Up, metal: true, leaveDecal: false);
         ImpactEffect.Spawn(world, at + Vector3.Up, Vector3.Up, metal: false, leaveDecal: false);
 
-        world.Schedule(root, Lifetime, root.QueueFree);
+        // Retire the flash too: an invisible warm-up must not reserve a shadow slot during the first real blast.
+        world.Schedule(root, Lifetime, () => { root.QueueFree(); explosion.QueueFree(); });
+        return root;
     }
 }

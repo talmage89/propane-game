@@ -24,6 +24,8 @@ public partial class ExplosionEffect : Node3D
     private const int MaxShadowedFlashes = 3;
 
     private static Texture2D? flipbookTexture;
+    private static float processScale;
+    private static readonly ParticleProcessMaterial?[] sharedProcesses = new ParticleProcessMaterial?[5];
     private bool castsShadow;
 
     private float elapsed;
@@ -39,7 +41,11 @@ public partial class ExplosionEffect : Node3D
     private float groundHeight;
 
     /// <summary>Loads the textures an explosion uses, so the first one does not stall on disk.</summary>
-    public static void Preload() => flipbookTexture ??= GD.Load<Texture2D>("res://assets/tank/T_Fireball_SubUV_8x8.png");
+    public static void Preload()
+    {
+        flipbookTexture ??= GD.Load<Texture2D>("res://assets/tank/T_Fireball_SubUV_8x8.png");
+        FxLibrary.Preload();
+    }
 
     /// <summary>Spawns an explosion centered at <paramref name="position"/>, with the ground at <paramref name="groundY"/>.</summary>
     public static ExplosionEffect Create(WorldContext world, Vector3 position, float groundY, Spawn? spawn = null)
@@ -56,6 +62,7 @@ public partial class ExplosionEffect : Node3D
         using var profile = EffectProfile.Measure(EffectProfile.System.ExplosionCreate);
         var tuning = World.Tuning;
         var scale = tuning.FireballScale;
+        PrepareProcesses(scale);
         var groundOffset = groundHeight - GlobalPosition.Y;
 
         flash = new OmniLight3D
@@ -184,10 +191,17 @@ public partial class ExplosionEffect : Node3D
         groundRing.Visible = ring < 1f && tuning.ShockwaveScale > 0;
     }
 
+    private static void PrepareProcesses(float scale)
+    {
+        if (processScale == scale) return;
+        processScale = scale;
+        System.Array.Clear(sharedProcesses);
+    }
+
     private static GpuParticles3D CreateFireballCore(float scale)
     {
         // A dense, slow ball that merges into one rolling mass.
-        var process = new ParticleProcessMaterial
+        var process = sharedProcesses[0] ??= new ParticleProcessMaterial
         {
             EmissionShape = ParticleProcessMaterial.EmissionShapeEnum.Sphere,
             EmissionSphereRadius = 0.45f * scale,
@@ -216,7 +230,7 @@ public partial class ExplosionEffect : Node3D
     private static GpuParticles3D CreateFireballBillows(float scale)
     {
         // Faster lobes that punch outward and curl up, giving the ball a ragged silhouette.
-        var process = new ParticleProcessMaterial
+        var process = sharedProcesses[1] ??= new ParticleProcessMaterial
         {
             EmissionShape = ParticleProcessMaterial.EmissionShapeEnum.Sphere,
             EmissionSphereRadius = 0.3f * scale,
@@ -244,7 +258,7 @@ public partial class ExplosionEffect : Node3D
 
     private static GpuParticles3D CreateSmoke(float scale, float amount)
     {
-        var process = new ParticleProcessMaterial
+        var process = sharedProcesses[2] ??= new ParticleProcessMaterial
         {
             EmissionShape = ParticleProcessMaterial.EmissionShapeEnum.Sphere,
             EmissionSphereRadius = 0.7f * scale,
@@ -273,7 +287,7 @@ public partial class ExplosionEffect : Node3D
 
     private static GpuParticles3D CreateEmbers(float scale, float amount)
     {
-        var process = new ParticleProcessMaterial
+        var process = sharedProcesses[3] ??= new ParticleProcessMaterial
         {
             EmissionShape = ParticleProcessMaterial.EmissionShapeEnum.Sphere,
             EmissionSphereRadius = 0.3f,
@@ -297,7 +311,7 @@ public partial class ExplosionEffect : Node3D
 
     private static GpuParticles3D CreateDust(float scale)
     {
-        var process = new ParticleProcessMaterial
+        var process = sharedProcesses[4] ??= new ParticleProcessMaterial
         {
             EmissionShape = ParticleProcessMaterial.EmissionShapeEnum.Ring,
             EmissionRingAxis = Vector3.Up,
