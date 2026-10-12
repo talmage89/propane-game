@@ -110,8 +110,9 @@ public partial class LabSession : Node3D
         {
             OpenTuning();
         }
-        else if (!World.Paused && e is InputEventKey { Pressed: true, Echo: false, PhysicalKeycode: Key.Backspace })
+        else if ((!World.Paused || Overlay.MenuVisible) && e is InputEventKey { Pressed: true, Echo: false, PhysicalKeycode: Key.Backspace })
         {
+            // Also in the controls panel, where it is the keyboard's way to go again once a duel's clock has ended.
             RequestReset();
         }
         else if (!World.Paused && !Scenario.Banking && e.IsActionPressed(InputSetup.NewSuburb))

@@ -249,6 +249,13 @@ public partial class MenuDeviceInputTest : Node
         EnableHeadlessInput(lab.Player, lab.Overlay.MenuLayer);
         TapKey(Key.Escape);
         await Frames().ConfigureAwait(true);
+        // Backspace resets from the controls panel too (R stays a gameplay key, blocked behind a menu).
+        TapKey(Key.Backspace);
+        await Frames(8).ConfigureAwait(true);
+        Check(lab.ResetCount == 2 && !lab.World.Paused && !lab.Overlay.MenuVisible, "Backspace in the controls panel resets");
+        EnableHeadlessInput(lab.Player, lab.Overlay.MenuLayer);
+        TapKey(Key.Escape);
+        await Frames().ConfigureAwait(true);
         await Click("Free tuning").ConfigureAwait(true);
         Check(lab.TuningPanel.Visible && lab.World.Paused && !lab.Overlay.MenuVisible, "clicking Free tuning opens the paused panel");
         var template = Main.SavedTuning.RunSpeed;

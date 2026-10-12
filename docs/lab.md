@@ -26,9 +26,10 @@ the rest of Propane. Huge stack and Range use void; the banking duel and Free tu
   toggles work with the mouse, keyboard or controller. **Defaults** restores code defaults; **Save** explicitly
   writes gameplay dials to the saved template. Unsaved edits never touch that template.
 
-R / X resets non-duel starters; R / X reloads in a duel. Backspace resets any starter. Esc / Start opens Lab
-controls, where Reset/Respawn, Free tuning and Lab menu are controller-accessible buttons. B closes tuning or
-resumes a paused scenario. Leaving returns to the scenario list; Main menu returns to the front end.
+R / X resets non-duel starters; R / X reloads in a duel. Backspace resets any starter, from the controls panel too,
+so a finished duel is one key from the next. Esc / Start opens Lab controls, where Reset/Respawn, Free tuning and Lab
+menu are controller-accessible buttons. B closes tuning or resumes a paused scenario. Leaving returns to the
+scenario list; Main menu returns to the front end.
 
 Reset preserves the session's unsaved tuning but retires every actor, local view, timer, effect and physics
 resource before rebuilding. Re-entry uses the menu's settings and a fresh copy of the saved gameplay template.
