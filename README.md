@@ -312,6 +312,8 @@ $GODOT --fixed-fps 60 res://scenes/dev/player_range.tscn -- --capture-dir=$PWD/b
 $GODOT --headless res://scenes/dev/player_range.tscn -- --scenario=sprint-repro
 # Rifle contacts: all holds, both reloads, every gait, full pitch and recoil. Also runs in make test.
 $GODOT --headless --fixed-fps 60 res://scenes/dev/player_range.tscn -- --scenario=grip --grip-sweep --assert-grip
+# Spawn relocation: eight distant positions/yaws, immediate shot placement and both wrist contacts.
+$GODOT --headless --fixed-fps 60 res://scenes/dev/player_range.tscn -- --scenario=relocate --assert-grip --assert-motion
 # Repeat rendered with --view=rifleleft, rifleright, side and player. Writes per-frame grip.csv.
 $GODOT --fixed-fps 60 res://scenes/dev/player_range.tscn -- --scenario=grip --grip-sweep --grip-metrics --view=rifleleft --capture-dir=$PWD/build/grip
 # Compare aimed walk speeds from the side and the player camera (--view=player).

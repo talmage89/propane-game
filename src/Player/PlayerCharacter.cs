@@ -270,11 +270,15 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         animator.Reset();
         feet.Reset();
         rig.ResetPresentation();
+        var carriedRifle = visual.GlobalTransform.AffineInverse() * rifle.GlobalTransform;
         GlobalPosition = position;
         Velocity = Vector3.Zero;
         knockback = Vector3.Zero;
         facingYaw = yaw;
         visual.Rotation = new Vector3(0, yaw, 0);
+        // The rifle is top-level. Relocate its coherent carry with the body before physics can
+        // choose another firing muzzle or the skeleton modifier can sample a spawn handoff.
+        rifle.GlobalTransform = visual.GlobalTransform * carriedRifle;
         aimTarget = position + Vector3.Up * 1.4f + Forward(yaw) * 20f;
         if (IsRemote)
         {

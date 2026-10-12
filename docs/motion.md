@@ -30,6 +30,11 @@ and a per-frame bound. Small-angle rotations retain wrist precision rather than 
 Both arm segments use a common anatomical hinge plane, with the original wrist frames still solved exactly.
 The final shouldered fit checks both shoulder clearance bounds after elbow placement.
 
+Spawn relocation carries the top-level rifle in the character's frame and resets its motion state, retaining a coherent normal carry. A same-tick
+shot therefore starts at the new body, and a new handoff cannot inherit a weapon left at the previous spawn.
+The `relocate` probe covers eight distant positions/yaws and immediate shot placement; grip assertions still sample
+the first relocated pose, while only the deliberate stance reset and angular discontinuity are excluded.
+
 The coherent upper pose, rifle, get-up handoff weight and reload contact clock are fitted together. Clamping individual arm rotations
 away from a solved contact would detach the hands. Failed candidates reduce the whole pose change, with distinct
 body and carrying-arm rates; the final motion probe still enforces its 1500 degrees/s ordinary-pose bound. The

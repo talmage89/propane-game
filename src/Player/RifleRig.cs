@@ -47,10 +47,14 @@ public partial class RifleRig : SkeletonModifier3D
     private float reloadTarget, reloadPhase;
     private bool resetDigits;
 
-    /// <summary>Drop presentation history when the actor is relocated to a spawn pose.</summary>
+    /// <summary>Reset spawn motion, retaining a coherent carry in the relocated character's frame.</summary>
     public void ResetPresentation()
     {
-        hasUpperPose = hasStance = meleeReloadForward = hadMelee = false;
+        // A shot can arrive before another animation sample. Its shoulders and wrists need the last
+        // coherent carry, rather than a pistol clip that has never held this authoritative barrel.
+        var keepCarry = hasUpperPose && hasStance && !hasPhysicalHandoff && Weight >= 0.999f && Reload == 0 && !Melee;
+        hasUpperPose = hasStance = keepCarry;
+        meleeReloadForward = hadMelee = false;
         hasPhysicalHandoff = false;
         aimBlend = readyBlend = sprintBlend = lastFitAim = lastReloadPhase = reloadPhase = 0;
         lookDirection = Vector3.Zero;

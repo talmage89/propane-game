@@ -68,6 +68,32 @@ public partial class PlayerRange : Node3D
             ? MotionProbe.Attach(player, scenario == "motion") : null;
         switch (scenario)
         {
+            case "relocate":
+                script.Hold(.1f, 9.9f, new PlayerIntent { Aim = true });
+                for (var relocation = 0; relocation < 8; relocation++)
+                {
+                    var index = relocation;
+                    director.At(.6f + index, () =>
+                    {
+                        var yaw = index * Mathf.Pi / 3;
+                        var position = new Vector3(index % 2 == 0 ? 40 : -40, 0, index % 3 * 30);
+                        player.Teleport(position, yaw);
+                        // A top-level weapon must already be near its owner before a same-tick shot,
+                        // rather than waiting for the next skeleton modifier to repair its world pose.
+                        if (player.GetNode<Rifle>("Rifle").GlobalPosition.DistanceTo(position) > 2)
+                        {
+                            GD.PushError("[relocate] FAIL rifle remained at the previous spawn");
+                            ShutdownGuard.Quit(GetTree(), 1);
+                            return;
+                        }
+                        if (motion != null) motion.SkipNextPose = true;
+                        if (grip != null) grip.SkipNextPose = true;
+                        player.RemoteShot(position + Vector3.Up * 1.4f + new Basis(Vector3.Up, yaw) * Vector3.Forward * 20);
+                    });
+                    director.ShotAt(.9f + index, $"relocate_{index:00}");
+                }
+                director.At(9.8f, () => GD.Print("[relocate] PASS eight distant spawns and immediate shot poses"));
+                break;
             case "bot-recoil":
                 world.Random.Seed = 19019;
                 player.Ammo = new AmmoState { Tuning = world.Tuning, Magazine = 30, Reserve = 0 };
