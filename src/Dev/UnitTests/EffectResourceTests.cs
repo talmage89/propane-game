@@ -45,12 +45,13 @@ public static class EffectResourceTests
             var repeat = ExplosionEffect.Create(world, Vector3.Zero, 0).GetChildren().OfType<GpuParticles3D>().ToArray();
             Assert(particles.Length == 5 && repeat.Select((p, i) => p.ProcessMaterial == particles[i].ProcessMaterial).All(v => v),
                 "explosions did not share all five particle process resources");
-            first._Process(1d / 60); explosion._Process(1d / 60);
+            var debris = DebrisBody.Create(world, GameAssets.Debris[0]); world.Root.AddChild(debris);
+            first._Process(1d / 60); explosion._Process(1d / 60); debris._Process(1d / 60);
             var allocated = GC.GetAllocatedBytesForCurrentThread();
             for (var frame = 0; frame < 5; frame++)
-            { first._Process(1d / 60); explosion._Process(1d / 60); }
+            { first._Process(1d / 60); explosion._Process(1d / 60); debris._Process(1d / 60); }
             Assert(GC.GetAllocatedBytesForCurrentThread() == allocated,
-                "steady vent/explosion updates allocated shader parameter names");
+                "steady vent/explosion/debris updates allocated shader parameter names");
             other.Tuning.FireballScale *= 2;
             var larger = ExplosionEffect.Create(other, Vector3.Zero, 0).GetChildren().OfType<GpuParticles3D>().First();
             Assert(((ParticleProcessMaterial)larger.ProcessMaterial).InitialVelocityMax ==
@@ -100,7 +101,9 @@ public static class EffectResourceTests
             Assert(!replacement.Visible && !next.Visible && !last.Visible && proxies.Where(p => p.Visible).Sum(p => p.LightEnergy) == 6,
                 "source re-entry lost registration or duplicated its emitted energy");
             var bodies = world.Root.FindChildren("*", "RigidBody3D", owned: false).Count;
+            var randomState = world.Random.State;
             Warmup.RunEffects(world, world.Root, Vector3.Down * 400);
+            Assert(world.Random.State == randomState, "presentation warm-up advanced the simulation's random stream");
             Assert(world.Root.FindChildren("*", "RigidBody3D", owned: false).Count == bodies,
                 "presentation warm-up added a physics body");
             var labFlash = world.EffectsRoot.GetChildren().OfType<ExplosionEffect>().Single();

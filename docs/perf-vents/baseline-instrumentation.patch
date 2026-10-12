@@ -1,15 +1,15 @@
 --- a/src/Tank/VentJet.cs
 +++ b/src/Tank/VentJet.cs
 @@ -29,6 +29,7 @@
- 
+
      public override void _Ready()
      {
 +        using var profile = EffectProfile.Measure(EffectProfile.System.VentCreate);
          var scale = World.Tuning.VentFlameScale;
- 
+
          // Many small, short-lived puffs overlap into one continuous tongue of flame. They live in world space,
 @@ -128,6 +129,7 @@
- 
+
      public override void _Process(double delta)
      {
 +        using var profile = EffectProfile.Measure(EffectProfile.System.VentProcess);
@@ -19,7 +19,7 @@
 --- a/src/Fx/ExplosionEffect.cs
 +++ b/src/Fx/ExplosionEffect.cs
 @@ -53,6 +53,7 @@
- 
+
      public override void _Ready()
      {
 +        using var profile = EffectProfile.Measure(EffectProfile.System.ExplosionCreate);
@@ -27,7 +27,7 @@
          var scale = tuning.FireballScale;
          var groundOffset = groundHeight - GlobalPosition.Y;
 @@ -136,6 +137,7 @@
- 
+
      public override void _Process(double delta)
      {
 +        using var profile = EffectProfile.Measure(EffectProfile.System.ExplosionProcess);
@@ -41,9 +41,9 @@
  using Godot;
  using Propane.Core;
 +using Propane.Fx;
- 
+
  namespace Propane.Tank;
- 
+
 @@ -16,6 +17,7 @@
      /// </summary>
      public static void Detonate(WorldContext world, Vector3 center, PropaneTank? source, bool chain = true)
@@ -66,7 +66,7 @@
 +                }
              }
          }
- 
+
 -        foreach (var receiver in new List<IBlastReceiver>(world.BlastReceivers))
 +        using (EffectProfile.Measure(EffectProfile.System.BlastReceivers))
          {
@@ -103,7 +103,7 @@
 -            receiver.ReceiveBlast(new BlastInfo(center, PushDirection(center, target, tuning, rng), distance, falloff));
 +
          }
- 
+
          world.Events.RaiseExplosion(center);
 @@ -81,12 +90,16 @@
      {
@@ -128,7 +128,7 @@
 --- a/src/Tank/PropaneTank.cs
 +++ b/src/Tank/PropaneTank.cs
 @@ -295,6 +295,7 @@
- 
+
      public override void _PhysicsProcess(double delta)
      {
 +        using var profile = EffectProfile.Measure(EffectProfile.System.TankPhysics);
@@ -136,7 +136,7 @@
          if (State == TankState.Intact && !Gathering)
          {
 @@ -443,6 +444,7 @@
- 
+
      private void SpawnDebris(Vector3 center)
      {
 +        using var profile = EffectProfile.Measure(EffectProfile.System.Debris);
@@ -144,10 +144,27 @@
          var rng = new RandomNumberGenerator();
          var inherited = LinearVelocity;
 @@ -462,6 +464,7 @@
- 
+
      private void SpawnScorch(Vector3 groundPoint)
      {
 +        using var profile = EffectProfile.Measure(EffectProfile.System.Scorch);
          var size = World.Tuning.ScorchSize;
          if (size <= 0)
          {
+--- a/src/Tank/DebrisBody.cs
++++ b/src/Tank/DebrisBody.cs
+@@ -1,5 +1,6 @@
+ using Godot;
+ using Propane.Core;
++using Propane.Fx;
+
+ namespace Propane.Tank;
+
+@@ -36,6 +37,7 @@
+
+     public override void _Process(double delta)
+     {
++        using var profile = EffectProfile.Measure(EffectProfile.System.DebrisProcess);
+         age += (float)delta;
+         var heat = Mathf.Clamp(1f - age / CoolDownTime, 0, 1);
+         mesh.SetInstanceShaderParameter("heat", heat);

@@ -5,8 +5,8 @@ using Propane.Tank;
 namespace Propane.Fx;
 
 /// <summary>
-/// Instantiates one of every effect, out of sight, while a suburb is materializing, so the first real shot and
-/// explosion do not hitch while their shaders compile.
+/// Instantiates effect examples out of sight while assembling a session, priming shared resources before combat.
+/// Culled geometry can still need a draw pipeline on its first visible use.
 /// </summary>
 public static class Warmup
 {

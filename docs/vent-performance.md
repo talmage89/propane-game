@@ -27,7 +27,9 @@ Use `--fixed-fps 60` for those visual comparisons; omit it for throughput measur
 
 ## Implementation
 
-Steady vent and explosion updates reuse shader parameter names instead of allocating their C# wrappers.
+Steady vent, explosion and debris heat updates reuse shader parameter names instead of allocating their C# wrappers.
+The unit gate asserts these warmed update paths allocate zero managed bytes; presentation-only warm-up also leaves
+the world's random stream unchanged.
 The light manager writes each source and proxy's final visibility once, avoiding off/on renderer updates every frame.
 
 Particle draw meshes and growth/shrink curves are shared immutable resources. Vent and explosion process

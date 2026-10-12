@@ -6,7 +6,7 @@ namespace Propane.Fx;
 /// <summary>Opt-in dev timers; inclusive scopes accumulate until the harness drains each frame.</summary>
 public static class EffectProfile
 {
-    public enum System { VentCreate, VentProcess, VentLights, TankPhysics, ExplosionCreate, ExplosionProcess, Blast, BlastQuery, BlastExclusions, BlastPush, BlastReceivers, Debris, Scorch, Count }
+    public enum System { VentCreate, VentProcess, VentLights, TankPhysics, ExplosionCreate, ExplosionProcess, Blast, BlastQuery, BlastExclusions, BlastPush, BlastReceivers, Debris, Scorch, DebrisProcess, Count }
     public static bool Enabled { get; set; }
     private static readonly double[] milliseconds = new double[(int)System.Count];
     private static readonly long[] allocations = new long[(int)System.Count];
