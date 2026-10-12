@@ -459,6 +459,10 @@ public partial class NetTest : Node
 
     private static string Vector(Vector3 v) => FormattableString.Invariant($"{v.X:R},{v.Y:R},{v.Z:R}");
 
+    // No instance override exists until the new tank's first process update. Its material's
+    // shield is transparent; converting Nil directly to Color instead fabricates opaque black.
+    internal static Color ReadShieldColor(Variant value) => value.VariantType == Variant.Type.Nil ? Colors.Transparent : value.AsColor();
+
     private readonly Dictionary<uint, Vector3> gatherPositions = new();
     private readonly HashSet<uint> gatherShields = new();
     private readonly HashSet<uint> gatherGlides = new();
@@ -512,7 +516,7 @@ public partial class NetTest : Node
             foreach (var tank in match.LiveTanks.Where(IsDrop))
             {
                 var mesh = tank.GetNode<MeshInstance3D>("Mesh");
-                var glow = mesh.GetInstanceShaderParameter("shield_color").AsColor();
+                var glow = ReadShieldColor(mesh.GetInstanceShaderParameter("shield_color"));
                 if (tank.Invulnerable)
                 {
                     ScenarioAssert(!tank.Gathering, "gather: shielded drop gathered");
@@ -521,7 +525,7 @@ public partial class NetTest : Node
                     else if (glow.A > 0)
                     {
                         ScenarioAssert(new Color(glow, 1) == dropper.Appearance.Color,
-                            "gather: shielded drop lost accepted appearance");
+                            FormattableString.Invariant($"gather: shielded drop lost accepted appearance: tank {tank.NetId:x} glow={glow.R:R},{glow.G:R},{glow.B:R},{glow.A:R} expected={dropper.Appearance.Color.R:R},{dropper.Appearance.Color.G:R},{dropper.Appearance.Color.B:R}"));
                         gatherShields.Add(tank.NetId);
                     }
                 }

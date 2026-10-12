@@ -453,3 +453,33 @@ grids/334,868 body pairs, no unobserved grids, final rest/moving 0.001/0.154 m
 and longest episode 0.50 s. All scores agree (10 banked). Actions differ from
 the failed run, so this supports the direct regression rather than replaying
 the exact failed contact.
+
+
+## Unset shield override in the rendered gather probe
+
+The final gather probe first aborted on Bot2: a new shield read back as
+0,0,0,1 rather than the accepted 0.2,0.52156866,0.9490196. A diagnostic
+repeat on actual seed 1477546872 reproduced it. The new tank's shader instance
+override is Nil until its first process update. Godot's AsColor converts Nil
+to opaque black; the material's initial shield is transparent. No player
+appearance, shader, or drop rule was wrong.
+
+The probe treats Nil as transparent and waits to observe an actual shield
+override. Every available nontransparent color still must match the accepted
+appearance exactly, including legitimate black. Failure diagnostics retain
+actual RGB/alpha and expected RGB. A gated native regression reads the actual
+new tank's Nil override: before it fails as opaque black; afterward it passes
+and preserves a real black value. A rendered run also verifies the processed
+tank publishes its accepted appearance. Production rendering is unchanged.
+
+The verified-layout rendered gather repeat passes 1,100 grids/32,905 body pairs,
+zero gaps, zero final drift and a 0.20 s longest episode. Both clients observe
+two accepted-color shields and glides, host ownership, and a stable intact
+pile. Scores agree at 14 banked. This fixture-only correction does not affect
+the ordinary melee-start soak path or any replicated gameplay.
+
+```sh
+godot-mono --headless --fixed-fps 60 --path . res://scenes/dev/body_correction_tests.tscn
+godot-mono --fixed-fps 60 --resolution 960x540 --path . res://scenes/dev/body_correction_tests.tscn
+tools/dev/net_bots.sh -p 25087 -n 2 -l 45 -w 2 -s '--start-score=8 --match-seed=1477546872' -o "$PWD/build/vna-gather-fixed" -- --scenario=gather --tune.DropScatter=0.2 --tune.DropToss=1 --net-lag=120 --net-jitter=30 --net-loss=3 --capture-dir="$PWD/build/vna-gather-fixed/shots"
+```

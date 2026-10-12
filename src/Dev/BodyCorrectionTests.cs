@@ -22,6 +22,7 @@ public partial class BodyCorrectionTests : Node3D
         world.SetContentRoot(this);
         try
         {
+            await CheckShieldOverride().ConfigureAwait(true);
             var observer = CreateVent(1, Vector3.Up * 10);
             var owner = CreateVent(2, Vector3.Up * 10 + Vector3.Right * 4);
             var sync = new BodySync(world.Tuning, 4, 2);
@@ -73,6 +74,29 @@ public partial class BodyCorrectionTests : Node3D
             GD.PushError($"[body correction] FAIL {error}");
             ShutdownGuard.Quit(GetTree(), 1);
         }
+    }
+
+    private async Task CheckShieldOverride()
+    {
+        var tank = PropaneTank.Create(world);
+        world.Root.AddChild(tank);
+        tank.CollisionLayer = tank.CollisionMask = 0;
+        tank.GravityScale = 0;
+        var expected = AppearanceRecord.FromPalette(1).Color;
+        tank.MakeInvulnerable(world.Tuning.DropInvulnerableTime, expected);
+        var mesh = tank.GetNode<MeshInstance3D>("Mesh");
+        var initial = mesh.GetInstanceShaderParameter("shield_color");
+        Assert(initial.VariantType == Variant.Type.Nil, "new shield fixture already had an instance override");
+        Assert(NetTest.ReadShieldColor(initial).A == 0, "unset shield override fabricated an opaque black glow");
+        Assert(NetTest.ReadShieldColor(Colors.Black) == Colors.Black, "real opaque black was treated as an unset shield");
+        for (var frame = 0; frame < 2; frame++) { await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+        if (DisplayServer.GetName() != "headless")
+        {
+            var glow = NetTest.ReadShieldColor(mesh.GetInstanceShaderParameter("shield_color"));
+            Assert(glow.A > 0 && new Color(glow, 1) == expected, "processed shield did not publish its accepted appearance");
+            GD.Print("[body correction] rendered shield override transitions from unset to accepted color");
+        }
+        tank.QueueFree();
     }
 
     private async Task CheckSettledContact()
