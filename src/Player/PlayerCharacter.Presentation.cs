@@ -12,7 +12,7 @@ public partial class PlayerCharacter
         var tuning = World.Tuning;
         UpdateBodyContrast();
         var planar = feet.SamplePlanarVelocity(dt);
-        animator.UpdateLocomotion(ResolvedState.Active ? planar.Length() : 0f, dt, ResolvedState.Gait);
+        animator.UpdateLocomotion(ResolvedState.Active ? planar : Vector3.Zero, facingYaw, dt, ResolvedState.Gait);
 
         visual.Rotation = new Vector3(0, facingYaw, 0);
         rig.AimTarget = aimTarget;

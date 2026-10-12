@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using Godot;
 using Propane.Core;
@@ -15,6 +16,11 @@ public sealed class CharacterAnimator
     public LocomotionPose Pose { get; }
     private readonly Tuning tuning;
     private readonly AnimationPlayer player;
+    private readonly List<(string Parameter, double Length)> gaitSamples = new();
+    private readonly List<(string Gait, string FrontBack, string LeftRight, string FrontDiagonal,
+        string BackDiagonal, string Diagonal, string LongDiagonal, string Direction)> gaitParameters = new();
+    private static readonly string[] Gaits = { "walk", "jog" };
+    private static readonly string[] Directions = { "back", "left", "right", "front_left", "front_right", "back_left", "back_right" };
     private const string Air = "parameters/air/blend_amount";
     private const string Hold = "parameters/hold/blend_amount";
     private const string Hit = "parameters/hit/request";
@@ -23,8 +29,7 @@ public sealed class CharacterAnimator
 
     private static readonly string[] UpperBodyBones =
     {
-        "spine_01", "spine_02", "spine_03",
-        "clavicle_l", "upperarm_l", "lowerarm_l", "hand_l", "clavicle_r", "upperarm_r", "lowerarm_r", "hand_r",
+        "upperarm_l", "lowerarm_l", "hand_l", "upperarm_r", "lowerarm_r", "hand_r",
         "index_01_l", "index_02_l", "index_03_l", "middle_01_l", "middle_02_l", "middle_03_l",
         "pinky_01_l", "pinky_02_l", "pinky_03_l", "ring_01_l", "ring_02_l", "ring_03_l",
         "thumb_01_l", "thumb_02_l", "thumb_03_l",
@@ -34,12 +39,30 @@ public sealed class CharacterAnimator
     };
 
     private readonly AnimationTree tree;
+    private float previousFacing;
+    private bool hasFacing;
+    private float filteredYawSpeed;
+
+    public void Reset()
+    {
+        Pose.Reset();
+        hasFacing = false;
+        filteredYawSpeed = 0;
+    }
 
     public CharacterAnimator(Tuning tuning, AnimationPlayer player, Node3D modelRoot, string skeletonPath)
     {
         this.tuning = tuning;
         Pose = new LocomotionPose(tuning);
         this.player = player;
+        foreach (var gait in Gaits)
+        {
+            foreach (var direction in Directions)
+                gaitSamples.Add(($"parameters/{gait}_{direction}_seek/seek_request", player.GetAnimation(DirectionalClip(gait, direction)).Length));
+            gaitParameters.Add((gait, $"parameters/{gait}_front_back/blend_amount", $"parameters/{gait}_left_right/blend_amount",
+                $"parameters/{gait}_front_diagonal/blend_amount", $"parameters/{gait}_back_diagonal/blend_amount",
+                $"parameters/{gait}_diagonal/blend_amount", $"parameters/{gait}_long_diagonal/blend_amount", $"parameters/{gait}_direction/blend_amount"));
+        }
         tree = new AnimationTree
         {
             Name = "AnimationTree",
@@ -60,11 +83,33 @@ public sealed class CharacterAnimator
     private const float GetUpSpeed = 1.1f;
 
     /// <summary>All moving clips are sampled at the same normalized phase. Blending never restarts a foot.</summary>
-    public void UpdateLocomotion(float planarSpeed, float delta, PlayerGait resolvedGait)
+    public void UpdateLocomotion(Vector3 planar, float facingYaw, float delta, PlayerGait resolvedGait)
     {
-        Pose.Update(planarSpeed, resolvedGait, delta);
+        var local = new Basis(Vector3.Up, facingYaw).Inverse() * planar;
+        var yawSpeed = hasFacing ? Mathf.RadToDeg(Mathf.Wrap(facingYaw - previousFacing, -Mathf.Pi, Mathf.Pi)) / Mathf.Max(delta, 0.00001f) : 0;
+        previousFacing = facingYaw;
+        hasFacing = true;
+        filteredYawSpeed = Mathf.Lerp(filteredYawSpeed, yawSpeed, 1 - Mathf.Exp(-tuning.TurnVelocityResponse * delta));
+        Pose.Update(planar.Length(), resolvedGait, delta, new Vector2(local.X, -local.Z), filteredYawSpeed);
+        tree.Set("parameters/turn_left_seek/seek_request", Pose.TurnPhase * player.GetAnimation("Turn_Left").Length);
+        tree.Set("parameters/turn_right_seek/seek_request", Pose.TurnPhase * player.GetAnimation("Turn_Right").Length);
+        tree.Set("parameters/turn_direction/blend_amount", Pose.TurnRight);
+        tree.Set("parameters/turning/blend_amount", Pose.Turn);
         tree.Set("parameters/walk_seek/seek_request", Pose.Phase * player.GetAnimation("Walk").Length);
         tree.Set("parameters/jog_seek/seek_request", Pose.Phase * player.GetAnimation("Jog_Fwd").Length);
+        foreach (var sample in gaitSamples) tree.Set(sample.Parameter, Pose.Phase * sample.Length);
+        foreach (var parameters in gaitParameters)
+        {
+            tree.Set(parameters.FrontBack, Pose.BackBlend);
+            tree.Set(parameters.LeftRight, Pose.RightBlend);
+            tree.Set(parameters.FrontDiagonal, Pose.RightBlend);
+            tree.Set(parameters.BackDiagonal, Pose.RightBlend);
+            tree.Set(parameters.Diagonal, Pose.BackBlend);
+            var sideWeight = parameters.Gait == "walk" ? Pose.WalkSideBlend : Pose.JogSideBlend;
+            var diagonalWeight = parameters.Gait == "walk" ? Pose.WalkDiagonalWeight : Pose.JogDiagonalWeight;
+            tree.Set(parameters.LongDiagonal, Mathf.Min(1, sideWeight / diagonalWeight));
+            tree.Set(parameters.Direction, Mathf.Max(0, (sideWeight - diagonalWeight) / (1 - diagonalWeight)));
+        }
         tree.Set("parameters/sprint_seek/seek_request", Pose.Phase * player.GetAnimation("Sprint").Length);
         tree.Set("parameters/walk_jog/blend_amount", 1 - Pose.Walk);
         tree.Set("parameters/gaits/blend_amount", Pose.Sprint);
@@ -94,6 +139,10 @@ public sealed class CharacterAnimator
     private float jumpSample;
     private int takeoffs;
 
+    private static string DirectionalClip(string gait, string direction)
+        => (gait == "walk" ? "Walk" : "Jog") + "_" + string.Join("_", System.Array.ConvertAll(direction.Split('_'),
+            part => char.ToUpperInvariant(part[0]) + part[1..]));
+
     public void PlayHit() => tree.Set(Hit, (int)AnimationNodeOneShot.OneShotRequest.Fire);
 
     public void PlayGetUp() => tree.Set(GetUp, (int)AnimationNodeOneShot.OneShotRequest.Fire);
@@ -122,13 +171,40 @@ public sealed class CharacterAnimator
             root.ConnectNode(name, 0, a);
             root.ConnectNode(name, 1, b);
         }
-        Blend("walk_jog", "walk_seek", "jog_seek");
+        foreach (var gait in Gaits)
+        {
+            foreach (var side in Directions)
+            {
+                var name = gait + "_" + side;
+                var clip = DirectionalClip(gait, side);
+                root.AddNode(name + "_clip", Clip(clip));
+                root.AddNode(name + "_seek", new AnimationNodeTimeSeek());
+                root.ConnectNode(name + "_seek", 0, name + "_clip");
+            }
+            Blend(gait + "_front_back", gait + "_seek", gait + "_back_seek");
+            Blend(gait + "_left_right", gait + "_left_seek", gait + "_right_seek");
+            Blend(gait + "_front_diagonal", gait + "_front_left_seek", gait + "_front_right_seek");
+            Blend(gait + "_back_diagonal", gait + "_back_left_seek", gait + "_back_right_seek");
+            Blend(gait + "_diagonal", gait + "_front_diagonal", gait + "_back_diagonal");
+            Blend(gait + "_long_diagonal", gait + "_front_back", gait + "_diagonal");
+            Blend(gait + "_direction", gait + "_long_diagonal", gait + "_left_right");
+        }
+        Blend("walk_jog", "walk_direction", "jog_direction");
         Blend("gaits", "walk_jog", "sprint_seek");
         Blend("moving", "idle", "gaits");
-        Blend("air", "moving", "fall_seek");
+        foreach (var side in new[] { "left", "right" })
+        {
+            var name = "turn_" + side;
+            root.AddNode(name + "_clip", Clip(side == "left" ? "Turn_Left" : "Turn_Right"));
+            root.AddNode(name + "_seek", new AnimationNodeTimeSeek());
+            root.ConnectNode(name + "_seek", 0, name + "_clip");
+        }
+        Blend("turn_direction", "turn_left_seek", "turn_right_seek");
+        Blend("turning", "moving", "turn_direction");
+        Blend("air", "turning", "fall_seek");
         Blend("land", "air", "land_seek");
 
-        // Stabilize the torso and arms across gaits; the rig supplies wrists and individual finger curls.
+        // Keep authored pelvis/spine motion; only the arms use the rifle hold base.
         root.AddNode("hold_clip", Clip("Pistol_Idle"), new Vector2(800, 450));
         var hold = new AnimationNodeBlend2 { FilterEnabled = true };
         foreach (var bone in UpperBodyBones)

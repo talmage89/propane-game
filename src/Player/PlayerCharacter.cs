@@ -267,7 +267,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         resolver.Reset();
         ResolvedState = default;
         airTime = 0;
-        animator.Pose.Reset();
+        animator.Reset();
         feet.Reset();
         GlobalPosition = position;
         Velocity = Vector3.Zero;
@@ -449,31 +449,19 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         {
             targetYaw = Mathf.Atan2(-meleeDirection.X, -meleeDirection.Z);
         }
-        else if (ready)
+        else if (ResolvedState.Gait == PlayerGait.Sprint && wish.LengthSquared() > tuning.FacingInputThreshold * tuning.FacingInputThreshold)
         {
-            if (wish.LengthSquared() > tuning.FacingInputThreshold * tuning.FacingInputThreshold)
-            {
-                // Legs follow the movement, torso twists to the aim. Moving backward, the legs face forward and
-                // the feet step in actual travel direction, keeping the spine within its comfortable range.
-                var moveYaw = Mathf.Atan2(-wish.X, -wish.Z);
-                var offset = Mathf.Wrap(moveYaw - aimYaw, -Mathf.Pi, Mathf.Pi);
-                if (Mathf.Abs(offset) > Mathf.DegToRad(tuning.BackpedalAngleDegrees))
-                {
-                    offset = Mathf.Wrap(offset + Mathf.Pi, -Mathf.Pi, Mathf.Pi);
-                }
-                var limit = Mathf.DegToRad(tuning.CombatSpineTwistDegrees);
-                targetYaw = aimYaw + Mathf.Clamp(offset, -limit, limit);
-            }
-            else
-            {
-                // Standing: turn in place only once the twist gets large.
-                var offset = Mathf.Wrap(facingYaw - aimYaw, -Mathf.Pi, Mathf.Pi);
-                targetYaw = Mathf.Abs(offset) > Mathf.DegToRad(tuning.CombatTurnDegrees) ? aimYaw : facingYaw;
-            }
+            targetYaw = Mathf.Atan2(-wish.X, -wish.Z);
         }
         else if (wish.LengthSquared() > tuning.FacingInputThreshold * tuning.FacingInputThreshold)
         {
-            targetYaw = Mathf.Atan2(-wish.X, -wish.Z);
+            // Facing is presentation: authored backpedal/strafe clips move under the camera's aim direction.
+            targetYaw = aimYaw;
+        }
+        else if (ready)
+        {
+            var offset = Mathf.Wrap(facingYaw - aimYaw, -Mathf.Pi, Mathf.Pi);
+            targetYaw = Mathf.Abs(offset) > Mathf.DegToRad(tuning.CombatTurnDegrees) ? aimYaw : facingYaw;
         }
         else
         {
@@ -557,7 +545,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
             WeaponAction.Carry, 0, 0, 0, intent.Aim, false, false);
         aimAmount = sprintAmount = readyAmount = 0;
         airTime = 0;
-        animator.Pose.Reset();
+        animator.Reset();
         feet.Reset();
         Ammo?.CancelReload();
         stateTimer = 0;

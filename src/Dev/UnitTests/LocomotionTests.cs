@@ -12,11 +12,43 @@ public static class LocomotionTests
     {
         runner.Run("locomotion keeps phase across gaits and stops", Phase);
         runner.Run("locomotion blends synchronized gaits over actual speed", SpeedBlend);
+        runner.Run("directional locomotion keeps a continuous distance clock through reversal", Directions);
         runner.Run("locomotion latches jump across physics/render rates", Jump);
         runner.Run("locomotion handles remote takeoff without a jumping snapshot", RemoteJump);
         runner.Run("locomotion scales landing and allows immediate movement", Landing);
         runner.Run("locomotion resets phase and support blends on lifecycle exit", Reset);
         runner.Run("pose blend preserves unit rotations during tiny simulation steps", () => PoseNormalization(runner.World));
+    }
+
+    private static void Directions()
+    {
+        using var tuning = new Tuning();
+        var pose = new LocomotionPose(tuning);
+        pose.ObservePhysics(State(PlayerSupport.Grounded), 0);
+        const float dt = 1f / 60;
+        void Settle(Vector2 direction)
+        {
+            for (var i = 0; i < 180; i++) pose.Update(tuning.CreepSpeed, PlayerGait.Creep, dt, direction);
+            TestRunner.Assert(pose.Direction.Dot(direction) > .999f, "direction did not settle on travel");
+        }
+        Settle(Vector2.Down);
+        var forwardStride = pose.Stride;
+        for (var i = 0; i < 180; i++)
+        {
+            var before = pose.Phase;
+            pose.Update(tuning.CreepSpeed, PlayerGait.Creep, dt, Vector2.Up);
+            TestRunner.Assert(Mathf.Abs(pose.Direction.Length() - 1) < .00001f, "reversal collapsed travel direction");
+            var advance = Mathf.PosMod(pose.Phase - before, 1);
+            TestRunner.Assert(advance > 0 && advance < .1f, "reversal reset or jumped the stride clock");
+        }
+        TestRunner.Assert(pose.Direction.Dot(Vector2.Up) > .999f && pose.Stride < forwardStride,
+            "backpedal did not retain forward-facing, shorter steps");
+        foreach (var direction in new[] { Vector2.Left, Vector2.Right, new Vector2(1, 1).Normalized(), new Vector2(-1, -1).Normalized() })
+            Settle(direction);
+        var phase = pose.Phase;
+        var facing = pose.Direction;
+        pose.Update(0, PlayerGait.Default, dt, Vector2.Zero);
+        TestRunner.Assert(pose.Phase == phase && pose.Direction == facing, "stopping lost the authored cycle");
     }
 
     private static void PoseNormalization(WorldContext world)

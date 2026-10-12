@@ -4,8 +4,8 @@ using Propane.Player;
 
 namespace Propane.Dev;
 
-/// <summary>Controlled snapshot motion covers every body-relative direction even where local sprint intent is
-/// forward-only. The animation must also tolerate those directions during interpolated turns and knockback.</summary>
+/// <summary>Controlled snapshots cover eight directions for each gait. Walk/creep keep aim-facing hips;
+/// sprint faces travel, as the local controller does. Corrections cover interpolation and knockback.</summary>
 public partial class LocomotionMatrix : Node
 {
     public PlayerCharacter Player { get; init; } = null!;
@@ -41,8 +41,9 @@ public partial class LocomotionMatrix : Node
         {
             Position = position + correction,
             Velocity = velocity,
-            Yaw = 0,
-            AimTarget = position + new Vector3(0, 1.5f, -20),
+            Yaw = gait == PlayerGait.Sprint ? -angle : 0,
+            AimTarget = position + Vector3.Up * 1.5f + (gait == PlayerGait.Sprint
+                ? new Vector3(Mathf.Sin(angle), 0, -Mathf.Cos(angle)) * 20 : Vector3.Forward * 20),
             Grounded = true,
             Support = PlayerSupport.Grounded,
             Gait = gait,

@@ -20,6 +20,7 @@ public partial class PoseBlend : SkeletonModifier3D
     private Quaternion[]? previous;
     private Quaternion[]? displayed;
     private bool[] digitBones = Array.Empty<bool>();
+    private bool[] legBones = Array.Empty<bool>();
 
     public bool HasCapture => captured != null && !captureRequested;
 
@@ -118,16 +119,20 @@ public partial class PoseBlend : SkeletonModifier3D
         if (digitBones.Length != count)
         {
             digitBones = new bool[count];
+            legBones = new bool[count];
             for (var i = 0; i < count; i++)
             {
                 var name = skeleton.GetBoneName(i).ToString();
+                legBones[i] = name.StartsWith("thigh_", StringComparison.Ordinal) || name.StartsWith("calf_", StringComparison.Ordinal) ||
+                    name.StartsWith("foot_", StringComparison.Ordinal) || name.StartsWith("ball_", StringComparison.Ordinal);
                 digitBones[i] = name.StartsWith("index_", StringComparison.Ordinal) || name.StartsWith("middle_", StringComparison.Ordinal) ||
                     name.StartsWith("ring_", StringComparison.Ordinal) || name.StartsWith("pinky_", StringComparison.Ordinal) || name.StartsWith("thumb_", StringComparison.Ordinal);
             }
         }
         var initialized = previous != null;
         previous ??= new Quaternion[count];
-        var limit = Mathf.DegToRad(World.Tuning.PoseAngularSpeed) * dt;
+        var upperLimit = Mathf.DegToRad(World.Tuning.PoseAngularSpeed) * dt;
+        var legLimit = Mathf.DegToRad(World.Tuning.FootPoseRecoverySpeed) * dt;
         for (var i = 0; i < count; i++)
         {
             var target = skeleton.GetBonePoseRotation(i).Normalized();
@@ -136,6 +141,7 @@ public partial class PoseBlend : SkeletonModifier3D
             {
                 var difference = previous[i].Inverse() * target;
                 var angle = 2 * Mathf.Atan2(new Vector3(difference.X, difference.Y, difference.Z).Length(), Mathf.Abs(difference.W));
+                var limit = legBones[i] ? legLimit : upperLimit;
                 if (angle > limit) target = previous[i].Slerp(target, limit / angle);
                 skeleton.SetBonePoseRotation(i, target);
             }

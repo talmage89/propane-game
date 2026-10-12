@@ -20,7 +20,7 @@ public partial class LocomotionProbe : SkeletonModifier3D
     public bool RequireJumpPhases { get; init; }
     public bool SkipNextPose { get; set; }
     private readonly List<(string Label, double Time, Vector3 Left, Vector3 Right)> samples = new();
-    private readonly StringBuilder csv = new("label,time,left_x,left_y,left_z,right_x,right_y,right_z,max_bone_deg,phase,left_plant,right_plant,left_error,right_error,reach_error,pelvis,jump\n");
+    private readonly StringBuilder csv = new("label,time,left_x,left_y,left_z,right_x,right_y,right_z,max_bone_deg,phase,left_plant,right_plant,left_error,right_error,reach_error,pelvis,jump,drift_window,settled,root_x,root_y,root_z\n");
     private readonly HashSet<JumpPose> jumpPhases = new();
     private readonly Dictionary<string, (int Count, float Error, float Drift)> contacts = new();
     private readonly Vector3[] previousFeet = new Vector3[2];
@@ -103,7 +103,7 @@ public partial class LocomotionProbe : SkeletonModifier3D
                 var foot = side == 0 ? left : right;
                 var anchor = side == 0 ? feet.LeftAnchor : feet.RightAnchor;
                 var planted = side == 0 ? feet.LeftPlanted : feet.RightPlanted;
-                if (SampleTurns && !planted && foot.Y - Player.GlobalPosition.Y > Player.World.Tuning.FootSoleHeight + Player.World.Tuning.WalkFootLift * 0.5f)
+                if (SampleTurns && !planted && foot.Y - Player.GlobalPosition.Y > Player.World.Tuning.FootSoleHeight + 0.045f)
                     turnLifts[side]++;
                 if (planted)
                 {
@@ -121,7 +121,7 @@ public partial class LocomotionProbe : SkeletonModifier3D
         }
         var leftError = feet?.LeftPlanted == true ? left.DistanceTo(feet.LeftAnchor) : 0;
         var rightError = feet?.RightPlanted == true ? right.DistanceTo(feet.RightAnchor) : 0;
-        csv.AppendLine(FormattableString.Invariant($"{Label},{time:F6},{left.X:F6},{left.Y:F6},{left.Z:F6},{right.X:F6},{right.Y:F6},{right.Z:F6},{angle:F3},{feet?.Pose.Phase ?? 0:F6},{feet?.LeftPlanted ?? false},{feet?.RightPlanted ?? false},{leftError:F6},{rightError:F6},{feet?.ReachError ?? 0:F6},{feet?.PelvisOffset ?? 0:F6},{feet?.Pose.Jump.ToString() ?? "baseline"}"));
+        csv.AppendLine(FormattableString.Invariant($"{Label},{time:F6},{left.X:F6},{left.Y:F6},{left.Z:F6},{right.X:F6},{right.Y:F6},{right.Z:F6},{angle:F3},{feet?.Pose.Phase ?? 0:F6},{feet?.LeftPlanted ?? false},{feet?.RightPlanted ?? false},{leftError:F6},{rightError:F6},{feet?.ReachError ?? 0:F6},{feet?.PelvisOffset ?? 0:F6},{feet?.Pose.Jump.ToString() ?? "baseline"},{SampleDrift},{feet?.Settled ?? true},{Player.GlobalPosition.X:F6},{Player.GlobalPosition.Y:F6},{Player.GlobalPosition.Z:F6}"));
     }
 
     public void AssertSplitSupport()
