@@ -70,5 +70,5 @@ python3 -B tools/dev/measure_vents.py --baseline=build/pv-before --output="$PWD/
 back to back, twice at 32/64/128/40 tanks in idle/blast/chain phases. It preserves 600 raw samples per run, logs,
 before/after machine load and a summary CSV; missing GPU samples, engine errors or a failed scene abort it.
 Rendered harnesses also accept `--frame-metrics=<directory>` for per-process CSV telemetry after 180 startup
-frames. GPU readings are delayed relative to script timers; process/physics Performance monitors update less
+frames, monotonic timestamps and explosion counts for locating the largest rendered burst. GPU readings are delayed relative to script timers; process/physics Performance monitors update less
 frequently than the frame samples. Use direct timers for individual CPU spikes, not repeated monitor values.
