@@ -195,7 +195,7 @@ the engine tears down its C# bindings and native servers. Static caches remain a
 
 ## Dev harnesses
 
-The [animation review harness](docs/animation-review.md) compares all 34 controller cases from both review views, with a strict calibrated gate and release/dev/candidate media. External sources include Quaternius CC0 and 100STYLE CC BY 4.0.
+The [animation review harness](docs/animation-review.md) compares all 35 controller cases from both review views, with a strict calibrated gate and release/dev/candidate media. External sources include Quaternius CC0 and 100STYLE CC BY 4.0.
 
 Each scene in `scenes/dev` is a scripted test. Arguments after `--` are read by `src/Dev/DevArgs.cs`;
 `--capture-dir=<dir>` saves screenshots, `--record=<file.mp4>` films the window in real time (needs ffmpeg on `PATH`,

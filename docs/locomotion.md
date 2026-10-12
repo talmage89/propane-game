@@ -2,7 +2,7 @@
 
 The controller owns travel, acceleration, gait eligibility, jumping and melee timing. Animation presents those
 rules. The mannequin rebuild and licenses are documented in [animation sources](animation-sources.md); the
-34-case controller comparison is documented in [animation review](animation-review.md).
+35-case controller comparison is documented in [animation review](animation-review.md).
 
 `CharacterAnimator` blends forward, backward, sideways and baked diagonal walk/jog clips on one retained stride
 phase. Speed controls cadence; walk-to-jog weights change through acceleration. Aimed creep remains 1.6 m/s.
@@ -68,7 +68,7 @@ measurements. `feet.csv` records frame-level poses, correction state, contact fl
 `jump-timing.csv` compares physics and pose ticks.
 
 `make test` includes these probes and the strict seven-case animation gate. `make test-full` additionally runs the
-full 34-case gate and deeper lifecycle, melee and generation sweeps. Rendered review remains necessary: proxies
+full 35-case gate and deeper lifecycle, melee and generation sweeps. Rendered review remains necessary: proxies
 and continuity bounds do not establish a natural silhouette or exact mesh collision freedom.
 
 Presentation tuners are shared match data and require a minor release. Message shapes and `Protocol.Version`

@@ -22,8 +22,9 @@ library and Godot. No downloads or recordings are required by CI.
 Each three-second case starts at the origin. Scripted controller intent moves between 0.25 and 2.65 seconds, including acceleration
 and stopping. Walk uses 0.25 analog input (1.5 m/s); jog uses full input (6 m/s); aimed creep is 1.6 m/s. Directions
 are 0 forward, 45 forward/right, 90 right, 135 back/right, 180 back, 225 back/left, 270 left, 315 forward/left.
-The complete 34-case matrix includes idle, those 24 combinations, sprint, start/stop, a continuous aimed reversal,
+The original 34-case matrix includes idle, those 24 combinations, sprint, start/stop, a continuous aimed reversal,
 stationary half-turn and return, jumping while holding aim, a burst, tactical reload, melee and stationary aim.
+An additional `hip_burst` case explicitly shows the first carry-to-fire transition.
 Teleports separate cases; they are not pivots. Reload starts with 20 rounds. The release has no melee; its slot is
 explicitly marked unavailable. Only its review fixture normalizes the older 3.6 m/s aim speed to 1.6 m/s.
 Device delivery is checked separately by `menu_test --scenario=input`, which injects real keyboard and mouse events.
@@ -31,7 +32,9 @@ Device delivery is checked separately by `menu_test --scenario=input`, which inj
 Tuners are fresh **code defaults**, independent of saved settings or project `tuning.tres`. Direct current-build runs
 accept explicit `--tune.Name=value` overrides for pose research; comparison commands use defaults. Differences in a build's
 camera code remain visible in the player view. Side view has fixed framing. `--cases=a,b` limits a run; `--view=player`
-uses the real player camera. `--capture-dir=$PWD/build/...` saves 12 samples per simulated second. The tool creates
+uses the real player camera. `--capture-dir=$PWD/build/...` saves 12 samples per simulated second by default;
+`animation_review.py --capture-fps=60` captures every rendered sample for smoother owner clips. The manifest
+records the cadence and assembly uses that value. The tool creates
 captioned six-frame sheets and deterministic short MP4s from those images, paired sheets for every build pair,
 and `index.html` opening release, dev and candidate side by side, with optional two-build selection,
 synchronized restart and half speed. Independent clip selection compares Walk
@@ -45,13 +48,22 @@ godot-mono --resolution 960x540 --disable-vsync --path . res://scenes/dev/animat
 Fixed-step films are the comparison evidence; real-time `--record` cadence is affected by other GPU work. Neither
 is a frame-time benchmark. Inspect all sheets and action footage before asking the owner to approve a redo.
 
+For compact owner material, capture the selected cases at 60 fps, then compose their six views:
+
+```sh
+python3 -B tools/dev/animation_owner_review.py build/animation-owner-source --output build/owner-review
+```
+
+The source must contain `release`, `dev` and `candidate` media from `animation_review.py`. Composition writes one
+H.264 1280×720 MP4 per case, checks each is below 8 MB, and writes a short viewing guide and exact provenance.
+
 ## Metrics and calibration
 
 `make test` samples the seven named gate cases at 60 Hz in a final skeleton modifier, after feet, rifle and hands.
 It rejects missing bones, non-finite values, incomplete windows, insufficient contact observations and skipped
 frames. Python unit tests reject frozen feet, dropped samples and ineffective collision bounds. Each settled window
 is 0.8–2.5 seconds: acceleration, stopping and teleport frames are excluded. A metric JSON lists every visual check and measured value. `--strict` makes any visual failure return nonzero.
-`make test-full` measures all 34 cases with motion and grip assertions and runs the same strict checks. An improvement is reported as a pass rather than rejected as an unexpected success.
+`make test-full` measures all 35 cases with motion and grip assertions and runs the same strict checks. An improvement is reported as a pass rather than rejected as an unexpected success.
 
 The immutable calibration in `tools/dev/animation_calibration.json` comes from `v0.2.0` (`7170a13c8d44`) through
 this harness. Bare authored UAL1 clips independently cross-check it: Walk ankle correlation −0.597 and head

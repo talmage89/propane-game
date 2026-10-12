@@ -79,21 +79,22 @@ def assemble(builds, output):
         for case in manifest:
             name = case['name']
             for view in ('side', 'player'):
-                expected = math.ceil((case['end'] - case['start']) * 12 - .001) - 1
+                fps = case.get('capture_fps', 12)
+                expected = math.ceil((case['end'] - case['start']) * fps - .001) - 1
                 frames = capture_frames(path / view, name, expected)
                 sheet = Image.new('RGB', (960, 3 * 294), '#ddd')
                 draw = ImageDraw.Draw(sheet)
                 for i in range(6):
                     last = len(frames) - 1
                     if 'clip_seconds' in case and not case['loop']:
-                        last = min(last, max(1, math.ceil(case['clip_seconds'] * 12) - 2))
+                        last = min(last, max(1, math.ceil(case['clip_seconds'] * fps) - 2))
                     frame = frames[i * last // 5]
                     with Image.open(frame) as image:
                         sheet.paste(ImageOps.contain(image.convert('RGB'), (480, 270)), ((i % 2) * 480, (i // 2) * 294))
                     draw.text(((i % 2) * 480 + 4, (i // 2) * 294 + 274), f'{label} / {view} / {name} / {frame.stem}', fill='black')
                 sheet.save(path / f'{view}-{name}.jpg', quality=90)
                 # Fixed-step captured frames yield exact playback cadence, independent of competing GPU load.
-                subprocess.run(['ffmpeg', '-loglevel', 'error', '-y', '-framerate', '12', '-start_number', '1',
+                subprocess.run(['ffmpeg', '-loglevel', 'error', '-y', '-framerate', str(fps), '-start_number', '1',
                                 '-i', str(path / view / (name + '_%03d.png')), '-frames:v', str(expected), '-c:v', 'libx264', '-pix_fmt', 'yuv420p',
                                 '-movflags', '+faststart', str(path / f'{view}-{name}.mp4')], check=True)
     for (left_label, left), (right_label, right) in itertools.combinations(builds, 2):
@@ -113,7 +114,7 @@ def assemble(builds, output):
     # Three columns open release, dev and candidate together. Two-run comparisons remain available.
     document = '''<!doctype html><meta charset="utf-8"><title>Propane animation review</title>
 <style>body{font:16px sans-serif;background:#222;color:#eee}main{display:flex;gap:1em}article{flex:1;min-width:0}video,img{width:100%}select,button{margin:.5em}small{display:block}</style>
-<h1>Animation review</h1><p>Fixed-step 12 fps films. Compare release, dev and candidate together, or select two runs. Controller builds use identical inputs and code-default tuners; external clips are stationary previews. Each run has provenance.json.</p>
+<h1>Animation review</h1><p>Fixed-step films (cadence in each manifest). Compare release, dev and candidate together, or select two runs. Controller builds use identical inputs and code-default tuners; external clips are stationary previews. Each run has provenance.json.</p>
 <label>Left <select id="left"></select></label><label>Right <select id="right"></select></label>
 <label><input id="three" type="checkbox">Three runs</label><label>Third <select id="third"></select></label>
 <select id="view"><option>side</option><option>player</option></select><select id="motion"></select>
@@ -146,6 +147,8 @@ def main():
     parser.add_argument('--metrics-only', action='store_true')
     parser.add_argument('--assemble-only', action='store_true')
     parser.add_argument('--cases', default='')
+    parser.add_argument('--capture-fps', type=int, choices=range(1, 61), default=12,
+                        help='fixed-step media cadence; use 60 for owner clips')
     parser.add_argument('--candidate', metavar='LABEL=GLB', help='preview an external library on the packaged mannequin')
     parser.add_argument('--anims', default='Walk_Loop', help='candidate names, comma-separated; @reverse derives backward playback')
     parser.add_argument('--hands', action='store_true', help='candidate preview retains current rifle hand solve')
@@ -174,6 +177,7 @@ def main():
         project, sha = prepare(ref, output / 'projects')
         (path / 'provenance.json').write_text(json.dumps({'ref': ref, 'sha': sha, 'harness_sha256': hashlib.sha256(b''.join((ROOT / f).read_bytes() for f in FILES)).hexdigest()}, indent=2))
         common = [godot, '--path', str(project), '--fixed-fps', '60', 'res://scenes/dev/animation_review.tscn', '--', f'--label={label}']
+        common.append('--capture-fps=' + str(args.capture_fps))
         if args.cases:
             common.append('--cases=' + args.cases)
         if args.metrics_only:

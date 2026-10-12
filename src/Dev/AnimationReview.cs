@@ -19,7 +19,7 @@ public partial class AnimationReview : Node3D
     private Camera3D? observer;
     private Label caption = null!;
     private string current = "";
-    private int burstShots;
+    private int burstShots, hipBurstShots;
     private bool jumped;
     private bool reloaded;
     private bool struck;
@@ -64,7 +64,11 @@ public partial class AnimationReview : Node3D
         LocalView.Attach(player, this).Hud.ShowHud(false);
 #endif
         player.InputOverride = input;
-        player.Fired += _ => { if (CaseAt(input.Now).Name == "burst") burstShots++; };
+        player.Fired += _ =>
+        {
+            if (CaseAt(input.Now).Name == "burst") burstShots++;
+            if (CaseAt(input.Now).Name == "hip_burst") hipBurstShots++;
+        };
 #if !PROPANE_REVIEW_RELEASE
         player.MeleeStarted += (_, _) => struck = true;
 #endif
@@ -94,6 +98,7 @@ public partial class AnimationReview : Node3D
             ? GripProbe.Attach(player) : null;
 #endif
         var cursor = 0f;
+        var captureFps = Math.Clamp((int)DevArgs.GetFloat("capture-fps", 12), 1, 60);
         var filter = DevArgs.Get("cases")?.Split(',');
         void Case(string name, Action<float> schedule, float length = 3)
         {
@@ -110,8 +115,8 @@ public partial class AnimationReview : Node3D
 #endif
             });
             schedule(start);
-            // A dense sequence also serves as a deterministic 12 fps review film; --record remains available.
-            for (var i = 1; i < length * 12; i++) director.ShotAt(start + i / 12f, $"{name}_{i:000}");
+            // Fixed-step frames keep comparison cadence independent of shared GPU load.
+            for (var i = 1; i < length * captureFps; i++) director.ShotAt(start + (float)i / captureFps, $"{name}_{i:000}");
             cursor += length;
         }
         Case("idle", _ => { });
@@ -151,6 +156,8 @@ public partial class AnimationReview : Node3D
             input.Hold(t, t + 3, new PlayerIntent { Aim = true });
             input.Hold(t + 0.5f, t + 1.3f, new PlayerIntent { FireHeld = true });
         });
+        // Add the first hip shot explicitly: the aimed burst cannot reveal a carry-to-fire snap.
+        Case("hip_burst", t => input.Hold(t + 0.5f, t + 1.3f, new PlayerIntent { FireHeld = true }));
         Case("reload", t =>
         {
             director.At(t, () => player.Ammo!.Magazine = 20);
@@ -167,7 +174,7 @@ public partial class AnimationReview : Node3D
         director.At(cursor - 0.1f, () =>
         {
             bool Included(string name) => cases.Any(c => c.Name == name);
-            var failed = (Included("burst") && burstShots < 2) || (Included("jump_land") && !jumped) ||
+            var failed = (Included("burst") && burstShots < 2) || (Included("hip_burst") && hipBurstShots < 2) || (Included("jump_land") && !jumped) ||
                 (Included("reload") && !reloaded);
 #if !PROPANE_REVIEW_RELEASE
             failed |= Included("melee") && !struck;
@@ -175,7 +182,7 @@ public partial class AnimationReview : Node3D
             if (failed) { GD.PushError("[animation-review] FAIL controller action coverage"); Quit(GetTree(), 1); }
             else
             {
-                GD.Print($"[animation-review] controller coverage: burst={burstShots}, jump={jumped}, reload={reloaded}, melee={struck}");
+                GD.Print($"[animation-review] controller coverage: burst={burstShots}, hip-burst={hipBurstShots}, jump={jumped}, reload={reloaded}, melee={struck}");
             }
         });
 #if !PROPANE_REVIEW_RELEASE
@@ -198,6 +205,7 @@ public partial class AnimationReview : Node3D
                 name = c.Name,
                 start = c.Start,
                 end = c.End,
+                capture_fps = captureFps,
 #if PROPANE_REVIEW_RELEASE
             available = c.Name != "melee",
 #else
