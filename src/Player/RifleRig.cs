@@ -85,6 +85,7 @@ public partial class RifleRig : SkeletonModifier3D
         // Physics can fire on the first tick after a reload finishes, before presentation clears its
         // magazine/bolt contact. Fit the firing foregrip that this frame will actually render.
         reloadPhase = reloadTarget = lastReloadPhase = 0;
+        meleeReloadForward = false;
         Rifle.PreviewReloadContact(0);
         var from = skeleton.GlobalTransform;
         var shoulderR = from * (hasUpperPose ? lastShoulderR : skeleton.GetBoneGlobalPose(upperR).Origin);

@@ -45,7 +45,8 @@ Remote reliable shot echoes are queued until the rig samples the displayed body 
 snapshot relocation/facing and can still see a reload contact that presentation will overwrite. Fitting and
 emitting the flash/tracer together inside the modifier keeps the firing muzzle, cached upper root and foregrip
 in one frame. A delayed echo also owns the firing frame's weapon presentation if the displayed snapshot has
-already entered melee; the character restores that action on the next frame. Local shots keep their immediate authoritative fit and obstruction query; shot endpoints and
+already entered melee; the character restores that action on the next frame. Firing also clears the old
+reload-return direction, so restoring melee cannot restart an obsolete magazine contact. Local shots keep their immediate authoritative fit and obstruction query; shot endpoints and
 logical recoil are unchanged. Multiple echoes in a catch-up frame each emit their effects; the last pose renders.
 
 A second failure occurred at close endpoints: alternating barrel alignment about the muzzle with restoring a

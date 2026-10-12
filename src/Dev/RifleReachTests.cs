@@ -64,13 +64,14 @@ public partial class RifleReachTests : Node3D
                 Echo(origin + new Vector3(3, 1, -20));
                 await Frames(2).ConfigureAwait(true);
 
-                stage = $"turn {turn}: echo during displayed melee";
+                stage = $"turn {turn}: echo during displayed melee after late reload";
+                Apply(origin, turn * Mathf.Pi / 4, .65f);
+                await Frames(60).ConfigureAwait(true);
                 Apply(origin, turn * Mathf.Pi / 4, melee: .4f);
-                await Frames(10).ConfigureAwait(true);
                 Echo(origin + new Vector3(3, 1, -20));
-                await Frames(2).ConfigureAwait(true);
-
+                await Frames(4).ConfigureAwait(true);
                 Assert(rig.Melee, "delayed echo suppressed melee beyond its firing frame");
+                Assert(rig.ForegripResidual <= .003f, $"echo restarted the stale reload return: {rig.ForegripResidual:F6}m");
 
                 stage = $"turn {turn}: completed reload before presentation";
                 Apply(origin, turn * Mathf.Pi / 4);
