@@ -314,6 +314,8 @@ public partial class MenuGamepadTest : Node
         await Frames().ConfigureAwait(true);
         CheckFocus("Multiplayer");
         await ToSignal(GetTree().CreateTimer(0.46), SceneTreeTimer.SignalName.Timeout);
+        CheckFocus("Lab");
+        await ToSignal(GetTree().CreateTimer(0.14), SceneTreeTimer.SignalName.Timeout);
         CheckFocus("Quit");
         await Axis(JoyAxis.LeftY, 0).ConfigureAwait(true);
         await ToSignal(GetTree().CreateTimer(0.2), SceneTreeTimer.SignalName.Timeout);

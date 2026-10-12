@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using Godot;
 using Propane.Core;
 
@@ -34,7 +36,7 @@ public partial class RifleRig : SkeletonModifier3D
     private Quaternion[] desiredBones = null!;
     private Vector3[] previousPositions = null!, desiredPositions = null!;
     private int[] upperBones = null!;
-    private Transform3D lastRifle, lastChest;
+    private Transform3D lastRifle, lastChest, lastUpperParent;
     private float lastReloadPhase;
     private bool meleeReloadForward, hadMelee;
     private bool hasUpperPose;
@@ -66,13 +68,25 @@ public partial class RifleRig : SkeletonModifier3D
     private float alignmentRemaining;
     /// <summary>Exact aligned shot placement, retained until the firing frame has posed both grips.</summary>
     private Transform3D? shotPose;
+    private Transform3D shotSkeletonFrame;
     private Vector3 lastShoulderR, lastShoulderL, lastNeck;
+    private readonly Queue<Vector3> remoteShots = new();
+    public event Action<Vector3>? RemoteShotAligned;
+
+    /// <summary>Reliable shot echoes can precede snapshot movement and reload presentation. Fit them only
+    /// when this frame's body transform is final; local authoritative shots still fit immediately.</summary>
+    public void QueueRemoteShot(Vector3 target) => remoteShots.Enqueue(target);
 
     /// <summary>Place the barrel and both reachable grips before the authoritative muzzle obstruction ray.</summary>
     public void AlignShot(Vector3 target)
     {
         var skeleton = GetSkeleton();
         if (skeleton == null || Rifle == null || !resolved) return;
+        // Physics can fire on the first tick after a reload finishes, before presentation clears its
+        // magazine/bolt contact. Fit the firing foregrip that this frame will actually render.
+        reloadPhase = reloadTarget = lastReloadPhase = 0;
+        meleeReloadForward = false;
+        Rifle.PreviewReloadContact(0);
         var from = skeleton.GlobalTransform;
         var shoulderR = from * (hasUpperPose ? lastShoulderR : skeleton.GetBoneGlobalPose(upperR).Origin);
         var shoulderL = from * (hasUpperPose ? lastShoulderL : skeleton.GetBoneGlobalPose(upperL).Origin);
@@ -86,6 +100,7 @@ public partial class RifleRig : SkeletonModifier3D
         // The obstruction origin now agrees with the aligned model. Preserve it for this rendered firing frame.
         Rifle.GlobalTransform = Rifle.AlignBarrel(pose, Rifle.MuzzleLocal.Origin, target);
         shotPose = Rifle.GlobalTransform;
+        shotSkeletonFrame = from;
         alignmentRemaining = 1 / Mathf.Max(World.Tuning.FireRate, 0.1f) + 1f / Engine.PhysicsTicksPerSecond;
     }
 
@@ -146,6 +161,18 @@ public partial class RifleRig : SkeletonModifier3D
         if (!resolved)
         {
             Resolve(skeleton);
+        }
+
+        while (remoteShots.TryDequeue(out var target))
+        {
+            if (Weight > 0.001f)
+            {
+                // A newer snapshot can already be striking. The echo owns this one firing frame's
+                // weapon presentation; the character restores its current action on the next frame.
+                Melee = false;
+                AlignShot(target);
+            }
+            RemoteShotAligned?.Invoke(target);
         }
 
         var tuning = World.Tuning;
@@ -416,6 +443,18 @@ public partial class RifleRig : SkeletonModifier3D
         var releasingReload = Reload == 0 && !Melee && lastReloadPhase > 0 || Melee && meleeReloadForward;
         var proposedReload = releasingReload ? 1 : Reload;
         var fittedReload = proposedReload;
+        if (shotPose != null)
+        {
+            // Animation can advance the hips after physics fitted this muzzle against the cached shoulders.
+            // Movement can also advance the body between physics ticks. Preserve the fitting frame in world
+            // space, then rebase it into this skeleton and parent before easing toward this clip sample.
+            var root = spine[0];
+            var previousRoot = from.AffineInverse() * shotSkeletonFrame * lastUpperParent *
+                new Transform3D(new Basis(previousBones![root]), previousPositions[root]);
+            var rebased = s.GetBoneGlobalPose(s.GetBoneParent(root)).AffineInverse() * previousRoot;
+            previousBones[root] = rebased.Basis.Orthonormalized().GetRotationQuaternion();
+            previousPositions[root] = rebased.Origin;
+        }
         for (var attempt = 0; attempt < 12; attempt++)
         {
             foreach (var bone in upperBones)
@@ -470,6 +509,14 @@ public partial class RifleRig : SkeletonModifier3D
             s.SetBonePoseRotation(lowerL, previousBones[lowerL]);
             var oldR = from * s.GetBoneGlobalPose(lowerR).Origin;
             var oldL = from * s.GetBoneGlobalPose(lowerL).Origin;
+            // A fixed firing muzzle can put a trial torso outside arm reach while turning. Reject that
+            // trial before invoking IK; only the final trial reports a genuinely unreachable contact.
+            if (attempt < 11 && (right.Origin.DistanceTo(shoulderR) >= ArmLength(s, upperR, lowerR, handR) ||
+                left.Origin.DistanceTo(shoulderL) >= ArmLength(s, upperL, lowerL, handL)))
+            {
+                amount *= 0.5f;
+                continue;
+            }
             SolveTwoBone(s, upperR, lowerR, handR, to * right, to * oldR.Lerp(poleR, amount));
             SolveTwoBone(s, upperL, lowerL, handL, to * left, to * oldL.Lerp(poleL, amount));
             if (TrackingBarrelThisFrame && fittedAim >= 0.99f)
@@ -503,6 +550,7 @@ public partial class RifleRig : SkeletonModifier3D
 
     private void CacheBones(Skeleton3D skeleton)
     {
+        lastUpperParent = skeleton.GetBoneGlobalPose(skeleton.GetBoneParent(spine[0]));
         lastNeck = skeleton.GetBoneGlobalPose(neck).Origin;
         lastShoulderR = skeleton.GetBoneGlobalPose(upperR).Origin;
         lastShoulderL = skeleton.GetBoneGlobalPose(upperL).Origin;
@@ -628,7 +676,53 @@ public partial class RifleRig : SkeletonModifier3D
                 Rifle.LeftHandLocal, Rifle.LeftGripBasis, leftStart, leftWeight, eyeCenter, eyeReach);
             if (rifle.IsEqualApprox(previous)) break;
         }
+        var aligned = Rifle.AlignBarrel(rifle, Rifle!.MuzzleLocal.Origin, target);
+        if (RightHandTransform(aligned).Origin.DistanceTo(shoulderR) <= reachR + 1e-6f &&
+            leftStart.Lerp(LeftHandTransform(aligned, Rifle.LeftHandLocal, Rifle.LeftGripBasis).Origin, leftWeight).DistanceTo(shoulderL) <= reachL + 1e-6f)
+        {
+            return rifle;
+        }
+        // The pivot fit can oscillate when a close endpoint crosses the muzzle. Instead put the
+        // endpoint on the positive barrel ray and intersect that ray's two wrist-reach intervals.
+        // This fallback preserves the endpoint and both grips; the ordinary cheek/pivot fit above
+        // remains unchanged. A delayed remote echo need not admit its observer's current cheek hold.
+        foreach (var center in new[] { shoulderR, shoulderL, (shoulderR + shoulderL) * .5f })
+        {
+            var forward = (target - center).Normalized();
+            if (forward.LengthSquared() < .5f) continue;
+            var basis = new Basis(new Quaternion(-rifle.Basis.Z.Normalized(), forward)) * rifle.Basis;
+            var atTarget = new Transform3D(basis, target - basis * Rifle.MuzzleLocal.Origin);
+            var low = 0.0001f;
+            var high = float.PositiveInfinity;
+            var right = RightHandTransform(atTarget).Origin;
+            var left = leftStart.Lerp(LeftHandTransform(atTarget, Rifle.LeftHandLocal, Rifle.LeftGripBasis).Origin, leftWeight);
+            if (!ReachInterval(right - shoulderR, forward, reachR, ref low, ref high) ||
+                !ReachInterval(left - shoulderL, forward * leftWeight, reachL, ref low, ref high))
+            {
+                continue;
+            }
+            // Use the interval interior: a muzzle almost on the endpoint magnifies float roundoff and
+            // gives the next exact barrel correction no stable direction.
+            var distance = (low + high) * .5f;
+            atTarget.Origin -= forward * distance;
+            return atTarget;
+        }
         return rifle;
+    }
+
+    // offset - axis*t must remain inside a reach sphere. The same t places both wrists along the barrel.
+    private static bool ReachInterval(Vector3 offset, Vector3 axis, float reach, ref float low, ref float high)
+    {
+        var lengthSquared = axis.LengthSquared();
+        if (lengthSquared < 1e-12f) return offset.LengthSquared() <= reach * reach;
+        var center = offset.Dot(axis) / lengthSquared;
+        var perpendicular = offset - axis * center;
+        var radiusSquared = (reach * reach - perpendicular.LengthSquared()) / lengthSquared;
+        if (radiusSquared < 0) return false;
+        var radius = Mathf.Sqrt(radiusSquared);
+        low = Mathf.Max(low, center - radius);
+        high = Mathf.Min(high, center + radius);
+        return low <= high;
     }
 
     private static Vector3 ProjectSphere(Vector3 point, Vector3 center, float radius)

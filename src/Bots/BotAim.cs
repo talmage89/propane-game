@@ -2,7 +2,7 @@ using Godot;
 using Propane.Core;
 using Propane.Player;
 
-namespace Propane.Dev;
+namespace Propane.Bots;
 
 /// <summary>Track a desired view and pull against observed recoil through the same look path as a player.</summary>
 public sealed class BotAim

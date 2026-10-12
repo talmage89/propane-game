@@ -8,8 +8,8 @@ Immutable asset, shader, material, mesh, collision and catalog caches remain sha
 Each simulation lives in a viewport with rendering disabled. The application viewport shares the selected
 `World3D` to present it; camera nodes stay under the facade and query their injected world's physics space. This
 presentation bridge preserves the facades. Actors carry camera-independent logical aim; explicit local views
-attach cameras, HUDs and input sources. Lab and split-screen layout remain later packages. Authored dev fixtures can place geometry directly under their scene
-while explicitly presenting that fixture's context.
+attach cameras, HUDs and input sources. The Lab uses this assembly; split-screen layout remains a later package.
+Authored dev fixtures can place geometry directly under their scene while explicitly presenting that fixture's context.
 The presentation viewport owns the bridge in metadata. When several contexts present there, retirement restores
 the most recently presented live context, or the viewport's original world when none remain, in either teardown order.
 
@@ -119,8 +119,10 @@ are detached, attach the world, build its world source, add actors, add local vi
 matching inbox and acknowledge readiness. Loading presentation is initialized before attaching the inbox;
 replayed Countdown/Go/End messages must not be overwritten by the ready acknowledgment.
 `ISessionWorldSource` builds content; `ISessionMode` supplies assembly policy, not a new rules engine. Sandbox and
-Tank Bank adapters retain their facade's existing gameplay. A new Lab/lobby source or mode can implement those
-interfaces without editing the factory. `WorldContext` still owns content replacement within a live session.
+Tank Bank adapters retain their facade's existing gameplay. The shipped Lab uses `VoidWorldSource` and
+`SuburbWorldSource`; a lobby or streamed source can implement those interfaces without editing the factory.
+See [the Lab](lab.md) for its registry and offline banking adapter. `WorldContext` still owns content replacement
+within a live session.
 
 `SessionContext` owns an actor registry independent of peer keys, local views and overlays, a cancellation token,
 inbox detach callbacks, subscriptions and replication stop adapters. Disposal invalidates world work first,

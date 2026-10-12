@@ -47,8 +47,14 @@ Requires Godot 4.7.2 (.NET edition) and the .NET 10 SDK.
 [docs/code-quality.md](docs/code-quality.md) describes the formatting and analyzer baseline and its regression
 checks. The gate follows the existing code's style and checks correctness without API design or naming churn.
 
-The game opens maximized on the main menu: Single player, Multiplayer or Quit. In play it captures the mouse; click
+The game opens maximized on the main menu: Single player, Multiplayer, Lab or Quit. In play it captures the mouse; click
 the window to recapture it after switching away.
+
+## Lab
+
+Choose **Lab** for an upright huge stack, a marked shooting range, a local duel against the banking bot, or free
+session tuning. Void is the default; duel and free tuning also offer a suburb. Each starter can reset and has a
+controller-accessible controls menu. Unsaved tuning changes stay in that Lab session. [Lab controls and verification](docs/lab.md).
 
 ## Multiplayer
 
@@ -159,9 +165,10 @@ invalid settings fail generation instead of placing players on top of one anothe
 
 | Path | Contents |
 | --- | --- |
-| `src/Main.cs` | The root: the menus over their backdrop, then single player, a match, or the multiplayer server. |
+| `src/Main.cs` | The root: menus over their backdrop, then single player, Lab, a match, or the server. |
 | `src/Game.cs` | Single player: the void, player, HUD, menus, and the suburb swap with its dissolve and materialize. |
 | `src/Net` | Multiplayer: the server, the client connection, the match world, body sync, ammo pickups. |
+| `src/Lab`, `src/Bots` | Shipped Lab scenarios, local bank adapter and camera-free banking brain. |
 | `src/Session` | Ordered session assembly, actors, local views and retirement. |
 | `src/Core` | Tuning, input map, physics and render layers, shared assets, events, spawn roots. |
 | `src/World` | The void environment, the model catalog, and the suburb builder. `Plan/` holds the pure-data generator. |
@@ -300,6 +307,8 @@ $GODOT --fixed-fps 60 res://scenes/dev/player_range.tscn -- --scenario=melee --v
 $GODOT --headless --fixed-fps 60 res://scenes/dev/player_range.tscn -- --scenario=melee-reloads --assert-grip --assert-motion
 # Motion: all gaits, hip/aimed bursts, walking reload and get-up into run, captured at 60 Hz.
 $GODOT --fixed-fps 60 res://scenes/dev/player_range.tscn -- --scenario=motion --view=side --assert-motion --assert-grip --capture-dir="$PWD/build/motion"
+# Final remote firing contacts through snapshot relocation/turns, delayed reload echoes and catch-up delivery.
+$GODOT --headless --fixed-fps 60 res://scenes/dev/rifle_reach_tests.tscn
 # Full-auto magazine, persistent aim climb and shot/rendered barrel alignment; aim, hip or creep.
 $GODOT --fixed-fps 60 --resolution 1280x720 res://scenes/dev/player_range.tscn -- --scenario=recoil --stance=aim --view=player --assert-grip --assert-motion --capture-dir="$PWD/build/rcl-player"
 # Ten magazines against a player capsule with the production bot aim controller.
@@ -345,7 +354,8 @@ $GODOT --fixed-fps 60 --resolution 1280x720 res://scenes/dev/menu_test.tscn -- -
 # Multiplayer: a local server and bot players under simulated lag and loss; asserts tank agreement and scores.
 # Logs go to build/net (-o picks another directory).
 GODOT=$GODOT tools/dev/net_bots.sh -n 3 -l 60 -- --net-lag=120 --net-jitter=30 --net-loss=3
-# -t clean uses tighter tank limits; -k skips both post-run checks.
+# Logged engine/protocol errors also fail the run. make test-full includes a 90-second faulted rifle soak.
+# -t clean uses tighter tank limits; -k skips post-run checks.
 # Rerun a comparison: tools/dev/compare_tanks.py [--profile clean] build/net/bot*.log
 ```
 

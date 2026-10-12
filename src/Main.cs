@@ -2,6 +2,7 @@ using System.Linq;
 using Godot;
 using Propane.Core;
 using Propane.Dev;
+using Propane.Lab;
 using Propane.Net;
 using Propane.Tank;
 using Propane.UI;
@@ -11,7 +12,7 @@ namespace Propane;
 
 /// <summary>
 /// The root of the game. Shows the menus over a backdrop, and runs single player (<see cref="Game"/>) or a
-/// multiplayer match (<see cref="Match"/>) under them. Started with <c>-- --server</c> (and usually
+/// multiplayer match (<see cref="Match"/>) or the Lab under them. Started with <c>-- --server</c> (and usually
 /// <c>--headless</c>), it runs only the multiplayer server instead.
 /// </summary>
 public partial class Main : Node
@@ -22,6 +23,8 @@ public partial class Main : Node
     private Node3D? backdrop;
     private Game? game;
     private Match? match;
+    private LabMenu? labMenu;
+    private LabSession? lab;
     private LobbyServer? hostedServer;
     private int matchGeneration;
 
@@ -48,6 +51,7 @@ public partial class Main : Node
         AddChild(updates);
         menus = new Menus { Name = "Menus", Net = net, Updates = updates };
         menus.SinglePlayerRequested += StartSinglePlayer;
+        menus.LabRequested += ShowLab;
         menus.HostRequested += Host;
         AddChild(menus);
         ShowMenus(Menus.Screen.Main);
@@ -65,7 +69,7 @@ public partial class Main : Node
 
     public override void _UnhandledInput(InputEvent @event)
     {
-        if (game == null && match == null && @event.IsActionPressed(InputSetup.ToggleFullscreen))
+        if (game == null && match == null && lab == null && @event.IsActionPressed(InputSetup.ToggleFullscreen))
         {
             var fullscreen = DisplayServer.WindowGetMode() == DisplayServer.WindowMode.Fullscreen;
             DisplayServer.WindowSetMode(fullscreen ? DisplayServer.WindowMode.Windowed : DisplayServer.WindowMode.Fullscreen);
@@ -184,6 +188,40 @@ public partial class Main : Node
         game?.Free();
         game = null;
         ShowMenus(Menus.Screen.Main);
+    }
+
+    // ------------------------------------------------------------------ Lab
+
+    private void ShowLab()
+    {
+        menus.Show(Menus.Screen.None);
+        if (labMenu == null)
+        {
+            labMenu = new LabMenu { Name = "LabMenu", Template = SavedTuning };
+            labMenu.BackRequested += () => { labMenu.Visible = false; ShowMenus(Menus.Screen.Main); };
+            labMenu.StartRequested += StartLab;
+            AddChild(labMenu);
+        }
+        else
+        {
+            labMenu.ShowScenarios();
+        }
+    }
+
+    private void StartLab(LabScenario scenario, LabEnvironment environment, Tuning tuning)
+    {
+        labMenu!.Visible = false;
+        HideBackdrop();
+        lab = new LabSession { Name = "Lab", Scenario = scenario, EnvironmentKind = environment, Template = tuning };
+        lab.ExitRequested += () =>
+        {
+            lab.Session.Dispose();
+            lab.Free();
+            lab = null;
+            ShowMenus(Menus.Screen.None);
+            labMenu.ShowScenarios();
+        };
+        AddChild(lab);
     }
 
     // ------------------------------------------------------------------ Multiplayer

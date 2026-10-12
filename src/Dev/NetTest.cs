@@ -882,6 +882,15 @@ public partial class NetTest : Node
             var focus = attacker.GlobalPosition + Vector3.Up;
             movementCamera.LookAtFromPosition(focus + new Vector3(4, .6f, -1.2f), focus);
         }
+        if (!victim && DevArgs.Get("view") == "player" && target.IsRagdolled)
+        {
+            AimAt(player, target.GlobalPosition + Vector3.Up);
+            var label = target.ResolvedState.Lifecycle == PlayerLifecycle.GettingUp ? "remote_getup" : "remote_down";
+            if (meleeCaptured.Add(label)) CaptureMelee(label);
+            var targetRig = target.FindChildren("RifleRig", owned: false).OfType<RifleRig>().Single();
+            if (targetRig.Weight > .5f && targetRig.Weight < .9f && meleeCaptured.Add("remote_getup_handoff"))
+                CaptureMelee("remote_getup_handoff");
+        }
         if (duelTime < 8) meleeFirstDown |= target.IsRagdolled;
         if (duelTime > 12) meleeSecondDown |= target.IsRagdolled;
         if (attacker.ResolvedState.Weapon == WeaponAction.Melee)
@@ -966,8 +975,11 @@ public partial class NetTest : Node
             }
             else
             {
-                movementCamera = new Camera3D { Fov = 40, Current = true };
-                match.AddChild(movementCamera);
+                if (DevArgs.Get("view") != "player")
+                {
+                    movementCamera = new Camera3D { Fov = 40, Current = true };
+                    match.AddChild(movementCamera);
+                }
             }
         }
         duelTime += dt;
@@ -976,7 +988,15 @@ public partial class NetTest : Node
         var other = match.RemoteBodies.FirstOrDefault();
         if (other == null) return;
         if (remoteGrip == null && (DevArgs.Get("grip-metrics") != null || DevArgs.Get("assert-grip") != null))
+        {
             remoteGrip = GripProbe.Attach(other);
+            var rig = remoteGrip.GetParent<Skeleton3D>().GetNode<RifleRig>("RifleRig");
+            rig.RemoteShotAligned += _ =>
+            {
+                var label = rig.AimAmount > .99f ? "remote_09_aim_fire" : "remote_08_hip_fire";
+                if (meleeCaptured.Add(label)) CaptureRemoteFrame(label);
+            };
+        }
         // The spawn-to-void relocation also replaces the aim target and body yaw. Measure the movement
         // sequence after that controlled staging has settled; the matrix measures ordinary corrections.
         if (remoteFeet == null && duelTime >= 1 && (DevArgs.Get("feet-metrics") != null || DevArgs.Get("assert-feet") != null))
@@ -994,7 +1014,20 @@ public partial class NetTest : Node
             focus = rifle.GlobalTransform * new Vector3(0, 0, -0.12f);
             offset = new Basis(Vector3.Up, other.FacingYaw) * new Vector3(view == "rifleleft" ? -0.8f : 0.8f, 0.2f, -0.45f);
         }
-        movementCamera!.LookAtFromPosition(focus + offset, focus);
+        if (DevArgs.Get("view") == "player")
+        {
+            // Review through the observer's actual local view, close enough to judge both wrists.
+            match.Player.Teleport(other.GlobalPosition + new Vector3(2, .05f, -3), 0);
+            AimAt(match.Player, focus);
+        }
+        else
+        {
+            movementCamera!.LookAtFromPosition(focus + offset, focus);
+        }
+
+        var remoteRig = other.FindChildren("RifleRig", owned: false).OfType<RifleRig>().Single();
+        if (remoteRig.Reload > .4f && remoteRig.Reload < .7f && meleeCaptured.Add("remote_10_reload"))
+            CaptureRemoteFrame("remote_10_reload");
         var state = other.ResolvedState;
         var speed = new Vector2(other.Velocity.X, other.Velocity.Z).Length();
         remoteGaitTime = remoteGait == state.Gait ? remoteGaitTime + dt : 0;
