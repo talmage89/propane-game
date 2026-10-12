@@ -247,6 +247,8 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
             Aim.Target = GlobalPosition + Vector3.Up * World.Tuning.CameraHeight;
         }
         aimTarget = GlobalPosition + Forward(facingYaw) * 20f;
+        // Modifiers can sample before the first presentation update. Never start by looking at zero.
+        rig.AimTarget = aimTarget;
         Rotation = Vector3.Zero;
         visual.Rotation = new Vector3(0, facingYaw, 0);
         Initialized = true;
@@ -288,6 +290,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         // choose another firing muzzle or the skeleton modifier can sample a spawn handoff.
         rifle.GlobalTransform = visual.GlobalTransform * carriedRifle;
         aimTarget = position + Vector3.Up * 1.4f + Forward(yaw) * 20f;
+        rig.AimTarget = aimTarget;
         if (IsRemote)
         {
             hasRemoteState = false;

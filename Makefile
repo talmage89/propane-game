@@ -55,6 +55,7 @@ test-core: build ## Run checker, platform, movement and unit assertions
 
 test-behavior: build ## Run isolated physics, navigation, menu, grip and feet probes
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/rifle_reach_tests.tscn
+	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/animation_review.tscn -- --cases=walk_000 --assert-motion --assert-spawn
 	"$(GODOT)" --headless --path . res://scenes/dev/server_tuning_tests.tscn -- --server --tune.MaxPlayers=6 --port=$(PORT)
 	"$(GODOT)" --headless --path . res://scenes/dev/server_seed_tests.tscn -- --server --match-seed=23 --port=$(PORT)
 	"$(GODOT)" --headless --path . res://scenes/dev/transport_physics_tests.tscn -- --server --port=$(PORT)

@@ -17,6 +17,7 @@ public partial class MotionProbe : SkeletonModifier3D
     private Quaternion[] previous = Array.Empty<Quaternion>();
     private readonly Dictionary<string, float> physicalMaxima = new();
     private float physicalMaximum;
+    private float spawnHeadPitch;
     private readonly Dictionary<string, float> maxima = new();
     private readonly StringBuilder csv = new("time,bone,degrees,rate,muzzle_side,physical,rig_weight\n");
     private double time;
@@ -72,6 +73,13 @@ public partial class MotionProbe : SkeletonModifier3D
         var right = new Basis(Vector3.Up, Player.FacingYaw) * Vector3.Right;
         var lateral = (rig.Rifle!.MuzzlePosition - Player.GlobalPosition).Dot(right);
         var physical = s.GetNode<Ragdoll>("Ragdoll").Simulating;
+        if (time <= .2 && DevArgs.Get("assert-spawn") != null)
+        {
+            var direction = (s.GlobalBasis * s.GetBoneGlobalPose(s.FindBone("Head")).Basis.Column2).Normalized();
+            var pitch = Mathf.RadToDeg(Mathf.Asin(Mathf.Clamp(Mathf.Abs(direction.Y), 0, 1)));
+            spawnHeadPitch = Mathf.Max(spawnHeadPitch, pitch);
+            invalid |= !float.IsFinite(pitch) || pitch > 30;
+        }
         var worst = "";
         var angle = 0f;
         for (var i = 0; i < previous.Length; i++)
@@ -151,6 +159,8 @@ public partial class MotionProbe : SkeletonModifier3D
     public void Finish()
     {
         var assert = DevArgs.Get("assert-motion") != null;
+        if (DevArgs.Get("assert-spawn") != null)
+            GD.Print(FormattableString.Invariant($"[spawn] head pitch in first 200 ms={spawnHeadPitch:F3}deg (limit 30deg)"));
         foreach (var (bone, degrees) in maxima.Where(p => p.Value > 25).OrderByDescending(p => p.Value))
             GD.Print(FormattableString.Invariant($"[motion spike] {bone} max={degrees:F3}deg"));
         foreach (var (bone, degrees) in physicalMaxima.Where(p => p.Value > 25).OrderByDescending(p => p.Value))

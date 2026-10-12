@@ -27,7 +27,10 @@ stationary half-turn and return, jumping while holding aim, a burst, tactical re
 An additional `hip_burst` case explicitly shows the first carry-to-fire transition.
 Teleports separate cases; they are not pivots. Reload starts with 20 rounds. The release has no melee; its slot is
 explicitly marked unavailable. Only its review fixture normalizes the older 3.6 m/s aim speed to 1.6 m/s.
-Device delivery is checked separately by `menu_test --scenario=input`, which injects real keyboard and mouse events.
+A separate `--cases=walk_000 --assert-motion --assert-spawn` gate observes the first 200 ms of a cold spawn,
+requiring head pitch at most 30 degrees at the default camera pitch. Settled gait windows cannot catch an
+uninitialized rig looking at the world origin. Device delivery is checked separately by
+`menu_test --scenario=input`, which injects real keyboard and mouse events.
 
 Tuners are fresh **code defaults**, independent of saved settings or project `tuning.tres`. Direct current-build runs
 accept explicit `--tune.Name=value` overrides for pose research; comparison commands use defaults. Differences in a build's
