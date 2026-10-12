@@ -15,17 +15,31 @@ public sealed class CharacterAnimator
 {
     public LocomotionPose Pose { get; }
     private readonly Tuning tuning;
-    private readonly AnimationPlayer player;
-    private readonly List<(string Parameter, double Length)> gaitSamples = new();
-    private readonly List<(string Gait, string FrontBack, string LeftRight, string FrontDiagonal,
-        string BackDiagonal, string Diagonal, string LongDiagonal, string Direction)> gaitParameters = new();
+    private readonly double turnLeftLength, turnRightLength, walkLength, jogLength, sprintLength;
+    private readonly List<(StringName Parameter, double Length)> gaitSamples = new();
+    private readonly List<(string Gait, StringName FrontBack, StringName LeftRight, StringName FrontDiagonal,
+        StringName BackDiagonal, StringName Diagonal, StringName LongDiagonal, StringName Direction)> gaitParameters = new();
     private static readonly string[] Gaits = { "walk", "jog" };
     private static readonly string[] Directions = { "back", "left", "right", "front_left", "front_right", "back_left", "back_right" };
-    private const string Air = "parameters/air/blend_amount";
-    private const string Hold = "parameters/hold/blend_amount";
-    private const string Hit = "parameters/hit/request";
-    private const string GetUp = "parameters/getup/request";
-    private const string GetUpScale = "parameters/getup_scale/scale";
+    private static readonly StringName Air = "parameters/air/blend_amount";
+    private static readonly StringName Hold = "parameters/hold/blend_amount";
+    private static readonly StringName Hit = "parameters/hit/request";
+    private static readonly StringName GetUp = "parameters/getup/request";
+    private static readonly StringName GetUpScale = "parameters/getup_scale/scale";
+
+    private static readonly StringName TurnLeftSeek = "parameters/turn_left_seek/seek_request";
+    private static readonly StringName TurnRightSeek = "parameters/turn_right_seek/seek_request";
+    private static readonly StringName TurnDirection = "parameters/turn_direction/blend_amount";
+    private static readonly StringName Turning = "parameters/turning/blend_amount";
+    private static readonly StringName WalkSeek = "parameters/walk_seek/seek_request";
+    private static readonly StringName JogSeek = "parameters/jog_seek/seek_request";
+    private static readonly StringName SprintSeek = "parameters/sprint_seek/seek_request";
+    private static readonly StringName WalkJog = "parameters/walk_jog/blend_amount";
+    private static readonly StringName GaitsBlend = "parameters/gaits/blend_amount";
+    private static readonly StringName Moving = "parameters/moving/blend_amount";
+    private static readonly StringName FallSeek = "parameters/fall_seek/seek_request";
+    private static readonly StringName LandBlend = "parameters/land/blend_amount";
+    private static readonly StringName LandSeek = "parameters/land_seek/seek_request";
 
     private static readonly string[] UpperBodyBones =
     {
@@ -54,7 +68,11 @@ public sealed class CharacterAnimator
     {
         this.tuning = tuning;
         Pose = new LocomotionPose(tuning);
-        this.player = player;
+        turnLeftLength = player.GetAnimation("Turn_Left").Length;
+        turnRightLength = player.GetAnimation("Turn_Right").Length;
+        walkLength = player.GetAnimation("Walk").Length;
+        jogLength = player.GetAnimation("Jog_Fwd").Length;
+        sprintLength = player.GetAnimation("Sprint").Length;
         foreach (var gait in Gaits)
         {
             foreach (var direction in Directions)
@@ -91,12 +109,12 @@ public sealed class CharacterAnimator
         hasFacing = true;
         filteredYawSpeed = Mathf.Lerp(filteredYawSpeed, yawSpeed, 1 - Mathf.Exp(-tuning.TurnVelocityResponse * delta));
         Pose.Update(planar.Length(), resolvedGait, delta, new Vector2(local.X, -local.Z), filteredYawSpeed);
-        tree.Set("parameters/turn_left_seek/seek_request", Pose.TurnPhase * player.GetAnimation("Turn_Left").Length);
-        tree.Set("parameters/turn_right_seek/seek_request", Pose.TurnPhase * player.GetAnimation("Turn_Right").Length);
-        tree.Set("parameters/turn_direction/blend_amount", Pose.TurnRight);
-        tree.Set("parameters/turning/blend_amount", Pose.Turn);
-        tree.Set("parameters/walk_seek/seek_request", Pose.Phase * player.GetAnimation("Walk").Length);
-        tree.Set("parameters/jog_seek/seek_request", Pose.Phase * player.GetAnimation("Jog_Fwd").Length);
+        tree.Set(TurnLeftSeek, Pose.TurnPhase * turnLeftLength);
+        tree.Set(TurnRightSeek, Pose.TurnPhase * turnRightLength);
+        tree.Set(TurnDirection, Pose.TurnRight);
+        tree.Set(Turning, Pose.Turn);
+        tree.Set(WalkSeek, Pose.Phase * walkLength);
+        tree.Set(JogSeek, Pose.Phase * jogLength);
         foreach (var sample in gaitSamples) tree.Set(sample.Parameter, Pose.Phase * sample.Length);
         foreach (var parameters in gaitParameters)
         {
@@ -110,10 +128,10 @@ public sealed class CharacterAnimator
             tree.Set(parameters.LongDiagonal, Mathf.Min(1, sideWeight / diagonalWeight));
             tree.Set(parameters.Direction, Mathf.Max(0, (sideWeight - diagonalWeight) / (1 - diagonalWeight)));
         }
-        tree.Set("parameters/sprint_seek/seek_request", Pose.Phase * player.GetAnimation("Sprint").Length);
-        tree.Set("parameters/walk_jog/blend_amount", 1 - Pose.Walk);
-        tree.Set("parameters/gaits/blend_amount", Pose.Sprint);
-        tree.Set("parameters/moving/blend_amount", Pose.Moving);
+        tree.Set(SprintSeek, Pose.Phase * sprintLength);
+        tree.Set(WalkJog, 1 - Pose.Walk);
+        tree.Set(GaitsBlend, Pose.Sprint);
+        tree.Set(Moving, Pose.Moving);
         tree.Set(Air, Pose.Air);
         // Jump_Start contains an authored anticipation before its push. Start at the push on the accepted
         // physics jump, then use that clip's extension/tuck as the velocity falls through rising/apex/falling.
@@ -131,9 +149,9 @@ public sealed class CharacterAnimator
             _ => t.JumpFallClipTime,
         };
         jumpSample = Mathf.MoveToward(jumpSample, airTime, delta * t.JumpSampleBlendSpeed);
-        tree.Set("parameters/fall_seek/seek_request", jumpSample);
-        tree.Set("parameters/land/blend_amount", Pose.Landing);
-        tree.Set("parameters/land_seek/seek_request", t.LandingClipTime);
+        tree.Set(FallSeek, jumpSample);
+        tree.Set(LandBlend, Pose.Landing);
+        tree.Set(LandSeek, t.LandingClipTime);
     }
 
     private float jumpSample;

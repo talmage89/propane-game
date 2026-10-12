@@ -9,6 +9,9 @@ phase. Speed controls cadence; walk-to-jog weights change through acceleration. 
 Non-sprinting movement faces logical aim, so backward travel backpedals and sideways travel strafes. Sprint
 continues to face travel and remains forward-only under the existing eligibility rules. Standing ready turns keep
 the controller's existing facing threshold and use authored quarter-turn derivatives.
+The driver caches native parameter names and fixed clip lengths instead of converting strings and looking up
+animations on every update. `animation_driver_tests` warms the real tree, then bounds recurring managed
+allocations over 2,000 updates; it runs in `make test`.
 
 `LocomotionPose` smooths direction changes without resetting the clock. A diagonal's cycle travel is the harmonic
 combination of its neighboring strides. Mirrored clips share contact phase; diagonals reconstruct ankle and knee

@@ -56,6 +56,7 @@ test-core: build ## Run checker, platform, movement and unit assertions
 
 test-behavior: build ## Run isolated physics, navigation, menu, grip and feet probes
 	GODOT="$(GODOT)" python3 -B tools/dev/check_shader_capacity.py
+	"$(GODOT)" --headless --path . res://scenes/dev/animation_driver_tests.tscn
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/rifle_reach_tests.tscn
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/animation_review.tscn -- --cases=walk_000 --assert-motion --assert-spawn
 	"$(GODOT)" --headless --path . res://scenes/dev/server_tuning_tests.tscn -- --server --tune.MaxPlayers=6 --port=$(PORT)
