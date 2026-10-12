@@ -15,7 +15,7 @@ CASES = {
     'creep_000': 'Slow aimed walk; head motion, shoulder pocket and muzzle stability.',
     'jog_000': 'Run cadence, alternating legs and upper-body weight.',
     'sprint': 'Forward sprint, flight phase, low ready and forearm/thigh clearance.',
-    'start_stop': 'Idle-to-movement blend and settling after release.',
+    'start_stop_walk': 'Idle-to-walk blend at 1.5 m/s and settling after release.',
     'turn': 'Standing half-turn and return; both feet lift.',
     'jump_land': 'Takeoff, held aim suppression, landing and recovery.',
     'burst': 'Aimed burst: climb, shoulder/head clearance and attached hands.',

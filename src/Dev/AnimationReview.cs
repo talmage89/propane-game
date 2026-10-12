@@ -170,6 +170,7 @@ public partial class AnimationReview : Node3D
 #endif
         });
         Case("aim_idle", t => input.Hold(t, t + 3, new PlayerIntent { Aim = true }));
+        Case("start_stop_walk", t => input.Hold(t + 0.6f, t + 1.9f, new PlayerIntent { Move = Vector2.Down * .25f }));
         if (cases.Count == 0) throw new ArgumentException("no matching cases");
         director.At(cursor - 0.1f, () =>
         {
