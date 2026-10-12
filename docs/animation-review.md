@@ -51,6 +51,11 @@ ragdoll/get-up events and remaining match time. Pass it through `tools/dev/net_b
 ordinary play; it does not force a recovery. Require an observed get-up during play as well as clean engine logs
 before treating a stress run as recovery coverage.
 
+The integrated branch still failed an independent rendered four-bot observer match (`--scenario=watch`,
+`--melee-start`, match seed 25): three initial-pose reach exceptions and two right-wrist contact errors.
+Its five ordinary four-bot soak passes do not cover this failure. Keep the engine-error gate strict and
+reproduce the observer/relocation path before claiming complete presentation robustness.
+
 Tuners are fresh **code defaults**, independent of saved settings or project `tuning.tres`. Direct current-build runs
 accept explicit `--tune.Name=value` overrides for pose research; comparison commands use defaults. Differences in a build's
 camera code remain visible in the player view. Side view has fixed framing. `--cases=a,b` limits a run; `--view=player`
