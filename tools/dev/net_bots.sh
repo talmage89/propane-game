@@ -86,6 +86,10 @@ done
 echo "bots finished (status $status); logs in $out"
 grep -h "match over" "$out/server.log" 2>/dev/null || true
 if (( checks )); then
+  if grep -nE '(^ERROR:|bad [A-Za-z]+ message|\[net\] bad message:)' "$out"/*.log; then
+    echo "FAIL engine or protocol errors in network logs" >&2
+    status=1
+  fi
   if (( bots >= 2 )); then
     python3 -B "$project/tools/dev/compare_tanks.py" --profile "$profile" "$out"/bot*.log || status=1
   else
