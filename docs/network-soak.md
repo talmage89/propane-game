@@ -222,7 +222,10 @@ tools/dev/capacity_acceptance.sh -n 16 -r 3 -w 1 -o "$PWD/build/a6-capacity"
 
 `make test-capacity` runs the same six matches. Each launches a dedicated headless server and 16 separate
 actor-owning ENet clients. The creator renders at 960×540; the other clients have no local views or cameras.
-Every match lasts 60 seconds with 8 initial banked tanks per actor. The final client delays construction by
+The integrated gate lasts 90 seconds with 8 initial banked tanks per actor (the original A6 runs below lasted
+60 seconds). The deliberately late builder must still satisfy the ordinary 90% play-coverage gate; the additional
+30 seconds accommodate its measured construction time without relaxing checker bounds. At least three clients
+are needed to compare two survivors after creator departure. The final client delays construction by
 26 seconds, exceeding the server's 20-second loading deadline plus countdown. Three runs use a clean transport;
 three use 120 ms round-trip lag, 30 ms jitter and 3% loss of unreliable traffic, with deterministic fault seeds.
 Reliable events remain ordered under those faults.
