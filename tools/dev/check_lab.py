@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[2]
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--full', action='store_true', help='ten lifecycle cycles and both three-minute bot soaks')
 args = parser.parse_args()
-scenarios = [('lifetime', [f'--cycles={10 if args.full else 1}']), ('rules', []), ('duel', ['--seconds=15'])]
+scenarios = [('lifetime', [f'--cycles={10 if args.full else 1}']), ('rules', []), ('aimstall', []), ('duel', ['--seconds=15'])]
 if args.full:
     scenarios += [('soak', ['--environment=void']), ('soak', ['--environment=suburb'])]
 logs = ROOT / 'build' / ('lab-check-full' if args.full else 'lab-check')

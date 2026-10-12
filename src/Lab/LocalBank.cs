@@ -29,6 +29,7 @@ public partial class LocalBank : Node
     public int Hits { get; private set; }
     public int InitialSupply { get; private set; }
     public string BotStatus => brains[0].Brain.Status;
+    public int BotBlacklisted => brains[0].Brain.BlacklistedTargets;
     private WorldContext World => Lab.World;
 
     public override void _Ready()

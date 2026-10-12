@@ -33,6 +33,7 @@ public partial class LabTest : Node
                 case "duel": await Duel().ConfigureAwait(true); break;
                 case "soak": await Duel(soak: true).ConfigureAwait(true); break;
                 case "measure": await Measure().ConfigureAwait(true); break;
+                case "aimstall": await AimStall().ConfigureAwait(true); break;
                 default: await Lifetime().ConfigureAwait(true); break;
             }
             template.Dispose();
@@ -164,6 +165,8 @@ public partial class LabTest : Node
         var bank = lab.Bank!;
         GD.Print($"[lab duel] seconds={seconds} simulation={lab.World.Clock.Now:F3} banked={bank.BankedTotal} spilled={bank.SpilledTotal} hits={bank.Hits} you={bank.Scores[1]} bot={bank.Scores[2]} earned_you={bank.Earned[1]} earned_bot={bank.Earned[2]} live={lab.LiveTanks.Count()}");
         Assert(bank.BankedTotal > 0 && bank.Earned[2] > 0, "banking bot earned no bank");
+        // A bot that freezes for most of the round (the suburb once banked one tank in 180 s) must not pass.
+        if (soak) Assert(bank.Earned[1] + bank.Earned[2] >= 10, $"two banking bots earned only {bank.Earned[1] + bank.Earned[2]} tanks");
         Assert(bank.Scores.Values.Sum() + lab.LiveTanks.Count() == bank.InitialSupply, "bank conservation");
         Assert(lab.Opponent!.View == null && !lab.World.Networked, "duel needs camera/network");
         capture.Screenshot(soak ? "duel_soak_end" : "duel_bot_bank");
@@ -249,6 +252,36 @@ public partial class LabTest : Node
         Assert(!lab.Bank.IsPlaying && lab.World.Paused && lab.Overlay.MenuVisible, "clock did not end/freeze duel");
         lab.Session.Dispose(); lab.Free();
         GD.Print("[lab rules] PASS two-shot/chain attribution, hit grace, shielded spill, melee, conservation, ammo respawn, pause and round end");
+    }
+
+    /// <summary>
+    /// The bot's vantage search ignores props that still stop the rifle's ray. It must give a pile up rather than
+    /// stand in front of it, aimed at the obstruction, for the rest of the round.
+    /// </summary>
+    private async Task AimStall()
+    {
+        template.LabDuelPiles = 2;
+        template.LabDuelPileCount = 1;
+        template.LabDuelSeconds = 60;
+        var lab = Enter(LabScenarios.Get("duel"), LabEnvironment.Void);
+        var tanks = lab.LiveTanks.ToArray();
+        tanks[0].Position = new Vector3(-1, 0, -16);
+        tanks[1].Position = new Vector3(1, 0, -16);
+        foreach (var tank in tanks) tank.Freeze = true;
+        lab.Player.InputOverride = new IdleInput();
+        lab.Player.Teleport(new Vector3(0, .05f, 25), 0);
+        lab.Opponent!.Teleport(new Vector3(0, .05f, 0), 0);
+        // Debris stops shots but not the vantage search's sight test or a walking player.
+        var wall = new StaticBody3D { CollisionLayer = Layers.Debris, CollisionMask = 0, Position = new Vector3(0, 3, -5) };
+        wall.AddChild(new CollisionShape3D { Shape = new BoxShape3D { Size = new Vector3(60, 6, .3f) } });
+        lab.World.ContentRoot.AddChild(wall);
+        await Frames(3 * 60).ConfigureAwait(true);
+        Assert(lab.Bank!.BotStatus.StartsWith("shooting", StringComparison.Ordinal) && lab.Opponent.Ammo!.Magazine == lab.Opponent.Ammo.Tuning.MagazineSize,
+            $"fixture must stall the bot on its aim first ({lab.Bank.BotStatus})");
+        await Frames(6 * 60).ConfigureAwait(true);
+        Assert(lab.Bank.BotBlacklisted >= 2, $"bot never gave up a pile with no clear shot ({lab.Bank.BotStatus})");
+        lab.Session.Dispose(); lab.Free();
+        GD.Print("[lab aimstall] PASS the bot left a pile whose shots an obstruction stopped");
     }
 
     private static async Task FireAt(PlayerCharacter actor, Func<Vector3> point)

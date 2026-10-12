@@ -16,6 +16,8 @@ the rest of Propane. Huge stack and Range use void; the banking duel and Free tu
   minutes; bank most to win. Bullets spill with hit grace, melee/blasts spill on the victim's ordinary ragdoll
   event, drops have the match's shield, ammo cans replenish, and delayed chains credit their initiating shooter.
   The void arena is marked on the floor; its markings are reference points, not walls or a new boundary rule.
+  A bot whose rifle ray stays blocked for `BotStuckAimTime` (4 s) without moving gives up that pile for
+  `BotTargetRetryTime`: the vantage search can see past a loose fence panel that still stops the shot.
 - **Free tuning** opens the tuning panel after a short settling delay on a range fixture or a generated suburb.
   Opening it manually cancels that introductory opening. It is also available in every
   other starter through F1/` or the Lab controls menu. Opening it pauses this world and its clock. Sliders and
@@ -49,8 +51,8 @@ its Protocol 2 dev adapter. The factory and session retain ordered teardown on r
 
 ## Verification
 
-`python3 -B tools/dev/check_lab.py` is the fast gate: one lifecycle cycle per allowed pair, local rules and a
-15-second scripted duel. It requires a success marker, exit 0 and no engine warnings/errors. `--full` performs
+`python3 -B tools/dev/check_lab.py` is the fast gate: one lifecycle cycle per allowed pair, local rules, the bot's
+aim-stall probe and a 15-second scripted duel. It requires a success marker, exit 0 and no engine warnings/errors. `--full` performs
 10 entry/reset/exit cycles for all six pairs and 180-second bot-versus-bot soaks in both environments. Both are
 wired into `make test` / `make test-full`. `menu_test --scenario=input` also injects real keyboard, mouse and
 controller events through Lab menus, movement/combat, reset, local tuning dials and Defaults without template edits.

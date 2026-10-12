@@ -29,6 +29,8 @@ public sealed class BankingBot : IPlayerInputSource, System.IDisposable
     private Node3D? target;
     private float retarget;
     private float blocked;
+    private float unaimed;
+    private Vector3 unaimedAnchor;
     private Tuning tuning = null!;
     private readonly BotNavigator navigator = new();
     private Vector3? navigationGoal;
@@ -199,6 +201,7 @@ public sealed class BankingBot : IPlayerInputSource, System.IDisposable
             if (chosen != target)
             {
                 blocked = 0;
+                unaimed = 0;
                 if (!navigator.Jumping) { navigator.Reset(); }
                 vantage = null;
                 target = chosen;
@@ -395,6 +398,11 @@ public sealed class BankingBot : IPlayerInputSource, System.IDisposable
         var near = safe;
         var far = Mathf.Max(near + 8f, 18f);
         var clear = distance >= near && distance <= far + 4f && CanSee(player, center);
+        if (here.DistanceTo(unaimedAnchor) > 2f)
+        {
+            unaimedAnchor = here;
+            unaimed = 0;
+        }
 
         if (clear && blocked < 1f)
         {
@@ -412,10 +420,27 @@ public sealed class BankingBot : IPlayerInputSource, System.IDisposable
                 // Single taps: one punctures, the next sets it off. Ammo is scarce.
                 Tap();
                 blocked = 0;
+                unaimed = 0;
             }
             else
             {
                 blocked += dt;
+                unaimed += dt;
+                if (unaimed >= tuning.BotStuckAimTime)
+                {
+                    // The vantage search sees past things the shot cannot (a loose fence panel in front of the
+                    // rifle), so it can keep choosing this very spot. Leave this pile for a while.
+                    foreach (var neighbor in match.LiveTanks.Where(t => t.GlobalPosition.DistanceTo(tank.GlobalPosition) <= tuning.ChainRadius).ToList())
+                    {
+                        Blacklist(neighbor, tuning.BotTargetRetryTime);
+                    }
+                    Blacklist(tank, tuning.BotTargetRetryTime);
+                    target = null;
+                    vantage = null;
+                    retarget = 0;
+                    unaimed = 0;
+                    Status = "no clear shot: leaving this pile";
+                }
             }
             return;
         }
