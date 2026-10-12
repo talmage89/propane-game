@@ -207,7 +207,8 @@ $GODOT --headless res://scenes/dev/shutdown_tests.tscn
 $GODOT --headless --fixed-fps 60 res://scenes/dev/session_actors_tests.tscn
 $GODOT --fixed-fps 60 res://scenes/dev/session_actors_tests.tscn -- --capture-dir=/tmp/session-actors
 
-# Participant capacity: production lobby/results layouts (also use 2/8 entries and 1920x1080).
+# Participant capacity: production lobby/results layouts and real keyboard/mouse/gamepad delivery.
+# Repeat with 2/8 entries and 1920x1080; make test covers all counts headlessly.
 $GODOT --resolution 1280x720 --fixed-fps 60 res://scenes/dev/capacity_ui_tests.tscn -- --players=16 --capture-dir="$PWD/build/capacity-ui"
 # Repeated sixteen-client acceptance and resource measurements: docs/network-soak.md.
 make test-capacity

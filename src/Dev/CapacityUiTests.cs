@@ -40,6 +40,7 @@ public partial class CapacityUiTests : Node
             await Frames(12).ConfigureAwait(true);
             AssertPanels(menus);
             TestRunnerCount(menus, count);
+            await TestLobbyInput(menus).ConfigureAwait(true);
             capture.Screenshot($"lobby_{count}");
             await Frames(12).ConfigureAwait(true);
             menus.Show(Menus.Screen.None);
@@ -61,6 +62,47 @@ public partial class CapacityUiTests : Node
             GD.PushError($"[capacity UI] FAIL {error}");
             ShutdownGuard.Quit(GetTree(), 1);
         }
+    }
+    private async Task TestLobbyInput(Menus menus)
+    {
+        var start = menus.FindChildren("*", "Button", owned: false).OfType<Button>().Single(b => b.Text == "Start match");
+        var presses = 0;
+        start.Pressed += () => presses++;
+        for (var step = 0; GetViewport().GuiGetFocusOwner() != start; step++)
+        {
+            UnitTests.TestRunner.Assert(step < 40, "Tab cannot reach Start match");
+            Send(new InputEventKey { Keycode = Key.Tab, PhysicalKeycode = Key.Tab, Pressed = true });
+            Send(new InputEventKey { Keycode = Key.Tab, PhysicalKeycode = Key.Tab, Pressed = false });
+            await Frames(2).ConfigureAwait(true);
+            UnitTests.TestRunner.Assert(GetViewport().GuiGetFocusOwner() is not BaseButton { Disabled: true }, "Tab focused a disabled capacity control");
+        }
+        Send(new InputEventKey { Keycode = Key.Enter, PhysicalKeycode = Key.Enter, Pressed = true });
+        await Frames(1).ConfigureAwait(true);
+        Send(new InputEventKey { Keycode = Key.Enter, PhysicalKeycode = Key.Enter, Pressed = false });
+        await Frames(2).ConfigureAwait(true);
+        UnitTests.TestRunner.Assert(presses == 1, "keyboard confirmation did not reach the lobby button exactly once");
+        Send(new InputEventJoypadButton { ButtonIndex = JoyButton.DpadRight, Pressed = true });
+        Send(new InputEventJoypadButton { ButtonIndex = JoyButton.DpadRight, Pressed = false });
+        UnitTests.TestRunner.Assert(GetViewport().GuiGetFocusOwner() is Button { Text: "Leave lobby" }, "gamepad could not navigate the lobby button row");
+        Send(new InputEventJoypadButton { ButtonIndex = JoyButton.DpadLeft, Pressed = true });
+        Send(new InputEventJoypadButton { ButtonIndex = JoyButton.DpadLeft, Pressed = false });
+        Send(new InputEventJoypadButton { ButtonIndex = JoyButton.A, Pressed = true });
+        Send(new InputEventJoypadButton { ButtonIndex = JoyButton.A, Pressed = false });
+        await Frames(2).ConfigureAwait(true);
+        UnitTests.TestRunner.Assert(presses == 2, "gamepad confirmation did not reach the lobby button exactly once");
+        var position = GetViewport().GetFinalTransform() * start.GetGlobalRect().GetCenter();
+        Send(new InputEventMouseMotion { Position = position, GlobalPosition = position });
+        Send(new InputEventMouseButton { Position = position, GlobalPosition = position, ButtonIndex = MouseButton.Left, Pressed = true });
+        await Frames(1).ConfigureAwait(true);
+        Send(new InputEventMouseButton { Position = position, GlobalPosition = position, ButtonIndex = MouseButton.Left, Pressed = false });
+        await Frames(2).ConfigureAwait(true);
+        UnitTests.TestRunner.Assert(presses == 3, "mouse confirmation did not reach the scaled lobby button exactly once");
+        GD.Print("[capacity UI] PASS real keyboard, mouse and gamepad delivery");
+    }
+    private static void Send(InputEvent input)
+    {
+        Input.ParseInputEvent(input);
+        Input.FlushBufferedEvents();
     }
     private static void TestRunnerCount(Node root, int count) => UnitTests.TestRunner.Assert(
         root.FindChildren("*", "ColorRect", owned: false).OfType<ColorRect>().Count(c => c.HasMeta("appearance_player")) == count,

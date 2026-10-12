@@ -58,6 +58,7 @@ test-behavior: build ## Run isolated physics, navigation, menu, grip and feet pr
 	"$(GODOT)" --headless --path . res://scenes/dev/transport_physics_tests.tscn -- --server --port=$(PORT)
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/body_correction_tests.tscn
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/session_actors_tests.tscn
+	for count in 2 8 16; do "$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/capacity_ui_tests.tscn -- --players=$$count || exit; done
 	python3 -B tools/dev/animation_review_tests.py
 	@mkdir -p build/animation-review-gate
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/animation_review.tscn -- --cases=walk_000,jog_000,creep_000,creep_180,creep_090,sprint,aim_idle --metrics=$(CURDIR)/build/animation-review-gate/metrics.csv
