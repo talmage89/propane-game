@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using Godot;
 using Propane.Core;
+using Propane.Fx;
 
 namespace Propane.Tank;
 
@@ -16,6 +17,7 @@ public static class Blast
     /// </summary>
     public static void Detonate(WorldContext world, Vector3 center, PropaneTank? source, bool chain = true)
     {
+        using var profile = EffectProfile.Measure(EffectProfile.System.Blast);
         world.EnsureAlive();
         var tuning = world.Tuning;
         var radius = tuning.BlastRadius;
@@ -50,23 +52,27 @@ public static class Blast
             }
         }
 
-        foreach (var receiver in new List<IBlastReceiver>(world.BlastReceivers))
+        using (EffectProfile.Measure(EffectProfile.System.BlastReceivers))
         {
-            if (!world.IsAlive) { return; }
-            if (!world.IsRegistered(receiver)) { continue; }
-            var target = receiver.BlastTargetPosition;
-            var distance = center.DistanceTo(target);
-            var reach = Mathf.Max(radius, Mathf.Max(tuning.RagdollRadius, tuning.StaggerRadius));
-            if (distance > reach)
+            foreach (var receiver in new List<IBlastReceiver>(world.BlastReceivers))
             {
-                continue;
+                if (!world.IsAlive) { return; }
+                if (!world.IsRegistered(receiver)) { continue; }
+                var target = receiver.BlastTargetPosition;
+                var distance = center.DistanceTo(target);
+                var reach = Mathf.Max(radius, Mathf.Max(tuning.RagdollRadius, tuning.StaggerRadius));
+                if (distance > reach)
+                {
+                    continue;
+                }
+                var falloff = Mathf.Pow(Mathf.Clamp(1f - distance / reach, 0, 1), tuning.BlastFalloff);
+                if (IsOccluded(space, center, target))
+                {
+                    falloff *= tuning.BlastOcclusion;
+                }
+                receiver.ReceiveBlast(new BlastInfo(center, PushDirection(center, target, tuning, rng), distance, falloff));
             }
-            var falloff = Mathf.Pow(Mathf.Clamp(1f - distance / reach, 0, 1), tuning.BlastFalloff);
-            if (IsOccluded(space, center, target))
-            {
-                falloff *= tuning.BlastOcclusion;
-            }
-            receiver.ReceiveBlast(new BlastInfo(center, PushDirection(center, target, tuning, rng), distance, falloff));
+
         }
 
         world.Events.RaiseExplosion(center);

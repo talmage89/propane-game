@@ -53,6 +53,7 @@ public partial class ExplosionEffect : Node3D
 
     public override void _Ready()
     {
+        using var profile = EffectProfile.Measure(EffectProfile.System.ExplosionCreate);
         var tuning = World.Tuning;
         var scale = tuning.FireballScale;
         var groundOffset = groundHeight - GlobalPosition.Y;
@@ -136,6 +137,7 @@ public partial class ExplosionEffect : Node3D
 
     public override void _Process(double delta)
     {
+        using var profile = EffectProfile.Measure(EffectProfile.System.ExplosionProcess);
         elapsed += (float)delta;
         UpdateLayers(elapsed);
         if (elapsed > Lifetime)

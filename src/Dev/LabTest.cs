@@ -1,9 +1,13 @@
 using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Godot;
 using Propane.Bots;
 using Propane.Core;
+using Propane.Fx;
 using Propane.Lab;
 using Propane.Player;
 using Propane.Tank;
@@ -33,6 +37,7 @@ public partial class LabTest : Node
                 case "rules": await BankRules().ConfigureAwait(true); break;
                 case "duel": await Duel().ConfigureAwait(true); break;
                 case "soak": await Duel(soak: true).ConfigureAwait(true); break;
+                case "effects": await EffectFrames().ConfigureAwait(true); break;
                 case "measure": await Measure().ConfigureAwait(true); break;
                 case "stackfire": await StackFire().ConfigureAwait(true); break;
                 case "aimstall": await AimStall().ConfigureAwait(true); break;
@@ -437,6 +442,36 @@ public partial class LabTest : Node
         }
     }
 
+    private async Task EffectFrames()
+    {
+        var count = (int)DevArgs.GetFloat("count", 128);
+        Assert(count is >= 1 and <= 1024, "effect review count must be 1..1024");
+        template.LabStackDistance = count <= 8 ? 8 : 24;
+        var scenario = LabScenarios.Get("stack") with { Setup = lab => { lab.World.Tuning.LabStackCount = count; lab.BuildStack(); } };
+        var lab = Enter(scenario, LabEnvironment.Void);
+        await Frames(180).ConfigureAwait(true);
+        var tank = lab.LiveTanks.First();
+        tank.TakeShot(tank.GlobalPosition + Vector3.Up * .2f, Vector3.Back, Vector3.Forward);
+        await Frames(60).ConfigureAwait(true);
+        capture.Screenshot($"vent_{count}");
+        await Frames(120).ConfigureAwait(true);
+        capture.Screenshot($"smoke_{count}");
+        lab.Session.Dispose(); lab.Free();
+        lab = Enter(scenario, LabEnvironment.Void);
+        await Frames(180).ConfigureAwait(true);
+        foreach (var primed in lab.LiveTanks.ToArray())
+            primed.TakeShot(primed.GlobalPosition + Vector3.Up * .2f, Vector3.Back, Vector3.Forward);
+        lab.LiveTanks.First().Detonate();
+        var previous = 0;
+        foreach (var frame in new[] { 1, 6, 15, 30, 60, 120, 240 })
+        {
+            await Frames(frame - previous).ConfigureAwait(true); previous = frame;
+            capture.Screenshot($"chain_{count}_{frame:000}");
+        }
+        Assert(lab.LiveTanks.Count() < count, "effect review must detonate a tank");
+        lab.Session.Dispose(); lab.Free();
+    }
+
     private async Task Measure()
     {
         var count = (int)DevArgs.GetFloat("count", Tuning.LabStackMaximum);
@@ -448,6 +483,23 @@ public partial class LabTest : Node
         RenderingServer.ViewportSetMeasureRenderTime(GetViewport().GetViewportRid(), true);
         await Frames(180).ConfigureAwait(true);
         var phase = DevArgs.Get("phase") ?? "idle";
+        Assert(phase is "idle" or "blast" or "chain", "unknown measurement phase");
+        EffectProfile.Enabled = true;
+        foreach (var system in Enum.GetValues<EffectProfile.System>().Where(s => s != EffectProfile.System.Count)) EffectProfile.Drain(system);
+        var allocated = GC.GetTotalAllocatedBytes();
+        var collections = Enumerable.Range(0, 3).Select(GC.CollectionCount).ToArray();
+        var hide = DevArgs.Get("profile-hide");
+        Assert(hide is null or "particles" or "smoke" or "lights" or "shadows" or "decals", "unknown diagnostic exclusion");
+        void Hide(Node node)
+        {
+            if (node is GpuParticles3D particle && hide == "particles") particle.Visible = false;
+            if (node is GpuParticles3D puff && hide == "smoke" && (puff.DrawPass1 as PrimitiveMesh)?.Material is ShaderMaterial material && material.Shader.ResourcePath == "res://shaders/fx_smoke.gdshader") puff.Visible = false;
+            if (node is OmniLight3D light && hide == "lights") light.Visible = false;
+            if (node is OmniLight3D shadow && hide == "shadows") shadow.ShadowEnabled = false;
+            if (node is Decal decal && hide == "decals") decal.Visible = false;
+        }
+        if (hide != null) GetTree().NodeAdded += Hide;
+        var last = Time.GetTicksUsec();
         if (phase == "blast")
         {
             var target = lab.LiveTanks.First();
@@ -460,21 +512,42 @@ public partial class LabTest : Node
                 tank.TakeShot(tank.GlobalPosition + Vector3.Up * .2f, Vector3.Back, Vector3.Forward);
             lab.LiveTanks.First().Detonate();
         }
-        var samples = new System.Collections.Generic.List<double>();
-        var gpu = new System.Collections.Generic.List<double>();
-        var process = new System.Collections.Generic.List<double>();
-        var physics = new System.Collections.Generic.List<double>();
-        var last = Time.GetTicksUsec();
+        var series = new Dictionary<string, List<double>>();
+        var rows = new List<string>();
+        void Sample(string name, double value)
+        {
+            if (!series.TryGetValue(name, out var values)) series[name] = values = new List<double>();
+            values.Add(value);
+        }
         for (var i = 0; i < 600; i++)
         {
             await Frames(1).ConfigureAwait(true);
-            var now = Time.GetTicksUsec(); samples.Add((now - last) / 1000d); last = now;
-            gpu.Add(RenderingServer.ViewportGetMeasuredRenderTimeGpu(GetViewport().GetViewportRid()));
-            process.Add(Performance.GetMonitor(Performance.Monitor.TimeProcess) * 1000);
-            physics.Add(Performance.GetMonitor(Performance.Monitor.TimePhysicsProcess) * 1000);
+            var now = Time.GetTicksUsec(); Sample("wall", (now - last) / 1000d); last = now;
+            Sample("gpu", RenderingServer.ViewportGetMeasuredRenderTimeGpu(GetViewport().GetViewportRid()));
+            Sample("render_cpu", RenderingServer.ViewportGetMeasuredRenderTimeCpu(GetViewport().GetViewportRid()) + RenderingServer.GetFrameSetupTimeCpu());
+            Sample("process", Performance.GetMonitor(Performance.Monitor.TimeProcess) * 1000);
+            Sample("physics", Performance.GetMonitor(Performance.Monitor.TimePhysicsProcess) * 1000);
+            Sample("active_bodies", Performance.GetMonitor(Performance.Monitor.Physics3DActiveObjects));
+            Sample("contacts", Performance.GetMonitor(Performance.Monitor.Physics3DCollisionPairs));
+            Sample("draw_calls", Performance.GetMonitor(Performance.Monitor.RenderTotalDrawCallsInFrame));
+            Sample("objects", Performance.GetMonitor(Performance.Monitor.ObjectCount));
+            Sample("resources", Performance.GetMonitor(Performance.Monitor.ObjectResourceCount));
+            Sample("nodes", Performance.GetMonitor(Performance.Monitor.ObjectNodeCount));
+            Sample("pipeline_draw", Performance.GetMonitor(Performance.Monitor.PipelineCompilationsDraw));
+            Sample("pipeline_specialization", Performance.GetMonitor(Performance.Monitor.PipelineCompilationsSpecialization));
+            foreach (var system in Enum.GetValues<EffectProfile.System>().Where(s => s != EffectProfile.System.Count)) Sample(system.ToString(), EffectProfile.Drain(system));
+            rows.Add(string.Join(",", series.Values.Select(v => v[^1].ToString("R", CultureInfo.InvariantCulture))));
         }
-        samples.Sort(); gpu.Sort(); process.Sort(); physics.Sort();
-        GD.Print($"[lab measure] tanks={count} phase={phase} live={lab.LiveTanks.Count()} median_ms={samples[300]:F3} p95_ms={samples[570]:F3} max_ms={samples[^1]:F3} gpu_p95_ms={gpu[570]:F3} process_p95_ms={process[570]:F3} physics_p95_ms={physics[570]:F3}");
+        EffectProfile.Enabled = false;
+        if (hide != null) GetTree().NodeAdded -= Hide;
+        if (DevArgs.Get("metrics") is { } path)
+            File.WriteAllLines(path, new[] { string.Join(",", series.Keys) }.Concat(rows));
+        GD.Print($"[lab measure] tanks={count} phase={phase} live={lab.LiveTanks.Count()} allocated_bytes={GC.GetTotalAllocatedBytes() - allocated} gc={string.Join(",", collections.Select((v, i) => GC.CollectionCount(i) - v))}");
+        foreach (var (name, values) in series)
+        {
+            values.Sort();
+            GD.Print($"[lab profile] {name} p50={values[300]:F3} p95={values[570]:F3} worst={values[^1]:F3}");
+        }
         capture.Screenshot($"stack_{count}");
         lab.Session.Dispose(); lab.Free();
     }

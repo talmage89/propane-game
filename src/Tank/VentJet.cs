@@ -29,6 +29,7 @@ public partial class VentJet : Node3D
 
     public override void _Ready()
     {
+        using var profile = EffectProfile.Measure(EffectProfile.System.VentCreate);
         var scale = World.Tuning.VentFlameScale;
 
         // Many small, short-lived puffs overlap into one continuous tongue of flame. They live in world space,
@@ -128,6 +129,7 @@ public partial class VentJet : Node3D
 
     public override void _Process(double delta)
     {
+        using var profile = EffectProfile.Measure(EffectProfile.System.VentProcess);
         time += (float)delta;
         smoke.GlobalPosition = GlobalTransform * smokeOffset;
         ignition = Mathf.Min(1f, ignition + (float)delta * 6f);

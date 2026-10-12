@@ -295,6 +295,7 @@ public partial class PropaneTank : RigidBody3D
 
     public override void _PhysicsProcess(double delta)
     {
+        using var profile = EffectProfile.Measure(EffectProfile.System.TankPhysics);
         if (Gathering) { UpdateGatherShimmer(); }
         if (State == TankState.Intact && !Gathering)
         {
@@ -443,6 +444,7 @@ public partial class PropaneTank : RigidBody3D
 
     private void SpawnDebris(Vector3 center)
     {
+        using var profile = EffectProfile.Measure(EffectProfile.System.Debris);
         var tuning = World.Tuning;
         var rng = new RandomNumberGenerator();
         var inherited = LinearVelocity;
@@ -462,6 +464,7 @@ public partial class PropaneTank : RigidBody3D
 
     private void SpawnScorch(Vector3 groundPoint)
     {
+        using var profile = EffectProfile.Measure(EffectProfile.System.Scorch);
         var size = World.Tuning.ScorchSize;
         if (size <= 0)
         {
