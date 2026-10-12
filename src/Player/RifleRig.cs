@@ -164,7 +164,13 @@ public partial class RifleRig : SkeletonModifier3D
 
         while (remoteShots.TryDequeue(out var target))
         {
-            if (Weight > 0.001f) AlignShot(target);
+            if (Weight > 0.001f)
+            {
+                // A newer snapshot can already be striking. The echo owns this one firing frame's
+                // weapon presentation; the character restores its current action on the next frame.
+                Melee = false;
+                AlignShot(target);
+            }
             RemoteShotAligned?.Invoke(target);
         }
 

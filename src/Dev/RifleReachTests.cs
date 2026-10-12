@@ -64,24 +64,34 @@ public partial class RifleReachTests : Node3D
                 Echo(origin + new Vector3(3, 1, -20));
                 await Frames(2).ConfigureAwait(true);
 
+                stage = $"turn {turn}: echo during displayed melee";
+                Apply(origin, turn * Mathf.Pi / 4, melee: .4f);
+                await Frames(10).ConfigureAwait(true);
+                Echo(origin + new Vector3(3, 1, -20));
+                await Frames(2).ConfigureAwait(true);
+
+                Assert(rig.Melee, "delayed echo suppressed melee beyond its firing frame");
+
                 stage = $"turn {turn}: completed reload before presentation";
                 Apply(origin, turn * Mathf.Pi / 4);
                 Echo(origin + new Vector3(0, 2, -20));
                 await Frames(2).ConfigureAwait(true);
             }
-            Assert(samples >= 100 && shotFrames == 24 && presented == echoes && echoes == 32,
-                $"missing final-pose coverage: {samples} samples, {shotFrames}/24 shot frames, {presented}/{echoes} echoes");
+            Assert(samples >= 100 && shotFrames == 32 && presented == echoes && echoes == 40,
+                $"missing final-pose coverage: {samples} samples, {shotFrames}/32 shot frames, {presented}/{echoes} echoes");
             for (var aimed = 0; aimed < 2; aimed++)
             {
                 for (var yaw = 0; yaw < 8; yaw++)
                 {
-                    Apply(Vector3.Zero, yaw * Mathf.Pi / 4, aim: aimed);
+                    // Match-sized coordinates also exercise float precision in the short muzzle ray.
+                    var origin = new Vector3((yaw - 4) * 40, 0, (aimed - .5f) * 150);
+                    Apply(origin, yaw * Mathf.Pi / 4, aim: aimed);
                     await Frames(60).ConfigureAwait(true);
                     foreach (var offset in new[] { new Vector3(.8f, 0, 0), new Vector3(0, 0, -.8f),
                         new Vector3(.04f, .25f, -.88f), new Vector3(0, 0, 1), new Vector3(0, 0, -2) })
                     {
                         stage = $"near echo aim={aimed} yaw={yaw} offset={offset}";
-                        Echo(Vector3.Up * 1.4f + offset);
+                        Echo(origin + Vector3.Up * 1.4f + offset);
                         await Frames(2).ConfigureAwait(true);
                     }
                 }
@@ -105,7 +115,7 @@ public partial class RifleReachTests : Node3D
                 }
                 await Frames(1).ConfigureAwait(true);
             }
-            Assert(handoffShots >= 3 && presented == echoes && shotFrames == 104 + handoffShots,
+            Assert(handoffShots >= 3 && presented == echoes && shotFrames == 112 + handoffShots,
                 $"missing final echo frames: {handoffShots} get-up, {shotFrames} frames, {presented}/{echoes} effects");
             GD.Print($"[rifle reach] PASS samples={samples} shots={shotFrames} wrist={maxResidual:F6}m barrel={maxAngle:F6}deg muzzle={maxMuzzleError:F6}m");
             ShutdownGuard.Quit(GetTree());
@@ -117,7 +127,7 @@ public partial class RifleReachTests : Node3D
         }
     }
 
-    private void Apply(Vector3 position, float yaw, float reload = 0, float aim = 0)
+    private void Apply(Vector3 position, float yaw, float reload = 0, float aim = 0, float melee = 0)
     {
         remote.SetRemoteState(new PlayerNetState
         {
@@ -127,9 +137,10 @@ public partial class RifleReachTests : Node3D
             Reload = reload,
             Ready = 1,
             Aim = aim,
+            Melee = melee,
             Grounded = true,
             Support = PlayerSupport.Grounded,
-            Weapon = reload > 0 ? WeaponAction.Reload : aim > 0 ? WeaponAction.Aim : WeaponAction.Ready,
+            Weapon = melee > 0 ? WeaponAction.Melee : reload > 0 ? WeaponAction.Reload : aim > 0 ? WeaponAction.Aim : WeaponAction.Ready,
         });
         remote._PhysicsProcess(1.0 / Engine.PhysicsTicksPerSecond);
     }

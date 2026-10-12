@@ -44,7 +44,8 @@ error reporting. This fixes transient turn/contact errors without changing recoi
 Remote reliable shot echoes are queued until the rig samples the displayed body frame. Receipt can precede
 snapshot relocation/facing and can still see a reload contact that presentation will overwrite. Fitting and
 emitting the flash/tracer together inside the modifier keeps the firing muzzle, cached upper root and foregrip
-in one frame. Local shots keep their immediate authoritative fit and obstruction query; shot endpoints and
+in one frame. A delayed echo also owns the firing frame's weapon presentation if the displayed snapshot has
+already entered melee; the character restores that action on the next frame. Local shots keep their immediate authoritative fit and obstruction query; shot endpoints and
 logical recoil are unchanged. Multiple echoes in a catch-up frame each emit their effects; the last pose renders.
 
 A second failure occurred at close endpoints: alternating barrel alignment about the muzzle with restoring a
@@ -56,7 +57,7 @@ in the fallback, grip reach takes priority over a cheek hold that the current bo
 is moved and no shot waits for a pose transition. The first hip-shot arm snap remains the existing mechanism.
 
 `rifle_reach_tests` applies echo/snapshot orderings explicitly, across eight body facings, relocation, displayed
-reload, reload completion, 80 close endpoints in hip/aimed holds and get-up handoff. It checks final wrists (3 mm), barrel/endpoint angle (0.05 degrees), emitted tracer
+reload, melee, reload completion, 80 close endpoints in hip/aimed holds at match-sized coordinates and get-up handoff. It checks final wrists (3 mm), barrel/endpoint angle (0.05 degrees), emitted tracer
 origin (0.1 mm) and delivery of every echo. `make check` runs this fast deterministic scene; `make test-full` also
 runs a faulted four-bot 90-second match. The network launcher fails any run with logged engine or protocol errors,
 including rifle reach/contact errors, even when tanks and scores agree. This is a presentation hotfix: no shared
