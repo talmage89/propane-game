@@ -1,202 +1,158 @@
+**DO NOT MERGE**
+
 # Participant integration review
 
-Independent verification of `wp/a6-participants`, Linux, October 11, 2026. **DO NOT MERGE**: the staged
-sixteen-client gate passes, but ordinary play still fails engine and tank agreement checks. These failures were
-not converted into passing evidence by changing gameplay rules or checker bounds.
+Reverification on October 12, 2026, after merging `dev` at `729c8c8` (including Lab `8516ad8`). The October 11 report is
+preserved in commit `cdf422a` and its `build/va6-*` logs. The staged capacity gate passes, but the required
+ordinary-play matrix and unstaged stress still violate unchanged tank bounds. The old terminal drift is not conclusively
+classified.
 
-## Integration and fixes
+## Summary by commit
 
-Merged `dev` at `5a82ac9`: recoil, animation review, and network correctness. Kept actor-keyed identity,
-authority and scoring alongside rotating reliable checkpoint lanes, correction freshness, gather leases,
-loading-time rests and one continuous tank checker through `net_bots.sh`.
+- `2dc18de`: merge the rifle reach hotfix and Lab. Port actor-keyed scoring/retaliation into `BankingBot`, and give
+  Lab's human and bot distinct actor ids on one owner peer. Its bank-rule assertion checks hit attribution by actor.
+- `e943eaa`: ordinary sixteen-player destruction exhausted Godot's shader-instance uniform storage. Budget 131072 slots
+  instead of 65536. The production-material regression allocates and retires 6000 meshes twice; the old budget fails,
+  the new rendered and headless runs pass with zero engine errors. This is a renderer resource budget, not an
+  effect/gameplay tuner change.
+- `a78cafa`: the duel fixture sometimes shot the victim blocking a dropped tank. Both A6 and dev failed this scenario.
+  Choose a clear road firing lane using a physics ray; preserve hit/grace, detonation and throw assertions. A
+  deliberately blocked two-round regression fails before and passes after; it runs in `make test-full`.
+- `79bf14c`: a zero-error 90-second capacity run recorded only 80.355 seconds of delayed play, below the required 81
+  seconds. Capture 120 seconds, requiring 110 observed seconds under the unchanged ten-second startup ceiling. The
+  regression rejects the old short capture and delays over that ceiling.
+- `063aaa8`: catch life/revision exhaustion at round completion and revision exhaustion on departure. Retire the lobby
+  and detach peers before rejection/disconnect callbacks. Seeded server regressions fail before (two then one
+  overflows), pass after (268 tests, zero failures), and prove fresh lobbies remain usable.
 
-- `50e6444`: integrate both models, translate loading-grace handles to native backend ids, and adapt the
-  default-capacity and drop-publication fixtures to actor envelopes.
-- `f5bfc85`: suppress body publications for every owned actor's unconfirmed drops. Moving and resting bot
-  regressions failed before the fix and passed afterward.
-- `eb9bbe7`: report `Loaded` after the first complete frame. A nine-second callback stall disconnected before
-  the fix and completed afterward, preserving short established-peer failure detection.
-- `fe5f412`: reject network runs with engine/protocol errors even when tank and score checks pass.
-- `4eec41d`: test real keyboard, mouse and gamepad delivery against production layouts at 2, 8 and 16 entries.
-- `3750dc8`: use 90-second capacity matches. The intentional 26-second delay plus construction yielded only
-  53.23 seconds of a 60-second match, correctly failing the ordinary 90% coverage requirement. No comparison
-  bound was relaxed. At least three clients leave two surviving replicas for comparison.
-- `9c64370`: stop the loading frame if a required-send failure synchronously retires its session. The regression
-  previously accessed a freed HUD label; afterward all 265 unit tests passed.
-- `2b65c15`: isolate the native readiness regression with the controlled body stream. A separate melee-based
-  attempt reached readiness but missed its second contact; the dedicated rendered melee scenario passes.
+Earlier verifier fixes remain: suppress every owned actor's unconfirmed drops, keep loading grace until the first
+completed frame, handle synchronous session retirement, reject logged engine/protocol errors, and test production UI
+with real device events. Actor authority and rotating reliable checkpoints retain both packages' intent. No gameplay
+rules, correction bounds or tuner defaults changed.
 
-Repeated `git merge dev` checks remained up to date. Lab was still on its separate branch, not on `dev`, at
-final proof; its bot extraction and firing-frame fixes were therefore not integrated or independently proved here.
+## Verification commands and retained evidence
+
+All scratch is under `build/`; TMPDIR is a worktree build directory. Native scenes use `godot-mono` or its wrappers. No
+other checkout was modified, nothing was pushed, and all generated script UIDs are tracked.
+
+The final commands are `git merge dev`, `make setup`, `make -j4 check`, `bash build/va6-r5-network-proof.sh`,
+`tools/dev/capacity_acceptance.sh -n 16 -r 3 -w 1 -o "$PWD/build/va6-r5-capacity"`, and `make -j4 test-full`.
+`build/va6-r5-final-proof.sh` serializes them with unstaged stress and rendered input; its status file records
+individual exit codes. Network commands are recorded in `build/va6-r5-network-commands.txt`.
+
+`make setup` and `make -j4 check` pass with zero build warnings; the final `make -j4 test-full` passes with 268 unit
+tests, zero failures and zero logged engine errors. Deep generation passes 200 solo/two-player seeds, 100 seeds each at
+8/16/24/32 actors and six seeds per forced formation/size. Navigation passes 700/700 courses, zero stuck events and 600
+jumps. The nine-second readiness stall passes tank and score gates. Full Lab lifetime, bank rules, 168 dial sessions and
+both three-minute duels pass with clean engine logs. The controlled blocked two-round duel regression and the mandatory
+faulted rifle soak pass. Final exits are in `build/va6-r5-final-status.tsv`; two network failures remain recorded there.
+
+The ordinary matrix has zero engine/protocol errors in all eight runs and every score audit agrees. It runs five faulted
+and three clean four-bot 90-second `--melee-start` matches, map seeds 24–28 and fault seeds 1–5. Fault settings are 120
+ms RTT, 30 ms jitter and 3% disposable loss. The script also runs rendered melee, two-round duel, gather and puncture
+race, plus `compare_vents.py`. All scenario assertions, tank comparisons, score audits and vents pass, but those four
+shell exits fail because I omitted the scratch TMPDIR directory needed by the rendering wrapper. Corrected reruns (`bash
+build/va6-r6-scenes.sh`) pass all five exits with zero engine/protocol errors. Melee/duel/gather/race longest transients
+are 0.20/0.30/0.20/0.30 seconds; final moving drift is 0.000/0.225/0.000/0.094 m. `compare_vents.py` passes 279 pairs,
+median/p95/max 0.092/0.202/0.349 m. Reviewed `build/va6-r6-melee/shots/melee_host_2_06.png`,
+`build/va6-r6-duel/shots/victim_throw_1.80.png` and `build/va6-r6-gather/shots/gather_join_settled.png`: strike/spills,
+blast ragdoll and settled gather presentation. The scratch-directory mistake does not explain either ordinary tank
+failure.
+
+The rendered input command is `godot-mono --resolution 1280x720 --fixed-fps 60 --path . res://scenes/dev/menu_test.tscn
+-- --scenario=input --port=24984 --capture-dir="$PWD/build/va6-r5-input"`. The final integrated run passes 163
+assertions, with zero engine errors. Reviewed turn/jump images for single player, Lab and multiplayer.
+
+Six rendered `capacity_ui_tests.tscn` runs use `--players=2|8|16`, `--resolution 1280x720|1920x1080`, `--fixed-fps 60`
+and absolute capture directories `build/va6-r3-ui-COUNT-SIZE`. All pass real Tab/Enter, D-pad/A and scaled mouse
+delivery. Personally reviewed all twelve lobby/results captures: controls, names, ranks, scores and departed markers
+fit.
+
+`python3 -B tools/dev/check_liveness.py --output build/va6-r3-liveness-client` passes in 4.523 seconds. The same command
+with `--silent server --output build/va6-r3-liveness-server` passes in 3.156 seconds. Loading peers retain extended
+grace; established peers retain short detection. The native nine-second readiness stall is part of the deep gate.
+
+`python3 -B tools/dev/check_shader_capacity.py --rendered --output "$PWD/build/va6-r2-shader-after"` and its headless
+invocation pass. Reviewed `shader_capacity.png`, a fully rendered 6000-mesh grid. The negative old-budget capture is
+retained separately. `python3 -B tools/dev/compare_tanks_tests.py` passes 25 tests, including strict delayed coverage.
+Exhaustion before/after unit logs are `build/va6-r4-exhaustion-*` and `build/va6-r4-departure-before*`.
 
 ## Cold review
 
-Reviewed `git diff dev...HEAD`. Server actor ownership, membership and LifeId checks precede accepted actions;
-pose sequences are separate from reliable actions. Roster requests have monotonic request ids and server revisions;
-foreign/stale updates, replay, capacity bypass and exhausted actor/slot/life allocation are covered by assertions.
-Body updates validate peer ownership, epoch and sequence. Same-peer contacts use the ordinary actor handler,
-with predicted contacts and echoes deduplicated; ammo, grace, bank reservations and drop namespaces remain
-per actor. Delayed chain credit cannot switch to another actor on the same peer.
+Server actor ownership, lives, membership and sequences precede accepted actions. Regressions cover forged roster
+updates, replay, capacity bypass, exhausted identities and stale revisions. Same-peer contacts use the ordinary actor
+handler and deduplicate prediction/echoes; delayed chains retain actor credit. Departure removes every owned actor,
+preserves standings and transfers body authority with new epochs and creator controls without original debug-tuning
+permission. The server still trusts the plan's designated physical reporters and runs no physics.
 
-Departure removes all owned actors, preserves their standings, transfers body authority with fresh epochs and
-transfers creator controls without transferring the original debug-tuning permission. Readiness and broadcasts
-remain per peer; starts and supplies count actors. The server still trusts the planned physical reporters for
-contact geometry and blast distance and runs no physics.
+## Tank failure classification and baseline limitations
 
-Actor lookup is keyed; body correction is linear per peer. There is one world and one body synchronizer per peer.
-Relay work and bandwidth grow with moving bodies times recipients. Full roster broadcasts are quadratic only
-on waiting-lobby mutations, not each physics tick. Native ENet queue byte counts remain unavailable.
+Stock `dev` was archived into `build/va6-r2-dev-baseline`, set up and built without warnings. Eight four-bot comparisons
+use the same map/fault seeds and melee start as A6. Its clean seed-24 run passes at 0.70 seconds longest divergence and
+0.054 m final motion. A6's first and subsequent error-free clean seed-24 runs pass at 0.40/0.75 seconds and 0.108/0.025
+m final motion. The old 1.75-second clean episode is not reproduced; its exact cause cannot be isolated from the old
+error-heavy logs. There is no reproduced A6 actor/epoch regression. Engine-error load as a contributor is an inference.
 
-## Final gates and device/UI proof
+Existing correction tails do reproduce: stock dev's fault seed-1/map-24 run fails at 5.05 seconds while A6's first rerun
+fails at 2.75 seconds. Publications are fresh, epochs match, claims are resolved and traces show no barrier. The final
+ordinary matrix has seven passes and one failure (fault-1: 2.15 seconds, 4.728 m episode peak, 0.185 m final motion).
+Clean-1 passes at 1.45 seconds and 0.085 m final motion; failed exploratory runs remain failures. Stock dev fault-2 also
+logs one incomplete StartMatch tuning snapshot after match completion; its tank pass does not make that launcher run
+pass.
 
-All scratch, logs and captures are under `build/va6-*`; commands use the invisible `godot-mono` wrapper.
-`TMPDIR` was set to a worktree build directory throughout.
+For sixteen-client dev comparisons only, the old eight-entry admission/decoder limits were widened to sixteen, with
+color validation, wire shapes, physics and authority unchanged. The baseline checkout copy was removed after comparison;
+logs and patches remain. The exact scratch delta is `build/va6-r2-dev-admission.patch`; later runs also use the renderer
+budget fix. These are admission-adjusted dev comparisons, not untouched sixteen-client dev. All use map seed 23, fault
+seed 1 and 120/30/3, with no staged scenario or melee start.
 
-```sh
-make setup
-make -j4 check
-make -j4 test-full
-godot-mono --resolution 1280x720 --fixed-fps 60 --path . res://scenes/dev/menu_test.tscn -- \
-  --scenario=input --port=24984 --capture-dir="$PWD/build/va6-input"
-```
+Three dev sixteen-bot runs fail active agreement: longest episodes 4.65/3.60/2.95 seconds, final motion
+0.455/0.411/0.390 m; all score audits agree and engine logs are clean. None reproduces the terminal >0.5 m violation.
+The old error-heavy A6 unstaged run ended at 0.643 m final motion against the 0.5 m bound. The first post-renderer-fix
+A6 stress run has zero engine errors but fails with 0.889 m final motion, 2.40 seconds longest active divergence and a
+0.113 m resting completion difference. Conservation is `56 map + 16 drops - 43 spills = 29 banked`, agreed by all
+sixteen clients.
 
-Warning-free builds and `make check` pass; final `make test-full` passes with 265 unit tests, deep generation at
-200 solo/two-player seeds and 100 seeds each at 8/16/24/32 actors, forced formations, lifetime/reload/melee probes,
-and 700/700 navigation courses, zero stuck events and 600 jumps. The final native readiness stream passes after
-its nine-second callback stall. A previous full attempt failed the unrelated melee second-contact fixture;
-that failure remains in `build/va6-readiness-melee-gate-failed/` and `build/va6-proof-full.log`.
-Some earlier solo-clear runs logged the existing rifle reach error despite successful suite exit status.
+At that run's live final, vent `20a00002` has epoch 2 and owner 12. Observer motion targets have sequences 179, receipt
+silence 0.003/0.014 seconds, no pending claim and no barrier; owner spin is about 30 rad/s. This matches the fresh
+nonlinear vent-tracking residual already recorded on dev (0.531 m) in `docs/network-corrections.md`. BodySync correction
+methods and vent-force callbacks are unchanged from dev; the existing-residual attribution is supported but remains an
+inference, not deterministic replay. Fixed map/fault seeds do not fix physical timing or effect randomness.
 
-Rendered `menu_test --scenario=input` passes 74 assertions. Reviewed before/after turn and jump captures in
-single player and multiplayer; mouse, keyboard and controller actions reach the production world viewport.
-All twelve original production lobby/results captures for 2/8/16 entries at 1280×720 and 1920×1080 fit, including
-ranks, scores and departed markers. Expanded layout probes also pass real `Input.ParseInputEvent` Tab/Enter,
-gamepad row navigation/A and scaled mouse clicks at every count/resolution, plus all three headless counts.
+The final frozen-tree unstaged run (`build/va6-r5-unstaged16`) has zero engine/protocol errors, but fails one vent
+episode: body `10000017`, 2.05 seconds against the 2.0-second faulted bound, peak 3.487 m. Final motion is 0.486 m
+against 0.5 m, so the old terminal violation does not reproduce here. Both copies use owner 12 / epoch 2; observer
+targets are fresh (0.015–0.074 seconds receipt silence), with no pending claim or barrier. All sixteen score audits
+agree: `41 map + 14 drops - 29 spills = 26 banked`. Upload mean/peak is 3.765/5.930 Mbit/s. Reviewed
+`shots/Bot1_030.0.png`: normal player/suburb presentation.
 
-```sh
-for count in 2 8 16; do
-  for size in 1280x720 1920x1080; do
-    godot-mono --resolution "$size" --fixed-fps 60 --path . res://scenes/dev/capacity_ui_tests.tscn -- \
-      --players="$count" --capture-dir="$PWD/build/va6-ui-input-$count-$size"
-  done
-done
-python3 -B tools/dev/check_liveness.py --output build/va6-final-liveness-client
-python3 -B tools/dev/check_liveness.py --silent server --output build/va6-final-liveness-server
-```
+The earlier resting completion mismatch occurs after the server retires replication. The owner remains at its settled
+pose while an observer coasts during its later results interval. Dev has the same retirement path. No bounds were
+loosened and no common correction/gameplay behavior was changed to hide either residual.
 
-Native silent client/server detection passed in 4.275/3.422 seconds. The ordinary nine-second loading-stall
-fixture and the new readiness-callback stall both survive. Native grace remains 20/30 seconds only while loading,
-3/8 seconds after readiness; no blanket 30-second established-peer timeout remains.
+## Scale, risks and compatibility
 
-## Sixteen-client acceptance
+Relay cost remains approximately bodies times recipients; full roster broadcasts are quadratic on lobby mutations, not
+physics ticks. Final capacity acceptance passes three clean and three faulted 120-second matches: 248331299 strict
+body-pair comparisons, zero disagreements. Longest transients are 0.60/0.45/0.30 seconds clean and 0.40/0.55/0.40
+faulted; final moving drift is 0.001 m in every run. All audits conserve `128 initial + 1 map - 80 spills = 49 banked`.
 
-```sh
-tools/dev/capacity_acceptance.sh -n 16 -r 3 -w 1 -o "$PWD/build/va6-capacity-isolated"
-```
+Server payload upload means are 3.237–4.184 Mbit/s, peaks 7.314–8.959; download means 0.253–0.313, peaks up to 0.583.
+Per-client upload means 0.017–0.021, peak 0.118; download means 0.213–0.274, peak 0.563. Peak RSS is 211.0 MiB server /
+1222.3 MiB client. Client queues peak at 336 packets / 25228 bytes; loading inboxes at 2590 packets / 325362 bytes.
+Client process means are 32.870–39.855 ms, p95 59.831–72.482 ms; server process includes an 889.254 ms outlier and
+client physics a 3738.853 ms outlier. Detailed counters remain in each `acceptance.txt` and
+`build/va6-r5-bandwidth.txt`. Payload rates exclude UDP headers and retransmissions; native ENet queue bytes are
+unavailable. A ten-megabit uplink has little margin against the observed roughly nine-megabit payload peak. Twenty
+megabits leaves more room; actual WAN congestion and distributed machines were not tested. One GPU and CPU were shared
+with other worktrees, so functional capacity is not a sixty-FPS promise.
 
-All six isolated runs pass: three clean and three at 120 ms lag, 30 ms jitter and 3% unreliable loss. Each proves
-16 actors/peers, 16 separated starts, 84 map tanks and 19 ammo supplies, delayed loading, contested authority,
-throws, creator departure and fresh epochs. Every survivor agrees on all sixteen standings, including the
-creator's departed standing. Every audit conserves `128 initial + 1 map - 80 spills = 49 banked`.
+The staged fixture holds final owner poses and uses production gather interpolation for convergence. Unstaged physics
+failures remain disclosed separately; the sixteen-player ceiling must not imply all ordinary trajectories meet every
+strict tank bound. Earlier overlapping/cancelled `va6-r4` attempts are retained and are not counted as final proof.
+Linux was tested; stock Ubuntu CI execution, Windows and macOS were not independently run here.
 
-The ordinary continuous tank checker compares roughly 31 million body pairs per run, with zero disagreements.
-Final drift is at most 0.001 m; longest above-tolerance episodes are 0.25–0.45 seconds. No protocol error,
-disposable registration rejection or inbox overflow occurs. Earlier exploratory capacity runs failed early
-construction liveness and later insufficient late-client coverage under simultaneous suites; those failures
-remain recorded. The final matrix was isolated from those suites.
-
-| Run | Server process mean/p95/max (ms) | Client process mean/p95/max (ms) | Peak server/client RSS (MiB) | Client queue packets/bytes | Loading inbox packets/bytes |
-|---|---|---|---|---|---|
-| clean-1 | 1.887/6.473/6.473 | 34.954/68.961/410.643 | 208.8 / 1215.2 | 0/0B | 2541/314541B |
-| clean-2 | 2.116/11.421/11.421 | 35.092/68.928/472.832 | 208.4 / 1210.6 | 0/0B | 2494/326954B |
-| clean-3 | 2.072/6.444/6.444 | 33.863/68.696/403.985 | 210.1 / 1209.5 | 0/0B | 2538/303330B |
-| faulted-1 | 2.772/17.990/17.990 | 34.123/67.720/437.690 | 208.1 / 1214.2 | 170/17300B | 2468/310760B |
-| faulted-2 | 47.307/811.566/811.566 | 35.251/72.193/429.559 | 209.4 / 1213.7 | 181/16985B | 2460/327184B |
-| faulted-3 | 51.320/895.894/895.894 | 33.708/60.390/485.191 | 209.2 / 1211.5 | 147/14715B | 2478/302020B |
-
-Server physics mean/p95/max ranges from 0.114/0.753/0.753 to 0.386/2.961/2.961 ms. Client physics means are
-29.482–32.966 ms; p95 is 64.906–67.089 ms. The largest client physics sample is 3626.286 ms during loading.
-Keep the 811.566/895.894 ms server startup samples in the record. All processes shared an i5-10400F and GTX 1660;
-these are functional capacity measurements under contention, not distributed 60 FPS guarantees. RSS excludes
-GPU memory. Sampled server queues were empty; delayed client queues and loading inboxes stayed bounded.
-
-Payload bandwidth excludes UDP headers, ACKs and retransmissions. From per-peer server counter intervals:
-
-| Run | Server mean/peak upload (Mbps) | Client mean/peak upload (Mbps) | Client mean/peak download (Mbps) |
-|---|---:|---:|---:|
-| clean-1 | 4.304/8.955 | 0.022/0.083 | 0.281/0.565 |
-| clean-2 | 4.217/9.001 | 0.021/0.095 | 0.275/0.566 |
-| clean-3 | 4.424/8.795 | 0.022/0.089 | 0.289/0.552 |
-| faulted-1 | 3.742/7.970 | 0.019/0.081 | 0.244/0.500 |
-| faulted-2 | 4.212/8.651 | 0.021/0.092 | 0.275/0.544 |
-| faulted-3 | 3.888/8.319 | 0.019/0.109 | 0.254/0.524 |
-
-A 10 Mbps host uplink has little margin at the measured 9 Mbps payload peak once overhead/retransmissions are
-included. An uplink comfortably above that peak fits these observed rates; 20 Mbps leaves substantially more
-room. Actual WAN congestion and distributed clients were not measured. Do not extrapolate a larger ceiling
-from these runs or from the generator's 24/32-actor sweeps.
-
-## Ordinary soaks and unstaged stress: unresolved failures
-
-Commands are recorded exactly in `build/va6-network-commands.txt`; `build/va6-network-proof.sh` runs the matrix.
-Five faulted and three clean four-bot, 90-second `--melee-start` soaks completed, using map seeds 24–28 and
-fault seeds 1–5. **None is a passing run**: all eight log rifle reach errors and the launcher rejects them.
-All score/conservation audits agree. Seven continuous tank gates pass; clean-1 fails vent `10000010`, peer pair
-2/3, for 1.75 seconds above the clean 1.5-second bound, peaking at 3.300 m from monotonic time 133598.85.
-Final tank poses converge. The motion failure remains unclassified under the error-heavy run; repeat after the
-firing-frame issue is fixed rather than enlarging the bound.
-
-The rifle error reproduces on isolated **dev `5a82ac9` offline**, with:
-
-```sh
-godot-mono --headless --fixed-fps 60 --path BASELINE res://scenes/dev/game_test.tscn -- \
-  --scenario=clear --quit=32 --tune.FixedSeed=23 --effects-seed=4
-```
-
-`build/va6-baseline-clear-4.log` records the unreachable-wrist assertion. Baseline source/import copies were
-removed after proof; logs remain. This is an animation/firing-frame defect predating participant identity changes,
-not an A6 actor mismatch. The unmerged Lab contains related firing-frame fixes; those are still unverified here.
-No character-animation or gameplay-rule change was made to disguise it.
-
-```sh
-tools/dev/net_bots.sh -n 16 -l 90 -w 1 -s '--capacity-metrics --match-seed=23' \
-  -o "$PWD/build/va6-unstaged16" -- --bot-log --digest-every=1 --shot-every=15 \
-  --net-lag=120 --net-jitter=30 --net-loss=3 --capture-dir="$PWD/build/va6-unstaged16/shots"
-```
-
-The unstaged run also fails: 5128 rifle errors and sixteen final tank disagreements on one venting body, with
-maximum final drift 0.643 m above the unchanged 0.5 m limit. The longest active above-tolerance episode is
-1.50 seconds. All sixteen client standings agree: `60 map + 2 recovered drops - 14 spills = 48 banked`.
-Reviewed its ordinary navigation captures. Server payload upload mean/peak is 3.136/5.618 Mbps; client payload
-upload is 0.013/0.120 and download 0.196/0.360 Mbps. The reduced live-body count and machine contention differ
-from the staged fixture, so the lower rate does not supersede its 9 Mbps peak. Native packet/queue pressure and
-frame budget on separate machines remain unproved.
-
-## Scripted network scenarios
-
-All four rendered probes at 120/30/3 pass engine, continuous tank and score checks. Reviewed melee spills, the
-duel throw, gather shimmer/settled pile and both canonical vent views.
-
-```sh
-tools/dev/net_bots.sh -n 2 -w 1 -l 35 -s '--start-score=5 --match-seed=23' -o "$PWD/build/va6-melee" -- \
-  --scenario=melee --assert-grip --assert-motion --net-lag=120 --net-jitter=30 --net-loss=3 --capture-dir="$PWD/build/va6-melee/shots"
-tools/dev/net_bots.sh -n 2 -w 2 -l 35 -s '--start-score=8 --match-seed=23' -o "$PWD/build/va6-duel" -- \
-  --scenario=duel --matches=2 --net-lag=120 --net-jitter=30 --net-loss=3 --capture-dir="$PWD/build/va6-duel/shots"
-tools/dev/net_bots.sh -n 2 -w 2 -l 45 -s '--start-score=8 --match-seed=23' -o "$PWD/build/va6-gather" -- \
-  --scenario=gather --tune.DropScatter=0.2 --tune.DropToss=1 --net-lag=120 --net-jitter=30 --net-loss=3 --capture-dir="$PWD/build/va6-gather/shots"
-tools/dev/net_bots.sh -n 2 -w 2 -l 20 -o "$PWD/build/va6-puncture-race" -- \
-  --scenario=puncture-race --net-lag=120 --net-jitter=30 --net-loss=3 --capture-dir="$PWD/build/va6-puncture-race/shots"
-python3 -B tools/dev/compare_vents.py build/va6-puncture-race/bot1.log build/va6-puncture-race/bot2.log
-```
-
-Melee conserves `10 - 5 = 5`; each duel round conserves `16 + 1 - 7 = 10`, with stable actor ids and new lives;
-gather conserves `16 - 2 = 14`. Canonical vent agreement covers 280 trajectory pairs, median/p95/max drift
-0.097/0.190/0.302 m. Maximum final motion drift in these probes is 0.175 m.
-
-## Compatibility and follow-up
-
-Participant message shapes, shared identities/roster mapping and entity allocation require a minor release.
-`Protocol.Version` stays **2**, as mandated for this unreleased cycle. Hello, Welcome and Rejected retain their
-layouts. Verifier fixes add no wire fields or gameplay-rule changes. The actor ceiling must not be treated as
-ordinary-play approval until the failed soaks and unstaged agreement are resolved. Integrate and prove Lab when
-it lands; embedded-bot topology remains A8 work. Windows/macOS and real WAN operation were not verified.
+A6 changes shared message shapes, actor/life/roster identity, capacity settings and suburb construction from the actual
+frozen actor count. `Protocol.Version` remains 2 by the brief's explicit unreleased-cycle instruction; a public minor
+release is required. The verifier's renderer/fixture changes are local or dev-only; exhaustion handling reuses existing
+rejection messages. No further protocol bump was made.
