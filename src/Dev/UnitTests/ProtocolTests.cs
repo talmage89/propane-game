@@ -168,6 +168,12 @@ public static class ProtocolTests
             TestRunner.Assert(tuning.BlastRadius == 1, "lower endpoint rejected");
             tuning.Apply(new Godot.Collections.Dictionary { [nameof(Tuning.BlastRadius)] = 40f, [nameof(Tuning.FixedSeed)] = int.MinValue });
             TestRunner.Assert(tuning.BlastRadius == 40 && tuning.FixedSeed == int.MinValue, "upper endpoint or int32 seed rejected");
+            tuning.Apply(new Godot.Collections.Dictionary { [nameof(Tuning.RifleReachMargin)] = 0.005f });
+            tuning.Apply(new Godot.Collections.Dictionary { [nameof(Tuning.RifleReachMargin)] = 0.1f });
+            TestRunner.Throws<InvalidDataException>(() => tuning.Apply(new Godot.Collections.Dictionary
+            { [nameof(Tuning.RifleReachMargin)] = 0.00499f }));
+            TestRunner.Throws<InvalidDataException>(() => tuning.Apply(new Godot.Collections.Dictionary
+            { [nameof(Tuning.RifleReachMargin)] = 0.10001f }));
         });
         runner.Run("protocol/handshake extensions and legacy rejection", () =>
         {

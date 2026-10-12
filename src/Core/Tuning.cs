@@ -110,8 +110,12 @@ public partial class Tuning : Resource
                 var max = type == Variant.Type.Int ? int.MaxValue : double.MaxValue;
                 if ((PropertyHint)entry["hint"].AsInt64() == PropertyHint.Range)
                 {
-                    min = double.Parse(range[0], System.Globalization.CultureInfo.InvariantCulture);
-                    max = double.Parse(range[1], System.Globalization.CultureInfo.InvariantCulture);
+                    // Float exports store single-precision values in double-backed Variants. Parse their
+                    // inclusive endpoints at the same precision so an exact exported endpoint remains valid.
+                    min = type == Variant.Type.Float ? float.Parse(range[0], System.Globalization.CultureInfo.InvariantCulture)
+                        : double.Parse(range[0], System.Globalization.CultureInfo.InvariantCulture);
+                    max = type == Variant.Type.Float ? float.Parse(range[1], System.Globalization.CultureInfo.InvariantCulture)
+                        : double.Parse(range[1], System.Globalization.CultureInfo.InvariantCulture);
                 }
                 schema[name] = (type, min, max);
             }
