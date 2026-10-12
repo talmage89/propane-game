@@ -48,3 +48,10 @@ Blast query paging preserves engine hit order, duplicate shapes and caller exclu
 hash set on full pages instead of repeated native linear searches, and skips exclusion work on the final short
 page because no more query is needed. Queries still visit every body and apply the same impulses and chain rules.
 The dense-query harness asserts 1,100 bodies across multiple pages, caller exclusions and short-page hit order.
+
+`tools/dev/measure_vents.py --baseline=<scratch project> --output=<absolute directory>` alternates two builds
+back to back, twice at 32/64/128/40 tanks in idle/blast/chain phases. It preserves 600 raw samples per run, logs,
+before/after machine load and a summary CSV; missing GPU samples, engine errors or a failed scene abort it.
+Rendered harnesses also accept `--frame-metrics=<directory>` for per-process CSV telemetry after 180 startup
+frames. GPU readings are delayed relative to script timers; process/physics Performance monitors update less
+frequently than the frame samples. Use direct timers for individual CPU spikes, not repeated monitor values.

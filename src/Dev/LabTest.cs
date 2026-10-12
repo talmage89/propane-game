@@ -446,10 +446,17 @@ public partial class LabTest : Node
     {
         var count = (int)DevArgs.GetFloat("count", 128);
         Assert(count is >= 1 and <= 1024, "effect review count must be 1..1024");
-        template.LabStackDistance = count <= 8 ? 8 : 24;
+        template.LabStackDistance = count <= 8 ? 10 : 24;
         var scenario = LabScenarios.Get("stack") with { Setup = lab => { lab.World.Tuning.LabStackCount = count; lab.BuildStack(); } };
+        uint particleSeed = 0;
+        void Seed(Node node)
+        {
+            if (node is GpuParticles3D particle) { particle.UseFixedSeed = true; particle.Seed = ++particleSeed; }
+        }
+        GetTree().NodeAdded += Seed;
         var lab = Enter(scenario, LabEnvironment.Void);
         await Frames(180).ConfigureAwait(true);
+        particleSeed = 0;
         var tank = lab.LiveTanks.First();
         tank.TakeShot(tank.GlobalPosition + Vector3.Up * .2f, Vector3.Back, Vector3.Forward);
         await Frames(60).ConfigureAwait(true);
@@ -459,6 +466,7 @@ public partial class LabTest : Node
         lab.Session.Dispose(); lab.Free();
         lab = Enter(scenario, LabEnvironment.Void);
         await Frames(180).ConfigureAwait(true);
+        particleSeed = 0;
         foreach (var primed in lab.LiveTanks.ToArray())
             primed.TakeShot(primed.GlobalPosition + Vector3.Up * .2f, Vector3.Back, Vector3.Forward);
         lab.LiveTanks.First().Detonate();
@@ -470,6 +478,23 @@ public partial class LabTest : Node
         }
         Assert(lab.LiveTanks.Count() < count, "effect review must detonate a tank");
         lab.Session.Dispose(); lab.Free();
+        if (count >= 32)
+        {
+            lab = Enter(scenario, LabEnvironment.Void);
+            await Frames(180).ConfigureAwait(true);
+            particleSeed = 0;
+            var target = lab.LiveTanks.First();
+            target.TakeShot(target.GlobalPosition + Vector3.Up * .2f, Vector3.Back, Vector3.Forward);
+            target.TakeShot(target.GlobalPosition + Vector3.Up * .2f, Vector3.Back, Vector3.Forward);
+            previous = 0;
+            foreach (var frame in new[] { 60, 180, 600 })
+            {
+                await Frames(frame - previous).ConfigureAwait(true); previous = frame;
+                capture.Screenshot($"ordinary_{count}_{frame:000}");
+            }
+            lab.Session.Dispose(); lab.Free();
+        }
+        GetTree().NodeAdded -= Seed;
     }
 
     private async Task Measure()
@@ -485,8 +510,14 @@ public partial class LabTest : Node
         var phase = DevArgs.Get("phase") ?? "idle";
         Assert(phase is "idle" or "blast" or "chain", "unknown measurement phase");
         EffectProfile.Enabled = true;
-        foreach (var system in Enum.GetValues<EffectProfile.System>().Where(s => s != EffectProfile.System.Count)) EffectProfile.Drain(system);
+        foreach (var system in Enum.GetValues<EffectProfile.System>().Where(s => s != EffectProfile.System.Count))
+        { EffectProfile.Drain(system); EffectProfile.DrainBytes(system); }
         var allocated = GC.GetTotalAllocatedBytes();
+        var gcPause = GC.GetTotalPauseDuration().TotalMilliseconds;
+        var pipelineMesh = Performance.GetMonitor(Performance.Monitor.PipelineCompilationsMesh);
+        var pipelineSurface = Performance.GetMonitor(Performance.Monitor.PipelineCompilationsSurface);
+        var pipelineDraw = Performance.GetMonitor(Performance.Monitor.PipelineCompilationsDraw);
+        var pipelineSpecialization = Performance.GetMonitor(Performance.Monitor.PipelineCompilationsSpecialization);
         var collections = Enumerable.Range(0, 3).Select(GC.CollectionCount).ToArray();
         var hide = DevArgs.Get("profile-hide");
         Assert(hide is null or "particles" or "smoke" or "lights" or "shadows" or "decals", "unknown diagnostic exclusion");
@@ -533,9 +564,16 @@ public partial class LabTest : Node
             Sample("objects", Performance.GetMonitor(Performance.Monitor.ObjectCount));
             Sample("resources", Performance.GetMonitor(Performance.Monitor.ObjectResourceCount));
             Sample("nodes", Performance.GetMonitor(Performance.Monitor.ObjectNodeCount));
-            Sample("pipeline_draw", Performance.GetMonitor(Performance.Monitor.PipelineCompilationsDraw));
-            Sample("pipeline_specialization", Performance.GetMonitor(Performance.Monitor.PipelineCompilationsSpecialization));
-            foreach (var system in Enum.GetValues<EffectProfile.System>().Where(s => s != EffectProfile.System.Count)) Sample(system.ToString(), EffectProfile.Drain(system));
+            Sample("gc_pause", GC.GetTotalPauseDuration().TotalMilliseconds - gcPause);
+            Sample("pipeline_mesh", Performance.GetMonitor(Performance.Monitor.PipelineCompilationsMesh) - pipelineMesh);
+            Sample("pipeline_surface", Performance.GetMonitor(Performance.Monitor.PipelineCompilationsSurface) - pipelineSurface);
+            Sample("pipeline_draw", Performance.GetMonitor(Performance.Monitor.PipelineCompilationsDraw) - pipelineDraw);
+            Sample("pipeline_specialization", Performance.GetMonitor(Performance.Monitor.PipelineCompilationsSpecialization) - pipelineSpecialization);
+            foreach (var system in Enum.GetValues<EffectProfile.System>().Where(s => s != EffectProfile.System.Count))
+            {
+                Sample(system.ToString(), EffectProfile.Drain(system));
+                Sample(system + "_bytes", EffectProfile.DrainBytes(system));
+            }
             rows.Add(string.Join(",", series.Values.Select(v => v[^1].ToString("R", CultureInfo.InvariantCulture))));
         }
         EffectProfile.Enabled = false;

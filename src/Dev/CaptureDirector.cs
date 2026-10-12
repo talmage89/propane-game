@@ -38,6 +38,8 @@ public partial class CaptureDirector : Node
 
     public override void _Ready()
     {
+        if (DevArgs.Get("frame-metrics") != null && DisplayServer.GetName() != "headless")
+            AddChild(new FrameMetrics { ProcessPriority = int.MaxValue });
         timeline.Sort((a, b) => a.Time.CompareTo(b.Time));
         ProcessMode = ProcessModeEnum.Always;
         recordFps = DevArgs.GetFloat("record-fps", 30f);
