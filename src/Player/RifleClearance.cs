@@ -29,8 +29,9 @@ public sealed class RifleClearance
         var volumes = new[] { "pelvis", "spine_01", "spine_02", "spine_03", "Head", "thigh_l", "thigh_r" }
             .ToDictionary(skeleton.FindBone, _ => new List<Vector3>());
         var restFrames = volumes.Keys.ToDictionary(bone => bone, bone => skeleton.GetBoneGlobalRest(bone).AffineInverse());
+        // The imported mannequin root owns its skeleton and skinned mesh. Walking farther up
+        // searches every mesh in the world once per actor, including other players' models.
         var root = skeleton.GetParent();
-        while (root is Node3D && root.GetParent() is Node3D) root = root.GetParent();
         foreach (var mesh in root.FindChildren("*", "MeshInstance3D", owned: false).OfType<MeshInstance3D>())
         {
             if (mesh.Skin == null || mesh.GetNodeOrNull<Skeleton3D>(mesh.Skeleton) != skeleton) continue;

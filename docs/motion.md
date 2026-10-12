@@ -27,7 +27,8 @@ angle and timing are reported. Close floor endpoints can require a larger immedi
 
 ## Constraint fit
 
-`RifleClearance` derives ellipsoid proxies from the mannequin skin for pelvis, spine, head and thighs. It samples
+`RifleClearance` derives ellipsoid proxies from the mannequin skin for pelvis, spine, head and thighs. Discovery
+stays within the imported model, so adding actors or suburb meshes does not enlarge each actor's search. It samples
 the rounded stock core, upper/lower arms and tapered arm pairs. The shoulder pocket uses the proximal upper-arm
 capsule. A wrist obstruction follows its own surface normal; it does not inherit an unrelated head correction.
 Corrections measure each violated surface again, since searching for clearance of every surface along one normal
