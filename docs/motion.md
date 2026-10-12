@@ -6,6 +6,10 @@ weight shift and head movement while bringing the shoulders toward logical aim. 
 describes clip cadence and small foot corrections; [animation review](animation-review.md) supplies the paired
 release/dev/candidate comparison and immutable natural-motion calibration.
 
+Aimed walking counterleans through the spine, retaining the upper chest's orientation and most of the authored
+roll. This keeps the shoulder steady above the moving hips without stretching bones or freezing vertical head
+motion. The existing motion suite requires aimed muzzle lateral travel at most 12 mm over its steady window.
+
 The stock sits near the shoulder pocket. A bounded neck lean brings the cheek toward it while the head keeps
 its gaze. An exact optic weld is intentionally absent: it would translate the stock through the mannequin's broad
 head. Carry, low ready, aimed hold and reload placement are tuners. The sprint carry keeps the support forearm
@@ -23,6 +27,8 @@ can have no solution and unnecessarily jump the whole correction limit.
 The fit alternates skin clearance, shoulder pocket, wrist reach and elbow placement. Elbows stay on the anatomical
 two-bone circle; only an obstructed preferred bend searches alternatives. Scapular protraction has a total bound
 and a per-frame bound. Small-angle rotations retain wrist precision rather than treating nearby targets as equal.
+Both arm segments use a common anatomical hinge plane, with the original wrist frames still solved exactly.
+The final shouldered fit checks both shoulder clearance bounds after elbow placement.
 
 The coherent upper pose, rifle, get-up handoff weight and reload contact clock are fitted together. Clamping individual arm rotations
 away from a solved contact would detach the hands. Failed candidates reduce the whole pose change, with distinct
@@ -34,7 +40,9 @@ so an initially physical hand can transfer its rifle without an immediate stock 
 
 [Recoil](recoil.md) owns persistent player-controlled climb and barrel alignment. The fit clears both reachable
 grips before the authoritative muzzle ray. The rendered firing pose retains that exact world muzzle and carries
-the shoulder frame through actor translation, facing and authored pelvis motion. The two arms follow the rigid
+the shoulder frame through actor translation, facing and authored pelvis motion. A shot also keeps its stock
+above the pelvis's leg-swing region before that ray: a low sprint carry otherwise places the stock inside the
+next rendered thigh pose, especially below 60 fps. The two arms follow the rigid
 aligned rifle immediately, as R19 requires; body/head and digit bounds remain measured. This does not change the
 recoil spring, camera, firing eligibility, damage or spread rules.
 

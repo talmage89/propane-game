@@ -17,6 +17,8 @@ public sealed class RifleClearance
     private Transform3D[] bodyFrames = Array.Empty<Transform3D>();
     private Transform3D headFrame;
     private Transform3D toSkeleton, fromSkeleton;
+    /// <summary>Nearest volume from the most recent stock query, for frame-level clearance diagnostics.</summary>
+    public int LastStockBodyBone { get; private set; } = -1;
 
     public RifleClearance(Skeleton3D skeleton)
     {
@@ -116,6 +118,7 @@ public sealed class RifleClearance
         var local = toSkeleton * rifle;
         var gap = float.PositiveInfinity;
         var normal = Vector3.Zero;
+        LastStockBodyBone = -1;
         for (var i = 0; i <= 20; i++)
         {
             var point = local * new Vector3(0, 0.064f, Mathf.Lerp(0.08f, 0.255f, i / 20f));
@@ -127,6 +130,7 @@ public sealed class RifleClearance
                     tuning.RifleStockRadius + (margin ?? tuning.RifleHeadClearance)) - tuning.RifleStockRadius;
                 if (distance >= gap) continue;
                 gap = distance;
+                LastStockBodyBone = body[j].Bone;
                 normal = fromSkeleton.Basis * bodyFrames[j].Basis.Transposed() * (normalized / volumeRadius).Normalized();
             }
         }
@@ -177,6 +181,14 @@ public sealed class RifleClearance
             }
             Grip(rightGrip);
             Grip(leftGrip);
+            if (shouldered >= 0.999f)
+            {
+                var shoulder = ShoulderContact(skeleton, pose, tuning);
+                var minimumShoulder = shoulder.Gap - tuning.RifleShoulderMinimumGap;
+                var maximumShoulder = tuning.RifleShoulderMaximumGap - shoulder.Gap;
+                if (minimumShoulder < result.Gap) result = (minimumShoulder, shoulder.Normal);
+                if (maximumShoulder < result.Gap) result = (maximumShoulder, -shoulder.Normal);
+            }
             return result;
         }
         var start = rifle;

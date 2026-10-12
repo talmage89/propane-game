@@ -21,6 +21,7 @@ public partial class RifleRig : SkeletonModifier3D
     private readonly int[,] fingers = new int[10, 3];
     private int upperR, lowerR, handR;
     private int upperL, lowerL, handL;
+    private Basis upperBindR, lowerBindR, upperBindL, lowerBindL;
     private bool resolved;
     private RifleClearance clearance = null!;
     private bool reportedContactFailure;
@@ -103,12 +104,20 @@ public partial class RifleRig : SkeletonModifier3D
         var pose = AlignPlacement(Rifle.GlobalTransform, target, pivot, shoulderR, shoulderL,
             ArmLength(skeleton, upperR, lowerR, handR) - margin, ArmLength(skeleton, upperL, lowerL, handL) - margin);
         var to = from.AffineInverse();
+        // The first shot can interrupt a low sprint carry before the next rendered gait pose. Keeping
+        // the stock above the pelvis's leg-swing region clears that transition before the muzzle ray,
+        // rather than moving the chosen shot or freezing a leg afterward.
+        var thighCeiling = (from * lastPelvisFrame.Origin).Y + World.Tuning.RifleShotStockAbovePelvis;
+        float StockFloor(Transform3D rifle) => Mathf.Min((rifle * new Vector3(0, 0.064f, 0.08f)).Y,
+            (rifle * new Vector3(0, 0.064f, 0.255f)).Y) - World.Tuning.RifleStockRadius;
         for (var fit = 0; fit < 48; fit++)
         {
+            var previous = pose;
             pose = clearance.Project(skeleton, pose, World.Tuning,
                 rightGrip: RightHandTransform(Transform3D.Identity).Origin,
                 leftGrip: LeftHandTransform(Transform3D.Identity, Rifle.LeftHandLocal, Rifle.LeftGripBasis).Origin,
                 minimumGap: World.Tuning.RifleShotClearance);
+            pose.Origin += Vector3.Up * Mathf.Max(0, thighCeiling - StockFloor(pose));
             pose = AlignPlacement(pose, target, pivot, shoulderR, shoulderL,
                 ArmLength(skeleton, upperR, lowerR, handR) - margin, ArmLength(skeleton, upperL, lowerL, handL) - margin);
             pose = Rifle.AlignBarrel(pose, Rifle.MuzzleLocal.Origin, target);
@@ -124,9 +133,16 @@ public partial class RifleRig : SkeletonModifier3D
             var reachable = wristR.DistanceTo(lastShoulderR) <= ArmLength(skeleton, upperR, lowerR, handR) - margin + 0.000001f &&
                 wristL.DistanceTo(lastShoulderL) <= ArmLength(skeleton, upperL, lowerL, handL) - margin + 0.000001f;
             var pairGap = RifleClearance.ArmPairGap(new(lastShoulderR, elbowR, wristR), new(lastShoulderL, elbowL, wristL), World.Tuning);
+            var stockGap = clearance.StockBodyGap(skeleton, pose, World.Tuning);
             if (contact.Gap >= World.Tuning.RifleLimbClearance && pairGap >= World.Tuning.RifleLimbClearance && reachable &&
-                clearance.StockBodyGap(skeleton, pose, World.Tuning) >= World.Tuning.RifleHeadClearance)
+                StockFloor(pose) >= thighCeiling - 0.000001f &&
+                (stockGap >= World.Tuning.RifleShotClearance ||
+                 stockGap >= World.Tuning.RifleHeadClearance && pose.Origin.DistanceSquaredTo(previous.Origin) < 1e-12f &&
+                 pose.Basis.IsEqualApprox(previous.Basis)))
             {
+                // Seek the firing reserve before accepting the fit: the next authored leg pose can move
+                // under the stock. Anatomical reach can limit that reserve; repeating a fixed point adds
+                // work without increasing clearance. The rendered pose still checks its body objectives.
                 break;
             }
 
@@ -291,6 +307,9 @@ public partial class RifleRig : SkeletonModifier3D
         var yaw = flatAim.LengthSquared() > 0.0001f ? forward.SignedAngleTo(flatAim.Normalized(), Vector3.Up) : 0f;
         var authoredForward = fromSkeleton.Basis * skeleton.GetBoneGlobalPose(spine[2]).Basis *
             skeleton.GetBoneGlobalRest(spine[2]).Basis.Inverse() * Vector3.Back;
+        var authoredUp = fromSkeleton.Basis * skeleton.GetBoneGlobalPose(spine[2]).Basis *
+            skeleton.GetBoneGlobalRest(spine[2]).Basis.Inverse() * Vector3.Up;
+        var authoredRoll = Mathf.Atan2(authoredUp.Dot(right), authoredUp.Dot(Vector3.Up));
         authoredForward.Y = 0;
         if (authoredForward.LengthSquared() > 0.00001f)
             yaw -= forward.SignedAngleTo(authoredForward.Normalized(), Vector3.Up) * (1 - tuning.RifleAuthoredYawShare);
@@ -305,7 +324,8 @@ public partial class RifleRig : SkeletonModifier3D
             * new Quaternion(Vector3.Up, Mathf.DegToRad(tuning.MeleeTorsoTwistDegrees) * (1 - 2 * contact) * meleeWeight)
             * new Quaternion(aimDir, Mathf.DegToRad(tuning.RifleTorsoSwayDegrees) * lateral * sway)
             * new Quaternion(aimRight, pitch * pitchShare - Mathf.DegToRad(tuning.RifleRecoilLiftDegrees) * kick * tuning.RifleRecoilTorsoShare)
-            * new Quaternion(Vector3.Up, yaw);
+            * new Quaternion(Vector3.Up, yaw)
+            * new Quaternion(forward, -authoredRoll * (1 - tuning.RifleAimedAuthoredRollShare) * AimAmount);
         var lowerSpine = skeleton.GetBoneGlobalPose(spine[0]);
         lowerSpine.Origin += toSkeleton.Basis * (-aimDir * tuning.RifleRecoilBack * kick * tuning.RifleRecoilTorsoShare);
         var lowerParent = skeleton.GetBoneParent(spine[0]);
@@ -318,6 +338,18 @@ public partial class RifleRig : SkeletonModifier3D
             // upper body bend sideways when a strafing player aims near the pitch limits.
             RotateBoneWorld(skeleton, spine[k], Quaternion.Identity.Slerp(torsoRotation, spineWeights[k] * Weight), fromSkeleton, toSkeleton);
         }
+        // A walking shooter counterleans above the moving hips. Preserve the authored pelvis and vertical
+        // motion while stabilizing the shoulder laterally; translating the rifle alone would unseat its stock.
+        var pelvisSide = (fromSkeleton.Basis * (skeleton.GetBoneGlobalPose(pelvis).Origin - skeleton.GetBoneGlobalRest(pelvis).Origin)).Dot(right);
+        var lowerWorld = fromSkeleton * skeleton.GetBoneGlobalPose(spine[0]).Origin;
+        var chestOrigin = fromSkeleton * skeleton.GetBoneGlobalPose(spine[2]).Origin;
+        var counterLean = Mathf.Atan2(-pelvisSide, Mathf.Max(chestOrigin.Y - lowerWorld.Y, 0.1f));
+        var leanLimit = Mathf.DegToRad(tuning.RifleAimCounterLeanDegrees);
+        counterLean = Mathf.Clamp(counterLean, -leanLimit, leanLimit) * tuning.RifleAimCounterSwayShare * AimAmount * Weight;
+        RotateBoneWorld(skeleton, spine[0], new Quaternion(forward, counterLean), fromSkeleton, toSkeleton);
+        // Keep the upper chest's authored orientation. A gentle S bend shifts it over the hips without
+        // amplifying head sway above the stabilized shoulder or stretching either spinal segment.
+        RotateBoneWorld(skeleton, spine[2], new Quaternion(forward, -counterLean), fromSkeleton, toSkeleton);
         var torsoForward = forward.Rotated(Vector3.Up, yaw);
         RotateBoneWorld(skeleton, clavicleR, new Quaternion(torsoForward,
             -Mathf.DegToRad(tuning.RifleShoulderRaiseDegrees) * AimAmount * Weight), fromSkeleton, toSkeleton);
@@ -637,7 +669,8 @@ public partial class RifleRig : SkeletonModifier3D
                 }
                 if (Weight >= 0.999f && shotPose == null &&
                     (clearance.StockBodyGap(s, rifle, World.Tuning) < World.Tuning.RifleHeadClearance - 0.000001f ||
-                     shouldered >= 0.999f && clearance.ShoulderGap(s, rifle, World.Tuning) > World.Tuning.RifleShoulderMaximumGap))
+                     shouldered >= 0.999f && (clearance.ShoulderGap(s, rifle, World.Tuning) > World.Tuning.RifleShoulderMaximumGap ||
+                         clearance.ShoulderGap(s, rifle, World.Tuning) < World.Tuning.RifleShoulderMinimumGap - 0.000001f)))
                 {
                     // Barrel alignment and the final elbow choice can change the shoulder/skin fit.
                     // Iterate those objectives on the solved pose before accepting either contact.
@@ -1011,6 +1044,8 @@ public partial class RifleRig : SkeletonModifier3D
         upperL = skeleton.FindBone("upperarm_l");
         lowerL = skeleton.FindBone("lowerarm_l");
         handL = skeleton.FindBone("hand_l");
+        (upperBindR, lowerBindR) = ArmBind(skeleton, upperR, lowerR, handR);
+        (upperBindL, lowerBindL) = ArmBind(skeleton, upperL, lowerL, handL);
         upperBones = new[] { spine[0], spine[1], spine[2], skeleton.FindBone("clavicle_l"), clavicleR, neck, head, upperR, lowerR, handR, upperL, lowerL, handL };
         desiredBones = new Quaternion[skeleton.GetBoneCount()];
         previousPositions = new Vector3[skeleton.GetBoneCount()];
@@ -1043,7 +1078,7 @@ public partial class RifleRig : SkeletonModifier3D
     }
 
     /// <summary>Analytic two-bone IK in skeleton space, with a pole point for the elbow.</summary>
-    private static bool SolveTwoBone(Skeleton3D skeleton, int upper, int lower, int end, Transform3D target, Vector3 pole)
+    private bool SolveTwoBone(Skeleton3D skeleton, int upper, int lower, int end, Transform3D target, Vector3 pole)
     {
         var a = skeleton.GetBoneGlobalPose(upper).Origin;
         var b = skeleton.GetBoneGlobalPose(lower).Origin;
@@ -1063,14 +1098,48 @@ public partial class RifleRig : SkeletonModifier3D
         var poleDir = pole - a;
         poleDir = (poleDir - dir * dir.Dot(poleDir)).Normalized();
         var elbow = a + dir * along + poleDir * height;
+        var reach = a + dir * distance;
+        var normal = (elbow - a).Cross(reach - elbow);
+        var hinge = normal.LengthSquared() > 0.00000001f;
 
         RotateBone(skeleton, upper, new Basis(Between((b - a).Normalized(), (elbow - a).Normalized())));
+        if (hinge)
+        {
+            // Both segments share the anatomical hinge plane. Independent shortest swings can leave
+            // opposing axial twists, making the wrist flip while its contact and elbow remain correct.
+            var desired = HingeFrame(elbow - a, normal) * (upper == upperR ? upperBindR : upperBindL);
+            var current = skeleton.GetBoneGlobalPose(upper).Basis.Orthonormalized();
+            SetBoneGlobalBasis(skeleton, upper, new Basis(current.GetRotationQuaternion().Slerp(desired.GetRotationQuaternion(), Weight)));
+        }
         b = skeleton.GetBoneGlobalPose(lower).Origin;
         c = skeleton.GetBoneGlobalPose(end).Origin;
-        var reach = a + dir * distance;
         RotateBone(skeleton, lower, new Basis(Between((c - b).Normalized(), (reach - b).Normalized())));
+        if (hinge)
+        {
+            var desired = HingeFrame(reach - b, normal) * (upper == upperR ? lowerBindR : lowerBindL);
+            var current = skeleton.GetBoneGlobalPose(lower).Basis.Orthonormalized();
+            SetBoneGlobalBasis(skeleton, lower, new Basis(current.GetRotationQuaternion().Slerp(desired.GetRotationQuaternion(), Weight)));
+        }
         SetBoneGlobalBasis(skeleton, end, target.Basis.Orthonormalized());
         return true;
+    }
+
+    private static (Basis Upper, Basis Lower) ArmBind(Skeleton3D skeleton, int upper, int lower, int hand)
+    {
+        var a = skeleton.GetBoneGlobalRest(upper);
+        var b = skeleton.GetBoneGlobalRest(lower);
+        var c = skeleton.GetBoneGlobalRest(hand);
+        var normal = (b.Origin - a.Origin).Cross(c.Origin - b.Origin);
+        if (normal.LengthSquared() < 0.00000001f) throw new InvalidOperationException("Mannequin arm hinge plane missing");
+        return (HingeFrame(b.Origin - a.Origin, normal).Inverse() * a.Basis.Orthonormalized(),
+            HingeFrame(c.Origin - b.Origin, normal).Inverse() * b.Basis.Orthonormalized());
+    }
+
+    private static Basis HingeFrame(Vector3 axis, Vector3 normal)
+    {
+        var y = axis.Normalized();
+        var x = (normal - y * normal.Dot(y)).Normalized();
+        return new Basis(x, y, x.Cross(y)).Orthonormalized();
     }
 
     private static Quaternion Between(Vector3 from, Vector3 to)

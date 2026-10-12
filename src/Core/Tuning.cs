@@ -368,6 +368,9 @@ public partial class Tuning : Resource
     [Export(PropertyHint.Range, "0,1,0.01")] public float RifleHipPitchShare { get; set; } = 0.55f;
     [Export(PropertyHint.Range, "0,1,0.01")] public float RifleAimPitchShare { get; set; } = 0.7f;
     [Export(PropertyHint.Range, "0,1,0.01")] public float RifleAuthoredYawShare { get; set; } = 0.35f;
+    [Export(PropertyHint.Range, "0,1,0.01")] public float RifleAimedAuthoredRollShare { get; set; } = 0.65f;
+    [Export(PropertyHint.Range, "0,1,0.01")] public float RifleAimCounterSwayShare { get; set; } = 1f;
+    [Export(PropertyHint.Range, "0,15,0.1")] public float RifleAimCounterLeanDegrees { get; set; } = 10f;
     [Export(PropertyHint.Range, "0,80,1")] public float RifleHipBladeDegrees { get; set; } = 28f;
     [Export(PropertyHint.Range, "0,80,1")] public float RifleAimBladeDegrees { get; set; } = 28f;
     [Export(PropertyHint.Range, "0,45,1")] public float RifleShoulderRaiseDegrees { get; set; } = 15f;
@@ -380,10 +383,12 @@ public partial class Tuning : Resource
     [Export(PropertyHint.Range, "0,60,1")] public float RifleNeckLeanDegrees { get; set; } = 30f;
     [Export(PropertyHint.Range, "0,0.03,0.001")] public float RifleHeadClearance { get; set; } = 0.006f;
     [Export(PropertyHint.Range, "0,0.06,0.001")] public float RifleShotClearance { get; set; } = 0.035f;
+    [Export(PropertyHint.Range, "0,0.3,0.01")] public float RifleShotStockAbovePelvis { get; set; } = 0.2f;
     [Export(PropertyHint.Range, "0.005,0.04,0.001")] public float RifleStockRadius { get; set; } = 0.018f;
     [Export(PropertyHint.Range, "0.03,0.08,0.001")] public float RifleShoulderRadius { get; set; } = 0.055f;
     [Export(PropertyHint.Range, "0.05,0.2,0.001")] public float RifleShoulderContactLength { get; set; } = 0.14f;
     [Export(PropertyHint.Range, "0,0.025,0.001")] public float RifleShoulderContactGap { get; set; } = 0.008f;
+    [Export(PropertyHint.Range, "0,0.01,0.001")] public float RifleShoulderMinimumGap { get; set; } = 0f;
     [Export(PropertyHint.Range, "0.005,0.025,0.001")] public float RifleShoulderMaximumGap { get; set; } = 0.025f;
     [Export(PropertyHint.Range, "0,30,1")] public float RifleShoulderReachDegrees { get; set; } = 25f;
     [Export(PropertyHint.Range, "0.1,1,0.01")] public float RifleShoulderPoseShare { get; set; } = 0.5f;

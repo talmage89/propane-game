@@ -268,6 +268,8 @@ public partial class PlayerRange : Node3D
                     script.Hold(23, 26, new PlayerIntent { Move = Vector2.Down, Sprint = true });
                     director.At(26, () => player.Ammo = new AmmoState { Tuning = world.Tuning, Magazine = 30, Reserve = 90 });
                     script.Hold(26, 28.9f, new PlayerIntent { FireHeld = true });
+                    director.At(26.025f, () => CaptureAfterDraw(director, "sprint_fire"));
+                    director.At(26.25f, () => CaptureAfterDraw(director, "sprint_fire_return"));
                     script.Hold(29, 32, new PlayerIntent { Move = Vector2.Down, Sprint = true });
                     script.Reload(29.5f);
                     foreach (var start in new[] { 15.7f, 18f, 20.5f, 23.5f, 26.5f })
@@ -379,6 +381,20 @@ public partial class PlayerRange : Node3D
                 break;
         }
         // Scenarios such as creep set their own duration; finish diagnostics against that final duration.
+        if ((scenario is "motion" or "ragdoll") && (DevArgs.Get("assert-grip") != null || DevArgs.Get("assert-motion") != null))
+        {
+            var rig = player.FindChildren("*", "SkeletonModifier3D", owned: false).OfType<RifleRig>().Single();
+            director.At(director.QuitAfter - 0.15f, () =>
+            {
+                if (!player.ResolvedState.Active || rig.Weight < 0.999f)
+                {
+                    GD.PushError("[handoff] FAIL get-up did not return to a complete rifle hold");
+                    ShutdownGuard.Quit(GetTree(), 1);
+                    return;
+                }
+                GD.Print("[handoff] PASS active body and complete rifle hold after get-up");
+            });
+        }
         if (motion != null) director.At(director.QuitAfter - 0.08f, motion.Finish);
         if (grip != null) director.At(director.QuitAfter - 0.1f, grip.Finish);
         // Ready sorts the complete timeline, including diagnostics and pitch changes.

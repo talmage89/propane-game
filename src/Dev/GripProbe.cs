@@ -24,7 +24,7 @@ public partial class GripProbe : SkeletonModifier3D
         bones.AddChild(probe);
         return probe;
     }
-    private readonly StringBuilder csv = new("time,gait,pitch,ready,aim,sprint,reload,recoil,right_m,left_m,right_deg,left_deg,penetration_m,eye_m,stock_head_m,stock_shoulder_m,gaze_deg,stock_body_m,arm_body_m,reach_margin_m\n");
+    private readonly StringBuilder csv = new("time,gait,pitch,ready,aim,sprint,reload,recoil,right_m,left_m,right_deg,left_deg,penetration_m,eye_m,stock_head_m,stock_shoulder_m,gaze_deg,stock_body_m,arm_body_m,reach_margin_m,pelvis_side_m,chest_side_m,shoulder_side_m,rifle_side_m,head_side_m,neck_side_m,stock_body_bone\n");
     private readonly float[] maxima = new float[6];
     private int count;
     private float settledEye;
@@ -92,6 +92,7 @@ public partial class GripProbe : SkeletonModifier3D
         var headDirection = (bones.GlobalTransform * bones.GetBoneGlobalPose(bones.FindBone("Head"))).Basis.Column2.Normalized();
         var currentGaze = Mathf.RadToDeg(Mathf.Acos(Mathf.Clamp(headDirection.Dot(-rifle.GlobalBasis.Column2.Normalized()), -1, 1)));
         var currentStockBody = body.StockBodyGap(bones, rifle.GlobalTransform, Player.World.Tuning);
+        var currentStockBone = body.LastStockBodyBone < 0 ? "none" : bones.GetBoneName(body.LastStockBodyBone).ToString();
         var currentArmBody = float.PositiveInfinity;
         var currentReach = float.PositiveInfinity;
         if (rig.Weight >= 0.999f)
@@ -206,7 +207,10 @@ public partial class GripProbe : SkeletonModifier3D
             }
         }
         count++;
-        csv.AppendLine(FormattableString.Invariant($"{time:F6},{Player.ResolvedState.Gait},{(Player.IsRemote ? (float?)null : Player.Aim.Pitch) ?? 0:F3},{rig.ReadyAmount:F3},{rig.AimAmount:F3},{rig.SprintAmount:F3},{rig.Reload:F3},{rig.Recoil:F3},{values[0]:F6},{values[1]:F6},{values[2]:F4},{values[3]:F4},{values[4]:F6},{values[5]:F6},{currentHead:F6},{currentShoulder:F6},{currentGaze:F3},{currentStockBody:F6},{currentArmBody:F6},{currentReach:F6}"));
+        var lateral = new Basis(Vector3.Up, Player.FacingYaw) * Vector3.Right;
+        float Side(string bone) => (bones.GlobalTransform * bones.GetBoneGlobalPose(bones.FindBone(bone)).Origin - Player.GlobalPosition).Dot(lateral);
+        var rifleSide = (rifle.GlobalPosition - Player.GlobalPosition).Dot(lateral);
+        csv.AppendLine(FormattableString.Invariant($"{time:F6},{Player.ResolvedState.Gait},{(Player.IsRemote ? (float?)null : Player.Aim.Pitch) ?? 0:F3},{rig.ReadyAmount:F3},{rig.AimAmount:F3},{rig.SprintAmount:F3},{rig.Reload:F3},{rig.Recoil:F3},{values[0]:F6},{values[1]:F6},{values[2]:F4},{values[3]:F4},{values[4]:F6},{values[5]:F6},{currentHead:F6},{currentShoulder:F6},{currentGaze:F3},{currentStockBody:F6},{currentArmBody:F6},{currentReach:F6},{Side("pelvis"):F6},{Side("spine_03"):F6},{Side("upperarm_r"):F6},{rifleSide:F6},{Side("Head"):F6},{Side("neck_01"):F6},{currentStockBone}"));
 
     }
 
