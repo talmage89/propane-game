@@ -1,5 +1,9 @@
 # Tank agreement in network soaks
 
+[Independent participant integration review](participant-integration.md) records the merged six-run capacity
+proof, measurements, verifier fixes and unresolved ordinary-play failures. The staged capacity gate passes;
+those failures still block merge approval.
+
 `net_bots.sh` runs `compare_tanks.py` and `check_scores.py` after every local match. Either failure makes the
 launcher fail. `-k` skips both checks, including for an existing server (`-S`), whose audit log must be
 obtained separately. Deliberate late construction or early-leave probes also need `-k`, since their captures
