@@ -7,3 +7,4 @@ obj/
 build/
 build_id.txt
 override.cfg
+__pycache__/
