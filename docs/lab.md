@@ -96,21 +96,24 @@ peer and retain separate banks. The factory and session retain ordered teardown 
 `python3 -B tools/dev/check_lab.py` is the fast gate: one lifecycle cycle per allowed pair, local rules, the bot's
 aim-stall probe and a 15-second scripted duel. It requires a success marker, exit 0 and no engine warnings/errors.
 It also plays a Ring Out round and a King round to their ends with shortened dials (`--scenario=prototype --quick`),
-a bot on every actor, and one quick Short Fuse match (`--scenario=shortfuse --quick`: 60 s rounds, first to two). `--full` performs 10 entry/reset/exit cycles for every scenario and environment, sweeps every
+a bot on every actor, one quick Short Fuse match (`--scenario=shortfuse --quick`: 60 s rounds, first to two), and a
+scripted Short Fuse round (`--scenario=shortfuse-combo`) through the real reports: Bot 2 shoots the player dead (the
+player then watches Bot 2), sets off a pile beside Bot 1 and finishes it with bullets while it is down, wins the round,
+and the next suburb builds with new lives; with `--capture-dir` it screenshots each step. `--full` performs 10 entry/reset/exit cycles for every scenario and environment, sweeps every
 layout dial to both slider ends and all at once through every scenario and environment it lays out
 (`--scenario=dials`), and runs 180-second bot-versus-bot soaks in both
 environments, each of which must bank at least ten tanks, and full prototype rounds at the shipped dials (Ring Out on
 three seeds, King on three in the void and one in a suburb). Each prototype round must end legally: Ring Out with a
 winner, every starter placed in elimination order and the out spectating; King on its clock with the bank conserved,
 every mint counted and a materialized pile per zone move. `--full` also plays two Short Fuse matches at the shipped
-dials (`shortfuse-full`), which must between them finish a thrown player with a bullet at least once. Each Short Fuse
+dials (`shortfuse-full`), reporting how often a bot finished a thrown player with a bullet. Each Short Fuse
 round must end legally: every death a starter's, once, credited to someone else or to nobody; the dead spectating;
 alive plus dead equal to the starters, and one alive at most unless the limit ended it; the winner alive. Each match
 must have one winner with the wins, round wins and kills that add up, lives that advanced with every round, and no
 report the rules refused as late, early, duplicated or naming an unknown actor or blast (the Lab's reports arrive at
 once). All are wired into `make test` / `make test-full`.
 `--only=soak-void,dials` runs only the named sessions (`lifetime`, `rules`, `aimstall`, `duel`, `ringout`, `king`,
-`shortfuse`, and with `--full` `dials`, `soak-void`, `soak-suburb`, `ringout-full`, `king-full`, `king-suburb`,
+`shortfuse`, `shortfuse-combo`, and with `--full` `dials`, `soak-void`, `soak-suburb`, `ringout-full`, `king-full`, `king-suburb`,
 `shortfuse-full`); `make test-full` splits
 `--full` into four such jobs. A prototype round alone: `lab_test.tscn -- --scenario=prototype --mode=ringout|king
 [--environment=suburb] [--seeds=3] [--first-seed=1] [--bots=2] [--quick]`; `--shots=4,12.5` adds `--capture-dir`

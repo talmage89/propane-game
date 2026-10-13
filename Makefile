@@ -115,9 +115,9 @@ GENERATOR_3 := --first-seed=101 --seeds=50 --first-large-seed=51 --large-seeds=2
 GENERATOR_4 := --first-seed=151 --seeds=50 --first-large-seed=76 --large-seeds=25 --first-formation-seed=6 --formation-seeds=1
 GENERATOR_SHARDS := test-full-generator-1 test-full-generator-2 test-full-generator-3 test-full-generator-4
 # The Lab sessions of check_lab.py --full, split by cost.
-LAB_1 := soak-void
+LAB_1 := soak-void,shortfuse-full
 LAB_2 := soak-suburb
-LAB_3 := lifetime,rules,aimstall,duel,ringout,king,shortfuse,dials
+LAB_3 := lifetime,rules,aimstall,duel,ringout,king,shortfuse,shortfuse-combo,dials
 LAB_4 := ringout-full,king-full,king-suburb
 LAB_SHARDS := test-full-lab-1 test-full-lab-2 test-full-lab-3 test-full-lab-4
 # Longest first, so make -j starts the jobs that would otherwise finish last early. The Lab soaks are unseeded bot

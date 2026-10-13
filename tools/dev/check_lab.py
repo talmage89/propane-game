@@ -12,7 +12,7 @@ parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--full', action='store_true', help='ten lifecycle cycles, every dial at both slider ends, both three-minute bot soaks '
                     'and full prototype rounds across seeds')
 parser.add_argument('--only', help='comma-separated sessions to run, so make -j can split the list: '
-                    'lifetime, rules, aimstall, duel, ringout, king, shortfuse, and with --full dials, soak-void, soak-suburb, '
+                    'lifetime, rules, aimstall, duel, ringout, king, shortfuse, shortfuse-combo, and with --full dials, soak-void, soak-suburb, '
                     'ringout-full, king-full, king-suburb, shortfuse-full')
 args = parser.parse_args()
 # Each session is named, and its log keeps its number in the whole list, so split runs never share a log.
@@ -22,7 +22,9 @@ scenarios = [('lifetime', 'lifetime', [f'--cycles={10 if args.full else 1}']), (
              ('ringout', 'prototype', ['--mode=ringout', '--quick', '--seeds=2']),
              ('king', 'prototype', ['--mode=king', '--quick', '--seeds=1']),
              # A whole Short Fuse match, a new suburb each round: shortened rounds, first to two.
-             ('shortfuse', 'shortfuse', ['--quick', '--seeds=1'])]
+             ('shortfuse', 'shortfuse', ['--quick', '--seeds=1']),
+             # The scripted round: a player shot dead spectates, then a blast-then-bullet kill decides it.
+             ('shortfuse-combo', 'shortfuse-combo', [])]
 if args.full:
     scenarios += [('dials', 'dials', []), ('soak-void', 'soak', ['--environment=void']),
                   ('soak-suburb', 'soak', ['--environment=suburb']),
