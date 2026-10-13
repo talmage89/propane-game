@@ -38,6 +38,10 @@ public partial class MenuGamepadTest : Node
             {
                 await Devices().ConfigureAwait(true);
             }
+            else if (DevArgs.Get("scenario") == "bots")
+            {
+                await Bots().ConfigureAwait(true);
+            }
             else
             {
                 await Run().ConfigureAwait(true);

@@ -23,6 +23,9 @@ else:
     fault = os.environ["NAS_FAULT"]
     if fault == "process" and second:
         sys.exit(7)
+    if "--leave-who=Bot2" in sys.argv and second:
+        print("leaving the match on purpose")
+        sys.exit(0)
     if "--scenario=capacity" in sys.argv and not second:
         print("capacity creator departure")
         sys.exit(0)
@@ -65,6 +68,12 @@ else:
         result = self.run_launcher("none", "-S", "localhost:24680")
         self.assertEqual(result.returncode, 2)
         self.assertIn("remote server audit log", result.stderr)
+
+    def test_a_client_leaving_on_purpose_is_omitted_from_completion_checks(self):
+        result = self.run_launcher("none", "--", "--leave-at=2", "--leave-who=Bot2")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("tank comparison skipped", result.stdout)
+        self.assertEqual(self.run_launcher("score", "--", "--leave-at=2", "--leave-who=Bot2").returncode, 0)
 
 
 if __name__ == "__main__":

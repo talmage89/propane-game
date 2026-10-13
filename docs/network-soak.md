@@ -392,3 +392,79 @@ were logged. The trajectory checker asserted 24 final tank ids/states and compar
 median/p95/max drift 0.000/0.273/5.438 m overall, 0.168/1.049/5.438 m on 31,311 venting pairs. These active-motion
 distributions are observational, not the capacity gate's stationary endpoint limit. The coarse comparer recorded
 488 comparisons. Artifacts are in `build/a6-melee/`, `build/a6-duel/`, `build/a6-gather/` and `build/a6-soak/`.
+
+# Lobby bots (A8)
+
+Measured on October 13, 2026 on a shared 4-CPU cloud VM without a GPU (Mesa renders on the CPU). Timings here are
+indicative only; rerun them on real hardware before relying on a number.
+
+## Soaks
+
+Each run is 90 seconds with `--melee-start`; `--lobby-bots=A,B` gives the first client A lobby bots and the second B.
+Faulted runs add `--net-lag=120 --net-jitter=30 --net-loss=3`.
+
+```sh
+tools/dev/net_bots.sh -n 2 -l 90 -s "--match-seed=24" -- --melee-start --lobby-bots=2,1 --net-seed=1 --net-lag=120 --net-jitter=30 --net-loss=3
+tools/dev/net_bots.sh -n 2 -l 90 -s "--match-seed=25" -- --melee-start --lobby-bots=1,2 --net-seed=2 --net-lag=120 --net-jitter=30 --net-loss=3
+tools/dev/net_bots.sh -n 2 -l 90 -t clean -s "--match-seed=26" -- --melee-start --lobby-bots=2,1
+tools/dev/net_bots.sh -n 2 -l 90 -t clean -s "--match-seed=27" -- --melee-start --lobby-bots=1,2 --lobby-bot-difficulty=2
+tools/dev/net_bots.sh -n 3 -l 90 -s "--match-seed=28" -- --melee-start --lobby-bots=1,2,0 --leave-at=40 --leave-who=Bot2 --net-seed=3 --net-lag=120 --net-jitter=30 --net-loss=3
+```
+
+| Run | Actors | Tanks | Longest episode | Final rest/moving | Audit | Scores |
+| --- | --- | --- | ---: | --- | --- | --- |
+| Faulted, seed 24 | 2 + 3 bots | pass, 0 disagreements | 0.55 s | 0.000 / 0.236 m | 27 map + 35 drops − 45 spills = 17 | agree |
+| Faulted, seed 25 | 2 + 3 bots | pass, 0 disagreements | 0.40 s | 0.001 / 0.116 m | 39 + 54 − 70 = 23 | agree |
+| Clean, seed 26 | 2 + 3 bots | pass, 0 disagreements | 0.10 s | 0.001 / 0.109 m | 39 + 27 − 43 = 23 | agree |
+| Clean, seed 27, Hard | 2 + 3 bots | pass, 0 disagreements | 0.95 s | 0.004 / 0.000 m | 27 + 37 − 49 = 15 | agree |
+| Faulted, seed 28, creator leaves at 40 s | 3 + 3 bots | pass, 0 disagreements | 0.50 s | 0.000 / 0.000 m | 35 + 35 − 43 = 27 | agree |
+
+Every run logged zero engine or protocol errors. In the departure run Bot2 left with its two bots: the server kept all
+three in the standings (0, 0 and 2 banked), both survivors agreed with the server's standings, and their final digests
+list only the surviving actors. The leaver's log is omitted from the tank and score comparison, as `net_bots.sh` now
+does for any `--leave-at` client.
+
+## The creator's cost
+
+`--human=idle` keeps the creator's own player still, so the brains measured are the lobby bots'. One client hosts
+every bot on map seed 23 for a 90-second match; the frame columns cover play after the first 12 seconds and before
+the last 8, from `--frame-metrics`.
+
+```sh
+tools/dev/net_bots.sh -n 1 -l 90 -k -s "--match-seed=23" -- --human=idle --lobby-bots=7 --frame-metrics="$PWD/build/frames"
+```
+
+| Headless | Wall p50 / p95 | Process p50 / p95 | Physics p50 / p95 | Brain per think | Thinks per bot-second |
+| --- | --- | --- | --- | --- | ---: |
+| 1 human | 16.7 / 17.4 ms | 1.8 / 5.8 ms | 2.0 / 6.4 ms | — | — |
+| 1 human + 3 bots | 16.8–17.0 / 57–109 ms | 5.9–6.1 / 16–20 ms | 18–19 / 61–267 ms | 1.09–1.54 ms | 120 |
+| 1 human + 7 bots | 21–155 / 300–840 ms | 9.9–11.9 / 19–22 ms | 24–35 / 52–118 ms | 1.09–1.84 ms | 55–80 |
+
+Ranges span two runs on the same seed, one before and one after the navigation savings below; the bots' choices, and
+so their route searches, differ from run to run more than those savings do. With 7
+bots on this VM the physics step cannot keep 120 Hz and the match runs slower than real time. Bots also bring the
+match to life (blasts, vents and drops) that an idle player alone does not, which these frame times include. The
+brain allocates 14–64 kB per think, almost all of it inside `BankingBot` and the physics query results; the runtime
+glue allocates nothing per tick.
+
+Rendered runs (1280×720 window, Mesa on the CPU) ran at 1–2 frames a second with or without bots, about 0.8–1.3 s of
+rendering per frame, so they cannot separate the bots' cost and are not reported as numbers.
+
+Navigation is about 90% of a brain's time: route searches advance up to `BotSearchPerTick` nodes for each bot on each
+tick, and every node costs dozens of capsule sweeps and rays. A8 removes repeated queries without changing a result:
+query objects are reused, a jump link checks its range before its walk test, and a navigation world remembers
+standable and supported points for its tick. On the five-seed course, queries fell from 210188 to 131896 (37%), and
+the twenty-seed course's output is identical to dev's. Bounding the creator's total cost regardless of bot count
+would change bot behavior (a shared search budget per peer, a lower think rate, or a cap on bots per peer); that is
+the owner's decision.
+
+## For real hardware
+
+Rerun on the 12-thread machine, rendered and headless:
+
+- The frame-time table above, including 1 + 7 bots, and 1 + 15 bots for a full lobby on one creator.
+- 8 actors: `-n 4 -l 90 -- --melee-start --lobby-bots=1` and `-n 2 -l 90 -- --melee-start --lobby-bots=3`, faulted
+  and clean. The host raises the lobby's capacity to fit every client's bots.
+- 16 actors: `-n 4 -l 90 -- --melee-start --lobby-bots=3` and `-n 8 -l 90 -- --melee-start --lobby-bots=1`, faulted
+  and clean.
+- Departure at both sizes: add `--leave-at=40 --leave-who=Bot2` (with `-n` of 3 or more, so two survivors compare).

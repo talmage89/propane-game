@@ -10,6 +10,8 @@ namespace Propane.UI;
 public partial class AppearancePicker : CanvasLayer
 {
     public required AppearanceRecord Initial { get; init; }
+    /// <summary>Whose color this is: the player's own, or a bot's.</summary>
+    public string Title { get; init; } = "YOUR COLOR";
     public event Action<AppearanceRecord>? Applied;
     public event Action? Closed;
     public AppearanceRecord Selected { get; private set; } = AppearanceRecord.FromPalette(0);
@@ -41,7 +43,7 @@ public partial class AppearancePicker : CanvasLayer
         var layout = new VBoxContainer { CustomMinimumSize = new Vector2(540, 0) };
         layout.AddThemeConstantOverride("separation", 10);
         panel.AddChild(layout);
-        layout.AddChild(UiStyle.Title("YOUR COLOR", 34));
+        layout.AddChild(UiStyle.Title(Title, 34));
         layout.AddChild(UiStyle.Text("Pick a preset or adjust · Hold left / right for larger moves", 16, UiStyle.SoftInk, HorizontalAlignment.Center));
         var viewportContainer = new SubViewportContainer
         {
@@ -212,7 +214,7 @@ public partial class AppearancePicker : CanvasLayer
             }
         }
         hex.Text = Selected.Color.ToHtml(false).ToUpperInvariant();
-        colorText.Text = $"YOUR COLOR · #{hex.Text}";
+        colorText.Text = $"{Title} · #{hex.Text}";
     }
 
     public void Close()
