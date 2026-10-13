@@ -535,8 +535,15 @@ public partial class LabTest : Node
         template.LabPrototypeBots = 2;
         template.FixedSeed = (int)DevArgs.GetFloat("seed", 23);
         DevArgs.ApplyTuningOverrides(template);
-        var lab = new LabSession { Scenario = LabScenarios.Get("shortfuse"), EnvironmentKind = LabEnvironment.Suburb, Template = template,
-            PauseOnFocusLoss = false, TestRandomSeed = 23, Name = "Lab" };
+        var lab = new LabSession
+        {
+            Scenario = LabScenarios.Get("shortfuse"),
+            EnvironmentKind = LabEnvironment.Suburb,
+            Template = template,
+            PauseOnFocusLoss = false,
+            TestRandomSeed = 23,
+            Name = "Lab"
+        };
         AddChild(lab);
         var runner = lab.Prototype!;
         var rules = (ShortFuseRules)runner.Rules;
@@ -547,7 +554,9 @@ public partial class LabTest : Node
         var space = lab.World.Physics.DirectSpaceState;
         bool Clear(Vector3 at) => space.IntersectShape(new PhysicsShapeQueryParameters3D
         {
-            Shape = new SphereShape3D { Radius = 0.5f }, Transform = new Transform3D(Basis.Identity, at + Vector3.Up * 1f), CollisionMask = Layers.World | Layers.Props | Layers.Pushable,
+            Shape = new SphereShape3D { Radius = 0.5f },
+            Transform = new Transform3D(Basis.Identity, at + Vector3.Up * 1f),
+            CollisionMask = Layers.World | Layers.Props | Layers.Pushable,
         }, 1).Count == 0;
         // Nothing a bullet would stop at in between: the line ends at the target or short of it only by the target itself.
         bool Sees(Vector3 from, Vector3 to, Node? target = null)
@@ -570,7 +579,9 @@ public partial class LabTest : Node
                 var side = from + (out1 - across).Normalized() * 9f;
                 if (Clear(at) && Clear(from) && Clear(side) && Sees(from, at) && Sees(from, tank.GlobalTransform * PropaneTank.LocalCenter - Vector3.Up * 1.2f, tank) && Sees(side, from) &&
                     lab.LiveTanks.All(t => t.GlobalPosition.DistanceTo(from) > 8 && t.GlobalPosition.DistanceTo(side) > 8))
+                {
                     layout = (tank, at, from, side);
+                }
             }
             if (layout != null) break;
         }
