@@ -11,6 +11,8 @@ namespace Propane.Dev;
 /// <summary>
 /// Headless checks of the suburb generator over many seeds. Exits with code 1 on any failure.
 /// Run: godot --headless res://scenes/dev/generator_tests.tscn -- --seeds=200
+/// Each sweep runs a contiguous seed range, so make test-full can shard it: --first-seed (single-player and 2-player),
+/// --first-large-seed and --first-formation-seed start the ranges, and --list-seeds prints them without generating.
 /// </summary>
 public partial class GeneratorTests : Node
 {
@@ -20,6 +22,7 @@ public partial class GeneratorTests : Node
     private TankGeometry geometry = null!;
     private float chainRadius;
     private readonly Dictionary<string, int> failureKinds = new();
+    private bool listing;
 
     public override void _Ready()
     {
@@ -36,6 +39,8 @@ public partial class GeneratorTests : Node
     {
         DevArgs.Setup();
         var count = (int)DevArgs.GetFloat("seeds", 120);
+        var first = (int)DevArgs.GetFloat("first-seed", 1);
+        listing = DevArgs.Get("list-seeds") != null;
         var tuning = new Core.Tuning();
         var settings = SuburbPlans.SinglePlayer(tuning);
         chainRadius = Mathf.Min(tuning.ChainRadius, tuning.BlastRadius);
@@ -48,8 +53,9 @@ public partial class GeneratorTests : Node
         var reasons = new Dictionary<string, int>();
         var firstSeedFor = new Dictionary<string, int>();
         var timer = System.Diagnostics.Stopwatch.StartNew();
-        for (var seed = 1; seed <= count; seed++)
+        for (var seed = first; seed < first + count; seed++)
         {
+            if (Listed("single", seed)) continue;
             var plan = new SuburbGenerator(settings, catalog, seed).Generate();
             var again = new SuburbGenerator(settings, catalog, seed).Generate();
             Check(seed, "deterministic", Net.PlanCodec.Encode(plan).SequenceEqual(Net.PlanCodec.Encode(again)));
@@ -68,25 +74,44 @@ public partial class GeneratorTests : Node
             sizes.Add(plan.Bounds.Size);
             groupSizes.AddRange(GroupSizes(plan));
         }
-        GD.Print($"[tests] {count} seeds in {timer.ElapsedMilliseconds} ms; lots {lotTotals.Min()}..{lotTotals.Max()} (avg {lotTotals.Average():0.0}); " +
-                 $"tanks {tankTotals.Min()}..{tankTotals.Max()}; map {sizes.Min(v => v.X * v.Y) / 1000f:0.0}..{sizes.Max(v => v.X * v.Y) / 1000f:0.0} " +
-                 $"thousand m2 (avg {sizes.Average(v => v.X):0} x {sizes.Average(v => v.Y):0} m)");
-        GD.Print($"[tests] tank groups: {groupSizes.Count / (float)count:0.0} per map, sizes " +
-                 string.Join(" ", groupSizes.GroupBy(g => g).OrderBy(g => g.Key).Select(g => $"{g.Key}:{g.Count()}")));
-        GD.Print("[tests] tank spots: " + string.Join(", ", reasons.OrderByDescending(r => r.Value).Select(r => $"{r.Key} {r.Value} (seed {firstSeedFor[r.Key]})")));
+        if (tankTotals.Count > 0)
+        {
+            GD.Print($"[tests] seeds {first}..{first + count - 1} in {timer.ElapsedMilliseconds} ms; lots {lotTotals.Min()}..{lotTotals.Max()} (avg {lotTotals.Average():0.0}); " +
+                     $"tanks {tankTotals.Min()}..{tankTotals.Max()}; map {sizes.Min(v => v.X * v.Y) / 1000f:0.0}..{sizes.Max(v => v.X * v.Y) / 1000f:0.0} " +
+                     $"thousand m2 (avg {sizes.Average(v => v.X):0} x {sizes.Average(v => v.Y):0} m)");
+            GD.Print($"[tests] tank groups: {groupSizes.Count / (float)count:0.0} per map, sizes " +
+                     string.Join(" ", groupSizes.GroupBy(g => g).OrderBy(g => g.Key).Select(g => $"{g.Key}:{g.Count()}")));
+            GD.Print("[tests] tank spots: " + string.Join(", ", reasons.OrderByDescending(r => r.Value).Select(r => $"{r.Key} {r.Value} (seed {firstSeedFor[r.Key]})")));
+        }
         var formationTimer = System.Diagnostics.Stopwatch.StartNew();
         var formationCount = (int)DevArgs.GetFloat("formation-seeds", 6);
-        TestFormations(catalog, formationCount);
-        GD.Print($"[tests] forced formations: {formationCount} seeds per formation/size in {formationTimer.ElapsedMilliseconds} ms");
+        var formationFirst = (int)DevArgs.GetFloat("first-formation-seed", 1);
+        TestFormations(catalog, formationFirst, formationCount);
+        if (!listing) GD.Print($"[tests] forced formations: seeds {formationFirst}..{formationFirst + formationCount - 1} per formation/size in {formationTimer.ElapsedMilliseconds} ms");
         // Larger matches cost far more per seed; --large-seeds (default 10) sets their sweep. make test-full runs 100.
         var largeCount = (int)DevArgs.GetFloat("large-seeds", Mathf.Min(count, 10));
-        foreach (var players in new[] { 2, 8, 16, 24, 32 }) TestMatchSuburbs(players <= 2 ? count : largeCount, players, catalog);
+        var largeFirst = (int)DevArgs.GetFloat("first-large-seed", 1);
+        foreach (var players in new[] { 2, 8, 16, 24, 32 })
+            TestMatchSuburbs(players <= 2 ? first : largeFirst, players <= 2 ? count : largeCount, players, catalog);
+        if (listing)
+        {
+            GD.Print("[seeds] listed");
+            ShutdownGuard.Quit(GetTree(), 0);
+            return;
+        }
         foreach (var (kind, n) in failureKinds.OrderByDescending(k => k.Value))
         {
             GD.Print($"[tests] FAIL {kind}: {n}");
         }
         GD.Print(failures == 0 ? "[tests] ALL PASSED" : $"[tests] {failures} FAILURES");
         ShutdownGuard.Quit(GetTree(), failures == 0 ? 0 : 1);
+    }
+
+    /// <summary>With --list-seeds, names the sweep's seed instead of checking it.</summary>
+    private bool Listed(string sweep, int seed)
+    {
+        if (listing) GD.Print($"[seeds] {sweep} {seed}");
+        return listing;
     }
 
     private void Check(int seed, string what, bool ok, string detail = "")
@@ -107,7 +132,7 @@ public partial class GeneratorTests : Node
     /// Match suburbs: the same checks, plus a start for every player and the ammo spots, tank piles pulled toward the
     /// center, and the plan surviving the trip through <see cref="Net.PlanCodec"/> unchanged.
     /// </summary>
-    private void TestMatchSuburbs(int count, int players, GameCatalog catalog)
+    private void TestMatchSuburbs(int first, int count, int players, GameCatalog catalog)
     {
         var tuning = new Core.Tuning();
         var settings = SuburbPlans.Match(tuning, players);
@@ -117,8 +142,9 @@ public partial class GeneratorTests : Node
         var spawnGaps = new List<float>();
         var ammoCounts = new List<int>();
         var planBytes = new List<int>();
-        for (var seed = 1; seed <= count; seed++)
+        for (var seed = first; seed < first + count; seed++)
         {
+            if (Listed($"match-{players}", seed)) continue;
             var plan = new SuburbGenerator(settings, catalog, seed).Generate();
             var again = new SuburbGenerator(settings, catalog, seed).Generate();
             Check(seed, "match: deterministic", Net.PlanCodec.Encode(plan).SequenceEqual(Net.PlanCodec.Encode(again)) &&
@@ -156,8 +182,9 @@ public partial class GeneratorTests : Node
                                                          decoded.CulDeSacs.SequenceEqual(plan.CulDeSacs));
 
         }
+        if (mpRadius.Count == 0) return;
         GD.Print($"[tests] {players} players: tanks {settings.TankCount}, max pile {settings.ClusterSizeMax}, map input {settings.MapSize}, ammo {settings.AmmoSpots}");
-        GD.Print($"[tests] match suburbs ({players} players): {count} seeds in {timer.ElapsedMilliseconds} ms; tanks average {mpRadius.Average():0.0} m from the center; " +
+        GD.Print($"[tests] match suburbs ({players} players): seeds {first}..{first + count - 1} in {timer.ElapsedMilliseconds} ms; tanks average {mpRadius.Average():0.0} m from the center; " +
                  $"closest starts {spawnGaps.Min():0.0}..{spawnGaps.Max():0.0} m apart; " +
                  $"ammo spots {ammoCounts.Min()}..{ammoCounts.Max()}; plan {planBytes.Average() / 1024f:0.0} KB encoded (max {planBytes.Max() / 1024f:0.0})");
     }
@@ -186,13 +213,14 @@ public partial class GeneratorTests : Node
         return gap;
     }
 
-    private void TestFormations(GameCatalog catalog, int count)
+    private void TestFormations(GameCatalog catalog, int first, int count)
     {
         foreach (var formation in Enum.GetValues<World.Plan.PileFormation>())
         {
             var tuning = new Core.Tuning();
             var spacing = new Vector3(tuning.PileSpacing, tuning.PileLayerHeight, tuning.PileDepthSpacing);
-            foreach (var n in new[] { 0, 1, 2, 4, 5, 6, 9, 10, 14, 16, 20, 30, 64, 128 })
+            // The pile shapes need no seed; every run checks them.
+            foreach (var n in listing ? Array.Empty<int>() : new[] { 0, 1, 2, 4, 5, 6, 9, 10, 14, 16, 20, 30, 64, 128 })
             {
                 var transforms = World.Plan.PileBuilder.Build(formation, n, spacing, tuning.PileUprightLayerHeight);
                 Check(n, "formation count", transforms.Count == n);
@@ -242,8 +270,9 @@ public partial class GeneratorTests : Node
             }));
             foreach (var mode in modes)
             {
-                for (var seed = 1; seed <= count; seed++)
+                for (var seed = first; seed < first + count; seed++)
                 {
+                    if (Listed($"formation-{formation}-{(mode.PlayerSpawns > 0 ? $"match-{mode.PlayerSpawns}" : "single")}", seed)) continue;
                     var plan = new SuburbGenerator(mode, catalog, seed).Generate();
                     Check(seed, "forced formation", plan.Tanks.All(t => t.Formation == formation));
                     CheckTanks(seed, plan, mode);
