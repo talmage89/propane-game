@@ -117,9 +117,10 @@ LAB_1 := soak-void
 LAB_2 := soak-suburb
 LAB_3 := lifetime,rules,aimstall,duel,dials
 LAB_SHARDS := test-full-lab-1 test-full-lab-2 test-full-lab-3
-# Longest first, so make -j starts the jobs that would otherwise finish last early.
-FULL := $(GENERATOR_SHARDS) test-full-navigation $(LAB_SHARDS) test-full-piles test-full-range test-full-menu \
-	test-full-generator-coverage
+# Longest first, so make -j starts the jobs that would otherwise finish last early. The Lab soaks are unseeded bot
+# matches whose cost varies several-fold between runs, so they start before the steadier generator shards.
+FULL := test-full-lab-1 test-full-lab-2 $(GENERATOR_SHARDS) test-full-navigation test-full-lab-3 test-full-piles \
+	test-full-range test-full-menu test-full-generator-coverage
 .PHONY: $(FULL) test-full-bots
 
 test-full: test $(FULL) ## Run the gate plus deep sweeps (make -j4 test-full runs them side by side)
