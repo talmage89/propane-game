@@ -48,17 +48,24 @@ public partial class PlayerCharacter
     private Vector2 BodyTravel(float dt)
     {
         var root = GlobalPosition;
-        var velocity = IsRemote
-            ? hasDisplayedRoot && root.DistanceTo(displayedRoot) < World.Tuning.SnapDistance ? (root - displayedRoot) / Mathf.Max(dt, 0.00001f) : Vector3.Zero
-            : Velocity;
+        var velocity = Velocity;
+        if (IsRemote)
+        {
+            // Displayed displacement, unless it is a snapshot correction: faster than anyone runs, it is a jump
+            // to a corrected position, and the replicated velocity says how the player is really moving.
+            velocity = hasDisplayedRoot ? (root - displayedRoot) / Mathf.Max(dt, 0.00001f) : Vector3.Zero;
+            if (velocity.Length() > World.Tuning.SprintSpeed * 1.5f) velocity = Velocity;
+        }
+        // An aimed body turns in short bursts as the look passes CombatTurnDegrees; smooth them into one turn.
         var turn = hasDisplayedRoot ? Mathf.Wrap(facingYaw - displayedYaw, -Mathf.Pi, Mathf.Pi) / Mathf.Max(dt, 0.00001f) : 0;
+        turnRate = Mathf.Lerp(turnRate, turn, 1 - Mathf.Exp(-dt / Mathf.Max(World.Tuning.GaitBlendTime, 0.001f)));
         displayedRoot = root;
         displayedYaw = facingYaw;
         hasDisplayedRoot = true;
         var facing = new Basis(Vector3.Up, facingYaw);
         var travel = new Vector2(velocity.Dot(facing.Column0), -velocity.Dot(facing.Column2));
         // A left turn (positive yaw) leads with the left foot; a quick turn steps no faster than the creep.
-        var step = new Vector2(-Mathf.Clamp(turn * World.Tuning.TurnStepRadius, -World.Tuning.CreepSpeed, World.Tuning.CreepSpeed), 0);
+        var step = new Vector2(-Mathf.Clamp(turnRate * World.Tuning.TurnStepRadius, -World.Tuning.CreepSpeed, World.Tuning.CreepSpeed), 0);
         return step.LengthSquared() > travel.LengthSquared() ? step : travel;
     }
 

@@ -239,7 +239,8 @@ public partial class RifleRig : SkeletonModifier3D
         // 4. Cheek to the stock: drop the head toward the sight rather than raising the rifle to the eye.
         if (aim * Weight > 0.001f && reloadWeight < 1 && strike.Weight < 1)
         {
-            var sight = stance * Rifle.EyeLocal.Origin;
+            // Toward where the sight sits once shouldered: steady while the rifle swings up from the hip or port.
+            var sight = aimed * Rifle.EyeLocal.Origin;
             var weld = aim * t.RifleCheekWeld * (1 - reloadWeight) * (1 - strike.Weight) * Weight;
             FitEye(skeleton, to * sight, weld, t);
             var gaze = (target - sight).Normalized();
@@ -326,13 +327,17 @@ public partial class RifleRig : SkeletonModifier3D
         var l1 = a.DistanceTo(b);
         var l2 = b.DistanceTo(c);
         var offset = eyeTarget - a;
-        var distance = Mathf.Clamp(offset.Length(), Mathf.Abs(l1 - l2) + 0.001f, l1 + l2 - 0.001f);
+        // Never fold the chain flat: a rising rifle passes its sight close by the neck.
+        var distance = Mathf.Clamp(offset.Length(), Mathf.Abs(l1 - l2) + 0.02f, l1 + l2 - 0.001f);
         var direction = offset.Normalized();
         var along = (l1 * l1 - l2 * l2 + distance * distance) / (2 * distance);
         var height = Mathf.Sqrt(Mathf.Max(0, l1 * l1 - along * along));
-        // Keep the head's current bend: the pole is where the head already is.
-        var pole = b - a;
-        pole = (pole - direction * direction.Dot(pole)).Normalized();
+        // Keep the head's current bend. Where the sight lines up with the neck that side vanishes, and a little
+        // of the face's forward keeps the pole from flipping through it.
+        var forwardSide = skeleton.GetBoneGlobalPose(head).Basis * Vector3.Back;
+        var pole = (b - a) - direction * direction.Dot(b - a);
+        pole += (forwardSide - direction * direction.Dot(forwardSide)) * 0.02f;
+        pole = pole.Normalized();
         var headPosition = a + direction * along + pole * height;
         RotateBone(skeleton, neck, new Basis(Quaternion.Identity.Slerp(new Quaternion((b - a).Normalized(), (headPosition - a).Normalized()), weight)));
         b = skeleton.GetBoneGlobalPose(head).Origin;

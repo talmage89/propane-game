@@ -91,7 +91,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
     private float remoteUpTimer;
     private float pendingYaw;
     private Vector3 displayedRoot;
-    private float displayedYaw;
+    private float displayedYaw, turnRate;
     private bool hasDisplayedRoot;
 
     private ActorRuntime? runtime;
@@ -277,6 +277,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         airTime = 0;
         animator.Pose.Reset();
         hasDisplayedRoot = false;
+        turnRate = 0;
         GlobalPosition = position;
         Velocity = Vector3.Zero;
         knockback = Vector3.Zero;

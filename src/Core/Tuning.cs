@@ -359,7 +359,7 @@ public partial class Tuning : Resource
     [Export(PropertyHint.Range, "0,1,0.01")] public float RifleHipPitchShare { get; set; } = 0.3f;
     [Export(PropertyHint.Range, "0,1,0.01")] public float RifleAimPitchShare { get; set; } = 0.7f;
     [Export(PropertyHint.Range, "0,80,1")] public float RifleHipBladeDegrees { get; set; } = 28f;
-    [Export(PropertyHint.Range, "0,80,1")] public float RifleAimBladeDegrees { get; set; } = 38f;
+    [Export(PropertyHint.Range, "0,80,1")] public float RifleAimBladeDegrees { get; set; } = 25f;
     [Export(PropertyHint.Range, "0,45,1")] public float RifleCheekRollDegrees { get; set; } = 15f;
     [Export(PropertyHint.Range, "-0.1,0.1,0.001")] public float RifleEyeSide { get; set; } = -0.032f;
     [Export(PropertyHint.Range, "0,0.2,0.001")] public float RifleEyeUp { get; set; } = 0.17f;
@@ -369,7 +369,7 @@ public partial class Tuning : Resource
     [Export(PropertyHint.Range, "0,0.5,0.001")] public float RifleHipSightReferenceDown { get; set; } = 0.2f;
     [Export(PropertyHint.Range, "-0.1,0.2,0.001")] public float RifleShoulderInboard { get; set; } = 0.08f;
     [Export(PropertyHint.Range, "-0.1,0.2,0.001")] public float RifleShoulderUp { get; set; } = 0.06f;
-    [Export(PropertyHint.Range, "-0.1,0.2,0.001")] public float RifleShoulderForward { get; set; } = 0.04f;
+    [Export(PropertyHint.Range, "-0.1,0.2,0.001")] public float RifleShoulderForward { get; set; } = 0.06f;
     [Export(PropertyHint.Range, "0,0.4,0.001")] public float RifleHipDown { get; set; } = 0.17f;
     [Export(PropertyHint.Range, "-0.2,0.2,0.001")] public float RifleHipOutboard { get; set; } = -0.07f;
     [Export(PropertyHint.Range, "-0.1,0.2,0.001")] public float RifleHipForward { get; set; } = 0.02f;
