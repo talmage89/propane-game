@@ -1,0 +1,39 @@
+# Concurrent spill tickets, idempotency, refusal, expiry and departure.
+mode tankbank
+tune HitDropCount=1 RagdollDropCount=5 HitGraceTime=0.5
+actors 1=3 2=6 3=2
+phase round ends=150
+now 1
+spill 1 1 thrown 2
+spill 1 2 thrown 2
+expect last canceled 1/2 exceeds
+spill 1 3 hit 1
+expect reserved 1=3
+expect bank 1=3
+spill 1 1 thrown 2
+expect last reserved 1/1 2
+register 1 3
+register 1 1
+expect bank 1=0
+expect reserved 1=0
+register 1 1
+expect last none
+spill 2 1 thrown 5
+fail 2 1
+expect last canceled 2/1 rejected
+expect bank 2=6
+retune RagdollDropCount=2
+spill 2 2 thrown 3
+expect last canceled 2/2 exceeds
+spill 2 3 thrown 2
+spill 3 1 hit 1
+leave 3
+expect last canceled 3/1 departed
+spill 3 2 hit 1
+expect last canceled 3/2 departed
+phase roundend
+expect last canceled 2/3 expired; end match
+register 2 3
+expect last none
+expect standings 2=6 3=2(left) 1=0
+expect audit initial=11 map=0 drops=0 spills=3 banked=8 expected=8 ok=True

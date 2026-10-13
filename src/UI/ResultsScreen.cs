@@ -10,6 +10,7 @@ public partial class ResultsScreen : CanvasLayer
     private GridContainer rows = null!;
     private Label title = null!;
     private Label footer = null!;
+    private Label column = null!;
     private float left;
 
     public override void _Ready()
@@ -31,7 +32,8 @@ public partial class ResultsScreen : CanvasLayer
         title = UiStyle.Text("", 64, UiStyle.Ink, HorizontalAlignment.Center);
         title.AddThemeFontOverride("font", UiStyle.BoldFont);
         layout.AddChild(title);
-        layout.AddChild(UiStyle.Text("Tanks banked", 22, UiStyle.SoftInk, HorizontalAlignment.Center));
+        column = UiStyle.Text("", 22, UiStyle.SoftInk, HorizontalAlignment.Center);
+        layout.AddChild(column);
         layout.AddChild(new HSeparator());
         rows = new GridContainer { Columns = 1 };
         rows.AddThemeConstantOverride("h_separation", 24);
@@ -53,8 +55,10 @@ public partial class ResultsScreen : CanvasLayer
         footer.Text = $"Back to the lobby in {Mathf.CeilToInt(left)}";
     }
 
-    public void Show(IReadOnlyList<Standing> standings, int me, float seconds)
+    /// <summary>Shows the final standings; <paramref name="columns"/> are the mode's scoreboard captions.</summary>
+    public void Show(IReadOnlyList<Standing> standings, int me, float seconds, IReadOnlyList<string> columns)
     {
+        column.Text = columns.Count > 0 ? columns[0] : "";
         foreach (var child in rows.GetChildren())
         {
             child.QueueFree();

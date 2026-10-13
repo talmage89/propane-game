@@ -39,7 +39,7 @@ check: lint ## Run lint, then the tests
 # These same partitions run as separate CI jobs. Shared build runs once, even with make -j.
 test: test-core test-behavior test-generator test-world ## Run the fast headless gate (the same suites as CI)
 
-test-core: build ## Run checker, platform, movement and unit assertions
+test-core: build ## Run checker, platform, movement, unit and scripted mode-rule assertions
 	GODOT="$(GODOT)" python3 -B tools/dev/check_test_threads.py
 	python3 -B tools/dev/check_world_tests.py
 	python3 -B tools/dev/time_gate_tests.py
@@ -49,6 +49,7 @@ test-core: build ## Run checker, platform, movement and unit assertions
 	python3 -B tools/dev/compare_tanks_tests.py
 	python3 -B tools/dev/net_bots_tests.py
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/core_tests.tscn
+	"$(GODOT)" --headless --path . res://scenes/dev/mode_test.tscn
 	"$(GODOT)" --headless --path . res://scenes/dev/shutdown_tests.tscn
 	"$(GODOT)" --headless --path . res://scenes/dev/shutdown_tests.tscn -- --paused --window-close --repeat-quit
 

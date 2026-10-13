@@ -4,14 +4,16 @@ using System.IO;
 using System.Linq;
 using Godot;
 using Propane.Core;
+using Propane.Modes;
 using Propane.World;
 
 namespace Propane.Net;
 
 /// <summary>
 /// The multiplayer server. It runs no physics: it hosts lobbies, generates each match's suburb, relays messages
-/// between the players in a match, keeps the score and the match clock, and settles ties (the first claim on a tank
-/// or a pickup wins). It runs headless on a dedicated server (<c>--server</c>), or inside a player's game for testing.
+/// between the players in a match, runs the match clock and its mode (see <see cref="ModeRunner"/>), and settles ties
+/// (the first claim on a tank or a pickup wins). It runs headless on a dedicated server (<c>--server</c>), or inside
+/// a player's game for testing.
 /// </summary>
 public partial class LobbyServer : Node
 {
@@ -54,6 +56,7 @@ public partial class LobbyServer : Node
         public MatchRun? Match;
         public int Capacity;
         public ParticipantRoster Roster = null!;
+        public ModeDefinition Mode = ModeRegistry.TankBank;
     }
 
     private sealed class MatchRun
@@ -61,7 +64,6 @@ public partial class LobbyServer : Node
         public readonly List<int> Players = new(); // Participating peers: readiness and delivery, once per connection.
         public readonly Dictionary<int, PlayerProfile> Actors = new();
         public readonly Dictionary<(int Actor, bool Pose), uint> Actions = new();
-        public readonly Dictionary<int, int> Scores = new();
         public readonly Dictionary<int, (string Name, AppearanceRecord Appearance)> Profiles = new();
         public int Id;
         public int CreatorId;
@@ -69,11 +71,12 @@ public partial class LobbyServer : Node
         public TankLedger Tanks = null!;
         public readonly HashSet<int> LooseProps = new();
         public readonly Dictionary<int, int> Slots = new();
-        public readonly Dictionary<int, (int Gained, int LostToHits, int LostToThrows)> Stats = new();
         public readonly HashSet<int> Loaded = new();
         public readonly Dictionary<int, MeleeValidation> Melee = new();
         public int HostId;
-        public double PhaseEnds;
+        public ModeRunner Mode = null!;
+        public IModeHost Host = null!;
+        public double PhaseEnds => Mode.Phases.PhaseEnds;
         public double NextClock;
         public float Length;
         public Tuning Tuning = null!;
@@ -103,6 +106,8 @@ public partial class LobbyServer : Node
     // Legacy handler tests bypass the connection layer; transport tests use the injected interface.
     internal Action<int, byte[], TrafficClass>? SendOverride { get; set; }
     internal Func<ParticipantRoster> RosterFactory { get; set; } = () => new();
+    /// <summary>The mode new lobbies play. Tank Bank is the only networked mode; tests run synthetic ones.</summary>
+    internal ModeDefinition LobbyMode { get; set; } = ModeRegistry.TankBank;
 
     public int Port { get; set; } = Protocol.DefaultPort;
 
@@ -217,6 +222,11 @@ public partial class LobbyServer : Node
                 Relay(client, message, incoming);
                 return;
             }
+            if (message.Type == Msg.ModeEvent)
+            {
+                ModeEvent(client, message);
+                return;
+            }
             switch (message.Type)
             {
                 case Msg.Hello: Hello(client, (HelloMessage)message.Payload); break;
@@ -303,7 +313,8 @@ public partial class LobbyServer : Node
             CreatorId = client.Id,
             MatchLength = Tuning.SavedTemplate.MatchLengthDefault,
             Capacity = Math.Clamp(Tuning.SavedTemplate.MaxPlayers, 2, Protocol.TestedActorCeiling),
-            Roster = RosterFactory()
+            Roster = RosterFactory(),
+            Mode = LobbyMode,
         };
         lobbies[lobby.Id] = lobby;
         Log($"{client.Name} created lobby {lobby.Id}");
@@ -374,7 +385,10 @@ public partial class LobbyServer : Node
                 if (match.HostId == 0) match.HostId = match.Players[0];
             }
             foreach (var actor in match.Actors.Values.Where(a => a.OwnerPeerId == client.Id).ToArray())
+            {
                 match.Actors[actor.Id] = actor with { Present = false };
+                match.Mode.Apply(match.Host, new ActorLeft(actor.Id), clock.Seconds);
+            }
             var transfers = match.Players.Count > 0 ? match.Tanks.Transfer(client.Id, match.HostId) : Array.Empty<BodyAuthority>();
             foreach (var id in match.Players)
             {
@@ -532,17 +546,20 @@ public partial class LobbyServer : Node
         {
             match.Actors.Add(a.ActorId, PlayerProfile.From(a));
             match.Slots[a.ActorId] = a.AllocationSlot;
-            match.Scores[a.ActorId] = StartScore;
             match.Profiles[a.ActorId] = (a.Name, a.Appearance);
         }
 
         var started = Time.GetTicksMsec();
         var seed = OS.IsDebugBuild() && int.TryParse(Dev.DevArgs.Get("match-seed"), out var requestedSeed)
             ? requestedSeed : random.Next();
-        var settings = SuburbPlans.Match(tuning, actors.Count);
+        var mode = lobby.Mode;
+        var settings = mode.Supply.Suburb(tuning, actors.Count);
         var plan = SuburbPlans.Generate(settings, seed, () => random.Next());
         var planBytes = PlanCodec.Encode(plan);
         match.Tanks = new TankLedger(plan, match.HostId);
+        match.Host = new MatchHost(this, match);
+        match.Mode = new ModeRunner(mode, new ModeSetup(actors.Select(a => new ModeActor(a.ActorId, a.Name, true, StartScore)).ToArray(),
+            new ModeWorld(mode.World, 1, plan.Tanks.Count), mode.CopyTuners(tuning), unchecked((ulong)plan.Seed)));
         for (var i = 0; i < plan.Props.Count; i++)
         {
             if (plan.Props[i].Body != World.Plan.PropBody.Static && !plan.Props[i].Model.StartsWith("car:")) { match.LooseProps.Add(i); }
@@ -558,6 +575,8 @@ public partial class LobbyServer : Node
             RosterRevision = lobby.Roster.Revision,
             CreatorId = match.CreatorId,
             Peers = match.Players.Select(id => new PeerCapabilities(id, id == match.CreatorId && match.CreatorDebug)).ToArray(),
+            ModeId = mode.Id,
+            ModeSchema = mode.SchemaVersion,
         };
         var bytes = MessageCodec.Encode(new NetMessage(Msg.MatchStart, match.Id, 0, setup), true);
         foreach (var id in match.Players)
@@ -567,7 +586,8 @@ public partial class LobbyServer : Node
         }
         lobby.Match = match;
         lobby.Phase = LobbyPhase.Loading;
-        match.PhaseEnds = clock.Seconds + LoadTimeout;
+        match.Mode.Apply(match.Host, new PhaseEntered(ModePhase.Loading,
+            match.Mode.Phases.Load(clock.Seconds, Times(match), mode.Timer, match.Length).Round), clock.Seconds);
         SendLobbyState(lobby);
         BroadcastLobbyList();
     }
@@ -577,89 +597,113 @@ public partial class LobbyServer : Node
         foreach (var lobby in lobbies.Values.ToList()) { Tick(lobby, now); }
     }
 
+    private static PhaseTimes Times(MatchRun match) => new(LoadTimeout, match.Tuning.CountdownTime, match.Tuning.ResultsTime);
+
     private void Tick(Lobby lobby, double now)
     {
         if (lobby.Match is not { } match)
         {
             return;
         }
-        switch (lobby.Phase)
+        foreach (var held in match.Mode.Gate.Expire(now))
+            match.Mode.Wire.Failed(match.Mode, match.Host, held.Peer, (ModeEnvelope)held.Message.Payload, now);
+        if (lobby.Phase == LobbyPhase.Playing)
         {
-            case LobbyPhase.Loading:
-                if (match.Players.All(match.Loaded.Contains) || now >= match.PhaseEnds)
+            for (var i = 0; i < match.PickupUp.Length; i++)
+            {
+                if (!match.PickupUp[i] && now >= match.PickupBack[i])
                 {
-                    lobby.Phase = LobbyPhase.Countdown;
-                    match.PhaseEnds = now + match.Tuning.CountdownTime;
-                    Broadcast(match, new NetWriter(Msg.Countdown, match.Id).Float(match.Tuning.CountdownTime));
+                    match.PickupUp[i] = true;
+                    Broadcast(match, new NetWriter(Msg.PickupRespawn, match.Id).Int(i));
                 }
+            }
+            if (now >= match.NextClock)
+            {
+                match.NextClock += 1;
+                Broadcast(match, new NetWriter(Msg.Clock, match.Id).Float((float)Math.Max(0, match.PhaseEnds - now)), traffic: TrafficClass.UnreliablePlayerPoses);
+            }
+        }
+        // One timed step per tick; a round's end resolves through RoundEnd, MatchEnd and Results at once.
+        if (match.Mode.Phases.Advance(now, Times(match), match.Players.All(match.Loaded.Contains)) is { } change)
+        {
+            Enter(lobby, match, change, now);
+        }
+    }
+
+    private void Enter(Lobby lobby, MatchRun match, PhaseChange change, double now)
+    {
+        switch (change.To)
+        {
+            case ModePhase.Countdown:
+                lobby.Phase = LobbyPhase.Countdown;
+                Broadcast(match, new NetWriter(Msg.Countdown, match.Id).Float(match.Tuning.CountdownTime));
+                match.Mode.Apply(match.Host, new PhaseEntered(ModePhase.Countdown, change.Round), now);
                 break;
-            case LobbyPhase.Countdown:
-                if (now >= match.PhaseEnds)
-                {
-                    lobby.Phase = LobbyPhase.Playing;
-                    match.PhaseEnds = now + match.Length;
-                    match.NextClock = now + 1;
-                    Broadcast(match, new NetWriter(Msg.MatchGo, match.Id).Float(match.Length));
-                    foreach (var (id, score) in match.Scores.Where(s => s.Value != 0))
-                    {
-                        Broadcast(match, new NetWriter(Msg.Score, match.Id).Int(id).Int(score).Int(0));
-                    }
-                    Log($"lobby {lobby.Id}: match on");
-                }
+            case ModePhase.Round:
+                lobby.Phase = LobbyPhase.Playing;
+                match.NextClock = now + 1;
+                Broadcast(match, new NetWriter(Msg.MatchGo, match.Id).Float((float)change.Round.Length));
+                match.Mode.Apply(match.Host, new PhaseEntered(ModePhase.Round, change.Round), now);
+                Log($"lobby {lobby.Id}: match on");
                 break;
-            case LobbyPhase.Playing:
-                for (var i = 0; i < match.PickupUp.Length; i++)
+            case ModePhase.RoundEnd:
+                foreach (var held in match.Mode.Gate.Clear())
+                    match.Mode.Wire.Failed(match.Mode, match.Host, held.Peer, (ModeEnvelope)held.Message.Payload, now);
+                var decision = match.Mode.Apply(match.Host, new PhaseEntered(ModePhase.RoundEnd, change.Round), now)
+                    .LastOrDefault(c => c is EndMatch or NextRound) ?? new EndMatch();
+                if (decision is NextRound { RebuildWorld: true })
                 {
-                    if (!match.PickupUp[i] && now >= match.PickupBack[i])
-                    {
-                        match.PickupUp[i] = true;
-                        Broadcast(match, new NetWriter(Msg.PickupRespawn, match.Id).Int(i));
-                    }
+                    // Clients cannot rebuild a world inside a run yet (a segment world source will); end cleanly instead.
+                    Log($"match {match.Id}: the mode asked for a rebuilt world, which this server cannot deliver; ending the match");
+                    decision = new EndMatch();
                 }
-                if (now >= match.NextClock)
-                {
-                    match.NextClock += 1;
-                    Broadcast(match, new NetWriter(Msg.Clock, match.Id).Float((float)Math.Max(0, match.PhaseEnds - now)), traffic: TrafficClass.UnreliablePlayerPoses);
-                }
-                if (now >= match.PhaseEnds)
-                {
-                    lobby.Phase = LobbyPhase.Results;
-                    match.PhaseEnds = now + match.Tuning.ResultsTime;
-                    var w = new NetWriter(Msg.MatchEnd, match.Id).Int(match.Scores.Count);
-                    foreach (var (id, score) in match.Scores.OrderByDescending(s => s.Value))
-                    {
-                        w.Int(id).String(match.Profiles[id].Name).Appearance(match.Profiles[id].Appearance).Int(score).Bool(match.Actors[id].Present);
-                    }
-                    Broadcast(match, w);
-                    var spills = match.Stats.Values.Sum(st => st.LostToHits + st.LostToThrows);
-                    var banked = match.Scores.Values.Sum();
-                    var initial = StartScore * match.Scores.Count;
-                    var expected = initial + match.Tanks.MapDetonations + match.Tanks.DropDetonations - spills;
-                    Log($"match {match.Id}: bank audit initial={initial} map={match.Tanks.MapDetonations} drops={match.Tanks.DropDetonations} " +
-                        $"spills={spills} banked={banked} expected={expected} ok={banked == expected}");
-                    Log($"standings match {match.Id}: " + string.Join(" ", match.Scores.OrderBy(s => s.Key).Select(s => $"{s.Key}={s.Value}")));
-                    Log($"lobby {lobby.Id}: match over, " + string.Join(", ", match.Scores.OrderByDescending(s => s.Value).Select(s => $"{match.Profiles[s.Key].Name} {s.Value}")));
-                    Log($"lobby {lobby.Id}: tanks gained / lost to hits / lost to throws: " + string.Join(", ", match.Profiles.Keys.Select(id =>
-                    {
-                        var st = match.Stats.GetValueOrDefault(id);
-                        return $"{match.Profiles[id].Name} {st.Gained}/{st.LostToHits}/{st.LostToThrows}";
-                    })));
-                }
+                Enter(lobby, match, match.Mode.Phases.Decide(now, Times(match), decision), now);
                 break;
-            case LobbyPhase.Results:
-                if (now >= match.PhaseEnds)
+            case ModePhase.MatchEnd:
+                lobby.Phase = LobbyPhase.Results;
+                var state = match.Mode.Rules.Snapshot();
+                var w = new NetWriter(Msg.MatchEnd, match.Id).Int(state.Standings.Count);
+                foreach (var standing in state.Standings)
                 {
-                    try { lobby.Roster.RespawnAll(); }
-                    catch (OverflowException)
-                    {
-                        RetireExhaustedLobby(lobby);
-                        return;
-                    }
-                    lobby.Phase = LobbyPhase.Waiting;
-                    lobby.Match = null;
-                    SendLobbyState(lobby);
-                    BroadcastLobbyList();
+                    w.Int(standing.ActorId).String(match.Profiles[standing.ActorId].Name).Appearance(match.Profiles[standing.ActorId].Appearance)
+                        .Int(standing.Score).Bool(standing.Present);
                 }
+                Broadcast(match, w);
+                match.Mode.Apply(match.Host, new PhaseEntered(ModePhase.MatchEnd, change.Round), now);
+                foreach (var report in state.Report)
+                {
+                    Log(report.Kind switch
+                    {
+                        ModeReportKind.Audit => $"match {match.Id}: {report.Text}",
+                        ModeReportKind.Standings => $"standings match {match.Id}: {report.Text}",
+                        _ => $"lobby {lobby.Id}: {report.Text}",
+                    });
+                }
+                if (match.Mode.Rules is TankBankRules bank && (bank.MapDetonations != match.Tanks.MapDetonations || bank.DropDetonations != match.Tanks.DropDetonations))
+                {
+                    Log($"match {match.Id}: ledger disagreement map={match.Tanks.MapDetonations} drops={match.Tanks.DropDetonations}");
+                }
+                Enter(lobby, match, match.Mode.Phases.Advance(now, Times(match), true)!.Value, now);
+                break;
+            case ModePhase.Results:
+                lobby.Phase = LobbyPhase.Results;
+                match.Mode.Apply(match.Host, new PhaseEntered(ModePhase.Results, change.Round), now);
+                break;
+            case ModePhase.Lobby:
+                try { lobby.Roster.RespawnAll(); }
+                catch (OverflowException)
+                {
+                    RetireExhaustedLobby(lobby);
+                    return;
+                }
+                lobby.Phase = LobbyPhase.Waiting;
+                lobby.Match = null;
+                SendLobbyState(lobby);
+                BroadcastLobbyList();
+                break;
+            case ModePhase.Loading:
+                lobby.Phase = LobbyPhase.Loading;
+                match.Mode.Apply(match.Host, new PhaseEntered(ModePhase.Loading, change.Round), now);
                 break;
         }
     }
@@ -687,7 +731,8 @@ public partial class LobbyServer : Node
 
     private void ClaimPickup(Client client, int actorId, int index)
     {
-        if (client.Lobby is not { Phase: LobbyPhase.Playing, Match: { } match } || index < 0 || index >= match.PickupUp.Length || !match.PickupUp[index])
+        if (client.Lobby is not { Match: { } match } || !match.Mode.Permits(ModeGate.Pickup, clock.Seconds) ||
+            index < 0 || index >= match.PickupUp.Length || !match.PickupUp[index])
         {
             return;
         }
@@ -707,56 +752,37 @@ public partial class LobbyServer : Node
         if (client.Lobby is not { Match: { } match } lobby || !match.Players.Contains(client.Id)) { return; }
         if (lobby.Phase is not (LobbyPhase.Countdown or LobbyPhase.Playing or LobbyPhase.Results) &&
             !(lobby.Phase == LobbyPhase.Loading && message.Type is Msg.BodyStates or Msg.BodyRest) &&
-            message.Type is not (Msg.Claim or Msg.Puncture or Msg.Explode or Msg.Drop)) { return; }
+            message.Type is not (Msg.Claim or Msg.Puncture or Msg.Explode)) { return; }
         if (Protocol.IsActorMessage(message.Type) && !AcceptActor(client, match, message)) return;
         var actorId = message.ActorId;
         var includeSender = message.Type is Msg.Shot or Msg.MeleeStart or Msg.MeleeContact;
+        var playOpen = match.Mode.Permits(ModeGate.World, clock.Seconds);
         switch (message.Payload)
         {
             case ExplodeMessage explosion:
-                var detonation = match.Tanks.Detonate(client.Id, explosion, actorId, lobby.Phase == LobbyPhase.Playing && clock.Seconds < match.PhaseEnds);
+                var detonation = match.Tanks.Detonate(client.Id, explosion, actorId, playOpen);
                 PublishAuthority(match, detonation);
+                var dependency = new ModeDependency(client.Id, explosion.Request);
                 if (detonation.Reason == ClaimRefusal.None)
                 {
-                    ChangeScore(match, actorId, 1);
-                    var stats = match.Stats.GetValueOrDefault(actorId);
-                    match.Stats[actorId] = stats with { Gained = stats.Gained + 1 };
+                    match.Mode.Apply(match.Host, new TankDetonated(actorId, explosion.Id < BodySync.DropTankBase ? TankOrigin.Map : TankOrigin.Drop), clock.Seconds);
+                    foreach (var held in match.Mode.Gate.Release(dependency))
+                        match.Mode.Wire.Event(match.Mode, match.Host, held.Peer, (ModeEnvelope)held.Message.Payload, clock.Seconds);
+                }
+                else if (detonation.Reason != ClaimRefusal.DuplicateRequest)
+                {
+                    foreach (var held in match.Mode.Gate.Fail(dependency))
+                        match.Mode.Wire.Failed(match.Mode, match.Host, held.Peer, (ModeEnvelope)held.Message.Payload, clock.Seconds);
                 }
                 return;
             case PunctureMessage puncture:
-                PublishAuthority(match, match.Tanks.Puncture(client.Id, puncture, actorId, lobby.Phase == LobbyPhase.Playing && clock.Seconds < match.PhaseEnds));
+                PublishAuthority(match, match.Tanks.Puncture(client.Id, puncture, actorId, playOpen));
                 return;
-            case DropMessage drop:
-                try
-                {
-                    var limit = drop.Reason == 1 ? match.Tuning.RagdollDropCount : match.Tuning.HitDropCount;
-                    if (lobby.Phase != LobbyPhase.Playing || clock.Seconds >= match.PhaseEnds || drop.Tanks.Count > limit || drop.Tanks.Count > match.Scores[actorId])
-                    {
-                        throw new InvalidDataException("drop outside play or exceeds bank/tuner");
-                    }
-                    match.Tanks.RegisterDrops(match.Slots[actorId], client.Id, drop.Tanks);
-                }
-                catch (InvalidDataException e)
-                {
-                    // A fully decoded prediction can legitimately become invalid in flight (clock/tuning changes).
-                    // Tell only its sender which ids to remove; the ledger and bank remain untouched.
-                    Send(client.Id, MessageCodec.Encode(new NetMessage(Msg.DropRefused, match.Id, 0,
-                        new DropRefusedMessage(drop.Tanks.Select(t => t.Id).ToArray())), fromServer: true));
-                    Log($"refused Drop from {client.Id}: {e.Message}");
-                    return;
-                }
-                includeSender = true; // Confirmation clears the sender's pending ids without spawning them twice.
-                ChangeScore(match, actorId, -drop.Tanks.Count);
-                var losses = match.Stats.GetValueOrDefault(actorId);
-                match.Stats[actorId] = drop.Reason == 1 ? losses with { LostToThrows = losses.LostToThrows + drop.Tanks.Count }
-                    : losses with { LostToHits = losses.LostToHits + drop.Tanks.Count };
-                break;
             case ClaimMessage claim:
-                PublishAuthority(match, match.Tanks.Claim(client.Id, claim, lobby.Phase == LobbyPhase.Playing && clock.Seconds < match.PhaseEnds));
+                PublishAuthority(match, match.Tanks.Claim(client.Id, claim, playOpen));
                 return;
             case GatherMessage gather:
-                if (!match.Tanks.Gather(client.Id, match.HostId, gather,
-                    lobby.Phase == LobbyPhase.Playing && clock.Seconds < match.PhaseEnds)) { return; }
+                if (!match.Tanks.Gather(client.Id, match.HostId, gather, playOpen)) { return; }
                 break;
             case BodyStatesMessage states:
                 match.Tanks.ValidateBodies(states.Bodies.Select(b => b.Id));
@@ -774,12 +800,12 @@ public partial class LobbyServer : Node
                 if (!match.Tanks.Update(client.Id, new BodyState(rest.Id, rest.Transform, Vector3.Zero, Vector3.Zero, rest.Epoch, rest.Sequence), rest: true)) { return; }
                 break;
             case MeleeStartMessage strike:
-                if (lobby.Phase != LobbyPhase.Playing || clock.Seconds >= match.PhaseEnds) return;
+                if (!playOpen) return;
                 if (!match.Melee.TryGetValue(actorId, out var melee)) match.Melee[actorId] = melee = new MeleeValidation();
                 if (!melee.Start(strike, clock.Seconds, match.Tuning)) return;
                 break;
             case MeleeContactMessage contact:
-                if (lobby.Phase != LobbyPhase.Playing || clock.Seconds >= match.PhaseEnds ||
+                if (!playOpen ||
                     contact.Victim != 0 && (!ValidTarget(match, contact.Victim, contact.VictimLifeId) || contact.Victim == actorId) ||
                     contact.PropIndex >= 0 && !match.LooseProps.Contains(contact.PropIndex))
                 {
@@ -799,6 +825,7 @@ public partial class LobbyServer : Node
                 // The original creator's debug capability is captured at start, never transferred with hosting.
                 if (client.Id != match.CreatorId || !match.CreatorDebug) { throw new InvalidDataException("tuning requires the debug creator"); }
                 match.Tuning.Apply(new Godot.Collections.Dictionary { [tune.Name] = tune.Value });
+                match.Mode.Apply(match.Host, new TunersChanged(match.Mode.Definition.CopyTuners(match.Tuning)), clock.Seconds);
                 break;
         }
         var bytes = MessageCodec.Encode(message with { Sender = client.Id }, fromServer: true);
@@ -812,6 +839,45 @@ public partial class LobbyServer : Node
         {
             if (id != client.Id || includeSender) { Send(id, bytes, traffic); }
         }
+    }
+
+    /// <summary>
+    /// A mode event: the envelope codec already checked its schema, kind, direction and bounds. The reporter must own
+    /// the actor with its current life and a newer action sequence; causal dependencies wait in the run's gate.
+    /// </summary>
+    private void ModeEvent(Client client, NetMessage message)
+    {
+        if (client.Lobby is not { Match: { } match } || !match.Players.Contains(client.Id)) return;
+        var envelope = (ModeEnvelope)message.Payload;
+        if (envelope.ModeId != match.Mode.Definition.Id || envelope.SchemaVersion != match.Mode.Definition.SchemaVersion)
+            throw new InvalidDataException($"mode event for schema {envelope.ModeId}/{envelope.SchemaVersion} in a {match.Mode.Definition.Name} run");
+        var kind = ModeSchemas.Find(envelope.ModeId, envelope.SchemaVersion).Kind(envelope.Kind, ModeDirection.Event);
+        if (kind.Reporter == ModeReporter.ActorOwner && !AcceptActor(client, match, message)) return;
+        var now = clock.Seconds;
+        if (kind.Dependency?.Invoke(envelope.Payload) is { } dependency && !match.Tanks.Exploded(dependency.Peer, dependency.Request))
+        {
+            if (!match.Mode.Gate.Hold(client.Id, message, dependency, now)) match.Mode.Wire.Failed(match.Mode, match.Host, client.Id, envelope, now);
+            return;
+        }
+        match.Mode.Wire.Event(match.Mode, match.Host, client.Id, envelope, now);
+    }
+
+    private sealed class MatchHost(LobbyServer server, MatchRun match) : IModeHost
+    {
+        public void Broadcast(Msg type, ModeEnvelope envelope)
+        {
+            var bytes = MessageCodec.Encode(new NetMessage(type, match.Id, 0, envelope), fromServer: true);
+            foreach (var id in match.Players) server.Send(id, bytes);
+        }
+
+        public void Send(int peer, Msg type, ModeEnvelope envelope) =>
+            server.Send(peer, MessageCodec.Encode(new NetMessage(type, match.Id, 0, envelope), fromServer: true));
+
+        public void RegisterEntities(int actorId, int peer, IReadOnlyList<BodyState> bodies) =>
+            match.Tanks.RegisterDrops(match.Slots[actorId], peer, bodies);
+
+        public uint Life(int actorId) => match.Actors[actorId].LifeId;
+        public void Log(string text) => LobbyServer.Log(text);
     }
 
     private static bool ValidTarget(MatchRun match, int actor, uint life) =>
@@ -849,17 +915,6 @@ public partial class LobbyServer : Node
             Send(result.Peer, bytes);
             Log($"refused authority from {result.Peer} request {result.Request}: {result.Reason}");
         }
-    }
-
-    private void ChangeScore(MatchRun match, int player, int delta)
-    {
-        if (!match.Scores.TryGetValue(player, out var score))
-        {
-            return;
-        }
-        var next = Math.Max(0, score + delta);
-        match.Scores[player] = next;
-        Broadcast(match, new NetWriter(Msg.Score, match.Id).Int(player).Int(next).Int(next - score));
     }
 
     private void Broadcast(MatchRun match, NetWriter message, TrafficClass traffic = TrafficClass.ReliableOrdered)

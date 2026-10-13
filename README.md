@@ -168,7 +168,8 @@ invalid settings fail generation instead of placing players on top of one anothe
 | --- | --- |
 | `src/Main.cs` | The root: menus over their backdrop, then single player, Lab, a match, or the server. |
 | `src/Game.cs` | Single player: the void, player, HUD, menus, and the suburb swap with its dissolve and materialize. |
-| `src/Net` | Multiplayer: the server, the client connection, the match world, body sync, ammo pickups. |
+| `src/Net` | Multiplayer: the server, the client connection, the match world, body sync, ammo pickups, the mode runner and envelope. |
+| `src/Modes` | Pure mode rules (Sandbox, Tank Bank), mode definitions, phases and HUD presenters ([modes](docs/modes.md)). |
 | `src/Lab`, `src/Bots` | Shipped Lab scenarios, local bank adapter and camera-free banking brain. |
 | `src/Session` | Ordered session assembly, actors, local views and retirement. |
 | `src/Core` | Tuning, input map, physics and render layers, shared assets, events, spawn roots. |

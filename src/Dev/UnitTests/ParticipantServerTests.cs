@@ -138,8 +138,8 @@ public static class ParticipantServerTests
             foreach (var peer in new[] { 2, 3 }) f.Receive(new NetWriter(Msg.Loaded, setup.Id), peer);
             f.Advance(); f.Advance(); f.Packets.Clear();
             var drop = new BodyState(BodySync.DropTankId(next.AllocationSlot, 0), Transform3D.Identity, Vector3.Zero, Vector3.Zero);
-            f.Receive(MessageCodec.Encode(new NetMessage(Msg.Drop, setup.Id, 0, new DropMessage(0, new[] { drop }), next.Id, 1, 1), false));
-            Assert(f.Packets.Any(p => p.Message.Payload is ScoreMessage s && s.Player == next.Id && s.Score == 3),
+            f.Receive(MessageCodec.Encode(ModeWireFixtures.Spill(setup.Id, next.Id, 1, 1, Modes.SpillReason.Hit, new[] { drop }), false));
+            Assert(f.Packets.Any(p => ModeWireFixtures.IsScore(p.Message, next.Id, 3)),
                 "ledger validated the spawn slot instead of the allocation slot");
         });
         runner.Run("participants/frozen roster counts actors and validates ownership and lives", () =>
@@ -153,8 +153,8 @@ public static class ParticipantServerTests
             f.Reject(Packet(human.Id, 1, 1), 3);
             f.Reject(Packet(bot.Id, 2, 1));
             f.Receive(Packet(bot.Id, 1, 1));
-            Assert(f.Packets.Any(p => p.Message.Payload is ScoreMessage s && s.Player == bot.Id && s.Score == 5), "bot gain credited to human");
-            Assert(!f.Packets.Any(p => p.Message.Payload is ScoreMessage s && s.Player == human.Id), "last local actor stole score");
+            Assert(f.Packets.Any(p => ModeWireFixtures.IsScore(p.Message, bot.Id, 5)), "bot gain credited to human");
+            Assert(!f.Packets.Any(p => ModeWireFixtures.IsScore(p.Message, human.Id)), "last local actor stole score");
             f.Reject(Packet(bot.Id, 1, 1));
             f.Packets.Clear();
             f.Receive(Request(Msg.AddActor, new AddActorMessage(2, ActorKind.Bot, "Late", bot.Appearance, ControllerConfig.Bot)));
@@ -231,7 +231,7 @@ public static class ParticipantServerTests
                 var human = match.Player;
                 var bot = match.Session.OwnedActors.Single(a => a.Character != human).Character;
                 match.OnMessage(new NetMessage(Msg.MatchGo, f.Id, 0, new FloatMessage(10)));
-                match.OnMessage(new NetMessage(Msg.Score, f.Id, 0, new ScoreMessage(bot.ActorId, 4, 0)));
+                match.OnMessage(ModeWireFixtures.Score(f.Id, bot.ActorId, 4, 0));
                 var shot = new NetMessage(Msg.Shot, f.Id, 2, new ShotMessage(Vector3.Zero, Vector3.Up, Vector3.Forward, 0, bot.ActorId, -1), human.ActorId, 1, 1);
                 match.OnMessage(shot);
                 Assert(bot.Runtime.DropPredictions.UnconfirmedCount == 1 && human.Runtime.DropPredictions.UnconfirmedCount == 0, "same-peer shot did not spill the victim's bank");
@@ -248,9 +248,9 @@ public static class ParticipantServerTests
                 Assert(bot.IsRagdolled && bot.Runtime.DropPredictions.UnconfirmedCount == 4, "same-peer melee failed or spilled twice");
                 var id = BodySync.DropTankId(human.Runtime.AllocationSlot, 899999);
                 human.Runtime.DropPredictions.Add(id);
-                match.OnMessage(new NetMessage(Msg.Score, f.Id, 0, new ScoreMessage(human.ActorId, 3, -1)));
+                match.OnMessage(ModeWireFixtures.Score(f.Id, human.ActorId, 3, -1));
                 var dropped = new BodyState(id, Transform3D.Identity, Vector3.Zero, Vector3.Zero);
-                match.OnMessage(new NetMessage(Msg.Drop, f.Id, 2, new DropMessage(0, new[] { dropped }), human.ActorId, 1, 1));
+                match.OnMessage(ModeWireFixtures.Accepted(f.Id, human.ActorId, 1, Modes.SpillReason.Hit, new[] { dropped }));
                 Assert(human.Runtime.DropPredictions.Refused(new[] { id }).Count == 0,
                     "newer contact prediction suppressed an earlier drop confirmation");
                 var reserve = human.Ammo!.Reserve;
@@ -288,7 +288,7 @@ public static class ParticipantServerTests
             foreach (var message in new[]
             {
                 new NetMessage(Msg.MatchGo, fixture.Id, 0, new FloatMessage(10)),
-                new NetMessage(Msg.Score, fixture.Id, 0, new ScoreMessage(own.Id, 8, 0)),
+                ModeWireFixtures.Score(fixture.Id, own.Id, 8, 0),
                 new NetMessage(Msg.Authority, fixture.Id, 0, new AuthorityMessage(3, 1, ClaimRefusal.None,
                     new[] { new BodyAuthority(new BodyState(BodySync.MapTankId(0), Transform3D.Identity, Vector3.Zero, Vector3.Zero, 2),
                         3, TankLedger.State.Exploded, true, null, new Vector3(400, .3f, 0), 2) })),

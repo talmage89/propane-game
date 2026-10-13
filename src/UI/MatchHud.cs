@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using Godot;
 using Propane.Core;
+using Propane.Modes;
 using Propane.Player;
 
 namespace Propane.UI;
@@ -9,9 +10,10 @@ namespace Propane.UI;
 public readonly record struct ScoreTag(Vector2 Screen, int Score, Color Color, float Scale);
 
 /// <summary>
-/// The match HUD, over the single-player one (crosshair and tank arrows): the match clock, the tanks you have
-/// banked with "+N" as you score, ammo, a hit marker when your shot hits a player, arrows toward whoever shot you,
-/// every other visible player's score over their head, and the countdown.
+/// The match HUD, over the single-player one (crosshair and tank arrows). It renders the mode's plain HUD data
+/// (<see cref="ModeHud"/>: the clock, the primary counter and its caption, further counters, a banner and an
+/// out-state) and the local view's feedback: "+N" as you score, ammo, a hit marker when your shot hits a player,
+/// arrows toward whoever shot you, every other visible player's score over their head, and the countdown.
 /// </summary>
 public partial class MatchHud : CanvasLayer
 {
@@ -23,6 +25,9 @@ public partial class MatchHud : CanvasLayer
     private Label timer = null!;
     private Label score = null!;
     private Label caption = null!;
+    private Label counters = null!;
+    private Label banner = null!;
+    private Label outState = null!;
     private Label popup = null!;
     private Label magazine = null!;
     private Label reserve = null!;
@@ -58,8 +63,10 @@ public partial class MatchHud : CanvasLayer
         score.PivotOffset = new Vector2(160, 50);
         top.AddChild(score);
         caption = HudLabel(19, new Color(Dark, 0.75f), 6);
-        caption.Text = "TANKS BANKED";
         top.AddChild(caption);
+        counters = HudLabel(19, new Color(Dark, 0.75f), 6);
+        counters.Visible = false;
+        top.AddChild(counters);
 
         popup = HudLabel(44, UiStyle.Accent, 9);
         popup.SetAnchorsPreset(Control.LayoutPreset.CenterTop);
@@ -98,6 +105,18 @@ public partial class MatchHud : CanvasLayer
         countdown.PivotOffset = new Vector2(300, 100);
         root.AddChild(countdown);
 
+        banner = HudLabel(44, Dark, 9);
+        banner.SetAnchorsPreset(Control.LayoutPreset.Center);
+        banner.Position = new Vector2(-400, -260);
+        banner.Size = new Vector2(800, 60);
+        root.AddChild(banner);
+
+        outState = HudLabel(56, Warn, 10);
+        outState.SetAnchorsPreset(Control.LayoutPreset.Center);
+        outState.Position = new Vector2(-400, 110);
+        outState.Size = new Vector2(800, 70);
+        root.AddChild(outState);
+
         notice = HudLabel(24, Dark, 7);
         notice.SetAnchorsPreset(Control.LayoutPreset.Center);
         notice.Position = new Vector2(-400, 60);
@@ -107,8 +126,7 @@ public partial class MatchHud : CanvasLayer
         overlay = new Overlay { World = World, MouseFilter = Control.MouseFilterEnum.Ignore };
         overlay.SetAnchorsPreset(Control.LayoutPreset.FullRect);
         root.AddChild(overlay);
-        SetScore(0, false);
-        SetTimer(-1);
+        Show(ModeHud.Empty);
     }
 
     public override void _Process(double delta)
@@ -139,27 +157,41 @@ public partial class MatchHud : CanvasLayer
         overlay.Tick(dt);
     }
 
-    public void SetTimer(float seconds)
+    /// <summary>Renders the mode's HUD data. <paramref name="animate"/> pops the primary counter (a gain).</summary>
+    public void Show(ModeHud hud, bool animate = false)
     {
-        timer.Visible = seconds >= 0;
-        if (seconds < 0)
+        SetTimer(hud.Timer);
+        var primary = hud.Counters.Count > 0 ? hud.Counters[0] : null;
+        score.Visible = caption.Visible = primary != null;
+        if (primary != null)
         {
-            return;
+            score.Text = primary.Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            caption.Text = primary.Caption;
         }
-        var whole = Mathf.CeilToInt(seconds);
-        timer.Text = $"{whole / 60}:{whole % 60:00}";
-        // The last ten seconds turn red.
-        timer.AddThemeColorOverride("font_color", seconds <= 10.5f && seconds > 0 ? Warn : Dark);
-    }
-
-    public void SetScore(int banked, bool animate)
-    {
-        score.Text = banked.ToString();
-        caption.Text = banked == 1 ? "TANK BANKED" : "TANKS BANKED";
+        counters.Visible = hud.Counters.Count > 1;
+        if (counters.Visible)
+        {
+            counters.Text = string.Join("   ", System.Linq.Enumerable.Select(System.Linq.Enumerable.Skip(hud.Counters, 1), c => $"{c.Value} {c.Caption}"));
+        }
+        banner.Text = hud.Banner;
+        outState.Text = hud.OutState;
         if (animate)
         {
             scorePop = 1f;
         }
+    }
+
+    private void SetTimer(HudTimer? clock)
+    {
+        timer.Visible = clock is { Seconds: >= 0 };
+        if (clock is not { Seconds: >= 0 } shown)
+        {
+            return;
+        }
+        var whole = Mathf.CeilToInt(shown.Seconds);
+        timer.Text = $"{whole / 60}:{whole % 60:00}";
+        // The last ten seconds of a countdown turn red.
+        timer.AddThemeColorOverride("font_color", shown.Kind == RoundTimer.Countdown && shown.Seconds <= 10.5f && shown.Seconds > 0 ? Warn : Dark);
     }
 
     /// <summary>"+N" by the score; points that keep coming (a chain) add to the one showing.</summary>

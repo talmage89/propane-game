@@ -76,13 +76,13 @@ public static class LifecycleTests
                 Start(client, 7);
                 Feed(client, Msg.Countdown, new FloatMessage(4));
                 Feed(client, Msg.MatchGo, new FloatMessage(90));
-                Feed(client, Msg.Score, new ScoreMessage(2, 1, 1));
+                Feed(client, Msg.ModeCommand, ModeWireFixtures.Score(7, 2, 1, 1).Payload);
                 Feed(client, Msg.Authority, ProtocolTests.Fixtures().Single(f => f.Type == Msg.Authority).Payload);
                 Feed(client, Msg.MatchEnd, new[] { new Standing(2, "Test", AppearanceRecord.FromPalette(1), 1, true) });
                 TestRunner.Assert(delivered.Count == 0, "events dispatched before attachment");
                 Action<NetMessage> receiver = m => delivered.Add(m.Type);
                 TestRunner.Assert(client.AttachMatch(7, receiver), "current scene could not attach");
-                TestRunner.Assert(delivered.SequenceEqual(new[] { Msg.Countdown, Msg.MatchGo, Msg.Score, Msg.Authority, Msg.MatchEnd }), "queued events lost or reordered");
+                TestRunner.Assert(delivered.SequenceEqual(new[] { Msg.Countdown, Msg.MatchGo, Msg.ModeCommand, Msg.Authority, Msg.MatchEnd }), "queued events lost or reordered");
                 client.AttachMatch(7, receiver);
                 TestRunner.Assert(delivered.Count == 5, "queue replayed twice");
                 Feed(client, Msg.Clock, new FloatMessage(0));
@@ -161,7 +161,7 @@ public static class LifecycleTests
             try
             {
                 Start(client, 7);
-                var score = MessageCodec.Encode(new NetMessage(Msg.Score, 7, 0, new ScoreMessage(2, 1, 1)), true);
+                var score = MessageCodec.Encode(ModeWireFixtures.Score(7, 2, 1, 1), true);
                 client.Handle(score[..^1]);
                 var count = 0;
                 client.AttachMatch(7, _ => count++);
