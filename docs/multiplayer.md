@@ -31,7 +31,7 @@ the Lab duel; [modes.md](modes.md) describes the framework, the spill tickets an
 
 1. **Main menu:** single player (the sandbox), multiplayer or quit.
 2. **Multiplayer:** the player connects to a server, then creates a lobby or joins an existing one.
-3. **Lobby:** each player sets a name and color. The creator sets the match length and starts the match.
+3. **Lobby:** each player sets a name and color and may add bots. The creator sets the match length and starts the match.
 4. **Match start:** the server sends the suburb's plan. Each client builds it, it materializes as in single player, and play begins when the timer starts.
 5. **Match:** runs for the lobby's match length.
 6. **End:** a results screen, then back to the lobby.
@@ -254,17 +254,24 @@ pushes or chain contacts; `scenes/dev/blast_query_tests.tscn` checks 1,100 bodie
 
 - **Main menu:** Single player, Multiplayer, Quit. Single player is the sandbox as before; its pause menu gains a Main menu button.
 - **Multiplayer:** (or start the game with `-- --connect=host[:port]`) type a name and the server's address (`host` or `host:port`; the port defaults to 24680, UDP). **Host on this computer** runs a server inside the game and joins it, for playing without a dedicated server; the lobby screens then show the addresses others can connect to.
-- **Lobbies:** create one or join one from the list (lobbies in a match can't be joined). In the lobby, everyone picks a name and a color (a color someone else has is grayed out), and the creator sets the match length and presses Start. A release build needs two players to start; a debug build may start alone, for testing.
+- **Lobbies:** create one or join one from the list (lobbies in a match can't be joined). In the lobby, everyone picks a name and any color and may add bots, and the creator sets the match length and presses Start. A release build needs two actors (players or bots) to start; a debug build may start alone, for testing.
 - **In a match:** the clock and the tanks you have banked are at the top, ammo at the bottom right. R reloads (an empty magazine also reloads on the next trigger pull). Walking over an ammo can takes it, unless the reserve is full. Esc or Start / Options opens the controls with Resume, Leave match and Quit; the match keeps running behind it. Leaving a match also leaves the lobby.
 - **After a match:** the results show for `ResultsTime`, then everyone is back in the lobby, ready for another.
 
 ## Playing against bots
 
-`tools/dev/add_bots.sh -S host:port` starts bot players (4 by default) on that server, from a source checkout; without
-`-S` they join a server on this computer. Create a lobby first: they join the first open lobby and play every match it
-starts. `-k 0.5`
-makes them easier (slower to turn, looser aim, slower to react), `-b simple` gives them the first, easy brain, and
-`-x` stops them. Each uses about 7% of a core and 0.6 GB while it waits.
+**Add bot** in the lobby opens a dialog with a name (the first free "Bot N"), a color (the presets, or **Custom color**
+with the appearance picker) and Easy, Normal or Hard. Any lobby member can add bots; each bot's row shows its
+difficulty and, for its owner only, **Edit**, which reopens the dialog with **Remove bot**. Bots count toward the
+lobby's capacity, so Add bot is disabled when the lobby is full. The dialog works with the mouse, the keyboard (Tab,
+arrows, Enter, Esc cancels) and a controller (B cancels); a refused request keeps it open with the server's reason.
+The lobby section [below](#lobby-bots-a8-unreleased-protocol-2) describes the runtime and validation.
+
+From a source checkout, `tools/dev/add_bots.sh -S host:port` still starts separate bot processes (4 by default) on that
+server; without `-S` they join a server on this computer. Create a lobby first: they join the first open lobby and play
+every match it starts. `-k 0.5` makes them easier (slower to turn, looser aim, slower to react), `-b simple` gives them
+the first, easy brain, and `-x` stops them. Each uses about 7% of a core and 0.6 GB while it waits. These test tools
+play at skill 1 unless told otherwise, the Hard profile.
 
 The bot (`src/Dev/Bot.cs`) plays to win:
 - it sets tanks off from outside the throw radius, wider for a pile, puncturing and detonating in one burst, from a
@@ -566,7 +573,7 @@ Only the owning peer may update/remove an actor. The server replies with
 `ActorRequestResult(RequestId, Accepted, Revision, Reason)` and broadcasts full
 `RosterState(LobbyId, Revision, Actors)`. Repeated requests do not mutate the roster; stale revisions are ignored.
 Controller configuration is three bytes: schema version (1), Device/Bot kind, and difficulty (0–2; Device uses 0).
-A8 supplies the lobby bot controls and runtime brains.
+A8 adds the lobby bot controls and runtime brains, and a trailing roster revision on each request (below).
 
 Wire changes in this package:
 
@@ -607,3 +614,56 @@ Tank Bank now runs on the mode framework described in [modes.md](modes.md), with
 Hello, Welcome and Rejected are unchanged. `Protocol.Version` stays **2** under the unreleased-cycle ruling; these
 changes require a minor release. No tuner, construction rule or world hash changed.
 
+## Lobby bots (A8, unreleased Protocol 2)
+
+A bot is an ordinary roster actor of kind Bot, owned by the peer that added it. Its owner's game simulates it exactly
+like its own player: the same `PlayerCharacter`, owner-authoritative physics, actor envelope, action sequences, hit
+grace, spills and pickups. The only difference is its intent, which the mode's goal policy (`ModeDefinition.CreateBot`,
+`BankingBot` for Tank Bank) chooses each physics tick from that peer's view of the match, through the shared navigation
+and aim (`src/Net/Match.Bots.cs`). A bot has no camera, audio listener, HUD, hit marker or score popup. Other peers
+receive its poses and actions like a human's and cannot tell them apart beyond the roster's kind. Each brain is seeded
+from the match and actor ids, so it never draws from the world's shared random stream.
+
+**Difficulty.** The controller's difficulty byte selects a named profile of local bot dials (`src/Bots/BotDifficulty.cs`):
+
+| Profile | Skill dial | Skill | Aim error | Reaction | Aim turning factor |
+| --- | --- | ---: | ---: | ---: | ---: |
+| Easy | `BotEasySkill` | 0.2 | 0.92 m | 0.44 s | 0.48 |
+| Normal | `BotNormalSkill` | 0.6 | 0.57 m | 0.32 s | 0.74 |
+| Hard | `BotHardSkill` | 1.0 | 0.22 m | 0.20 s | 1.00 |
+
+Skill blends the existing Easy/Hard endpoints (`BotAimError...`, `BotReaction...`) and scales aim turning
+(`BotAimTurnSharpness` times 0.35–1). Aim error is the wobble around a fought player's aim point once the aim has
+settled; reaction is the delay before firing at a new opponent. Normal is the Lab duel's default skill (0.6), and
+Easy and Hard are the Lab's existing Easy and Hard. The goals, navigation and physics are identical at every
+difficulty. The dials are local C# properties like the other `Bot...` dials: they are copied into each world but never
+enter the match snapshot, so the owner's profile values decide its own bots and nothing else changes.
+
+**Validation.** `AddActor`, `UpdateActor` and `RemoveActor` gain a trailing UInt32: the roster revision the request was
+made against. In a waiting lobby the server refuses, without changing anything, a request on any other revision ("The
+lobby changed"), a client's add of anything but a bot, a change to an actor another peer owns, an add beyond the lobby's
+capacity, and a bot name that is not 1–16 UTF-16 units of printable letters, digits, punctuation, symbols and plain
+spaces without surrounding spaces, or that matches any present actor's name ignoring case. During a match the roster
+is frozen. Malformed controller bytes, kinds, appearance records, zero ids and truncated or trailing data fail
+decoding before the roster. The client checks the name first and shows the server's reason for any refusal.
+
+**Departure.** A bot departs with its owner through the same path as a human: leaving the lobby, a crash or a timeout
+removes all of the peer's actors (`RemovePeer`), and in a match each one's `ActorLeft` keeps its bank in the standings
+and the conservation audit, while body ownership passes to the new host. Survivors remove every actor of the departed
+peer on `PlayerLeft`, and the owners of other bots refresh their brains' view of the others.
+
+**Cost.** Brains share the navigation budget (`BotSearchPerTick` per bot per tick). The runtime glue allocates nothing
+per tick; the brain's own LINQ queries are unchanged. `Match.BotCost` counts thinks, seconds and allocated bytes, and
+`net_test` logs them at the end of a match. Measurements are in [network-soak.md](network-soak.md#lobby-bots-a8).
+
+**Tests.** `BotTests` covers the requests (add, edit, remove, ownership, capacity, stale revisions, names, malformed
+input), the profiles, the owner's runtime and departure. `menu_test --scenario=bots` adds, edits, cancels and removes
+bots by keyboard and by controller, with a second client watching, and checks a full lobby's refusal; it runs in
+`make test`. `net_test --lobby-bots=N` (or `2,1`, one count per `BotI` client, at `--lobby-bot-difficulty=0..2`) gives
+each client lobby bots before the host starts; `--leave-at=S --leave-who=BotI` makes one client leave, and
+`net_bots.sh` then omits that client's log from the completion checks while the survivors and the server's audit still
+run them.
+
+Hello, Welcome and Rejected are unchanged. `Protocol.Version` stays **2** under the unreleased-cycle ruling; the roster
+requests change shape, so the next release must be a minor release. No shared tuner, construction rule or world hash
+changed.

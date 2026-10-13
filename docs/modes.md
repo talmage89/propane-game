@@ -145,8 +145,8 @@ Local views still add the crosshair, ammo, hit markers, hit arrows, score tags, 
 
 `IBotGoalPolicy` picks goals from mode state and world facts (`IBotWorld`: play state, time left and scores from the
 mode; tanks, players and pickups from the world); the shared navigation (`BotNavigator`) and aiming (`BotAim`) turn
-them into intent. Tank Bank's policy is the existing banking brain, created through its definition by the Lab and
-the network bot harness. Its goal selection still lives inside `BankingBot`; separating it further is follow-up
+them into intent. Tank Bank's policy is the existing banking brain, created through its definition by the Lab, the
+network bot harness and each peer's match for the lobby bots it owns (`Match.Bots.cs`, A8). Its goal selection still lives inside `BankingBot`; separating it further is follow-up
 work that would need its own bot-behavior proof.
 
 ## Room for later
