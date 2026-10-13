@@ -20,7 +20,8 @@ namespace Propane.Dev;
 /// Add <c>--host-server</c> to run the server in the same process. <c>--lobby-bots=N</c> (or a list such as
 /// <c>2,1</c>, one entry per <c>--name=BotI</c> client) adds that many lobby bots owned by each client before the start,
 /// at <c>--lobby-bot-difficulty=0..2</c>; the host waits for all of them. <c>--leave-who=Name</c> limits
-/// <c>--leave-at</c> to one client.
+/// <c>--leave-at</c> to one client. <c>--human=idle</c> keeps this client's player still; <c>--look-at-bots</c> keeps it
+/// still, facing the nearest remote lobby bot.
 /// </summary>
 public partial class NetTest : Node
 {
@@ -398,6 +399,12 @@ public partial class NetTest : Node
         else if (DevArgs.Get("scenario") == "watch" && role == "host")
         {
             Watch(match, dt);
+        }
+        else if (DevArgs.Get("look-at-bots") != null && match.RemoteBodies.Where(b => match.Setup.Players.Any(p => p.Player.Id == b.ActorId &&
+                     p.Player.Kind == ActorKind.Bot)).OrderBy(b => b.GlobalPosition.DistanceTo(match.Player.GlobalPosition)).FirstOrDefault() is { } watched)
+        {
+            // --look-at-bots: a still observer facing the nearest remote bot, to film how others see lobby bots.
+            AimAt(match.Player, watched.GlobalPosition + Vector3.Up * 1.2f);
         }
         else if (DevArgs.Get("human") != "idle") // --human=idle: a still player, so frame costs measure lobby bots alone.
         {
