@@ -88,7 +88,8 @@ public partial class MotionProbe : SkeletonModifier3D
                     name.StartsWith("ring_", StringComparison.Ordinal) || name.StartsWith("pinky_", StringComparison.Ordinal) || name.StartsWith("thumb_", StringComparison.Ordinal);
                 // A snap detector, not a smoothing bound: clips and stance changes may move fast, never jump.
                 // Fingers close quickly on a grip, so they get a wider bound.
-                if (!physical || digit) rotationFailed |= degrees / delta > (digit ? DigitSnapRate : SnapRate);
+                // The root only re-expresses the pose when the model turns to its get-up heading; it has no mesh.
+                if ((!physical || digit) && name != "root") rotationFailed |= degrees / delta > (digit ? DigitSnapRate : SnapRate);
                 var statistics = physical && !digit ? physicalMaxima : maxima;
                 if (physical && digit)
                 {

@@ -27,7 +27,7 @@ public partial class RifleRig : SkeletonModifier3D
     private readonly RecoilSpring recoil = new();
     private float reloadTarget, reloadPhase;
     private bool meleeReloadForward, hadMelee;
-    private float reloadBlend;
+    private float reloadBlend, grip;
     private Vector3 lookDirection;
 
     /// <summary>Wrist targets of the last pose, for contact diagnostics.</summary>
@@ -115,11 +115,14 @@ public partial class RifleRig : SkeletonModifier3D
         recoil.Update(dt, t.RifleRecoilFrequency, t.RifleRecoilDamping);
         if (Weight <= 0.001f)
         {
-            // Ragdolling or getting up: RifleHandFollow keeps the rifle in the right hand.
+            // Ragdolling or getting up: RifleHandFollow keeps the rifle in the right hand. The fingers let go
+            // over a moment rather than snapping open as the body is thrown.
             recoil.Reset();
             reloadBlend = 0;
             lookDirection = Vector3.Zero;
             Rifle.Animate(dt, 0);
+            grip = Mathf.MoveToward(grip, 0, blendStep);
+            if (grip > 0) PoseFingers(skeleton, grip);
             return;
         }
         Rifle.PreviewReloadContact(Reload);
@@ -272,10 +275,11 @@ public partial class RifleRig : SkeletonModifier3D
         // where down-and-out alone would line up with the arm. It vanishes from the bend when a hand reaches forward.
         var poleR = upperRWorld + chestRight * t.RifleElbowOut - up * t.RifleElbowDown - chestForward * t.RifleElbowBack;
         var poleL = upperLWorld - chestRight * t.RifleElbowOut - up * t.RifleElbowDown - chestForward * t.RifleElbowBack;
-        SolveTwoBone(skeleton, upperR, lowerR, handR, to * RightTarget, to * poleR);
-        SolveTwoBone(skeleton, upperL, lowerL, handL, to * LeftTarget, to * poleL);
+        SolveTwoBone(skeleton, upperR, lowerR, handR, to * RightTarget, to * poleR, Weight);
+        SolveTwoBone(skeleton, upperL, lowerL, handL, to * LeftTarget, to * poleL, Weight);
         Rifle.Animate(dt, Reload);
-        PoseFingers(skeleton);
+        grip = Weight;
+        PoseFingers(skeleton, grip);
     }
 
     /// <summary>Blends two rifle placements about the butt, so the stock stays where both stances hold it and the
@@ -370,7 +374,7 @@ public partial class RifleRig : SkeletonModifier3D
         return rifle * new Transform3D(gripBasis, gripLocal) * new Transform3D(wristBasis, new Vector3(-side, up, back));
     }
 
-    private void PoseFingers(Skeleton3D skeleton)
+    private void PoseFingers(Skeleton3D skeleton, float weight)
     {
         var t = World.Tuning;
         // Each local X is the finger's flexion axis after its authored rest orientation. Set absolute curls:
@@ -406,7 +410,7 @@ public partial class RifleRig : SkeletonModifier3D
                 }
                 var bone = fingers[f, j];
                 var pose = skeleton.GetBoneRest(bone).Basis.GetRotationQuaternion() * new Quaternion(Vector3.Right, Mathf.DegToRad(angle));
-                skeleton.SetBonePoseRotation(bone, skeleton.GetBonePoseRotation(bone).Normalized().Slerp(pose, Weight));
+                skeleton.SetBonePoseRotation(bone, skeleton.GetBonePoseRotation(bone).Normalized().Slerp(pose, weight));
             }
         }
     }
@@ -492,8 +496,10 @@ public partial class RifleRig : SkeletonModifier3D
     /// twist follows the elbow instead of the shortest turn from the clip's pose, which flips as a strike crosses the
     /// body. The wrist takes the hand's twist: splitting it with the forearm jumps a half turn wherever the bent wrist
     /// lines the hand's axis up with the forearm. A target beyond reach straightens the arm toward it.</summary>
-    private static void SolveTwoBone(Skeleton3D skeleton, int upper, int lower, int end, Transform3D target, Vector3 pole)
+    private static void SolveTwoBone(Skeleton3D skeleton, int upper, int lower, int end, Transform3D target, Vector3 pole, float weight = 1)
     {
+        var fromUpper = skeleton.GetBoneGlobalPose(upper).Basis.GetRotationQuaternion();
+        var fromLower = skeleton.GetBoneGlobalPose(lower).Basis.GetRotationQuaternion();
         var a = skeleton.GetBoneGlobalPose(upper).Origin;
         var l1 = a.DistanceTo(skeleton.GetBoneGlobalPose(lower).Origin);
         var l2 = skeleton.GetBoneGlobalPose(lower).Origin.DistanceTo(skeleton.GetBoneGlobalPose(end).Origin);
@@ -502,6 +508,8 @@ public partial class RifleRig : SkeletonModifier3D
         var dir = toTarget.Normalized();
         var along = (l1 * l1 - l2 * l2 + distance * distance) / (2f * distance);
         var height = Mathf.Sqrt(Mathf.Max(0, l1 * l1 - along * along));
+        // Fading in, the elbow starts where the clip has it and moves to the pole's side with the weight.
+        if (weight < 0.999f) pole = skeleton.GetBoneGlobalPose(lower).Origin.Lerp(pole, weight);
         var poleDir = pole - a;
         poleDir = (poleDir - dir * dir.Dot(poleDir)).Normalized();
         var elbow = a + dir * along + poleDir * height;
@@ -515,6 +523,18 @@ public partial class RifleRig : SkeletonModifier3D
         var lowerY = (wrist - elbow).Normalized();
         var lowerBasis = new Basis(hinge, lowerY, hinge.Cross(lowerY));
         SetBoneGlobalBasis(skeleton, lower, lowerBasis);
+        if (weight < 0.999f)
+        {
+            // Fading in (the end of a get-up): start from the arm the clip shows, then close the wrist onto its
+            // target by the shortest turns, which barely move an arm that is already nearly there.
+            SetBoneGlobalBasis(skeleton, upper, new Basis(fromUpper.Slerp(new Basis(hinge, upperY, upperZ).GetRotationQuaternion(), weight)));
+            SetBoneGlobalBasis(skeleton, lower, new Basis(fromLower.Slerp(lowerBasis.GetRotationQuaternion(), weight)));
+            var b = skeleton.GetBoneGlobalPose(lower).Origin;
+            RotateBone(skeleton, upper, new Basis(new Quaternion((b - a).Normalized(), (elbow - a).Normalized())));
+            b = skeleton.GetBoneGlobalPose(lower).Origin;
+            var c = skeleton.GetBoneGlobalPose(end).Origin;
+            RotateBone(skeleton, lower, new Basis(new Quaternion((c - b).Normalized(), (wrist - b).Normalized())));
+        }
         SetBoneGlobalBasis(skeleton, end, target.Basis.Orthonormalized());
     }
 }
