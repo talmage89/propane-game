@@ -93,11 +93,11 @@ public static class ParticipantServerTests
             using var f = new ServerTests.Fixture(playing: false);
             f.Advance(50); f.Advance(); f.Advance(20); f.Advance(2);
             var human = f.Setup.Players.Single(p => p.Player.OwnerPeerId == 2).Player;
-            f.Receive(Request(Msg.RemoveActor, new RemoveActorMessage(1, human.Id)));
+            f.Receive(Request(Msg.RemoveActor, new RemoveActorMessage(1, human.Id, f.Revision())));
             f.Packets.Clear();
             f.Receive(new NetWriter(Msg.StartMatch).Snapshot(f.Tuning.Snapshot()));
             Assert(f.Packets.Count == 1 && f.Packets[0].Message.Type == Msg.Notice, "creator without an actor started a match");
-            f.Receive(Request(Msg.AddActor, new AddActorMessage(2, ActorKind.Bot, "Creator bot", human.Appearance, ControllerConfig.Bot)));
+            f.Receive(Request(Msg.AddActor, new AddActorMessage(2, ActorKind.Bot, "Creator bot", human.Appearance, ControllerConfig.Bot, f.Revision())));
             f.Packets.Clear();
             f.Receive(new NetWriter(Msg.StartMatch).Snapshot(f.Tuning.Snapshot()));
             var setup = f.Packets.Select(p => p.Message.Payload).OfType<MatchSetup>().First();
@@ -112,7 +112,7 @@ public static class ParticipantServerTests
             f.Advance(50); f.Advance(); f.Advance(20); f.Advance(2); // Return to Waiting.
             var revision = f.Packets.Select(p => p.Message.Payload).OfType<LobbyInfo>().Last().RosterRevision;
             f.Packets.Clear();
-            var add = Request(Msg.AddActor, new AddActorMessage(1, ActorKind.Bot, "Embedded", AppearanceRecord.FromPalette(0), ControllerConfig.Bot));
+            var add = Request(Msg.AddActor, new AddActorMessage(1, ActorKind.Bot, "Embedded", AppearanceRecord.FromPalette(0), ControllerConfig.Bot, f.Revision()));
             f.Receive(add);
             var roster = f.Packets.Select(p => p.Message.Payload).OfType<RosterStateMessage>().First();
             var bot = roster.Actors.Single(a => a.Kind == ActorKind.Bot);
@@ -120,14 +120,14 @@ public static class ParticipantServerTests
             f.Packets.Clear(); f.Receive(add);
             Assert(f.Packets.Count == 1 && f.Packets[0].Message.Payload is ActorRequestResultMessage { Accepted: true } duplicate && duplicate.Revision == revision + 1, "duplicate request mutated roster");
             f.Packets.Clear();
-            f.Receive(Request(Msg.UpdateActor, new UpdateActorMessage(1, bot.Id, "Stolen", bot.Appearance, ControllerConfig.Bot)), 3);
+            f.Receive(Request(Msg.UpdateActor, new UpdateActorMessage(1, bot.Id, "Stolen", bot.Appearance, ControllerConfig.Bot, f.Revision())), 3);
             Assert(f.Packets.Single().Message.Payload is ActorRequestResultMessage { Accepted: false } spoof && spoof.Revision == revision + 1, "spoofed update accepted");
             f.Packets.Clear();
-            f.Receive(Request(Msg.UpdateActor, new UpdateActorMessage(2, bot.Id, "Renamed", bot.Appearance, ControllerConfig.Bot)));
+            f.Receive(Request(Msg.UpdateActor, new UpdateActorMessage(2, bot.Id, "Renamed", bot.Appearance, ControllerConfig.Bot, f.Revision())));
             Assert(f.Packets.Any(p => p.Message.Payload is RosterStateMessage r && r.Revision == revision + 2 && r.Actors.Any(a => a.Name == "Renamed")), "update not broadcast");
-            f.Packets.Clear(); f.Receive(Request(Msg.RemoveActor, new RemoveActorMessage(3, bot.Id)));
+            f.Packets.Clear(); f.Receive(Request(Msg.RemoveActor, new RemoveActorMessage(3, bot.Id, f.Revision())));
             Assert(f.Packets.Any(p => p.Message.Payload is RosterStateMessage r && r.Revision == revision + 3 && r.Actors.Count == 2), "remove not broadcast");
-            f.Packets.Clear(); f.Receive(Request(Msg.AddActor, new AddActorMessage(4, ActorKind.Bot, "Next", bot.Appearance, ControllerConfig.Bot)));
+            f.Packets.Clear(); f.Receive(Request(Msg.AddActor, new AddActorMessage(4, ActorKind.Bot, "Next", bot.Appearance, ControllerConfig.Bot, f.Revision())));
             var next = f.Packets.Select(p => p.Message.Payload).OfType<RosterStateMessage>().First().Actors.Single(a => a.Kind == ActorKind.Bot);
             Assert(next.Id > bot.Id && next.AllocationSlot > bot.AllocationSlot, "removed actor or allocation reused");
             f.Packets.Clear();
@@ -157,7 +157,7 @@ public static class ParticipantServerTests
             Assert(!f.Packets.Any(p => ModeWireFixtures.IsScore(p.Message, human.Id)), "last local actor stole score");
             f.Reject(Packet(bot.Id, 1, 1));
             f.Packets.Clear();
-            f.Receive(Request(Msg.AddActor, new AddActorMessage(2, ActorKind.Bot, "Late", bot.Appearance, ControllerConfig.Bot)));
+            f.Receive(Request(Msg.AddActor, new AddActorMessage(2, ActorKind.Bot, "Late", bot.Appearance, ControllerConfig.Bot, f.Revision())));
             Assert(f.Packets.Single().Message.Payload is ActorRequestResultMessage { Accepted: false }, "match roster was mutable");
             f.Packets.Clear();
             f.Receive(new NetWriter(Msg.SetProfile).String("Frozen profile").Appearance(bot.Appearance));
@@ -328,11 +328,11 @@ public static class ParticipantServerTests
             f.Receive(Request(Msg.SetCapacity, new IntMessage(16)));
             Assert(f.Packets.Any(p => p.Message.Payload is LobbyInfo { Capacity: 16 }), "creator cannot select tested ceiling");
             for (uint request = 1; request <= 14; request++)
-                f.Receive(Request(Msg.AddActor, new AddActorMessage(request, ActorKind.Bot, $"Bot {request}", AppearanceRecord.FromPalette(0), ControllerConfig.Bot)));
+                f.Receive(Request(Msg.AddActor, new AddActorMessage(request, ActorKind.Bot, $"Bot {request}", AppearanceRecord.FromPalette(0), ControllerConfig.Bot, f.Revision())));
             var full = f.Packets.Select(p => p.Message.Payload).OfType<RosterStateMessage>().Last();
             Assert(full.Actors.Count == 16, "capacity remained peer- or palette-derived");
             f.Packets.Clear();
-            f.Receive(Request(Msg.AddActor, new AddActorMessage(15, ActorKind.Bot, "Excess", AppearanceRecord.FromPalette(0), ControllerConfig.Bot)));
+            f.Receive(Request(Msg.AddActor, new AddActorMessage(15, ActorKind.Bot, "Excess", AppearanceRecord.FromPalette(0), ControllerConfig.Bot, f.Revision())));
             Assert(f.Packets.Single().Message.Payload is ActorRequestResultMessage { Accepted: false }, "actor exceeded selected capacity");
             f.Packets.Clear(); f.Receive(Request(Msg.SetCapacity, new IntMessage(2)));
             Assert(f.Packets.Count == 0, "capacity shrank below actual roster");
@@ -384,7 +384,7 @@ public static class ParticipantServerTests
             foreach (var malformed in new[] { shot with { ActorId = 0 }, shot with { LifeId = 0 }, shot with { ActionId = 0 } })
                 TestRunner.Throws<InvalidDataException>(() => MessageCodec.Decode(MessageCodec.Encode(malformed, false), false));
             foreach (var config in new[] { new ControllerConfig(2, ControllerKind.Bot, 1), new ControllerConfig(1, ControllerKind.Bot, 3), ControllerConfig.Human })
-                TestRunner.Throws<InvalidDataException>(() => MessageCodec.Decode(Request(Msg.AddActor, new AddActorMessage(1, ActorKind.Bot, "Bot", AppearanceRecord.FromPalette(0), config)), false));
+                TestRunner.Throws<InvalidDataException>(() => MessageCodec.Decode(Request(Msg.AddActor, new AddActorMessage(1, ActorKind.Bot, "Bot", AppearanceRecord.FromPalette(0), config, 1)), false));
         });
     }
 }

@@ -106,6 +106,8 @@ public partial class LobbyServer : Node
     // Legacy handler tests bypass the connection layer; transport tests use the injected interface.
     internal Action<int, byte[], TrafficClass>? SendOverride { get; set; }
     internal Func<ParticipantRoster> RosterFactory { get; set; } = () => new();
+    /// <summary>The roster revision of a peer's lobby (0 outside one), for request fixtures.</summary>
+    internal uint RosterRevision(int peer) => clients.GetValueOrDefault(peer)?.Lobby?.Roster.Revision ?? 0;
     /// <summary>The mode new lobbies play. Tank Bank is the only networked mode; tests run synthetic ones.</summary>
     internal ModeDefinition LobbyMode { get; set; } = ModeRegistry.TankBank;
 
@@ -463,28 +465,11 @@ public partial class LobbyServer : Node
             return;
         }
         var accepted = false;
-        var reason = "The roster is frozen during a match.";
         var lobby = client.Lobby;
+        var reason = lobby == null ? "Join a lobby first." : "The roster is frozen during a match.";
         if (lobby is { Phase: LobbyPhase.Waiting })
         {
-            reason = "You do not own that actor, or its controller is invalid.";
-            try
-            {
-                switch (payload)
-                {
-                    case AddActorMessage add when lobby.Roster.Present.Count < lobby.Capacity:
-                        lobby.Roster.Add(client.Id, add.Kind, add.Name, add.Appearance, add.Config);
-                        accepted = true;
-                        break;
-                    case AddActorMessage: reason = "That lobby is full."; break;
-                    case UpdateActorMessage update:
-                        accepted = lobby.Roster.Update(client.Id, update.ActorId, update.Name, update.Appearance, update.Config);
-                        break;
-                    case RemoveActorMessage remove:
-                        accepted = lobby.Roster.Remove(client.Id, remove.ActorId);
-                        break;
-                }
-            }
+            try { accepted = ChangeRoster(client, lobby, payload, out reason); }
             catch (InvalidOperationException) { reason = "The session identity space is exhausted. Create a new lobby."; }
             catch (OverflowException) { reason = "The session identity space is exhausted. Create a new lobby."; }
         }
@@ -493,6 +478,50 @@ public partial class LobbyServer : Node
         client.ActorReply = result;
         Send(client.Id, MessageCodec.Encode(new NetMessage(Msg.ActorRequestResult, 0, 0, result), true));
         if (accepted) { SendLobbyState(lobby!); BroadcastLobbyList(); }
+    }
+
+    /// <summary>
+    /// Validates one waiting-lobby roster request against the revision it was made on. Clients add only bots, change
+    /// only actors they own, and name bots uniquely; appearance and controller ranges were checked by the codec.
+    /// </summary>
+    private static bool ChangeRoster(Client client, Lobby lobby, object payload, out string reason)
+    {
+        var roster = lobby.Roster;
+        var revision = payload switch
+        {
+            AddActorMessage a => a.Revision,
+            UpdateActorMessage a => a.Revision,
+            RemoveActorMessage a => a.Revision,
+            _ => throw new InvalidDataException("unknown roster request"),
+        };
+        reason = "The lobby changed. Check it and try again.";
+        if (revision != roster.Revision) return false;
+        reason = "You do not own that actor, or its controller is invalid.";
+        switch (payload)
+        {
+            case AddActorMessage add:
+                if (add.Kind != ActorKind.Bot) { reason = "Only bots can be added."; return false; }
+                if (!NameAvailable(roster, add.Name, 0, out reason)) return false;
+                if (roster.Present.Count >= lobby.Capacity) { reason = "That lobby is full."; return false; }
+                roster.Add(client.Id, add.Kind, add.Name, add.Appearance, add.Config);
+                return true;
+            case UpdateActorMessage update:
+                if (roster.Get(update.ActorId) is not { Present: true } actor || actor.OwnerPeerId != client.Id) return false;
+                if (actor.Kind == ActorKind.Bot ? !NameAvailable(roster, update.Name, actor.ActorId, out reason)
+                        : !Protocol.ValidActorName(update.Name)) { return false; }
+                return roster.Update(client.Id, update.ActorId, update.Name, update.Appearance, update.Config);
+            case RemoveActorMessage remove:
+                return roster.Remove(client.Id, remove.ActorId);
+        }
+        return false;
+    }
+
+    private static bool NameAvailable(ParticipantRoster roster, string name, int actorId, out string reason)
+    {
+        reason = $"Names need 1 to {Protocol.MaxNameLength} letters, digits, spaces or symbols.";
+        if (!Protocol.ValidActorName(name)) return false;
+        reason = $"Someone in the lobby is already called {name}.";
+        return !roster.Present.Any(a => a.ActorId != actorId && Protocol.SameName(a.Name, name));
     }
 
     private byte[] LobbyList()

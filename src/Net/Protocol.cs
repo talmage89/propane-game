@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using System.IO;
 using System.Text;
 using Godot;
@@ -114,6 +115,29 @@ public static class Protocol
     public static readonly string[] ColorNames = { "Orange", "Blue", "Green", "Red", "Purple", "Yellow", "Teal", "Pink" };
 
     public static Color PlayerColor(int index) => PlayerColors[Mathf.PosMod(index, PlayerColors.Length)];
+
+    /// <summary>
+    /// A name the server accepts exactly as sent for a roster request: 1 to <see cref="MaxNameLength"/> UTF-16 units,
+    /// no surrounding spaces, and only printable letters, digits, punctuation, symbols and spaces.
+    /// </summary>
+    public static bool ValidActorName(string? name)
+    {
+        if (string.IsNullOrEmpty(name) || name.Length > MaxNameLength || name.Trim() != name) return false;
+        foreach (var c in name)
+        {
+            switch (char.GetUnicodeCategory(c))
+            {
+                case UnicodeCategory.Control or UnicodeCategory.Format or UnicodeCategory.Surrogate or UnicodeCategory.PrivateUse or
+                    UnicodeCategory.OtherNotAssigned or UnicodeCategory.LineSeparator or UnicodeCategory.ParagraphSeparator:
+                    return false;
+                case UnicodeCategory.SpaceSeparator when c != ' ':
+                    return false;
+            }
+        }
+        return true;
+    }
+
+    public static bool SameName(string a, string b) => string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
 
     public static string CleanName(string? name)
     {

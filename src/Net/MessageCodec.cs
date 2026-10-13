@@ -10,9 +10,10 @@ using Propane.Tank;
 namespace Propane.Net;
 
 public sealed record NetMessage(Msg Type, int MatchId, int Sender, object Payload, int ActorId = 0, uint LifeId = 0, uint ActionId = 0);
-public sealed record AddActorMessage(uint RequestId, ActorKind Kind, string Name, AppearanceRecord Appearance, ControllerConfig Config);
-public sealed record UpdateActorMessage(uint RequestId, int ActorId, string Name, AppearanceRecord Appearance, ControllerConfig Config);
-public sealed record RemoveActorMessage(uint RequestId, int ActorId);
+/// <summary>Roster requests name the roster revision they were made against; the server refuses a stale one.</summary>
+public sealed record AddActorMessage(uint RequestId, ActorKind Kind, string Name, AppearanceRecord Appearance, ControllerConfig Config, uint Revision);
+public sealed record UpdateActorMessage(uint RequestId, int ActorId, string Name, AppearanceRecord Appearance, ControllerConfig Config, uint Revision);
+public sealed record RemoveActorMessage(uint RequestId, int ActorId, uint Revision);
 public sealed record RosterStateMessage(int LobbyId, uint Revision, IReadOnlyList<PlayerProfile> Actors);
 public sealed record ActorRequestResultMessage(uint RequestId, bool Accepted, uint Revision, string Reason);
 public sealed record EmptyMessage;
@@ -77,8 +78,8 @@ public static class MessageCodec
             Msg.SetProfile => new ProfileMessage(r.String(), r.Appearance()),
             Msg.SetCapacity => new IntMessage(Range(r.Int(), 2, Protocol.TestedActorCeiling)),
             Msg.AddActor => ReadAddActor(r),
-            Msg.UpdateActor => new UpdateActorMessage(Id(r.UInt()), Positive(r.Int()), r.String(), r.Appearance(), ReadController(r)),
-            Msg.RemoveActor => new RemoveActorMessage(Id(r.UInt()), Positive(r.Int())),
+            Msg.UpdateActor => new UpdateActorMessage(Id(r.UInt()), Positive(r.Int()), r.String(), r.Appearance(), ReadController(r), r.UInt()),
+            Msg.RemoveActor => new RemoveActorMessage(Id(r.UInt()), Positive(r.Int()), r.UInt()),
             Msg.RosterState => new RosterStateMessage(Positive(r.Int()), Id(r.UInt()), ReadProfiles(r)),
             Msg.ActorRequestResult => new ActorRequestResultMessage(Id(r.UInt()), r.Bool(), Id(r.UInt()), r.String()),
             Msg.SetMatchLength => new FloatMessage(Range(r.Float(), 10, 3600)),
@@ -129,9 +130,9 @@ public static class MessageCodec
         if (Protocol.IsRelay(message.Type) && fromServer) { w.Int(message.Sender); }
         switch (message.Payload)
         {
-            case AddActorMessage p: w.UInt(p.RequestId).Byte((byte)p.Kind).String(p.Name).Appearance(p.Appearance); WriteController(w, p.Config); break;
-            case UpdateActorMessage p: w.UInt(p.RequestId).Int(p.ActorId).String(p.Name).Appearance(p.Appearance); WriteController(w, p.Config); break;
-            case RemoveActorMessage p: w.UInt(p.RequestId).Int(p.ActorId); break;
+            case AddActorMessage p: w.UInt(p.RequestId).Byte((byte)p.Kind).String(p.Name).Appearance(p.Appearance); WriteController(w, p.Config); w.UInt(p.Revision); break;
+            case UpdateActorMessage p: w.UInt(p.RequestId).Int(p.ActorId).String(p.Name).Appearance(p.Appearance); WriteController(w, p.Config); w.UInt(p.Revision); break;
+            case RemoveActorMessage p: w.UInt(p.RequestId).Int(p.ActorId).UInt(p.Revision); break;
             case RosterStateMessage p:
                 w.Int(p.LobbyId).UInt(p.Revision).Int(p.Actors.Count);
                 foreach (var actor in p.Actors) WriteProfile(w, actor);
@@ -318,7 +319,7 @@ public static class MessageCodec
         var request = Id(r.UInt()); var kind = (ActorKind)Range(r.Byte(), 0, 1);
         var name = r.String(); var appearance = r.Appearance(); var config = ReadController(r);
         if (!config.ValidFor(kind)) throw new InvalidDataException("controller does not match actor kind");
-        return new(request, kind, name, appearance, config);
+        return new(request, kind, name, appearance, config, r.UInt());
     }
 
     private static PlayerStateMessage ReadPlayerState(NetReader r)
