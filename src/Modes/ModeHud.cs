@@ -13,7 +13,8 @@ public sealed record HudTimer(float Seconds, RoundTimer Kind);
 /// <summary>
 /// Plain HUD data a mode supplies. MatchHud and the results screen render it; local views add the crosshair, ammo,
 /// hit markers and other feedback. Objectives generalize the tank arrows: positions the HUD points toward.
-/// An out-state ("eliminated", "spectating") replaces play feedback when a mode with health needs one.
+/// An out-state ("eliminated", "spectating") replaces play feedback when a mode with health needs one. A feed lists
+/// recent events, newest last (Ring Out's knock-offs).
 /// </summary>
 public sealed record ModeHud(
     IReadOnlyList<HudCounter> Counters,
@@ -22,14 +23,19 @@ public sealed record ModeHud(
     IReadOnlyList<Vector3> Objectives,
     bool ObjectivesVisible,
     string Banner = "",
-    string OutState = "")
+    string OutState = "",
+    IReadOnlyList<string>? Feed = null)
 {
     public static readonly ModeHud Empty = new(Array.Empty<HudCounter>(), Array.Empty<string>(), null, Array.Empty<Vector3>(), false);
 }
 
-/// <summary>What a presenter reads: mode state as the local peer knows it, plus the world facts it may point at.</summary>
+/// <summary>
+/// What a presenter reads: mode state as the local peer knows it, plus the world facts it may point at. Where the
+/// peer runs the rules itself (the Lab), <paramref name="Rules"/> and <paramref name="Clock"/> let a presenter read
+/// mode-specific state such as a boundary or a zone.
+/// </summary>
 public sealed record ModeHudInput(int LocalActor, ModePhase Phase, float TimeLeft, IReadOnlyDictionary<int, int> Scores,
-    IReadOnlyList<Vector3> Objectives, bool ShowObjectives);
+    IReadOnlyList<Vector3> Objectives, bool ShowObjectives, IModeRules? Rules = null, ModeClock Clock = default);
 
 public interface IModeHudPresenter
 {

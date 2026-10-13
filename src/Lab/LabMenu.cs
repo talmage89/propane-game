@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using Godot;
 using Propane.Core;
 using Propane.UI;
@@ -69,11 +70,13 @@ public partial class LabMenu : CanvasLayer
         layout.AddChild(new HSeparator());
         if (selected == null)
         {
-            foreach (var scenario in LabScenarios.All)
-            {
-                Button(scenario.Name, () => { selected = scenario; environment = LabEnvironment.Void; Rebuild(); });
-                layout.AddChild(UiStyle.Text(scenario.Description, 16, UiStyle.SoftInk, HorizontalAlignment.Center));
-            }
+            foreach (var scenario in LabScenarios.All.Where(s => !s.Prototype))
+                Scenario(scenario);
+            // Modes on trial: playable against Lab bots so their rules can be judged before anything ships.
+            layout.AddChild(new HSeparator());
+            layout.AddChild(UiStyle.Text("PROTOTYPE MODES · RULES ON TRIAL", 18, UiStyle.Accent, HorizontalAlignment.Center));
+            foreach (var scenario in LabScenarios.All.Where(s => s.Prototype))
+                Scenario(scenario);
             layout.AddChild(new HSeparator());
             Button("Main menu", () => BackRequested?.Invoke());
         }
@@ -103,7 +106,7 @@ public partial class LabMenu : CanvasLayer
                 Button("+", () => { draft.LabStackCount = Mathf.Min(Tuning.LabStackMaximum, draft.LabStackCount + Tuning.LabStackStep); Rebuild("larger"); }, "larger", draft.LabStackCount >= Tuning.LabStackMaximum, row);
                 layout.AddChild(UiStyle.Text($"{Tuning.LabStackMinimum}–{Tuning.LabStackMaximum} tanks · bigger stacks cost more during a blast.", 16, UiStyle.SoftInk, HorizontalAlignment.Center));
             }
-            if (scenario.Banking)
+            if (scenario.Banking || scenario.Prototype)
             {
                 // The lobby's difficulty profiles; the Lab's skill dial keeps fine control between them.
                 var difficulty = Bots.BotProfile.Nearest(draft.LabBotSkill, draft);
@@ -112,7 +115,9 @@ public partial class LabMenu : CanvasLayer
                     draft.LabBotSkill = Bots.BotProfile.For((Bots.BotDifficulty)(((int)difficulty + 1) % Bots.BotProfile.All.Length), draft).Skill;
                     Rebuild("difficulty");
                 }, "difficulty");
-                layout.AddChild(UiStyle.Text("Local tank bank · one bot · three minutes · no server needed", 16, UiStyle.SoftInk, HorizontalAlignment.Center));
+                layout.AddChild(UiStyle.Text(scenario.Prototype
+                    ? $"Prototype · you and {draft.LabPrototypeBots} bot{(draft.LabPrototypeBots == 1 ? "" : "s")} · rules on trial · no server needed"
+                    : "Local tank bank · one bot · three minutes · no server needed", 16, UiStyle.SoftInk, HorizontalAlignment.Center));
             }
             layout.AddChild(new HSeparator());
             Button("Enter Lab", () => StartRequested?.Invoke(scenario, environment, draft), "enter");
@@ -123,6 +128,12 @@ public partial class LabMenu : CanvasLayer
             HorizontalAlignment.Center));
         // Choosing a scenario lands on Enter Lab, so a second press starts it rather than changing an option.
         navigation.Configure(focus ?? (selected != null ? "enter" : null));
+    }
+
+    private void Scenario(LabScenario scenario)
+    {
+        Button(scenario.Name, () => { selected = scenario; environment = LabEnvironment.Void; Rebuild(); });
+        layout.AddChild(UiStyle.Text(scenario.Description, 16, UiStyle.SoftInk, HorizontalAlignment.Center));
     }
 
     private void Button(string text, Action action, string? key = null, bool disabled = false, Node? parent = null)

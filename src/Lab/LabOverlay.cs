@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Linq;
 using Godot;
 using Propane.UI;
@@ -78,6 +79,40 @@ public partial class LabOverlay : CanvasLayer
         UpdateStatus();
     }
 
+    /// <summary>A prototype's status line, and once decided its result title and the full order.</summary>
+    private (string Line, string Winner, string Summary) Prototype(PrototypeRunner prototype)
+    {
+        var me = Lab.Player.ActorId;
+        string Name(int actor) => actor == me ? "You" : prototype.Roster.First(a => a.ActorId == actor).Name;
+        switch (prototype.Rules)
+        {
+            case Modes.RingOutRules ring:
+            {
+                var plan = ring.Plan;
+                var next = plan.NextDissolve(prototype.Elapsed) - prototype.Elapsed;
+                var line = $"{ring.AliveCount} standing" + (double.IsInfinity(next) ? " · one lot left" : $" · rim dissolves in {Mathf.CeilToInt(next)} s");
+                var order = prototype.Roster.Select(a => a.ActorId).OrderBy(a => ring.Place(a) ?? 0).ToArray();
+                var winners = order.Where(a => ring.Place(a) == 1).ToArray();
+                var winner = winners.Contains(me) ? (winners.Length > 1 ? "SHARED WIN" : "YOU WIN") :
+                    winners.Length == 0 ? "NOBODY STANDS" : $"{string.Join(" & ", winners.Select(Name)).ToUpperInvariant()} WINS";
+                var summary = string.Join("  ·  ", order.Select(a => $"{Modes.RingOutHud.Ordinal(ring.Place(a) ?? 0).ToLowerInvariant()} {Name(a)}"));
+                return (line, winner, summary);
+            }
+            default:
+            {
+                var scores = prototype.Scores;
+                var clock = $"{Mathf.CeilToInt(prototype.TimeLeft) / 60}:{Mathf.CeilToInt(prototype.TimeLeft) % 60:00}";
+                var line = string.Join("  ·  ", prototype.Roster.Select(a => $"{Name(a.ActorId)} {scores.GetValueOrDefault(a.ActorId)}")) + $"  ·  {clock}";
+                var best = scores.Values.DefaultIfEmpty(0).Max();
+                var top = scores.Where(s => s.Value == best).Select(s => s.Key).ToArray();
+                var winner = top.Length > 1 ? (top.Contains(me) ? "TIED FOR THE WIN" : "TIED") : top[0] == me ? "YOU WIN" : $"{Name(top[0]).ToUpperInvariant()} WINS";
+                var summary = "Time’s up · " + string.Join(", ", prototype.Roster.OrderByDescending(a => scores.GetValueOrDefault(a.ActorId))
+                    .Select(a => $"{Name(a.ActorId)} {scores.GetValueOrDefault(a.ActorId)}"));
+                return (line, winner, summary);
+            }
+        }
+    }
+
     private static Button AddButton(Node parent, string text, System.Action action)
     {
         var button = UiStyle.Button(text);
@@ -109,6 +144,14 @@ public partial class LabOverlay : CanvasLayer
             title.Text = bank.IsPlaying ? Lab.Scenario.Name.ToUpperInvariant() : bank.Scores[1] == bank.Scores[2] ? "TIED" :
                 bank.Scores[1] > bank.Scores[2] ? "YOU WIN" : "BOT WINS";
             result.Text = bank.IsPlaying ? "Paused · the clock is stopped" : $"Time’s up · you banked {bank.Scores[1]}, the bot {bank.Scores[2]}";
+        }
+        else if (Lab.Prototype is { } prototype)
+        {
+            resume.Disabled = !prototype.IsPlaying;
+            var (line, winner, summary) = Prototype(prototype);
+            status.Text = line;
+            title.Text = prototype.IsPlaying ? Lab.Scenario.Name.ToUpperInvariant() : winner;
+            result.Text = prototype.IsPlaying ? "Paused · the round is stopped" : summary;
         }
         else
         {

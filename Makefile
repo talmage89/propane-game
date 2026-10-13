@@ -117,11 +117,12 @@ GENERATOR_SHARDS := test-full-generator-1 test-full-generator-2 test-full-genera
 # The Lab sessions of check_lab.py --full, split by cost.
 LAB_1 := soak-void
 LAB_2 := soak-suburb
-LAB_3 := lifetime,rules,aimstall,duel,dials
-LAB_SHARDS := test-full-lab-1 test-full-lab-2 test-full-lab-3
+LAB_3 := lifetime,rules,aimstall,duel,ringout,king,dials
+LAB_4 := ringout-full,king-full,king-suburb
+LAB_SHARDS := test-full-lab-1 test-full-lab-2 test-full-lab-3 test-full-lab-4
 # Longest first, so make -j starts the jobs that would otherwise finish last early. The Lab soaks are unseeded bot
 # matches whose cost varies several-fold between runs, so they start before the steadier generator shards.
-FULL := test-full-lab-1 test-full-lab-2 $(GENERATOR_SHARDS) test-full-navigation test-full-lab-3 test-full-piles \
+FULL := test-full-lab-1 test-full-lab-2 test-full-lab-4 $(GENERATOR_SHARDS) test-full-navigation test-full-lab-3 test-full-piles \
 	test-full-range test-full-menu test-full-generator-coverage
 .PHONY: $(FULL) test-full-bots
 
