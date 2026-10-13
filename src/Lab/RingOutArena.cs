@@ -162,7 +162,7 @@ public partial class RingOutArena : Node3D
         var tuning = Lab.World.Tuning;
         clock += (float)delta;
         var pulse = 0.5f + 0.5f * Mathf.Sin(clock * Mathf.Tau * tuning.LabWarningPulseHz);
-        warnMaterial.AlbedoColor = new Color(WarnColor, 0.12f + 0.38f * pulse);
+        warnMaterial.AlbedoColor = new Color(WarnColor, 0.2f + 0.5f * pulse);
         var size = tuning.RingOutLotSize;
         foreach (var nodes in lots.Values)
         {

@@ -22,9 +22,11 @@ public partial class KingArena : Node3D
     private readonly List<(PropaneTank Tank, Vector3 Center, float Age)> materializing = new();
     private MeshInstance3D beam = null!;
     private MeshInstance3D ring = null!;
+    private MeshInstance3D disc = null!;
     private MeshInstance3D ghost = null!;
     private StandardMaterial3D beamMaterial = null!;
     private StandardMaterial3D ringMaterial = null!;
+    private StandardMaterial3D discMaterial = null!;
     private StandardMaterial3D ghostMaterial = null!;
     private PrototypeRunner? runner;
     private float clock;
@@ -65,9 +67,10 @@ public partial class KingArena : Node3D
     public override void _Ready()
     {
         var tuning = Lab.World.Tuning;
-        beamMaterial = Glow(UiStyle.Accent, 0.16f);
-        ringMaterial = Glow(UiStyle.Accent, 0.5f);
-        ghostMaterial = Glow(Colors.White, 0.1f);
+        beamMaterial = Glow(UiStyle.Accent, tuning.KingBeamAlpha);
+        ringMaterial = Glow(UiStyle.Accent, 0.9f);
+        discMaterial = Glow(UiStyle.Accent, 0.2f);
+        ghostMaterial = Glow(Colors.White, 0.2f);
         beam = new MeshInstance3D
         {
             Name = "ZoneBeam",
@@ -86,6 +89,15 @@ public partial class KingArena : Node3D
             Visible = false,
         };
         AddChild(ring);
+        disc = new MeshInstance3D
+        {
+            Name = "ZoneFloor",
+            Mesh = new CylinderMesh { TopRadius = tuning.KingZoneRadius, BottomRadius = tuning.KingZoneRadius, Height = 0.02f },
+            MaterialOverride = discMaterial,
+            CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+            Visible = false,
+        };
+        AddChild(disc);
         ghost = new MeshInstance3D
         {
             Name = "NextZoneBeam",
@@ -101,7 +113,6 @@ public partial class KingArena : Node3D
     {
         ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
         Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
-        BlendMode = BaseMaterial3D.BlendModeEnum.Add,
         CullMode = BaseMaterial3D.CullModeEnum.Disabled,
         AlbedoColor = new Color(color, alpha),
     };
@@ -168,20 +179,22 @@ public partial class KingArena : Node3D
         var pulse = 0.5f + 0.5f * Mathf.Sin(clock * Mathf.Tau * tuning.LabWarningPulseHz);
         var elapsed = rules.Elapsed(runner.Clock);
         var spot = Point(rules.SpotOf(rules.Zone));
-        beam.Visible = ring.Visible = runner.IsPlaying;
+        beam.Visible = ring.Visible = disc.Visible = runner.IsPlaying;
         beam.Position = spot + Vector3.Up * (tuning.KingBeamHeight / 2);
         ring.Position = spot + Vector3.Up * 0.06f;
+        disc.Position = spot + Vector3.Up * 0.03f;
         var holder = rules.Holder != 0 ? Lab.Session.Actor(rules.Holder)?.Character : null;
         var color = rules.Contested ? Contest : holder?.BodyColor ?? UiStyle.Accent;
         var warning = rules.Warning(elapsed);
         var strength = rules.Contested || warning ? 0.35f + 0.65f * pulse : 1f;
-        beamMaterial.AlbedoColor = new Color(color, 0.16f * strength);
-        ringMaterial.AlbedoColor = new Color(color, 0.55f * strength);
+        beamMaterial.AlbedoColor = new Color(color, tuning.KingBeamAlpha * strength);
+        ringMaterial.AlbedoColor = new Color(color, 0.9f * strength);
+        discMaterial.AlbedoColor = new Color(color, 0.22f * strength);
         ghost.Visible = warning && runner.IsPlaying;
         if (ghost.Visible)
         {
             ghost.Position = Point(rules.SpotOf(rules.Zone + 1)) + Vector3.Up * (tuning.KingBeamHeight / 2);
-            ghostMaterial.AlbedoColor = new Color(Colors.White, 0.06f + 0.1f * pulse);
+            ghostMaterial.AlbedoColor = new Color(UiStyle.Accent.Lightened(0.5f), (0.25f + 0.5f * pulse) * tuning.KingBeamAlpha);
         }
         for (var i = materializing.Count - 1; i >= 0; i--)
         {

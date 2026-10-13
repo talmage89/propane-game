@@ -24,8 +24,6 @@ public partial class PrototypeRunner : Node
     public required ModeDefinition Mode { get; init; }
     /// <summary>Points the rules may use, such as the piles a zone sits on.</summary>
     public IReadOnlyList<ModeSpot> Spots { get; init; } = Array.Empty<ModeSpot>();
-    /// <summary>Test seam: the player's actor is driven by the mode's brain too, so a whole round plays headless.</summary>
-    public bool DrivePlayer { get; init; }
     public event Action<ModeCommand>? Decided;
 
     private readonly Dictionary<int, int> scores = new();
@@ -70,7 +68,7 @@ public partial class PrototypeRunner : Node
         foreach (var tank in Lab.LiveTanks) Track(tank);
         foreach (var actor in Lab.Session.Actors.Select(a => a.Character)) Watch(actor);
         foreach (var actor in Lab.Session.Actors.Select(a => a.Character))
-            if (DrivePlayer || actor != Lab.Player) AttachBot(actor);
+            if (actor != Lab.Player) AttachBot(actor);
         Apply(Rules.Handle(new PhaseEntered(ModePhase.Round, new RoundInfo(1, 1, Mode.Timer, 0, length)), Clock));
         Lab.Session.OnStopping(() =>
         {
@@ -80,7 +78,8 @@ public partial class PrototypeRunner : Node
         });
     }
 
-    private void AttachBot(PlayerCharacter actor)
+    /// <summary>Gives an actor the mode's brain. The player's actor gets one only after its view took the devices.</summary>
+    internal void AttachBot(PlayerCharacter actor)
     {
         var brain = Mode.CreateBot!(World.Random.Randi());
         brain.Skill = World.Tuning.LabBotSkill;

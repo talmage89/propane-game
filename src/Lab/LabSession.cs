@@ -326,7 +326,6 @@ public partial class LabSession : Node3D
             Lab = this,
             Mode = Scenario.Definition,
             Spots = King?.Spots ?? Array.Empty<Modes.ModeSpot>(),
-            DrivePlayer = DrivePlayer,
             Name = "PrototypeRunner",
             ProcessPhysicsPriority = -10,
         };
@@ -421,7 +420,9 @@ public partial class LabSession : Node3D
         public void CreateViews(SessionContext session)
         {
             if (!lab.CreateLocalView) return;
-            session.AddLocalView(lab.Player.Runtime, lab, new DeviceInput(session.World.Tuning));
+            var view = session.AddLocalView(lab.Player.Runtime, lab, new DeviceInput(session.World.Tuning));
+            // A prototype's counters are the mode's, on the match HUD, as in a match.
+            if (lab.Scenario.Prototype) view.Hud.ShowTankCount(false);
             session.AddView(lab, new Hitstop { World = session.World, Focus = lab.Player, Name = "Hitstop" });
             var tuningPanel = new TuningPanel
             {
@@ -438,6 +439,7 @@ public partial class LabSession : Node3D
 
         public void Ready(SessionContext session)
         {
+            if (lab.DrivePlayer) lab.Prototype?.AttachBot(lab.Player);
             if (!lab.CreateLocalView) return;
             Warmup.RunEffects(session.World, session.World.Root, new Vector3(0, -400, 0));
             Capture(true);

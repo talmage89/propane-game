@@ -66,6 +66,9 @@ public partial class MatchHud : CanvasLayer
         caption = HudLabel(19, new Color(Dark, 0.75f), 6);
         top.AddChild(caption);
         counters = HudLabel(19, new Color(Dark, 0.75f), 6);
+        // Clear of the caption above, which the container's negative separation tucks under the counter.
+        counters.CustomMinimumSize = new Vector2(0, 34);
+        counters.VerticalAlignment = VerticalAlignment.Bottom;
         counters.Visible = false;
         top.AddChild(counters);
 

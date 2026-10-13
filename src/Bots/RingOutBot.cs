@@ -8,8 +8,8 @@ namespace Propane.Bots;
 
 /// <summary>
 /// Ring Out's goal policy, kept simple for the prototype: stay on ground that is not about to dissolve, keeping to
-/// the middle; pick the opponent nearest the edge (and near this bot); get between them and the center and shove
-/// them outward with melee; and when that opponent stands by a pile, set the pile off from a safe distance to throw
+/// the middle; pick the opponent nearest the edge (and near this bot); get to the side away from their nearest edge and
+/// shove them toward it with melee; and when that opponent stands by a pile, set the pile off from a safe distance to throw
 /// them. It reads the boundary from the rules, as a pure function of round time.
 /// </summary>
 public sealed class RingOutBot : IBotGoalPolicy
@@ -61,8 +61,10 @@ public sealed class RingOutBot : IBotGoalPolicy
         bool NearEdge(Vector3 p) => Enumerable.Range(0, 8).Any(i =>
             !Safe(p + new Vector3(Mathf.Cos(i * Mathf.Tau / 8), 0, Mathf.Sin(i * Mathf.Tau / 8)) * EdgeMargin));
 
-        // 1. Off safe ground, or at an edge: back toward the middle.
-        if (!Safe(here) || NearEdge(here))
+        // 1. Off safe ground, or at an edge: back toward the middle. Once one lot remains there is nowhere better to
+        //    be, so it holds its edge and fights.
+        var lastLot = double.IsInfinity(plan.NextDissolve(elapsed));
+        if (!Safe(here) || !lastLot && NearEdge(here))
         {
             var refuge = Refuge(plan, elapsed, here);
             motor.Face(player, refuge + Vector3.Up * 1.4f, dt);
@@ -92,7 +94,7 @@ public sealed class RingOutBot : IBotGoalPolicy
         {
             retarget = RetargetInterval;
             quarry = world.RemoteBodies.Where(b => rules.IsAlive(b.ActorId))
-                .OrderBy(b => b.GlobalPosition.DistanceTo(here) + 1.5f * EdgeDistance(plan, elapsed, b.GlobalPosition))
+                .OrderBy(b => b.GlobalPosition.DistanceTo(here) + 1.5f * Edge(plan, elapsed, b.GlobalPosition).Distance)
                 .FirstOrDefault();
         }
         if (quarry == null)
@@ -131,16 +133,17 @@ public sealed class RingOutBot : IBotGoalPolicy
             return;
         }
 
-        // 5. Get to their middle side and shove them outward.
-        var outward = BotMotor.Flat(target);
-        outward = outward.LengthSquared() > 0.01f ? outward.Normalized() : Vector3.Forward;
-        var behind = target - outward * 1.1f;
+        // 5. Get to the side away from their nearest edge and shove them toward it. Swing from contact range, not
+        //    the lunge's limit: a swing that falls short is a free shove for them.
+        var (_, edge) = Edge(plan, elapsed, target);
+        var behind = target - edge * 1.1f;
         if (!Safe(behind)) behind = target;
-        var reach = BotMotor.MeleeReach(tuning);
+        var reach = tuning.MeleeRange + 0.3f;
         motor.Face(player, BotMotor.AimPoint(quarry), dt);
-        var distance = BotMotor.Flat(target - here).Length();
-        var inside = BotMotor.Flat(here).Length() < BotMotor.Flat(target).Length() + 0.5f;
-        if (distance <= reach && inside)
+        var toward = BotMotor.Flat(target - here);
+        var distance = toward.Length();
+        var aligned = distance > 0.01f && toward.Normalized().Dot(edge) > 0.35f;
+        if (distance <= reach && (aligned || distance < 0.9f))
         {
             motor.Melee(player, target + Vector3.Up * tuning.MeleeContactHeight);
             motor.Intent.Move = new Vector2(0, 0.6f);
@@ -148,25 +151,27 @@ public sealed class RingOutBot : IBotGoalPolicy
         }
         else
         {
-            motor.MoveTo(inside || distance > 6f ? target : behind, run: distance > tuning.BotSprintDistance);
+            motor.MoveTo(aligned || distance > 6f ? target : behind, run: distance > tuning.BotSprintDistance);
             Status = $"closing on {quarry.ActorId} at {distance:0.0} m";
         }
         motor.Navigate(player, world.LiveTanks, dt);
         if (motor.Failed) retarget = 0;
     }
 
-    /// <summary>How far a point is from ground that is going (or gone), sampled outward in eight directions.</summary>
-    private static float EdgeDistance(RingOutPlan plan, double elapsed, Vector3 at)
+    /// <summary>The nearest ground that is going (or gone) from a point: how far, and which way (sixteen directions).</summary>
+    private static (float Distance, Vector3 Direction) Edge(RingOutPlan plan, double elapsed, Vector3 at)
     {
-        for (var r = 1f; r < 24f; r += 1.5f)
+        for (var r = 1f; r < 24f; r += 1f)
         {
-            for (var i = 0; i < 8; i++)
+            for (var i = 0; i < 16; i++)
             {
-                var p = at + new Vector3(Mathf.Cos(i * Mathf.Tau / 8), 0, Mathf.Sin(i * Mathf.Tau / 8)) * r;
-                if (plan.LotAt(p.X, p.Z) is not { } lot || plan.Stage(lot, elapsed + 1.0) != LotStage.Solid) return r;
+                var direction = new Vector3(Mathf.Cos(i * Mathf.Tau / 16), 0, Mathf.Sin(i * Mathf.Tau / 16));
+                var p = at + direction * r;
+                if (plan.LotAt(p.X, p.Z) is not { } lot || plan.Stage(lot, elapsed + 1.0) != LotStage.Solid) return (r, direction);
             }
         }
-        return 24f;
+        var outward = BotMotor.Flat(at);
+        return (24f, outward.LengthSquared() > 0.01f ? outward.Normalized() : Vector3.Forward);
     }
 
     /// <summary>The nearest lot center that stays solid past the next warning, weighted toward the middle.</summary>

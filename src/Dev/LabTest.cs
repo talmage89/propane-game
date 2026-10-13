@@ -297,6 +297,8 @@ public partial class LabTest : Node
             template.KingRoundSeconds = 30;
             template.KingMoveSeconds = 12;
         }
+        DevArgs.ApplyTuningOverrides(template);
+        var until = DevArgs.GetFloat("until", float.MaxValue); // Captures stop early and skip the outcome checks.
         var shots = (DevArgs.Get("shots") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries)
             .Select(v => double.Parse(v, CultureInfo.InvariantCulture)).ToArray();
         for (var seed = firstSeed; seed < firstSeed + seeds; seed++)
@@ -313,19 +315,39 @@ public partial class LabTest : Node
             };
             AddChild(lab);
             var runner = lab.Prototype!;
+            if (DevArgs.Get("overview") != null)
+            {
+                // Review captures: a high camera on the whole arena, rather than the bot-driven player's own view.
+                var reach = id == "king" ? lab.World.Tuning.KingSpotRing + 8 : lab.RingOut!.HalfWidth;
+                var camera = new Camera3D { Name = "Overview", Fov = 50, Far = 2000, Current = true };
+                lab.AddChild(camera);
+                camera.LookAtFromPosition(new Vector3(0, reach * 1.05f, reach * 1.75f), new Vector3(0, -reach * 0.1f, 0), Vector3.Up);
+            }
             Assert(lab.Session.Actors.Count == template.LabPrototypeBots + 1 && lab.LiveTanks.Any(), $"{id} roster or fixture");
             var moves = 0;
             runner.Decided += command => { if (command is ZoneMoved { Zone: > 0 }) moves++; };
             var limit = (id == "king" ? lab.World.Tuning.KingRoundSeconds : lab.World.Tuning.RingOutRoundLimit) + 5;
             var watch = System.Diagnostics.Stopwatch.StartNew();
             var shot = 0;
-            for (var frame = 0; runner.IsPlaying; frame++)
+            for (var frame = 0; runner.IsPlaying && runner.Elapsed < until; frame++)
             {
                 Assert(frame < limit * 60, $"{id} seed {seed}: the round never ended");
+                if (DevArgs.Get("trace") != null && frame % 120 == 0)
+                {
+                    GD.Print($"[lab trace] {runner.Elapsed:F1}s " + string.Join(" | ", lab.Session.Actors.Select(a =>
+                        $"{a.Character.ActorId} {a.Character.GlobalPosition.X:F1},{a.Character.GlobalPosition.Y:F1},{a.Character.GlobalPosition.Z:F1} {runner.BotStatus(a.Character.ActorId)}")));
+                }
+
                 if (shot < shots.Length && runner.Elapsed >= shots[shot]) capture.Screenshot($"{id}_{environment}_{seed}_{shots[shot++]:000}s".ToLowerInvariant());
                 await Frames(1).ConfigureAwait(true);
             }
             var wall = watch.Elapsed.TotalSeconds;
+            if (runner.IsPlaying)
+            {
+                GD.Print($"[lab prototype] {id} seed={seed} capture stopped at {runner.Elapsed:F1}s");
+                lab.Session.Dispose(); lab.Free();
+                continue;
+            }
             var state = runner.Rules.Snapshot();
             foreach (var line in state.Report) GD.Print($"[lab prototype] {id} seed {seed}: {line.Text}");
             var brains = runner.Thinks / System.Math.Max(1, runner.Elapsed * 120);

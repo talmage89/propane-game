@@ -3,12 +3,14 @@ using System.Linq;
 using Godot;
 using Propane.Modes;
 using Propane.Player;
+using Propane.Tank;
 
 namespace Propane.Bots;
 
 /// <summary>
 /// King of the Cul-de-sac's goal policy, kept simple for the prototype: get into the zone and hold it; shove anyone
-/// else inside out with melee, and shoot intruders it can see (a hit spills their bank); head for the next spot
+/// else inside out with melee, and shoot intruders it can see (a hit spills their bank); with nobody to fight, shoot
+/// tanks in sight from a safe distance to bank them; head for the next spot
 /// when the zone is about to move and it could not otherwise make it in time. It reads the zone from the rules.
 /// </summary>
 public sealed class KingBot : IBotGoalPolicy
@@ -19,6 +21,8 @@ public sealed class KingBot : IBotGoalPolicy
     private Vector3 standOffset;
     private float fightTime;
     private float burstClock;
+    private PropaneTank? prize;
+    private float prizeTimer;
 
     public string Status { get; private set; } = "";
     public float Skill { get => motor.Skill; set => motor.Skill = value; }
@@ -85,13 +89,14 @@ public sealed class KingBot : IBotGoalPolicy
         {
             motor.Face(player, BotMotor.AimPoint(close), dt);
             motor.Melee(player, close.GlobalPosition + Vector3.Up * tuning.MeleeContactHeight);
-            motor.MoveTo(close.GlobalPosition);
+            motor.Intent.Move = new Vector2(0, 0.6f); // Into them: their own spot is never a standable goal.
             Status = $"shoving {close.ActorId} out of the zone";
         }
         else if (inZone && intruders.FirstOrDefault(b => BotMotor.CanSee(player, BotMotor.AimPoint(b))) is { } rival)
         {
             Shoot(player, rival, tuning, dt);
-            motor.MoveTo(rival.GlobalPosition);
+            var gap = BotMotor.Flat(rival.GlobalPosition - here);
+            if (gap.Length() > 2.5f) motor.MoveTo(rival.GlobalPosition - gap.Normalized() * 1.5f);
             Status = $"contesting {rival.ActorId}";
         }
         else if (!inZone)
@@ -111,6 +116,15 @@ public sealed class KingBot : IBotGoalPolicy
                 Shoot(player, watch, tuning, dt);
                 Status = $"holding, shooting {watch.ActorId}";
             }
+            else if (Prize(world, player, tuning, dt) is { } prize)
+            {
+                // Nothing to fight: bank the nearest tank in sight from where it stands, never one close enough to throw it.
+                var center = prize.GlobalTransform * PropaneTank.LocalCenter;
+                motor.Face(player, center, dt);
+                motor.Intent.Aim = true;
+                if (BotMotor.OnTarget(player, prize)) motor.Tap();
+                Status = $"holding, shooting a {prize.State} tank";
+            }
             else
             {
                 fightTime = 0;
@@ -121,6 +135,24 @@ public sealed class KingBot : IBotGoalPolicy
         }
         motor.Navigate(player, world.LiveTanks, dt);
         if (motor.Failed) PickStand(rules);
+    }
+
+    /// <summary>The tank to bank, chosen a few times a second: each choice casts a ray to every candidate.</summary>
+    private PropaneTank? Prize(IBotWorld world, PlayerCharacter player, Core.Tuning tuning, float dt)
+    {
+        var here = player.GlobalPosition;
+        var safe = tuning.RagdollRadius + 2.5f;
+        prizeTimer -= dt;
+        if (prize != null && GodotObject.IsInstanceValid(prize) && prize.State != PropaneTank.TankState.Exploded && prizeTimer > 0 &&
+            prize.GlobalPosition.DistanceTo(here) > safe)
+        {
+            return prize;
+        }
+        prizeTimer = 0.4f;
+        return prize = world.LiveTanks.Where(t => !t.Invulnerable && t.GlobalPosition.DistanceTo(here) is var d && d > safe && d < 25f &&
+                world.RemoteBodies.All(b => b.GlobalPosition.DistanceTo(t.GlobalPosition) > 1f) &&
+                BotMotor.CanSee(player, t.GlobalTransform * PropaneTank.LocalCenter))
+            .OrderBy(t => t.GlobalPosition.DistanceTo(here)).FirstOrDefault();
     }
 
     private void PickStand(KingRules rules)
