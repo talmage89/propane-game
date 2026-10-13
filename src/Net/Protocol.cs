@@ -8,7 +8,8 @@ namespace Propane.Net;
 
 /// <summary>
 /// Message types. Clients only ever talk to the server. Forwarded match messages gain a sender after the match id;
-/// Claim, Puncture and Explode are consumed requests whose ordered results arrive as Authority.
+/// Claim, Puncture and Explode are consumed requests whose ordered results arrive as Authority. Mode-specific traffic
+/// travels inside the three fixed mode envelopes (ModeEvent, ModeCommand, ModeSnapshot).
 /// </summary>
 public enum Msg : byte
 {
@@ -27,8 +28,9 @@ public enum Msg : byte
     AddActor,
     UpdateActor,
     RemoveActor,
+    ModeEvent,
 
-    // Server to client.
+    // Server to client. Numbers stay fixed: retired messages leave gaps (40 was Score, 47 DropRefused).
     Welcome = 32,
     Rejected,
     LobbyList,
@@ -37,19 +39,19 @@ public enum Msg : byte
     Countdown,
     MatchGo,
     Clock,
-    Score,
-    Notice,
+    Notice = 41,
     PickupTaken,
     PickupRespawn,
     MatchEnd,
     PlayerLeft,
     Pong,
-    DropRefused,
-    Authority,
+    Authority = 48,
     RosterState,
     ActorRequestResult,
+    ModeCommand,
+    ModeSnapshot,
 
-    // Match traffic. Authority requests are resolved by the server; the other messages are relayed.
+    // Match traffic. Authority requests are resolved by the server; the other messages are relayed. 71 was Drop.
     PlayerState = 64,
     Shot,
     Puncture,
@@ -57,8 +59,7 @@ public enum Msg : byte
     Claim,
     BodyStates,
     BodyRest,
-    Drop,
-    Ragdoll,
+    Ragdoll = 72,
     GetUp,
     TuningSet,
     Gather,
@@ -82,12 +83,15 @@ public static class Protocol
     public const int MaxWireActors = 64;
     public const int MaxWirePeers = 64;
     public static bool IsActorMessage(Msg type) => type is Msg.PlayerState or Msg.Shot or Msg.MeleeStart or
-        Msg.MeleeContact or Msg.Puncture or Msg.Explode or Msg.Drop or Msg.Ragdoll or Msg.GetUp or Msg.ClaimPickup;
+        Msg.MeleeContact or Msg.Puncture or Msg.Explode or Msg.Ragdoll or Msg.GetUp or Msg.ClaimPickup;
 
-    public static bool IsRelay(Msg type) => type is >= Msg.PlayerState and <= Msg.MeleeContact;
+    public static bool IsRelay(Msg type) => type is >= Msg.PlayerState and <= Msg.MeleeContact && Enum.IsDefined(type);
+
+    /// <summary>The fixed outer mode envelope; see <see cref="ModeEnvelope"/>.</summary>
+    public static bool IsMode(Msg type) => type is Msg.ModeEvent or Msg.ModeCommand or Msg.ModeSnapshot;
 
     public static bool IsMatch(Msg type) => IsRelay(type) || type is Msg.Loaded or Msg.ClaimPickup or Msg.MatchStart or
-        Msg.Countdown or Msg.MatchGo or Msg.Clock or Msg.Score or Msg.PickupTaken or Msg.PickupRespawn or Msg.MatchEnd or Msg.PlayerLeft or Msg.DropRefused or Msg.Authority;
+        Msg.Countdown or Msg.MatchGo or Msg.Clock or Msg.PickupTaken or Msg.PickupRespawn or Msg.MatchEnd or Msg.PlayerLeft or Msg.Authority || IsMode(type);
 
     // Wire safety limits, not gameplay tuners. Gameplay counts are also checked against the match's tuning.
     public const int MaxPacketBytes = 1 << 20;
@@ -154,6 +158,13 @@ public sealed class NetWriter
             writer.Write(actionId);
         }
     }
+
+    private NetWriter() => writer = new BinaryWriter(stream, Encoding.UTF8);
+
+    /// <summary>A bare payload writer, without a type byte or header: mode envelope payloads.</summary>
+    public static NetWriter Payload() => new();
+
+    public NetWriter Raw(byte[] v) { writer.Write(v); return this; }
 
     public NetWriter Byte(byte v) { writer.Write(v); return this; }
 
@@ -306,6 +317,13 @@ public sealed class NetReader
     {
         if (count < min || count > max) { throw new InvalidDataException($"bad count {count}"); }
         return count;
+    }
+
+    /// <summary>Exactly <paramref name="length"/> bytes, already bounded by the caller.</summary>
+    public byte[] Raw(int length)
+    {
+        if (length < 0 || length > Remaining) { throw new InvalidDataException("truncated payload"); }
+        return reader.ReadBytes(length);
     }
 
     public AppearanceRecord Appearance() => AppearanceCodec.Decode(Bytes(AppearanceCodec.MaxRecordBytes));

@@ -42,6 +42,10 @@ public sealed record MatchSetup(int Id, byte[] Plan, int HostId, bool CreatorDeb
     public int CreatorId { get; init; } = HostId;
     public IReadOnlyList<PeerCapabilities> Peers { get; init; } = Players.Select(p => p.Player.OwnerPeerId).Distinct()
         .Select(id => new PeerCapabilities(id, id == HostId && CreatorDebug)).ToArray();
+    /// <summary>The mode the server runs, by id and envelope schema version; unknown pairs fail decoding.</summary>
+    public byte ModeId { get; init; } = Modes.ModeRegistry.TankBankId;
+    public ushort ModeSchema { get; init; } = Modes.ModeRegistry.TankBank.SchemaVersion;
+    public Modes.ModeDefinition Mode => Modes.ModeRegistry.Find(ModeId, ModeSchema) ?? throw new InvalidOperationException($"unknown mode {ModeId}/{ModeSchema}");
 }
 public sealed record PeerCapabilities(int PeerId, bool DebugTuning);
 

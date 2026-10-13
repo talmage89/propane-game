@@ -40,7 +40,7 @@ public static class AuthorityTests
                 using var f = new MatchFixture(runner, bots: 1);
                 var victim = botVictim ? f.Match.Session.OwnedActors.Single(a => a.Character != f.Match.Player).Character : f.Match.Player;
                 f.Match.OnMessage(new NetMessage(Msg.MatchGo, f.Server.Id, 0, new FloatMessage(60)));
-                f.Match.OnMessage(new NetMessage(Msg.Score, f.Server.Id, 0, new ScoreMessage(victim.ActorId, 5, 0)));
+                f.Match.OnMessage(ModeWireFixtures.Score(f.Server.Id, victim.ActorId, 5, 0));
                 victim.Runtime.GraceUntil = 0;
                 f.Match.OnMessage(new NetMessage(Msg.Shot, f.Server.Id, 3,
                     new ShotMessage(Vector3.Zero, Vector3.Up, Vector3.Forward, 0, victim.ActorId, -1), f.Server.ActorId(3), 1, 1));
@@ -54,13 +54,13 @@ public static class AuthorityTests
                 TestRunner.Assert(known.Sequence > 0, "pending drops blocked a registered body's stream");
                 TestRunner.Assert(drops.All(t => f.Match.Bodies.Get(t.NetId) is { Sequence: 0, PublishRequired: true }),
                     "unregistered drop published or consumed its required first state");
-                f.Match.OnMessage(new NetMessage(Msg.Score, f.Server.Id, 0, new ScoreMessage(victim.ActorId, 5 - drops.Length, -drops.Length)));
+                f.Match.OnMessage(ModeWireFixtures.Score(f.Server.Id, victim.ActorId, 5 - drops.Length, -drops.Length));
                 f.Server.Clock.Seconds += .1;
                 f.Match._PhysicsProcess(1.0 / 60);
                 TestRunner.Assert(drops.All(t => f.Match.Bodies.Get(t.NetId)!.Sequence == 0),
                     "bank debit released publication before creation confirmation");
                 var states = drops.Select(t => new BodyState(t.NetId, t.GlobalTransform, t.LinearVelocity, t.AngularVelocity)).ToArray();
-                f.Match.OnMessage(new NetMessage(Msg.Drop, f.Server.Id, 2, new DropMessage(0, states), victim.ActorId, 1, 1));
+                f.Match.OnMessage(ModeWireFixtures.Accepted(f.Server.Id, victim.ActorId, 1, Modes.SpillReason.Hit, states));
                 f.Match._PhysicsProcess(1.0 / 60);
                 TestRunner.Assert(drops.All(t => f.Match.Bodies.Get(t.NetId) is { Sequence: 1, PublishRequired: false }),
                     "confirmation lost the first moving checkpoint or final rest");
@@ -876,7 +876,7 @@ public static class AuthorityTests
         public void Dispose() => Body.Free();
     }
 
-    private sealed class MatchFixture : IDisposable
+    internal sealed class MatchFixture : IDisposable
     {
         public readonly ServerTests.Fixture Server;
         private readonly NetClient client;

@@ -23,6 +23,8 @@ public partial class Match
         public void Configure(SessionContext session)
         {
             match.me = match.Net.MyId;
+            match.mode = match.Setup.Mode;
+            match.hudPresenter = match.mode.CreateHud();
             match.bodies = new BodySync(session.World.Tuning, match.me, match.Setup.HostId);
             session.OnStopping(match.StopReplication);
         }
@@ -51,7 +53,7 @@ public partial class Match
         World.Root.AddChild(environment);
         effects = World.EffectsRoot;
         plan = PlanCodec.Decode(Setup.Plan);
-        var settings = SuburbPlans.Match(World.Tuning, Setup.Players.Count);
+        var settings = Setup.Mode.Supply.Suburb(World.Tuning, Setup.Players.Count);
         suburb = Suburb.Build(World, plan, settings, networked: true);
         World.Root.AddChild(suburb);
         World.SetContentRoot(suburb.DynamicRoot);
@@ -67,7 +69,7 @@ public partial class Match
         };
         suburb.AddChild(gather);
 
-        for (var i = 0; i < plan.AmmoSpots.Count; i++)
+        for (var i = 0; i < (Setup.Mode.Supply.Pickups ? plan.AmmoSpots.Count : 0); i++)
         {
             var pickup = new AmmoPickup { Name = $"Ammo_{i}", Index = i };
             suburb.DynamicRoot.AddChild(pickup);
@@ -95,7 +97,7 @@ public partial class Match
                 OwnerPeerId = profile.OwnerPeerId,
                 LifeId = profile.LifeId,
                 BodyColor = profile.Appearance.Color,
-                Ammo = owned ? AmmoState.Starting(World.Tuning) : null,
+                Ammo = owned && mode.Supply.LimitedAmmo ? AmmoState.Starting(World.Tuning) : null,
                 InputLocked = owned,
             };
             Session.AddActor(character);
@@ -121,6 +123,7 @@ public partial class Match
         }
         matchHud = new MatchHud { World = World, Name = "MatchHud" };
         Session.AddView(this, matchHud);
+        matchHud.Show(PresentHud(tankGroups, false));
         results = new ResultsScreen { Name = "Results" };
         Session.AddView(this, results);
         menu = new MatchMenu { Name = "Menu" };

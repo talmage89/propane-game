@@ -282,7 +282,7 @@ public partial class MenuGamepadTest : Node
         Menus.Show(Menus.Screen.None);
         var results = new ResultsScreen();
         AddChild(results);
-        results.Show(new[] { new Standing(1, "Player", AppearanceRecord.FromPalette(0), 7, true), new Standing(2, "Other", AppearanceRecord.FromPalette(1), 3, true) }, 1, 10);
+        results.Show(new[] { new Standing(1, "Player", AppearanceRecord.FromPalette(0), 7, true), new Standing(2, "Other", AppearanceRecord.FromPalette(1), 3, true) }, 1, 10, new[] { Modes.TankBankHud.Column });
         await Frames().ConfigureAwait(true);
         Check(results.IsAncestorOf(Focus), "results own focus");
         await Shot("13_results").ConfigureAwait(true);
@@ -298,7 +298,7 @@ public partial class MenuGamepadTest : Node
         await Press(JoyButton.B).ConfigureAwait(true);
         Check(results.IsAncestorOf(Focus), "closing an overlay restores results focus");
         overlay.QueueFree();
-        results.Show(Array.Empty<Standing>(), 1, 10);
+        results.Show(Array.Empty<Standing>(), 1, 10, new[] { Modes.TankBankHud.Column });
         await Frames().ConfigureAwait(true);
         Check(results.IsAncestorOf(Focus), "results rebuild retains focus");
         results.QueueFree();
