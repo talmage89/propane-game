@@ -860,6 +860,9 @@ public partial class RifleRig : SkeletonModifier3D
         skeleton.SetBonePoseRotation(bone, local.GetRotationQuaternion());
     }
 
+    /// <summary>How far past full reach a wrist target may round and still be solved as a straight arm (meters).</summary>
+    private const float StraightArmTolerance = 0.0001f;
+
     /// <summary>Analytic two-bone IK in skeleton space, with a pole point for the elbow.</summary>
     private static void SolveTwoBone(Skeleton3D skeleton, int upper, int lower, int end, Transform3D target, Vector3 pole)
     {
@@ -870,6 +873,9 @@ public partial class RifleRig : SkeletonModifier3D
         var l2 = (c - b).Length();
         var toTarget = target.Origin - a;
         var distance = toTarget.Length();
+        // A target placed exactly at full reach (a get-up handoff starts with a straight arm and no margin) can land a
+        // rounding error past it: that is a straight arm, not a miss.
+        if (distance >= l1 + l2 && distance < l1 + l2 + StraightArmTolerance) distance = l1 + l2 - 0.000001f;
         if (distance >= l1 + l2 || distance <= Mathf.Abs(l1 - l2) + 0.00001f)
         {
             GD.PushError($"[rifle] unreachable wrist: distance={distance:F6}, lengths={l1:F6}/{l2:F6}");
