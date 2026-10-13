@@ -46,7 +46,10 @@ project="$(cd "$(dirname "$0")/../.." && pwd)"
 out="${out:-$project/build/net}"
 mkdir -p "$out"
 rm -f "$out"/*.log
-budget=$((length + 75))
+# Each match adds its length plus loading, countdown and results; --matches=N plays N on one connection.
+matches=1
+for arg in "$@"; do [[ "$arg" == --matches=* ]] && matches="${arg#*=}"; done
+budget=$((matches * (length + 40) + 35))
 
 address=127.0.0.1
 if [[ -n "$remote" ]]; then
