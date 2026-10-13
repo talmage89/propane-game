@@ -26,7 +26,8 @@ continuing cycle. `GaitBlendTime` paces the gait weights.
 ## Direction relative to the body
 
 Travel is measured in the body's frame (local players use their velocity, remote copies their displayed
-displacement, so an interpolation stall stops the feet as well). The heading of travel turns smoothly; it is an
+displacement, so an interpolation stall stops the feet as well; a displacement faster than 1.5 times the sprint
+speed is a snapshot correction, and the replicated velocity stands in for it). The heading of travel turns smoothly; it is an
 angle, so even a straight reversal sweeps through a side direction. Diamond weights then pick neighbors: the
 sidestep's share is `|x| / (|x| + |y|)`, so a diagonal is half sidestep and half forward walk or backpedal. The
 front/back and left/right pairs change over only within a few degrees of the axis where their share is near zero,
@@ -42,8 +43,9 @@ Which way the body faces decides which clip plays (`PlayerCharacter.UpdateFacing
   `BackpedalAngleDegrees`, they face the aim and run backward) and the torso twists back to the aim. The turn grows with
   speed from `CreepSpeed` to `RunSpeed`, so the change from the walk family is gradual. The 100STYLE runs are slow
   jogs whose steps cannot be stretched to 6 m/s, so the run keeps the packaged jog.
-- **Ready, standing**: the body turns to the aim once the twist exceeds `CombatTurnDegrees`. The turn steps: its yaw
-  rate times `TurnStepRadius`, capped at the creep speed, drives the sidestep in the turn's direction.
+- **Ready, standing**: the body turns to the aim once the twist exceeds `CombatTurnDegrees`, in short bursts while
+  the look keeps turning. The turn steps: its yaw rate, smoothed over `GaitBlendTime` into one turn, times
+  `TurnStepRadius` and capped at the creep speed, drives the sidestep in the turn's direction.
 
 Facing is presentation; it is replicated with the snapshot, so remote copies choose the same clips.
 
@@ -66,6 +68,9 @@ and two two-bone solves, and finger curls. No physics queries, no per-bone queri
 
 `make test` runs the unit suite (phase across gaits and stops, directional weights and their crossovers, jump
 latching and landing), the movement suite, and the `feet`, `feet-events` and network movement probes. Those probes
-assert finite poses, no snaps (40 degrees in one 60 Hz frame), jump-phase coverage and feet that lift in standing
-turns; they report near-floor foot drift and ankle separation without asserting them. Judge the motion from rendered
+assert finite poses, no snaps (40 degrees in one 60 Hz frame), jump-phase coverage, at least six near-floor sample
+pairs per episode (the run touches down briefly) and feet that lift 1.5 cm in standing turns (a captured sidestep
+lifts its trailing foot only about 3 cm). They report near-floor foot drift and ankle separation without asserting
+them: the `feet` matrix runs every gait in every direction with the body held facing forward, which play never does
+at a run, so its sideways runs slide. Judge the motion from rendered
 clips ([animation review](animation-review.md)).

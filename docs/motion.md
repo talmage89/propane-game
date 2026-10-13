@@ -63,4 +63,4 @@ the pose. Their tuners were deleted.
 grips, no hand 1 cm into the rifle's solid proxies, an aimed eye within 15 cm of the sight, finite values and stance
 coverage. `--assert-motion` rejects non-finite bones and snaps (a limb turning 60 degrees, or a finger 90, in one 60 Hz
 frame; the strike peaks near 45 and is continuous, while the IK flips it caught jumped 90 to 170) and keeps the logical
-recoil climb checks; aimed creep allows 5 cm of lateral muzzle sway. Judge the stance from rendered clips ([animation review](animation-review.md)).
+recoil climb checks; aimed creep allows 8 cm of lateral muzzle sway (the walk clip's shoulders sway about 6.6 cm). Judge the stance from rendered clips ([animation review](animation-review.md)).
