@@ -41,6 +41,9 @@ public sealed class TankLedger
 
     public BodyAuthority? Get(uint id) => bodies.GetValueOrDefault(id);
 
+    /// <summary>This peer's explosion request was accepted: a causal dependency mode events may name.</summary>
+    public bool Exploded(int peer, uint request) => explosions.ContainsKey((peer, request));
+
     public void ValidateBodies(IEnumerable<uint> ids)
     {
         if (ids.Any(id => !bodies.ContainsKey(id))) { throw new InvalidDataException("unknown body id"); }

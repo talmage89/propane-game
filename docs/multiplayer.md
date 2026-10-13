@@ -24,7 +24,8 @@ clock runs out wins.
 - No health: nobody dies.
 
 The counts and times are tuners (the Match, Tank bank, Multiplayer suburb, Ammo, HUD and Network groups of
-`src/Core/Tuning.cs`).
+`src/Core/Tuning.cs`). The rules themselves are `TankBankRules`, pure logic run by the server's mode runner and by
+the Lab duel; [modes.md](modes.md) describes the framework, the spill tickets and the mode envelope.
 
 ## Match flow
 
@@ -132,14 +133,16 @@ and string limits apply inside the plan, and starts must agree with the player a
 - The victim's client decides whether a blast ragdolls them, because it knows exactly where they were.
 - The victim's client spawns the dropped tanks and owns them until another player interacts with them.
 
-A drop must contain unique, unused ids from that player's spawn slot and fit both their bank and the drop reason's
-tuner. Its glow uses the dropper's accepted match appearance; Drop contains no color field. The server refuses the
+A drop (a Tank Bank Spill event in the [mode envelope](modes.md#the-envelope)) must contain unique, unused ids
+from that player's allocation slot and fit both their unreserved bank and the drop reason's tuner. Its glow uses the
+dropper's accepted match appearance; the spill contains no color field. The server refuses the
 whole batch if any entry is invalid. Scoring, spilling and authority transitions happen only while the server's clock is playing. A late lifecycle prediction is refused and restored to the last authoritative state. Known exploded body ids may appear in late snapshots or claims, which clients
 ignore; body ids that never existed are refused. A client missing a server-accepted tank still plays its reported
 blast, including throws, without running a chain or claiming credit locally.
 
-Drops are predicted locally. The server echoes an accepted Drop to its sender as well as the other players, and
-replies with `DropRefused` ids for a fully decoded batch it cannot accept. The sender removes only those pending
+Drops are predicted locally. The rules reserve the bank for the spill's ticket, the ledger registers the batch, and
+the server broadcasts the accepted spill (SpillAccepted) to its sender as well as the other players after the debit
+(Score). It replies with SpillRefused ids for a fully decoded batch it cannot accept. The sender removes only those pending
 predictions and releases their bank reservation. This also handles legitimate drops overtaken by a live debug
 drop-count change or the server's match deadline. Malformed packets still get no reply.
 The deadline check uses the server clock even when a packet is polled before that frame's phase transition.
@@ -307,7 +310,8 @@ The server is the game itself started with `-- --server` (and `--headless`). It 
 | Path | Contents |
 | --- | --- |
 | `src/Main.cs` | The root scene: menus over a backdrop, single player, the match, or server mode. |
-| `src/Net/LobbyServer.cs` | The server: lobbies, match flow and clock, relaying, scores, first-claim ties, pickups. |
+| `src/Net/LobbyServer.cs` | The server: lobbies, match flow and clock, relaying, first-claim ties, pickups. |
+| `src/Net/ModeRunner.cs`, `ModeEnvelope.cs`, `src/Modes` | The mode runner, the fixed mode envelope and pure mode rules ([modes.md](modes.md)). |
 | `src/Net/NetClient.cs`, `NetTransport.cs`, `Protocol.cs` | The client connection, the ENet adapter, the message types. |
 | `src/Net/IPacketTransport.cs`, `ProtocolPeerMap.cs`, `PacketTransports.cs`, `FaultPacketTransport.cs` | Message transport contract, Protocol 2 identity bridge/backend selection, deterministic network faults. |
 | `src/Net/MessageCodec.cs`, `TankLedger.cs` | Complete, typed wire decoding and the server's tank existence/lifecycle ledger. |
@@ -419,7 +423,7 @@ Details settled while building, within the decisions above:
 
 | Command | Checks |
 | --- | --- |
-| `make test` | Plain C# assertion suites (every wire message, malformed payloads, server ledger and permissions, lifecycle buffering and ownership, transport faults/reconnect/lifetime), score-checker regressions, movement, gamepad menu, device switching and platform checks, generator checks (20 seeds plus large layouts and forced formations), and separate-process built-world hashes. `make test-full` adds deeper layout, navigation and lifetime sweeps. Add suites under `src/Dev/UnitTests/` and mark them `[UnitSuite]` for discovery; any failure prints its name and exits nonzero. |
+| `make test` | Plain C# assertion suites (every wire message, malformed payloads, server ledger and permissions, lifecycle buffering and ownership, transport faults/reconnect/lifetime, pure mode rules and the mode envelope), the scripted `mode_test` rules harness, score-checker regressions, movement, gamepad menu, device switching and platform checks, generator checks (20 seeds plus large layouts and forced formations), and separate-process built-world hashes. `make test-full` adds deeper layout, navigation and lifetime sweeps. Add suites under `src/Dev/UnitTests/` and mark them `[UnitSuite]` for discovery; any failure prints its name and exits nonzero. |
 | `godot --headless res://scenes/dev/generator_tests.tscn -- --seeds=100` | All four formations; 2, 8, 16, 24 and 32 players; exact supply counts, clear separated reachable starts, hull overlaps and supports, and exact `PlanCodec` round trips. |
 | `tools/dev/net_bots.sh -n 3 -l 60 -- --net-lag=120 --net-jitter=30 --net-loss=3` | A local server and bot players (`scenes/dev/net_test.tscn`) that run to tanks, shoot them and each other, and fetch ammo, under simulated lag and loss. `-w N` shows N of them in windows; `-S host:port -k` uses an existing server (audit it separately with its server log). Tank agreement and score checks run automatically; either failure fails the command. `-k` skips checks, `-t clean` uses tighter tank limits. |
 | `tools/dev/compare_tanks.py [--profile clean] out/bot*.log` | Same-machine shared monotonic samples interpolated to a 50 ms grid, all peer pairs, bounded lifecycle/moving/resting disagreement and settled final agreement. Missing samples, gaps or incomplete matches fail. `--details` prints disagreement intervals. Replaces the coarse countdown and tank-path comparers. See [calibration](network-soak.md) for limits and observed failures on dev. |
@@ -595,3 +599,16 @@ retain their layouts. `Protocol.Version` remains **2** under the unreleased-cycl
 minor release.
 
 The repeatable separate-client capacity gate and its measured evidence are in [network-soak.md](network-soak.md).
+
+## Modes (A7, unreleased Protocol 2)
+
+Tank Bank now runs on the mode framework described in [modes.md](modes.md), with identical rules. Wire changes:
+
+- `ModeEvent` (15), `ModeCommand` (51) and `ModeSnapshot` (52) carry all mode-specific traffic in one fixed envelope.
+- `Score`, `Drop` and `DropRefused` are retired into Tank Bank's Score, Spill, SpillAccepted and SpillRefused kinds;
+  their numbers (40, 71, 47) stay unused. Round start sends one bank snapshot instead of restating nonzero scores.
+- `MatchStart` appends the mode id (UInt8) and schema version (UInt16).
+
+Hello, Welcome and Rejected are unchanged. `Protocol.Version` stays **2** under the unreleased-cycle ruling; these
+changes require a minor release. No tuner, construction rule or world hash changed.
+

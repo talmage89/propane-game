@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using Godot;
 using Propane.Core;
+using Propane.Modes;
 using Propane.Net;
 using Propane.Player;
 using Propane.Tank;
@@ -37,11 +38,15 @@ public static class ProtocolTests
             Packet(Msg.LobbyState, new LobbyInfo(1, 2, 90, LobbyServer.LobbyPhase.Waiting, new[] { profile })),
             Packet(Msg.MatchStart, new MatchSetup(7, PlanCodec.Encode(PlanTests.Fixture()), 2, true, 90, snapshot, new[] { (profile, 0) })),
             Packet(Msg.Countdown, new FloatMessage(4)), Packet(Msg.MatchGo, new FloatMessage(90)), Packet(Msg.Clock, new FloatMessage(42)),
-            Packet(Msg.Score, new ScoreMessage(2, 3, -1)), Packet(Msg.Notice, new TextMessage("Test")),
+            Packet(Msg.Notice, new TextMessage("Test")),
             Packet(Msg.PickupTaken, new PickupMessage(0, 2)), Packet(Msg.PickupRespawn, new IntMessage(0)),
             Packet(Msg.MatchEnd, new[] { new Standing(2, "Test", AppearanceRecord.FromPalette(1), 3, true) }), Packet(Msg.PlayerLeft, new PlayerLeftMessage(3, 2)),
             Packet(Msg.Pong, new PongMessage(1, 2)),
-            Packet(Msg.DropRefused, new DropRefusedMessage(new[] { BodySync.DropTankId(0, 0) })),
+            Packet(Msg.ModeCommand, new ModeEnvelope(1, 1, ModeRegistry.TankBankId, 1, 2, 1, 3, ModeSchemas.TankBankKinds.Score, new TankBankScore(3, -1))),
+            Packet(Msg.ModeSnapshot, new ModeEnvelope(1, 1, ModeRegistry.TankBankId, 1, 0, 0, 4, ModeSchemas.TankBankKinds.Banks,
+                new TankBankBanks(new[] { (2, 3, true), (3, 0, false) }))),
+            Packet(Msg.ModeEvent, new ModeEnvelope(1, 1, ModeRegistry.TankBankId, 1, 2, 1, 5, ModeSchemas.TankBankKinds.Spill,
+                new TankBankSpill(SpillReason.Thrown, new[] { body with { Id = BodySync.DropTankId(0, 0) } }))),
             Packet(Msg.Authority, new AuthorityMessage(2, 1, ClaimRefusal.None,
                 new[] { new BodyAuthority(body with { Epoch = 2 }, 2, TankLedger.State.Venting, false, new VentParameters(Vector3.One, Vector3.Up, -1), Vector3.Zero) })),
             Packet(Msg.PlayerState, new PlayerStateMessage(1, new PlayerNetState { Position = Vector3.One, Velocity = Vector3.Zero,
@@ -54,7 +59,6 @@ public static class ProtocolTests
             Packet(Msg.Puncture, new PunctureMessage(body.Id, body.Transform, body.Linear, body.Angular, Vector3.One, Vector3.Up, -1)),
             Packet(Msg.Explode, new ExplodeMessage(body.Id, Vector3.One)), Packet(Msg.Claim, new ClaimMessage(1, new[] { body })),
             Packet(Msg.BodyStates, new BodyStatesMessage(1, new[] { body with { Sequence = 1 } })), Packet(Msg.BodyRest, new BodyRestMessage(body.Id, body.Transform, 1)),
-            Packet(Msg.Drop, new DropMessage(1, new[] { body with { Id = BodySync.DropTankId(0, 0) } })),
             Packet(Msg.Ragdoll, new RagdollMessage(Vector3.One, Vector3.Up, Vector3.Right)), Packet(Msg.GetUp, new GetUpMessage(Vector3.One, 1)),
             Packet(Msg.Gather, new GatherMessage(GatherPhase.Glide, new[] { body with { Sequence = 1 } })),
             Packet(Msg.TuningSet, new TuningMessage(nameof(Tuning.BlastRadius), 5f)),
@@ -70,7 +74,7 @@ public static class ProtocolTests
             Enum.GetValues<Msg>().Order().SequenceEqual(fixtures.Select(f => f.Type).Order()), "missing or duplicate message fixture"));
         foreach (var fixture in fixtures)
         {
-            var fromServer = fixture.Type is >= Msg.Welcome and <= Msg.ActorRequestResult;
+            var fromServer = fixture.Type is >= Msg.Welcome and <= Msg.ModeSnapshot;
             RoundTrip(runner, fixture, fromServer);
             if (Protocol.IsRelay(fixture.Type) && fixture.Type is not (Msg.Claim or Msg.Puncture or Msg.Explode)) { RoundTrip(runner, fixture, true); }
         }
@@ -146,7 +150,6 @@ public static class ProtocolTests
         {
             var bad = new[]
             {
-                new NetWriter(Msg.Drop, 7).Byte(0).Int(-1).ToArray(),
                 new NetWriter(Msg.Explode, 7).UInt(0).Vec3(Vector3.One).ToArray(),
                 new NetWriter(Msg.Explode, 7).UInt(BodySync.MapTankId(0)).Vec3(new Vector3(float.NaN, 0, 0)).ToArray(),
                 new NetWriter(Msg.GetUp, 7).Vec3(Vector3.Zero).Float(float.PositiveInfinity).ToArray(),

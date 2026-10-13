@@ -53,7 +53,7 @@ fi
                        COMMAND_LOG=str(log), WORLD_COUNT=str(counter), TMPDIR=str(scratch))
     checkers = ["check_test_threads.py", "check_world_tests.py", "time_gate_tests.py", "check_scores_tests.py", "check_capacity_tests.py", "compare_vents_tests.py", "compare_tanks_tests.py", "net_bots_tests.py",
                 "check_shader_capacity.py", "check_lab.py", "animation_review_tests.py", "animation_metrics.py build/animation-review-gate/metrics.csv --output build/animation-review-gate/results.json"]
-    scenes = ["shutdown_tests.tscn", "shutdown_tests.tscn -- --paused --window-close --repeat-quit", "core_tests.tscn", "blast_query_tests.tscn", "gather_range.tscn",
+    scenes = ["shutdown_tests.tscn", "shutdown_tests.tscn -- --paused --window-close --repeat-quit", "core_tests.tscn", "mode_test.tscn", "blast_query_tests.tscn", "gather_range.tscn",
               "gather_range.tscn -- --scenario=grant-races",
               "gather_range.tscn -- --scenario=appearance",
               "game_test.tscn -- --scenario=gather --tune.FixedSeed=23",

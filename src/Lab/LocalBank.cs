@@ -4,38 +4,50 @@ using System.Linq;
 using Godot;
 using Propane.Bots;
 using Propane.Core;
+using Propane.Modes;
 using Propane.Net;
 using Propane.Player;
 using Propane.Tank;
 
 namespace Propane.Lab;
 
-/// <summary>Offline Tank Bank adapter. Both actors simulate here; no server or prediction is needed.</summary>
+/// <summary>
+/// Offline Tank Bank runner. Both actors simulate here; no server or prediction is needed. The same
+/// <see cref="TankBankRules"/> as a server match decide banks and spills; this node supplies their clock, the
+/// physical facts (attributed detonations, hits and throws) and the spilled tanks themselves.
+/// </summary>
 public partial class LocalBank : Node
 {
     public required LabSession Lab { get; init; }
+    private readonly ModeDefinition mode = ModeRegistry.TankBank;
+    private readonly TankBankRules rules = new();
     private readonly Dictionary<int, int> scores = new() { [1] = 0, [2] = 0 };
-    private readonly Dictionary<int, int> earned = new() { [1] = 0, [2] = 0 };
-    public IReadOnlyDictionary<int, int> Earned => earned;
+    public IReadOnlyDictionary<int, int> Earned => scores.Keys.ToDictionary(id => id, id => rules.StatsFor(id).Gained);
     private readonly Dictionary<PropaneTank, int> directShots = new();
+    private readonly HashSet<PropaneTank> drops = new();
     private readonly List<AmmoPickup> pickups = new();
-    private readonly List<(BankingBot Brain, PlayerCharacter Actor)> brains = new();
+    private readonly List<(IBotGoalPolicy Brain, PlayerCharacter Actor)> brains = new();
+    private uint nextTicket;
     public IReadOnlyDictionary<int, int> Scores => scores;
     public IReadOnlyList<AmmoPickup> Pickups => pickups;
     public float TimeLeft { get; private set; }
     public bool IsPlaying => TimeLeft > 0;
-    public int BankedTotal { get; private set; }
-    public int SpilledTotal { get; private set; }
+    public int BankedTotal => scores.Keys.Sum(id => rules.StatsFor(id).Gained);
+    public int SpilledTotal => rules.Spilled;
+    public TankBankRules Rules => rules;
     public int Hits { get; private set; }
     public int InitialSupply { get; private set; }
     public string BotStatus => brains[0].Brain.Status;
-    public int BotBlacklisted => brains[0].Brain.BlacklistedTargets;
+    public int BotBlacklisted => (brains[0].Brain as BankingBot)?.BlacklistedTargets ?? 0;
     private WorldContext World => Lab.World;
 
     public override void _Ready()
     {
         TimeLeft = World.Tuning.LabDuelSeconds;
         InitialSupply = Lab.LiveTanks.Count();
+        rules.Initialize(new ModeSetup(new[] { new ModeActor(1, "You"), new ModeActor(2, "Bot") },
+            new ModeWorld(Lab.EnvironmentKind == LabEnvironment.Void ? ModeWorldSource.Void : ModeWorldSource.SuburbPlan, 1, InitialSupply),
+            mode.CopyTuners(World.Tuning), 0));
         foreach (var tank in Lab.LiveTanks) Track(tank);
         foreach (var actor in Lab.Session.Actors.Select(a => a.Character))
         {
@@ -46,7 +58,7 @@ public partial class LocalBank : Node
                     directShots[tank] = actor.ActorId;
                 else if (PlayerCharacter.Owning(shot.Collider) is { } victim && victim != actor) Hit(actor, victim);
             }
-            void Thrown(Vector3 at, Vector3 velocity, Vector3 spin) => Spill(actor, World.Tuning.RagdollDropCount,
+            void Thrown(Vector3 at, Vector3 velocity, Vector3 spin) => Spill(actor, SpillReason.Thrown, World.Tuning.RagdollDropCount,
                 at + Vector3.Up * 0.35f, Vector3.Zero);
             actor.ShotImpacting += Impact;
             actor.Ragdolled += Thrown;
@@ -64,7 +76,7 @@ public partial class LocalBank : Node
         Lab.Session.OnStopping(() =>
         {
             foreach (var (brain, actor) in brains) { actor.InputOverride = null; brain.Dispose(); }
-            brains.Clear(); directShots.Clear(); pickups.Clear();
+            brains.Clear(); directShots.Clear(); drops.Clear(); pickups.Clear();
         });
     }
 
@@ -72,7 +84,8 @@ public partial class LocalBank : Node
     {
         if (!Lab.Session.Actors.Any(a => a.Character == actor) || brains.Any(b => b.Actor == actor))
             throw new ArgumentException("Bot must control an unassigned actor in this session", nameof(actor));
-        var brain = new BankingBot(World.Random.Randi()) { Skill = World.Tuning.LabBotSkill };
+        var brain = mode.CreateBot!(World.Random.Randi());
+        brain.Skill = World.Tuning.LabBotSkill;
         actor.InputOverride = brain;
         brains.Add((brain, actor));
     }
@@ -118,7 +131,8 @@ public partial class LocalBank : Node
             var scorer = changed.ChainCause != 0 ? (int)changed.ChainCause : directShots.GetValueOrDefault(changed);
             directShots.Remove(changed);
             changed.BlastRequest = (uint)scorer;
-            if (IsPlaying && scores.ContainsKey(scorer)) { scores[scorer]++; earned[scorer]++; BankedTotal++; }
+            if (IsPlaying && scores.ContainsKey(scorer))
+                Apply(rules.Handle(new TankDetonated(scorer, drops.Remove(changed) ? TankOrigin.Drop : TankOrigin.Map), Clock));
             changed.Punctured -= Punctured;
             changed.Detonated -= Detonated;
         }
@@ -134,22 +148,34 @@ public partial class LocalBank : Node
     {
         victim.Runtime.LastHitTime = World.Clock.Now;
         victim.Runtime.LastHitBy = shooter.ActorId;
-        if (World.Clock.Now < victim.Runtime.GraceUntil) return;
-        victim.Runtime.GraceUntil = World.Clock.Now + World.Tuning.HitGraceTime;
+        var grace = victim.Runtime.GraceUntil;
+        if (!TankBankRules.TryOpenGrace(World.Clock.Now, ref grace, World.Tuning.HitGraceTime)) return;
+        victim.Runtime.GraceUntil = grace;
         Hits++;
         var back = new Vector3(Mathf.Sin(victim.FacingYaw), 0, Mathf.Cos(victim.FacingYaw));
         var origin = victim.IsRagdolled ? victim.PelvisPosition + Vector3.Up * 0.3f :
             victim.GlobalPosition + Vector3.Up * 0.45f + back * World.Tuning.HitDropDistance;
-        Spill(victim, World.Tuning.HitDropCount, origin, victim.IsRagdolled ? Vector3.Zero : back);
+        Spill(victim, SpillReason.Hit, World.Tuning.HitDropCount, origin, victim.IsRagdolled ? Vector3.Zero : back);
     }
 
-    private void Spill(PlayerCharacter actor, int wanted, Vector3 origin, Vector3 away)
+    /// <summary>The rules' clock: one round that is open while the duel's time remains.</summary>
+    private ModeClock Clock => new(IsPlaying ? ModePhase.Round : ModePhase.Results, 1, 0, TimeLeft);
+
+    private void Apply(IReadOnlyList<ModeCommand> commands)
+    {
+        foreach (var command in commands)
+            if (command is ScoreChanged changed) scores[changed.ActorId] = changed.Score;
+    }
+
+    /// <summary>A spill ticket: the rules reserve the bank, the tanks appear, then the debit commits.</summary>
+    private void Spill(PlayerCharacter actor, SpillReason reason, int wanted, Vector3 origin, Vector3 away)
     {
         if (!IsPlaying) return;
-        var count = Mathf.Min(wanted, scores[actor.ActorId]);
+        var count = TankBankRules.SpillCount(wanted, scores[actor.ActorId], rules.Reserved(actor.ActorId));
         if (count <= 0) return;
-        scores[actor.ActorId] -= count;
-        SpilledTotal += count;
+        rules.Handle(new TunersChanged(mode.CopyTuners(World.Tuning)), Clock); // Session tuning is live.
+        var ticket = new SpillTicket(actor.ActorId, actor.LifeId, ++nextTicket);
+        if (!rules.Handle(new SpillRequested(ticket, reason, count), Clock).OfType<SpillReserved>().Any()) return;
         var tuning = World.Tuning;
         var rng = World.Random;
         var start = rng.RandfRange(0, Mathf.Tau);
@@ -169,8 +195,10 @@ public partial class LocalBank : Node
             World.ContentRoot.AddChild(tank);
             tank.MakeInvulnerable(tuning.DropInvulnerableTime, actor.BodyColor);
             Lab.TrackDrop(tank);
+            drops.Add(tank);
             Track(tank);
         }
+        Apply(rules.Handle(new SpillRegistered(ticket), Clock));
     }
 
     private Vector3 SafeDropPoint(Vector3 clear, Vector3 wanted)
@@ -184,7 +212,7 @@ public partial class LocalBank : Node
         return wanted;
     }
 
-    private sealed class BotWorld(LocalBank bank, PlayerCharacter actor) : IBankingBotWorld
+    private sealed class BotWorld(LocalBank bank, PlayerCharacter actor) : IBotWorld
     {
         public WorldContext World => bank.World;
         public PlayerCharacter Player => actor;
