@@ -41,13 +41,16 @@ on resume. No socket or server is created by the Lab.
 
 `LabScenarios.All` is the compiled registry: id, name, description, allowed environments and a setup callback.
 The callback runs after the source builds content and before actors/views enter. Later prototypes register here;
-this package introduces no health, teams, mode runner, boundary policy or streamed segments.
+each scenario names a registered mode ([modes.md](modes.md)): the duel plays Tank Bank and the other starters play
+Sandbox, taking supply and ammo policy from it. There is still no health, teams, boundary policy or streamed
+segments.
 
 `VoidWorldSource` and `SuburbWorldSource` implement the existing `ISessionWorldSource` seam. The factory needs no
 source-specific branches. A later streaming implementation can build and retire content roots with
 `WorldContext.RetireContent`; it owns segment policy rather than teaching the factory about segments.
 
-`LocalBank` adapts actor/tank events locally. `ShotImpacting` attributes a direct tank contact before lifecycle
+`LocalBank` is an offline Tank Bank runner: it feeds `TankBankRules` attributed detonations, spill tickets and its
+clock, and spawns the spilled tanks between reservation and commit. It adapts actor/tank events locally. `ShotImpacting` attributes a direct tank contact before lifecycle
 callbacks run; `BlastRequest`/`ChainCause` carry local causal actor keys through the existing chain path. The brain
 reads an actor-specific `IBotWorld`, with scores and hit attribution keyed by actor id. The Lab uses a
 simulation clock; its Protocol 2 dev adapter uses the existing monotonic clock. Both local actors share one owner
