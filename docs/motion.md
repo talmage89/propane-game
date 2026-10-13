@@ -7,7 +7,8 @@ their muzzle obstruction and hits come from the logical aim only (`PlayerCharact
 
 ## Layers
 
-1. **Torso.** The spine turns toward the aim, bladed right so the left shoulder comes forward to the foregrip
+1. **Torso.** The shown aim follows the logical aim at up to `RifleAimTurnSpeed` (720 degrees/s), so a mouse flick
+   swings the body over a few frames; logical aim and shots never wait for it. The spine turns toward that aim, bladed right so the left shoulder comes forward to the foregrip
    (`RifleHipBladeDegrees`, `RifleAimBladeDegrees`), and pitches part of the way with it (`RifleHipPitchShare`,
    `RifleAimPitchShare`; less in sprint). One world rotation is spread over `spine_01..03` by the `RifleSpine*Share`
    tuners. A relaxed player looking far behind twists no further than `CombatSpineTwistDegrees`. The clip's own spine
@@ -31,8 +32,8 @@ their muzzle obstruction and hits come from the logical aim only (`PlayerCharact
    torso absorbs `RifleRecoilTorsoShare` of the lift.
 5. **Hands.** Two-bone IK puts each wrist on its grip frame (`RifleRightWrist*`, `RifleLeftWrist*`, magazine and bolt
    frames) with elbows down, out and a little back (`RifleElbowOut`, `RifleElbowDown`, `RifleElbowBack`). Each arm
-   bone's frame comes from the bend plane (the mannequin's elbow hinges about its local X), and the forearm takes half
-   the hand's twist, so the arms never flip as a strike crosses the body. If a stance holds a grip a little beyond
+   bone's frame comes from the bend plane (the mannequin's elbow hinges about its local X), so the arms never flip as
+   a strike crosses the body; the wrist takes the hand's twist. If a stance holds a grip a little beyond
    its arm, the rifle slides toward that shoulder by the shortfall. Fingers take absolute curls per grip.
 
 Hip fire raises the rifle from the carry over a few frames (the character's `ReadyRaiseSpeed` and the rig's

@@ -352,6 +352,8 @@ public partial class Tuning : Resource
     [Export(PropertyHint.Range, "0,1,0.01")] public float RifleAimHeadFollow { get; set; } = 1f;
     /// <summary>Share of the head's turn toward the aim taken by the neck.</summary>
     [Export(PropertyHint.Range, "0,1,0.01")] public float RifleNeckShare { get; set; } = 0.4f;
+    /// <summary>Fastest turn of the shown aim, degrees per second; logical aim and shots never wait for it.</summary>
+    [Export(PropertyHint.Range, "60,3600,10")] public float RifleAimTurnSpeed { get; set; } = 720f;
     /// <summary>Shouldered, how far the neck and head bring the eye down to the sight (0 = head up, 1 = on it).</summary>
     [Export(PropertyHint.Range, "0,1,0.01")] public float RifleCheekWeld { get; set; } = 0.75f;
     [Export(PropertyHint.Range, "0,1,0.01")] public float RifleHipPitchShare { get; set; } = 0.3f;
