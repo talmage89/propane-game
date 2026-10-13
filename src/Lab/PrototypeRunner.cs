@@ -15,8 +15,11 @@ namespace Propane.Lab;
 /// Offline runner for the Lab's prototype modes. Every actor simulates here; the mode's pure rules decide, and this
 /// node supplies their clock and the physical facts: where each actor is (sampled every step, as a server samples
 /// the positions its clients already send), who knocked whom down (melee, or a blast whose chain they started), and,
-/// for a banking mode, attributed detonations, hits and throws. It carries out what the rules decide and hands the
-/// rest (eliminations, zone moves, the end) to the scenario's arena through <see cref="Decided"/>.
+/// for a banking mode, attributed detonations, hits and throws; for a mode with health, the damage reports a server
+/// would receive (a shooter's bullet hit, the explosion it accepted and each victim's blast report naming it). It
+/// carries out what the rules decide and hands the rest (eliminations, deaths, zone moves, the end) to the scenario's
+/// arena through <see cref="Decided"/>. A multi-round match (<see cref="Match"/>) keeps its rules and mode clock
+/// across rounds; each round is a fresh session and runner.
 /// </summary>
 public partial class PrototypeRunner : Node
 {
@@ -24,6 +27,8 @@ public partial class PrototypeRunner : Node
     public required ModeDefinition Mode { get; init; }
     /// <summary>Points the rules may use, such as the piles a zone sits on.</summary>
     public IReadOnlyList<ModeSpot> Spots { get; init; } = Array.Empty<ModeSpot>();
+    /// <summary>The match this round belongs to, for a mode that plays several rounds; null plays one round.</summary>
+    public LabMatch? Match { get; init; }
     public event Action<ModeCommand>? Decided;
 
     private readonly Dictionary<int, int> scores = new();
@@ -31,8 +36,12 @@ public partial class PrototypeRunner : Node
     private readonly HashSet<PropaneTank> drops = new();
     private readonly List<(IBotGoalPolicy Brain, PlayerCharacter Actor)> brains = new();
     private readonly HashSet<int> spectating = new();
+    private readonly Dictionary<int, uint> shots = new();
     private (int Actor, ulong Frame) blastCause;
     private uint nextTicket;
+    private uint nextBlast;
+    private uint round = 1;
+    private double offset;
     private double elapsed;
     private double length;
     private ModeActor[] roster = Array.Empty<ModeActor>();
@@ -41,35 +50,55 @@ public partial class PrototypeRunner : Node
     public IModeHudPresenter Hud { get; private set; } = null!;
     public ModePhase Phase { get; private set; } = ModePhase.Round;
     public bool IsPlaying => Phase == ModePhase.Round;
+    /// <summary>The match is over and its result shows: the Lab's controls stay up.</summary>
+    public bool Finished => Phase == ModePhase.Results;
+    /// <summary>The round's decision at its end: another round, or the end of the match.</summary>
+    public ModeCommand? Decision { get; private set; }
     public double Elapsed => elapsed;
     public float TimeLeft => Mode.Timer == RoundTimer.Countdown ? (float)Math.Max(0, length - elapsed) : 0;
     public IReadOnlyDictionary<int, int> Scores => scores;
     public IReadOnlyList<ModeActor> Roster => roster;
     public int Thinks { get; private set; }
     public double ThinkSeconds { get; private set; }
-    public ModeClock Clock => new(Phase, 1, elapsed, IsPlaying ? (Mode.Timer == RoundTimer.Countdown ? length : double.PositiveInfinity) : elapsed);
+    public ModeClock Clock => new(Phase, round, offset + elapsed,
+        IsPlaying ? (Mode.Timer == RoundTimer.Countdown ? offset + length : double.PositiveInfinity) : offset + elapsed);
     public bool Spectating(int actorId) => spectating.Contains(actorId);
     public string BotStatus(int actorId) => brains.FirstOrDefault(b => b.Actor.ActorId == actorId).Brain?.Status ?? "";
     private WorldContext World => Lab.World;
     private bool Banking => Rules is KingRules;
+    private bool Health => Rules is ShortFuseRules;
     private TankBankRules? Bank => (Rules as KingRules)?.Bank;
 
     public override void _Ready()
     {
         var tuning = World.Tuning;
-        length = Mode.Id == ModeRegistry.KingId ? tuning.KingRoundSeconds : 0;
+        length = Mode.Id == ModeRegistry.KingId ? tuning.KingRoundSeconds : Mode.Id == ModeRegistry.ShortFuseId ? tuning.ShortFuseRoundSeconds : 0;
         roster = Lab.Session.Actors.Select(a => new ModeActor(a.Character.ActorId, a.Character.Name)).ToArray();
         foreach (var actor in roster) scores[actor.ActorId] = 0;
-        Rules = Mode.CreateRules();
         Hud = Mode.CreateHud();
-        Rules.Initialize(new ModeSetup(roster,
-            new ModeWorld(Lab.EnvironmentKind == LabEnvironment.Void ? ModeWorldSource.Void : ModeWorldSource.SuburbPlan, 1, Lab.LiveTanks.Count(), Spots),
-            Mode.CopyTuners(tuning), World.Random.Randi()));
+        if (Match?.Rules is { } carried)
+        {
+            Rules = carried;
+            round = Match.Round;
+            offset = Match.ClockOffset;
+        }
+        else
+        {
+            Rules = Mode.CreateRules();
+            Rules.Initialize(new ModeSetup(roster,
+                new ModeWorld(Lab.EnvironmentKind == LabEnvironment.Void ? ModeWorldSource.Void : ModeWorldSource.SuburbPlan, 1, Lab.LiveTanks.Count(), Spots),
+                Mode.CopyTuners(tuning), World.Random.Randi()));
+            if (Match != null) Match.Rules = Rules;
+        }
+        if (Rules is ShortFuseRules fuse)
+        {
+            foreach (var actor in roster) scores[actor.ActorId] = fuse.Wins(actor.ActorId);
+        }
         foreach (var tank in Lab.LiveTanks) Track(tank);
         foreach (var actor in Lab.Session.Actors.Select(a => a.Character)) Watch(actor);
         foreach (var actor in Lab.Session.Actors.Select(a => a.Character))
             if (actor != Lab.Player) AttachBot(actor);
-        Apply(Rules.Handle(new PhaseEntered(ModePhase.Round, new RoundInfo(1, 1, Mode.Timer, 0, length)), Clock));
+        Apply(Rules.Handle(new PhaseEntered(ModePhase.Round, new RoundInfo(round, round, Mode.Timer, offset, length)), Clock));
         Lab.Session.OnStopping(() =>
         {
             foreach (var (brain, actor) in brains) { actor.InputOverride = null; brain.Dispose(); }
@@ -123,6 +152,15 @@ public partial class PrototypeRunner : Node
                 case ActorEliminated eliminated:
                     spectating.Add(eliminated.ActorId);
                     break;
+                case ActorDied died:
+                    spectating.Add(died.VictimId);
+                    break;
+                case ActorRespawned respawned when Lab.Session.Actor(respawned.ActorId) is { } entry:
+                    entry.Character.LifeId = respawned.LifeId;
+                    break;
+                case RoundWon won when won.WinnerId != 0:
+                    scores[won.WinnerId] = scores.GetValueOrDefault(won.WinnerId) + 1;
+                    break;
                 case RoundOver:
                     End();
                     break;
@@ -131,12 +169,39 @@ public partial class PrototypeRunner : Node
         }
     }
 
-    /// <summary>The round is decided: the rules close it, everyone stops, and the controls panel shows the result.</summary>
+    /// <summary>
+    /// The round is decided: the rules close it and decide what follows. A one-round prototype stops at once and the
+    /// controls panel shows the result. In a match the round's result shows for a moment while the world plays on,
+    /// then the next suburb assembles, or the match's result takes the panel.
+    /// </summary>
     private void End()
     {
         if (!IsPlaying) return;
         Phase = ModePhase.RoundEnd;
-        Apply(Rules.Handle(new PhaseEntered(ModePhase.RoundEnd, new RoundInfo(1, 1, Mode.Timer, 0, length)), Clock));
+        var decided = Rules.Handle(new PhaseEntered(ModePhase.RoundEnd, new RoundInfo(round, round, Mode.Timer, offset, length)), Clock);
+        Decision = decided.FirstOrDefault(c => c is NextRound or EndMatch);
+        Apply(decided);
+        if (Match == null)
+        {
+            Finish();
+            return;
+        }
+        foreach (var actor in Lab.Session.Actors) actor.Character.InputLocked = true;
+        var pause = World.Tuning.ShortFuseRoundEndSeconds;
+        if (Decision is NextRound)
+        {
+            Match.Round = round + 1;
+            Match.ClockOffset = offset + elapsed + pause;
+            World.Schedule(this, pause, Lab.AdvanceRound);
+        }
+        else
+        {
+            World.Schedule(this, pause, Finish);
+        }
+    }
+
+    private void Finish()
+    {
         Phase = ModePhase.Results;
         foreach (var actor in Lab.Session.Actors) actor.Character.InputLocked = true;
         World.SetPaused(true);
@@ -184,6 +249,7 @@ public partial class PrototypeRunner : Node
             directShots.Remove(changed);
             changed.BlastRequest = (uint)scorer;
             blastCause = (scorer, Engine.GetPhysicsFrames());
+            if (IsPlaying && Health) Blast(changed, scorer);
             if (IsPlaying && Banking && scores.ContainsKey(scorer))
                 Apply(Rules.Handle(new TankDetonated(scorer, drops.Remove(changed) ? TankOrigin.Drop : TankOrigin.Map), Clock));
             changed.Punctured -= Punctured;
@@ -197,10 +263,35 @@ public partial class PrototypeRunner : Node
         });
     }
 
+    /// <summary>
+    /// The explosion is accepted, as a server's ledger accepts it, credited to its chain's first detonator; then each
+    /// actor it throws reports it, as a victim's own game does, with how far it stood (before the push). This runs
+    /// inside the detonation, before the blast moves anyone.
+    /// </summary>
+    private void Blast(PropaneTank tank, int scorer)
+    {
+        var center = tank.GlobalTransform * PropaneTank.LocalCenter;
+        var id = ++nextBlast;
+        Apply(Rules.Handle(new BlastAccepted(id, scores.ContainsKey(scorer) ? scorer : 0, Clock.Now), Clock));
+        var reach = World.Tuning.RagdollRadius;
+        foreach (var actor in Lab.Session.Actors.Select(a => a.Character).Where(a => !spectating.Contains(a.ActorId)).ToArray())
+        {
+            var distance = center.DistanceTo(actor.BlastTargetPosition);
+            if (distance <= reach) Apply(Rules.Handle(new BlastHitReported(actor.ActorId, actor.LifeId, id, distance), Clock));
+        }
+    }
+
     private void Hit(PlayerCharacter shooter, PlayerCharacter victim)
     {
         victim.Runtime.LastHitTime = World.Clock.Now;
         victim.Runtime.LastHitBy = shooter.ActorId;
+        if (Health)
+        {
+            // The shooter's own hit detection reports the hit, with its own sequence and both lives as it saw them.
+            var shot = shots[shooter.ActorId] = shots.GetValueOrDefault(shooter.ActorId) + 1;
+            Apply(Rules.Handle(new BulletHitReported(shooter.ActorId, shooter.LifeId, shot, victim.ActorId, victim.LifeId, Clock.Now), Clock));
+            return;
+        }
         if (!Banking) return;
         var grace = victim.Runtime.GraceUntil;
         if (!TankBankRules.TryOpenGrace(World.Clock.Now, ref grace, World.Tuning.HitGraceTime)) return;

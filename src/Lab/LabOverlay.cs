@@ -98,6 +98,16 @@ public partial class LabOverlay : CanvasLayer
                 var summary = string.Join("  ·  ", order.Select(a => $"{Modes.RingOutHud.Ordinal(ring.Place(a) ?? 0).ToLowerInvariant()} {Name(a)}"));
                 return (line, winner, summary);
             }
+            case Modes.ShortFuseRules fuse:
+            {
+                var line = $"Round {fuse.Round} · {fuse.AliveCount} standing · " +
+                    string.Join("  ·  ", prototype.Roster.Select(a => $"{Name(a.ActorId)} {fuse.Wins(a.ActorId)}"));
+                var champion = fuse.MatchWinner;
+                var winner = champion == me ? "YOU WIN THE MATCH" : champion is { } other ? $"{Name(other).ToUpperInvariant()} WINS THE MATCH" : "NO WINNER";
+                var summary = $"{fuse.Rounds.Count} rounds · " + string.Join(", ", prototype.Roster.OrderByDescending(a => fuse.Wins(a.ActorId))
+                    .Select(a => $"{Name(a.ActorId)} {fuse.Wins(a.ActorId)} won, {fuse.Kills(a.ActorId)} kills"));
+                return (line, winner, summary);
+            }
             default:
             {
                 var scores = prototype.Scores;
@@ -147,11 +157,11 @@ public partial class LabOverlay : CanvasLayer
         }
         else if (Lab.Prototype is { } prototype)
         {
-            resume.Disabled = !prototype.IsPlaying;
+            resume.Disabled = prototype.Finished;
             var (line, winner, summary) = Prototype(prototype);
             status.Text = line;
-            title.Text = prototype.IsPlaying ? Lab.Scenario.Name.ToUpperInvariant() : winner;
-            result.Text = prototype.IsPlaying ? "Paused · the round is stopped" : summary;
+            title.Text = !prototype.Finished ? Lab.Scenario.Name.ToUpperInvariant() : winner;
+            result.Text = !prototype.Finished ? "Paused · the round is stopped" : summary;
         }
         else
         {

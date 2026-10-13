@@ -7,6 +7,9 @@ namespace Propane.Modes;
 /// <summary>A number the HUD shows large, with its caption (the bank in Tank Bank).</summary>
 public sealed record HudCounter(int Value, string Caption);
 
+/// <summary>A bar the HUD shows by the crosshair's foot: health, with its caption. <paramref name="Hot"/> marks a warning state.</summary>
+public sealed record HudBar(float Value, float Max, string Caption, bool Hot = false);
+
 /// <summary>A round clock: seconds to show, and whether they count down or up.</summary>
 public sealed record HudTimer(float Seconds, RoundTimer Kind);
 
@@ -14,7 +17,7 @@ public sealed record HudTimer(float Seconds, RoundTimer Kind);
 /// Plain HUD data a mode supplies. MatchHud and the results screen render it; local views add the crosshair, ammo,
 /// hit markers and other feedback. Objectives generalize the tank arrows: positions the HUD points toward.
 /// An out-state ("eliminated", "spectating") replaces play feedback when a mode with health needs one. A feed lists
-/// recent events, newest last (Ring Out's knock-offs).
+/// recent events, newest last (Ring Out's knock-offs). A bar shows a mode's health.
 /// </summary>
 public sealed record ModeHud(
     IReadOnlyList<HudCounter> Counters,
@@ -24,7 +27,8 @@ public sealed record ModeHud(
     bool ObjectivesVisible,
     string Banner = "",
     string OutState = "",
-    IReadOnlyList<string>? Feed = null)
+    IReadOnlyList<string>? Feed = null,
+    HudBar? Bar = null)
 {
     public static readonly ModeHud Empty = new(Array.Empty<HudCounter>(), Array.Empty<string>(), null, Array.Empty<Vector3>(), false);
 }

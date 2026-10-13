@@ -1,8 +1,8 @@
 namespace Propane.Core;
 
-// The Lab's prototype modes (Ring Out, King of the Cul-de-sac). Like every Lab dial these are local: they never
+// The Lab's prototype modes (Ring Out, King of the Cul-de-sac, Short Fuse). Like every Lab dial these are local: they never
 // enter a match snapshot or a saved .tres, so trying a rule changes nobody else's game. The mode rules copy the
-// ones they read by name (RingOutRules.Tuners, KingRules.Tuners); layout dials apply on reset.
+// ones they read by name (RingOutRules.Tuners, KingRules.Tuners, ShortFuseRules.Tuners); layout dials apply on reset.
 public partial class Tuning
 {
     [LabDial(1, 5)] public int LabPrototypeBots { get; set; } = 3;
@@ -39,4 +39,24 @@ public partial class Tuning
     [LabDial(5, 80, 5, Scenario = "king")] public float KingBeamHeight { get; set; } = 40f;
     [LabDial(0.05, 0.75, 0.05, Scenario = "king")] public float KingBeamAlpha { get; set; } = 0.3f;
     [LabDial(0.2, 4, 0.1, Scenario = "king")] public float KingMaterializeSeconds { get; set; } = 1.2f;
+
+    // Short Fuse: health, damage, credit and rounds. Blast damage reaches RagdollRadius, as far as a blast throws.
+    [LabDial(30, 300, 5, Scenario = "shortfuse")] public float ShortFuseRoundSeconds { get; set; } = 105f;
+    /// <summary>The slab's side; its tanks and piles are stocked for the players as in a match.</summary>
+    [LabDial(100, 240, 10, Scenario = "shortfuse")] public float ShortFuseMapSize { get; set; } = 150f;
+    [LabDial(1, 7, 1, Scenario = "shortfuse")] public int ShortFuseWinsToMatch { get; set; } = 3;
+    [LabDial(10, 300, 10, Scenario = "shortfuse")] public float ShortFuseMaxHealth { get; set; } = 100f;
+    [LabDial(0, 50, 1, Scenario = "shortfuse")] public float ShortFuseBulletDamage { get; set; } = 7f;
+    [LabDial(0, 300, 5, Scenario = "shortfuse")] public float ShortFuseBlastCenterDamage { get; set; } = 90f;
+    [LabDial(0, 300, 5, Scenario = "shortfuse")] public float ShortFuseBlastEdgeDamage { get; set; } = 30f;
+    [LabDial(0, 50, 0.5, Scenario = "shortfuse")] public float ShortFuseRegenPerSecond { get; set; } = 5f;
+    [LabDial(0, 20, 0.5, Scenario = "shortfuse")] public float ShortFuseRegenDelay { get; set; } = 5f;
+    [LabDial(0, 5, 0.25, Scenario = "shortfuse")] public float ShortFuseGetUpGrace { get; set; } = 0.75f;
+    [LabDial(0, 30, 0.5, Scenario = "shortfuse")] public float ShortFuseCreditSeconds { get; set; } = 8f;
+    /// <summary>How late a damage report may arrive; a death is declared once this has passed it.</summary>
+    [LabDial(0, 2, 0.05, Scenario = "shortfuse")] public float ShortFuseReportWindow { get; set; } = 0.25f;
+    /// <summary>How long a round's result shows before the next suburb assembles.</summary>
+    [LabDial(1, 15, 0.5, Scenario = "shortfuse")] public float ShortFuseRoundEndSeconds { get; set; } = 4f;
+    /// <summary>How long a dead body lies before it leaves the round.</summary>
+    [LabDial(0, 5, 0.25, Scenario = "shortfuse")] public float ShortFuseCorpseSeconds { get; set; } = 1.5f;
 }

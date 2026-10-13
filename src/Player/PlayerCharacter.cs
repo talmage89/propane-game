@@ -127,6 +127,9 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
     /// <summary>Only looking around is allowed (the countdown before a match, and after it ends).</summary>
     public bool InputLocked { get; set; }
 
+    /// <summary>A mode's spectate view: while set, this player's camera orbits that body instead of its own.</summary>
+    public PlayerCharacter? Spectating { get; set; }
+
     /// <summary>The body color: the player's color in a match.</summary>
     public Color BodyColor
     {
@@ -555,6 +558,14 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
             animator.PlayHit();
             staggers++;
         }
+    }
+
+    /// <summary>The body goes limp where it stands (a mode's death), keeping its motion. Ignored unless active.</summary>
+    public void Collapse()
+    {
+        if (IsRemote || state != State.Active) return;
+        var spin = Vector3.Up.Cross(Forward(facingYaw)).Normalized() * World.Random.RandfRange(-2f, 2f);
+        BeginRagdoll(Velocity, spin);
     }
 
     private void BeginRagdoll(Vector3 velocity, Vector3 spin)
