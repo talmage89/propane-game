@@ -327,3 +327,88 @@ world 9.23 s, plus one 1.23 s shared incremental build. CI retains the four para
 cache; the earlier estimate of 2–4 minutes warm / 3–5 minutes cold remains an estimate. CI was not pushed or run.
 The existing malformed-packet fixture emits an expected network warning; builds reported zero warnings.
 No messages, suburb construction, tank behavior or tuners changed relative to merged dev; protocol version remains 2.
+
+## Parallel deep sweeps
+
+Before this work, `make test-full` ran the gate and then every deep step one at a time. On `dev` at `a832c5d`, on the
+lead's 12-thread machine at load about 2, it took 2,317 seconds: generator sweep 902, `check_lab.py --full` 612,
+navigation 141, rifle soak 113, deep piles 77, duel lane 77, loading readiness 49, gate about 360. Each deep step is
+now its own target ([code-quality.md](code-quality.md#fast-gate-and-deep-sweeps) lists them), so `make -j4 test-full`
+runs them side by side with the gate's partitions. Nothing is dropped:
+
+- The generator sweep runs as four seed-range shards. `test-full-generator-coverage` runs the sweep's own
+  `--list-seeds` listing for the whole sweep and for each shard, and requires the shards to hold exactly the whole
+  sweep's 944 seeds, each once: 200 single-player, 200 two-player, 100 at each of 8/16/24/32 players and six per
+  formation at each of the six sizes. A forced gap and overlap (shard 4 starting at seeds 152 and 75) failed it, naming
+  the six missing, four shared and two extra seeds.
+- `check_lab.py --full` runs as three jobs of named sessions; `lint_tests.py` requires them to add up to every `--full`
+  session. Navigation stays one process: it passes on its success rate over all 100 seeds.
+- The bot matches run last and alone. They run in real time. On this VM, beside three CPU-bound jobs, the rifle
+  soak's clients fell to 1–2 frames a second and it failed tank agreement with two disagreements. Running the offline
+  jobs under `nice -n 19` restored client frame rates but did not protect the loading-readiness match (below).
+- A temporary failing assertion at seed 102 failed `make -j4 test-full-generator-2 test-full-generator-3` with exit 2,
+  `[generator-3] [tests] FAIL forced failure probe: 1`, `[generator-3] FAIL (exit 1): <command>` and make's
+  `*** [Makefile:146: test-full-generator-3] Error 1`; generator 2 still finished and passed.
+
+`-j` is not the default: worktree agents share one machine, so each run picks its job count.
+
+### Timings on a four-CPU cloud VM
+
+Indicative only: 4 CPUs, no GPU, rendering on the CPU. Each run was wrapped in `tools/dev/time_gate.py`. Load averages
+(1/5/15 minutes) were taken with `uptime` just before each run; a higher 5- or 15-minute figure is the previous run
+fading out.
+
+| Commit | Command | Load before | Wall seconds | Result |
+| --- | --- | --- | ---: | --- |
+| `8a0bf8b` | `make test-full` | 2.95 / 2.52 / 2.92 | 3,287.5 | Pass |
+| `a5da896` | `make -j4 test-full`, bots beside other jobs | 4.60 / 2.34 / 1.56 | 1,013.2 | Pass |
+| `8a0bf8b` | same, longest jobs first | 1.17 / 1.45 / 1.46 | 969.4 | Loading readiness failed |
+| `8a0bf8b` | same | 1.19 / 1.55 / 2.29 | 975.5 | Rifle soak failed: starved clients, two disagreements |
+| `273e118` | offline jobs under `nice -n 19` | 0.56 / 3.63 / 4.26 | 991.9 | Loading readiness failed; rifle soak passed |
+| `441fa7d` | bots alone, after everything else | 0.57 / 2.10 / 3.58 | 1,288.9 | Loading readiness failed (alone); a 532-second void soak was the tail |
+| `6f37471` | Lab soaks started first | 0.91 / 2.03 / 3.18 | 1,156.9 | Loading readiness failed (alone); everything else passed |
+| `6f37471` | same | 1.16 / 3.11 / 3.76 | 1,194.7 | Loading readiness failed (alone); everything else passed |
+
+In every run, every job that ran passed except as noted: 944 generator layouts, 700/700 navigation courses, all
+seven Lab sessions, deep piles, the range probes, menu lifetime, the coverage proof, the rifle soak and the duel lane.
+After the rifle soak failed, make started no new jobs, so that run skipped the coverage proof and the last two bot
+matches. Seconds per job:
+
+| Job | Serial (`8a0bf8b`) | `-j4` (`6f37471`) |
+| --- | ---: | ---: |
+| Generator shards 1–4 | 385.7, 393.0, 364.1, 353.9 | 416.3, 418.1, 393.9, 399.7 |
+| Generator coverage proof | 11.4 | 12.7 |
+| Navigation, 100 seeds | 262.8 | 279.6 |
+| Lab void soak / suburb soak / other five sessions | 211.5 / 121.7 / 242.5 | 296.8 / 110.6 / 249.1 |
+| Deep piles | 118.5 | 137.9 |
+| Menu lifetime | 24.0 | 26.8 |
+| Melee reloads, airborne recoil, ten-magazine bot recoil | 8.2, 3.7, 7.6 | 9.7, 3.9, 9.7 |
+| Rifle soak / duel lane / loading readiness (host bot) | 112.5 / 76.7 / 49.3 | 113.1 / 77.1 / 49.0 |
+
+The gate and build took about 530 seconds of the serial run. The Lab soaks are unseeded bot-versus-bot matches. Across
+these runs, a soak's cost ranged from 84 to 532 seconds as play varied (banked 30–99, spilled 3–85), so they start
+first. On the lead's 12-thread machine, `-j4` keeps four jobs running without contention. About 2,080 seconds of
+offline work over four jobs, plus about 240 seconds of bots alone, suggests 13 to 15 minutes. That is an estimate
+from the serial figures above, not a measurement.
+
+| Rifle soak, four bots, 90 seconds | Client median frame rates | Longest above-tolerance episode | Result |
+| --- | --- | ---: | --- |
+| Alone | 58, 60, 59, 59 | 0.70 s | Pass |
+| Beside three generator shards | 43, 40, 45, 36 | 0.65 s | Pass |
+| Beside the same shards under `nice -n 10` | 50, 44, 59, 57 | 0.65 s | Pass |
+| Beside the same shards under `nice -n 19` | 60, 57, 57, 47 | 0.55 s | Pass |
+| Inside `make -j4 test-full` beside three jobs (`8a0bf8b`) | 52, 52, 46, 42; minimums 1–2 | 2.55 s | Fail, two disagreements |
+
+### Intermittent loading-readiness failure
+
+`net_bots.sh -n 2 -l 20 -- --scenario=body-stream --tank-check-ready-stall=Bot2` fails intermittently. The code it
+runs is the same as on `dev`: the branch changes only `GeneratorTests.cs` under `src/`. Alone it failed 6 of 14 runs:
+3 of 10 standalone runs (1 of the first 6, 2 of 4 two hours later), and 3 of the 4 bot jobs that ran alone inside
+`make test-full` (the serial run's passed). Beside other jobs it failed 5 of 6: 3 of 4 runs beside three generator
+shards under `nice -n 19`, and both `-j4` runs that reached it while other jobs still ran.
+
+Every failure is the same. The server drops Bot2 with `TransportFailure` during its nine-second readiness stall,
+about 11 seconds after sending the plan, and the checker reports `missing play coverage or settled completion`. ENet
+drops a peer that early only on the established-player timeout (3-second minimum, 8-second maximum), not on the
+20/30-second loading grace. So the server sometimes ends Bot2's grace before Bot2 stalls. This branch does not change
+that behavior; it is an open question for the network work.

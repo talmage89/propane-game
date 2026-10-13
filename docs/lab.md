@@ -60,6 +60,8 @@ aim-stall probe and a 15-second scripted duel. It requires a success marker, exi
 `--full` performs 10 entry/reset/exit cycles for all six pairs, sweeps every layout dial to both slider ends and all
 at once through every scenario and environment (`--scenario=dials`), and runs 180-second bot-versus-bot soaks in both
 environments, each of which must bank at least ten tanks. Both are wired into `make test` / `make test-full`.
+`--only=soak-void,dials` runs only the named sessions (`lifetime`, `rules`, `aimstall`, `duel`, and with `--full`
+`dials`, `soak-void`, `soak-suburb`); `make test-full` splits `--full` into three such jobs.
 `--scenario=aimstall` puts a shot-stopping prop in front of the bot and asserts it leaves the pile.
 
 `menu_test --scenario=input` injects real keyboard, mouse and controller events through Lab menus, movement/combat,
