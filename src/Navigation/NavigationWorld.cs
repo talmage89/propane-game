@@ -104,7 +104,7 @@ public sealed class NavigationWorld : INavigationWorld
     }
 
     // A world lives for one tick, while physics stands still, so a point's answer cannot change. Searches ask again for
-    // the same cells (a cell check, then its walk and jump links), and every repeat would cost three queries.
+    // the same cells (a cell check, then its walk and jump links, then a walk's end samples), so remember each answer.
     private Dictionary<Vector3, bool>? standable;
 
     public bool Standable(Vector3 feet)
@@ -116,7 +116,16 @@ public sealed class NavigationWorld : INavigationWorld
         return result;
     }
 
+    private Dictionary<Vector3, bool>? supported;
+
     private bool Supported(Vector3 feet)
+    {
+        supported ??= new();
+        if (supported.TryGetValue(feet, out var known)) { return known; }
+        return supported[feet] = Support(feet);
+    }
+
+    private bool Support(Vector3 feet)
     {
         var ray = queries?.Ray ?? new PhysicsRayQueryParameters3D();
         try
@@ -149,13 +158,14 @@ public sealed class NavigationWorld : INavigationWorld
     {
         if (capabilities.JumpVelocity <= 0 || capabilities.Gravity <= 0 || capabilities.Speed <= 0 ||
             !Safe(from, false) || !Safe(to, false) || !Standable(from) || !Standable(to)) { return false; }
-        if (Walk(from, to)) { return false; }
         var direction = to - from;
         direction.Y = 0;
         var distance = direction.Length();
         // Jump links use the run gait, never creep or sprint. A grid endpoint may be a little before touchdown;
         // test the actual full arc as well, so an unchecked tank or wall just beyond that endpoint is rejected.
+        // The range costs nothing, so it goes before the walk test's sweeps; either refusal gives the same answer.
         if (distance < capabilities.JumpRange * minimumJumpRange || distance > capabilities.JumpRange) { return false; }
+        if (Walk(from, to)) { return false; }
         direction = direction.Normalized();
         var landing = from + direction * capabilities.JumpRange;
         if (!Safe(landing, false) || !Standable(landing)) { return false; }
