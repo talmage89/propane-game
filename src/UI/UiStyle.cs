@@ -121,6 +121,50 @@ public static class UiStyle
         return label;
     }
 
+    /// <summary>A round color button; the selected one has a dark ring, distinct from the orange focus outline.</summary>
+    public static Button Swatch(Color color, bool selected, string key, string tooltip)
+    {
+        var swatch = new Button
+        {
+            CustomMinimumSize = new Vector2(40, 40),
+            FocusMode = Control.FocusModeEnum.All,
+            TooltipText = tooltip,
+        };
+        swatch.SetMeta("focus_key", key);
+        swatch.AddThemeStyleboxOverride("focus", Focus());
+        var ring = selected ? 3 : 0;
+        foreach (var state in new[] { "normal", "hover", "pressed" })
+        {
+            swatch.AddThemeStyleboxOverride(state, new StyleBoxFlat
+            {
+                BgColor = state == "hover" ? color.Lightened(0.15f) : color,
+                BorderColor = Ink,
+                BorderWidthBottom = ring,
+                BorderWidthTop = ring,
+                BorderWidthLeft = ring,
+                BorderWidthRight = ring,
+                CornerRadiusTopLeft = 20,
+                CornerRadiusTopRight = 20,
+                CornerRadiusBottomLeft = 20,
+                CornerRadiusBottomRight = 20,
+            });
+        }
+        return swatch;
+    }
+
+    /// <summary>Marks the chosen button of a set with the same dark ring as a selected swatch.</summary>
+    public static void Choose(Button button, bool chosen)
+    {
+        foreach (var state in new[] { "normal", "hover", "pressed" })
+        {
+            if (button.GetThemeStylebox(state) is not StyleBoxFlat style) continue;
+            var copy = (StyleBoxFlat)style.Duplicate();
+            copy.BorderColor = Ink;
+            copy.BorderWidthBottom = copy.BorderWidthTop = copy.BorderWidthLeft = copy.BorderWidthRight = chosen ? 3 : 0;
+            button.AddThemeStyleboxOverride(state, copy);
+        }
+    }
+
     public static Button Button(string text)
     {
         var button = new Button { Text = text, FocusMode = Control.FocusModeEnum.All, CustomMinimumSize = new Vector2(0, 42) };

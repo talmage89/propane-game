@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using Godot;
+using Propane.Bots;
 using Propane.Core;
 using Propane.Net;
 
@@ -34,6 +35,7 @@ public partial class Menus : CanvasLayer
     private Screen builtScreen;
     private LineEdit? serverField;
     private AppearancePicker? picker;
+    private BotEditor? botEditor;
 
     /// <summary>The connection the multiplayer screens use. Set before adding to the tree.</summary>
     public NetClient Net { get; set; } = null!;
@@ -99,7 +101,7 @@ public partial class Menus : CanvasLayer
     public void Show(Screen screen, string? note = null)
     {
         message = note ?? "";
-        if (screen != Screen.Lobby) { picker?.Close(); }
+        if (screen != Screen.Lobby) { picker?.Close(); botEditor?.Close(); }
         Current = screen;
         Visible = screen != Screen.None;
         Rebuild();
@@ -199,7 +201,8 @@ public partial class Menus : CanvasLayer
         {
             serverField.Text = serverDraft;
         }
-        if (Visible)
+        // An open overlay keeps focus; it reconfigures this screen when it closes.
+        if (Visible && picker == null && botEditor == null)
         {
             navigation.Configure(focus);
         }
@@ -406,7 +409,9 @@ public partial class Menus : CanvasLayer
             var row = new HBoxContainer();
             row.AddThemeConstantOverride("separation", 12);
             row.AddChild(UiStyle.ColorSample(member.Appearance.Color, 20, member.Id.ToString(System.Globalization.CultureInfo.InvariantCulture)));
-            var label = UiStyle.Text(member.Name + (member.Kind == ActorKind.Bot ? "  (bot)" : member.OwnerPeerId == Net.MyId ? "  (you)" : ""), compact ? 18 : 20);
+            var bot = member.Kind == ActorKind.Bot;
+            var difficulty = (BotDifficulty)Math.Min(member.ControllerConfig.Difficulty, (byte)BotDifficulty.Hard);
+            var label = UiStyle.Text(member.Name + (bot ? $"  ({difficulty} bot)" : member.OwnerPeerId == Net.MyId ? "  (you)" : ""), compact ? 18 : 20);
             label.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
             label.CustomMinimumSize = new Vector2(compact ? 200 : 260, 0);
             label.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
@@ -415,8 +420,27 @@ public partial class Menus : CanvasLayer
             {
                 row.AddChild(UiStyle.Text(compact ? "creator" : "starts the match", 15, UiStyle.SoftInk));
             }
+            if (bot && member.OwnerPeerId == Net.MyId)
+            {
+                // Only a bot's owner may change it; the server enforces the same rule.
+                var edit = UiStyle.Button("Edit");
+                edit.SetMeta("focus_key", $"bot_{member.Id}");
+                edit.Disabled = lobby.Phase != LobbyServer.LobbyPhase.Waiting;
+                var editing = member;
+                edit.Pressed += () => OpenBotEditor(editing);
+                row.AddChild(edit);
+            }
             roster.AddChild(row);
         }
+        var bots = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.Center };
+        bots.AddThemeConstantOverride("separation", 12);
+        var addBot = UiStyle.Button("Add bot");
+        addBot.SetMeta("focus_key", "add_bot");
+        addBot.Disabled = lobby.Phase != LobbyServer.LobbyPhase.Waiting || lobby.Members.Count >= lobby.Capacity;
+        addBot.TooltipText = "Bots play on this computer and leave with you";
+        addBot.Pressed += () => OpenBotEditor(null);
+        bots.AddChild(addBot);
+        layout.AddChild(bots);
         layout.AddChild(new HSeparator());
 
         // Name and color.
@@ -440,32 +464,8 @@ public partial class Menus : CanvasLayer
         for (var i = 0; i < Protocol.PlayerColors.Length; i++)
         {
             var index = i;
-            var swatch = new Button
-            {
-                CustomMinimumSize = new Vector2(40, 40),
-                FocusMode = Control.FocusModeEnum.All,
-                TooltipText = Protocol.ColorNames[i],
-            };
-            swatch.SetMeta("focus_key", $"color_{i}");
-            swatch.AddThemeStyleboxOverride("focus", UiStyle.Focus());
             var mine = Net.Appearance.Color == AppearanceRecord.FromPalette(i).Color;
-            foreach (var state in new[] { "normal", "hover", "pressed" })
-            {
-                var color = Protocol.PlayerColor(i);
-                swatch.AddThemeStyleboxOverride(state, new StyleBoxFlat
-                {
-                    BgColor = state == "hover" ? color.Lightened(0.15f) : color,
-                    BorderColor = UiStyle.Ink,
-                    BorderWidthBottom = mine ? 3 : 0,
-                    BorderWidthTop = mine ? 3 : 0,
-                    BorderWidthLeft = mine ? 3 : 0,
-                    BorderWidthRight = mine ? 3 : 0,
-                    CornerRadiusTopLeft = 20,
-                    CornerRadiusTopRight = 20,
-                    CornerRadiusBottomLeft = 20,
-                    CornerRadiusBottomRight = 20,
-                });
-            }
+            var swatch = UiStyle.Swatch(Protocol.PlayerColor(i), mine, $"color_{i}", Protocol.ColorNames[i]);
             swatch.Pressed += () => SetProfile(nameField?.Text ?? Net.PlayerName, Net.Appearance.WithColor(Protocol.PlayerColor(index)));
             colors.AddChild(swatch);
         }
@@ -578,6 +578,46 @@ public partial class Menus : CanvasLayer
         buttons.AddChild(leave);
         layout.AddChild(buttons);
         AddMessage();
+    }
+
+    private void OpenBotEditor(PlayerProfile? editing)
+    {
+        if (botEditor != null || picker != null || Net.Lobby is not { Phase: LobbyServer.LobbyPhase.Waiting } lobby) { return; }
+        botEditor = new BotEditor
+        {
+            Net = Net,
+            Editing = editing,
+            InitialName = editing?.Name ?? DefaultBotName(lobby),
+            InitialAppearance = editing?.Appearance ?? DefaultBotAppearance(lobby),
+            InitialDifficulty = editing != null ? (BotDifficulty)Math.Min(editing.ControllerConfig.Difficulty, (byte)BotDifficulty.Hard) : BotDifficulty.Normal,
+        };
+        botEditor.Closed += () =>
+        {
+            botEditor = null;
+            if (Visible) { navigation.Configure(editing != null ? $"bot_{editing.Id}" : "add_bot"); }
+        };
+        AddChild(botEditor);
+    }
+
+    /// <summary>"Bot 1", "Bot 2"...: the first number nobody in the lobby is named with.</summary>
+    internal static string DefaultBotName(LobbyInfo lobby)
+    {
+        for (var n = 1; ; n++)
+        {
+            var name = $"Bot {n}";
+            if (!lobby.Members.Any(m => Protocol.SameName(m.Name, name))) { return name; }
+        }
+    }
+
+    /// <summary>The first preset nobody in the lobby wears; any color stays allowed.</summary>
+    private static AppearanceRecord DefaultBotAppearance(LobbyInfo lobby)
+    {
+        for (var i = 0; i < Protocol.PlayerColors.Length; i++)
+        {
+            var preset = AppearanceRecord.FromPalette(i);
+            if (!lobby.Members.Any(m => m.Appearance.Color == preset.Color)) { return preset; }
+        }
+        return AppearanceRecord.FromPalette(lobby.Members.Count);
     }
 
     private void AdjustMatchLength(int direction)
