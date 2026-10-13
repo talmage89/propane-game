@@ -181,7 +181,7 @@ All runs were on the final work head `a344b98` (dev + part 1 + this work), on th
 - **Short Fuse is unreachable from a match:** it is in `ModeRegistry.Prototypes` only, not in `ModeRegistry.All`, the
   lobby or `MatchStart`.
 - **`ModeHud` gained a trailing optional field** (`Bar`), which is local HUD data that is never sent.
-- **Tank Bank:** world hashes and formations (`test-world`), the generator, the mode suites and the soaks below are
+- **Tank Bank:** world hashes and formations (`test-world`), the generator, the mode suites and the soaks above are
   unchanged.
 - **Release:** no minor release is needed for this package; a patch is enough. It changes nothing players in a match
   share.
