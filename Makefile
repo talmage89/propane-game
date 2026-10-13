@@ -117,7 +117,7 @@ GENERATOR_SHARDS := test-full-generator-1 test-full-generator-2 test-full-genera
 # The Lab sessions of check_lab.py --full, split by cost.
 LAB_1 := soak-void
 LAB_2 := soak-suburb
-LAB_3 := lifetime,rules,aimstall,duel,ringout,king,dials
+LAB_3 := lifetime,rules,aimstall,duel,ringout,king,shortfuse,dials
 LAB_4 := ringout-full,king-full,king-suburb
 LAB_SHARDS := test-full-lab-1 test-full-lab-2 test-full-lab-3 test-full-lab-4
 # Longest first, so make -j starts the jobs that would otherwise finish last early. The Lab soaks are unseeded bot

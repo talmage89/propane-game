@@ -44,6 +44,7 @@ public partial class LabTest : Node
                 case "aimstall": await AimStall().ConfigureAwait(true); break;
                 case "dials": await Dials().ConfigureAwait(true); break;
                 case "prototype": await Prototypes().ConfigureAwait(true); break;
+                case "shortfuse": await ShortFuseMatches().ConfigureAwait(true); break;
                 default: await Lifetime().ConfigureAwait(true); break;
             }
             template.Dispose();
@@ -391,6 +392,137 @@ public partial class LabTest : Node
         // Bot play, not legality: across full rounds somebody must hold the zone long enough to mint.
         if (id == "king" && DevArgs.Get("quick") == null && until == float.MaxValue)
             Assert(minted > 0, $"king: nobody minted across {seeds} rounds");
+    }
+
+    /// <summary>
+    /// Whole Short Fuse matches with a bot on every actor (the player's too), headless, across seeds: rounds rebuild
+    /// the suburb, and each must end legally. Every death is a starter's, once, credited to someone else or nobody;
+    /// the dead spectate and leave the round; the winner was alive; the match winner reached the wins; kills add up;
+    /// every life advanced with its round; and the Lab's reports, arriving at once, were never late, early, duplicated
+    /// or naming an unknown actor or blast. --quick shortens rounds and the match; --capture-events screenshots a
+    /// blast-then-bullet kill, the kill feed, spectating and the round-win banner.
+    /// </summary>
+    private async Task ShortFuseMatches()
+    {
+        var scenario = LabScenarios.Get("shortfuse");
+        var seeds = (int)DevArgs.GetFloat("seeds", 2);
+        var firstSeed = (int)DevArgs.GetFloat("first-seed", 1);
+        template.LabPrototypeBots = (int)DevArgs.GetFloat("bots", 2);
+        if (DevArgs.Get("quick") != null)
+        {
+            template.ShortFuseRoundSeconds = 60;
+            template.ShortFuseWinsToMatch = 2;
+            template.ShortFuseRoundEndSeconds = 1;
+        }
+        DevArgs.ApplyTuningOverrides(template);
+        var events = DevArgs.Get("capture-events") != null;
+        int combos = 0, deaths = 0, roundsPlayed = 0, limits = 0;
+        for (var seed = firstSeed; seed < firstSeed + seeds; seed++)
+        {
+            template.FixedSeed = 100 + seed * 37;
+            var lab = new LabSession
+            {
+                Scenario = scenario,
+                EnvironmentKind = LabEnvironment.Suburb,
+                Template = template,
+                PauseOnFocusLoss = false,
+                TestRandomSeed = (ulong)seed,
+                DrivePlayer = DevArgs.Get("watch") == null,
+                Name = "Lab"
+            };
+            AddChild(lab);
+            var match = lab.Match!;
+            var tuning = lab.World.Tuning;
+            var starters = lab.Session.Actors.Select(a => a.Character.ActorId).ToArray();
+            Assert(starters.Length == template.LabPrototypeBots + 1 && lab.LiveTanks.Any() && lab.ShortFuse!.Spawns.Count == starters.Length, "roster or fixture");
+            var maxRounds = starters.Length * (tuning.ShortFuseWinsToMatch - 1) + 1;
+            var limit = maxRounds * (tuning.ShortFuseRoundSeconds + tuning.ShortFuseRoundEndSeconds + 10) * 60;
+            PrototypeRunner? watched = null;
+            var captured = new HashSet<string>();
+            var pending = new List<(int Frame, string Name)>();
+            var frame = 0;
+            void Capture(string name, int delay)
+            {
+                if (events && captured.Add(name)) pending.Add((frame + delay, $"shortfuse_{seed}_{name}"));
+            }
+            void Watch(PrototypeRunner runner)
+            {
+                watched = runner;
+                var rules = (ShortFuseRules)runner.Rules;
+                var spawns = lab.ShortFuse!.Spawns.Select(p => p.Position).ToArray();
+                Assert(spawns.SelectMany(a => spawns.Where(b => b != a), (a, b) => a.DistanceTo(b)).DefaultIfEmpty(99).Min() > 10, $"seed {seed}: crowded starts");
+                Assert(lab.Session.Actors.All(a => a.Character.LifeId == match.Round && rules.Health.Health(a.Character.ActorId, runner.Clock.Now) == rules.MaxHealth),
+                    $"seed {seed} round {match.Round}: lives must advance with the round, at full health");
+                runner.Decided += command =>
+                {
+                    switch (command)
+                    {
+                        case ActorDied died:
+                            deaths++;
+                            Assert(starters.Contains(died.VictimId) && died.CreditedTo != died.VictimId && (died.CreditedTo == 0 || starters.Contains(died.CreditedTo)),
+                                $"seed {seed}: illegal death {died}");
+                            Assert(rules.RoundDeaths.Count(d => d.VictimId == died.VictimId) == 1, $"seed {seed}: {died.VictimId} died twice");
+                            var body = lab.Session.Actor(died.VictimId)!.Character;
+                            if (died.Kind == DamageKind.Bullet && body.IsRagdolled) { combos++; Capture("blast_then_bullet", 2); }
+                            if (died.VictimId == lab.Player.ActorId) Capture("spectating", (int)((tuning.ShortFuseCorpseSeconds + 1.5f) * 60));
+                            if (rules.RoundDeaths.Count >= 2) Capture("kill_feed", 10);
+                            break;
+                        case RoundWon won:
+                        {
+                            roundsPlayed++;
+                            var alive = starters.Where(rules.IsAlive).ToArray();
+                            var timedOut = runner.Elapsed >= tuning.ShortFuseRoundSeconds - 0.01;
+                            if (timedOut) limits++;
+                            Assert(alive.Length + rules.RoundDeaths.Count == starters.Length, $"seed {seed}: alive {alive.Length} + dead {rules.RoundDeaths.Count}");
+                            Assert(timedOut || alive.Length <= 1, $"seed {seed}: the round ended early with {alive.Length} alive");
+                            Assert(won.WinnerId == 0 || alive.Contains(won.WinnerId), $"seed {seed}: the winner {won.WinnerId} was not alive");
+                            Assert(rules.RoundDeaths.All(d => runner.Spectating(d.VictimId)) && alive.All(a => !runner.Spectating(a)), $"seed {seed}: spectators disagree");
+                            Capture("round_win", 30);
+                            GD.Print($"[lab shortfuse] seed={seed} round={won.RoundId} winner={won.WinnerId} time={runner.Elapsed:F1}s deaths=" +
+                                string.Join(",", rules.RoundDeaths.Select(d => $"{d.VictimId}:{d.Kind}:{d.KilledBy}>{d.CreditedTo}")) +
+                                $" bots={string.Join(" | ", starters.Select(a => $"{a} {runner.BotStatus(a)}"))}");
+                            break;
+                        }
+                    }
+                };
+            }
+            var watch = System.Diagnostics.Stopwatch.StartNew();
+            for (; lab.Prototype is not { Finished: true }; frame++)
+            {
+                Assert(frame < limit, $"seed {seed}: the match never ended");
+                if (lab.Prototype is { } runner && runner != watched) Watch(runner);
+                foreach (var shot in pending.Where(p => p.Frame <= frame).ToArray())
+                {
+                    capture.Screenshot(shot.Name);
+                    pending.Remove(shot);
+                }
+                if (DevArgs.Get("trace") != null && frame % 300 == 0 && lab.Prototype is { } traced)
+                {
+                    GD.Print($"[lab trace] {traced.Elapsed:F1}s " + string.Join(" | ", lab.Session.Actors.Select(a =>
+                        $"{a.Character.ActorId} {((ShortFuseRules)traced.Rules).Health.Health(a.Character.ActorId, traced.Clock.Now):0} {traced.BotStatus(a.Character.ActorId)}")));
+                }
+                await Frames(1).ConfigureAwait(true);
+            }
+            var fuse = (ShortFuseRules)match.Rules!;
+            foreach (var line in fuse.Snapshot().Report) GD.Print($"[lab shortfuse] seed {seed}: {line.Text}");
+            var health = fuse.Health;
+            Assert(fuse.MatchOver && fuse.MatchWinner is { } champion && fuse.Wins(champion) == tuning.ShortFuseWinsToMatch &&
+                starters.Count(a => fuse.Wins(a) >= tuning.ShortFuseWinsToMatch) == 1, $"seed {seed}: no single match winner");
+            Assert(fuse.Rounds.Count == match.Round && fuse.Rounds.Count(r => r.WinnerId != 0) == starters.Sum(fuse.Wins), $"seed {seed}: round wins disagree");
+            Assert(health.Deaths.Count(d => d.CreditedTo != 0) == starters.Sum(fuse.Kills) && health.Deaths.Count == starters.Sum(fuse.DeathsOf), $"seed {seed}: kills disagree");
+            Assert(new[] { DamageRefusal.Late, DamageRefusal.Future, DamageRefusal.Duplicate, DamageRefusal.UnknownAttacker, DamageRefusal.UnknownVictim,
+                DamageRefusal.UnknownBlast, DamageRefusal.SelfHit }.All(r => health.Refused(r) == 0), $"seed {seed}: the Lab sent a bad report: {health.Audit()}");
+            Assert(health.Accepted > 0 && health.Deaths.Count > 0, $"seed {seed}: nobody fought");
+            GD.Print($"[lab shortfuse] seed={seed} rounds={fuse.Rounds.Count} winner={fuse.MatchWinner} wall={watch.Elapsed.TotalSeconds:F1}s");
+            await Frames(20).ConfigureAwait(true);
+            capture.Screenshot($"shortfuse_{seed}_end");
+            Assert(lab.World.Paused && lab.Overlay.MenuVisible, "a decided match must pause and show the Lab menu");
+            lab.Session.Dispose(); lab.Free();
+            await Collect().ConfigureAwait(true);
+        }
+        GD.Print($"[lab shortfuse] {seeds} matches, {roundsPlayed} rounds ({limits} at the limit), {deaths} deaths, {combos} finished while down");
+        // Bot play, not legality: across whole matches a thrown player must sometimes be shot dead.
+        if (DevArgs.Get("quick") == null) Assert(combos > 0, "no blast-then-bullet kill across the matches");
     }
 
     /// <summary>Real shots into the shipped maximum stack, through the whole chain, with frame times and frames.</summary>

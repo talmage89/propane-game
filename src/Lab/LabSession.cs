@@ -31,6 +31,9 @@ public partial class LabSession : Node3D
     public PrototypeRunner? Prototype { get; private set; }
     public RingOutArena? RingOut { get; private set; }
     public KingArena? King { get; private set; }
+    public ShortFuseArena? ShortFuse { get; private set; }
+    /// <summary>A multi-round prototype's match (Short Fuse), carried across the resets that build each round's suburb.</summary>
+    public LabMatch? Match { get; private set; }
     /// <summary>Test seam: a prototype's runner drives the player's actor with the mode's brain too.</summary>
     internal bool DrivePlayer { get; init; }
     private MatchHud? matchHud;
@@ -70,9 +73,15 @@ public partial class LabSession : Node3D
             if (!double.IsFinite(value) || value < dial.Min || value > dial.Max)
                 throw new ArgumentOutOfRangeException(property.Name);
         }
+        if (Scenario.Definition.Id == Modes.ModeRegistry.ShortFuseId)
+        {
+            // Each round of the match is a new suburb: the match's seed, stepped by round.
+            Match ??= new LabMatch(settings.FixedSeed != 0 ? settings.FixedSeed : (int)(GD.Randi() % 100000) + 1);
+        }
+        var seed = Match?.SuburbSeed ?? (settings.FixedSeed != 0 ? settings.FixedSeed : 23);
         source = EnvironmentKind == LabEnvironment.Void ? new VoidWorldSource() :
             new SuburbWorldSource(Scenario.Banking ? Scenario.Definition.Supply.Suburb(settings, 2) with { MapSize = settings.LabSuburbSize } :
-                Scenario.Definition.Supply.Suburb(settings, 1), settings.FixedSeed != 0 ? settings.FixedSeed : 23);
+                Scenario.Definition.Supply.Suburb(settings, Scenario.Prototype ? settings.LabPrototypeBots + 1 : 1), seed);
         SessionFactory.Build(this, settings, source, new Mode(this), session => { Session = session; if (TestRandomSeed is { } seed) World.Random.Seed = seed; }, present: CreateLocalView);
         resetQueued = false;
     }
@@ -84,10 +93,21 @@ public partial class LabSession : Node3D
         World.Defer(Reset, whilePaused: true);
     }
 
-    /// <summary>Also used by lifecycle probes. Event handlers request a deferred reset instead.</summary>
-    public void Reset()
+    /// <summary>Also used by lifecycle probes. Event handlers request a deferred reset instead. A reset starts a new match.</summary>
+    public void Reset() => Rebuild(keepMatch: false);
+
+    /// <summary>The next round of a multi-round match: a new world, the same match.</summary>
+    internal void AdvanceRound()
+    {
+        if (!World.IsAlive || resetQueued) return;
+        resetQueued = true;
+        World.Defer(() => Rebuild(keepMatch: true), whilePaused: true);
+    }
+
+    private void Rebuild(bool keepMatch)
     {
         using var tuning = World.Tuning.Copy();
+        if (!keepMatch) Match = null;
         Session.Dispose();
         tanks.Clear();
         suburb = null;
@@ -96,6 +116,7 @@ public partial class LabSession : Node3D
         Prototype = null;
         RingOut = null;
         King = null;
+        ShortFuse = null;
         matchHud = null;
         Assemble(tuning);
         ResetCount++;
@@ -150,7 +171,7 @@ public partial class LabSession : Node3D
 
     public void SetMenu(bool visible)
     {
-        visible |= Bank is { IsPlaying: false } || Prototype is { IsPlaying: false };
+        visible |= Bank is { IsPlaying: false } || Prototype is { Finished: true };
         TuningPanel.Visible = false;
         World.SetPaused(visible);
         Overlay.ShowMenu(visible);
@@ -184,7 +205,7 @@ public partial class LabSession : Node3D
         var camera = view.CameraRig.Camera;
         var radius = Mathf.Tan(Mathf.DegToRad(Player.SpreadDegrees)) / Mathf.Tan(Mathf.DegToRad(camera.Fov / 2)) *
             GetViewport().GetVisibleRect().Size.Y / 2;
-        view.Hud.SetCrosshair(radius, !World.Paused && !Player.IsRagdolled, Player.AimAmount);
+        view.Hud.SetCrosshair(radius, !World.Paused && !Player.IsRagdolled && Player.Spectating == null, Player.AimAmount);
         view.Hud.SetTanks(LiveTanks.Count(), animate: false);
         if (Prototype != null && matchHud != null)
         {
@@ -279,6 +300,14 @@ public partial class LabSession : Node3D
         if (suburb == null) (start, startYaw) = King.Spawn(0, World.Tuning.LabPrototypeBots + 1, null, 0);
     }
 
+    internal void BuildShortFuse()
+    {
+        ShortFuse = new ShortFuseArena { Lab = this, Name = "ShortFuse" };
+        World.ContentRoot.AddChild(ShortFuse);
+        ShortFuse.Layout(suburb!.Plan, World.Tuning.LabPrototypeBots + 1, Match!.Round);
+        (start, startYaw) = ShortFuse.Spawn(0);
+    }
+
     internal List<PropaneTank> AddPile(Vector3 at, int count)
     {
         var tuning = World.Tuning;
@@ -317,7 +346,7 @@ public partial class LabSession : Node3D
                 BodyColor = BotColors[(i - 1) % BotColors.Length],
             };
             session.AddActor(bot);
-            var (at, yaw) = RingOut != null ? RingOut.Spawn(i, count)
+            var (at, yaw) = RingOut != null ? RingOut.Spawn(i, count) : ShortFuse != null ? ShortFuse.Spawn(i)
                 : King!.Spawn(i, count, suburb != null ? start : null, startYaw);
             bot.Teleport(at, yaw);
         }
@@ -326,12 +355,14 @@ public partial class LabSession : Node3D
             Lab = this,
             Mode = Scenario.Definition,
             Spots = King?.Spots ?? Array.Empty<Modes.ModeSpot>(),
+            Match = Match,
             Name = "PrototypeRunner",
             ProcessPhysicsPriority = -10,
         };
         session.World.Root.AddChild(Prototype);
         RingOut?.Bind(Prototype);
         King?.Bind(Prototype);
+        ShortFuse?.Bind(Prototype);
     }
 
     /// <summary>An orange disk on the floor, with a label unless <paramref name="text"/> is null.</summary>

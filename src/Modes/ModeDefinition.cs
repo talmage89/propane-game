@@ -70,11 +70,22 @@ public static class ModeRegistry
         new ModeSupply((tuning, _) => SuburbPlans.SinglePlayer(tuning), LimitedAmmo: false, Pickups: false), RoundTimer.Countdown,
         () => new KingHud(), seed => new KingBot(seed), KingRules.Tuners);
 
+    public const byte ShortFuseId = 5;
+
+    /// <summary>
+    /// Lab prototype: last one standing with health, a new suburb each round. Unlimited ammo, no cans; the suburb is
+    /// stocked for the players (on a Lab-sized slab), who start around its rim rather than at its spawn points.
+    /// </summary>
+    public static readonly ModeDefinition ShortFuse = new(ShortFuseId, "Short Fuse", 1, () => new ShortFuseRules(), ModeWorldSource.SuburbPlan,
+        new ModeSupply((tuning, players) => SuburbPlans.Match(tuning, players) with { MapSize = tuning.ShortFuseMapSize, PlayerSpawns = 0, AmmoSpots = 0 },
+            LimitedAmmo: false, Pickups: false),
+        RoundTimer.Countdown, () => new ShortFuseHud(), seed => new ShortFuseBot(seed), ShortFuseRules.Tuners);
+
     /// <summary>
     /// Modes tried only in the Lab. They are not in <see cref="All"/>: no lobby, MatchStart or envelope schema names
     /// them, so they change nothing a match shares.
     /// </summary>
-    public static IReadOnlyList<ModeDefinition> Prototypes { get; } = new[] { RingOut, King };
+    public static IReadOnlyList<ModeDefinition> Prototypes { get; } = new[] { RingOut, King, ShortFuse };
 
     private static readonly List<ModeDefinition> registered = new() { Sandbox, TankBank };
     public static IReadOnlyList<ModeDefinition> All => registered.AsReadOnly();

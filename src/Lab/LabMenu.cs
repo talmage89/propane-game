@@ -95,7 +95,8 @@ public partial class LabMenu : CanvasLayer
             else
             {
                 layout.AddChild(UiStyle.Text($"Environment: {scenario.Environments[0]}", 22, UiStyle.Ink, HorizontalAlignment.Center));
-                layout.AddChild(UiStyle.Text("A clear floor, an open sky, and no houses.", 16, UiStyle.SoftInk, HorizontalAlignment.Center));
+                layout.AddChild(UiStyle.Text(scenario.Environments[0] == LabEnvironment.Void ? "A clear floor, an open sky, and no houses."
+                    : "A new suburb every round, sized for everyone in it.", 16, UiStyle.SoftInk, HorizontalAlignment.Center));
             }
             if (scenario.Id == "stack")
             {
@@ -132,7 +133,7 @@ public partial class LabMenu : CanvasLayer
 
     private void Scenario(LabScenario scenario)
     {
-        Button(scenario.Name, () => { selected = scenario; environment = LabEnvironment.Void; Rebuild(); });
+        Button(scenario.Name, () => { selected = scenario; environment = scenario.Environments[0]; Rebuild(); });
         layout.AddChild(UiStyle.Text(scenario.Description, 16, UiStyle.SoftInk, HorizontalAlignment.Center));
     }
 

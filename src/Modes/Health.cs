@@ -380,7 +380,6 @@ public sealed class HealthState
     }
 
     /// <summary>One audit line for server logs and tests.</summary>
-    public string Audit() =>
-        $"health audit accepted={Accepted} refused={RefusedTotal} " +
-        string.Join(" ", refusals.OrderBy(r => r.Key).Select(r => $"{r.Key}={r.Value}")) + $" waiting={waiting.Count} deaths={deaths.Count}";
+    public string Audit() => string.Join(" ", new[] { $"health audit accepted={Accepted} refused={RefusedTotal}" }
+        .Concat(refusals.OrderBy(r => r.Key).Select(r => $"{r.Key}={r.Value}")).Append($"waiting={waiting.Count} deaths={deaths.Count}"));
 }

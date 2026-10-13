@@ -37,6 +37,8 @@ public static class LabScenarios
             new[] { LabEnvironment.Void }, lab => lab.BuildRingOut(), Mode: ModeRegistry.RingOut),
         new LabScenario("king", "King of the Cul-de-sac", "Hold the beam alone to mint tanks. It moves every 45 seconds.",
             new[] { LabEnvironment.Void, LabEnvironment.Suburb }, lab => lab.BuildKing(), Mode: ModeRegistry.King),
+        new LabScenario("shortfuse", "Short Fuse", "Last one standing: bullets chip, blasts kill. First to three rounds.",
+            new[] { LabEnvironment.Suburb }, lab => lab.BuildShortFuse(), Mode: ModeRegistry.ShortFuse),
     });
 
     public static LabScenario Get(string id) => All.FirstOrDefault(scenario => scenario.Id == id)
