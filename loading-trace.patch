@@ -1,0 +1,293 @@
+diff --git a/docs/multiplayer.md b/docs/multiplayer.md
+index 987eacb..3417a73 100644
+--- a/docs/multiplayer.md
++++ b/docs/multiplayer.md
+@@ -356,9 +356,14 @@ connection to 20/30 s before sending MatchStart, and the client does so before i
+ `IPacketTransport.SetLoading` carries this policy through decorators; backends without native ACK deadlines may
+ ignore it. Clients report `Loaded` after their first complete frame, so initial physics and shader work retain
+ loading grace. Loaded restores the short timeout at both ends, including a late Loaded after countdown or Go.
+-Leaving construction also restores it. A silent failed endpoint therefore does not keep a live-match player
+-present for the construction grace. Explicit disconnects remain immediate. ENet's retry schedule can defer
+-the check until its next retransmission; these are ACK timeout parameters, not exact wall-clock disconnect times.
++Leaving construction also restores it. The ENet adapter restores it only after a hold as long as the load itself
++(MatchStart to Loaded) plus 1 s: ENet doubles a reliable command's retry interval on every unacknowledged send,
++without a cap, so commands a stalled loader lost (its receive buffer overflows while it does not service the socket)
++retry up to that long after it resumes. Ending the grace at Loaded let the next such retry meet the short timeout,
++which declares the peer lost instead of resending. A silent failed endpoint therefore does not keep a live-match
++player present for the construction grace beyond that hold. Explicit disconnects remain immediate. ENet's retry
++schedule can defer the check until its next retransmission; these are ACK timeout parameters, not exact wall-clock
++disconnect times.
+ 
+ `NetClient.Diagnostics` exposes the local connection counters; server logs include per-connection payload
+ packets/bytes accepted out and received in, RTT, managed queue
+diff --git a/docs/test-speed.md b/docs/test-speed.md
+index acf7672..8bc47d5 100644
+--- a/docs/test-speed.md
++++ b/docs/test-speed.md
+@@ -407,8 +407,24 @@ runs is the same as on `dev`: the branch changes only `GeneratorTests.cs` under
+ `make test-full` (the serial run's passed). Beside other jobs it failed 5 of 6: 3 of 4 runs beside three generator
+ shards under `nice -n 19`, and both `-j4` runs that reached it while other jobs still ran.
+ 
+-Every failure is the same. The server drops Bot2 with `TransportFailure` during its nine-second readiness stall,
+-about 11 seconds after sending the plan, and the checker reports `missing play coverage or settled completion`. ENet
+-drops a peer that early only on the established-player timeout (3-second minimum, 8-second maximum), not on the
+-20/30-second loading grace. So the server sometimes ends Bot2's grace before Bot2 stalls. This branch does not change
+-that behavior; it is an open question for the network work.
++Every failure is the same. The server drops Bot2 with `TransportFailure` about 11 seconds after sending the plan,
++and the checker reports `missing play coverage or settled completion`. ENet drops a peer that early only on the
++established-player timeout (3-second minimum, 8-second maximum), not on the 20/30-second loading grace.
++
++The cause, from timestamped traces on both ends (`claude/loading-grace-iqlm37`): the grace did not end before the
++stall. Bot2 sent `Loaded` after it, and the server dropped Bot2 0.02 to 4.5 seconds after receiving it, in all 8
++failures of 20 runs. Bot2's frames after the stall took about 17 ms (the bots are headless), so slow first frames
++are not the cause. While Bot2 slept, the server's body stream overflowed its 208 KB UDP receive buffer
++(`RcvbufErrors` in `/proc/net/snmp`: 158–326 drops in each failing run; 18–89 in 11 of the 12 passing runs, 201 in one). ENet doubles a
++reliable command's retry interval on every unacknowledged send, without a cap (`enet_protocol_check_timeouts` in
++Godot's bundled ENet 1.3.18). So commands lost in the overflow next retried seconds after Bot2 resumed. Once
++`Loaded` had restored the short timeout, the next such retry found the command unacknowledged 3 seconds after its
++last send, after six or more attempts, and declared the peer lost instead of resending. The run passed only when no
++retry with an interval that long came due after `Loaded`. The fix keeps the grace after `Loaded` for as long as the
++load took, plus 1 second (`LoadingGrace` in `NetTransport.cs`), and the match passes; see
++[multiplayer.md](multiplayer.md#transport-contract).
++
++| Loading-readiness match on the 4-CPU VM | Before | After |
++| --- | ---: | ---: |
++| Alone | 12/20 | AFTER_ALONE |
++| Beside `make -j3 test-full-generator-1 test-full-generator-2 test-full-generator-3` | 4/10 | AFTER_BESIDE |
+diff --git a/src/Dev/NetTest.cs b/src/Dev/NetTest.cs
+index 7c9abff..5709342 100644
+--- a/src/Dev/NetTest.cs
++++ b/src/Dev/NetTest.cs
+@@ -132,7 +132,9 @@ public partial class NetTest : Node
+             {
+                 // Native transport regression: a legitimate construction frame can outlast an 8 s timeout.
+                 Log("tank-check loading stall 9s");
++                Propane.Net.NetTransport.Trace("stall begin");
+                 System.Threading.Thread.Sleep(TimeSpan.FromSeconds(9));
++                Propane.Net.NetTransport.Trace("stall end");
+             }
+             match = new Match
+             {
+@@ -193,12 +195,16 @@ public partial class NetTest : Node
+                 if (raceVent != null) { ScenarioAssert(raceVent == canonical.Vent, "race: canonical vent changed during reconciliation"); }
+                 raceVent = canonical.Vent;
+             };
++            Propane.Net.NetTransport.Trace("AddChild begin");
+             AddChild(match);
++            Propane.Net.NetTransport.Trace("AddChild end");
+             if (DevArgs.Get("tank-check-ready-stall") == net.PlayerName)
+             {
+                 // Readiness can be sent from packet delivery while construction still blocks native ACK service.
+                 Log("tank-check readiness callback stall 9s");
++                Propane.Net.NetTransport.Trace("stall begin");
+                 System.Threading.Thread.Sleep(TimeSpan.FromSeconds(9));
++                Propane.Net.NetTransport.Trace("stall end");
+             }
+             if (DevArgs.Get("gather-trace") != null && match.World.Root.FindChild("Gather", true, false) is TankGather gatherProbe)
+             {
+diff --git a/src/Dev/UnitTests/TransportTests.cs b/src/Dev/UnitTests/TransportTests.cs
+index 9a07f32..ebb21be 100644
+--- a/src/Dev/UnitTests/TransportTests.cs
++++ b/src/Dev/UnitTests/TransportTests.cs
+@@ -397,6 +397,29 @@ public static class TransportTests
+             }
+             finally { client._ExitTree(); server._ExitTree(); client.Free(); server.Free(); }
+         });
++        runner.Run("transport/native loading grace outlasts readiness by the time spent loading", () =>
++        {
++            var grace = new LoadingGrace();
++            var slow = new ConnectionHandle();
++            var fast = new ConnectionHandle();
++            grace.Begin(slow, 100);
++            grace.Begin(fast, 100);
++            grace.Begin(slow, 104); // A repeated start keeps the first: retries back off from it.
++            Assert(!grace.End(fast, 102) && !grace.End(slow, 111), "readiness released a grace before ENet could retry");
++            Assert(grace.Expire(104.9).Count == 0 && grace.Expire(105).Single() == fast,
++                "a 2 s load did not keep its grace for 2 s plus the retry margin");
++            Assert(!grace.End(slow, 112) && grace.Expire(122.9).Count == 0, "a repeated Loaded moved or released the hold");
++            Assert(grace.Expire(123).Single() == slow && grace.Expire(200).Count == 0,
++                "an 11 s load did not release exactly once after 11 s plus the retry margin");
++            Assert(grace.End(slow, 200), "a connection that is not loading kept a long timeout");
++            // A new MatchStart during the hold cancels the release; disconnects forget the connection.
++            grace.Begin(fast, 300);
++            Assert(!grace.End(fast, 301), "readiness after a short load released at once");
++            grace.Begin(fast, 301.5);
++            Assert(grace.Expire(400).Count == 0, "a new load kept the previous load's release");
++            grace.Forget(fast);
++            Assert(grace.End(fast, 400) && grace.Expire(1000).Count == 0, "a retired connection kept a grace");
++        });
+         runner.Run("transport/client and server handshake, lobby, disconnect and reconnect", () =>
+         {
+             var network = new LoopbackNetwork();
+diff --git a/src/Net/LobbyServer.cs b/src/Net/LobbyServer.cs
+index 7afff26..b7c2f24 100644
+--- a/src/Net/LobbyServer.cs
++++ b/src/Net/LobbyServer.cs
+@@ -248,6 +248,7 @@ public partial class LobbyServer : Node
+                 case Msg.AddActor or Msg.UpdateActor or Msg.RemoveActor: ChangeActor(client, message.Payload); break;
+                 case Msg.StartMatch: StartMatch(client, (Godot.Collections.Dictionary)message.Payload); break;
+                 case Msg.Loaded:
++                    NetTransport.Trace($"recv Loaded from {client.Id}");
+                     if (client.Lobby?.Match is { } match)
+                     {
+                         match.Loaded.Add(client.Id);
+diff --git a/src/Net/Match.cs b/src/Net/Match.cs
+index 8d7de98..ef47f6b 100644
+--- a/src/Net/Match.cs
++++ b/src/Net/Match.cs
+@@ -93,6 +93,7 @@ public partial class Match : Node3D
+     private Phase phase = Phase.Loading;
+     private int me;
+     private int loadingFrames;
++    private int traceFrames = 40;
+     private float revealTime;
+     private bool revealing = true;
+     private float countdownLeft;
+@@ -188,8 +189,10 @@ public partial class Match : Node3D
+         if (World is not { IsAlive: true } || World.Paused) { return; }
+         // The first complete frame includes physics setup and shader warm-up. Reporting from
+         // construction's packet callback would end native loading grace before that work finishes.
++        if (traceFrames-- > 0) NetTransport.Trace($"frame delta {delta * 1000:0} ms loadingFrames={loadingFrames}");
+         if (loadingFrames > 0 && --loadingFrames == 0)
+         {
++            NetTransport.Trace("send Loaded");
+             Send(new NetWriter(Msg.Loaded, Setup.Id));
+             if (!World.IsAlive) return; // A required-send failure can synchronously retire the session.
+         }
+diff --git a/src/Net/NetTransport.cs b/src/Net/NetTransport.cs
+index de4d7e6..21f37e5 100644
+--- a/src/Net/NetTransport.cs
++++ b/src/Net/NetTransport.cs
+@@ -18,9 +18,11 @@ public sealed class NetTransport : IPacketTransport
+     private readonly HashSet<ConnectionHandle> connected = new();
+     private readonly Dictionary<ConnectionHandle, PacketCounters> counters = new();
+     private readonly Queue<(ConnectionHandle Connection, DisconnectReason Reason)> disconnected = new();
++    private readonly LoadingGrace grace = new();
+     private bool open;
+     private bool server;
+     private double pollMs;
++    private long lastPoll = Stopwatch.GetTimestamp();
+ 
+     public event Action<ConnectionHandle>? Connected;
+     public event Action<ConnectionHandle, DisconnectReason>? Disconnected;
+@@ -40,6 +42,7 @@ public sealed class NetTransport : IPacketTransport
+         };
+         peer.PeerDisconnected += id =>
+         {
++            Trace($"PeerDisconnected server={server} id={id} sincePoll={Stopwatch.GetElapsedTime(lastPoll).TotalMilliseconds:0}");
+             if (connections.TryGetValue((int)id, out var connection))
+             {
+                 // Godot's ENetMultiplayerPeer discards ENet event.data and exposes no timeout cause.
+@@ -90,11 +93,28 @@ public sealed class NetTransport : IPacketTransport
+         _ => 0,
+     };
+ 
++    internal static void Trace(string text) => GD.Print($"[trace] {DateTime.UtcNow:HH:mm:ss.fff} {text}");
++
+     public void SetLoading(ConnectionHandle connection, bool loading)
+     {
++        Trace($"SetLoading server={server} loading={loading} known={connected.Contains(connection)}");
+         if (!connected.Contains(connection)) { return; }
+         // Both ends need the longer minimum while the client constructs its world. Once it
+-        // reports ready, live players should not linger for the entire construction grace.
++        // reports ready, live players should not linger for the entire construction grace,
++        // but the grace outlasts readiness long enough for ENet to retry what loading delayed.
++        if (loading)
++        {
++            grace.Begin(connection, Now);
++            SetTimeout(connection, loading: true);
++        }
++        else if (grace.End(connection, Now)) { SetTimeout(connection, loading: false); }
++    }
++
++    private static double Now => Stopwatch.GetTimestamp() / (double)Stopwatch.Frequency;
++
++    private void SetTimeout(ConnectionHandle connection, bool loading)
++    {
++        Trace($"SetTimeout server={server} loading={loading}");
+         peer.GetPeer(backendIds[connection])?.SetTimeout(32, loading ? 20000 : 3000, loading ? 30000 : 8000);
+     }
+ 
+@@ -127,10 +147,17 @@ public sealed class NetTransport : IPacketTransport
+     public void Poll()
+     {
+         var started = Stopwatch.GetTimestamp();
++        var gap = Stopwatch.GetElapsedTime(lastPoll, started).TotalMilliseconds;
++        if (gap > 250) Trace($"poll gap {gap:0} ms server={server}");
++        lastPoll = started;
+         try
+         {
+             if (open)
+             {
++                foreach (var connection in grace.Expire(Now))
++                {
++                    if (connected.Contains(connection)) { SetTimeout(connection, loading: false); }
++                }
+                 peer.Poll();
+                 if (peer.GetConnectionStatus() == MultiplayerPeer.ConnectionStatus.Disconnected)
+                 {
+@@ -180,6 +207,7 @@ public sealed class NetTransport : IPacketTransport
+     {
+         connections.Remove(backendIds[connection]);
+         connected.Remove(connection);
++        grace.Forget(connection);
+         peerIds.Retire(connection);
+         disconnected.Enqueue((connection, reason));
+     }
+@@ -203,3 +231,56 @@ public sealed class NetTransport : IPacketTransport
+         };
+     }
+ }
++
++/// <summary>
++/// When each connection's loading grace ends. ENet doubles a reliable command's retransmission timeout on every
++/// unacknowledged send, without a cap. While a loading client does not service its socket, commands it loses (its
++/// receive buffer overflows) back off to retry intervals as long as the time spent loading. Their next retry can then
++/// come after readiness, where the established timeouts measure the interval since the command's last send and
++/// declare the peer lost instead of resending. So the grace outlasts readiness by the time spent loading: a command
++/// first sent while loading waits at most that long, plus its first retransmission timeout, for its next retry.
++/// </summary>
++internal sealed class LoadingGrace
++{
++    /// <summary>Seconds that cover a command's first retransmission timeout: a round trip plus four deviations.</summary>
++    internal const double RetryMargin = 1;
++    private readonly Dictionary<ConnectionHandle, double> started = new();
++    private readonly Dictionary<ConnectionHandle, double> ends = new();
++
++    /// <summary>Loading begins; this cancels a pending release from an earlier load.</summary>
++    public void Begin(ConnectionHandle connection, double now)
++    {
++        started.TryAdd(connection, now);
++        ends.Remove(connection);
++    }
++
++    /// <summary>Readiness, or leaving construction. True when the established timeouts apply now.</summary>
++    public bool End(ConnectionHandle connection, double now)
++    {
++        if (started.Remove(connection, out var since))
++        {
++            ends[connection] = now + (now - since) + RetryMargin;
++            return false;
++        }
++        return !ends.ContainsKey(connection);
++    }
++
++    /// <summary>Connections whose grace has run out by <paramref name="now"/>; each is reported once.</summary>
++    public IReadOnlyList<ConnectionHandle> Expire(double now)
++    {
++        if (ends.Count == 0) { return Array.Empty<ConnectionHandle>(); }
++        var due = new List<ConnectionHandle>();
++        foreach (var (connection, end) in ends)
++        {
++            if (now >= end) { due.Add(connection); }
++        }
++        foreach (var connection in due) { ends.Remove(connection); }
++        return due;
++    }
++
++    public void Forget(ConnectionHandle connection)
++    {
++        started.Remove(connection);
++        ends.Remove(connection);
++    }
++}
