@@ -27,6 +27,7 @@ public partial class RifleRig : SkeletonModifier3D
     private readonly RecoilSpring recoil = new();
     private float reloadTarget, reloadPhase;
     private bool meleeReloadForward, hadMelee;
+    private float twistR, twistL, reloadBlend;
 
     /// <summary>Wrist targets of the last pose, for contact diagnostics.</summary>
     public Transform3D RightTarget { get; private set; }
@@ -115,6 +116,7 @@ public partial class RifleRig : SkeletonModifier3D
         {
             // Ragdolling or getting up: RifleHandFollow keeps the rifle in the right hand.
             recoil.Reset();
+            reloadBlend = 0;
             Rifle.Animate(dt, 0);
             return;
         }
@@ -198,7 +200,9 @@ public partial class RifleRig : SkeletonModifier3D
         stance = Blend(stance, port, sprint);
 
         // Reload: the rifle comes in front of the chest, canted, with the magazine well where the left hand works.
-        var reloadWeight = Reload > 0 ? Mathf.SmoothStep(0, t.RifleReloadBlendFraction, Reload) * (1f - Mathf.SmoothStep(1f - t.RifleReloadBlendFraction, 1f, Reload)) : 0f;
+        // Eased like the other stances: a strike that cancels an early reload swings the rifle out over a few frames.
+        var reloadPose = Reload > 0 ? Mathf.SmoothStep(0, t.RifleReloadBlendFraction, Reload) * (1f - Mathf.SmoothStep(1f - t.RifleReloadBlendFraction, 1f, Reload)) : 0f;
+        var reloadWeight = reloadBlend = Mathf.MoveToward(reloadBlend, reloadPose, blendStep);
         if (reloadWeight > 0)
         {
             var reloadDir = CarryDirection(chestForward, chestRight, t.RifleReloadPitchDegrees, t.RifleReloadYawDegrees);
@@ -252,10 +256,12 @@ public partial class RifleRig : SkeletonModifier3D
         // 5. Hands onto the grips: the pistol grip, and the foregrip or, mid-reload, the magazine and bolt catch.
         RightTarget = handNow.InterpolateWith(RightHandTransform(stance), Weight);
         LeftTarget = leftNow.InterpolateWith(LeftHandTransform(stance, Rifle.LeftHandLocal, Rifle.LeftGripBasis), Weight);
-        var poleR = upperRWorld + chestRight * t.RifleElbowOut - up * t.RifleElbowDown;
-        var poleL = upperLWorld - chestRight * t.RifleElbowOut - up * t.RifleElbowDown;
-        SolveTwoBone(skeleton, upperR, lowerR, handR, to * RightTarget, to * poleR);
-        SolveTwoBone(skeleton, upperL, lowerL, handL, to * LeftTarget, to * poleL);
+        // Elbows down, out and a little back: the back share keeps the bend defined when a hand drops by the hip,
+        // where down-and-out alone would line up with the arm. It vanishes from the bend when a hand reaches forward.
+        var poleR = upperRWorld + chestRight * t.RifleElbowOut - up * t.RifleElbowDown - chestForward * t.RifleElbowBack;
+        var poleL = upperLWorld - chestRight * t.RifleElbowOut - up * t.RifleElbowDown - chestForward * t.RifleElbowBack;
+        SolveTwoBone(skeleton, upperR, lowerR, handR, to * RightTarget, to * poleR, ref twistR);
+        SolveTwoBone(skeleton, upperL, lowerL, handL, to * LeftTarget, to * poleL, ref twistL);
         Rifle.Animate(dt, Reload);
         PoseFingers(skeleton);
     }
@@ -469,15 +475,15 @@ public partial class RifleRig : SkeletonModifier3D
         skeleton.SetBonePoseRotation(bone, (parentBasis.Inverse() * globalBasis).Orthonormalized().GetRotationQuaternion());
     }
 
-    /// <summary>Analytic two-bone IK in skeleton space, with a pole point for the elbow. A target beyond reach
-    /// straightens the arm toward it.</summary>
-    private static void SolveTwoBone(Skeleton3D skeleton, int upper, int lower, int end, Transform3D target, Vector3 pole)
+    /// <summary>Analytic two-bone IK in skeleton space, with a pole point for the elbow. Each bone's frame is built
+    /// from the bend plane (the mannequin's elbow hinges about its local X, bending toward local +Z), so the arm's
+    /// twist follows the elbow instead of the shortest turn from the clip's pose, which flips as a strike crosses the
+    /// body. The forearm takes half the hand's twist. A target beyond reach straightens the arm toward it.</summary>
+    private static void SolveTwoBone(Skeleton3D skeleton, int upper, int lower, int end, Transform3D target, Vector3 pole, ref float twist)
     {
         var a = skeleton.GetBoneGlobalPose(upper).Origin;
-        var b = skeleton.GetBoneGlobalPose(lower).Origin;
-        var c = skeleton.GetBoneGlobalPose(end).Origin;
-        var l1 = (b - a).Length();
-        var l2 = (c - b).Length();
+        var l1 = a.DistanceTo(skeleton.GetBoneGlobalPose(lower).Origin);
+        var l2 = skeleton.GetBoneGlobalPose(lower).Origin.DistanceTo(skeleton.GetBoneGlobalPose(end).Origin);
         var toTarget = target.Origin - a;
         var distance = Mathf.Clamp(toTarget.Length(), Mathf.Abs(l1 - l2) + 0.001f, (l1 + l2) * 0.9999f);
         var dir = toTarget.Normalized();
@@ -486,12 +492,23 @@ public partial class RifleRig : SkeletonModifier3D
         var poleDir = pole - a;
         poleDir = (poleDir - dir * dir.Dot(poleDir)).Normalized();
         var elbow = a + dir * along + poleDir * height;
+        var wrist = a + dir * distance;
 
-        RotateBone(skeleton, upper, new Basis(new Quaternion((b - a).Normalized(), (elbow - a).Normalized())));
-        b = skeleton.GetBoneGlobalPose(lower).Origin;
-        c = skeleton.GetBoneGlobalPose(end).Origin;
-        var reach = a + dir * distance;
-        RotateBone(skeleton, lower, new Basis(new Quaternion((c - b).Normalized(), (reach - b).Normalized())));
+        var upperY = (elbow - a).Normalized();
+        // The forearm bends away from the pole side; that bend direction is the upper arm's +Z.
+        var upperZ = -(poleDir - upperY * upperY.Dot(poleDir)).Normalized();
+        var hinge = upperY.Cross(upperZ);
+        SetBoneGlobalBasis(skeleton, upper, new Basis(hinge, upperY, upperZ));
+        var lowerY = (wrist - elbow).Normalized();
+        var lowerBasis = new Basis(hinge, lowerY, hinge.Cross(lowerY));
+        var handX = target.Basis.Column0.Normalized();
+        handX -= lowerY * lowerY.Dot(handX);
+        // The twist is undefined where the bent wrist lines the hand's axis up with the forearm; fade the forearm's
+        // share out there. Unwrap against the last frame: near a half turn, halving the shorter angle would flip it.
+        var defined = Mathf.SmoothStep(0.1f, 0.5f, handX.Length());
+        if (defined > 0) twist += Mathf.Wrap(hinge.SignedAngleTo(handX, lowerY) - twist, -Mathf.Pi, Mathf.Pi);
+        lowerBasis = new Basis(lowerY, twist * 0.5f * defined) * lowerBasis;
+        SetBoneGlobalBasis(skeleton, lower, lowerBasis);
         SetBoneGlobalBasis(skeleton, end, target.Basis.Orthonormalized());
     }
 }

@@ -22,7 +22,7 @@ public partial class MotionProbe : SkeletonModifier3D
     private double time;
     private Vector3 previousRoot;
     private float maximum, maximumRate;
-    private const double SnapRate = 2400;
+    private const double SnapRate = 2400, DigitSnapRate = 5400;
     private float minMuzzle = float.PositiveInfinity, maxMuzzle = float.NegativeInfinity;
     private int frames, creepFrames;
     private bool invalid;
@@ -86,7 +86,8 @@ public partial class MotionProbe : SkeletonModifier3D
                 var digit = name.StartsWith("index_", StringComparison.Ordinal) || name.StartsWith("middle_", StringComparison.Ordinal) ||
                     name.StartsWith("ring_", StringComparison.Ordinal) || name.StartsWith("pinky_", StringComparison.Ordinal) || name.StartsWith("thumb_", StringComparison.Ordinal);
                 // A snap detector, not a smoothing bound: clips and stance changes may move fast, never jump.
-                if (!physical || digit) rotationFailed |= degrees / delta > SnapRate;
+                // Fingers close quickly on a grip, so they get a wider bound.
+                if (!physical || digit) rotationFailed |= degrees / delta > (digit ? DigitSnapRate : SnapRate);
                 var statistics = physical && !digit ? physicalMaxima : maxima;
                 if (physical && digit)
                 {

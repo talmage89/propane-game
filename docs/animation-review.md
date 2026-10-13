@@ -1,8 +1,8 @@
 # Animation review
 
-This is the acceptance harness for the authored directional rifle redo. Production animation, movement rules,
-rigs and assets are unchanged. Use it again after A4 changes aim and cameras. Visual thresholds are pending until
-that redo; numerical checks support the owner's rendered review, not replace it.
+This is the acceptance harness for character animation: clips played as authored under a light rifle stance
+([locomotion](locomotion.md), [rifle stance](motion.md)). The owner approves the look from rendered clips; numerical
+checks support that review, never replace it.
 
 ## Controller review
 
@@ -23,14 +23,17 @@ library and Godot. No downloads or recordings are required by CI.
 Each three-second case starts at the origin. Real input moves between 0.25 and 2.65 seconds, including acceleration
 and stopping. Walk uses 0.25 analog input (1.5 m/s); jog uses full input (6 m/s); aimed creep is 1.6 m/s. Directions
 are 0 forward, 45 forward/right, 90 right, 135 back/right, 180 back, 225 back/left, 270 left, 315 forward/left.
-The complete 34-case matrix includes idle, those 24 combinations, sprint, start/stop, a continuous aimed reversal,
-stationary half-turn and return, jumping while holding aim, a burst, tactical reload, melee and stationary aim.
+The complete 37-case matrix includes idle, those 24 combinations, sprint, start/stop, a continuous aimed reversal,
+stationary half-turn and return, jumping while holding aim, an aimed burst, a hip burst from the relaxed carry
+(`hip_burst`, the first shot's raise), hip fire while running backward and sideways (`jog_fire_180`,
+`jog_fire_090`), tactical reload, melee and stationary aim. Relaxed walk and jog face their travel; aimed creep and
+the running-fire cases show the directional rules.
 Teleports separate cases; they are not pivots. Reload starts with 20 rounds. The release has no melee; its slot is
 explicitly marked unavailable. Only its review fixture normalizes the older 3.6 m/s aim speed to 1.6 m/s.
 
 Tuners are fresh **code defaults**, independent of saved settings or ignored `tuning.tres`. Differences in a build's
-camera code remain visible in the player view. Side view has fixed framing. `--cases=a,b` limits a run; `--view=player`
-uses the real player camera. `--capture-dir=$PWD/build/...` saves 12 samples per simulated second. The tool creates
+camera code remain visible in the player view. Side view has fixed framing; `--view=front` looks from ahead and to the
+right, for sidesteps and the strike. `--cases=a,b` limits a run; `--view=player` uses the real player camera. `--capture-dir=$PWD/build/...` saves 12 samples per simulated second. The tool creates
 captioned six-frame sheets and deterministic short MP4s from those images, paired sheets for every build pair,
 and `index.html` with any-two-build selection, synchronized restart and half speed. Independent clip selection compares Walk
 against Carry or alternative strikes. A whole-run real-time recording
@@ -38,6 +41,15 @@ can also be requested directly:
 
 ```sh
 godot-mono --resolution 960x540 --disable-vsync --path . res://scenes/dev/animation_review.tscn -- --cases=pivot,turn,burst,reload,melee --view=side --record=$PWD/build/animation-review/actions.mp4 --record-fps=60
+```
+
+On a machine without a GPU, rendering is far slower than real time, so `--record` mostly repeats frames. Use
+Godot's Movie Maker instead: it renders every frame at a fixed step however slowly it runs. It records the project's
+1920×1080 base size whatever `--resolution` says, so lower `window/size/viewport_width` and `viewport_height` in the
+checkout's ignored `override.cfg` for the run, then restore it:
+
+```sh
+godot-mono --fixed-fps 30 --disable-vsync --path . --write-movie $PWD/build/review/creep.avi res://scenes/dev/animation_review.tscn -- --cases=creep_180,creep_090 --view=front
 ```
 
 Fixed-step films are the comparison evidence; real-time `--record` cadence is affected by other GPU work. Neither

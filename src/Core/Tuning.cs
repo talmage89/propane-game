@@ -163,7 +163,7 @@ public partial class Tuning : Resource
     [Export(PropertyHint.Range, "0.05,1,0.01")] public float MeleeWindup { get; set; } = 0.24f;
     [Export(PropertyHint.Range, "0.05,1,0.01")] public float MeleeActive { get; set; } = 0.16f;
     [Export(PropertyHint.Range, "0.05,2,0.01")] public float MeleeRecovery { get; set; } = 0.4f;
-    [Export(PropertyHint.Range, "0.1,10,0.1")] public float MeleeReloadReturnSpeed { get; set; } = 4.5f;
+    [Export(PropertyHint.Range, "0.1,10,0.1")] public float MeleeReloadReturnSpeed { get; set; } = 3f;
     [Export(PropertyHint.Range, "0.1,5,0.01")] public float MeleeCooldown { get; set; } = 0.65f;
     [Export(PropertyHint.Range, "0,10,0.1")] public float MeleeLungeSpeed { get; set; } = 2.6f;
     [Export(PropertyHint.Range, "0.1,4,0.05")] public float MeleeRange { get; set; } = 1.65f;
@@ -387,6 +387,7 @@ public partial class Tuning : Resource
     [Export(PropertyHint.Range, "0.01,0.3,0.01")] public float RifleReloadBlendFraction { get; set; } = 0.18f;
     [Export(PropertyHint.Range, "0,0.6,0.01")] public float RifleElbowOut { get; set; } = 0.3f;
     [Export(PropertyHint.Range, "0,1,0.01")] public float RifleElbowDown { get; set; } = 0.6f;
+    [Export(PropertyHint.Range, "0,1,0.01")] public float RifleElbowBack { get; set; } = 0.3f;
 
     // Reload, recoil, wrist and finger poses of the rifle stance.
     [ExportGroup("Rifle Motion")]
