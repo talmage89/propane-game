@@ -330,32 +330,7 @@ public partial class LabTest : Node
         foreach (var tank in tanks) tank.Freeze = true;
         lab.Player.InputOverride = new IdleInput(aim: true);
         await Frames(60).ConfigureAwait(true);
-        // Reproduce the first physics shot after ammo becomes ready, with the prior render's bolt pose.
-        var rig = lab.Player.FindChildren("*", owned: false).OfType<RifleRig>().Single();
-        Assert(rig.AimAmount >= .999f, "post-reload contact fixture must be fully aimed");
-        var rifle = rig.Rifle!;
-        var skeleton = rig.GetParent();
-        var parentAdvance = new ShotParentProbe { Rig = rig };
-        skeleton.AddChild(parentAdvance);
-        skeleton.MoveChild(parentAdvance, rig.GetIndex());
-        var contacts = new ShotParentProbe { Rig = rig, Source = parentAdvance };
-        skeleton.AddChild(contacts);
-        rig.Reload = .8f;
-        rig.AdvanceReload(0, remote: false);
-        rifle.PreviewReloadContact(.8f);
-        var firedWithForegrip = false;
-        void CheckFiringContact(ShotReport shot)
-        {
-            Assert(rig.Reload == 0 && rifle.MagazineHold == 0 && rifle.BoltHold == 0,
-                "first post-reload shot fitted an obsolete magazine/bolt contact");
-            firedWithForegrip = true;
-            parentAdvance.Pending = true;
-        }
-        lab.Player.ShotImpacting += CheckFiringContact;
         await FireAt(lab.Player, () => tanks[0].GlobalTransform * PropaneTank.LocalCenter).ConfigureAwait(true);
-        lab.Player.ShotImpacting -= CheckFiringContact;
-        Assert(firedWithForegrip, "post-reload firing contact was not exercised");
-        Assert(contacts.Samples == 1, "animation-parent firing contacts were not checked");
         Assert(tanks[0].State == PropaneTank.TankState.Venting && lab.Bank!.Scores[1] == 0, "first shot must puncture, not bank");
         await FireAt(lab.Player, () => tanks[1].GlobalTransform * PropaneTank.LocalCenter).ConfigureAwait(true);
         Assert(tanks[1].State == PropaneTank.TankState.Venting, "second fixture did not puncture");

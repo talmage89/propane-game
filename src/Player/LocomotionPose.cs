@@ -5,25 +5,44 @@ namespace Propane.Player;
 
 public enum JumpPose { Ground, Takeoff, Rising, Apex, Falling, Landing }
 
-/// <summary>One continuous stride clock for the clips and the procedural contacts. Physics observations latch
-/// the one-tick jump/landing events; render updates only interpolate presentation, never movement.</summary>
+/// <summary>One continuous stride clock for every locomotion clip, and the blend weights that choose them.
+/// Each clip is one cycle starting at the left foot's touchdown, so sampling all of them at the same phase keeps
+/// the feet in step through gait and direction blends. Physics observations latch the one-tick jump/landing
+/// events; render updates only interpolate presentation, never movement.</summary>
 public sealed class LocomotionPose
 {
     private readonly Tuning tuning;
     public LocomotionPose(Tuning tuning) => this.tuning = tuning;
     public int Takeoffs { get; private set; }
     public float Phase { get; private set; }
+    /// <summary>Walk family weight against the jog (1 = walk clips only).</summary>
     public float Walk { get; private set; }
     public float Sprint { get; private set; }
     public float Moving { get; private set; }
+    /// <summary>Walk family: share of the sidestep clip, from travel relative to the body.</summary>
+    public float Side { get; private set; }
+    /// <summary>Walk family: right sidestep against the left, and backpedal against the forward walk. Each pair
+    /// changes over only where its share of the blend is small.</summary>
+    public float Right { get; private set; }
+    public float Back { get; private set; }
+    /// <summary>Jog family: share of the backward run (the jog played in reverse).</summary>
+    public float JogBack { get; private set; }
     public float Air { get; private set; }
     public float Landing { get; private set; }
     public float Impact { get; private set; }
     public float TakeoffTime { get; private set; }
     public JumpPose Jump { get; private set; }
-    public float Stride => Mathf.Lerp(Mathf.Lerp(tuning.JogStrideLength, tuning.WalkStrideLength, Walk), tuning.SprintStrideLength, Sprint);
-    public float Contact => Mathf.Lerp(Mathf.Lerp(tuning.JogContactFraction, tuning.WalkContactFraction, Walk), tuning.SprintContactFraction, Sprint);
-    public float Lift => Mathf.Lerp(Mathf.Lerp(tuning.JogFootLift, tuning.WalkFootLift, Walk), tuning.SprintFootLift, Sprint);
+    /// <summary>Ground covered by one cycle of the current blend.</summary>
+    public float Stride
+    {
+        get
+        {
+            var t = tuning;
+            var walk = Mathf.Lerp(Mathf.Lerp(t.WalkStrideLength, t.BackStrideLength, Back), t.SideStrideLength, Side);
+            return Mathf.Lerp(Mathf.Lerp(t.JogStrideLength, walk, Walk), t.SprintStrideLength, Sprint);
+        }
+    }
+    private float heading;
     private bool supported = true;
     private bool wasJumping;
     private float vertical;
@@ -33,7 +52,7 @@ public sealed class LocomotionPose
 
     public void Reset()
     {
-        Phase = Walk = Sprint = Moving = Air = Landing = Impact = TakeoffTime = 0;
+        Phase = Walk = Sprint = Moving = Air = Landing = Impact = TakeoffTime = Side = JogBack = Right = Back = heading = 0;
         supported = true;
         wasJumping = false;
         Takeoffs = 0;
@@ -70,9 +89,11 @@ public sealed class LocomotionPose
         vertical = verticalVelocity;
     }
 
-    public void Update(float speed, PlayerGait gait, float dt)
+    /// <summary><paramref name="travel"/> is planar velocity in the body frame: x right, y forward (m/s).</summary>
+    public void Update(Vector2 travel, PlayerGait gait, float dt)
     {
         var t = tuning;
+        var speed = travel.Length();
         var blend = dt / Mathf.Max(t.GaitBlendTime, 0.001f);
         var walk = gait == PlayerGait.Creep ? 1 : 1 - Mathf.SmoothStep(0, t.RunSpeed, speed);
         var sprint = gait == PlayerGait.Sprint ? Mathf.SmoothStep(0, t.SprintSpeed, speed) : 0;
@@ -80,6 +101,18 @@ public sealed class LocomotionPose
         Sprint = Mathf.MoveToward(Sprint, sprint, blend);
         var moving = Mathf.Clamp(speed / Mathf.Max(t.AnimationIdleSpeed, 0.001f), 0, 1);
         Moving = Mathf.MoveToward(Moving, moving, dt / t.LocomotionSettleTime);
+        if (speed > 0.05f)
+        {
+            // Turn the heading of travel rather than blending weights: even a reversal sweeps through a side
+            // direction, where the front/back pair has almost no weight, so no clip pops in.
+            heading = Mathf.LerpAngle(heading, Mathf.Atan2(travel.X, travel.Y), 1 - Mathf.Exp(-3 * blend));
+        }
+        var direction = new Vector2(Mathf.Sin(heading), Mathf.Cos(heading));
+        // Diamond (L1) weights interpolate linearly between neighboring clips; 45 degrees is half of each.
+        Side = Mathf.Abs(direction.X) / (Mathf.Abs(direction.X) + Mathf.Abs(direction.Y));
+        Right = Mathf.SmoothStep(-0.15f, 0.15f, direction.X);
+        Back = Mathf.SmoothStep(0.15f, -0.15f, direction.Y);
+        JogBack = Mathf.SmoothStep(0.3f, -0.3f, direction.Y);
         if (supported)
         {
             Phase = Mathf.PosMod(Phase + speed * dt / Stride, 1);

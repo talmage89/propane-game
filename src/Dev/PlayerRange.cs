@@ -165,7 +165,7 @@ public partial class PlayerRange : Node3D
                 script.Hold(2.3f, 4.3f, new PlayerIntent { Move = Vector2.Up, Aim = true });
                 script.Hold(4.3f, 6, new PlayerIntent { Move = Vector2.Right, Aim = true });
                 script.Hold(6.3f, 8.3f, new PlayerIntent { Aim = true });
-                // A half-turn exceeds both the controller's standing twist and the feet's turn threshold.
+                // A half-turn exceeds the controller's standing twist, so the body turns and the feet step.
                 var turnLook = Mathf.Pi / world.Tuning.MouseSensitivity / 1.2f;
                 script.Look(6.5f, 7.7f, new Vector2(turnLook, 0));
                 script.Look(7.7f, 8.9f, new Vector2(-turnLook, 0));
@@ -187,7 +187,6 @@ public partial class PlayerRange : Node3D
                 });
                 director.At(15.8f, () => { player.Teleport(new Vector3(0, 0.24f, -4.5f), 0); events.SkipNextPose = true; if (motion != null) motion.SkipNextPose = true; });
                 director.At(19.7f, () => { player.Teleport(new Vector3(0.05f, 0.24f, -6), Mathf.Pi / 2); events.SkipNextPose = true; if (motion != null) motion.SkipNextPose = true; });
-                director.At(20.35f, events.AssertSplitSupport);
                 director.At(20.6f, () => { player.Teleport(new Vector3(0, 0, -8.5f), Mathf.Pi / 2); events.SkipNextPose = true; if (motion != null) motion.SkipNextPose = true; });
                 script.Hold(20.7f, 21.5f, new PlayerIntent { Aim = true });
                 script.Look(20.7f, 21.5f, new Vector2(Mathf.Pi / 2 / world.Tuning.MouseSensitivity / 0.8f, 0));

@@ -11,8 +11,7 @@ public partial class PlayerCharacter
         var dt = (float)delta;
         var tuning = World.Tuning;
         UpdateBodyContrast();
-        var planar = feet.SamplePlanarVelocity(dt);
-        animator.UpdateLocomotion(ResolvedState.Active ? planar.Length() : 0f, dt, ResolvedState.Gait);
+        animator.UpdateLocomotion(ResolvedState.Active ? BodyTravel(dt) : Vector2.Zero, dt, ResolvedState.Gait);
 
         visual.Rotation = new Vector3(0, facingYaw, 0);
         rig.AimTarget = aimTarget;
@@ -41,6 +40,26 @@ public partial class PlayerCharacter
         }
         Aim.Target = aimFocus;
         Aim.Advance(delta);
+    }
+
+    /// <summary>Planar travel in the body frame (x right, y forward) for the clips. Local players use their
+    /// velocity; remote copies use the displayed displacement, so an interpolation stall stops the feet too.
+    /// Turning on the spot steps sideways, at the speed the feet would swing around the body.</summary>
+    private Vector2 BodyTravel(float dt)
+    {
+        var root = GlobalPosition;
+        var velocity = IsRemote
+            ? hasDisplayedRoot && root.DistanceTo(displayedRoot) < World.Tuning.SnapDistance ? (root - displayedRoot) / Mathf.Max(dt, 0.00001f) : Vector3.Zero
+            : Velocity;
+        var turn = hasDisplayedRoot ? Mathf.Wrap(facingYaw - displayedYaw, -Mathf.Pi, Mathf.Pi) / Mathf.Max(dt, 0.00001f) : 0;
+        displayedRoot = root;
+        displayedYaw = facingYaw;
+        hasDisplayedRoot = true;
+        var facing = new Basis(Vector3.Up, facingYaw);
+        var travel = new Vector2(velocity.Dot(facing.Column0), -velocity.Dot(facing.Column2));
+        // A left turn (positive yaw) leads with the left foot; a quick turn steps no faster than the creep.
+        var step = new Vector2(-Mathf.Clamp(turn * World.Tuning.TurnStepRadius, -World.Tuning.CreepSpeed, World.Tuning.CreepSpeed), 0);
+        return step.LengthSquared() > travel.LengthSquared() ? step : travel;
     }
 
     private void UpdateBodyContrast()

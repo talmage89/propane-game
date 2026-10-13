@@ -82,11 +82,9 @@ public partial class PlayerCharacter
         var hit = space.IntersectRay(PhysicsRayQueryParameters3D.Create(start, start + direction * tuning.ShotRange, Layers.ShotMask, shotExclude));
         var end = hit.Count > 0 ? hit["position"].AsVector3() : start + direction * tuning.ShotRange;
 
-        // The bullet really leaves the muzzle: something between the muzzle and the target blocks it first.
-        // Movement resolves facing before this shot. Fit the muzzle in the same body frame the render uses.
-        visual.Rotation = new Vector3(0, facingYaw, 0);
-        rig.AlignShot(end);
-        var muzzle = rifle.MuzzlePosition;
+        // The bullet really leaves the muzzle: something between the muzzle and the target blocks it first. This
+        // muzzle is where the logical aim holds the rifle, never the animated one, so the pose cannot change a hit.
+        var muzzle = LogicalMuzzle(forward);
         var toEnd = end - muzzle;
         if (toEnd.LengthSquared() > 0.01f)
         {
@@ -98,10 +96,8 @@ public partial class PlayerCharacter
             }
         }
 
-        rifle.AlignBarrel(end);
-
         rifle.Fire(lastRound: Ammo is { Magazine: 0 });
-        World.Spawn.Effect(Tracer.Create(muzzle, end));
+        World.Spawn.Effect(Tracer.Create(rifle.MuzzlePosition, end));
 
         if (DevLog.Enabled)
         {
@@ -137,6 +133,16 @@ public partial class PlayerCharacter
                 break;
         }
         Fired?.Invoke(new ShotReport(muzzle, end, normal, shotDir, collider, true));
+    }
+
+    /// <summary>The muzzle as the logical aim holds it: ahead of the chest along the aim, higher when shouldered.</summary>
+    private Vector3 LogicalMuzzle(Vector3 forward)
+    {
+        var t = World.Tuning;
+        var right = forward.Cross(Vector3.Up);
+        right = right.LengthSquared() > 0.0001f ? right.Normalized() : Vector3.Right;
+        var height = ResolvedState.EffectiveAim ? t.ShotMuzzleAimHeight : t.ShotMuzzleHipHeight;
+        return GlobalPosition + Vector3.Up * height + right * t.ShotMuzzleSide + forward * t.ShotMuzzleForward;
     }
 
     /// <summary>The player a collider belongs to (its capsule or one of its ragdoll bones), if any.</summary>

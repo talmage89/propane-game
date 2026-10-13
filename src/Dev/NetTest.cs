@@ -1020,12 +1020,6 @@ public partial class NetTest : Node
         if (remoteGrip == null && (DevArgs.Get("grip-metrics") != null || DevArgs.Get("assert-grip") != null))
         {
             remoteGrip = GripProbe.Attach(other);
-            var rig = remoteGrip.GetParent<Skeleton3D>().GetNode<RifleRig>("RifleRig");
-            rig.RemoteShotAligned += _ =>
-            {
-                var label = rig.AimAmount > .99f ? "remote_09_aim_fire" : "remote_08_hip_fire";
-                if (meleeCaptured.Add(label)) CaptureRemoteFrame(label);
-            };
         }
         // The spawn-to-void relocation also replaces the aim target and body yaw. Measure the movement
         // sequence after that controlled staging has settled; the matrix measures ordinary corrections.

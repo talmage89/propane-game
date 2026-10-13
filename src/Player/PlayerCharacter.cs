@@ -43,7 +43,6 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
     private Node3D model = null!;
     private Skeleton3D skeleton = null!;
     private CharacterAnimator animator = null!;
-    private FootPlacement feet = null!;
     private RifleRig rig = null!;
     private RifleHandFollow handFollow = null!;
     private Ragdoll ragdoll = null!;
@@ -91,6 +90,9 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
     private Vector3? pendingRoot;
     private float remoteUpTimer;
     private float pendingYaw;
+    private Vector3 displayedRoot;
+    private float displayedYaw;
+    private bool hasDisplayedRoot;
 
     private ActorRuntime? runtime;
     public ActorRuntime Runtime => runtime ??= new ActorRuntime(this);
@@ -104,6 +106,9 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
     public float SpreadDegrees { get; private set; }
 
     public float AimAmount => aimAmount;
+
+    /// <summary>The stride clock and clip weights the animation is showing.</summary>
+    public LocomotionPose Locomotion => animator.Pose;
 
     /// <summary>Which way the body faces (radians about up; 0 faces -Z).</summary>
     public float FacingYaw => facingYaw;
@@ -219,18 +224,11 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         var player = model.FindChildren("*", "AnimationPlayer", owned: false).OfType<AnimationPlayer>().First();
         animator = new CharacterAnimator(World.Tuning, player, model, model.GetPathTo(skeleton));
         animator.Initialize();
-        poseBlend = new PoseBlend { World = World, Name = "PoseBlend" };
+        poseBlend = new PoseBlend { Name = "PoseBlend" };
         skeleton.AddChild(poseBlend);
-        feet = new FootPlacement { Name = "Feet", Player = this, Pose = animator.Pose };
-        skeleton.AddChild(feet);
-        rig = new RifleRig { World = World, Name = "RifleRig", Rifle = rifle, Pose = animator.Pose };
+        rig = new RifleRig { World = World, Name = "RifleRig", Rifle = rifle };
         skeleton.AddChild(rig);
-        rig.RemoteShotAligned += end =>
-        {
-            rifle.Fire();
-            World.Spawn.Effect(Tracer.Create(rifle.MuzzlePosition, end));
-        };
-        handFollow = new RifleHandFollow { Name = "RifleHandFollow", Rifle = rifle, Rig = rig, Blend = poseBlend };
+        handFollow = new RifleHandFollow { Name = "RifleHandFollow", Rifle = rifle, Rig = rig };
         skeleton.AddChild(handFollow);
 
         shotExclude.Add(GetRid());
@@ -278,7 +276,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         ResolvedState = default;
         airTime = 0;
         animator.Pose.Reset();
-        feet.Reset();
+        hasDisplayedRoot = false;
         GlobalPosition = position;
         Velocity = Vector3.Zero;
         knockback = Vector3.Zero;
@@ -463,8 +461,9 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         {
             if (wish.LengthSquared() > tuning.FacingInputThreshold * tuning.FacingInputThreshold)
             {
-                // Legs follow the movement, torso twists to the aim. Moving backward, the legs face forward and
-                // the feet step in actual travel direction, keeping the spine within its comfortable range.
+                // Walking and creeping, the body faces the aim and the clips step in any direction: backpedal,
+                // sidestep or a diagonal. Running, the legs turn toward the travel and the torso twists back to
+                // the aim; moving backward they face forward and run backward, keeping the spine comfortable.
                 var moveYaw = Mathf.Atan2(-wish.X, -wish.Z);
                 var offset = Mathf.Wrap(moveYaw - aimYaw, -Mathf.Pi, Mathf.Pi);
                 if (Mathf.Abs(offset) > Mathf.DegToRad(tuning.BackpedalAngleDegrees))
@@ -472,7 +471,8 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
                     offset = Mathf.Wrap(offset + Mathf.Pi, -Mathf.Pi, Mathf.Pi);
                 }
                 var limit = Mathf.DegToRad(tuning.CombatSpineTwistDegrees);
-                targetYaw = aimYaw + Mathf.Clamp(offset, -limit, limit);
+                var running = Mathf.SmoothStep(tuning.CreepSpeed, tuning.RunSpeed, new Vector2(Velocity.X, Velocity.Z).Length());
+                targetYaw = aimYaw + Mathf.Clamp(offset, -limit, limit) * running;
             }
             else
             {
@@ -568,7 +568,6 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         aimAmount = sprintAmount = readyAmount = 0;
         airTime = 0;
         animator.Pose.Reset();
-        feet.Reset();
         Ammo?.CancelReload();
         stateTimer = 0;
         settleTimer = 0;
@@ -739,7 +738,8 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
     /// <summary>Plays the muzzle flash and tracer of another player's shot.</summary>
     public void RemoteShot(Vector3 end)
     {
-        rig.QueueRemoteShot(end);
+        rifle.Fire();
+        World.Spawn.Effect(Tracer.Create(rifle.MuzzlePosition, end));
         rig.Kick();
         readyAmount = 1f;
     }
