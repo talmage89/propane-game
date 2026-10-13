@@ -51,8 +51,8 @@ fi
     counter = scratch / "world-count"
     environment = dict(os.environ, PATH=f"{scratch}:{os.environ['PATH']}", GODOT=str(scratch / "godot"),
                        COMMAND_LOG=str(log), WORLD_COUNT=str(counter), TMPDIR=str(scratch))
-    checkers = ["check_test_threads.py", "check_world_tests.py", "time_gate_tests.py", "check_scores_tests.py", "compare_vents_tests.py", "compare_tanks_tests.py", "net_bots_tests.py",
-                "animation_review_tests.py", "animation_metrics.py build/animation-review-gate/metrics.csv --output build/animation-review-gate/results.json"]
+    checkers = ["check_test_threads.py", "check_world_tests.py", "time_gate_tests.py", "check_scores_tests.py", "check_capacity_tests.py", "compare_vents_tests.py", "compare_tanks_tests.py", "net_bots_tests.py",
+                "check_shader_capacity.py", "check_lab.py", "animation_review_tests.py", "animation_metrics.py build/animation-review-gate/metrics.csv --output build/animation-review-gate/results.json"]
     scenes = ["shutdown_tests.tscn", "shutdown_tests.tscn -- --paused --window-close --repeat-quit", "core_tests.tscn", "blast_query_tests.tscn", "gather_range.tscn",
               "gather_range.tscn -- --scenario=grant-races",
               "gather_range.tscn -- --scenario=appearance",
@@ -61,7 +61,8 @@ fi
               "world_services_tests.tscn", "body_correction_tests.tscn", "server_tuning_tests.tscn -- --server --tune.MaxPlayers=6",
               "transport_physics_tests.tscn -- --server",
               "server_seed_tests.tscn -- --server --match-seed=23",
-              "session_actors_tests.tscn", "upright_pile_tests.tscn", "melee_range.tscn",
+              "session_actors_tests.tscn", "upright_pile_tests.tscn", "melee_range.tscn", "rifle_reach_tests.tscn",
+              "capacity_ui_tests.tscn -- --players=2", "capacity_ui_tests.tscn -- --players=8", "capacity_ui_tests.tscn -- --players=16",
               "animation_review.tscn -- --cases=walk_000,jog_000,creep_000,creep_180,creep_090,sprint,aim_idle",
               "player_range.tscn -- --scenario=melee --assert-motion --assert-grip",
               "bot_navigation_course.tscn -- --seeds=5",
@@ -73,6 +74,11 @@ fi
               "player_range.tscn -- --scenario=feet-events --assert-feet --assert-grip --assert-motion",
               "player_range.tscn -- --scenario=movement --assert-motion --assert-grip",
               "player_range.tscn -- --scenario=motion --assert-motion --assert-grip",
+              "player_range.tscn -- --scenario=recoil --stance=aim --assert-grip --assert-motion",
+              "player_range.tscn -- --scenario=recoil --stance=hip --assert-grip --assert-motion",
+              "player_range.tscn -- --scenario=recoil --stance=creep --assert-grip --assert-motion",
+              "player_range.tscn -- --scenario=recoil --stance=hip --burst-start=0 --assert-grip --assert-motion",
+              "player_range.tscn -- --scenario=bot-recoil --magazines=2",
               "generator_tests.tscn -- --seeds=20 --large-seeds=3 --formation-seeds=2"]
     probes = checkers + scenes + ["--write-world-plans=", "--hash-world-plans=", "world-diff", "world-missing", "world-partial", "world-second"]
     for failure in ["none", "format", "build", *probes]:
@@ -104,21 +110,47 @@ fi
         else:
             require(result.returncode != 0, f"parallel check ignored failure: {failure}", result.stdout)
     print("PASS: parallel check runs every suite after lint and propagates every suite/hash failure")
-    deep = ["--scenario=melee-reloads --assert-motion --assert-grip",
-            "--seeds=200 --large-seeds=100 --formation-seeds=6",
-            "bot_navigation_course.tscn -- --seeds=100"]
-    for failure in ["none", *deep]:
-        log.write_text("")
-        counter.write_text("0\n")
-        environment["PROBE_FAIL"] = failure
-        code, output = run(ROOT, "make", "-j4", "test-full", environment=environment)
-        commands = log.read_text().splitlines()
-        if failure == "none":
-            require(code == 0 and all(any(probe in c for c in commands) for probe in deep) and
-                    any("core_tests.tscn" in c for c in commands), "test-full lost the gate or deep sweeps", output)
-        else:
-            require(code != 0, f"test-full ignored deep failure: {failure}", output)
-    print("PASS: test-full includes the gate and every deep sweep, and propagates their failures")
+    # Every deep command, with the label its job prints. Each bot match runs its arguments once per bot. The generator
+    # shards and Lab sessions must also add up to the whole sweeps; check_generator_shards.py proves the seeds in test-full.
+    generator = "generator_tests.tscn -- "
+    bots = {"--melee-start --net-seed=2": 4, "--duel-blocked": 2, "--tank-check-ready-stall=Bot2": 2}
+    deep = {**dict.fromkeys(bots, "bots"),
+            "upright_pile_tests.tscn -- --deep --awake": "piles",
+            "menu_test.tscn -- --scenario=lifetime": "menu",
+            "--scenario=melee-reloads --assert-motion --assert-grip": "range",
+            "--scenario=recoil --stance=air --assert-grip --assert-motion": "range",
+            "player_range.tscn -- --scenario=bot-recoil --magazines=10": "range",
+            "bot_navigation_course.tscn -- --seeds=100": "navigation",
+            "check_lab.py --full --only=soak-void": "lab-1",
+            "check_lab.py --full --only=soak-suburb": "lab-2",
+            "check_lab.py --full --only=lifetime,rules,aimstall,duel,dials": "lab-3",
+            "check_generator_shards.py --full=--seeds=200 --large-seeds=100 --formation-seeds=6": "generator-coverage",
+            generator + "--first-seed=1 --seeds=50 --first-large-seed=1 --large-seeds=25 --first-formation-seed=1 --formation-seeds=2": "generator-1",
+            generator + "--first-seed=51 --seeds=50 --first-large-seed=26 --large-seeds=25 --first-formation-seed=3 --formation-seeds=2": "generator-2",
+            generator + "--first-seed=101 --seeds=50 --first-large-seed=51 --large-seeds=25 --first-formation-seed=5 --formation-seeds=1": "generator-3",
+            generator + "--first-seed=151 --seeds=50 --first-large-seed=76 --large-seeds=25 --first-formation-seed=6 --formation-seeds=1": "generator-4"}
+    lab = ["lifetime", "rules", "aimstall", "duel", "dials", "soak-void", "soak-suburb"]
+    for jobs, failures in ((["-j4"], ["none", *deep]), ([], ["none", generator + "--first-seed=101"])):
+        for failure in failures:
+            log.write_text("")
+            counter.write_text("0\n")
+            environment["PROBE_FAIL"] = failure
+            code, output = run(ROOT, "make", *jobs, "test-full", environment=environment)
+            commands = log.read_text().splitlines()
+            mode = " ".join(["make", *jobs, "test-full"])
+            if failure == "none":
+                require(code == 0 and any("core_tests.tscn" in c for c in commands), f"{mode} lost the gate", output)
+                for probe in deep:
+                    require(sum(probe in c for c in commands) == bots.get(probe, 1),
+                            f"{mode} skipped or duplicated {probe}", output)
+                require(sum(generator in c for c in commands) == 4 + 1, f"{mode} runs other generator sweeps", output)
+                sessions = [name for c in commands if "check_lab.py --full" in c for name in c.split("--only=")[1].split(",")]
+                require(sorted(sessions) == sorted(lab), f"{mode} Lab shards differ from every --full session", output)
+            else:
+                label = deep.get(failure, "generator-3")
+                require(code != 0 and f"[{label}] FAIL (exit " in output and f"test-full-{label}" in output,
+                        f"{mode} ignored or misattributed deep failure: {failure}", output)
+    print("PASS: plain and parallel test-full include the gate and every deep shard, and name the job that failed")
 
 
 
