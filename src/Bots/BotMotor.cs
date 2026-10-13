@@ -21,6 +21,9 @@ public sealed class BotMotor : System.IDisposable
     private float tapCooldown;
     private Vector3? goal;
     private bool sprint;
+    private Vector3 stallAnchor;
+    private float stalled;
+    private float direct;
     public PlayerIntent Intent;
     public float Skill { get; set; } = 1f;
     public bool Failed { get; private set; }
@@ -96,6 +99,21 @@ public sealed class BotMotor : System.IDisposable
             var wish = basis * new Vector3(Intent.Move.X, 0, -Intent.Move.Y);
             goal = player.GlobalPosition + wish.Normalized() * tuning.BotRouteSpacing * 2;
         }
+        // A planner that keeps searching without a route leaves the bot standing. After a stall, steer straight at the
+        // destination for a moment: the prototypes' arenas are mostly open floor.
+        if (player.GlobalPosition.DistanceTo(stallAnchor) > 0.5f) { stallAnchor = player.GlobalPosition; stalled = 0; }
+        else if (Flat(goal.Value - player.GlobalPosition).Length() > tuning.BotGoalRadius * 2)
+        {
+            stalled += dt;
+        }
+
+        if (stalled > StallTime) { direct = DirectTime; stalled = 0; navigator.Reset(); }
+        if (direct > 0)
+        {
+            direct -= dt;
+            Steer(player, Flat(goal.Value - player.GlobalPosition).Normalized(), sprint);
+            return;
+        }
         var shape = capsule != null && GodotObject.IsInstanceValid(capsule) && capsule.GetParent() == player ? capsule
             : capsule = player.GetChildren().OfType<CollisionShape3D>().Single();
         var capabilities = new NavigationCapabilities(shape.Shape, shape.Position, ((CapsuleShape3D)shape.Shape).Radius,
@@ -121,12 +139,20 @@ public sealed class BotMotor : System.IDisposable
             Face(player, player.GlobalPosition + move.Direction * 10 + Vector3.Up * 1.4f, dt);
             Intent.Aim = false;
         }
+        Steer(player, move.Direction, sprint && move.Sprint);
+        Intent.JumpPressed = move.Jump;
+    }
+
+    private const float StallTime = 1.2f;
+    private const float DirectTime = 1f;
+
+    private void Steer(PlayerCharacter player, Vector3 direction, bool run)
+    {
         var yaw = Mathf.DegToRad(player.Aim.Yaw);
         var forward = new Vector3(-Mathf.Sin(yaw), 0, -Mathf.Cos(yaw));
         var right = new Vector3(Mathf.Cos(yaw), 0, -Mathf.Sin(yaw));
-        Intent.Move = new Vector2(move.Direction.Dot(right), move.Direction.Dot(forward));
-        Intent.Sprint = sprint && move.Sprint && Intent.Move.Y > tuning.SprintForwardThreshold;
-        Intent.JumpPressed = move.Jump;
+        Intent.Move = new Vector2(direction.Dot(right), direction.Dot(forward));
+        Intent.Sprint = run && Intent.Move.Y > player.World.Tuning.SprintForwardThreshold;
         if (!player.IsOnFloor()) Intent.Aim = false;
     }
 

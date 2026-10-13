@@ -19,6 +19,7 @@ public sealed class KingBot : IBotGoalPolicy
     private readonly BotMotor motor = new();
     private int standZone = -1;
     private Vector3 standOffset;
+    private float standCheck;
     private float fightTime;
     private float burstClock;
     private PropaneTank? prize;
@@ -66,7 +67,14 @@ public sealed class KingBot : IBotGoalPolicy
         {
             // A spot sits on its pile, which nobody can stand in: hold the zone from beside it.
             standZone = zone;
-            PickStand(rules);
+            PickStand(rules, world, spot);
+        }
+        standCheck -= dt;
+        if (standCheck <= 0)
+        {
+            // Piles move and new ones materialize: a stand point a tank has rolled onto is no longer reachable.
+            standCheck = 0.5f;
+            if (!Clear(world, spot + standOffset)) PickStand(rules, world, spot);
         }
         var radius = (float)rules.Radius;
 
@@ -98,6 +106,15 @@ public sealed class KingBot : IBotGoalPolicy
             var gap = BotMotor.Flat(rival.GlobalPosition - here);
             if (gap.Length() > 2.5f) motor.MoveTo(rival.GlobalPosition - gap.Normalized() * 1.5f);
             Status = $"contesting {rival.ActorId}";
+        }
+        else if (!inZone && Blocker(world, player, spot, radius, tuning) is { } blocker)
+        {
+            // A venting tank in the zone keeps everyone out until it goes up: set it off from beyond its throw.
+            var center = blocker.GlobalTransform * PropaneTank.LocalCenter;
+            motor.Face(player, center, dt);
+            motor.Intent.Aim = true;
+            if (BotMotor.OnTarget(player, blocker)) motor.Tap();
+            Status = "clearing a venting tank from the zone";
         }
         else if (!inZone)
         {
@@ -134,7 +151,16 @@ public sealed class KingBot : IBotGoalPolicy
             }
         }
         motor.Navigate(player, world.LiveTanks, dt);
-        if (motor.Failed) PickStand(rules);
+        if (motor.Failed) PickStand(rules, world, spot);
+    }
+
+    private static PropaneTank? Blocker(IBotWorld world, PlayerCharacter player, Vector3 spot, float radius, Core.Tuning tuning)
+    {
+        var here = player.GlobalPosition;
+        return world.LiveTanks.FirstOrDefault(t => t.State == PropaneTank.TankState.Venting && !t.Invulnerable &&
+            BotMotor.Flat(t.GlobalPosition - spot).Length() < radius + tuning.RagdollRadius &&
+            t.GlobalPosition.DistanceTo(here) > tuning.RagdollRadius + 1f && t.GlobalPosition.DistanceTo(here) < 30f &&
+            BotMotor.CanSee(player, t.GlobalTransform * PropaneTank.LocalCenter));
     }
 
     /// <summary>The tank to bank, chosen a few times a second: each choice casts a ray to every candidate.</summary>
@@ -155,10 +181,21 @@ public sealed class KingBot : IBotGoalPolicy
             .OrderBy(t => t.GlobalPosition.DistanceTo(here)).FirstOrDefault();
     }
 
-    private void PickStand(KingRules rules)
+    /// <summary>A point inside the zone, beside its pile and clear of every tank, to hold it from.</summary>
+    private void PickStand(KingRules rules, IBotWorld world, Vector3 spot)
     {
-        var angle = rng.RandfRange(0, Mathf.Tau);
-        standOffset = new Vector3(Mathf.Cos(angle), 0, Mathf.Sin(angle)) * (float)rules.Radius * rng.RandfRange(0.45f, 0.75f);
+        for (var attempt = 0; attempt < 12; attempt++)
+        {
+            var angle = rng.RandfRange(0, Mathf.Tau);
+            standOffset = new Vector3(Mathf.Cos(angle), 0, Mathf.Sin(angle)) * (float)rules.Radius * rng.RandfRange(0.4f, 0.8f);
+            if (Clear(world, spot + standOffset)) return;
+        }
+    }
+
+    private static bool Clear(IBotWorld world, Vector3 point)
+    {
+        var clearance = world.World.Tuning.BotTankClearance + 0.8f;
+        return world.LiveTanks.All(t => BotMotor.Flat(t.GlobalPosition - point).Length() > clearance);
     }
 
     private void Shoot(PlayerCharacter player, PlayerCharacter rival, Core.Tuning tuning, float dt)

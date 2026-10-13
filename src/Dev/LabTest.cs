@@ -302,6 +302,7 @@ public partial class LabTest : Node
         var until = DevArgs.GetFloat("until", float.MaxValue); // Captures stop early and skip the outcome checks.
         var shots = (DevArgs.Get("shots") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries)
             .Select(v => double.Parse(v, CultureInfo.InvariantCulture)).ToArray();
+        var minted = 0;
         for (var seed = firstSeed; seed < firstSeed + seeds; seed++)
         {
             var lab = new LabSession
@@ -377,7 +378,7 @@ public partial class LabTest : Node
                     Assert(bank.Conserved && bank.Minted == runner.Roster.Sum(a => king.MintedBy(a.ActorId)), $"king seed {seed}: bank not conserved");
                     Assert(runner.Roster.All(a => runner.Scores.GetValueOrDefault(a.ActorId) == bank.Bank(a.ActorId)), "scores disagree with the bank");
                     Assert(moves == king.Zone && lab.King!.Materialized == moves, $"zone moves {moves}, zone {king.Zone}, piles {lab.King!.Materialized}");
-                    Assert(bank.Minted > 0, $"king seed {seed}: nobody held the zone long enough to mint");
+                    minted += bank.Minted;
                     break;
                 }
             }
@@ -387,6 +388,9 @@ public partial class LabTest : Node
             lab.Session.Dispose(); lab.Free();
             await Collect().ConfigureAwait(true);
         }
+        // Bot play, not legality: across full rounds somebody must hold the zone long enough to mint.
+        if (id == "king" && DevArgs.Get("quick") == null && until == float.MaxValue)
+            Assert(minted > 0, $"king: nobody minted across {seeds} rounds");
     }
 
     /// <summary>Real shots into the shipped maximum stack, through the whole chain, with frame times and frames.</summary>
