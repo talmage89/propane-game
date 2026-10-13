@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using Propane.Core;
+using Propane.Modes;
 using Propane.Net;
 using Propane.Player;
 using Propane.Tank;
@@ -26,6 +27,13 @@ public interface IBotWorld
     IEnumerable<PlayerCharacter> RemoteBodies { get; }
     IReadOnlyList<AmmoPickup> Pickups { get; }
     IEnumerable<PropaneTank> LiveTanks { get; }
+    /// <summary>
+    /// The mode's rules as this peer runs them, for policies that read mode-specific state (a boundary, a zone), or
+    /// null where the peer does not run them. Only the Lab's prototype runner supplies them so far.
+    /// </summary>
+    IModeRules? Rules => null;
+    /// <summary>The mode clock to read <see cref="Rules"/> with.</summary>
+    ModeClock Clock => default;
 }
 
 /// <summary>

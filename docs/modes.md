@@ -2,7 +2,9 @@
 
 How a game mode plugs into Propane: pure rules, a definition that selects everything mode-specific, a runner that
 supplies the clock and transport, and one fixed network envelope. Tank Bank is the first mode on this framework and
-plays exactly as before; its rules are in [multiplayer.md](multiplayer.md#tank-bank). Sandbox is the second.
+plays exactly as before; its rules are in [multiplayer.md](multiplayer.md#tank-bank). Sandbox is the second. Ring Out,
+King of the Cul-de-sac and Short Fuse are Lab prototypes, the framework's first test with new rules
+([below](#lab-prototypes)); Short Fuse is the first to use the optional [health state](#health).
 
 | Path | Contents |
 | --- | --- |
@@ -10,7 +12,12 @@ plays exactly as before; its rules are in [multiplayer.md](multiplayer.md#tank-b
 | `src/Modes/TankBankRules.cs` | Tank Bank's bank, spill tickets, gates, standings, statistics and audit; victim-owner helpers. |
 | `src/Modes/ModePhases.cs` | The pure phase machine the server's runner drives. |
 | `src/Modes/ModeHud.cs` | Plain HUD data and the Tank Bank and Sandbox presenters. |
-| `src/Modes/ModeDefinition.cs` | `ModeDefinition`, supply policy and `ModeRegistry` (Sandbox and Tank Bank). |
+| `src/Modes/ModeDefinition.cs` | `ModeDefinition`, supply policy and `ModeRegistry` (Sandbox and Tank Bank; the prototypes apart). |
+| `src/Modes/BodyEvents.cs` | Sampled positions, attributed throws, eliminations, `RoundOver` and a pure seeded generator. |
+| `src/Modes/Health.cs` | The optional health state: damage reports, validation, attribution, invulnerability, death, respawn. |
+| `src/Modes/RingOutRules.cs`, `KingRules.cs`, `ShortFuseRules.cs` | The prototypes' rules: Ring Out's slab plan, King's zone schedule, Short Fuse's rounds. |
+| `src/Modes/PrototypeHud.cs`, `ShortFuseHud.cs` | The prototypes' HUD presenters. |
+| `src/Lab/PrototypeRunner.cs`, `LabMatch.cs` | The offline runner that drives a prototype's rules in the Lab, and a multi-round match it carries. |
 | `src/Net/ModeEnvelope.cs` | The envelope record, schema registry, Tank Bank codecs, the causal gate and command order. |
 | `src/Net/ModeRunner.cs` | One run's mode on the server, and Tank Bank's wire adapter. |
 | `src/Bots/IBotWorld.cs` | Bot observations and the per-mode goal policy interface. |
@@ -34,6 +41,9 @@ presenter, the bot goal policy, the tuners the rules copy and the envelope schem
 | --- | --- | --- | --- | --- | --- | --- |
 | Sandbox (1) | no score, no spills, nothing gated | void | single-player suburb, unlimited ammo, no cans | none | tank arrows | none |
 | Tank Bank (2) | `TankBankRules` | suburb plan | `SuburbPlans.Match`, limited ammo, cans | countdown | bank, clock, arrows | `BankingBot` |
+| Ring Out (3), Lab only | `RingOutRules` | the Lab's slab | unlimited ammo, no cans | count-up | standing, knock-offs, next dissolve, feed | `RingOutBot` |
+| King of the Cul-de-sac (4), Lab only | `KingRules` | the Lab's choice | unlimited ammo, no cans | countdown | bank, minted, clock, zone arrows | `KingBot` |
+| Short Fuse (5), Lab only | `ShortFuseRules` | a suburb per round | `SuburbPlans.Match` on a Lab-sized slab, unlimited ammo, no cans | countdown | wins, standing, kills, health bar, feed | `ShortFuseBot` |
 
 Multiplayer lobbies play Tank Bank; `MatchStart` appends the mode id and schema version, and a client that does not
 know the pair fails decoding by name. Lab scenarios name a mode: the banking duel plays Tank Bank and the other
@@ -137,7 +147,8 @@ starting score.
 ## HUD
 
 A presenter turns mode state into plain `ModeHud` data: counters (the first renders large with its caption),
-scoreboard columns, a timer, objectives (which generalize the tank arrows), a banner and an out-state. `MatchHud`
+scoreboard columns, a timer, objectives (which generalize the tank arrows), a banner, an out-state, a feed and an
+optional bar (a mode's health, drawn at the bottom center; null for every other mode). `MatchHud`
 and `ResultsScreen` only render it; the "TANKS BANKED" caption and the results column now live in `TankBankHud`.
 Local views still add the crosshair, ammo, hit markers, hit arrows, score tags, score popups and the countdown.
 
@@ -149,13 +160,125 @@ them into intent. Tank Bank's policy is the existing banking brain, created thro
 network bot harness and each peer's match for the lobby bots it owns (`Match.Bots.cs`, A8). Its goal selection still lives inside `BankingBot`; separating it further is follow-up
 work that would need its own bot-behavior proof.
 
+## Lab prototypes
+
+Ring Out and King of the Cul-de-sac are definitions in `ModeRegistry.Prototypes`, not `ModeRegistry.All`: no lobby,
+`MatchStart` or envelope schema names them, so they change nothing a match shares and `Protocol.Version` is untouched.
+The Lab plays them against its own bots ([lab.md](lab.md#prototype-modes)) through `PrototypeRunner`, which feeds the
+rules what a server would: the round's phases on its clock, and every step the positions of all actors
+(`ActorsSampled`; a server would sample what its clients already send, so a mode needs no traffic of its own), who
+knocked whom down (`ActorThrown`: a melee hit's attacker, or the initiator of the chain whose blast threw them), and
+for King the attributed detonations, hits and throws exactly as the Lab duel feeds Tank Bank. Their dials are local
+Lab dials (`Tuning.Prototype.cs`), copied into `ModeTuners` like any mode's.
+
+**Ring Out** (`RingOutRules`). A square slab of lots (`RingOutLots` per side, odd, `RingOutLotSize` meters) centered
+on the origin; its top is at height zero and the void's floor lies `RingOutVoidDepth` (150 m) below, far enough for
+the fog to sell the drop. `RingOutPlan` cuts each ring of lots, outermost first, into angular bands of about
+`RingOutBandLots`, from a seeded start angle. Band `b`
+pulses for `RingOutWarningSeconds` and dissolves at `(b + 1) * RingOutBandSeconds` of round time, until the center
+lot alone remains (5 × 5 lots: six bands, one lot left at 90 s). Whether ground is solid is a pure function of round
+time and the plan, so the boundary is never sent. A sample eliminates an actor below `-RingOutFallDepth`, or below
+`RingOutStandHeight` over ground that is gone (or off the slab). A faller is credited to whoever last threw them
+within `RingOutCreditSeconds`; a later throw with nobody to blame (their own blast) clears it. Places follow
+elimination order and actors out in the same step share one; a departure is an elimination without credit. The round
+ends when one actor stands (or none, the last ones sharing first), or at `RingOutRoundLimit`, when survivors share
+first. Standings score a place as `starters - place`. There is no bank: spills are refused.
+
+**King of the Cul-de-sac** (`KingRules`). Tank Bank's rules, composed: the bank, tickets, gates and audit are
+`TankBankRules`, which gains one input, `TankMinted`, that Tank Bank never sends (its audit is unchanged; `Expected`
+adds the minted count, always zero there). The zone is a circle of `KingZoneRadius` (and `KingZoneHeight` above or
+below the spot) on one of the world's spots (`ModeWorld.Spots`: the Lab's pile spots, or a suburb's tank groups).
+Zone `k` is in force from `k * KingMoveSeconds` of round time; each next spot is a seeded pick among spots
+`KingMoveMin`–`KingMoveMax` meters from the last (or the nearest miss when none is in range), so the schedule is a
+pure function of the clock, the spots and the seed. A move warns for `KingWarningSeconds`; timing dials change from the
+next round. Only upright, present actors occupy. A lone occupant mints one banked tank per `KingMintSeconds` held
+without a break; a contest, leaving, being thrown or a move restarts the count. `ZoneMoved` asks the runner to
+materialize a fresh pile there. The audit line reads `king audit initial= map= drops= minted= spills= banked=
+expected= ok=`.
+
+**Short Fuse** (`ShortFuseRules`). Last one standing in a suburb of tanks, with [health](#health). Each round starts
+everyone present on a new life at full health (`BeginRound`); a declared death puts the victim out to spectate, and
+when one starter is left alive (or none: two going down together) the rules send `RoundWon` and `RoundOver`. A round
+that reaches `ShortFuseRoundSeconds` goes to the survivor with the most health; a tie wins nobody the round. At RoundEnd
+the rules answer `EndMatch` once someone has `ShortFuseWinsToMatch` round wins (or fewer than two remain), else
+`NextRound(RebuildWorld)`: the Lab builds a new suburb from the match's seed stepped by round, with the same rules
+(`LabMatch`), so wins, kills and life ids carry over. Standings score round wins. `SpectateTarget` is pure: a dead
+actor watches whoever got them while they live, then follows that chain of killers, then the lowest-numbered actor still
+alive. The kill feed reads `A shot B`, `A blew up B` (the chain's first detonator), `A got B` (the last other damager
+credited for someone else's blow, such as B's own blast), `B blew themself up` or `B went down`. There is no bank:
+spills are refused. The audit adds `short fuse round= alive= over= match_over= rounds=` to the health audit.
+
+**Where the framework did not fit.** Recorded rather than bent:
+
+- `IModeHudPresenter.Present` and `IBotGoalPolicy` see only scores and the clock; the prototypes need the boundary and
+  the zone. `ModeHudInput` and `IBotWorld` gained an optional `Rules` and `Clock`, supplied only where a peer runs
+  the rules itself (the Lab). A networked mode would carry that state in its snapshot payload instead.
+- Untimed and count-up rounds had no way to say they were decided: `RoundOver` is that command. No server runner
+  acts on it yet.
+- Tank Bank's goal selection still lives inside `BankingBot`; the prototype policies share `BotMotor`, a small layer
+  over `BotNavigator` and `BotAim` that `BankingBot` could adopt later.
+- The Lab has no networked session, so the prototypes are not playable in a hosted match. That needs envelope
+  schemas, wires (`IModeWire`) and snapshot payloads for eliminations and the zone.
+- `ModePhaseMachine` can rebuild a world between rounds (`NextRound(RebuildWorld)`), but a server match cannot yet: it
+  ends the match instead. Short Fuse's new suburb each round works only in the Lab, which rebuilds its whole session.
+- `RoundInfo.StartsAt` and the clock are the runner's; the Lab keeps a match's mode clock running across its round
+  rebuilds by offset (`LabMatch.ClockOffset`) so that the carried rules never see time go back.
+- `ModeHud` had no bar; it gained an optional `HudBar` for health. `ModeHudInput` carries no spectate choice, so the
+  presenter and the arena both read the rules' pure `SpectateTarget` to agree.
+- Death needed two small `PlayerCharacter` hooks: `Collapse()` (go limp where you stand) and `Spectating` (orbit
+  another body's camera focus). Neither changes a match.
+
+## Health
+
+`HealthState` (`src/Modes/Health.cs`) is a reusable, pure piece a mode composes, as King composes Tank Bank's bank;
+Tank Bank does not use it. A mode builds its numbers (`HealthRules`) from its own tuners: max health, bullet damage,
+blast damage at the center and at the edge (linear between, none beyond `BlastRadius`), regeneration per second after
+a delay unhit (zero disables it), the get-up grace, the credit window and the report window.
+
+**Reports follow today's authority lines.** Hit detection stays with the shooter and blast ragdolls with the victim, so
+damage arrives as their reports and the rules validate them:
+
+| Input | From | Carries |
+| --- | --- | --- |
+| `BulletHitReported` | the shooter | shooter, its life, its shot id, victim, the victim's life as seen, the shot's time |
+| `BlastAccepted` / `BlastRefused` | the server's ledger | blast id, the chain's first detonator, the blast's time |
+| `BlastHitReported` | the victim | victim, its life, the blast it names, how far it stood |
+| `ActorsSampled` | the runner | each body's down state: getting up opens the grace |
+| `InvulnerabilityGranted` | the mode | a life protected until a time (spawn protection) |
+| `ActorLeft` | the runner | the life ends without a death |
+
+A report is refused (`DamageRefused`, with a reason) when it repeats a shot or a blast for that victim, is older than
+the report window or from the future, falls outside a round, names an unknown actor or a life that is not the actor's
+at that time, hits a dead or protected victim, is the shooter's own, names a blast refused or never accepted within the
+window, or reports a distance beyond the throw. A victim's report waits for the blast it names, as the envelope's
+causal gate would hold it; the damage takes the blast's own time. The damage amount is always the rules', never the
+reporter's: a client reports what happened, not how much it hurt.
+
+**Order does not matter.** Accepted damage is kept per life and replayed in event-time order (ties broken by content,
+never arrival). Because a report older than the window is refused, once the window has passed a moment everything
+before it is known: a death there is declared (`ActorDied`, with the last blow's kind and attacker and the credit) and
+final. Until then health reads what has arrived, so a HUD may show zero a window's length before the death is
+declared. In the replay a bullet fired after its shooter's death counts for nothing, a chain keeps its detonator's
+credit even after they die, and nothing reaches a victim after its death. Credit goes to the last other actor to damage
+the victim within the credit window (for a blast, its chain's first detonator); a blow by the victim itself or by
+nobody credits that earlier damager, if any. A round closing (`Close`) declares nothing more, so how it ends never
+depends on which late reports happened to arrive. `BeginRound` respawns everyone (`ActorRespawned`, life ids only
+advance) and starts report and blast ids afresh, so a runner may number each round from one.
+
+Reports carry server times: a networked runner would stamp a report with its arrival time, or the reporter's time
+mapped to the server clock and bounded by the window. The window is the price of order independence: a death is
+declared that long after its blow. Short Fuse's is 0.25 s.
+
+**On the network.** Nothing here is wired yet; the shapes are meant for the envelope unchanged: `BulletHitReported`
+and `BlastHitReported` as two actor-owner event kinds (their EventId the reporter's action sequence, deduplicated as
+every event is), the blast report declaring its causal dependency so the server's `ModeEventGate` holds it until the
+ledger accepts that explosion request, `BlastAccepted` fed by the server from the ledger, and `DamageApplied`,
+`ActorDied` and `ActorRespawned` as commands with health in the snapshot payload. Victims report their own blast
+damage, so a modified client could under-report it; that is the trade victim-side ragdolls already make.
+
 ## Room for later
 
-These are shaped for, not built:
-
-- **Health.** Typed damage, attribution, invulnerability, death, respawn or elimination are new accepted events and
-  commands inside the envelope. Damage reports that name a blast use the causal gate; respawns advance life ids;
-  an out-state shows on the HUD.
+These are shaped for, not built (Ring Out added the first out-state, in the Lab only):
 - **Teams.** Team ids plus predicates beside `ModeActor`, carried in a mode's snapshot payload. Appearance color has
   no team meaning.
 - **Segments.** A segment world source builds and retires content roots (`WorldContext.RetireContent`) and lets
@@ -167,6 +290,14 @@ These are shaped for, not built:
 malformed, oversized, truncated, duplicate, out-of-order, stale-round and unknown-schema input, the causal gate and
 a server-held victim report), the ported server, participant, lifecycle and authority suites, and
 `scenes/dev/mode_test.tscn`, which feeds the scripts in `tools/dev/modes/` into the rules and checks their state.
+`PrototypeModeTests` cover Ring Out's band schedule, eliminations, credit window and placements, and King's
+occupancy, contests, minting, relocation, departures mid-hold and conservation. `HealthTests` cover damage typing and
+falloff, attribution windows, chain credit, regeneration, the get-up grace, invulnerability, a death during a ragdoll,
+departures alive and dead, every refusal, when a death is declared, and a scripted four-player fight delivered in
+order and then on forty fault schedules (reports delayed within the window, dropped and resent, duplicated, reordered)
+with the same deaths, credit and health every time, and past the window refused as if lost; and Short Fuse's rounds,
+match, limit, departures, spectate targets, feed and HUD. `check_lab.py` plays whole prototype
+rounds with bots (see [lab.md](lab.md#verification)).
 
 The network adoption keeps `Protocol.Version` at 2 under the unreleased-cycle ruling; MatchStart and the mode
 messages change shape, so the next release must be a minor release.

@@ -122,15 +122,17 @@ fi
             "--scenario=recoil --stance=air --assert-grip --assert-motion": "range",
             "player_range.tscn -- --scenario=bot-recoil --magazines=10": "range",
             "bot_navigation_course.tscn -- --seeds=100": "navigation",
-            "check_lab.py --full --only=soak-void": "lab-1",
+            "check_lab.py --full --only=soak-void,shortfuse-full": "lab-1",
             "check_lab.py --full --only=soak-suburb": "lab-2",
-            "check_lab.py --full --only=lifetime,rules,aimstall,duel,dials": "lab-3",
+            "check_lab.py --full --only=lifetime,rules,aimstall,duel,ringout,king,shortfuse,shortfuse-combo,dials": "lab-3",
+            "check_lab.py --full --only=ringout-full,king-full,king-suburb": "lab-4",
             "check_generator_shards.py --full=--seeds=200 --large-seeds=100 --formation-seeds=6": "generator-coverage",
             generator + "--first-seed=1 --seeds=50 --first-large-seed=1 --large-seeds=25 --first-formation-seed=1 --formation-seeds=2": "generator-1",
             generator + "--first-seed=51 --seeds=50 --first-large-seed=26 --large-seeds=25 --first-formation-seed=3 --formation-seeds=2": "generator-2",
             generator + "--first-seed=101 --seeds=50 --first-large-seed=51 --large-seeds=25 --first-formation-seed=5 --formation-seeds=1": "generator-3",
             generator + "--first-seed=151 --seeds=50 --first-large-seed=76 --large-seeds=25 --first-formation-seed=6 --formation-seeds=1": "generator-4"}
-    lab = ["lifetime", "rules", "aimstall", "duel", "dials", "soak-void", "soak-suburb"]
+    lab = ["lifetime", "rules", "aimstall", "duel", "ringout", "king", "shortfuse", "shortfuse-combo", "dials", "soak-void",
+           "soak-suburb", "ringout-full", "king-full", "king-suburb", "shortfuse-full"]
     for jobs, failures in ((["-j4"], ["none", *deep]), ([], ["none", generator + "--first-seed=101"])):
         for failure in failures:
             log.write_text("")

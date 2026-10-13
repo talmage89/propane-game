@@ -38,6 +38,10 @@ public partial class PlayerCharacter
             var pelvis = skeleton.GlobalTransform * skeleton.GetBoneGlobalPose(skeleton.FindBone("pelvis")).Origin;
             aimFocus = (pelvis + Vector3.Up * 0.45f).Lerp(GlobalPosition + Vector3.Up * tuning.CameraHeight, Mathf.SmoothStep(0, 1, t));
         }
+        if (Spectating is { } watched && IsInstanceValid(watched))
+        {
+            aimFocus = watched.IsRagdolled ? watched.PelvisPosition + Vector3.Up * 0.45f : watched.GlobalPosition + Vector3.Up * tuning.CameraHeight;
+        }
         Aim.Target = aimFocus;
         Aim.Advance(delta);
     }

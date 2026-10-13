@@ -28,7 +28,9 @@ run: build ## Play from source
 build: ## Compile the C# code
 	dotnet build Propane.sln -c Debug -nologo -v quiet
 
-lint: ## Check C# formatting and compile with warnings as errors
+lint: ## Check C# formatting and script .uid pairs, and compile with warnings as errors
+	@unpaired=$$(git ls-files 'src/*.cs' 'src/*.cs.uid' | sed 's/\.uid$$//' | sort | uniq -u); \
+	if [ -n "$$unpaired" ]; then printf 'Commit each script with its Godot .uid file, and no .uid without its script:\n%s\n' "$$unpaired"; exit 1; fi
 	dotnet format Propane.sln --verify-no-changes
 	dotnet build Propane.sln -c Debug --no-restore --no-incremental -nologo -v quiet -warnaserror
 
@@ -115,13 +117,14 @@ GENERATOR_3 := --first-seed=101 --seeds=50 --first-large-seed=51 --large-seeds=2
 GENERATOR_4 := --first-seed=151 --seeds=50 --first-large-seed=76 --large-seeds=25 --first-formation-seed=6 --formation-seeds=1
 GENERATOR_SHARDS := test-full-generator-1 test-full-generator-2 test-full-generator-3 test-full-generator-4
 # The Lab sessions of check_lab.py --full, split by cost.
-LAB_1 := soak-void
+LAB_1 := soak-void,shortfuse-full
 LAB_2 := soak-suburb
-LAB_3 := lifetime,rules,aimstall,duel,dials
-LAB_SHARDS := test-full-lab-1 test-full-lab-2 test-full-lab-3
+LAB_3 := lifetime,rules,aimstall,duel,ringout,king,shortfuse,shortfuse-combo,dials
+LAB_4 := ringout-full,king-full,king-suburb
+LAB_SHARDS := test-full-lab-1 test-full-lab-2 test-full-lab-3 test-full-lab-4
 # Longest first, so make -j starts the jobs that would otherwise finish last early. The Lab soaks are unseeded bot
 # matches whose cost varies several-fold between runs, so they start before the steadier generator shards.
-FULL := test-full-lab-1 test-full-lab-2 $(GENERATOR_SHARDS) test-full-navigation test-full-lab-3 test-full-piles \
+FULL := test-full-lab-1 test-full-lab-2 test-full-lab-4 $(GENERATOR_SHARDS) test-full-navigation test-full-lab-3 test-full-piles \
 	test-full-range test-full-menu test-full-generator-coverage
 .PHONY: $(FULL) test-full-bots
 

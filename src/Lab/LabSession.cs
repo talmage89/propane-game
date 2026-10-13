@@ -27,6 +27,16 @@ public partial class LabSession : Node3D
     public PlayerCharacter Player { get; private set; } = null!;
     public PlayerCharacter? Opponent { get; private set; }
     public LocalBank? Bank { get; private set; }
+    /// <summary>A prototype mode's runner, when the scenario plays one.</summary>
+    public PrototypeRunner? Prototype { get; private set; }
+    public RingOutArena? RingOut { get; private set; }
+    public KingArena? King { get; private set; }
+    public ShortFuseArena? ShortFuse { get; private set; }
+    /// <summary>A multi-round prototype's match (Short Fuse), carried across the resets that build each round's suburb.</summary>
+    public LabMatch? Match { get; private set; }
+    /// <summary>Test seam: a prototype's runner drives the player's actor with the mode's brain too.</summary>
+    internal bool DrivePlayer { get; init; }
+    private MatchHud? matchHud;
     public TuningPanel TuningPanel { get; private set; } = null!;
     public LabOverlay Overlay { get; private set; } = null!;
     public bool Initialized { get; private set; }
@@ -63,9 +73,15 @@ public partial class LabSession : Node3D
             if (!double.IsFinite(value) || value < dial.Min || value > dial.Max)
                 throw new ArgumentOutOfRangeException(property.Name);
         }
+        if (Scenario.Definition.Id == Modes.ModeRegistry.ShortFuseId)
+        {
+            // Each round of the match is a new suburb: the match's seed, stepped by round.
+            Match ??= new LabMatch(settings.FixedSeed != 0 ? settings.FixedSeed : (int)(GD.Randi() % 100000) + 1);
+        }
+        var seed = Match?.SuburbSeed ?? (settings.FixedSeed != 0 ? settings.FixedSeed : 23);
         source = EnvironmentKind == LabEnvironment.Void ? new VoidWorldSource() :
             new SuburbWorldSource(Scenario.Banking ? Scenario.Definition.Supply.Suburb(settings, 2) with { MapSize = settings.LabSuburbSize } :
-                Scenario.Definition.Supply.Suburb(settings, 1), settings.FixedSeed != 0 ? settings.FixedSeed : 23);
+                Scenario.Definition.Supply.Suburb(settings, Scenario.Prototype ? settings.LabPrototypeBots + 1 : 1), seed);
         SessionFactory.Build(this, settings, source, new Mode(this), session => { Session = session; if (TestRandomSeed is { } seed) World.Random.Seed = seed; }, present: CreateLocalView);
         resetQueued = false;
     }
@@ -77,15 +93,31 @@ public partial class LabSession : Node3D
         World.Defer(Reset, whilePaused: true);
     }
 
-    /// <summary>Also used by lifecycle probes. Event handlers request a deferred reset instead.</summary>
-    public void Reset()
+    /// <summary>Also used by lifecycle probes. Event handlers request a deferred reset instead. A reset starts a new match.</summary>
+    public void Reset() => Rebuild(keepMatch: false);
+
+    /// <summary>The next round of a multi-round match: a new world, the same match.</summary>
+    internal void AdvanceRound()
+    {
+        if (!World.IsAlive || resetQueued) return;
+        resetQueued = true;
+        World.Defer(() => Rebuild(keepMatch: true), whilePaused: true);
+    }
+
+    private void Rebuild(bool keepMatch)
     {
         using var tuning = World.Tuning.Copy();
+        if (!keepMatch) Match = null;
         Session.Dispose();
         tanks.Clear();
         suburb = null;
         Bank = null;
         Opponent = null;
+        Prototype = null;
+        RingOut = null;
+        King = null;
+        ShortFuse = null;
+        matchHud = null;
         Assemble(tuning);
         ResetCount++;
     }
@@ -139,7 +171,7 @@ public partial class LabSession : Node3D
 
     public void SetMenu(bool visible)
     {
-        visible |= Bank is { IsPlaying: false };
+        visible |= Bank is { IsPlaying: false } || Prototype is { Finished: true };
         TuningPanel.Visible = false;
         World.SetPaused(visible);
         Overlay.ShowMenu(visible);
@@ -173,9 +205,18 @@ public partial class LabSession : Node3D
         var camera = view.CameraRig.Camera;
         var radius = Mathf.Tan(Mathf.DegToRad(Player.SpreadDegrees)) / Mathf.Tan(Mathf.DegToRad(camera.Fov / 2)) *
             GetViewport().GetVisibleRect().Size.Y / 2;
-        view.Hud.SetCrosshair(radius, !World.Paused && !Player.IsRagdolled, Player.AimAmount);
+        view.Hud.SetCrosshair(radius, !World.Paused && !Player.IsRagdolled && Player.Spectating == null, Player.AimAmount);
         view.Hud.SetTanks(LiveTanks.Count(), animate: false);
-        if (suburb != null) view.Hud.SetTankArrows(camera, suburb.TankGroupCenters(), World.Tuning.TankArrows);
+        if (Prototype != null && matchHud != null)
+        {
+            var hud = Prototype.Present(Array.Empty<Vector3>());
+            matchHud.Show(hud);
+            view.Hud.SetTankArrows(camera, hud.Objectives, hud.ObjectivesVisible);
+        }
+        else if (suburb != null)
+        {
+            view.Hud.SetTankArrows(camera, suburb.TankGroupCenters(), World.Tuning.TankArrows);
+        }
         Overlay.UpdateStatus();
     }
 
@@ -236,10 +277,42 @@ public partial class LabSession : Node3D
         }
     }
 
-    private void AddPile(Vector3 at, int count)
+    internal void BuildRingOut()
+    {
+        var tuning = World.Tuning;
+        environment.FloorHeight = -tuning.RingOutVoidDepth;
+        RingOut = new RingOutArena { Lab = this, Name = "RingOut" };
+        World.ContentRoot.AddChild(RingOut);
+        var distance = RingOut.PileDistance(tuning);
+        for (var i = 0; i < tuning.RingOutPiles; i++)
+        {
+            var angle = (i + 0.5f) * Mathf.Tau / tuning.RingOutPiles;
+            AddPile(new Vector3(Mathf.Cos(angle), 0, Mathf.Sin(angle)) * distance, tuning.RingOutPileCount);
+        }
+        (start, startYaw) = RingOut.Spawn(0, tuning.LabPrototypeBots + 1);
+    }
+
+    internal void BuildKing()
+    {
+        King = new KingArena { Lab = this, Name = "King" };
+        World.ContentRoot.AddChild(King);
+        King.Layout(suburb?.TankGroupCenters());
+        if (suburb == null) (start, startYaw) = King.Spawn(0, World.Tuning.LabPrototypeBots + 1, null, 0);
+    }
+
+    internal void BuildShortFuse()
+    {
+        ShortFuse = new ShortFuseArena { Lab = this, Name = "ShortFuse" };
+        World.ContentRoot.AddChild(ShortFuse);
+        ShortFuse.Layout(suburb!.Plan, World.Tuning.LabPrototypeBots + 1, Match!.Round);
+        (start, startYaw) = ShortFuse.Spawn(0);
+    }
+
+    internal List<PropaneTank> AddPile(Vector3 at, int count)
     {
         var tuning = World.Tuning;
         var spacing = new Vector3(tuning.PileSpacing, tuning.PileLayerHeight, tuning.PileDepthSpacing);
+        var added = new List<PropaneTank>();
         foreach (var transform in PileBuilder.Build(PileFormation.Square, count, spacing, tuning.PileUprightLayerHeight))
         {
             var tank = PropaneTank.Create(World);
@@ -247,7 +320,49 @@ public partial class LabSession : Node3D
             World.ContentRoot.AddChild(tank);
             tank.MarkPile();
             tanks.Add(tank);
+            added.Add(tank);
         }
+        return added;
+    }
+
+    private static readonly Color[] BotColors =
+    {
+        new(0.26f, 0.58f, 0.8f), new(0.85f, 0.3f, 0.55f), new(0.35f, 0.7f, 0.35f), new(0.6f, 0.4f, 0.85f), new(0.9f, 0.75f, 0.2f),
+    };
+
+    /// <summary>A prototype's bots, its arena's start points and its runner.</summary>
+    private void CreatePrototype(SessionContext session)
+    {
+        var count = World.Tuning.LabPrototypeBots + 1;
+        for (var i = 1; i < count; i++)
+        {
+            var bot = new PlayerCharacter
+            {
+                World = session.World,
+                Name = $"Bot {i}",
+                ActorId = i + 1,
+                OwnerPeerId = 1,
+                Ammo = Scenario.Definition.Supply.LimitedAmmo ? AmmoState.Starting(session.World.Tuning) : null,
+                BodyColor = BotColors[(i - 1) % BotColors.Length],
+            };
+            session.AddActor(bot);
+            var (at, yaw) = RingOut != null ? RingOut.Spawn(i, count) : ShortFuse != null ? ShortFuse.Spawn(i)
+                : King!.Spawn(i, count, suburb != null ? start : null, startYaw);
+            bot.Teleport(at, yaw);
+        }
+        Prototype = new PrototypeRunner
+        {
+            Lab = this,
+            Mode = Scenario.Definition,
+            Spots = King?.Spots ?? Array.Empty<Modes.ModeSpot>(),
+            Match = Match,
+            Name = "PrototypeRunner",
+            ProcessPhysicsPriority = -10,
+        };
+        session.World.Root.AddChild(Prototype);
+        RingOut?.Bind(Prototype);
+        King?.Bind(Prototype);
+        ShortFuse?.Bind(Prototype);
     }
 
     /// <summary>An orange disk on the floor, with a label unless <paramref name="text"/> is null.</summary>
@@ -329,13 +444,16 @@ public partial class LabSession : Node3D
                 lab.Bank = new LocalBank { Lab = lab, Name = "LocalBank", ProcessPhysicsPriority = -10 };
                 session.World.Root.AddChild(lab.Bank);
             }
+            if (lab.Scenario.Prototype) lab.CreatePrototype(session);
             session.World.ContentRoot.AddChild(new TankGather { World = session.World, Tanks = () => lab.LiveTanks, Name = "Gather" });
         }
 
         public void CreateViews(SessionContext session)
         {
             if (!lab.CreateLocalView) return;
-            session.AddLocalView(lab.Player.Runtime, lab, new DeviceInput(session.World.Tuning));
+            var view = session.AddLocalView(lab.Player.Runtime, lab, new DeviceInput(session.World.Tuning));
+            // A prototype's counters are the mode's, on the match HUD, as in a match.
+            if (lab.Scenario.Prototype) view.Hud.ShowTankCount(false);
             session.AddView(lab, new Hitstop { World = session.World, Focus = lab.Player, Name = "Hitstop" });
             var tuningPanel = new TuningPanel
             {
@@ -346,11 +464,13 @@ public partial class LabSession : Node3D
             };
             tuningPanel.CloseRequested += lab.CloseTuning;
             lab.TuningPanel = session.AddView(lab, tuningPanel);
+            if (lab.Scenario.Prototype) lab.matchHud = session.AddView(lab, new MatchHud { World = session.World, Name = "MatchHud" });
             lab.Overlay = session.AddView(lab, new LabOverlay { Lab = lab, Name = "LabControls" });
         }
 
         public void Ready(SessionContext session)
         {
+            if (lab.DrivePlayer) lab.Prototype?.AttachBot(lab.Player);
             if (!lab.CreateLocalView) return;
             Warmup.RunEffects(session.World, session.World.Root, new Vector3(0, -400, 0));
             Capture(true);

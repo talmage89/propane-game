@@ -17,6 +17,8 @@ public sealed record LabScenario(string Id, string Name, string Description, IRe
 {
     public ModeDefinition Definition => Mode ?? ModeRegistry.Sandbox;
     public bool Banking => Definition.Id == ModeRegistry.TankBankId;
+    /// <summary>A prototype mode: played against Lab bots through <see cref="PrototypeRunner"/>, listed in its own group.</summary>
+    public bool Prototype => ModeRegistry.Prototypes.Contains(Definition);
 }
 
 public static class LabScenarios
@@ -31,6 +33,12 @@ public static class LabScenarios
             new[] { LabEnvironment.Void }, lab => lab.BuildRange()),
         new LabScenario("tuning", "Free tuning", "Try live dials on your own session. Save only when you choose.",
             new[] { LabEnvironment.Void, LabEnvironment.Suburb }, lab => lab.BuildTuning(), OpensTuning: true),
+        new LabScenario("ringout", "Ring Out", "Knock everyone off a slab whose rim dissolves. Last one standing wins.",
+            new[] { LabEnvironment.Void }, lab => lab.BuildRingOut(), Mode: ModeRegistry.RingOut),
+        new LabScenario("king", "King of the Cul-de-sac", "Hold the beam alone to mint tanks. It moves every 45 seconds.",
+            new[] { LabEnvironment.Void, LabEnvironment.Suburb }, lab => lab.BuildKing(), Mode: ModeRegistry.King),
+        new LabScenario("shortfuse", "Short Fuse", "Last one standing: bullets chip, blasts kill. First to three rounds.",
+            new[] { LabEnvironment.Suburb }, lab => lab.BuildShortFuse(), Mode: ModeRegistry.ShortFuse),
     });
 
     public static LabScenario Get(string id) => All.FirstOrDefault(scenario => scenario.Id == id)

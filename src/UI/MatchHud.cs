@@ -12,7 +12,7 @@ public readonly record struct ScoreTag(Vector2 Screen, int Score, Color Color, f
 /// <summary>
 /// The match HUD, over the single-player one (crosshair and tank arrows). It renders the mode's plain HUD data
 /// (<see cref="ModeHud"/>: the clock, the primary counter and its caption, further counters, a banner and an
-/// out-state) and the local view's feedback: "+N" as you score, ammo, a hit marker when your shot hits a player,
+/// out-state, a feed of recent events and a health bar) and the local view's feedback: "+N" as you score, ammo, a hit marker when your shot hits a player,
 /// arrows toward whoever shot you, every other visible player's score over their head, and the countdown.
 /// </summary>
 public partial class MatchHud : CanvasLayer
@@ -35,6 +35,7 @@ public partial class MatchHud : CanvasLayer
     private Label ammoPopup = null!;
     private Label countdown = null!;
     private Label notice = null!;
+    private Label feed = null!;
     private Overlay overlay = null!;
     private float scorePop;
     private float popupAge = 99f;
@@ -65,6 +66,9 @@ public partial class MatchHud : CanvasLayer
         caption = HudLabel(19, new Color(Dark, 0.75f), 6);
         top.AddChild(caption);
         counters = HudLabel(19, new Color(Dark, 0.75f), 6);
+        // Clear of the caption above, which the container's negative separation tucks under the counter.
+        counters.CustomMinimumSize = new Vector2(0, 34);
+        counters.VerticalAlignment = VerticalAlignment.Bottom;
         counters.Visible = false;
         top.AddChild(counters);
 
@@ -123,6 +127,14 @@ public partial class MatchHud : CanvasLayer
         notice.Size = new Vector2(800, 40);
         root.AddChild(notice);
 
+        feed = HudLabel(20, Dark, 6);
+        feed.SetAnchorsPreset(Control.LayoutPreset.TopRight);
+        feed.Position = new Vector2(-560, 24);
+        feed.Size = new Vector2(530, 140);
+        feed.HorizontalAlignment = HorizontalAlignment.Right;
+        feed.VerticalAlignment = VerticalAlignment.Top;
+        root.AddChild(feed);
+
         overlay = new Overlay { World = World, MouseFilter = Control.MouseFilterEnum.Ignore };
         overlay.SetAnchorsPreset(Control.LayoutPreset.FullRect);
         root.AddChild(overlay);
@@ -175,6 +187,8 @@ public partial class MatchHud : CanvasLayer
         }
         banner.Text = hud.Banner;
         outState.Text = hud.OutState;
+        feed.Text = hud.Feed is { Count: > 0 } lines ? string.Join("\n", lines) : "";
+        overlay.Bar = hud.Bar;
         if (animate)
         {
             scorePop = 1f;
@@ -261,7 +275,7 @@ public partial class MatchHud : CanvasLayer
         return label;
     }
 
-    /// <summary>Everything drawn rather than laid out: the hit marker, incoming-shot arrows, score tags and the reload ring.</summary>
+    /// <summary>Everything drawn rather than laid out: the hit marker, incoming-shot arrows, score tags, the reload ring and a mode's bar.</summary>
     private partial class Overlay : Control
     {
         public required WorldContext World { get; init; }
@@ -269,6 +283,7 @@ public partial class MatchHud : CanvasLayer
         public Vector3 Player;
         public float HitMarker;
         public float ReloadProgress;
+        public HudBar? Bar;
         public readonly List<(Vector3 From, float Age)> Hits = new();
         public List<ScoreTag> Tags = new();
 
@@ -319,6 +334,22 @@ public partial class MatchHud : CanvasLayer
                     DrawLine(center + n * 9f, center + n * 19f, new Color(dark, a * 0.6f), 5f, true);
                     DrawLine(center + n * 9f, center + n * 19f, hit, 2.5f, true);
                 }
+            }
+
+            if (Bar is { Max: > 0 } bar)
+            {
+                // Bottom center, clear of the ammo at the right: the fill, its frame, and the caption above.
+                var size = new Vector2(380, 18);
+                var origin = new Vector2(center.X - size.X / 2, Size.Y - 64);
+                var fill = Mathf.Clamp(bar.Value / bar.Max, 0, 1);
+                DrawRect(new Rect2(origin - Vector2.One * 3, size + Vector2.One * 6), new Color(1, 1, 1, 0.85f));
+                DrawRect(new Rect2(origin, size), new Color(dark, 0.35f));
+                DrawRect(new Rect2(origin, new Vector2(size.X * fill, size.Y)), bar.Hot ? new Color(0.85f, 0.2f, 0.15f) : new Color(0.16f, 0.62f, 0.32f));
+                var font = UiStyle.BoldFont;
+                var width = font.GetStringSize(bar.Caption, HorizontalAlignment.Left, -1, 20).X;
+                var at = new Vector2(center.X - width / 2, origin.Y - 10);
+                DrawStringOutline(font, at, bar.Caption, HorizontalAlignment.Left, -1, 20, 6, new Color(1, 1, 1, 0.85f));
+                DrawString(font, at, bar.Caption, HorizontalAlignment.Left, -1, 20, new Color(0.12f, 0.13f, 0.15f));
             }
 
             if (ReloadProgress > 0)

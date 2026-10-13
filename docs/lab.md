@@ -28,6 +28,35 @@ the rest of Propane. Huge stack and Range use void; the banking duel and Free tu
   toggles work with the mouse, keyboard or controller. **Defaults** restores code defaults; **Save** explicitly
   writes gameplay dials to the saved template. Unsaved edits never touch that template.
 
+## Prototype modes
+
+Below the starters, **Prototype modes · rules on trial** lists modes the owner is trying before setting their rules.
+Each plays you against Lab bots (Lab prototype bots, 1–5, default 3; the duel's difficulty sets their skill) in an
+offline round, with the match HUD on top. Their rules are in [modes.md](modes.md#lab-prototypes); every number is a
+Lab dial in the tuning panel's Lab section, and layout dials apply on reset.
+
+- **Ring Out** (void only). A slab of 5 × 5 lots of 16 m floats over the void, with four piles ringed around the
+  middle. Every 15 s a band of the rim pulses orange for 4 s and dissolves, until the center lot remains. Fall off, or
+  stand where the ground went, and you are out; the feed credits whoever threw you within 6 s. You then watch from a
+  ledge off one side, free to look around. The last one standing wins; the controls panel shows every place.
+- **King of the Cul-de-sac** (void or suburb). A beam marks a 12 m zone on a pile. Stand in it alone to mint a banked
+  tank every 2 s; anyone else upright inside stops it (the beam pulses red). Every 45 s the zone moves to another pile
+  15–25 m away after a 3 s warning (a pale beam marks the next spot) and a fresh pile materializes there. Banking,
+  hits and throws spill as in Tank Bank. The void lays out a ring of six pile spots around one in the middle; a suburb
+  uses its own tank groups. Most banked when the clock runs out wins.
+- **Short Fuse** (suburb only). Last one standing, with health: 100 each, bullets take 7, a blast 90 at its center
+  down to 30 at the edge of its throw and nothing beyond, and 5 HP/s comes back after 5 s unhit. You get 0.75 s of
+  protection once you are back on your feet after a throw. A thrown player is helpless, so a blast sets up the kill
+  and bullets finish it. Everyone starts around the rim of a 150 m suburb stocked for the players; the dead go limp,
+  lie for 1.5 s and then watch the player who got them (or, once they are gone too, the next one still alive), with
+  "SPECTATING <name>" under the crosshair. The last one alive wins the round; after 4 s a new suburb assembles for the
+  next round, and the first to three round wins takes the match. A round reaching its 105 s limit goes to the
+  healthiest survivor, or to nobody on a tie. The HUD shows round wins, how many stand, your kills, the round clock, a
+  health bar, the round's kill feed and the result banner; the controls panel shows the match's result.
+
+All three have unlimited ammo and no ammo cans. Bots run on the Lab's main thread; more than three in one process may not
+hold 120 Hz physics on a small machine.
+
 R / X resets non-duel starters; R / X reloads in a duel. Backspace resets any starter, from the controls panel too,
 so a finished duel is one key from the next. Esc / Start opens Lab controls, where Reset/Respawn, Free tuning and Lab
 menu are controller-accessible buttons. B closes tuning or resumes a paused scenario. Leaving returns to the
@@ -43,9 +72,13 @@ on resume. No socket or server is created by the Lab.
 
 `LabScenarios.All` is the compiled registry: id, name, description, allowed environments and a setup callback.
 The callback runs after the source builds content and before actors/views enter. Later prototypes register here;
-each scenario names a registered mode ([modes.md](modes.md)): the duel plays Tank Bank and the other starters play
-Sandbox, taking supply and ammo policy from it. There is still no health, teams, boundary policy or streamed
-segments.
+each scenario names a registered mode ([modes.md](modes.md)): the duel plays Tank Bank, the prototypes play their own
+modes, and the other starters play Sandbox, taking supply and ammo policy from it. A prototype scenario names a mode
+from `ModeRegistry.Prototypes`; its setup builds an arena presenter (`RingOutArena`, `KingArena`, `ShortFuseArena`) and
+the session adds the bots and a `PrototypeRunner`. A Lab dial with a `Scenario` lays out only that scenario. A
+multi-round prototype (Short Fuse) keeps a `LabMatch` on the session: each round is a reset that keeps the match's rules,
+round and mode clock and builds the next suburb from the match's seed stepped by round, while Backspace or Reset starts a
+new match. There are still no teams or streamed segments.
 
 `VoidWorldSource` and `SuburbWorldSource` implement the existing `ISessionWorldSource` seam. The factory needs no
 source-specific branches. A later streaming implementation can build and retire content roots with
@@ -62,11 +95,31 @@ peer and retain separate banks. The factory and session retain ordered teardown 
 
 `python3 -B tools/dev/check_lab.py` is the fast gate: one lifecycle cycle per allowed pair, local rules, the bot's
 aim-stall probe and a 15-second scripted duel. It requires a success marker, exit 0 and no engine warnings/errors.
-`--full` performs 10 entry/reset/exit cycles for all six pairs, sweeps every layout dial to both slider ends and all
-at once through every scenario and environment (`--scenario=dials`), and runs 180-second bot-versus-bot soaks in both
-environments, each of which must bank at least ten tanks. Both are wired into `make test` / `make test-full`.
-`--only=soak-void,dials` runs only the named sessions (`lifetime`, `rules`, `aimstall`, `duel`, and with `--full`
-`dials`, `soak-void`, `soak-suburb`); `make test-full` splits `--full` into three such jobs.
+It also plays a Ring Out round and a King round to their ends with shortened dials (`--scenario=prototype --quick`),
+a bot on every actor, one quick Short Fuse match (`--scenario=shortfuse --quick`: 60 s rounds, first to two), and a
+scripted Short Fuse round (`--scenario=shortfuse-combo`) through the real reports: Bot 2 shoots the player dead (the
+player then watches Bot 2), sets off a pile beside Bot 1 and finishes it with bullets while it is down, wins the round,
+and the next suburb builds with new lives; with `--capture-dir` it screenshots each step. `--full` performs 10 entry/reset/exit cycles for every scenario and environment, sweeps every
+layout dial to both slider ends and all at once through every scenario and environment it lays out
+(`--scenario=dials`), and runs 180-second bot-versus-bot soaks in both
+environments, each of which must bank at least ten tanks, and full prototype rounds at the shipped dials (Ring Out on
+three seeds, King on three in the void and one in a suburb). Each prototype round must end legally: Ring Out with a
+winner, every starter placed in elimination order and the out spectating; King on its clock with the bank conserved,
+every mint counted and a materialized pile per zone move. `--full` also plays two Short Fuse matches at the shipped
+dials (`shortfuse-full`), reporting how often a bot finished a thrown player with a bullet. Each Short Fuse
+round must end legally: every death a starter's, once, credited to someone else or to nobody; the dead spectating;
+alive plus dead equal to the starters, and one alive at most unless the limit ended it; the winner alive. Each match
+must have one winner with the wins, round wins and kills that add up, lives that advanced with every round, and no
+report the rules refused as late, early, duplicated or naming an unknown actor or blast (the Lab's reports arrive at
+once). All are wired into `make test` / `make test-full`.
+`--only=soak-void,dials` runs only the named sessions (`lifetime`, `rules`, `aimstall`, `duel`, `ringout`, `king`,
+`shortfuse`, `shortfuse-combo`, and with `--full` `dials`, `soak-void`, `soak-suburb`, `ringout-full`, `king-full`, `king-suburb`,
+`shortfuse-full`); `make test-full` splits
+`--full` into four such jobs. A prototype round alone: `lab_test.tscn -- --scenario=prototype --mode=ringout|king
+[--environment=suburb] [--seeds=3] [--first-seed=1] [--bots=2] [--quick]`; `--shots=4,12.5` adds `--capture-dir`
+screenshots at those round times. Short Fuse matches alone: `lab_test.tscn -- --scenario=shortfuse [--seeds=2]
+[--first-seed=1] [--bots=2] [--quick] [--trace]`; `--capture-events` adds `--capture-dir` screenshots of the first
+blast-then-bullet kill, the kill feed, the player spectating, the first round-win banner and the match's end.
 `--scenario=aimstall` puts a shot-stopping prop in front of the bot and asserts it leaves the pile.
 
 `menu_test --scenario=input` injects real keyboard, mouse and controller events through Lab menus, movement/combat,

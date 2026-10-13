@@ -41,8 +41,11 @@ public static class DevArgs
         if (System.Environment.GetEnvironmentVariable("PROPANE_GATE_TIMING") == "1") GD.Print("[gate-timing] ready");
     }
 
-    /// <summary>Applies <c>--tune.Name=value</c> arguments to the live tuning, for trying dial values from the command line.</summary>
-    private static void ApplyTuningOverrides()
+    /// <summary>
+    /// Applies <c>--tune.Name=value</c> arguments to the live tuning, or to <paramref name="target"/>, for trying dial
+    /// values from the command line.
+    /// </summary>
+    public static void ApplyTuningOverrides(Core.Tuning? target = null)
     {
         Get("");
         foreach (var (key, value) in values!)
@@ -57,7 +60,7 @@ public static class DevArgs
                 GD.PushError($"[dev] no tuning value named {key[5..]}");
                 continue;
             }
-            property.SetValue(Core.Tuning.SavedTemplate, System.Convert.ChangeType(value, property.PropertyType, System.Globalization.CultureInfo.InvariantCulture));
+            property.SetValue(target ?? Core.Tuning.SavedTemplate, System.Convert.ChangeType(value, property.PropertyType, System.Globalization.CultureInfo.InvariantCulture));
             GD.Print($"[dev] tuning {key[5..]} = {value}");
         }
     }

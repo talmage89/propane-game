@@ -32,6 +32,8 @@ public sealed class TankBankRules : IModeRules
 
     public int MapDetonations { get; private set; }
     public int DropDetonations { get; private set; }
+    /// <summary>Tanks a mode minted into banks (King of the Cul-de-sac's zone); always zero in Tank Bank.</summary>
+    public int Minted { get; private set; }
     public IReadOnlyDictionary<int, int> Banks => banks;
     public int Bank(int actorId) => banks.GetValueOrDefault(actorId);
     public Stats StatsFor(int actorId) => stats.GetValueOrDefault(actorId);
@@ -40,13 +42,13 @@ public sealed class TankBankRules : IModeRules
     public int Initial => actors.Sum(a => a.StartScore);
     public int Spilled => stats.Values.Sum(s => s.LostToHits + s.LostToThrows);
     public int Banked => banks.Values.Sum();
-    public int Expected => Initial + MapDetonations + DropDetonations - Spilled;
+    public int Expected => Initial + MapDetonations + DropDetonations + Minted - Spilled;
     public bool Conserved => Banked == Expected;
 
     public void Initialize(ModeSetup setup)
     {
         actors.Clear(); banks.Clear(); stats.Clear(); open.Clear(); resolved.Clear();
-        MapDetonations = DropDetonations = 0;
+        MapDetonations = DropDetonations = Minted = 0;
         round = 1;
         tuners = setup.Tuners;
         foreach (var actor in setup.Roster) Join(actor);
@@ -55,6 +57,7 @@ public sealed class TankBankRules : IModeRules
     public IReadOnlyList<ModeCommand> Handle(AcceptedEvent accepted, ModeClock clock) => accepted switch
     {
         TankDetonated detonation => Detonated(detonation),
+        TankMinted minted => Mint(minted.ActorId),
         SpillRequested spill => Request(spill, clock),
         SpillRegistered registered => Commit(registered.Ticket),
         SpillFailed failed => Close(failed.Ticket, SpillCancel.Rejected),
@@ -118,6 +121,15 @@ public sealed class TankBankRules : IModeRules
         var st = stats.GetValueOrDefault(detonation.ActorId);
         stats[detonation.ActorId] = st with { Gained = st.Gained + 1 };
         return new ModeCommand[] { Change(detonation.ActorId, 1) };
+    }
+
+    private ModeCommand[] Mint(int actorId)
+    {
+        if (!banks.ContainsKey(actorId)) return Array.Empty<ModeCommand>();
+        Minted++;
+        var st = stats.GetValueOrDefault(actorId);
+        stats[actorId] = st with { Gained = st.Gained + 1 };
+        return new ModeCommand[] { Change(actorId, 1) };
     }
 
     private ModeCommand[] Request(SpillRequested spill, ModeClock clock)
