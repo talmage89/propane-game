@@ -87,7 +87,7 @@ public partial class GeneratorTests : Node
         var formationCount = (int)DevArgs.GetFloat("formation-seeds", 6);
         var formationFirst = (int)DevArgs.GetFloat("first-formation-seed", 1);
         TestFormations(catalog, formationFirst, formationCount);
-        if (!listing) GD.Print($"[tests] forced formations: seeds {formationFirst}..{formationFirst + formationCount - 1} per formation/size in {formationTimer.ElapsedMilliseconds} ms");
+        if (!listing && formationCount > 0) GD.Print($"[tests] forced formations: seeds {formationFirst}..{formationFirst + formationCount - 1} per formation/size in {formationTimer.ElapsedMilliseconds} ms");
         // Larger matches cost far more per seed; --large-seeds (default 10) sets their sweep. make test-full runs 100.
         var largeCount = (int)DevArgs.GetFloat("large-seeds", Mathf.Min(count, 10));
         var largeFirst = (int)DevArgs.GetFloat("first-large-seed", 1);

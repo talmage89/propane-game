@@ -34,7 +34,8 @@ The fixtures compile in an isolated temporary project; they never run or modify 
 `check_world_tests.py` proves failed children retain their logs and exit status, while successful runs remove scratch
 files. The script also stubs external tools to prove `make -j4 check` runs lint before every gate suite and
 propagates a failure from each checker, scene, saved-plan writer and world-hash process. It checks that the core runner retains platform, movement and unit scenes with failure completion. It rejects missing or
-different world hashes and checks that `test-full` retains the gate and every deep sweep, including melee reloads, and propagates their failures. It checks that Godot
+different world hashes and checks that plain and parallel `test-full` run the gate and every deep command once, that the
+Lab jobs add up to every `--full` session, and that a failure in any deep job fails the run with that job's name. It checks that Godot
 setup reuses a valid cached editor and stops on a download failure.
 The gate manifest includes session actors, upright piles, real device input and the animation review/metrics.
 The shutdown proof permits `AnimationReview.Quit` only with its guarded current-build branch and explicit
@@ -55,6 +56,27 @@ The generator gate keeps every assertion and all 14 explicit pile counts (0–12
 `make test-full` runs the gate, then 200 single-player and 2-player seeds, 100 each at the four large sizes,
 six forced seeds per formation/size, 100 navigation seeds, and the melee-reload pose sweep. It includes every seed formerly in the gate:
 ordinary seeds 21–100, large seeds 4–10 and forced seeds 3–6 moved to this deeper sweep.
+
+Each deep step is its own `test-full-*` target, so `make -j4 test-full` runs them side by side with the gate's four
+partitions; [test-speed.md](test-speed.md#parallel-deep-sweeps) has the timings. `tools/dev/label.sh` prefixes every line
+a deep job prints with its name (`[generator-3]`, `[lab-1]`, `[bots]`) and, on failure, prints that name, the exit
+status and the command; make then names the failed target. The jobs:
+
+| Target | Runs |
+| --- | --- |
+| `test-full-generator-1`…`4` | The generator sweep in four contiguous seed ranges: 50 single-player and 2-player seeds, 25 at each large size, and two, two, one and one forced seeds |
+| `test-full-generator-coverage` | `check_generator_shards.py`: the shards' `--list-seeds` listings hold exactly the 944 seeds of `--seeds=200 --large-seeds=100 --formation-seeds=6`, each once |
+| `test-full-lab-1`…`3` | `check_lab.py --full --only=…`: the void soak, the suburb soak, and the other five sessions |
+| `test-full-navigation` | 100 navigation seeds in one process, since its pass rate is over all of them |
+| `test-full-bots` | The rifle soak, duel lane and loading-readiness matches, one at a time: they share this checkout's `build/` names |
+| `test-full-piles`, `test-full-range` | The deep awake pile trial; melee reloads, airborne recoil and the ten-magazine bot recoil run |
+| `test-full-menu` | The menu lifetime run, after `test-behavior`, whose port and `user://menu_test_settings.cfg` it shares |
+
+Every other deep job is offline and writes its own log names, so jobs never share a port, a settings file or an output
+path; all Godot processes of a checkout still append to its one `user://logs`, as under `make -j4 check`. `-j` is not
+the default: worktree agents share one machine, so each run chooses its own job count. Use `-j4` on a quiet machine,
+fewer when other worktrees are busy. To shard a sweep differently, change the `GENERATOR_*` or `LAB_*` variables in
+the Makefile; the coverage job and `lint_tests.py` reject a split that loses or repeats seeds or sessions.
 
 `core_tests.tscn` runs platform, movement and unit scenes sequentially, prints BEGIN/PASS per suite and exits
 nonzero on failure. Those scenes also work alone: `CoreTests.Complete` routes standalone completion through `ShutdownGuard.Quit`. The consolidated runner also uses
