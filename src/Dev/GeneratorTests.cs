@@ -93,6 +93,9 @@ public partial class GeneratorTests : Node
         var largeFirst = (int)DevArgs.GetFloat("first-large-seed", 1);
         foreach (var players in new[] { 2, 8, 16, 24, 32 })
             TestMatchSuburbs(players <= 2 ? first : largeFirst, players <= 2 ? count : largeCount, players, catalog);
+        // Dissolve Run's segment streams: --segment-seeds runs of --segments segments each (default 12, past a jackpot).
+        TestSegments((int)DevArgs.GetFloat("first-segment-seed", 1), (int)DevArgs.GetFloat("segment-seeds", Mathf.Min(count, 10)),
+            (int)DevArgs.GetFloat("segments", 12), catalog);
         if (listing)
         {
             GD.Print("[seeds] listed");
@@ -187,6 +190,101 @@ public partial class GeneratorTests : Node
         GD.Print($"[tests] match suburbs ({players} players): seeds {first}..{first + count - 1} in {timer.ElapsedMilliseconds} ms; tanks average {mpRadius.Average():0.0} m from the center; " +
                  $"closest starts {spawnGaps.Min():0.0}..{spawnGaps.Max():0.0} m apart; " +
                  $"ammo spots {ammoCounts.Min()}..{ammoCounts.Max()}; plan {planBytes.Average() / 1024f:0.0} KB encoded (max {planBytes.Max() / 1024f:0.0})");
+    }
+
+    /// <summary>
+    /// Dissolve Run: each run's segments generated in order and again out of order (from a worker's snapshot catalog)
+    /// are identical; each is a full-length strip with one through street, its scheduled tanks (and the jackpot on every
+    /// tenth), its ammo cans and a plan that survives <see cref="Net.PlanCodec"/>; and the segments laid end to end form
+    /// one street on which every tank of every segment is reachable on foot from the run's start.
+    /// </summary>
+    private void TestSegments(int first, int count, int segments, GameCatalog catalog)
+    {
+        var tuning = new Core.Tuning();
+        var settings = SegmentSettings.From(tuning);
+        var snapshot = new PlanCatalogSnapshot(catalog);
+        var timer = System.Diagnostics.Stopwatch.StartNew();
+        var attempts = new List<int>();
+        var tankTotals = new List<int>();
+        var previous = int.MaxValue;
+        for (var index = 0; index < 40; index++)
+        {
+            var tanks = SegmentPlans.TanksAt(settings, index);
+            Check(index, "segments: tanks never rise along a run", tanks <= previous && tanks >= settings.TanksMin);
+            previous = tanks;
+        }
+        Check(0, "segments: tanks fall to the minimum", SegmentPlans.TanksAt(settings, 1000) == settings.TanksMin);
+        for (var seed = first; seed < first + count; seed++)
+        {
+            if (Listed("segment-run", seed)) continue;
+            var run = Enumerable.Range(0, segments).Select(i => SegmentPlans.Generate(settings, catalog, seed, i)).ToList();
+            // Out of order and from the worker's catalog: a segment depends on its seed and index alone.
+            foreach (var index in Enumerable.Range(0, segments).Reverse())
+            {
+                var again = SegmentPlans.Generate(settings, snapshot, seed, index);
+                Check(seed, "segments: deterministic", again.Seed == run[index].Seed &&
+                    Net.PlanCodec.Encode(again.Plan).SequenceEqual(Net.PlanCodec.Encode(run[index].Plan)) && again.Plan.AmmoSpots.SequenceEqual(run[index].Plan.AmmoSpots));
+            }
+            Check(seed, "segments: runs differ by seed", seed == first || !Net.PlanCodec.Encode(run[0].Plan).SequenceEqual(
+                Net.PlanCodec.Encode(SegmentPlans.Generate(settings, catalog, seed - 1, 0).Plan)));
+            foreach (var segment in run)
+            {
+                var plan = segment.Plan;
+                var half = settings.Length / 2f;
+                attempts.Add(segment.Seed == SegmentPlans.SeedOf(seed, segment.Index) ? 1 : 2);
+                Check(seed, "segments: full length", Mathf.IsEqualApprox(plan.Bounds.Position.X, -half) && Mathf.IsEqualApprox(plan.Bounds.End.X, half),
+                    $"{segment.Index}: {plan.Bounds}");
+                Check(seed, "segments: one through street", plan.Roads.Count == 1 && plan.CulDeSacs.Count == 0 &&
+                    plan.Roads[0].A == new Vector2(-half, 0) && plan.Roads[0].B == new Vector2(half, 0), $"{segment.Index}");
+                Check(seed, "segments: placed end to end", Mathf.IsEqualApprox(segment.Start, SegmentPlans.StartOf(settings, segment.Index)) &&
+                    (segment.Index == 0 || Mathf.IsEqualApprox(run[segment.Index - 1].End, segment.Start)));
+                var jackpot = SegmentPlans.JackpotAt(settings, segment.Index);
+                Check(seed, "segments: jackpot every tenth", segment.Jackpot == jackpot && jackpot == ((segment.Index + 1) % settings.JackpotEvery == 0));
+                var scheduled = SegmentPlans.TanksAt(settings, segment.Index);
+                Check(seed, "segments: tanks per schedule", plan.Tanks.Count == scheduled + (jackpot ? settings.JackpotTanks : 0) && segment.Tanks == scheduled,
+                    $"{segment.Index}: {plan.Tanks.Count} for {scheduled}{(jackpot ? " + jackpot" : "")}");
+                Check(seed, "segments: jackpot is one pyramid on the street", !jackpot ||
+                    plan.Tanks.Count(t => t.Reason.StartsWith(SegmentPlans.JackpotReason)) == settings.JackpotTanks &&
+                    plan.Tanks.Where(t => t.Reason.StartsWith(SegmentPlans.JackpotReason)).All(t => Mathf.Abs(t.Position.Y) < 2f && t.Formation == PileFormation.Square));
+                Check(seed, "segments: ammo cans", plan.AmmoSpots.Count == settings.AmmoCans);
+                Check(seed, "segments: lots clear of the seams", plan.Lots.All(l => l.Bounds.Corners().All(c => Mathf.Abs(c.X) <= half - settings.Suburb.StripSeamGap + 0.05f)));
+                var bytes = Net.PlanCodec.Encode(plan);
+                Check(seed, "segments: plan survives encoding", Net.PlanCodec.Encode(Net.PlanCodec.Decode(bytes)).SequenceEqual(bytes));
+                CheckTanks(seed, plan, settings.Suburb with { TankCount = plan.Tanks.Count });
+                tankTotals.Add(plan.Tanks.Count);
+            }
+            var joined = Stitch(run);
+            CheckLots(seed, joined, settings.Suburb);
+            CheckReachability(seed, joined, settings.Suburb);
+            Check(seed, "segments: the street runs unbroken", joined.Roads.Zip(joined.Roads.Skip(1)).All(p => p.First.B.IsEqualApprox(p.Second.A)));
+        }
+        if (attempts.Count == 0) return;
+        GD.Print($"[tests] dissolve segments: runs {first}..{first + count - 1} x {segments} in {timer.ElapsedMilliseconds} ms; " +
+                 $"{attempts.Count(a => a > 1)}/{attempts.Count} rerolled; tanks {tankTotals.Min()}..{tankTotals.Max()} per segment");
+    }
+
+    /// <summary>A run's segments as one plan in run coordinates, starting from segment 0's spawn.</summary>
+    private static SuburbPlan Stitch(IReadOnlyList<SegmentPlan> run)
+    {
+        var first = run[0];
+        var joined = new SuburbPlan { Seed = first.Seed, Bounds = new Rect2(first.Start, first.Plan.Bounds.Position.Y, 0, first.Plan.Bounds.Size.Y) };
+        foreach (var segment in run)
+        {
+            var offset = new Vector2(segment.Center, 0);
+            var plan = segment.Plan;
+            joined.Bounds = joined.Bounds.Merge(new Rect2(plan.Bounds.Position + offset, plan.Bounds.Size));
+            joined.Roads.AddRange(plan.Roads.Select(r => new RoadSegment(r.A + offset, r.B + offset)));
+            joined.Lots.AddRange(plan.Lots.Select(l => new Lot
+            {
+                Bounds = l.Bounds with { Center = l.Bounds.Center + offset }, Seed = l.Seed, HouseModel = l.HouseModel, HousePalette = l.HousePalette,
+                House = l.House with { Center = l.House.Center + offset }, ReturnDepth = l.ReturnDepth, DrivewaySide = l.DrivewaySide,
+            }));
+            joined.Fences.AddRange(plan.Fences.Select(f => new FenceRun(f.A + offset, f.B + offset)));
+            joined.Props.AddRange(plan.Props.Select(p => p with { Position = p.Position + offset }));
+            joined.Tanks.AddRange(plan.Tanks.Select(t => t with { Position = t.Position + offset }));
+        }
+        joined.Spawn = first.Plan.Spawn + new Vector2(first.Center, 0);
+        return joined;
     }
 
     private float CheckMatchStarts(int seed, SuburbPlan plan, SuburbSettings settings)
