@@ -7,7 +7,7 @@ using Propane.Fx;
 
 namespace Propane.Dev;
 
-/// <summary>Optional rendered harness telemetry, after 180 startup frames; each process owns its CSV.</summary>
+/// <summary>Optional harness telemetry, rendered or headless, after 180 startup frames; each process owns its CSV.</summary>
 public partial class FrameMetrics : Node
 {
     private StreamWriter? output;
