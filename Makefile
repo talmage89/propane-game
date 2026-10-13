@@ -28,7 +28,9 @@ run: build ## Play from source
 build: ## Compile the C# code
 	dotnet build Propane.sln -c Debug -nologo -v quiet
 
-lint: ## Check C# formatting and compile with warnings as errors
+lint: ## Check C# formatting and script .uid pairs, and compile with warnings as errors
+	@unpaired=$$(git ls-files 'src/*.cs' 'src/*.cs.uid' | sed 's/\.uid$$//' | sort | uniq -u); \
+	if [ -n "$$unpaired" ]; then printf 'Commit each script with its Godot .uid file, and no .uid without its script:\n%s\n' "$$unpaired"; exit 1; fi
 	dotnet format Propane.sln --verify-no-changes
 	dotnet build Propane.sln -c Debug --no-restore --no-incremental -nologo -v quiet -warnaserror
 
