@@ -15,7 +15,8 @@ their muzzle obstruction and hits come from the logical aim only (`PlayerCharact
 2. **Head.** The neck takes `RifleNeckShare` of the head's turn toward the aim, and the head the rest
    (`RifleHipHeadFollow`, `RifleAimHeadFollow`), so the aim pitch is spread through the spine, neck and head.
 3. **Rifle.** Authored stances, placed in a chest frame (the body's yaw plus the torso twist, and world up) from the
-   right shoulder, and blended by state with eased weights (`RifleStanceBlendSpeed`):
+   right shoulder, and blended by state with eased weights (`RifleStanceBlendSpeed`). Blends pivot about the butt,
+   so the stock stays put while the rifle swings up, as a person raises one:
    - *Carry*: low and relaxed, muzzle dipped and angled across the body (`RifleCarry*`), stock by the hip.
    - *Hip ready*: stock tucked under the arm against the ribs, muzzle on the aim point (`RifleHip*`).
    - *Shouldered*: butt in the pocket just inside the shoulder joint (`RifleShoulderInboard`, `RifleShoulderUp`,
@@ -29,7 +30,10 @@ their muzzle obstruction and hits come from the logical aim only (`PlayerCharact
 4. **Recoil.** An underdamped spring (`RifleRecoil*`) pushes the stock back and lifts the muzzle about the butt; the
    torso absorbs `RifleRecoilTorsoShare` of the lift.
 5. **Hands.** Two-bone IK puts each wrist on its grip frame (`RifleRightWrist*`, `RifleLeftWrist*`, magazine and bolt
-   frames) with elbows down and out (`RifleElbowOut`, `RifleElbowDown`); fingers take absolute curls per grip.
+   frames) with elbows down, out and a little back (`RifleElbowOut`, `RifleElbowDown`, `RifleElbowBack`). Each arm
+   bone's frame comes from the bend plane (the mannequin's elbow hinges about its local X), and the forearm takes half
+   the hand's twist, so the arms never flip as a strike crosses the body. If a stance holds a grip a little beyond
+   its arm, the rifle slides toward that shoulder by the shortfall. Fingers take absolute curls per grip.
 
 Hip fire raises the rifle from the carry over a few frames (the character's `ReadyRaiseSpeed` and the rig's
 `RifleStanceBlendSpeed`): a fast, visible raise. The shot itself is never delayed; its tracer starts at the rendered
@@ -38,11 +42,12 @@ muzzle.
 ## Butt strike
 
 `MeleeStrike` is an authored keyframe track keyed to the gameplay phases (`MeleeWindup`, `MeleeActive`,
-`MeleeRecovery`), so retiming the strike keeps its shape. Windup: the torso coils right, the butt drawn back by the
-right hip with the muzzle up and forward. Active: the torso unwinds left and leans in while the right hand drives
-the stock forward at head height and the left pulls the barrel back past the left shoulder. Recovery: a short
-follow-through, then the rifle returns to the hip. `MeleeTorsoTwistDegrees`, `MeleeTorsoLeanDegrees` and
-`MeleeRifleForward` scale it. Hit volumes, timing and the lunge are unchanged.
+`MeleeRecovery`), so retiming the strike keeps its shape. Windup: the torso coils right and the stock is drawn back
+by the right hip, the muzzle up and forward across the body. Active: the torso unwinds left and leans in; the rifle
+pivots near the support hand, which pulls the barrel back past the left shoulder while the firing hand drives the
+stock through a wide arc to chin height in front. Recovery: a short follow-through, then the rifle returns to the
+hip. `MeleeTorsoTwistDegrees` and `MeleeTorsoLeanDegrees` scale the body's part. Hit volumes, timing and the lunge
+are unchanged. A strike that cancels a reload returns the support hand at `MeleeReloadReturnSpeed`.
 
 ## Removed layers
 
@@ -55,5 +60,6 @@ the pose. Their tuners were deleted.
 
 `--assert-grip` (grip, ragdoll, recoil, melee and network scenarios) keeps sanity bounds: wrists within 2 cm of their
 grips, no hand 1 cm into the rifle's solid proxies, an aimed eye within 15 cm of the sight, finite values and stance
-coverage. `--assert-motion` rejects non-finite bones and snaps (40 degrees in one 60 Hz frame) and keeps the logical
-recoil climb checks. Judge the stance from rendered clips ([animation review](animation-review.md)).
+coverage. `--assert-motion` rejects non-finite bones and snaps (a limb turning 60 degrees, or a finger 90, in one 60 Hz
+frame; the strike peaks near 45 and is continuous, while the IK flips it caught jumped 90 to 170) and keeps the logical
+recoil climb checks; aimed creep allows 5 cm of lateral muzzle sway. Judge the stance from rendered clips ([animation review](animation-review.md)).

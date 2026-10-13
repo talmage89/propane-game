@@ -22,7 +22,8 @@ public partial class MotionProbe : SkeletonModifier3D
     private double time;
     private Vector3 previousRoot;
     private float maximum, maximumRate;
-    private const double SnapRate = 2400, DigitSnapRate = 5400;
+    // 60 degrees in one 60 Hz frame for limbs: a strike peaks near 45 and is continuous; IK flips jump 90-170.
+    private const double SnapRate = 3600, DigitSnapRate = 5400;
     private float minMuzzle = float.PositiveInfinity, maxMuzzle = float.NegativeInfinity;
     private int frames, creepFrames;
     private bool invalid;

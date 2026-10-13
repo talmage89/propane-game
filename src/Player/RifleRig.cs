@@ -212,13 +212,13 @@ public partial class RifleRig : SkeletonModifier3D
             stance = Blend(stance, new Transform3D(reloadBasis, well - reloadBasis * Rifle.MagWellLocal.Origin), reloadWeight);
         }
 
-        // Butt strike: the stock leads, driven by the torso; keys are in the twisted chest frame.
+        // Butt strike: the rifle pivots near the support hand while the stock swings; keys are in the twisted chest frame.
         if (strike.Weight > 0)
         {
             var dir = CarryDirection(chestForward, chestRight, -strike.Pitch, strike.Heading);
             var basis = Basis.LookingAt(dir, Vector3.Up).Rotated(dir, Mathf.DegToRad(strike.Roll));
-            var butt = shoulder + chestRight * strike.Butt.X + up * strike.Butt.Y + chestForward * strike.Butt.Z;
-            stance = Blend(stance, new Transform3D(basis, butt - basis * Rifle.ButtLocal.Origin), strike.Weight);
+            var foregrip = shoulder + chestRight * strike.Foregrip.X + up * strike.Foregrip.Y + chestForward * strike.Foregrip.Z;
+            stance = Blend(stance, new Transform3D(basis, foregrip - basis * Rifle.ForegripLocal.Origin), strike.Weight);
         }
 
         // 4. Cheek to the stock: drop the head toward the sight rather than raising the rifle to the eye.

@@ -89,7 +89,7 @@ public partial class GripProbe : SkeletonModifier3D
         {
             right.Origin.DistanceTo(rig.RightTarget.Origin), left.Origin.DistanceTo(rig.LeftTarget.Origin),
             Angle(right.Basis, rig.RightTarget.Basis), Angle(left.Basis, rig.LeftTarget.Basis),
-            rig.Weight >= 0.999f ? Penetration(bones, rifle) : 0, rig.Weight >= 0.999f && rig.AimAmount > 0.99f ? eye.DistanceTo(rifle.GlobalTransform * rifle.EyeLocal.Origin) : 0,
+            rig.Weight >= 0.999f ? Penetration(bones, rifle) : 0, rig.Weight >= 0.999f && rig.AimAmount > 0.99f && Math.Abs(Player.IsRemote ? 0 : Player.Aim.Pitch) < 30 ? eye.DistanceTo(rifle.GlobalTransform * rifle.EyeLocal.Origin) : 0,
         };
         for (var i = 0; i < maxima.Length; i++)
         {
@@ -260,7 +260,8 @@ public partial class GripProbe : SkeletonModifier3D
     public void Finish()
     {
         var assert = DevArgs.Get("assert-grip") != null;
-        // Shouldered, the head comes down toward the sight but stays above the stock (RifleCheekWeld).
+        // Shouldered at ordinary pitches, the head comes down toward the sight but stays above the stock
+        // (RifleCheekWeld); near the pitch limits the neck cannot follow it all the way.
         failed |= count < 100 || maxima[0] > HandTolerance || maxima[1] > HandTolerance || maxima[2] > 5f || maxima[3] > 5f
             || maxima[4] > 0.01f || maxima[5] > 0.15f;
         if (RequireCoverage)
