@@ -139,7 +139,9 @@ public partial class RifleRig : SkeletonModifier3D
         // 1. Torso: turn to the aim, bladed so the left shoulder comes forward to the foregrip, and pitch
         // part of the way with it. The neck and head take the rest of the pitch below.
         var blade = Mathf.DegToRad(Mathf.Lerp(t.RifleHipBladeDegrees, t.RifleAimBladeDegrees, aim)) * (1 - sprint);
-        var yaw = forward.SignedAngleTo(flatAim, Vector3.Up) - blade;
+        // A relaxed player standing still can look anywhere; past the spine's comfortable twist the body stays put.
+        var limit = Mathf.DegToRad(t.CombatSpineTwistDegrees);
+        var yaw = Mathf.Clamp(forward.SignedAngleTo(flatAim, Vector3.Up), -limit, limit) - blade;
         yaw = Mathf.Lerp(yaw, Mathf.DegToRad(strike.TorsoYaw), strike.Weight);
         var pitch = Mathf.Asin(Mathf.Clamp(aimDir.Y, -1, 1));
         var pitchShare = Mathf.Lerp(t.RifleHipPitchShare, t.RifleAimPitchShare, aim) * (1 - sprint * t.RifleSprintPitchSuppression);

@@ -135,14 +135,16 @@ public partial class PlayerCharacter
         Fired?.Invoke(new ShotReport(muzzle, end, normal, shotDir, collider, true));
     }
 
-    /// <summary>The muzzle as the logical aim holds it: ahead of the chest along the aim, higher when shouldered.</summary>
+    /// <summary>The muzzle as the logical aim holds it: along the aim from the body, higher when shouldered.</summary>
     private Vector3 LogicalMuzzle(Vector3 forward)
     {
         var t = World.Tuning;
         var right = forward.Cross(Vector3.Up);
         right = right.LengthSquared() > 0.0001f ? right.Normalized() : Vector3.Right;
-        var height = ResolvedState.EffectiveAim ? t.ShotMuzzleAimHeight : t.ShotMuzzleHipHeight;
-        return GlobalPosition + Vector3.Up * height + right * t.ShotMuzzleSide + forward * t.ShotMuzzleForward;
+        var aimed = ResolvedState.EffectiveAim;
+        return GlobalPosition + Vector3.Up * (aimed ? t.ShotMuzzleAimHeight : t.ShotMuzzleHipHeight)
+            + right * (aimed ? t.ShotMuzzleAimSide : t.ShotMuzzleHipSide)
+            + forward * (aimed ? t.ShotMuzzleAimForward : t.ShotMuzzleHipForward);
     }
 
     /// <summary>The player a collider belongs to (its capsule or one of its ragdoll bones), if any.</summary>

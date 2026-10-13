@@ -328,11 +328,15 @@ public partial class Tuning : Resource
     [Export(PropertyHint.Range, "0,10,0.1")] public float RecoilSettleSpeed { get; set; } = 1f;
     [Export(PropertyHint.Range, "0,1,0.01")] public float RecoilYawDegrees { get; set; } = 0.175f;
     [Export(PropertyHint.Range, "10,1000,10")] public float ShotRange { get; set; } = 400f;
-    /// <summary>Where the logical aim holds the muzzle, for obstruction: above the feet, right of and along the aim.</summary>
-    [Export(PropertyHint.Range, "0.5,2,0.01")] public float ShotMuzzleHipHeight { get; set; } = 1.3f;
-    [Export(PropertyHint.Range, "0.5,2,0.01")] public float ShotMuzzleAimHeight { get; set; } = 1.5f;
-    [Export(PropertyHint.Range, "-0.5,0.5,0.01")] public float ShotMuzzleSide { get; set; } = 0.1f;
-    [Export(PropertyHint.Range, "0,1.5,0.01")] public float ShotMuzzleForward { get; set; } = 0.75f;
+    /// <summary>Where the logical aim holds the muzzle for obstruction, from the feet: height, right of and along the
+    /// aim, at the hip and shouldered. Never the animated rifle, so no pose can change a hit; the defaults are the
+    /// mean positions of the release's fitted muzzle.</summary>
+    [Export(PropertyHint.Range, "0.5,2,0.01")] public float ShotMuzzleHipHeight { get; set; } = 1.26f;
+    [Export(PropertyHint.Range, "-0.5,0.5,0.01")] public float ShotMuzzleHipSide { get; set; } = 0.13f;
+    [Export(PropertyHint.Range, "0,1.5,0.01")] public float ShotMuzzleHipForward { get; set; } = 0.65f;
+    [Export(PropertyHint.Range, "0.5,2,0.01")] public float ShotMuzzleAimHeight { get; set; } = 1.59f;
+    [Export(PropertyHint.Range, "-0.5,0.5,0.01")] public float ShotMuzzleAimSide { get; set; } = 0.07f;
+    [Export(PropertyHint.Range, "0,1.5,0.01")] public float ShotMuzzleAimForward { get; set; } = 0.76f;
     [Export(PropertyHint.Range, "0,200,1")] public float BulletImpulse { get; set; } = 30f;
 
     // ---------------------------------------------------------------- Rifle contact

@@ -5,6 +5,11 @@ barrel. R19 moves shot recoil into logical aim, retains most of it, and aligns t
 The weapon and camera springs supply short presentation kick independently of the primary aim ray. Damage,
 spread sampling, bloom, fire rate, ammunition and tank/blast rules are unchanged.
 
+The clip redo keeps R19's logical climb and recoil but drops its shot fitting: the rifle no longer re-aims or
+re-grips for each shot, and the muzzle obstruction ray starts at a logical muzzle instead of the animated rifle
+(see [Logical muzzle](#logical-muzzle)). Sections below that describe shot fitting, barrel alignment and its
+contact exceptions are R19's history.
+
 ## Climb
 
 The release did have automatic recovery: at 7/s it returned 65% of a pitch kick and transferred the remaining 35%
@@ -22,7 +27,6 @@ so blocked kick cannot wind up a later downward pull. Spawn orientation resets t
 | `RecoilSettleSpeed` | 1 | 1 | Exponential settle rate, per second |
 | `RecoilYawDegrees` | 0.175 | 0.5 | Uniform persistent sideways range, either direction |
 | `CameraRecoilKickDegrees` | 0.35 | 0.35 | Separate camera spring impulse |
-| `RifleShotPoseAngularSpeed` | 2400 | 2400 | Body/head response on a shot, degrees/s |
 | `BotRecoilControlSpeed` | 2.8 | 2.8 | Local brain correction rate, per second |
 
 `AimRecoilScale` stays 0.6. The new retained hip increment is `0.8 * 0.875 = 0.7` degrees, matching the release's
@@ -92,7 +96,44 @@ by maximum absolute displacement. Random streams can diverge when hit/effect his
 or player-code substitution is needed. The historical bot fixture exposes the old aim helpers without replacing
 their algorithms. `plot_recoil.py` requires matplotlib only for this optional report, never for `make test`.
 
-## Barrel alignment
+## Logical muzzle
+
+A shot's primary ray is the logical aim's chest-plane projection, random cone sample and hit query, unchanged.
+Something between the muzzle and that endpoint still blocks the bullet, but the muzzle is now where the logical aim
+holds it (`PlayerCharacter.LogicalMuzzle`): from the character's feet, a height, an offset right of the aim and a
+distance along the aim, separately at the hip and shouldered. These are shared gameplay tuners:
+
+| Tuner | Default | Release's fitted muzzle (median, range) |
+| --- | ---: | --- |
+| `ShotMuzzleHipHeight` | 1.26 m | 1.257 m (1.036–1.295) |
+| `ShotMuzzleHipSide` | 0.13 m | 0.126 m (0.073–0.252) |
+| `ShotMuzzleHipForward` | 0.65 m | 0.652 m (0.510–0.725) |
+| `ShotMuzzleAimHeight` | 1.59 m | 1.587 m (1.547–1.609) |
+| `ShotMuzzleAimSide` | 0.07 m | 0.071 m (0.051–0.102) |
+| `ShotMuzzleAimForward` | 0.76 m | 0.765 m (0.713–0.796) |
+
+The right column measures `dev` (`a832c5d`) over 2,400 bot-fixture shots. Its muzzle came from the animated, fitted
+rifle, so it wandered with the pose by a few centimeters; the tuners take its median. The rendered tracer still starts
+at the visible muzzle. A pose can no longer change a hit.
+
+The deterministic bot fixtures (`player_range --scenario=bot-recoil`, 300 shots each) compare as follows:
+
+| Brain | Distance | `dev` hits | Logical muzzle hits |
+| --- | ---: | ---: | ---: |
+| Smart, easy (0) | 8 m | 164 | 165 |
+| Smart, easy (0) | 20 m | 100 | 102 |
+| Smart, hard (1) | 8 m | 188 | 188 |
+| Smart, hard (1) | 20 m | 182 | 182 |
+| Simple | 8 m | 193 | 193 |
+| Simple | 20 m | 194 | 194 |
+
+Four fixtures are identical shot for shot. Exact equality everywhere is not reachable without the animated muzzle:
+many hits come from a camera ray that grazes past the target while the muzzle ray clips it (48 of the 100 easy hits
+at 20 m on `dev`), so a centimeter of the old pose's wander decides individual shots. Once one shot's final collider
+differs, its impact effect draws a different number of values from the shared world random stream, and every later
+spread sample diverges. The two differing fixtures first diverge on such a grazing shot (frames 840 and 2681).
+
+## Barrel alignment (R19, superseded)
 
 The primary ray retains its existing chest-plane projection, random cone sampler and hit query. Before the muzzle
 obstruction query, the rig solves a reachable rifle placement toward that endpoint. After any obstruction, the
