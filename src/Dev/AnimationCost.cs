@@ -55,8 +55,13 @@ public partial class AnimationCost : Node3D
             // Aim 20 degrees up so no shot or ragdoll couples the players; one row, far apart.
             input.Look(0, 0.25f, new Vector2(0, -20 / Mathf.RadToDeg(world.Tuning.MouseSensitivity) / 0.25f));
             inputs.Add(input);
-            var player = new PlayerCharacter { World = world, Name = $"Player{i}", InputOverride = input,
-                Position = new Vector3(i * 15, 0, 0) };
+            var player = new PlayerCharacter
+            {
+                World = world,
+                Name = $"Player{i}",
+                InputOverride = input,
+                Position = new Vector3(i * 15, 0, 0)
+            };
             dynamic.AddChild(player);
             player.Ammo = new AmmoState { Tuning = world.Tuning, Magazine = 30, Reserve = 900 };
         }
