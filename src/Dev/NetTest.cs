@@ -124,7 +124,8 @@ public partial class NetTest : Node
             if (result.RequestId != lobbyBotRequest) return;
             lobbyBotRequest = 0;
             Log(result.Accepted ? $"lobby bot added at revision {result.Revision}" : $"lobby bot refused: {result.Reason}");
-            AddLobbyBot();
+            // An accepted bot's roster arrives next and adds the following one; a refusal retries now.
+            if (!result.Accepted) AddLobbyBot();
         };
         net.MatchStarting += async setup =>
         {
@@ -398,7 +399,7 @@ public partial class NetTest : Node
         {
             Watch(match, dt);
         }
-        else
+        else if (DevArgs.Get("human") != "idle") // --human=idle: a still player, so frame costs measure lobby bots alone.
         {
             bot.Think(match, dt);
             if (DevArgs.Get("bot-log") != null && Mathf.PosMod(clock, 2f) < dt)
