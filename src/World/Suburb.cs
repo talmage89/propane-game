@@ -741,7 +741,7 @@ public partial class Suburb : Node3D
         StaticRoot.AddChild(new MeshInstance3D { Name = name, Mesh = mesh, Layers = RenderLayers.Static });
     }
 
-    private static ShaderMaterial GroundMaterial(int pattern, Color baseColor, Color altColor, float roughness = 0.9f, float jointSpacing = 1.6f)
+    internal static ShaderMaterial GroundMaterial(int pattern, Color baseColor, Color altColor, float roughness = 0.9f, float jointSpacing = 1.6f)
     {
         var material = new ShaderMaterial { Shader = GD.Load<Shader>("res://shaders/ground.gdshader") };
         material.SetShaderParameter("pattern", pattern);

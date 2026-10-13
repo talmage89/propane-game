@@ -18,6 +18,22 @@ public partial class VoidEnvironment : Node3D
     /// <summary>The node the floor recenters on (normally the camera).</summary>
     public Node3D? Follow { get; set; }
 
+    /// <summary>
+    /// The floor's height. Zero is the construct's ground; a slab mode (Ring Out) lowers it far below its slab, so
+    /// the slab floats over a drop and whatever falls off still comes to rest somewhere.
+    /// </summary>
+    public float FloorHeight
+    {
+        get => floorHeight;
+        set
+        {
+            floorHeight = value;
+            if (floorBody != null) Recenter();
+        }
+    }
+
+    private float floorHeight;
+
     public DirectionalLight3D Sun { get; private set; } = null!;
 
     public Godot.Environment Environment { get; private set; } = null!;
@@ -104,6 +120,7 @@ public partial class VoidEnvironment : Node3D
             CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
         };
         AddChild(floorMesh);
+        Recenter();
     }
 
     public override void _PhysicsProcess(double delta)
@@ -112,9 +129,14 @@ public partial class VoidEnvironment : Node3D
         {
             return;
         }
-        var p = Follow.GlobalPosition;
+        Recenter();
+    }
+
+    private void Recenter()
+    {
+        var p = Follow != null && IsInstanceValid(Follow) ? Follow.GlobalPosition : Vector3.Zero;
         // Snapping keeps the plane's transform stable; the grid is drawn in world space so it never slides.
-        var snapped = new Vector3(Mathf.Snapped(p.X, FloorSnap), 0, Mathf.Snapped(p.Z, FloorSnap));
+        var snapped = new Vector3(Mathf.Snapped(p.X, FloorSnap), floorHeight, Mathf.Snapped(p.Z, FloorSnap));
         floorBody.GlobalPosition = snapped;
         floorMesh.GlobalPosition = snapped + new Vector3(0, -0.02f, 0);
     }

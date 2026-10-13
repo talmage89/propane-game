@@ -2,7 +2,8 @@
 
 How a game mode plugs into Propane: pure rules, a definition that selects everything mode-specific, a runner that
 supplies the clock and transport, and one fixed network envelope. Tank Bank is the first mode on this framework and
-plays exactly as before; its rules are in [multiplayer.md](multiplayer.md#tank-bank). Sandbox is the second.
+plays exactly as before; its rules are in [multiplayer.md](multiplayer.md#tank-bank). Sandbox is the second. Ring Out and
+King of the Cul-de-sac are Lab prototypes, the framework's first test with new rules ([below](#lab-prototypes)).
 
 | Path | Contents |
 | --- | --- |
@@ -10,7 +11,11 @@ plays exactly as before; its rules are in [multiplayer.md](multiplayer.md#tank-b
 | `src/Modes/TankBankRules.cs` | Tank Bank's bank, spill tickets, gates, standings, statistics and audit; victim-owner helpers. |
 | `src/Modes/ModePhases.cs` | The pure phase machine the server's runner drives. |
 | `src/Modes/ModeHud.cs` | Plain HUD data and the Tank Bank and Sandbox presenters. |
-| `src/Modes/ModeDefinition.cs` | `ModeDefinition`, supply policy and `ModeRegistry` (Sandbox and Tank Bank). |
+| `src/Modes/ModeDefinition.cs` | `ModeDefinition`, supply policy and `ModeRegistry` (Sandbox and Tank Bank; the prototypes apart). |
+| `src/Modes/BodyEvents.cs` | Sampled positions, attributed throws, eliminations, `RoundOver` and a pure seeded generator. |
+| `src/Modes/RingOutRules.cs`, `KingRules.cs` | The prototypes' rules: Ring Out's slab plan, King's zone schedule. |
+| `src/Modes/PrototypeHud.cs` | The prototypes' HUD presenters. |
+| `src/Lab/PrototypeRunner.cs` | The offline runner that drives a prototype's rules in the Lab. |
 | `src/Net/ModeEnvelope.cs` | The envelope record, schema registry, Tank Bank codecs, the causal gate and command order. |
 | `src/Net/ModeRunner.cs` | One run's mode on the server, and Tank Bank's wire adapter. |
 | `src/Bots/IBotWorld.cs` | Bot observations and the per-mode goal policy interface. |
@@ -34,6 +39,8 @@ presenter, the bot goal policy, the tuners the rules copy and the envelope schem
 | --- | --- | --- | --- | --- | --- | --- |
 | Sandbox (1) | no score, no spills, nothing gated | void | single-player suburb, unlimited ammo, no cans | none | tank arrows | none |
 | Tank Bank (2) | `TankBankRules` | suburb plan | `SuburbPlans.Match`, limited ammo, cans | countdown | bank, clock, arrows | `BankingBot` |
+| Ring Out (3), Lab only | `RingOutRules` | the Lab's slab | unlimited ammo, no cans | count-up | standing, knock-offs, next dissolve, feed | `RingOutBot` |
+| King of the Cul-de-sac (4), Lab only | `KingRules` | the Lab's choice | unlimited ammo, no cans | countdown | bank, minted, clock, zone arrows | `KingBot` |
 
 Multiplayer lobbies play Tank Bank; `MatchStart` appends the mode id and schema version, and a client that does not
 know the pair fails decoding by name. Lab scenarios name a mode: the banking duel plays Tank Bank and the other
@@ -149,9 +156,56 @@ them into intent. Tank Bank's policy is the existing banking brain, created thro
 network bot harness and each peer's match for the lobby bots it owns (`Match.Bots.cs`, A8). Its goal selection still lives inside `BankingBot`; separating it further is follow-up
 work that would need its own bot-behavior proof.
 
+## Lab prototypes
+
+Ring Out and King of the Cul-de-sac are definitions in `ModeRegistry.Prototypes`, not `ModeRegistry.All`: no lobby,
+`MatchStart` or envelope schema names them, so they change nothing a match shares and `Protocol.Version` is untouched.
+The Lab plays them against its own bots ([lab.md](lab.md#prototype-modes)) through `PrototypeRunner`, which feeds the
+rules what a server would: the round's phases on its clock, and every step the positions of all actors
+(`ActorsSampled`; a server would sample what its clients already send, so a mode needs no traffic of its own), who
+knocked whom down (`ActorThrown`: a melee hit's attacker, or the initiator of the chain whose blast threw them), and
+for King the attributed detonations, hits and throws exactly as the Lab duel feeds Tank Bank. Their dials are local
+Lab dials (`Tuning.Prototype.cs`), copied into `ModeTuners` like any mode's.
+
+**Ring Out** (`RingOutRules`). A square slab of lots (`RingOutLots` per side, odd, `RingOutLotSize` meters) centered
+on the origin; its top is at height zero and the void's floor lies `RingOutVoidDepth` below. `RingOutPlan` cuts each
+ring of lots, outermost first, into angular bands of about `RingOutBandLots`, from a seeded start angle. Band `b`
+pulses for `RingOutWarningSeconds` and dissolves at `(b + 1) * RingOutBandSeconds` of round time, until the center
+lot alone remains (5 × 5 lots: six bands, one lot left at 90 s). Whether ground is solid is a pure function of round
+time and the plan, so the boundary is never sent. A sample eliminates an actor below `-RingOutFallDepth`, or below
+`RingOutStandHeight` over ground that is gone (or off the slab). A faller is credited to whoever last threw them
+within `RingOutCreditSeconds`; a later throw with nobody to blame (their own blast) clears it. Places follow
+elimination order and actors out in the same step share one; a departure is an elimination without credit. The round
+ends when one actor stands (or none, the last ones sharing first), or at `RingOutRoundLimit`, when survivors share
+first. Standings score a place as `starters - place`. There is no bank: spills are refused.
+
+**King of the Cul-de-sac** (`KingRules`). Tank Bank's rules, composed: the bank, tickets, gates and audit are
+`TankBankRules`, which gains one input, `TankMinted`, that Tank Bank never sends (its audit is unchanged; `Expected`
+adds the minted count, always zero there). The zone is a circle of `KingZoneRadius` (and `KingZoneHeight` above or
+below the spot) on one of the world's spots (`ModeWorld.Spots`: the Lab's pile spots, or a suburb's tank groups).
+Zone `k` is in force from `k * KingMoveSeconds` of round time; each next spot is a seeded pick among spots
+`KingMoveMin`–`KingMoveMax` meters from the last (or the nearest miss when none is in range), so the schedule is a
+pure function of the clock, the spots and the seed. A move warns for `KingWarningSeconds`; timing dials change from the
+next round. Only upright, present actors occupy. A lone occupant mints one banked tank per `KingMintSeconds` held
+without a break; a contest, leaving, being thrown or a move restarts the count. `ZoneMoved` asks the runner to
+materialize a fresh pile there. The audit line reads `king audit initial= map= drops= minted= spills= banked=
+expected= ok=`.
+
+**Where the framework did not fit.** Recorded rather than bent:
+
+- `IModeHudPresenter.Present` and `IBotGoalPolicy` see only scores and the clock; the prototypes need the boundary and
+  the zone. `ModeHudInput` and `IBotWorld` gained an optional `Rules` and `Clock`, supplied only where a peer runs
+  the rules itself (the Lab). A networked mode would carry that state in its snapshot payload instead.
+- Untimed and count-up rounds had no way to say they were decided: `RoundOver` is that command. No server runner
+  acts on it yet.
+- Tank Bank's goal selection still lives inside `BankingBot`; the prototype policies share `BotMotor`, a small layer
+  over `BotNavigator` and `BotAim` that `BankingBot` could adopt later.
+- The Lab has no networked session, so the prototypes are not playable in a hosted match. That needs envelope
+  schemas, wires (`IModeWire`) and snapshot payloads for eliminations and the zone.
+
 ## Room for later
 
-These are shaped for, not built:
+These are shaped for, not built (Ring Out added the first out-state, in the Lab only):
 
 - **Health.** Typed damage, attribution, invulnerability, death, respawn or elimination are new accepted events and
   commands inside the envelope. Damage reports that name a blast use the causal gate; respawns advance life ids;
@@ -167,6 +221,9 @@ These are shaped for, not built:
 malformed, oversized, truncated, duplicate, out-of-order, stale-round and unknown-schema input, the causal gate and
 a server-held victim report), the ported server, participant, lifecycle and authority suites, and
 `scenes/dev/mode_test.tscn`, which feeds the scripts in `tools/dev/modes/` into the rules and checks their state.
+`PrototypeModeTests` cover Ring Out's band schedule, eliminations, credit window and placements, and King's
+occupancy, contests, minting, relocation, departures mid-hold and conservation. `check_lab.py` plays whole prototype
+rounds with bots (see [lab.md](lab.md#verification)).
 
 The network adoption keeps `Protocol.Version` at 2 under the unreleased-cycle ruling; MatchStart and the mode
 messages change shape, so the next release must be a minor release.

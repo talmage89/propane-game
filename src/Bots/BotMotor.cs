@@ -100,7 +100,10 @@ public sealed class BotMotor : System.IDisposable
             : capsule = player.GetChildren().OfType<CollisionShape3D>().Single();
         var capabilities = new NavigationCapabilities(shape.Shape, shape.Position, ((CapsuleShape3D)shape.Shape).Radius,
             tuning.RunSpeed, tuning.SprintSpeed, tuning.JumpVelocity, tuning.PlayerGravity, tuning.Acceleration, tuning.AirControl);
-        var hazards = tanks.Select(t => new NavigationHazard(t.GlobalPosition,
+        // Only tanks near enough to matter: every route probe tests every hazard, and a King arena holds dozens.
+        var here = player.GlobalPosition;
+        var horizon = here.DistanceTo(goal.Value) + tuning.RagdollRadius + 4f;
+        var hazards = tanks.Where(t => t.GlobalPosition.DistanceTo(here) < horizon).Select(t => new NavigationHazard(t.GlobalPosition,
             t.State == PropaneTank.TankState.Venting ? tuning.RagdollRadius + tuning.BotVentClearance : tuning.BotTankClearance)).ToArray();
         var world = new NavigationWorld(player.World.Physics.DirectSpaceState, capabilities, hazards, tuning.BotJumpMargin,
             tuning.BotJumpMinimumRange, player.GlobalPosition, queries);

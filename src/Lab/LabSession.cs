@@ -27,6 +27,13 @@ public partial class LabSession : Node3D
     public PlayerCharacter Player { get; private set; } = null!;
     public PlayerCharacter? Opponent { get; private set; }
     public LocalBank? Bank { get; private set; }
+    /// <summary>A prototype mode's runner, when the scenario plays one.</summary>
+    public PrototypeRunner? Prototype { get; private set; }
+    public RingOutArena? RingOut { get; private set; }
+    public KingArena? King { get; private set; }
+    /// <summary>Test seam: a prototype's runner drives the player's actor with the mode's brain too.</summary>
+    internal bool DrivePlayer { get; init; }
+    private MatchHud? matchHud;
     public TuningPanel TuningPanel { get; private set; } = null!;
     public LabOverlay Overlay { get; private set; } = null!;
     public bool Initialized { get; private set; }
@@ -86,6 +93,10 @@ public partial class LabSession : Node3D
         suburb = null;
         Bank = null;
         Opponent = null;
+        Prototype = null;
+        RingOut = null;
+        King = null;
+        matchHud = null;
         Assemble(tuning);
         ResetCount++;
     }
@@ -139,7 +150,7 @@ public partial class LabSession : Node3D
 
     public void SetMenu(bool visible)
     {
-        visible |= Bank is { IsPlaying: false };
+        visible |= Bank is { IsPlaying: false } || Prototype is { IsPlaying: false };
         TuningPanel.Visible = false;
         World.SetPaused(visible);
         Overlay.ShowMenu(visible);
@@ -175,7 +186,16 @@ public partial class LabSession : Node3D
             GetViewport().GetVisibleRect().Size.Y / 2;
         view.Hud.SetCrosshair(radius, !World.Paused && !Player.IsRagdolled, Player.AimAmount);
         view.Hud.SetTanks(LiveTanks.Count(), animate: false);
-        if (suburb != null) view.Hud.SetTankArrows(camera, suburb.TankGroupCenters(), World.Tuning.TankArrows);
+        if (Prototype != null && matchHud != null)
+        {
+            var hud = Prototype.Present(Array.Empty<Vector3>());
+            matchHud.Show(hud);
+            view.Hud.SetTankArrows(camera, hud.Objectives, hud.ObjectivesVisible);
+        }
+        else if (suburb != null)
+        {
+            view.Hud.SetTankArrows(camera, suburb.TankGroupCenters(), World.Tuning.TankArrows);
+        }
         Overlay.UpdateStatus();
     }
 
@@ -236,10 +256,34 @@ public partial class LabSession : Node3D
         }
     }
 
-    private void AddPile(Vector3 at, int count)
+    internal void BuildRingOut()
+    {
+        var tuning = World.Tuning;
+        environment.FloorHeight = -tuning.RingOutVoidDepth;
+        RingOut = new RingOutArena { Lab = this, Name = "RingOut" };
+        World.ContentRoot.AddChild(RingOut);
+        var distance = RingOut.PileDistance(tuning);
+        for (var i = 0; i < tuning.RingOutPiles; i++)
+        {
+            var angle = (i + 0.5f) * Mathf.Tau / tuning.RingOutPiles;
+            AddPile(new Vector3(Mathf.Cos(angle), 0, Mathf.Sin(angle)) * distance, tuning.RingOutPileCount);
+        }
+        (start, startYaw) = RingOut.Spawn(0, tuning.LabPrototypeBots + 1);
+    }
+
+    internal void BuildKing()
+    {
+        King = new KingArena { Lab = this, Name = "King" };
+        World.ContentRoot.AddChild(King);
+        King.Layout(suburb?.TankGroupCenters());
+        if (suburb == null) (start, startYaw) = King.Spawn(0, World.Tuning.LabPrototypeBots + 1, null, 0);
+    }
+
+    internal List<PropaneTank> AddPile(Vector3 at, int count)
     {
         var tuning = World.Tuning;
         var spacing = new Vector3(tuning.PileSpacing, tuning.PileLayerHeight, tuning.PileDepthSpacing);
+        var added = new List<PropaneTank>();
         foreach (var transform in PileBuilder.Build(PileFormation.Square, count, spacing, tuning.PileUprightLayerHeight))
         {
             var tank = PropaneTank.Create(World);
@@ -247,7 +291,48 @@ public partial class LabSession : Node3D
             World.ContentRoot.AddChild(tank);
             tank.MarkPile();
             tanks.Add(tank);
+            added.Add(tank);
         }
+        return added;
+    }
+
+    private static readonly Color[] BotColors =
+    {
+        new(0.26f, 0.58f, 0.8f), new(0.85f, 0.3f, 0.55f), new(0.35f, 0.7f, 0.35f), new(0.6f, 0.4f, 0.85f), new(0.9f, 0.75f, 0.2f),
+    };
+
+    /// <summary>A prototype's bots, its arena's start points and its runner.</summary>
+    private void CreatePrototype(SessionContext session)
+    {
+        var count = World.Tuning.LabPrototypeBots + 1;
+        for (var i = 1; i < count; i++)
+        {
+            var bot = new PlayerCharacter
+            {
+                World = session.World,
+                Name = $"Bot {i}",
+                ActorId = i + 1,
+                OwnerPeerId = 1,
+                Ammo = Scenario.Definition.Supply.LimitedAmmo ? AmmoState.Starting(session.World.Tuning) : null,
+                BodyColor = BotColors[(i - 1) % BotColors.Length],
+            };
+            session.AddActor(bot);
+            var (at, yaw) = RingOut != null ? RingOut.Spawn(i, count)
+                : King!.Spawn(i, count, suburb != null ? start : null, startYaw);
+            bot.Teleport(at, yaw);
+        }
+        Prototype = new PrototypeRunner
+        {
+            Lab = this,
+            Mode = Scenario.Definition,
+            Spots = King?.Spots ?? Array.Empty<Modes.ModeSpot>(),
+            DrivePlayer = DrivePlayer,
+            Name = "PrototypeRunner",
+            ProcessPhysicsPriority = -10,
+        };
+        session.World.Root.AddChild(Prototype);
+        RingOut?.Bind(Prototype);
+        King?.Bind(Prototype);
     }
 
     /// <summary>An orange disk on the floor, with a label unless <paramref name="text"/> is null.</summary>
@@ -329,6 +414,7 @@ public partial class LabSession : Node3D
                 lab.Bank = new LocalBank { Lab = lab, Name = "LocalBank", ProcessPhysicsPriority = -10 };
                 session.World.Root.AddChild(lab.Bank);
             }
+            if (lab.Scenario.Prototype) lab.CreatePrototype(session);
             session.World.ContentRoot.AddChild(new TankGather { World = session.World, Tanks = () => lab.LiveTanks, Name = "Gather" });
         }
 
@@ -346,6 +432,7 @@ public partial class LabSession : Node3D
             };
             tuningPanel.CloseRequested += lab.CloseTuning;
             lab.TuningPanel = session.AddView(lab, tuningPanel);
+            if (lab.Scenario.Prototype) lab.matchHud = session.AddView(lab, new MatchHud { World = session.World, Name = "MatchHud" });
             lab.Overlay = session.AddView(lab, new LabOverlay { Lab = lab, Name = "LabControls" });
         }
 

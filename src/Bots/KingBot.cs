@@ -60,9 +60,9 @@ public sealed class KingBot : IBotGoalPolicy
         }
         if (zone != standZone)
         {
+            // A spot sits on its pile, which nobody can stand in: hold the zone from beside it.
             standZone = zone;
-            var angle = rng.RandfRange(0, Mathf.Tau);
-            standOffset = new Vector3(Mathf.Cos(angle), 0, Mathf.Sin(angle)) * (float)rules.Radius * rng.RandfRange(0.1f, 0.45f);
+            PickStand(rules);
         }
         var radius = (float)rules.Radius;
 
@@ -120,6 +120,13 @@ public sealed class KingBot : IBotGoalPolicy
             }
         }
         motor.Navigate(player, world.LiveTanks, dt);
+        if (motor.Failed) PickStand(rules);
+    }
+
+    private void PickStand(KingRules rules)
+    {
+        var angle = rng.RandfRange(0, Mathf.Tau);
+        standOffset = new Vector3(Mathf.Cos(angle), 0, Mathf.Sin(angle)) * (float)rules.Radius * rng.RandfRange(0.45f, 0.75f);
     }
 
     private void Shoot(PlayerCharacter player, PlayerCharacter rival, Core.Tuning tuning, float dt)

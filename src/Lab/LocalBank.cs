@@ -176,8 +176,19 @@ public partial class LocalBank : Node
         rules.Handle(new TunersChanged(mode.CopyTuners(World.Tuning)), Clock); // Session tuning is live.
         var ticket = new SpillTicket(actor.ActorId, actor.LifeId, ++nextTicket);
         if (!rules.Handle(new SpillRequested(ticket, reason, count), Clock).OfType<SpillReserved>().Any()) return;
-        var tuning = World.Tuning;
-        var rng = World.Random;
+        SpawnDrops(Lab, actor, count, origin, away, tank => { drops.Add(tank); Track(tank); });
+        Apply(rules.Handle(new SpillRegistered(ticket), Clock));
+    }
+
+    /// <summary>
+    /// Spawns a spill's tanks around the victim: scattered on a spiral, kept clear of walls and on the ground, tossed
+    /// outward, invulnerable for a moment and tinted with the victim's color. Shared by the Lab's banking runners.
+    /// </summary>
+    internal static void SpawnDrops(LabSession lab, PlayerCharacter actor, int count, Vector3 origin, Vector3 away, Action<PropaneTank> track)
+    {
+        var world = lab.World;
+        var tuning = world.Tuning;
+        var rng = world.Random;
         var start = rng.RandfRange(0, Mathf.Tau);
         var clear = actor.IsRagdolled ? actor.PelvisPosition + Vector3.Up * 0.2f : actor.GlobalPosition + Vector3.Up * 0.9f;
         for (var i = 0; i < count; i++)
@@ -185,25 +196,23 @@ public partial class LocalBank : Node
             var angle = start + i * 2.39996f;
             var spread = count == 1 ? 0.15f : Mathf.Sqrt((i + 0.5f) / count);
             var offset = new Vector3(Mathf.Cos(angle), 0, Mathf.Sin(angle)) * tuning.DropScatter * spread;
-            var position = SafeDropPoint(clear, origin + offset);
+            var position = SafeDropPoint(world, clear, origin + offset);
             var outward = (offset.LengthSquared() > 0.0001f ? offset.Normalized() : Vector3.Zero) + away;
             outward = outward.LengthSquared() > 0.0001f ? outward.Normalized() : Vector3.Zero;
-            var tank = PropaneTank.Create(World);
+            var tank = PropaneTank.Create(world);
             tank.Transform = new Transform3D(new Basis(Vector3.Up, rng.RandfRange(0, Mathf.Tau)), position);
             tank.LinearVelocity = outward * tuning.DropToss + Vector3.Up * tuning.DropToss * 0.6f;
             tank.AngularVelocity = new Vector3(rng.RandfRange(-1, 1), rng.RandfRange(-1, 1), rng.RandfRange(-1, 1)) * 2;
-            World.ContentRoot.AddChild(tank);
+            world.ContentRoot.AddChild(tank);
             tank.MakeInvulnerable(tuning.DropInvulnerableTime, actor.BodyColor);
-            Lab.TrackDrop(tank);
-            drops.Add(tank);
-            Track(tank);
+            lab.TrackDrop(tank);
+            track(tank);
         }
-        Apply(rules.Handle(new SpillRegistered(ticket), Clock));
     }
 
-    private Vector3 SafeDropPoint(Vector3 clear, Vector3 wanted)
+    private static Vector3 SafeDropPoint(WorldContext world, Vector3 clear, Vector3 wanted)
     {
-        var space = World.Physics.DirectSpaceState;
+        var space = world.Physics.DirectSpaceState;
         var mask = Layers.World | Layers.Props | Layers.Floor;
         var hit = space.IntersectRay(PhysicsRayQueryParameters3D.Create(clear, wanted, mask));
         if (hit.Count > 0) wanted = hit["position"].AsVector3() - (wanted - clear).Normalized() * 0.3f;
