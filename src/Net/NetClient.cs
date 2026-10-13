@@ -286,19 +286,19 @@ public partial class NetClient : Node
     public uint AddActor(ActorKind kind, string name, AppearanceRecord appearance, ControllerConfig config)
     {
         var request = checked(++nextActorRequest);
-        Send(MessageCodec.Encode(new NetMessage(Msg.AddActor, 0, 0, new AddActorMessage(request, kind, name, appearance, config)), false));
+        Send(MessageCodec.Encode(new NetMessage(Msg.AddActor, 0, 0, new AddActorMessage(request, kind, name, appearance, config, RosterRevision)), false));
         return request;
     }
     public uint UpdateActor(int actorId, string name, AppearanceRecord appearance, ControllerConfig config)
     {
         var request = checked(++nextActorRequest);
-        Send(MessageCodec.Encode(new NetMessage(Msg.UpdateActor, 0, 0, new UpdateActorMessage(request, actorId, name, appearance, config)), false));
+        Send(MessageCodec.Encode(new NetMessage(Msg.UpdateActor, 0, 0, new UpdateActorMessage(request, actorId, name, appearance, config, RosterRevision)), false));
         return request;
     }
     public uint RemoveActor(int actorId)
     {
         var request = checked(++nextActorRequest);
-        Send(MessageCodec.Encode(new NetMessage(Msg.RemoveActor, 0, 0, new RemoveActorMessage(request, actorId)), false));
+        Send(MessageCodec.Encode(new NetMessage(Msg.RemoveActor, 0, 0, new RemoveActorMessage(request, actorId, RosterRevision)), false));
         return request;
     }
 

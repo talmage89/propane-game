@@ -29,7 +29,11 @@ public partial class Match
             session.OnStopping(match.StopReplication);
         }
         public void CreateActors(SessionContext session) => match.BuildActors();
-        public void CreateViews(SessionContext session) => match.BuildViews();
+        public void CreateViews(SessionContext session)
+        {
+            match.BuildViews();
+            match.AttachBots();
+        }
         public void RegisterReplication(SessionContext session)
         {
             match.RegisterReplication();

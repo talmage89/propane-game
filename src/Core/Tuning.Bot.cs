@@ -3,8 +3,8 @@ namespace Propane.Core;
 public partial class Tuning
 {
     // Local brain dials deliberately have no Export attribute: ValueNames/Snapshot must remain unchanged for
-    // patch compatibility. DevArgs --tune.Bot... and C# callers can tune them; a later runtime bot package can
-    // provide local difficulty profiles without changing the match's movement physics or network schema.
+    // patch compatibility. DevArgs --tune.Bot... and C# callers can tune them. The difficulty profiles below are
+    // local too: a bot's difficulty changes its brain on its creator's game, never the match's physics or schema.
     public float BotRouteSpacing { get; set; } = 1.5f;
     public int BotSearchPerTick { get; set; } = 12;
     public int BotSearchBudget { get; set; } = 900;
@@ -32,4 +32,8 @@ public partial class Tuning
     public float BotAimErrorHard { get; set; } = 0.22f;
     public float BotReactionEasy { get; set; } = 0.5f;
     public float BotReactionHard { get; set; } = 0.2f;
+    // Easy, Normal and Hard pick the brain's skill, which blends the aim error, reaction and aim turning endpoints above.
+    public float BotEasySkill { get; set; } = 0.2f;
+    public float BotNormalSkill { get; set; } = 0.6f;
+    public float BotHardSkill { get; set; } = 1f;
 }

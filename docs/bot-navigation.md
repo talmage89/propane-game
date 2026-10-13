@@ -47,8 +47,10 @@ validation interval, jump clearance/cost, turning, sprint distance, hazard clear
 turning/error/reaction endpoints. They are local C# properties rather than exported scalar match tuners: adding
 exported scalars would change the complete snapshot schema and require a minor release. Dev overrides use
 `--tune.BotProgressWindow=...`, for example. The smart brain retains the local tuning object when a match installs
-shared movement tuning. `Skill` continues to interpolate aim/reaction; Easy/Normal/Hard profiles and lobby UI are
-left to the runtime bot package. The simple brain stays unchanged as the benchmark.
+shared movement tuning. `Skill` continues to interpolate aim/reaction; the Easy, Normal and Hard profiles
+(`BotEasySkill`, `BotNormalSkill`, `BotHardSkill`) pick it for lobby and Lab bots, as
+[multiplayer.md](multiplayer.md#lobby-bots-a8-unreleased-protocol-2) describes. The simple brain stays unchanged as the
+benchmark.
 
 Runtime searches advance at most `BotSearchPerTick` nodes on each physics tick, with a total cap of
 `BotSearchBudget`. Pending searches suspend progress detection and revalidate the route against the current world

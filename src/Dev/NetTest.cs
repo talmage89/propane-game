@@ -17,7 +17,11 @@ namespace Propane.Dev;
 /// scores and coarse tank digests. <c>--tank-check</c> adds frequent samples on the shared OS monotonic
 /// clock for assertions across same-machine clients; <c>--tank-check-nudge=Name</c> injects a physical divergence.
 /// Run: godot-mono res://scenes/dev/net_test.tscn -- --server=127.0.0.1 --role=host --players=2 [--capture-dir=$PWD/build/net-shots]
-/// Add <c>--host-server</c> to run the server in the same process.
+/// Add <c>--host-server</c> to run the server in the same process. <c>--lobby-bots=N</c> (or a list such as
+/// <c>2,1</c>, one entry per <c>--name=BotI</c> client) adds that many lobby bots owned by each client before the start,
+/// at <c>--lobby-bot-difficulty=0..2</c>; the host waits for all of them. <c>--leave-who=Name</c> limits
+/// <c>--leave-at</c> to one client. <c>--human=idle</c> keeps this client's player still; <c>--look-at-bots</c> keeps it
+/// still, facing the nearest remote lobby bot.
 /// </summary>
 public partial class NetTest : Node
 {
@@ -38,6 +42,9 @@ public partial class NetTest : Node
     private float shotTimer;
     private int matches;
     private int matchesWanted = 1;
+    private int lobbyBots;
+    private int lobbyBotsTotal;
+    private uint lobbyBotRequest;
 
     public override void _Ready()
     {
@@ -51,6 +58,7 @@ public partial class NetTest : Node
         bot = DevArgs.Get("brain") == "simple" ? new SimpleBot() : new Bot { Skill = DevArgs.GetFloat("bot-skill", 1f) };
         players = (int)DevArgs.GetFloat("players", 2);
         matchesWanted = (int)DevArgs.GetFloat("matches", 1);
+        ParseLobbyBots();
         var address = DevArgs.Get("server") ?? "127.0.0.1";
         var port = (int)DevArgs.GetFloat("port", Protocol.DefaultPort);
         if (DevArgs.Get("host-server") != null)
@@ -98,8 +106,9 @@ public partial class NetTest : Node
             }
             if (net.Lobby is { } lobby)
             {
-                if (role == "host" && net.IsCreator && lobby.Phase == LobbyServer.LobbyPhase.Waiting && lobby.Capacity < players)
-                    net.SetCapacity(players);
+                if (role == "host" && net.IsCreator && lobby.Phase == LobbyServer.LobbyPhase.Waiting && lobby.Capacity < players + lobbyBotsTotal)
+                    net.SetCapacity(players + lobbyBotsTotal);
+                AddLobbyBot();
                 Log($"lobby {lobby.Id}: {string.Join(", ", lobby.Members.Select(m => $"{m.Name}/{m.Appearance.Color.ToHtml(false)}"))}, {lobby.Phase}");
                 if (DevArgs.Get("scenario") == "appearance" && lobby.Phase == LobbyServer.LobbyPhase.Waiting && lobby.Members.Count == players)
                 {
@@ -111,6 +120,14 @@ public partial class NetTest : Node
             }
         };
         net.NoticeReceived += text => Log($"notice: {text}");
+        net.ActorRequestCompleted += result =>
+        {
+            if (result.RequestId != lobbyBotRequest) return;
+            lobbyBotRequest = 0;
+            Log(result.Accepted ? $"lobby bot added at revision {result.Revision}" : $"lobby bot refused: {result.Reason}");
+            // An accepted bot's roster arrives next and adds the following one; a refusal retries now.
+            if (!result.Accepted) AddLobbyBot();
+        };
         net.MatchStarting += async setup =>
         {
             appearanceMenus?.Show(UI.Menus.Screen.None);
@@ -159,6 +176,10 @@ public partial class NetTest : Node
                     Log($"navigation finished: stuck={smart.StuckEvents} blacklist={smart.BlacklistedTargets} replans={smart.Replans} jumps={smart.Jumps}");
                 }
                 if (DevArgs.Get("scenario") == "capacity") FinishCapacity();
+                if (match.BotCost is { Bots: > 0 } cost)
+                {
+                    Log(FormattableString.Invariant($"lobby bots {cost.Bots}: {cost.Thinks} thinks, mean {cost.Seconds * 1000 / Math.Max(cost.Thinks, 1):0.000} ms, {cost.Bytes / Math.Max(cost.Thinks, 1)} B allocated per think"));
+                }
                 Digest();
                 if (!tankCheckFinal) { LogTankCheck(final: true); }
                 LogTankCheck(completion: true);
@@ -228,15 +249,18 @@ public partial class NetTest : Node
             if (DevArgs.Get("melee-start") != null)
             {
                 // Stage before countdown so snapshots settle before the ordinary brains choose any targets.
+                // Pairs by actor id, lobby bots included; each owner stages the second actor of each pair it owns.
                 var peers = setup.Players.OrderBy(p => p.Player.Id).ToList();
-                var slot = peers.FindIndex(p => p.Player.Id == match.Player.ActorId);
-                var anchorId = peers[slot / 2 * 2].Player.Id;
-                var anchor = match.Player.ActorId == anchorId ? match.Player : match.RemoteBodies.First(p => p.ActorId == anchorId);
-                var yaw = anchor.FacingYaw;
-                var forward = new Vector3(-Mathf.Sin(yaw), 0, -Mathf.Cos(yaw));
-                // Use a normal clear spawn so navigation still has useful routes after the initial knockdowns.
-                match.Player.Teleport(anchor.GlobalPosition + (slot % 2 == 0 ? Vector3.Zero : forward * 1.8f),
-                    yaw + (slot % 2 == 0 ? 0 : Mathf.Pi));
+                foreach (var owned in match.Session.OwnedActors.Select(a => a.Character).ToList())
+                {
+                    var slot = peers.FindIndex(p => p.Player.Id == owned.ActorId);
+                    if (slot % 2 == 0) continue;
+                    var anchor = match.Session.Actor(peers[slot - 1].Player.Id)!.Character;
+                    var yaw = anchor.FacingYaw;
+                    var forward = new Vector3(-Mathf.Sin(yaw), 0, -Mathf.Cos(yaw));
+                    // Use a normal clear spawn so navigation still has useful routes after the initial knockdowns.
+                    owned.Teleport(anchor.GlobalPosition + forward * 1.8f, yaw + Mathf.Pi);
+                }
             }
             match.Player.MeleeStarted += (swing, _) => Log($"melee swing {swing}");
             match.Player.MeleeHit += hit => Log($"melee contact {hit.Swing} victim {PlayerCharacter.Owning(hit.Collider)?.ActorId ?? 0}");
@@ -278,10 +302,32 @@ public partial class NetTest : Node
         GetTree().CreateTimer(DevArgs.Get("host-server") != null ? 0.3 : 0.05).Timeout += () => net.Connect(address, port, name, appearance);
     }
 
+    private void ParseLobbyBots()
+    {
+        if (DevArgs.Get("lobby-bots") is not { } text) return;
+        var counts = text.Split(',').Select(int.Parse).ToArray();
+        var index = int.TryParse(new string((DevArgs.Get("name") ?? "").Where(char.IsAsciiDigit).ToArray()), out var n) ? n - 1 : 0;
+        // One entry applies to every client; a list gives each named client its own count.
+        lobbyBots = counts.Length == 1 ? counts[0] : index >= 0 && index < counts.Length ? counts[index] : 0;
+        lobbyBotsTotal = counts.Length == 1 ? counts[0] * players : counts.Take(players).Sum();
+    }
+
+    /// <summary>Adds this client's lobby bots one request at a time; a stale revision simply retries.</summary>
+    private void AddLobbyBot()
+    {
+        if (lobbyBotRequest != 0 || net.Lobby is not { Phase: LobbyServer.LobbyPhase.Waiting } lobby) return;
+        var mine = lobby.Members.Count(m => m.OwnerPeerId == net.MyId && m.Kind == ActorKind.Bot);
+        if (mine >= lobbyBots || matches > 0) return;
+        var difficulty = (byte)DevArgs.GetFloat("lobby-bot-difficulty", 1);
+        lobbyBotRequest = net.AddActor(ActorKind.Bot, $"{net.PlayerName} bot {mine + 1}", AppearanceRecord.FromPalette(net.MyId + mine + 3),
+            ControllerConfig.ForBot(difficulty));
+    }
+
     private void TryStartMatch()
     {
         if (role == "host" && net.IsCreator && !started && matches < matchesWanted &&
-            net.Lobby is { Phase: LobbyServer.LobbyPhase.Waiting } lobby && lobby.Members.Count >= players)
+            net.Lobby is { Phase: LobbyServer.LobbyPhase.Waiting } lobby && lobby.Peers.Count >= players &&
+            lobby.Members.Count >= players + lobbyBotsTotal)
         {
             started = true;
             net.SetMatchLength(DevArgs.GetFloat("length", 60));
@@ -308,7 +354,7 @@ public partial class NetTest : Node
             Log($"sent tuning {name} = {value}");
         }
         var leaveAt = DevArgs.GetFloat("leave-at", -1);
-        if (leaveAt > 0 && clock >= leaveAt)
+        if (leaveAt > 0 && clock >= leaveAt && (DevArgs.Get("leave-who") ?? net.PlayerName) == net.PlayerName)
         {
             Log("leaving the match on purpose");
             ShutdownGuard.Quit(GetTree());
@@ -354,7 +400,13 @@ public partial class NetTest : Node
         {
             Watch(match, dt);
         }
-        else
+        else if (DevArgs.Get("look-at-bots") != null && match.RemoteBodies.Where(b => match.Setup.Players.Any(p => p.Player.Id == b.ActorId &&
+                     p.Player.Kind == ActorKind.Bot)).OrderBy(b => b.GlobalPosition.DistanceTo(match.Player.GlobalPosition)).FirstOrDefault() is { } watched)
+        {
+            // --look-at-bots: a still observer facing the nearest remote bot, to film how others see lobby bots.
+            AimAt(match.Player, watched.GlobalPosition + Vector3.Up * 1.2f);
+        }
+        else if (DevArgs.Get("human") != "idle") // --human=idle: a still player, so frame costs measure lobby bots alone.
         {
             bot.Think(match, dt);
             if (DevArgs.Get("bot-log") != null && Mathf.PosMod(clock, 2f) < dt)

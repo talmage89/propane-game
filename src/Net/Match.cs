@@ -247,6 +247,7 @@ public partial class Match : Node3D
             (remote.IntentSource as ReplicatedIntent)?.Apply(remote.Character, now);
         }
         bodies.Correct(now);
+        ThinkBots(dt);
 
         foreach (var owned in Session.OwnedActors)
         {
@@ -1004,6 +1005,7 @@ public partial class Match : Node3D
                     ShowNotice($"{profiles[departing.Character.ActorId].Name} left the match", 3f);
                     Session.RemoveActor(departing);
                 }
+                RefreshBotPeers();
                 bodies.Host = left.Host;
                 break;
         }

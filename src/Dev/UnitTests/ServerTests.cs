@@ -316,7 +316,7 @@ public static class ServerTests
             for (var i = 0; i < bots; i++)
             {
                 Receive(MessageCodec.Encode(new NetMessage(Msg.AddActor, 0, 0,
-                new AddActorMessage((uint)i + 1, ActorKind.Bot, $"Bot{i}", AppearanceRecord.FromPalette(i), ControllerConfig.Bot)), false));
+                new AddActorMessage((uint)i + 1, ActorKind.Bot, $"Bot{i}", AppearanceRecord.FromPalette(i), ControllerConfig.Bot, Revision())), false));
             }
 
             Receive(new NetWriter(Msg.SetMatchLength).Float(10));
@@ -333,6 +333,9 @@ public static class ServerTests
             }
             Packets.Clear();
         }
+
+        /// <summary>The current roster revision of peer 2's lobby, for roster requests.</summary>
+        public uint Revision(int peer = 2) => Server.RosterRevision(peer);
 
         public void Advance(double seconds = 0)
         {

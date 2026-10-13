@@ -13,7 +13,9 @@ the rest of Propane. Huge stack and Range use void; the banking duel and Free tu
   Move along the line to line up with a lane; practice shots, punctures, melee and blast throws. Reset respawns
   the entire fixture and clears its debris.
 - **Duel vs a banking bot** runs two owned actors in one offline world. The bot has no camera and uses the
-  existing banking brain. Easy, Normal and Hard change its skill, not tank/player physics. The default is three
+  existing banking brain. Easy, Normal and Hard are the lobby bots' difficulty profiles: they set the
+  `LabBotSkill` dial to that profile's skill (0.2, 0.6 or 1), which free tuning can still set between them; the menu
+  shows the nearest profile. They change its skill, not tank/player physics. The default is three
   minutes; bank most to win. Bullets spill with hit grace, melee/blasts spill on the victim's ordinary ragdoll
   event, drops have the match's shield, ammo cans replenish, and delayed chains credit their initiating shooter.
   The void arena is marked by a ring of floor disks, half a step off both start points; the markings are reference

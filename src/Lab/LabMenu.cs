@@ -105,10 +105,11 @@ public partial class LabMenu : CanvasLayer
             }
             if (scenario.Banking)
             {
-                var difficulty = draft.LabBotSkill <= 0.3f ? "Easy" : draft.LabBotSkill >= 0.9f ? "Hard" : "Normal";
+                // The lobby's difficulty profiles; the Lab's skill dial keeps fine control between them.
+                var difficulty = Bots.BotProfile.Nearest(draft.LabBotSkill, draft);
                 Button($"Difficulty: {difficulty}", () =>
                 {
-                    draft.LabBotSkill = difficulty == "Easy" ? 0.6f : difficulty == "Normal" ? 1 : 0.2f;
+                    draft.LabBotSkill = Bots.BotProfile.For((Bots.BotDifficulty)(((int)difficulty + 1) % Bots.BotProfile.All.Length), draft).Skill;
                     Rebuild("difficulty");
                 }, "difficulty");
                 layout.AddChild(UiStyle.Text("Local tank bank · one bot · three minutes · no server needed", 16, UiStyle.SoftInk, HorizontalAlignment.Center));

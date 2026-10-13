@@ -407,8 +407,24 @@ runs is the same as on `dev`: the branch changes only `GeneratorTests.cs` under 
 `make test-full` (the serial run's passed). Beside other jobs it failed 5 of 6: 3 of 4 runs beside three generator
 shards under `nice -n 19`, and both `-j4` runs that reached it while other jobs still ran.
 
-Every failure is the same. The server drops Bot2 with `TransportFailure` during its nine-second readiness stall,
-about 11 seconds after sending the plan, and the checker reports `missing play coverage or settled completion`. ENet
-drops a peer that early only on the established-player timeout (3-second minimum, 8-second maximum), not on the
-20/30-second loading grace. So the server sometimes ends Bot2's grace before Bot2 stalls. This branch does not change
-that behavior; it is an open question for the network work.
+Every failure is the same. The server drops Bot2 with `TransportFailure` about 11 seconds after sending the plan,
+and the checker reports `missing play coverage or settled completion`. ENet drops a peer that early only on the
+established-player timeout (3-second minimum, 8-second maximum), not on the 20/30-second loading grace.
+
+The cause, from timestamped traces on both ends (`claude/loading-grace-iqlm37`): the grace did not end before the
+stall. Bot2 sent `Loaded` after it, and the server dropped Bot2 0.02 to 4.5 seconds after receiving it, in all 8
+failures of 20 runs. Bot2's frames after the stall took about 17 ms (the bots are headless), so slow first frames
+are not the cause. While Bot2 slept, the server's body stream overflowed its 208 KB UDP receive buffer
+(`RcvbufErrors` in `/proc/net/snmp`: 158–326 drops in each failing run; 18–89 in 11 of the 12 passing runs, 201 in one). ENet doubles a
+reliable command's retry interval on every unacknowledged send, without a cap (`enet_protocol_check_timeouts` in
+Godot's bundled ENet 1.3.18). So commands lost in the overflow next retried seconds after Bot2 resumed. Once
+`Loaded` had restored the short timeout, the next such retry found the command unacknowledged 3 seconds after its
+last send, after six or more attempts, and declared the peer lost instead of resending. The run passed only when no
+retry with an interval that long came due after `Loaded`. The fix keeps the grace after `Loaded` for as long as the
+load took, plus 1 second (`LoadingGrace` in `NetTransport.cs`), and the match passes; see
+[multiplayer.md](multiplayer.md#transport-contract).
+
+| Loading-readiness match on the 4-CPU VM | Before | After |
+| --- | ---: | ---: |
+| Alone | 12/20 | 20/20 |
+| Beside `make -j3 test-full-generator-1 test-full-generator-2 test-full-generator-3` | 4/10 | 10/10 |

@@ -65,7 +65,9 @@ created it sets capacity and match length and starts. **Host on this computer** 
 lobby then shows the addresses friends can use. Versions with the same major and minor number play together
 (0.2.0 with 0.2.5); the server turns away others and says which version it needs.
 
-To play against bots, create a lobby and run `make bots SERVER=host[:port]` (from source; `make bots-stop` stops them).
+To play against bots, press **Add bot** in the lobby: give it a name, a color and Easy, Normal or Hard. Anyone in the
+lobby can add bots; they count toward its capacity, run inside their creator's game and leave with their creator. From
+source, `make bots SERVER=host[:port]` still starts separate bot processes for testing (`make bots-stop` stops them).
 Starting the game with `-- --connect=host[:port]` skips straight to that server's lobbies.
 The message transport is injectable for deterministic tests; see the [transport contract](docs/multiplayer.md#transport-contract)
 for fault simulation, disconnect reasons and diagnostics. On Windows or macOS, the
@@ -355,6 +357,9 @@ $GODOT res://scenes/dev/menu_test.tscn -- --scenario=devices --capture-dir=/tmp/
 # Real keyboard/mouse events through the root viewport in single player and a solo match: turn, jump, melee,
 # single-click fire, R/new suburb or reload, and remapped Escape. Assertions also run headlessly in make test.
 $GODOT --fixed-fps 60 --resolution 1280x720 res://scenes/dev/menu_test.tscn -- --scenario=input --port=24681 --windowed --capture-dir="$PWD/build/input"
+# Lobby bots: add, edit, cancel and remove by keyboard, then by controller; a second client sees them and a full lobby
+# refuses one. Also runs headlessly in make test.
+$GODOT --fixed-fps 60 --resolution 1280x720 res://scenes/dev/menu_test.tscn -- --scenario=bots --port=24681 --capture-dir="$PWD/build/bots"
 
 # Multiplayer: a local server and bot players under simulated lag and loss; asserts tank agreement and scores.
 # Logs go to build/net (-o picks another directory).
