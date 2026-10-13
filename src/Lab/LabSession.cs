@@ -64,8 +64,8 @@ public partial class LabSession : Node3D
                 throw new ArgumentOutOfRangeException(property.Name);
         }
         source = EnvironmentKind == LabEnvironment.Void ? new VoidWorldSource() :
-            new SuburbWorldSource(Scenario.Banking ? SuburbPlans.Match(settings, 2) with { MapSize = settings.LabSuburbSize } :
-                SuburbPlans.SinglePlayer(settings), settings.FixedSeed != 0 ? settings.FixedSeed : 23);
+            new SuburbWorldSource(Scenario.Banking ? Scenario.Definition.Supply.Suburb(settings, 2) with { MapSize = settings.LabSuburbSize } :
+                Scenario.Definition.Supply.Suburb(settings, 1), settings.FixedSeed != 0 ? settings.FixedSeed : 23);
         SessionFactory.Build(this, settings, source, new Mode(this), session => { Session = session; if (TestRandomSeed is { } seed) World.Random.Seed = seed; }, present: CreateLocalView);
         resetQueued = false;
     }
@@ -301,7 +301,7 @@ public partial class LabSession : Node3D
                 Name = "Player",
                 ActorId = 1,
                 OwnerPeerId = 1,
-                Ammo = lab.Scenario.Banking ? AmmoState.Starting(session.World.Tuning) : null
+                Ammo = lab.Scenario.Definition.Supply.LimitedAmmo ? AmmoState.Starting(session.World.Tuning) : null
             };
             session.AddActor(lab.Player);
             lab.Player.Teleport(lab.start, lab.startYaw);

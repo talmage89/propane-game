@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using Godot;
 using Propane.Bots;
 using Propane.Core;
+using Propane.Modes;
 using Propane.Net;
 using Propane.Player;
 using Propane.Tank;
@@ -14,10 +15,10 @@ public interface IBotBrain : IPlayerInputSource
     void Think(Match match, float dt);
 }
 
-/// <summary>Protocol 2 harness adapter for the runtime banking brain.</summary>
+/// <summary>Protocol 2 harness adapter for Tank Bank's bot goal policy (the runtime banking brain).</summary>
 public sealed class Bot : IBotBrain, System.IDisposable
 {
-    private readonly BankingBot brain = new();
+    private readonly BankingBot brain = (BankingBot)ModeRegistry.TankBank.CreateBot!(null);
     public float Skill { get => brain.Skill; set => brain.Skill = value; }
     public string Status => brain.Status;
     public int StuckEvents => brain.StuckEvents;
@@ -29,7 +30,7 @@ public sealed class Bot : IBotBrain, System.IDisposable
     internal void Face(PlayerCharacter player, Vector3 point, float dt) => brain.Face(player, point, dt);
     public void Dispose() => brain.Dispose();
 
-    private sealed class MatchWorld(Match match) : IBankingBotWorld
+    private sealed class MatchWorld(Match match) : IBotWorld
     {
         public WorldContext World => match.World;
         public PlayerCharacter Player => match.Player;

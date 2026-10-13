@@ -49,7 +49,7 @@ source-specific branches. A later streaming implementation can build and retire 
 
 `LocalBank` adapts actor/tank events locally. `ShotImpacting` attributes a direct tank contact before lifecycle
 callbacks run; `BlastRequest`/`ChainCause` carry local causal actor keys through the existing chain path. The brain
-reads an actor-specific `IBankingBotWorld`, with scores and hit attribution keyed by actor id. The Lab uses a
+reads an actor-specific `IBotWorld`, with scores and hit attribution keyed by actor id. The Lab uses a
 simulation clock; its Protocol 2 dev adapter uses the existing monotonic clock. Both local actors share one owner
 peer and retain separate banks. The factory and session retain ordered teardown on reset, exit and partial failure.
 
