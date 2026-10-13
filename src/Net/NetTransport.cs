@@ -18,6 +18,7 @@ public sealed class NetTransport : IPacketTransport
     private readonly HashSet<ConnectionHandle> connected = new();
     private readonly Dictionary<ConnectionHandle, PacketCounters> counters = new();
     private readonly Queue<(ConnectionHandle Connection, DisconnectReason Reason)> disconnected = new();
+    private readonly LoadingGrace grace = new();
     private bool open;
     private bool server;
     private double pollMs;
@@ -94,7 +95,20 @@ public sealed class NetTransport : IPacketTransport
     {
         if (!connected.Contains(connection)) { return; }
         // Both ends need the longer minimum while the client constructs its world. Once it
-        // reports ready, live players should not linger for the entire construction grace.
+        // reports ready, live players should not linger for the entire construction grace,
+        // but the grace outlasts readiness long enough for ENet to retry what loading delayed.
+        if (loading)
+        {
+            grace.Begin(connection, Now);
+            SetTimeout(connection, loading: true);
+        }
+        else if (grace.End(connection, Now)) { SetTimeout(connection, loading: false); }
+    }
+
+    private static double Now => Stopwatch.GetTimestamp() / (double)Stopwatch.Frequency;
+
+    private void SetTimeout(ConnectionHandle connection, bool loading)
+    {
         peer.GetPeer(backendIds[connection])?.SetTimeout(32, loading ? 20000 : 3000, loading ? 30000 : 8000);
     }
 
@@ -131,6 +145,10 @@ public sealed class NetTransport : IPacketTransport
         {
             if (open)
             {
+                foreach (var connection in grace.Expire(Now))
+                {
+                    if (connected.Contains(connection)) { SetTimeout(connection, loading: false); }
+                }
                 peer.Poll();
                 if (peer.GetConnectionStatus() == MultiplayerPeer.ConnectionStatus.Disconnected)
                 {
@@ -180,6 +198,7 @@ public sealed class NetTransport : IPacketTransport
     {
         connections.Remove(backendIds[connection]);
         connected.Remove(connection);
+        grace.Forget(connection);
         peerIds.Retire(connection);
         disconnected.Enqueue((connection, reason));
     }
@@ -201,5 +220,58 @@ public sealed class NetTransport : IPacketTransport
             NativeThrottleLimit = target?.GetStatistic(ENetPacketPeer.PeerStatistic.PacketThrottleLimit) / ENetPacketPeer.PacketThrottleScale,
             NativeRttVariance = target?.GetStatistic(ENetPacketPeer.PeerStatistic.RoundTripTimeVariance)
         };
+    }
+}
+
+/// <summary>
+/// When each connection's loading grace ends. ENet doubles a reliable command's retransmission timeout on every
+/// unacknowledged send, without a cap. While a loading client does not service its socket, commands it loses (its
+/// receive buffer overflows) back off to retry intervals as long as the time spent loading. Their next retry can then
+/// come after readiness, where the established timeouts measure the interval since the command's last send and
+/// declare the peer lost instead of resending. So the grace outlasts readiness by the time spent loading: a command
+/// first sent while loading waits at most that long, plus its first retransmission timeout, for its next retry.
+/// </summary>
+internal sealed class LoadingGrace
+{
+    /// <summary>Seconds that cover a command's first retransmission timeout: a round trip plus four deviations.</summary>
+    internal const double RetryMargin = 1;
+    private readonly Dictionary<ConnectionHandle, double> started = new();
+    private readonly Dictionary<ConnectionHandle, double> ends = new();
+
+    /// <summary>Loading begins; this cancels a pending release from an earlier load.</summary>
+    public void Begin(ConnectionHandle connection, double now)
+    {
+        started.TryAdd(connection, now);
+        ends.Remove(connection);
+    }
+
+    /// <summary>Readiness, or leaving construction. True when the established timeouts apply now.</summary>
+    public bool End(ConnectionHandle connection, double now)
+    {
+        if (started.Remove(connection, out var since))
+        {
+            ends[connection] = now + (now - since) + RetryMargin;
+            return false;
+        }
+        return !ends.ContainsKey(connection);
+    }
+
+    /// <summary>Connections whose grace has run out by <paramref name="now"/>; each is reported once.</summary>
+    public IReadOnlyList<ConnectionHandle> Expire(double now)
+    {
+        if (ends.Count == 0) { return Array.Empty<ConnectionHandle>(); }
+        var due = new List<ConnectionHandle>();
+        foreach (var (connection, end) in ends)
+        {
+            if (now >= end) { due.Add(connection); }
+        }
+        foreach (var connection in due) { ends.Remove(connection); }
+        return due;
+    }
+
+    public void Forget(ConnectionHandle connection)
+    {
+        started.Remove(connection);
+        ends.Remove(connection);
     }
 }
