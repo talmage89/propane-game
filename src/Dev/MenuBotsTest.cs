@@ -168,6 +168,23 @@ public partial class MenuGamepadTest
         await Wait(() => Net.Lobby!.Members.Count == 1, "fixtures left").ConfigureAwait(true);
         crowd.Disconnect();
         watcher.Disconnect();
+
+        // A full lobby of bots keeps every row and control on a 720p screen.
+        Net.SetCapacity(Protocol.TestedActorCeiling);
+        await Wait(() => Net.Lobby!.Capacity == Protocol.TestedActorCeiling, "capacity raised").ConfigureAwait(true);
+        for (var i = 1; i < Protocol.TestedActorCeiling; i++)
+        {
+            var revision = Net.RosterRevision;
+            Net.AddActor(ActorKind.Bot, $"Filler {i}", AppearanceRecord.FromPalette(i), ControllerConfig.ForBot((byte)(i % 3)));
+            await Wait(() => Net.RosterRevision > revision, "filler bot added").ConfigureAwait(true);
+        }
+        Check(Net.Lobby!.Members.Count == Protocol.TestedActorCeiling && !Reachable().ContainsKey("add_bot"), "sixteen actors fill the lobby");
+        var screen = GetViewport().GetVisibleRect();
+        var panel = Menus.FindChildren("*", "PanelContainer", owned: false).OfType<PanelContainer>().First(p => p.IsVisibleInTree());
+        Check(screen.Encloses(panel.GetGlobalRect()) || DisplayServer.GetName() == "headless" && panel.Size.Y <= 720,
+            $"a full lobby of bots fits the screen: panel {panel.GetGlobalRect()} in {screen}");
+        await Navigate($"bot_{Net.Lobby.Members.Last().Id}").ConfigureAwait(true);
+        await Shot("05_lobby_full_of_bots").ConfigureAwait(true);
     }
 
     /// <summary>Moves keyboard focus with Tab until it reaches a control, as a keyboard player would.</summary>

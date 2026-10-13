@@ -424,6 +424,9 @@ public partial class Menus : CanvasLayer
             {
                 // Only a bot's owner may change it; the server enforces the same rule.
                 var edit = UiStyle.Button("Edit");
+                // As short as a name row, so a full lobby of bots still fits on the screen.
+                edit.CustomMinimumSize = new Vector2(0, compact ? 26 : 30);
+                edit.AddThemeFontSizeOverride("font_size", 15);
                 edit.SetMeta("focus_key", $"bot_{member.Id}");
                 edit.Disabled = lobby.Phase != LobbyServer.LobbyPhase.Waiting;
                 var editing = member;
