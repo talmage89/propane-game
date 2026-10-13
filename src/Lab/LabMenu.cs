@@ -96,6 +96,7 @@ public partial class LabMenu : CanvasLayer
             {
                 layout.AddChild(UiStyle.Text($"Environment: {scenario.Environments[0]}", 22, UiStyle.Ink, HorizontalAlignment.Center));
                 layout.AddChild(UiStyle.Text(scenario.Environments[0] == LabEnvironment.Void ? "A clear floor, an open sky, and no houses."
+                    : scenario.Definition == Modes.ModeRegistry.DissolveRun ? "One endless street, built a segment at a time."
                     : "A new suburb every round, sized for everyone in it.", 16, UiStyle.SoftInk, HorizontalAlignment.Center));
             }
             if (scenario.Id == "stack")
@@ -107,7 +108,17 @@ public partial class LabMenu : CanvasLayer
                 Button("+", () => { draft.LabStackCount = Mathf.Min(Tuning.LabStackMaximum, draft.LabStackCount + Tuning.LabStackStep); Rebuild("larger"); }, "larger", draft.LabStackCount >= Tuning.LabStackMaximum, row);
                 layout.AddChild(UiStyle.Text($"{Tuning.LabStackMinimum}–{Tuning.LabStackMaximum} tanks · bigger stacks cost more during a blast.", 16, UiStyle.SoftInk, HorizontalAlignment.Center));
             }
-            if (scenario.Banking || scenario.Prototype)
+            if (scenario.Definition == Modes.ModeRegistry.DissolveRun)
+            {
+                Button(draft.DissolveDaily != 0 ? "Seed: today’s run" : "Seed: a new run", () =>
+                {
+                    draft.DissolveDaily = draft.DissolveDaily != 0 ? 0 : 1;
+                    Rebuild("seed");
+                }, "seed");
+                layout.AddChild(UiStyle.Text(draft.DissolveDaily != 0 ? "Today’s street is the same for everyone · solo · no server needed"
+                    : "A fresh street every run · solo · no server needed", 16, UiStyle.SoftInk, HorizontalAlignment.Center));
+            }
+            else if (scenario.Banking || scenario.Prototype)
             {
                 // The lobby's difficulty profiles; the Lab's skill dial keeps fine control between them.
                 var difficulty = Bots.BotProfile.Nearest(draft.LabBotSkill, draft);

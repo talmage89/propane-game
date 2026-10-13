@@ -46,6 +46,7 @@ public partial class LabTest : Node
                 case "prototype": await Prototypes().ConfigureAwait(true); break;
                 case "shortfuse": await ShortFuseMatches().ConfigureAwait(true); break;
                 case "shortfuse-combo": await ShortFuseCombo().ConfigureAwait(true); break;
+                case "dissolve": await DissolveRun().ConfigureAwait(true); break;
                 default: await Lifetime().ConfigureAwait(true); break;
             }
             template.Dispose();

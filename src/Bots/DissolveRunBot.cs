@@ -58,7 +58,10 @@ public sealed class DissolveRunBot : IBotGoalPolicy
             ahead = can.GlobalPosition;
             Status = "taking ammo";
         }
-        else Status = gap < Flee ? $"running, front {gap:0.0} m behind" : "heading down the street";
+        else
+        {
+            Status = gap < Flee ? $"running, front {gap:0.0} m behind" : "heading down the street";
+        }
 
         retarget -= dt;
         if (target != null && (!GodotObject.IsInstanceValid(target) || target.State == PropaneTank.TankState.Exploded)) target = null;

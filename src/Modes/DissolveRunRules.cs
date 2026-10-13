@@ -20,7 +20,8 @@ public sealed record ChainClosed(uint Chain, int Tanks, int Bonus) : ModeCommand
 /// Dissolve Run: a solo run down an endless street that dissolves behind you. Everything is along world +X from the
 /// run's start (the world's first spot). The front starts <c>DissolveFrontStartGap</c> behind the start and moves at a
 /// speed that ramps from <c>DissolveFrontSpeed</c> toward <c>DissolveFrontMaxSpeed</c> with time constant
-/// <c>DissolveFrontRampSeconds</c>; each detonated tank pushes it back <c>DissolveFrontPush</c>. A sample behind the
+/// <c>DissolveFrontRampSeconds</c>, but never trails the furthest point reached by more than <c>DissolveFrontMaxGap</c>;
+/// each detonated tank pushes it back <c>DissolveFrontPush</c>. A sample behind the
 /// front is caught: the runner falls for <c>DissolveFallSeconds</c>, then the round is over. Score is the meters run
 /// (the furthest sample past the start), plus <c>DissolveTankPoints</c> per tank, plus n squared for each closed chain
 /// of n at least <c>DissolveChainMin</c>. Pure: the front is integrated from the mode clock, so a runner never sends it.
@@ -32,6 +33,7 @@ public sealed class DissolveRunRules : IModeRules
     public const string DissolveFrontMaxSpeed = nameof(DissolveFrontMaxSpeed);
     public const string DissolveFrontRampSeconds = nameof(DissolveFrontRampSeconds);
     public const string DissolveFrontPush = nameof(DissolveFrontPush);
+    public const string DissolveFrontMaxGap = nameof(DissolveFrontMaxGap);
     public const string DissolveFallSeconds = nameof(DissolveFallSeconds);
     public const string DissolveTankPoints = nameof(DissolveTankPoints);
     public const string DissolveChainMin = nameof(DissolveChainMin);
@@ -39,7 +41,7 @@ public sealed class DissolveRunRules : IModeRules
     public static readonly IReadOnlyList<string> Tuners = new[]
     {
         DissolveFrontStartGap, DissolveFrontSpeed, DissolveFrontMaxSpeed, DissolveFrontRampSeconds, DissolveFrontPush,
-        DissolveFallSeconds, DissolveTankPoints, DissolveChainMin, DissolveChainWindow,
+        DissolveFrontMaxGap, DissolveFallSeconds, DissolveTankPoints, DissolveChainMin, DissolveChainWindow,
     };
 
     private readonly List<ModeActor> actors = new();
@@ -156,6 +158,7 @@ public sealed class DissolveRunRules : IModeRules
             if (sample.ActorId != runner || Caught) continue;
             Position = sample.X;
             Best = Math.Max(Best, sample.X);
+            Front = Math.Max(Front, Best - tuners.Float(DissolveFrontMaxGap));
             if (sample.X < Front)
             {
                 CaughtAt = clock.Now;

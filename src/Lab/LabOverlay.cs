@@ -67,8 +67,9 @@ public partial class LabOverlay : CanvasLayer
         result = UiStyle.Text("Paused", 18, UiStyle.SoftInk, HorizontalAlignment.Center);
         layout.AddChild(result);
         layout.AddChild(new HSeparator());
-        layout.AddChild(new ControlsReference { Compact = true, ResetAction = Lab.Scenario.Banking ? "Reload" : "Reset scenario" });
+        layout.AddChild(new ControlsReference { Compact = true, ResetAction = Lab.Scenario.Reloads ? "Reload" : "Reset scenario" });
         layout.AddChild(UiStyle.Text(Lab.Scenario.Banking ? "R / X reloads · Backspace resets the duel" :
+            Lab.Scenario.Reloads ? "R / X reloads · Backspace starts a new run" :
             "R / X or Backspace resets this scenario", 16, UiStyle.SoftInk, HorizontalAlignment.Center));
         resume = AddButton(layout, "Resume Lab", () => Lab.SetMenu(false));
         AddButton(layout, Lab.Scenario.Id == "range" ? "Respawn targets" : "Reset scenario", Lab.RequestReset);
@@ -97,6 +98,15 @@ public partial class LabOverlay : CanvasLayer
                     winners.Length == 0 ? "NOBODY STANDS" : $"{string.Join(" & ", winners.Select(Name)).ToUpperInvariant()} WINS";
                 var summary = string.Join("  ·  ", order.Select(a => $"{Modes.RingOutHud.Ordinal(ring.Place(a) ?? 0).ToLowerInvariant()} {Name(a)}"));
                 return (line, winner, summary);
+            }
+            case Modes.DissolveRunRules run:
+            {
+                var line = $"{run.Meters} m · {run.Tanks} tanks · score {run.Score}" + (run.Caught ? "" : $" · front {Mathf.FloorToInt((float)run.Gap)} m behind");
+                var dissolve = Lab.Dissolve!;
+                var seed = dissolve.Daily ? $"today’s run ({dissolve.RunSeed})" : $"seed {dissolve.RunSeed}";
+                var best = dissolve.NewBest ? "a new best run" : $"best run {dissolve.BestScore}";
+                var summary = $"{run.Meters} m + {run.Tanks} tanks × {Lab.World.Tuning.DissolveTankPoints} + chains {run.Bonus} · best chain {run.BestChain}\n{best} · {seed}";
+                return (line, $"RUN OVER · {run.Score}", summary);
             }
             case Modes.ShortFuseRules fuse:
             {
@@ -168,8 +178,8 @@ public partial class LabOverlay : CanvasLayer
             status.Text = Lab.Scenario.Id == "range" ? $"{Lab.LiveTanks.Count()} targets · {fixtureSummary}" : fixtureSummary;
         }
 
-        hint.Text = MenuNavigation.Gamepad ? (Lab.Scenario.Banking ? "Start: Lab controls / reset / tuning   ·   X: reload" :
-            "X: reset   ·   Start: Lab controls / tuning") : (Lab.Scenario.Banking ?
+        hint.Text = MenuNavigation.Gamepad ? (Lab.Scenario.Reloads ? "Start: Lab controls / reset / tuning   ·   X: reload" :
+            "X: reset   ·   Start: Lab controls / tuning") : (Lab.Scenario.Reloads ?
             "Esc: Lab controls   ·   Backspace: reset   ·   R: reload   ·   F1: tuning" :
             "R / Backspace: reset   ·   Esc: Lab controls   ·   F1: tuning");
     }

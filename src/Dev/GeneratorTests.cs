@@ -276,8 +276,13 @@ public partial class GeneratorTests : Node
             joined.Roads.AddRange(plan.Roads.Select(r => new RoadSegment(r.A + offset, r.B + offset)));
             joined.Lots.AddRange(plan.Lots.Select(l => new Lot
             {
-                Bounds = l.Bounds with { Center = l.Bounds.Center + offset }, Seed = l.Seed, HouseModel = l.HouseModel, HousePalette = l.HousePalette,
-                House = l.House with { Center = l.House.Center + offset }, ReturnDepth = l.ReturnDepth, DrivewaySide = l.DrivewaySide,
+                Bounds = l.Bounds with { Center = l.Bounds.Center + offset },
+                Seed = l.Seed,
+                HouseModel = l.HouseModel,
+                HousePalette = l.HousePalette,
+                House = l.House with { Center = l.House.Center + offset },
+                ReturnDepth = l.ReturnDepth,
+                DrivewaySide = l.DrivewaySide,
             }));
             joined.Fences.AddRange(plan.Fences.Select(f => new FenceRun(f.A + offset, f.B + offset)));
             joined.Props.AddRange(plan.Props.Select(p => p with { Position = p.Position + offset }));

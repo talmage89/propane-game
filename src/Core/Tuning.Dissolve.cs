@@ -13,6 +13,8 @@ public partial class Tuning
     /// <summary>The ramp's time constant: the speed closes about 63% of the gap to the maximum in this long.</summary>
     [LabDial(10, 600, 10)] public float DissolveFrontRampSeconds { get; set; } = 180f;
     [LabDial(0, 10, 0.5)] public float DissolveFrontPush { get; set; } = 1.5f;
+    /// <summary>The front never trails the furthest point reached by more than this: it keeps the street behind you short.</summary>
+    [LabDial(20, 200, 5)] public float DissolveFrontMaxGap { get; set; } = 60f;
     /// <summary>How long a caught player falls before the results.</summary>
     [LabDial(0.5, 8, 0.5)] public float DissolveFallSeconds { get; set; } = 2.5f;
 
