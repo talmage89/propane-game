@@ -152,7 +152,8 @@ public partial class Menus : CanvasLayer
     {
         // Network refreshes preserve the control identity, drafts and caret; screen changes start at the top.
         var sameScreen = builtScreen == Current;
-        var focus = sameScreen ? navigation.FocusKey() : null;
+        // A new lobby screen starts on the player's name, even when bot controls come first in the layout.
+        var focus = sameScreen ? navigation.FocusKey() : Current == Screen.Lobby ? "Name" : null;
         var serverDraft = sameScreen && serverField != null ? serverField.Text : null;
         builtScreen = Current;
         string? typing = null;
