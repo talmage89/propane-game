@@ -1,25 +1,22 @@
-using System;
 using Godot;
-using Propane.Core;
 
 namespace Propane.Player;
 
 /// <summary>
-/// Blends the settled ragdoll into the get-up and bounds authored animation changes. Runs after physical
-/// bones, before feet and rifle contacts, so smoothing never detaches a solved hand or planted foot.
+/// Captures the settled ragdoll's pose in world space, then fades from it into whatever the animation produces,
+/// such as the start of the get-up clip. Runs after the physical bones and before the rifle stance, which is
+/// off during a get-up and then fades in itself.
 /// </summary>
 public partial class PoseBlend : SkeletonModifier3D
 {
-    public required WorldContext World { get; init; }
-
     private Transform3D[]? captured;
     private bool captureRequested;
     private bool blending;
     private float duration;
     private float elapsed;
-    private Quaternion[]? previous;
-    private Quaternion[]? displayed;
-    private bool[] digitBones = Array.Empty<bool>();
+    // Each bone's animated and captured rotations on the previous fade frame, signs kept continuous.
+    private Quaternion[] animatedPath = System.Array.Empty<Quaternion>(), capturedPath = System.Array.Empty<Quaternion>();
+    private bool pathStarted;
 
     public bool HasCapture => captured != null && !captureRequested;
 
@@ -45,6 +42,12 @@ public partial class PoseBlend : SkeletonModifier3D
         duration = Mathf.Max(seconds, 0.01f);
         elapsed = 0;
         blending = captured != null;
+        pathStarted = false;
+        if (blending && animatedPath.Length != captured!.Length)
+        {
+            animatedPath = new Quaternion[captured.Length];
+            capturedPath = new Quaternion[captured.Length];
+        }
     }
 
     public override void _ProcessModificationWithDelta(double delta)
@@ -68,7 +71,6 @@ public partial class PoseBlend : SkeletonModifier3D
         }
         if (!blending || captured == null)
         {
-            SmoothAnimation(skeleton, (float)delta);
             return;
         }
 
@@ -78,7 +80,6 @@ public partial class PoseBlend : SkeletonModifier3D
         {
             blending = false;
             captured = null;
-            SmoothAnimation(skeleton, (float)delta);
             return;
         }
 
@@ -90,57 +91,25 @@ public partial class PoseBlend : SkeletonModifier3D
             var local = parent >= 0 ? (toSkeleton * captured[parent]).AffineInverse() * global : global;
             local = local.Orthonormalized();
             var current = skeleton.GetBonePose(i);
-            var rotation = current.Basis.Orthonormalized().GetRotationQuaternion()
-                .Slerp(local.Basis.GetRotationQuaternion(), weight);
+            // Keep one path per bone for the whole fade: re-choosing the shortest arc every frame switches sides
+            // when the animation passes half a turn from the captured pose, flipping the limb in one frame.
+            var animated = current.Basis.Orthonormalized().GetRotationQuaternion();
+            var target = local.Basis.GetRotationQuaternion();
+            if (!pathStarted)
+            {
+                if (animated.Dot(target) < 0) target = -target;
+            }
+            else
+            {
+                if (animated.Dot(animatedPath[i]) < 0) animated = -animated;
+                if (target.Dot(capturedPath[i]) < 0) target = -target;
+            }
+            animatedPath[i] = animated;
+            capturedPath[i] = target;
+            var rotation = animated.Slerpni(target, weight).Normalized();
             skeleton.SetBonePoseRotation(i, rotation);
             skeleton.SetBonePosePosition(i, current.Origin.Lerp(local.Origin, weight));
         }
-        SmoothAnimation(skeleton, (float)delta);
-    }
-    /// <summary>Remember the complete displayed pose, including IK, for the next animation handoff.</summary>
-    public void ObserveFinalPose(Skeleton3D skeleton)
-    {
-        displayed ??= new Quaternion[skeleton.GetBoneCount()];
-        for (var i = 0; i < displayed.Length; i++) displayed[i] = skeleton.GetBonePoseRotation(i).Normalized();
-    }
-
-    // Bound authored animation changes before contact solvers, never after them. Physical ragdoll poses
-    // remain authoritative; cache them so the first get-up frame starts from the actual settled body.
-    private void SmoothAnimation(Skeleton3D skeleton, float dt)
-    {
-        var simulating = skeleton.GetNode<Ragdoll>("Ragdoll").Simulating;
-        var count = skeleton.GetBoneCount();
-        if (skeleton.GetNode<RifleRig>("RifleRig").Weight <= 0.001f && displayed != null)
-        {
-            previous ??= new Quaternion[count];
-            Array.Copy(displayed, previous, count);
-        }
-        if (digitBones.Length != count)
-        {
-            digitBones = new bool[count];
-            for (var i = 0; i < count; i++)
-            {
-                var name = skeleton.GetBoneName(i).ToString();
-                digitBones[i] = name.StartsWith("index_", StringComparison.Ordinal) || name.StartsWith("middle_", StringComparison.Ordinal) ||
-                    name.StartsWith("ring_", StringComparison.Ordinal) || name.StartsWith("pinky_", StringComparison.Ordinal) || name.StartsWith("thumb_", StringComparison.Ordinal);
-            }
-        }
-        var initialized = previous != null;
-        previous ??= new Quaternion[count];
-        var limit = Mathf.DegToRad(World.Tuning.PoseAngularSpeed) * dt;
-        for (var i = 0; i < count; i++)
-        {
-            var target = skeleton.GetBonePoseRotation(i).Normalized();
-            // Digits have no physical bodies. Keep their release smooth even when the arm is thrown.
-            if (initialized && (!simulating || digitBones[i]))
-            {
-                var difference = previous[i].Inverse() * target;
-                var angle = 2 * Mathf.Atan2(new Vector3(difference.X, difference.Y, difference.Z).Length(), Mathf.Abs(difference.W));
-                if (angle > limit) target = previous[i].Slerp(target, limit / angle);
-                skeleton.SetBonePoseRotation(i, target);
-            }
-            // Repeated tiny blends can accumulate roundoff; Inverse requires a unit quaternion next frame.
-            previous[i] = target.Normalized();
-        }
+        pathStarted = true;
     }
 }

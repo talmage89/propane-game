@@ -163,8 +163,7 @@ public partial class Tuning : Resource
     [Export(PropertyHint.Range, "0.05,1,0.01")] public float MeleeWindup { get; set; } = 0.24f;
     [Export(PropertyHint.Range, "0.05,1,0.01")] public float MeleeActive { get; set; } = 0.16f;
     [Export(PropertyHint.Range, "0.05,2,0.01")] public float MeleeRecovery { get; set; } = 0.4f;
-    [Export(PropertyHint.Range, "60,1440,10")] public float MeleePoseAngularSpeed { get; set; } = 1200f;
-    [Export(PropertyHint.Range, "0.1,10,0.1")] public float MeleeReloadReturnSpeed { get; set; } = 4.5f;
+    [Export(PropertyHint.Range, "0.1,10,0.1")] public float MeleeReloadReturnSpeed { get; set; } = 3f;
     [Export(PropertyHint.Range, "0.1,5,0.01")] public float MeleeCooldown { get; set; } = 0.65f;
     [Export(PropertyHint.Range, "0,10,0.1")] public float MeleeLungeSpeed { get; set; } = 2.6f;
     [Export(PropertyHint.Range, "0.1,4,0.05")] public float MeleeRange { get; set; } = 1.65f;
@@ -174,14 +173,8 @@ public partial class Tuning : Resource
     [Export(PropertyHint.Range, "0,10,0.1")] public float MeleeLaunchLift { get; set; } = 1.6f;
     [Export(PropertyHint.Range, "0,10,0.1")] public float MeleeSpin { get; set; } = 3f;
     [Export(PropertyHint.Range, "0,500,1")] public float MeleePropImpulse { get; set; } = 35f;
-    [Export(PropertyHint.Range, "0,180,1")] public float MeleeWindupYawDegrees { get; set; } = 110f;
-    [Export(PropertyHint.Range, "90,180,1")] public float MeleeStrikeYawDegrees { get; set; } = 155f;
-    [Export(PropertyHint.Range, "-90,90,1")] public float MeleePitchDegrees { get; set; } = -10f;
-    [Export(PropertyHint.Range, "-90,90,1")] public float MeleeRollDegrees { get; set; } = -20f;
-    [Export(PropertyHint.Range, "0,0.8,0.01")] public float MeleeRifleForward { get; set; } = 0.35f;
-    [Export(PropertyHint.Range, "0,0.5,0.01")] public float MeleeRifleDown { get; set; } = 0.12f;
-    [Export(PropertyHint.Range, "0,45,1")] public float MeleeTorsoLeanDegrees { get; set; } = 12f;
-    [Export(PropertyHint.Range, "0,60,1")] public float MeleeTorsoTwistDegrees { get; set; } = 25f;
+    [Export(PropertyHint.Range, "0,45,1")] public float MeleeTorsoLeanDegrees { get; set; } = 15f;
+    [Export(PropertyHint.Range, "0,60,1")] public float MeleeTorsoTwistDegrees { get; set; } = 35f;
     [Export(PropertyHint.Range, "0,1,0.01")] public float MeleeRelayGrace { get; set; } = 0.3f;
     [Export(PropertyHint.Range, "1,128,1")] public int MeleeMaxContacts { get; set; } = 32;
 
@@ -287,37 +280,15 @@ public partial class Tuning : Resource
     // ---------------------------------------------------------------- Locomotion presentation
     [ExportGroup("Locomotion")]
     [Export(PropertyHint.Range, "0.05,1,0.01")] public float LocomotionSettleTime { get; set; } = 0.18f;
-    [Export(PropertyHint.Range, "0.5,4,0.01")] public float WalkStrideLength { get; set; } = 1.34f;
-    [Export(PropertyHint.Range, "0.5,6,0.01")] public float JogStrideLength { get; set; } = 2.4f;
-    [Export(PropertyHint.Range, "0.5,8,0.01")] public float SprintStrideLength { get; set; } = 4.2f;
-    [Export(PropertyHint.Range, "0.2,0.7,0.01")] public float WalkContactFraction { get; set; } = 0.52f;
-    [Export(PropertyHint.Range, "0.2,0.7,0.01")] public float JogContactFraction { get; set; } = 0.4f;
-    [Export(PropertyHint.Range, "0.2,0.7,0.01")] public float SprintContactFraction { get; set; } = 0.23f;
-    [Export(PropertyHint.Range, "0.01,0.4,0.01")] public float WalkFootLift { get; set; } = 0.09f;
-    [Export(PropertyHint.Range, "0.01,0.5,0.01")] public float JogFootLift { get; set; } = 0.18f;
-    [Export(PropertyHint.Range, "0.01,0.6,0.01")] public float SprintFootLift { get; set; } = 0.24f;
-    [Export(PropertyHint.Range, "5,90,1")] public float TurnStepDegrees { get; set; } = 24f;
-    [Export(PropertyHint.Range, "0.05,1,0.01")] public float TurnStepTime { get; set; } = 0.22f;
-    [Export(PropertyHint.Range, "1,40,0.5")] public float FootStepTargetSpeed { get; set; } = 18f;
-    [Export(PropertyHint.Range, "0.05,0.4,0.01")] public float FootMinimumSeparation { get; set; } = 0.12f;
-    [Export(PropertyHint.Range, "0.01,0.4,0.01")] public float FootLateralStepThreshold { get; set; } = 0.2f;
-    [Export(PropertyHint.Range, "0.001,0.1,0.001")] public float FootGroundTolerance { get; set; } = 0.025f;
-    [Export(PropertyHint.Range, "0.1,2,0.01")] public float FootKneePoleForward { get; set; } = 1f;
-    [Export(PropertyHint.Range, "0.1,1,0.01")] public float FootKneePoleHeight { get; set; } = 0.5f;
-    [Export(PropertyHint.Range, "0.2,0.7,0.01")] public float FootContactRadius { get; set; } = 0.3f;
-    [Export(PropertyHint.Range, "0.05,0.6,0.01")] public float FootSettleDistance { get; set; } = 0.18f;
-    [Export(PropertyHint.Range, "0.05,0.4,0.01")] public float FootHalfWidth { get; set; } = 0.11f;
-    [Export(PropertyHint.Range, "0.01,0.2,0.001")] public float FootSoleHeight { get; set; } = 0.104f;
-    [Export(PropertyHint.Range, "0.01,0.5,0.01")] public float FootPelvisLimit { get; set; } = 0.22f;
-    [Export(PropertyHint.Range, "0.01,0.2,0.001")] public float FootReachMargin { get; set; } = 0.035f;
-    [Export(PropertyHint.Range, "1,40,0.5")] public float FootPelvisSpeed { get; set; } = 12f;
-    [Export(PropertyHint.Range, "0.1,2,0.01")] public float FootProbeUp { get; set; } = 0.5f;
-    [Export(PropertyHint.Range, "0.1,2,0.01")] public float FootProbeDown { get; set; } = 0.65f;
-    [Export(PropertyHint.Range, "0.1,10,0.1")] public float FootResetDistance { get; set; } = 0.5f;
-    [Export(PropertyHint.Range, "-0.3,0.1,0.01")] public float LocomotionBodyLower { get; set; } = -0.08f;
-    [Export(PropertyHint.Range, "0,0.1,0.001")] public float LocomotionBodyBounce { get; set; } = 0.015f;
-    [Export(PropertyHint.Range, "0,0.3,0.01")] public float LandingCompression { get; set; } = 0.08f;
-    [Export(PropertyHint.Range, "0,30,0.5")] public float LocomotionLeanDegrees { get; set; } = 5f;
+    [Export(PropertyHint.Range, "0.5,4,0.01")] public float WalkStrideLength { get; set; } = 1.33f;
+    [Export(PropertyHint.Range, "0.5,6,0.01")] public float JogStrideLength { get; set; } = 5.5f;
+    [Export(PropertyHint.Range, "0.5,8,0.01")] public float SprintStrideLength { get; set; } = 6.3f;
+    /// <summary>Ground per backpedal and sidestep cycle. Longer than the captured steps (0.79 m and 0.61 m) trades a
+    /// little foot slide for a natural cadence at the 1.6 m/s creep.</summary>
+    [Export(PropertyHint.Range, "0.3,3,0.01")] public float BackStrideLength { get; set; } = 1.0f;
+    [Export(PropertyHint.Range, "0.3,3,0.01")] public float SideStrideLength { get; set; } = 0.85f;
+    /// <summary>Turning on the spot steps sideways as fast as a foot this far from the body's axis swings.</summary>
+    [Export(PropertyHint.Range, "0,1,0.01")] public float TurnStepRadius { get; set; } = 0.25f;
     [Export(PropertyHint.Range, "0.05,0.4,0.01")] public float TakeoffPoseTime { get; set; } = 0.12f;
     [Export(PropertyHint.Range, "0,1,0.01")] public float TakeoffClipStart { get; set; } = 0.14f;
     [Export(PropertyHint.Range, "0.1,10,0.1")] public float TakeoffClipSpeed { get; set; } = 2.5f;
@@ -356,6 +327,15 @@ public partial class Tuning : Resource
     [Export(PropertyHint.Range, "0,10,0.1")] public float RecoilSettleSpeed { get; set; } = 1f;
     [Export(PropertyHint.Range, "0,1,0.01")] public float RecoilYawDegrees { get; set; } = 0.175f;
     [Export(PropertyHint.Range, "10,1000,10")] public float ShotRange { get; set; } = 400f;
+    /// <summary>Where the logical aim holds the muzzle for obstruction, from the feet: height, right of and along the
+    /// aim, at the hip and shouldered. Never the animated rifle, so no pose can change a hit; the defaults are the
+    /// mean positions of the release's fitted muzzle.</summary>
+    [Export(PropertyHint.Range, "0.5,2,0.01")] public float ShotMuzzleHipHeight { get; set; } = 1.26f;
+    [Export(PropertyHint.Range, "-0.5,0.5,0.01")] public float ShotMuzzleHipSide { get; set; } = 0.13f;
+    [Export(PropertyHint.Range, "0,1.5,0.01")] public float ShotMuzzleHipForward { get; set; } = 0.65f;
+    [Export(PropertyHint.Range, "0.5,2,0.01")] public float ShotMuzzleAimHeight { get; set; } = 1.59f;
+    [Export(PropertyHint.Range, "-0.5,0.5,0.01")] public float ShotMuzzleAimSide { get; set; } = 0.07f;
+    [Export(PropertyHint.Range, "0,1.5,0.01")] public float ShotMuzzleAimForward { get; set; } = 0.76f;
     [Export(PropertyHint.Range, "0,200,1")] public float BulletImpulse { get; set; } = 30f;
 
     // ---------------------------------------------------------------- Rifle contact
@@ -370,12 +350,16 @@ public partial class Tuning : Resource
     [Export(PropertyHint.Range, "0,1,0.01")] public float RifleSprintPitchSuppression { get; set; } = 0.7f;
     [Export(PropertyHint.Range, "0,1,0.01")] public float RifleHipHeadFollow { get; set; } = 0.45f;
     [Export(PropertyHint.Range, "0,1,0.01")] public float RifleAimHeadFollow { get; set; } = 1f;
-    [Export(PropertyHint.Range, "0.005,0.1,0.001")] public float RifleReachMargin { get; set; } = 0.025f;
+    /// <summary>Share of the head's turn toward the aim taken by the neck.</summary>
+    [Export(PropertyHint.Range, "0,1,0.01")] public float RifleNeckShare { get; set; } = 0.4f;
+    /// <summary>Fastest turn of the shown aim, degrees per second; logical aim and shots never wait for it.</summary>
+    [Export(PropertyHint.Range, "60,3600,10")] public float RifleAimTurnSpeed { get; set; } = 720f;
+    /// <summary>Shouldered, how far the neck and head bring the eye down to the sight (0 = head up, 1 = on it).</summary>
+    [Export(PropertyHint.Range, "0,1,0.01")] public float RifleCheekWeld { get; set; } = 0.75f;
     [Export(PropertyHint.Range, "0,1,0.01")] public float RifleHipPitchShare { get; set; } = 0.3f;
     [Export(PropertyHint.Range, "0,1,0.01")] public float RifleAimPitchShare { get; set; } = 0.7f;
     [Export(PropertyHint.Range, "0,80,1")] public float RifleHipBladeDegrees { get; set; } = 28f;
-    [Export(PropertyHint.Range, "0,80,1")] public float RifleAimBladeDegrees { get; set; } = 38f;
-    [Export(PropertyHint.Range, "0,45,1")] public float RifleShoulderRaiseDegrees { get; set; } = 30f;
+    [Export(PropertyHint.Range, "0,80,1")] public float RifleAimBladeDegrees { get; set; } = 25f;
     [Export(PropertyHint.Range, "0,45,1")] public float RifleCheekRollDegrees { get; set; } = 15f;
     [Export(PropertyHint.Range, "-0.1,0.1,0.001")] public float RifleEyeSide { get; set; } = -0.032f;
     [Export(PropertyHint.Range, "0,0.2,0.001")] public float RifleEyeUp { get; set; } = 0.17f;
@@ -383,9 +367,9 @@ public partial class Tuning : Resource
 
     // Rifle placement from the shoulder pocket.
     [Export(PropertyHint.Range, "0,0.5,0.001")] public float RifleHipSightReferenceDown { get; set; } = 0.2f;
-    [Export(PropertyHint.Range, "-0.1,0.2,0.001")] public float RifleShoulderInboard { get; set; } = 0.10f;
-    [Export(PropertyHint.Range, "-0.1,0.2,0.001")] public float RifleShoulderUp { get; set; } = 0.11f;
-    [Export(PropertyHint.Range, "-0.1,0.2,0.001")] public float RifleShoulderForward { get; set; } = 0.02f;
+    [Export(PropertyHint.Range, "-0.1,0.2,0.001")] public float RifleShoulderInboard { get; set; } = 0.08f;
+    [Export(PropertyHint.Range, "-0.1,0.2,0.001")] public float RifleShoulderUp { get; set; } = 0.06f;
+    [Export(PropertyHint.Range, "-0.1,0.2,0.001")] public float RifleShoulderForward { get; set; } = 0.06f;
     [Export(PropertyHint.Range, "0,0.4,0.001")] public float RifleHipDown { get; set; } = 0.17f;
     [Export(PropertyHint.Range, "-0.2,0.2,0.001")] public float RifleHipOutboard { get; set; } = -0.07f;
     [Export(PropertyHint.Range, "-0.1,0.2,0.001")] public float RifleHipForward { get; set; } = 0.02f;
@@ -404,24 +388,10 @@ public partial class Tuning : Resource
     [Export(PropertyHint.Range, "0.01,0.3,0.01")] public float RifleReloadBlendFraction { get; set; } = 0.18f;
     [Export(PropertyHint.Range, "0,0.6,0.01")] public float RifleElbowOut { get; set; } = 0.3f;
     [Export(PropertyHint.Range, "0,1,0.01")] public float RifleElbowDown { get; set; } = 0.6f;
+    [Export(PropertyHint.Range, "0,1,0.01")] public float RifleElbowBack { get; set; } = 0.3f;
 
-    // Motion presentation uses the same distance-driven phase as the legs.
+    // Reload, recoil, wrist and finger poses of the rifle stance.
     [ExportGroup("Rifle Motion")]
-    [Export(PropertyHint.Range, "0,0.1,0.001")] public float RifleSwaySide { get; set; } = 0.025f;
-    [Export(PropertyHint.Range, "0,0.1,0.001")] public float RifleSwayUp { get; set; } = 0.008f;
-    [Export(PropertyHint.Range, "0,0.1,0.001")] public float RifleSwayForward { get; set; } = 0.012f;
-    [Export(PropertyHint.Range, "0,15,0.1")] public float RifleSwayRollDegrees { get; set; } = 2.5f;
-    [Export(PropertyHint.Range, "0,15,0.1")] public float RifleTorsoSwayDegrees { get; set; } = 1.5f;
-    [Export(PropertyHint.Range, "0,1,0.01")] public float RifleWalkSwayScale { get; set; } = 0.25f;
-    [Export(PropertyHint.Range, "0,2,0.01")] public float RifleSprintSwayScale { get; set; } = 1.35f;
-    [Export(PropertyHint.Range, "0,1,0.01")] public float RifleAimSwayScale { get; set; } = 0.025f;
-    [Export(PropertyHint.Range, "0,1,0.01")] public float RifleAimPelvisSteady { get; set; } = 0.95f;
-    [Export(PropertyHint.Range, "30,1440,10")] public float RifleAimTurnSpeed { get; set; } = 360f;
-    [Export(PropertyHint.Range, "1,60,1")] public float RifleMotionResponse { get; set; } = 14f;
-    [Export(PropertyHint.Range, "60,1440,10")] public float PoseAngularSpeed { get; set; } = 600f;
-    /// <summary>Body pose speed on a shot; wrists follow instantaneous barrel alignment.</summary>
-    [Export(PropertyHint.Range, "600,3600,10")] public float RifleShotPoseAngularSpeed { get; set; } = 2400f;
-    [Export(PropertyHint.Range, "60,2400,10")] public float FootPoseRecoverySpeed { get; set; } = 1500f;
     [Export(PropertyHint.Range, "0.1,2,0.01")] public float RifleReloadPhaseSpeed { get; set; } = 0.75f;
     [Export(PropertyHint.Range, "1,15,0.1")] public float RifleRecoilFrequency { get; set; } = 5f;
     [Export(PropertyHint.Range, "0.1,0.99,0.01")] public float RifleRecoilDamping { get; set; } = 0.65f;

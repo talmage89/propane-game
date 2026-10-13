@@ -11,8 +11,6 @@ public partial class RifleHandFollow : SkeletonModifier3D
 
     public RifleRig? Rig { get; set; }
 
-    public PoseBlend? Blend { get; set; }
-
     public override void _ProcessModificationWithDelta(double delta)
     {
         var skeleton = GetSkeleton();
@@ -20,7 +18,6 @@ public partial class RifleHandFollow : SkeletonModifier3D
         {
             return;
         }
-        Blend?.ObserveFinalPose(skeleton);
         if (Rig.Weight > 0.001f) return;
         if (handR < 0)
         {

@@ -1,7 +1,11 @@
 # Rifle contact
 
-[Package 4](motion.md) extends this fit with stride sway, shoulder-absorbed spring recoil and bounded
-pose handoffs. The calibration results below are package 2's historical measurements.
+The clip redo ([rifle stance](motion.md)) keeps this package's wrist frames, finger curls, reload contact path and
+grip proxies, and retires the rest: the spine in the upper-body filter, the raised clavicle, the neck/head fit to
+`Socket_Eye`, the 25 mm reach margin and sphere projection, and the millimeter bounds. `--assert-grip` now checks
+sanity: wrists within 2 cm of their grip frames, no hand 1 cm into the rifle's solid proxies, an aimed eye within
+15 cm of the sight, finite values and the same scenario coverage. Everything below is package 2's historical
+design and measurements.
 
 The rifle rig places a rigid rifle before solving the arms. Its wrist offsets and orientations are fitted to
 the mannequin palms, the traced pistol grip and the vertical foregrip. A 25 mm reach margin leaves both elbows

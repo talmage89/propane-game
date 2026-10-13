@@ -60,7 +60,7 @@ public partial class AnimationReview : Node3D
         AddChild(environment);
         AddChild(player);
         player.InputOverride = input;
-        player.Fired += _ => { if (CaseAt(input.Now).Name == "burst") burstShots++; };
+        player.Fired += _ => { if (CaseAt(input.Now).Name is "burst" or "hip_burst") burstShots++; };
 #if !PROPANE_REVIEW_RELEASE
         player.MeleeStarted += (_, _) => struck = true;
 #endif
@@ -73,7 +73,7 @@ public partial class AnimationReview : Node3D
         var view = DevArgs.Get("view") ?? "side";
         if (view != "player")
         {
-            if (view != "side") throw new ArgumentException("view must be side or player");
+            if (view is not ("side" or "front")) throw new ArgumentException("view must be side, front or player");
             observer = new Camera3D { Current = true, Fov = 40 };
             AddChild(observer);
         }
@@ -133,6 +133,17 @@ public partial class AnimationReview : Node3D
             input.Hold(t, t + 3, new PlayerIntent { Aim = true });
             input.Hold(t + 0.5f, t + 1.3f, new PlayerIntent { FireHeld = true });
         });
+        // Hip fire from the relaxed carry: the first shot fires at once while the rifle visibly rises.
+        Case("hip_burst", t => input.Hold(t + 0.5f, t + 1.3f, new PlayerIntent { FireHeld = true }));
+        // Hip fire while running: the legs turn toward travel, or run backward, under the twisted torso.
+        foreach (var (name, move) in new[] { ("jog_fire_180", Vector2.Up), ("jog_fire_090", Vector2.Right) })
+        {
+            Case(name, t =>
+            {
+                input.Hold(t + 0.25f, t + 2.65f, new PlayerIntent { Move = move });
+                input.Hold(t + 0.6f, t + 2.2f, new PlayerIntent { Move = move, FireHeld = true });
+            });
+        }
         Case("reload", t =>
         {
             director.At(t, () => player.Ammo!.Magazine = 20);
@@ -149,7 +160,7 @@ public partial class AnimationReview : Node3D
         director.At(cursor - 0.1f, () =>
         {
             bool Included(string name) => cases.Any(c => c.Name == name);
-            var failed = (Included("burst") && burstShots < 2) || (Included("jump_land") && !jumped) ||
+            var failed = (Included("burst") && burstShots < 2) || (Included("hip_burst") && burstShots < 2) || (Included("jump_land") && !jumped) ||
                 (Included("reload") && !reloaded);
 #if !PROPANE_REVIEW_RELEASE
             failed |= Included("melee") && !struck;
@@ -221,6 +232,6 @@ public partial class AnimationReview : Node3D
             GD.Print($"[animation-review] {episode} wall={Time.GetTicksMsec()}");
         }
         var focus = player.GlobalPosition + Vector3.Up;
-        observer?.LookAtFromPosition(focus + new Vector3(3.4f, 0.3f, 0.4f), focus);
+        observer?.LookAtFromPosition(focus + (DevArgs.Get("view") == "front" ? new Vector3(1.2f, 0.3f, -3.3f) : new Vector3(3.4f, 0.3f, 0.4f)), focus);
     }
 }
