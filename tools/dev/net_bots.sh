@@ -4,6 +4,7 @@
 # Usage: tools/dev/net_bots.sh [-n bots] [-l match seconds] [-o out dir, default build/net] [-g godot] [-w windowed bots] [-s "server args"] [-S host:port of an existing server]
 #   [-k skip checks] [-t faults|clean] [-b brain per bot, e.g. smart,simple,simple] [-c hex colors per bot, e.g. 12ABEF,12ABEF,F6F6F6] [-- extra bot args]
 # Extra bot args (after --) go to every bot, e.g. --net-lag=120 --net-jitter=30 --net-loss=5 --capture-dir=... --shot-every=5
+#   --lobby-bots=2 (or 2,1 per bot) gives each client lobby bots it runs itself; --leave-at=30 --leave-who=Bot2 makes one leave
 set -euo pipefail
 
 bots=2
@@ -117,7 +118,12 @@ if (( checks )); then
     echo "FAIL engine or protocol errors in network logs" >&2
     status=1
   fi
-  client_logs=("$out"/bot*.log)
+  # A client told to leave mid-match (--leave-at) has no completion to compare. The survivors' tank agreement, final
+  # scores and the server's audit still cover its departure.
+  client_logs=()
+  for log in "$out"/bot*.log; do
+    grep -q "leaving the match on purpose" "$log" || client_logs+=("$log")
+  done
   # The capacity fixture intentionally retires its creator before completion. Its dedicated
   # checker proves that departure; all survivors still use the ordinary continuous tank gate.
   if [[ " $* " == *" --scenario=capacity "* ]] && grep -q "capacity creator departure" "$out/bot1.log"; then
