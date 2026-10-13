@@ -367,9 +367,14 @@ connection to 20/30 s before sending MatchStart, and the client does so before i
 `IPacketTransport.SetLoading` carries this policy through decorators; backends without native ACK deadlines may
 ignore it. Clients report `Loaded` after their first complete frame, so initial physics and shader work retain
 loading grace. Loaded restores the short timeout at both ends, including a late Loaded after countdown or Go.
-Leaving construction also restores it. A silent failed endpoint therefore does not keep a live-match player
-present for the construction grace. Explicit disconnects remain immediate. ENet's retry schedule can defer
-the check until its next retransmission; these are ACK timeout parameters, not exact wall-clock disconnect times.
+Leaving construction also restores it. The ENet adapter restores it only after a hold as long as the load itself
+(MatchStart to Loaded) plus 1 s: ENet doubles a reliable command's retry interval on every unacknowledged send,
+without a cap, so commands a stalled loader lost (its receive buffer overflows while it does not service the socket)
+retry up to that long after it resumes. Ending the grace at Loaded let the next such retry meet the short timeout,
+which declares the peer lost instead of resending. A silent failed endpoint therefore does not keep a live-match
+player present for the construction grace beyond that hold. Explicit disconnects remain immediate. ENet's retry
+schedule can defer the check until its next retransmission; these are ACK timeout parameters, not exact wall-clock
+disconnect times.
 
 `NetClient.Diagnostics` exposes the local connection counters; server logs include per-connection payload
 packets/bytes accepted out and received in, RTT, managed queue

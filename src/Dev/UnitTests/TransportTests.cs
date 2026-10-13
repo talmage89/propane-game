@@ -397,6 +397,29 @@ public static class TransportTests
             }
             finally { client._ExitTree(); server._ExitTree(); client.Free(); server.Free(); }
         });
+        runner.Run("transport/native loading grace outlasts readiness by the time spent loading", () =>
+        {
+            var grace = new LoadingGrace();
+            var slow = new ConnectionHandle();
+            var fast = new ConnectionHandle();
+            grace.Begin(slow, 100);
+            grace.Begin(fast, 100);
+            grace.Begin(slow, 104); // A repeated start keeps the first: retries back off from it.
+            Assert(!grace.End(fast, 102) && !grace.End(slow, 111), "readiness released a grace before ENet could retry");
+            Assert(grace.Expire(104.9).Count == 0 && grace.Expire(105).Single() == fast,
+                "a 2 s load did not keep its grace for 2 s plus the retry margin");
+            Assert(!grace.End(slow, 112) && grace.Expire(122.9).Count == 0, "a repeated Loaded moved or released the hold");
+            Assert(grace.Expire(123).Single() == slow && grace.Expire(200).Count == 0,
+                "an 11 s load did not release exactly once after 11 s plus the retry margin");
+            Assert(grace.End(slow, 200), "a connection that is not loading kept a long timeout");
+            // A new MatchStart during the hold cancels the release; disconnects forget the connection.
+            grace.Begin(fast, 300);
+            Assert(!grace.End(fast, 301), "readiness after a short load released at once");
+            grace.Begin(fast, 301.5);
+            Assert(grace.Expire(400).Count == 0, "a new load kept the previous load's release");
+            grace.Forget(fast);
+            Assert(grace.End(fast, 400) && grace.Expire(1000).Count == 0, "a retired connection kept a grace");
+        });
         runner.Run("transport/client and server handshake, lobby, disconnect and reconnect", () =>
         {
             var network = new LoopbackNetwork();
