@@ -206,6 +206,7 @@ public partial class LabTest : Node
             await Frames(6).ConfigureAwait(true);
         }
         main.Free();
+        if (DevArgs.Get("menus-only") != null) return;
         foreach (var scenario in LabScenarios.All)
         {
             foreach (var environment in scenario.Environments)

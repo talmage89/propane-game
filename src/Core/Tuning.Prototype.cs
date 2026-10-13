@@ -22,7 +22,7 @@ public partial class Tuning
     [LabDial(1, 12, 1, Scenario = "ringout")] public int RingOutPileCount { get; set; } = 6;
     [LabDial(4, 40, 1, Scenario = "ringout")] public float RingOutPileDistance { get; set; } = 13f;
     [LabDial(0.2, 3, 0.1, Scenario = "ringout")] public float RingOutDissolveSeconds { get; set; } = 0.8f;
-    [LabDial(10, 200, 10, Scenario = "ringout")] public float RingOutVoidDepth { get; set; } = 60f;
+    [LabDial(10, 300, 10, Scenario = "ringout")] public float RingOutVoidDepth { get; set; } = 150f;
 
     // King of the Cul-de-sac: the zone, its minting and its moves.
     [LabDial(3, 12, 0.5, Scenario = "king")] public float KingZoneRadius { get; set; } = 6f;

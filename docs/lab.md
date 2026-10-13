@@ -85,8 +85,9 @@ peer and retain separate banks. The factory and session retain ordered teardown 
 `python3 -B tools/dev/check_lab.py` is the fast gate: one lifecycle cycle per allowed pair, local rules, the bot's
 aim-stall probe and a 15-second scripted duel. It requires a success marker, exit 0 and no engine warnings/errors.
 It also plays a Ring Out round and a King round to their ends with shortened dials (`--scenario=prototype --quick`),
-a bot on every actor. `--full` performs 10 entry/reset/exit cycles for every scenario and environment, sweeps every layout dial to both slider ends and all
-at once through every scenario and environment (`--scenario=dials`), and runs 180-second bot-versus-bot soaks in both
+a bot on every actor. `--full` performs 10 entry/reset/exit cycles for every scenario and environment, sweeps every
+layout dial to both slider ends and all at once through every scenario and environment it lays out
+(`--scenario=dials`), and runs 180-second bot-versus-bot soaks in both
 environments, each of which must bank at least ten tanks, and full prototype rounds at the shipped dials (Ring Out on
 three seeds, King on three in the void and one in a suburb). Each prototype round must end legally: Ring Out with a
 winner, every starter placed in elimination order and the out spectating; King on its clock with the bank conserved,

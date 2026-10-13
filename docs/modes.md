@@ -168,8 +168,9 @@ for King the attributed detonations, hits and throws exactly as the Lab duel fee
 Lab dials (`Tuning.Prototype.cs`), copied into `ModeTuners` like any mode's.
 
 **Ring Out** (`RingOutRules`). A square slab of lots (`RingOutLots` per side, odd, `RingOutLotSize` meters) centered
-on the origin; its top is at height zero and the void's floor lies `RingOutVoidDepth` below. `RingOutPlan` cuts each
-ring of lots, outermost first, into angular bands of about `RingOutBandLots`, from a seeded start angle. Band `b`
+on the origin; its top is at height zero and the void's floor lies `RingOutVoidDepth` (150 m) below, far enough for
+the fog to sell the drop. `RingOutPlan` cuts each ring of lots, outermost first, into angular bands of about
+`RingOutBandLots`, from a seeded start angle. Band `b`
 pulses for `RingOutWarningSeconds` and dissolves at `(b + 1) * RingOutBandSeconds` of round time, until the center
 lot alone remains (5 × 5 lots: six bands, one lot left at 90 s). Whether ground is solid is a pure function of round
 time and the plan, so the boundary is never sent. A sample eliminates an actor below `-RingOutFallDepth`, or below
