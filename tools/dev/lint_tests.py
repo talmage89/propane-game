@@ -146,6 +146,10 @@ fi
                 require(sum(generator in c for c in commands) == 4 + 1, f"{mode} runs other generator sweeps", output)
                 sessions = [name for c in commands if "check_lab.py --full" in c for name in c.split("--only=")[1].split(",")]
                 require(sorted(sessions) == sorted(lab), f"{mode} Lab shards differ from every --full session", output)
+                first_bot = min(i for i, c in enumerate(commands) if any(probe in c for probe in bots))
+                require(all(i < first_bot for i, c in enumerate(commands)
+                            if "core_tests.tscn" in c or any(probe in c for probe in deep if probe not in bots)),
+                        f"{mode} ran the real-time bot matches beside other jobs", output)
             else:
                 label = deep.get(failure, "generator-3")
                 require(code != 0 and f"[{label}] FAIL (exit " in output and f"test-full-{label}" in output,

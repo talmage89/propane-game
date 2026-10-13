@@ -101,12 +101,10 @@ test-world: build ## Compare all formations built in two fresh processes
 	tools/dev/check_world.sh
 
 # The deep sweeps are independent targets, so make -j4 test-full runs them side by side with the gate. label.sh prefixes
-# each line of a job's output with its name. The bot matches share this checkout's port and build/ names, so they run
-# in one serial job; the menu lifetime run shares test-behavior's port and settings file, so it waits for it.
+# each line of a job's output with its name. The menu lifetime run shares test-behavior's port and settings file, so it
+# waits for it. The bot matches share this checkout's port and build/ names, and their server and clients run in real
+# time and fail when other jobs starve them, so test-full runs them alone, one at a time, after everything else.
 LABEL := tools/dev/label.sh
-# The offline jobs give way to the bot matches, whose server and clients run in real time and fail when starved. Their
-# results never depend on wall time; only check_lab.py bounds each session at 600 seconds.
-YIELD := nice -n 19
 # Four contiguous shards of the whole generator sweep; test-full-generator-coverage proves they hold exactly its seeds.
 GENERATOR_FULL := --seeds=200 --large-seeds=100 --formation-seeds=6
 GENERATOR_1 := --first-seed=1 --seeds=50 --first-large-seed=1 --large-seeds=25 --first-formation-seed=1 --formation-seeds=2
@@ -120,11 +118,12 @@ LAB_2 := soak-suburb
 LAB_3 := lifetime,rules,aimstall,duel,dials
 LAB_SHARDS := test-full-lab-1 test-full-lab-2 test-full-lab-3
 # Longest first, so make -j starts the jobs that would otherwise finish last early.
-FULL := $(GENERATOR_SHARDS) test-full-navigation $(LAB_SHARDS) test-full-bots test-full-piles test-full-range \
-	test-full-menu test-full-generator-coverage
-.PHONY: $(FULL)
+FULL := $(GENERATOR_SHARDS) test-full-navigation $(LAB_SHARDS) test-full-piles test-full-range test-full-menu \
+	test-full-generator-coverage
+.PHONY: $(FULL) test-full-bots
 
 test-full: test $(FULL) ## Run the gate plus deep sweeps (make -j4 test-full runs them side by side)
+	@$(MAKE) --no-print-directory test-full-bots
 
 test-full-bots: build
 	$(LABEL) bots tools/dev/net_bots.sh -o "$(CURDIR)/build/rifle-soak-gate" -n 4 -w 0 -l 90 -s '--match-seed=25' -- --melee-start --net-seed=2 --net-lag=120 --net-jitter=30 --net-loss=3
@@ -132,28 +131,28 @@ test-full-bots: build
 	$(LABEL) bots tools/dev/net_bots.sh -n 2 -l 20 -o "$(CURDIR)/build/loading-readiness-gate" -- --scenario=body-stream --tank-check-ready-stall=Bot2
 
 $(LAB_SHARDS): test-full-lab-%: build
-	$(LABEL) lab-$* $(YIELD) env GODOT="$(GODOT)" python3 -B tools/dev/check_lab.py --full --only=$(LAB_$*)
+	$(LABEL) lab-$* env GODOT="$(GODOT)" python3 -B tools/dev/check_lab.py --full --only=$(LAB_$*)
 
 test-full-piles: build
-	$(LABEL) piles $(YIELD) "$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/upright_pile_tests.tscn -- --deep --awake
+	$(LABEL) piles "$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/upright_pile_tests.tscn -- --deep --awake
 
 test-full-menu: build test-behavior
 	$(LABEL) menu "$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/menu_test.tscn -- --scenario=lifetime --port=$(PORT)
 
 test-full-range: build
-	$(LABEL) range $(YIELD) "$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/player_range.tscn -- --scenario=melee-reloads --assert-motion --assert-grip
-	$(LABEL) range $(YIELD) "$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/player_range.tscn -- --scenario=recoil --stance=air --assert-grip --assert-motion
-	$(LABEL) range $(YIELD) "$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/player_range.tscn -- --scenario=bot-recoil --magazines=10
+	$(LABEL) range "$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/player_range.tscn -- --scenario=melee-reloads --assert-motion --assert-grip
+	$(LABEL) range "$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/player_range.tscn -- --scenario=recoil --stance=air --assert-grip --assert-motion
+	$(LABEL) range "$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/player_range.tscn -- --scenario=bot-recoil --magazines=10
 
 $(GENERATOR_SHARDS): test-full-generator-%: build
-	$(LABEL) generator-$* $(YIELD) "$(GODOT)" --headless --path . res://scenes/dev/generator_tests.tscn -- $(GENERATOR_$*)
+	$(LABEL) generator-$* "$(GODOT)" --headless --path . res://scenes/dev/generator_tests.tscn -- $(GENERATOR_$*)
 
 test-full-generator-coverage: build
-	$(LABEL) generator-coverage $(YIELD) env GODOT="$(GODOT)" python3 -B tools/dev/check_generator_shards.py --full='$(GENERATOR_FULL)' \
+	$(LABEL) generator-coverage env GODOT="$(GODOT)" python3 -B tools/dev/check_generator_shards.py --full='$(GENERATOR_FULL)' \
 		--shard='$(GENERATOR_1)' --shard='$(GENERATOR_2)' --shard='$(GENERATOR_3)' --shard='$(GENERATOR_4)'
 
 test-full-navigation: build
-	$(LABEL) navigation $(YIELD) "$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/bot_navigation_course.tscn -- --seeds=100
+	$(LABEL) navigation "$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/bot_navigation_course.tscn -- --seeds=100
 
 test-capacity: build ## Repeat the separate-client tested-capacity gate (three clean and three faulted matches)
 	tools/dev/capacity_acceptance.sh

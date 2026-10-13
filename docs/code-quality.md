@@ -68,15 +68,15 @@ status and the command; make then names the failed target. The jobs:
 | `test-full-generator-coverage` | `check_generator_shards.py`: the shards' `--list-seeds` listings hold exactly the 944 seeds of `--seeds=200 --large-seeds=100 --formation-seeds=6`, each once |
 | `test-full-lab-1`…`3` | `check_lab.py --full --only=…`: the void soak, the suburb soak, and the other five sessions |
 | `test-full-navigation` | 100 navigation seeds in one process, since its pass rate is over all of them |
-| `test-full-bots` | The rifle soak, duel lane and loading-readiness matches, one at a time: they share this checkout's `build/` names |
+| `test-full-bots` | The rifle soak, duel lane and loading-readiness matches, one at a time and after every other job: they share this checkout's `build/` names and run in real time |
 | `test-full-piles`, `test-full-range` | The deep awake pile trial; melee reloads, airborne recoil and the ten-magazine bot recoil run |
 | `test-full-menu` | The menu lifetime run, after `test-behavior`, whose port and `user://menu_test_settings.cfg` it shares |
 
 Every other deep job is offline and writes its own log names, so jobs never share a port, a settings file or an output
-path; all Godot processes of a checkout still append to its one `user://logs`, as under `make -j4 check`. The offline
-jobs run under `nice -n 19`: the bot matches run in real time, and on a machine with fewer threads than their processes
-plus the other jobs, starved clients drop to a few frames a second and fail the tank agreement check. Low priority only
-slows the offline jobs while the matches run; their results never depend on wall time. `-j` is not
+path; all Godot processes of a checkout still append to its one `user://logs`, as under `make -j4 check`. The bot
+matches run alone, after every other job: their server and clients run in real time, and beside other jobs on four
+CPUs, clients dropped to a few frames a second and failed tank agreement, and the loading-readiness match lost its
+stalled client far more often ([test-speed.md](test-speed.md#parallel-deep-sweeps)). `-j` is not
 the default: worktree agents share one machine, so each run chooses its own job count. Use `-j4` on a quiet machine,
 fewer when other worktrees are busy. To shard a sweep differently, change the `GENERATOR_*` or `LAB_*` variables in
 the Makefile; the coverage job and `lint_tests.py` reject a split that loses or repeats seeds or sessions.
