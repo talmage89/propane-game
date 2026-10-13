@@ -4,6 +4,7 @@ using System.Linq;
 using Godot;
 using Propane.Core;
 using Propane.Fx;
+using Propane.Modes;
 using Propane.Player;
 using Propane.Session;
 using Propane.Tank;
@@ -36,12 +37,6 @@ public partial class Match : Node3D
         Ended,
     }
 
-    private enum DropReason : byte
-    {
-        Hit,
-        Ragdoll,
-    }
-
     [Flags]
     private enum Impact : byte
     {
@@ -63,6 +58,11 @@ public partial class Match : Node3D
 
     private readonly Dictionary<int, PlayerProfile> profiles = new();
     private readonly Dictionary<int, int> scores = new();
+    private ModeDefinition mode = null!;
+    private IModeHudPresenter hudPresenter = null!;
+    private readonly ModeCommandOrder commandOrder = new();
+    private uint round = RoundInfo.First.RoundId;
+    private readonly uint worldRevision = RoundInfo.First.WorldRevision;
     private readonly Dictionary<uint, PropaneTank> tanks = new();
     private readonly HashSet<uint> exploded = new();
     private readonly HashSet<uint> predictedExplosions = new();
@@ -275,15 +275,28 @@ public partial class Match : Node3D
             groupRefresh = 0.25f;
             tankGroups = phase is Phase.Playing or Phase.Countdown ? TankGroups() : new List<Vector3>();
         }
-        hud.SetTankArrows(camera, tankGroups, tuning.TankArrows && phase is Phase.Playing or Phase.Countdown);
+        var shown = PresentHud(tankGroups, tuning.TankArrows);
+        hud.SetTankArrows(camera, shown.Objectives, shown.ObjectivesVisible);
         hud.Visible = !menuOpen;
         matchHud.Visible = !menuOpen;
 
-        matchHud.SetTimer(phase == Phase.Playing || phase == Phase.Ended ? timeLeft : -1);
+        matchHud.Show(shown);
         matchHud.SetAmmo(player.Ammo);
         matchHud.SetView(camera, player.GlobalPosition);
         matchHud.SetTags(ScoreTags(camera));
     }
+
+    private ModePhase ModePhase => phase switch
+    {
+        Phase.Loading => Modes.ModePhase.Loading,
+        Phase.Countdown => Modes.ModePhase.Countdown,
+        Phase.Playing => Modes.ModePhase.Round,
+        _ => Modes.ModePhase.Results,
+    };
+
+    /// <summary>The mode's HUD data for this peer's view; the local view adds crosshair, ammo and feedback.</summary>
+    private ModeHud PresentHud(IReadOnlyList<Vector3> objectives, bool showObjectives) =>
+        hudPresenter.Present(new ModeHudInput(player.ActorId, ModePhase, timeLeft, scores, objectives, showObjectives));
 
     /// <summary>Groups of live tanks (the plan's and dropped ones), for the arrows.</summary>
     private List<Vector3> TankGroups() => suburb.TankGroupCenters();
@@ -731,7 +744,7 @@ public partial class Match : Node3D
     {
         Send(ActorWriter(Msg.Ragdoll, actor).Vec3(at).Vec3(velocity).Vec3(spin));
         // Thrown: the bank spills where the player stood, whoever's blast it was.
-        DropTanks(actor, World.Tuning.RagdollDropCount, DropReason.Ragdoll, at + Vector3.Up * 0.35f, Vector3.Zero);
+        DropTanks(actor, World.Tuning.RagdollDropCount, SpillReason.Thrown, at + Vector3.Up * 0.35f, Vector3.Zero);
     }
 
     /// <summary>Another player's shot hit this player.</summary>
@@ -740,12 +753,13 @@ public partial class Match : Node3D
         if (victim == player) matchHud.AddHitDirection(shooterPosition);
         // The victim owns this gameplay grace; wire timestamps and interpolation remain monotonic.
         var now = World.Clock.Now;
-        if (phase != Phase.Playing || now < victim.Runtime.GraceUntil)
+        var tuning = World.Tuning;
+        var grace = victim.Runtime.GraceUntil;
+        if (phase != Phase.Playing || !TankBankRules.TryOpenGrace(now, ref grace, tuning.HitGraceTime))
         {
             return;
         }
-        var tuning = World.Tuning;
-        victim.Runtime.GraceUntil = now + tuning.HitGraceTime;
+        victim.Runtime.GraceUntil = grace;
         Vector3 origin;
         Vector3 away;
         if (victim.IsRagdolled)
@@ -759,27 +773,29 @@ public partial class Match : Node3D
             origin = victim.GlobalPosition + Vector3.Up * 0.45f + back * tuning.HitDropDistance;
             away = back;
         }
-        DropTanks(victim, tuning.HitDropCount, DropReason.Hit, origin, away);
+        DropTanks(victim, tuning.HitDropCount, SpillReason.Hit, origin, away);
     }
 
     /// <summary>
     /// Spills up to <paramref name="wanted"/> banked tanks around a point (never more than this player has banked),
-    /// owned by this player and shielded for a moment, and tells everyone.
+    /// owned by this player and shielded for a moment. This owner chooses the placements and predicts them at once;
+    /// the spill ticket (actor, life, action id) asks the server's rules to debit the bank.
     /// </summary>
-    private void DropTanks(PlayerCharacter actor, int wanted, DropReason reason, Vector3 origin, Vector3 away)
+    private void DropTanks(PlayerCharacter actor, int wanted, SpillReason reason, Vector3 origin, Vector3 away)
     {
         if (phase != Phase.Playing)
         {
             return;
         }
-        var count = Mathf.Min(wanted, Mathf.Max(0, scores.GetValueOrDefault(actor.ActorId) - actor.Runtime.DropPredictions.UnconfirmedCount));
+        var count = TankBankRules.SpillCount(wanted, scores.GetValueOrDefault(actor.ActorId), actor.Runtime.DropPredictions.UnconfirmedCount);
         if (count <= 0)
         {
             return;
         }
         var tuning = World.Tuning;
         var rng = new RandomNumberGenerator();
-        var w = ActorWriter(Msg.Drop, actor).Byte((byte)reason).Int(count);
+        var ticket = checked(++actor.Runtime.ActionSequence);
+        var placements = new List<BodyState>(count);
         var start = rng.RandfRange(0, Mathf.Tau);
         var safeFrom = actor.IsRagdolled ? actor.PelvisPosition + Vector3.Up * 0.2f : actor.GlobalPosition + Vector3.Up * 0.9f;
         for (var i = 0; i < count; i++)
@@ -797,9 +813,13 @@ public partial class Match : Node3D
             var id = actor.Runtime.AllocateDropId();
             actor.Runtime.DropPredictions.Add(id);
             SpawnDroppedTank(id, actor.ActorId, transform, velocity, spin);
-            w.UInt(id).Transform(transform).Vec3(velocity).Vec3(spin).UInt(1).UInt(0);
+            placements.Add(new BodyState(id, transform, velocity, spin, 1, 0));
         }
-        Send(w);
+        if (World.IsAlive)
+        {
+            Net.Send(MessageCodec.Encode(new NetMessage(Msg.ModeEvent, Setup.Id, 0, new ModeEnvelope(round, worldRevision, mode.Id,
+                mode.SchemaVersion, actor.ActorId, actor.LifeId, ticket, ModeSchemas.TankBankKinds.Spill, new TankBankSpill(reason, placements))), fromServer: false));
+        }
     }
 
     /// <summary>Pulls a drop point back toward a known clear point if a wall or prop is in the way, and keeps it above the ground.</summary>
@@ -951,26 +971,8 @@ public partial class Match : Node3D
             case Msg.Clock:
                 if (phase == Phase.Playing) { timeLeft = ((FloatMessage)message.Payload).Value; }
                 break;
-            case Msg.Score:
-                var update = (ScoreMessage)message.Payload;
-                scores[update.Player] = update.Score;
-                if (update.Player == player.ActorId)
-                {
-                    matchHud.SetScore(update.Score, update.Delta > 0);
-                    if (update.Delta > 0) { matchHud.AddScorePopup(update.Delta); }
-                }
-                if (update.Delta < 0 && Actor(update.Player) is { IsRemote: false } scored)
-                    scored.Runtime.DropPredictions.ScoreConfirmed(update.Delta);
-                break;
-            case Msg.DropRefused:
-                foreach (var id in Session.OwnedActors.SelectMany(a => a.DropPredictions.Refused(((DropRefusedMessage)message.Payload).Ids)))
-                {
-                    if (!tanks.Remove(id, out var refused)) { continue; }
-                    bodies.Remove(id);
-                    refused.Punctured -= OnTankPunctured;
-                    refused.Detonated -= OnTankDetonated;
-                    refused.QueueFree();
-                }
+            case Msg.ModeCommand or Msg.ModeSnapshot:
+                OnMode((ModeEnvelope)message.Payload);
                 break;
             case Msg.PickupTaken:
                 var take = (PickupMessage)message.Payload;
@@ -993,7 +995,7 @@ public partial class Match : Node3D
                 timeLeft = 0;
                 foreach (var actor in Session.OwnedActors) actor.Character.InputLocked = true;
                 endLeft = tuning.ResultsTime;
-                results.Show(standings, player.ActorId, tuning.ResultsTime);
+                results.Show(standings, player.ActorId, tuning.ResultsTime, PresentHud(Array.Empty<Vector3>(), false).Columns);
                 break;
             case Msg.PlayerLeft:
                 var left = (PlayerLeftMessage)message.Payload;
@@ -1005,6 +1007,55 @@ public partial class Match : Node3D
                 bodies.Host = left.Host;
                 break;
         }
+    }
+
+    /// <summary>
+    /// Mode commands and snapshots from the server, in command order: duplicates and overtaken ids are dropped, and
+    /// only this run's schema and world revision apply. Round ids only move forward.
+    /// </summary>
+    private void OnMode(ModeEnvelope envelope)
+    {
+        if (envelope.ModeId != mode.Id || envelope.SchemaVersion != mode.SchemaVersion || envelope.WorldRevision != worldRevision ||
+            envelope.RoundId < round || !commandOrder.Accept(envelope.EventId)) { return; }
+        round = envelope.RoundId;
+        switch (envelope.Payload)
+        {
+            case TankBankScore score:
+                ApplyScore(envelope.ActorId, score.Score, score.Delta);
+                break;
+            case TankBankBanks banks:
+                foreach (var (actor, bank, _) in banks.Banks) ApplyScore(actor, bank, 0);
+                break;
+            case TankBankSpill spill:
+                // The committed spill reaches everyone, its owner included: confirmation clears pending ids without
+                // spawning them twice.
+                if (Actor(envelope.ActorId) is not { } source || source.LifeId != envelope.LifeId) break;
+                if (!source.IsRemote) source.Runtime.DropPredictions.Accepted(spill.Tanks.Select(t => t.Id));
+                foreach (var body in spill.Tanks) { SpawnDroppedTank(body.Id, envelope.ActorId, body.Transform, body.Linear, body.Angular); }
+                break;
+            case TankBankRefused refusedSpill:
+                foreach (var id in Session.OwnedActors.SelectMany(a => a.DropPredictions.Refused(refusedSpill.Ids)))
+                {
+                    if (!tanks.Remove(id, out var refused)) { continue; }
+                    bodies.Remove(id);
+                    refused.Punctured -= OnTankPunctured;
+                    refused.Detonated -= OnTankDetonated;
+                    refused.QueueFree();
+                }
+                break;
+        }
+    }
+
+    private void ApplyScore(int actorId, int score, int delta)
+    {
+        scores[actorId] = score;
+        if (actorId == player.ActorId)
+        {
+            matchHud.Show(PresentHud(tankGroups, World.Tuning.TankArrows), delta > 0);
+            if (delta > 0) { matchHud.AddScorePopup(delta); }
+        }
+        if (delta < 0 && Actor(actorId) is { IsRemote: false } scored)
+            scored.Runtime.DropPredictions.ScoreConfirmed(delta);
     }
 
     private PlayerCharacter? Actor(int id) => Session.Actor(id)?.Character;
@@ -1084,10 +1135,6 @@ public partial class Match : Node3D
                 break;
             case GatherMessage gathering:
                 ReceiveGather(sender, gathering);
-                break;
-            case DropMessage drop:
-                if (source is { IsRemote: false }) source.Runtime.DropPredictions.Accepted(drop.Tanks.Select(t => t.Id));
-                foreach (var body in drop.Tanks) { SpawnDroppedTank(body.Id, message.ActorId, body.Transform, body.Linear, body.Angular); }
                 break;
             case RagdollMessage ragdoll:
                 remote?.Character.RemoteRagdoll(ragdoll.Position, ragdoll.Velocity, ragdoll.Spin);

@@ -1,0 +1,12 @@
+# The sandbox has no score, refuses spills and never gates the world.
+mode sandbox
+actors 1=0
+phase round ends=0
+expect last none
+expect open true
+detonate 1 map
+expect last none
+spill 1 1 hit 1
+expect last canceled 1/1 closed
+phase roundend
+expect last end match

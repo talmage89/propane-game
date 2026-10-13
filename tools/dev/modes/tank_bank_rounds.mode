@@ -1,0 +1,21 @@
+# Repeated matches in one lobby start fresh; tickets and lives are per match.
+mode tankbank
+tune HitDropCount=1 RagdollDropCount=5 HitGraceTime=0.5
+actors 1=0 2=0
+phase round ends=10
+detonate 2 map
+spill 2 1 hit 1
+register 2 1
+expect audit initial=0 map=1 drops=0 spills=1 banked=0 expected=0 ok=True
+phase roundend
+expect last end match
+actors 1=2 2=0
+phase round ends=20
+expect last snapshot
+expect bank 1=2 2=0
+spill 1 1 hit 1 life=2
+register 1 1 life=2
+expect last score 1 1 -1; committed 1/1 hit 1
+join 4=3
+expect standings 4=3 1=1 2=0
+expect audit initial=5 map=0 drops=0 spills=1 banked=4 expected=4 ok=True

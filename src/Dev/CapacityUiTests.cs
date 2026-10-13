@@ -46,7 +46,7 @@ public partial class CapacityUiTests : Node
             menus.Show(Menus.Screen.None);
             var standings = profiles.Select((p, i) => new Standing(p.Id, p.Name, p.Appearance, count - i,
                 i != count - 1)).ToArray();
-            results.Show(standings, profiles[0].Id, 30);
+            results.Show(standings, profiles[0].Id, 30, new[] { Modes.TankBankHud.Column });
             await Frames(12).ConfigureAwait(true);
             AssertPanels(results);
             foreach (var name in results.FindChildren("*", "Label", owned: false).OfType<Label>().Where(l => l.Text.Contains("Participant") || l.Text.Contains("Creator")))

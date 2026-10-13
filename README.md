@@ -42,7 +42,8 @@ Requires Godot 4.7.2 (.NET edition) and the .NET 10 SDK.
 - Quality gate: `make lint` verifies C# formatting and rebuilds with warnings as errors. `make check` runs lint,
   then `make test`. Run it before submitting a change. `tools/dev/check_world.sh` prints log tails and keeps its
   scratch directory on failure. GitHub Actions runs the same checks on pushes to `dev`
-  and every pull request.
+  and every pull request. `make -j4 test-full` adds the deep sweeps as parallel jobs, each line prefixed with its job's
+  name; plain `make test-full` runs the same jobs one at a time.
 
 [docs/code-quality.md](docs/code-quality.md) describes the formatting and analyzer baseline and its regression
 checks. The gate follows the existing code's style and checks correctness without API design or naming churn.
@@ -168,7 +169,8 @@ invalid settings fail generation instead of placing players on top of one anothe
 | --- | --- |
 | `src/Main.cs` | The root: menus over their backdrop, then single player, Lab, a match, or the server. |
 | `src/Game.cs` | Single player: the void, player, HUD, menus, and the suburb swap with its dissolve and materialize. |
-| `src/Net` | Multiplayer: the server, the client connection, the match world, body sync, ammo pickups. |
+| `src/Net` | Multiplayer: the server, the client connection, the match world, body sync, ammo pickups, the mode runner and envelope. |
+| `src/Modes` | Pure mode rules (Sandbox, Tank Bank), mode definitions, phases and HUD presenters ([modes](docs/modes.md)). |
 | `src/Lab`, `src/Bots` | Shipped Lab scenarios, local bank adapter and camera-free banking brain. |
 | `src/Session` | Ordered session assembly, actors, local views and retirement. |
 | `src/Core` | Tuning, input map, physics and render layers, shared assets, events, spawn roots. |
@@ -227,8 +229,10 @@ $GODOT --headless res://scenes/dev/movement_tests.tscn
 
 # Generator: exact determinism and encoding, authored hull overlaps and tier supports, placement and reachability,
 # all four formations, and supply/start safety at 2, 8, 16, 24 and 32 players. Exits 1 on failure.
-# make test uses bounded sweeps; make test-full retains the deep seed coverage.
+# make test uses bounded sweeps; make test-full retains the deep seed coverage in four seed-range shards.
 $GODOT --headless res://scenes/dev/generator_tests.tscn -- --seeds=200
+# --first-seed, --first-large-seed and --first-formation-seed start each sweep's range; --list-seeds lists its seeds.
+$GODOT --headless res://scenes/dev/generator_tests.tscn -- --first-seed=51 --seeds=50 --large-seeds=0 --formation-seeds=0
 
 # Bot navigation: real picket/privacy fences, gates, bins, cars, piles, houses and touching-fence recovery.
 # Asserts >=95% success, walking through a direct gate, planned fence jumps and tank clearance.

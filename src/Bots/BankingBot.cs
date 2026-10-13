@@ -10,14 +10,14 @@ using Propane.Tank;
 namespace Propane.Bots;
 
 /// <summary>
-/// A bot player for matches. It plays the tank bank to win rather than to test:
+/// Tank Bank's bot goal policy. It plays the tank bank to win rather than to test:
 /// - it sets tanks off from outside their throw radius (wider for a pile, whose chain reaction reaches further);
 /// - it runs from venting tanks that come close;
 /// - it shoots players only when they have tanks to spill, and then sets off what they spilled;
 /// - it prefers venting tanks (one shot from a point) and big piles, especially piles with another player near them;
 /// - it strafes in a fight, keeps its magazine topped up when nothing is happening, and fetches ammo when low.
 /// </summary>
-public sealed class BankingBot : IPlayerInputSource, System.IDisposable
+public sealed class BankingBot : IBotGoalPolicy
 {
     private const float RetargetInterval = 0.35f;
     private const float PlayerRange = 38f;
@@ -76,7 +76,7 @@ public sealed class BankingBot : IPlayerInputSource, System.IDisposable
         return read;
     }
 
-    public void Think(IBankingBotWorld match, float dt)
+    public void Think(IBotWorld match, float dt)
     {
         tuning = match.World.Tuning;
         clock += dt;
@@ -241,7 +241,7 @@ public sealed class BankingBot : IPlayerInputSource, System.IDisposable
     // ------------------------------------------------------------------ Choosing
 
     /// <summary>Holding a bank worth keeping: leading with a few, or holding several late in the match.</summary>
-    private static bool Protecting(IBankingBotWorld match)
+    private static bool Protecting(IBotWorld match)
     {
         var mine = match.MyScore;
         var best = match.Scores.Where(s => s.Key != match.Player.ActorId).Select(s => s.Value).DefaultIfEmpty(0).Max();
@@ -257,7 +257,7 @@ public sealed class BankingBot : IPlayerInputSource, System.IDisposable
         }
     }
 
-    private Node3D? Choose(IBankingBotWorld match, AmmoState ammo)
+    private Node3D? Choose(IBotWorld match, AmmoState ammo)
     {
         var player = match.Player;
         var here = player.GlobalPosition;
@@ -343,7 +343,7 @@ public sealed class BankingBot : IPlayerInputSource, System.IDisposable
 
     // ------------------------------------------------------------------ Acting
 
-    private void Fight(IBankingBotWorld match, PlayerCharacter player, PlayerCharacter enemy, float dt)
+    private void Fight(IBotWorld match, PlayerCharacter player, PlayerCharacter enemy, float dt)
     {
         var distance = enemy.GlobalPosition.DistanceTo(player.GlobalPosition);
         if (enemy != fightTarget)
@@ -385,7 +385,7 @@ public sealed class BankingBot : IPlayerInputSource, System.IDisposable
         Status = $"fighting {enemy.ActorId} at {distance:0.0} m, error {error:0.00} m, firing {firing}";
     }
 
-    private void Demolish(IBankingBotWorld match, PlayerCharacter player, PropaneTank tank, float dt)
+    private void Demolish(IBotWorld match, PlayerCharacter player, PropaneTank tank, float dt)
     {
         var here = player.GlobalPosition;
         var center = tank.GlobalTransform * PropaneTank.LocalCenter;
@@ -616,7 +616,7 @@ public sealed class BankingBot : IPlayerInputSource, System.IDisposable
     private static bool VisibleFrom(PlayerCharacter player, Vector3 eye, Vector3 point) =>
         player.World.Physics.DirectSpaceState.IntersectRay(PhysicsRayQueryParameters3D.Create(eye, point, Layers.World | Layers.Props)).Count == 0;
 
-    private void Navigate(IBankingBotWorld match, float dt)
+    private void Navigate(IBotWorld match, float dt)
     {
         var player = match.Player;
         if (navigationGoal == null)

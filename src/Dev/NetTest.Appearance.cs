@@ -95,7 +95,8 @@ public partial class NetTest
             toward.Y = 0;
             var at = match.Player.GlobalPosition + toward.Normalized() * 1.3f;
             var body = new BodyState(BodySync.DropTankId(own.Player.AllocationSlot, 900000), new Transform3D(Basis.Identity, at), Vector3.Zero, Vector3.Zero);
-            net.Send(MessageCodec.Encode(new NetMessage(Msg.Drop, match.Setup.Id, 0, new DropMessage(0, new[] { body }), match.Player.ActorId, match.Player.LifeId, checked(++match.Player.Runtime.ActionSequence)), false));
+            net.Send(MessageCodec.Encode(new NetMessage(Msg.ModeEvent, match.Setup.Id, 0, new ModeEnvelope(1, 1, Modes.ModeRegistry.TankBankId, 1, match.Player.ActorId,
+                match.Player.LifeId, checked(++match.Player.Runtime.ActionSequence), ModeSchemas.TankBankKinds.Spill, new TankBankSpill(Modes.SpillReason.Hit, new[] { body }))), false));
         }
         if (!appearanceGlowChecked && appearanceTime >= 2.5f)
         {

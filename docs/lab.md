@@ -41,15 +41,18 @@ on resume. No socket or server is created by the Lab.
 
 `LabScenarios.All` is the compiled registry: id, name, description, allowed environments and a setup callback.
 The callback runs after the source builds content and before actors/views enter. Later prototypes register here;
-this package introduces no health, teams, mode runner, boundary policy or streamed segments.
+each scenario names a registered mode ([modes.md](modes.md)): the duel plays Tank Bank and the other starters play
+Sandbox, taking supply and ammo policy from it. There is still no health, teams, boundary policy or streamed
+segments.
 
 `VoidWorldSource` and `SuburbWorldSource` implement the existing `ISessionWorldSource` seam. The factory needs no
 source-specific branches. A later streaming implementation can build and retire content roots with
 `WorldContext.RetireContent`; it owns segment policy rather than teaching the factory about segments.
 
-`LocalBank` adapts actor/tank events locally. `ShotImpacting` attributes a direct tank contact before lifecycle
+`LocalBank` is an offline Tank Bank runner: it feeds `TankBankRules` attributed detonations, spill tickets and its
+clock, and spawns the spilled tanks between reservation and commit. It adapts actor/tank events locally. `ShotImpacting` attributes a direct tank contact before lifecycle
 callbacks run; `BlastRequest`/`ChainCause` carry local causal actor keys through the existing chain path. The brain
-reads an actor-specific `IBankingBotWorld`, with scores and hit attribution keyed by actor id. The Lab uses a
+reads an actor-specific `IBotWorld`, with scores and hit attribution keyed by actor id. The Lab uses a
 simulation clock; its Protocol 2 dev adapter uses the existing monotonic clock. Both local actors share one owner
 peer and retain separate banks. The factory and session retain ordered teardown on reset, exit and partial failure.
 
@@ -60,6 +63,8 @@ aim-stall probe and a 15-second scripted duel. It requires a success marker, exi
 `--full` performs 10 entry/reset/exit cycles for all six pairs, sweeps every layout dial to both slider ends and all
 at once through every scenario and environment (`--scenario=dials`), and runs 180-second bot-versus-bot soaks in both
 environments, each of which must bank at least ten tanks. Both are wired into `make test` / `make test-full`.
+`--only=soak-void,dials` runs only the named sessions (`lifetime`, `rules`, `aimstall`, `duel`, and with `--full`
+`dials`, `soak-void`, `soak-suburb`); `make test-full` splits `--full` into three such jobs.
 `--scenario=aimstall` puts a shot-stopping prop in front of the bot and asserts it leaves the pile.
 
 `menu_test --scenario=input` injects real keyboard, mouse and controller events through Lab menus, movement/combat,

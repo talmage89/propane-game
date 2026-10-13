@@ -25,7 +25,6 @@ public sealed record WelcomeMessage(int Id, string? Version);
 public sealed record RejectedMessage(string Reason, string? Version);
 public sealed record ProfileMessage(string Name, AppearanceRecord Appearance);
 public sealed record LobbyListMessage(int Capacity, IReadOnlyList<LobbySummary> Lobbies);
-public sealed record ScoreMessage(int Player, int Score, int Delta);
 public sealed record PickupMessage(int Index, int Player);
 public sealed record PlayerLeftMessage(int Player, int Host);
 public sealed record PongMessage(double Sent, double ServerTime);
@@ -44,8 +43,6 @@ public sealed record BodyState(uint Id, Transform3D Transform, Vector3 Linear, V
 public sealed record BodyStatesMessage(double Time, IReadOnlyList<BodyState> Bodies);
 public sealed record BodyRestMessage(uint Id, Transform3D Transform, double Time, uint Epoch = 1, uint Sequence = 1);
 public sealed record GatherMessage(GatherPhase Phase, IReadOnlyList<BodyState> Bodies);
-public sealed record DropMessage(byte Reason, IReadOnlyList<BodyState> Tanks);
-public sealed record DropRefusedMessage(IReadOnlyList<uint> Ids);
 public sealed record RagdollMessage(Vector3 Position, Vector3 Velocity, Vector3 Spin);
 public sealed record GetUpMessage(Vector3 Position, float Yaw);
 public sealed record TuningMessage(string Name, Variant Value);
@@ -61,7 +58,7 @@ public static class MessageCodec
         if (data.Length == 0 || data.Length > Protocol.MaxPacketBytes) { throw new InvalidDataException("bad packet size"); }
         var type = (Msg)data[0];
         var relay = Protocol.IsRelay(type);
-        if (!(fromServer ? type is >= Msg.Welcome and <= Msg.ActorRequestResult || relay : type is >= Msg.Hello and <= Msg.RemoveActor || relay))
+        if (!(fromServer ? type is >= Msg.Welcome and <= Msg.ModeSnapshot || relay : type is >= Msg.Hello and <= Msg.ModeEvent || relay))
         {
             throw new InvalidDataException($"unknown or wrong-direction message {(byte)type}");
         }
@@ -95,7 +92,6 @@ public static class MessageCodec
             Msg.MatchStart => ReadSetup(r, matchId),
             Msg.Countdown => new FloatMessage(Range(r.Float(), 0, 10)),
             Msg.MatchGo or Msg.Clock => new FloatMessage(Range(r.Float(), 0, 3600)),
-            Msg.Score => new ScoreMessage(Positive(r.Int()), Nonnegative(r.Int()), r.Int()),
             Msg.Notice => new TextMessage(r.String()),
             Msg.PickupTaken => new PickupMessage(Nonnegative(r.Int()), Positive(r.Int())),
             Msg.PickupRespawn => new IntMessage(Nonnegative(r.Int())),
@@ -103,7 +99,6 @@ public static class MessageCodec
                 new Standing(Positive(r.Int()), r.String(), r.Appearance(), Nonnegative(r.Int()), r.Bool()), min: 1),
             Msg.PlayerLeft => new PlayerLeftMessage(Positive(r.Int()), Positive(r.Int())),
             Msg.Pong => new PongMessage(Time(r.Double()), Time(r.Double())),
-            Msg.DropRefused => new DropRefusedMessage(Unique(ReadArray(r, r.UShort(), Protocol.MaxCollection, () => Id(r.UInt()), min: 1))),
             Msg.Authority => ReadAuthority(r),
             Msg.PlayerState => ReadPlayerState(r),
             Msg.Shot => ReadShot(r),
@@ -115,14 +110,16 @@ public static class MessageCodec
             Msg.Gather => ReadGather(r),
             Msg.BodyStates => ReadStates(r),
             Msg.BodyRest => new BodyRestMessage(Id(r.UInt()), Transform(r), Time(r.Double()), Id(r.UInt()), Id(r.UInt())),
-            Msg.Drop => ReadDrop(r),
             Msg.Ragdoll => new RagdollMessage(Vector(r), Vector(r), Vector(r)),
             Msg.GetUp => new GetUpMessage(Vector(r), Range(r.Float(), -1_000_000, 1_000_000)),
             Msg.TuningSet => ReadTuning(r),
+            Msg.ModeEvent or Msg.ModeCommand or Msg.ModeSnapshot => ModeSchemas.Read(r, type),
             _ => throw new InvalidDataException("unsupported message"),
         };
         // These three handshakes may gain trailing fields, even across incompatible protocols.
         if (type is not (Msg.Hello or Msg.Welcome or Msg.Rejected)) { r.End(); }
+        // A client event's reporter and actor-local sequence live in its envelope; expose them like any actor action.
+        if (payload is ModeEnvelope { } reported && type == Msg.ModeEvent) { (actor, life, action) = (reported.ActorId, reported.LifeId, reported.EventId); }
         return new NetMessage(type, matchId, sender, payload, actor, life, action);
     }
 
@@ -169,8 +166,8 @@ public static class MessageCodec
                 foreach (var peer in p.Peers) w.Int(peer.PeerId).Bool(peer.DebugTuning);
                 w.Int(p.Players.Count);
                 foreach (var (player, spawn) in p.Players) { WriteProfile(w, player).Int(spawn); }
+                w.Byte(p.ModeId).UShort(p.ModeSchema);
                 break;
-            case ScoreMessage p: w.Int(p.Player).Int(p.Score).Int(p.Delta); break;
             case PickupMessage p: w.Int(p.Index).Int(p.Player); break;
             case IReadOnlyList<Standing> p:
                 w.Int(p.Count);
@@ -214,15 +211,10 @@ public static class MessageCodec
                 w.Double(p.Time).UShort((ushort)p.Bodies.Count); foreach (var body in p.Bodies) { WriteBody(w, body); }
                 break;
             case BodyRestMessage p: w.UInt(p.Id).Transform(p.Transform).Double(p.Time).UInt(p.Epoch).UInt(p.Sequence); break;
-            case DropMessage p:
-                w.Byte(p.Reason).Int(p.Tanks.Count); foreach (var body in p.Tanks) { WriteBody(w, body); }
-                break;
-            case DropRefusedMessage p:
-                w.UShort((ushort)p.Ids.Count); foreach (var id in p.Ids) { w.UInt(id); }
-                break;
             case RagdollMessage p: w.Vec3(p.Position).Vec3(p.Velocity).Vec3(p.Spin); break;
             case GetUpMessage p: w.Vec3(p.Position).Float(p.Yaw); break;
             case TuningMessage p: w.String(p.Name).Scalar(p.Value); break;
+            case ModeEnvelope p: ModeSchemas.Write(w, message.Type, p); break;
             default: throw new InvalidDataException("unsupported message payload");
         }
         return w.ToArray();
@@ -275,6 +267,8 @@ public static class MessageCodec
         Unique(players.Select(p => p.Item2).ToArray());
         if (!players.Any(p => p.Item1.OwnerPeerId == host)) { throw new InvalidDataException("host missing from match"); }
         Unique(players.Select(p => p.Item1.AllocationSlot).ToArray());
+        var mode = r.Byte(); var schema = r.UShort();
+        if (Modes.ModeRegistry.Find(mode, schema) == null) { throw new InvalidDataException($"unknown mode schema {mode}/{schema}"); }
         if (players.Any(p => !p.Item1.Present || !peers.Any(peer => peer.PeerId == p.Item1.OwnerPeerId)) ||
             !peers.Any(p => p.PeerId == creator) || peers.Any(p => p.DebugTuning && (p.PeerId != creator || !debug)))
         {
@@ -286,7 +280,7 @@ public static class MessageCodec
         {
             throw new InvalidDataException("match players and plan starts disagree");
         }
-        return new MatchSetup(matchId, plan, host, debug, length, tuning, players) { RosterRevision = revision, CreatorId = creator, Peers = peers };
+        return new MatchSetup(matchId, plan, host, debug, length, tuning, players) { RosterRevision = revision, CreatorId = creator, Peers = peers, ModeId = mode, ModeSchema = schema };
     }
 
     private static PlayerProfile ReadProfile(NetReader r)
@@ -380,12 +374,6 @@ public static class MessageCodec
         return new BodyStatesMessage(time, bodies);
     }
 
-    private static DropMessage ReadDrop(NetReader r)
-    {
-        var reason = (byte)Range(r.Byte(), 0, 1); var count = r.Int();
-        return new DropMessage(reason, ReadBodies(r, count, Protocol.MaxCollection));
-    }
-
     private static BodyState[] ReadBodies(NetReader r, int count, int max)
     {
         var bodies = ReadArray(r, count, max, () => ReadBody(r), min: 1);
@@ -452,8 +440,8 @@ public static class MessageCodec
         WriteController(w, p.ControllerConfig);
         return w.Bool(p.Present).Int(p.AllocationSlot).UInt(p.LifeId);
     }
-    private static BodyState ReadBody(NetReader r) => new(Id(r.UInt()), Transform(r), Vector(r), Vector(r), Id(r.UInt()), r.UInt());
-    private static void WriteBody(NetWriter w, BodyState p) => w.UInt(p.Id).Transform(p.Transform).Vec3(p.Linear).Vec3(p.Angular).UInt(p.Epoch).UInt(p.Sequence);
+    internal static BodyState ReadBody(NetReader r) => new(Id(r.UInt()), Transform(r), Vector(r), Vector(r), Id(r.UInt()), r.UInt());
+    internal static void WriteBody(NetWriter w, BodyState p) => w.UInt(p.Id).Transform(p.Transform).Vec3(p.Linear).Vec3(p.Angular).UInt(p.Epoch).UInt(p.Sequence);
 
     private static ClaimMessage ReadClaim(NetReader r)
     {

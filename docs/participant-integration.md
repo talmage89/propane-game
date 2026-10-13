@@ -1,6 +1,8 @@
-**DO NOT MERGE**
-
 # Participant integration review
+
+Merged into `dev` at `3a204a8` over this review's strict verdict: its failing active-agreement tails (2.15 s and
+2.05 s against the 2.0 s bound) also occur on stock `dev` (5.05 s on the same seed). The lead's paired faulted soaks
+(match seeds 24–27) passed 8 of 8 with zero errors. The remaining tails are tracked as separate network work.
 
 Reverification on October 12, 2026, after merging `dev` at `729c8c8` (including Lab `8516ad8`). The October 11 report is
 preserved in commit `cdf422a` and its `build/va6-*` logs. The staged capacity gate passes, but the required

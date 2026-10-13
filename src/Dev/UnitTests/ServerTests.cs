@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Godot;
 using Propane.Core;
+using Propane.Modes;
 using Propane.Net;
 using Propane.Tank;
 
@@ -84,7 +85,7 @@ public static class ServerTests
             f.Reject(f.Drop(new[] { first, first }));
             f.Receive(f.Drop(new[] { first, second }));
             f.AssertScore(2, 2, -2);
-            TestRunner.Assert(f.Packets.Any(p => p.Message.Payload is DropMessage), "drop was not relayed");
+            TestRunner.Assert(f.Packets.Any(p => ModeWireFixtures.AcceptedSpill(p.Message) != null), "drop was not relayed");
             f.Receive(new NetWriter(Msg.Explode, f.Id).UInt(first.Id).Vec3(Vector3.One).UInt(1).UInt(1).UInt(0));
             f.AssertScore(2, 3, 1);
             f.Reject(f.Drop(new[] { first }));
@@ -93,8 +94,8 @@ public static class ServerTests
         runner.Run("server/drop counts cannot raise scores or exceed bank and tuner", () =>
         {
             using var f = new Fixture();
-            f.Reject(new NetWriter(Msg.Drop, f.Id).Byte(0).Int(-1).ToArray());
-            f.Reject(new NetWriter(Msg.Drop, f.Id).Byte(0).Int(0).ToArray());
+            f.Reject(f.RawSpill(0, 0));
+            f.Reject(f.RawSpill(0, ModeSchemas.MaxSpill + 1));
             f.Reject(f.Drop(Enumerable.Range(0, 5).Select(i => DropBody(0, i)).ToArray()));
             f.Reject(f.Drop(new[] { DropBody(0, 0), DropBody(0, 1) }, reason: 0));
             f.Receive(f.Drop(new[] { DropBody(0, 0) }));
@@ -111,8 +112,8 @@ public static class ServerTests
             f.Packets.Clear();
             // Production polls incoming packets before advancing phases on this process frame.
             f.Receive(f.Drop(new[] { DropBody(0, 0) }));
-            TestRunner.Assert(f.Packets.Single() is { Peer: 2, Message.Payload: DropRefusedMessage reply } &&
-                reply.Ids.SequenceEqual(new[] { DropBody(0, 0).Id }), "expired clock accepted a predicted drop");
+            TestRunner.Assert(f.Packets.Single() is { Peer: 2 } only && ModeWireFixtures.Refused(only.Message) is { } reply &&
+                reply.SequenceEqual(new[] { DropBody(0, 0).Id }), "expired clock accepted a predicted drop");
             f.Packets.Clear();
             f.Advance();
             TestRunner.Assert(f.Packets.Select(p => p.Message.Payload).OfType<IReadOnlyList<Standing>>().First().All(s => s.Score == 4),
@@ -218,7 +219,7 @@ public static class ServerTests
             TestRunner.Assert(f.Packets.Any(p => p.Peer == 3 && p.Message.Payload is PlayerLeftMessage { Player: 2, Host: 3 }),
                 "creator departure did not identify the successor");
             f.Packets.Clear();
-            f.Receive(f.Drop(new[] { DropBody(1, 0) }), peer: 3);
+            f.Receive(f.Drop(new[] { DropBody(1, 0) }, peer: 3), peer: 3);
             f.AssertScore(3, 3, -1);
             f.Advance(20);
             var standings = f.Packets.Select(p => p.Message.Payload).OfType<IReadOnlyList<Standing>>().Single();
@@ -232,13 +233,13 @@ public static class ServerTests
             f.Packets.Clear();
             // This batch fit the former count of five when the victim sent it. The creator's tuning arrived first.
             f.Receive(f.Drop(new[] { DropBody(0, 0), DropBody(0, 1) }));
-            TestRunner.Assert(f.Packets.Count == 1 && f.Packets[0] is { Peer: 2, Message.Payload: DropRefusedMessage reply } &&
-                reply.Ids.SequenceEqual(new[] { DropBody(0, 0).Id, DropBody(0, 1).Id }),
+            TestRunner.Assert(f.Packets.Count == 1 && f.Packets[0] is { Peer: 2 } only && ModeWireFixtures.Refused(only.Message) is { } reply &&
+                reply.SequenceEqual(new[] { DropBody(0, 0).Id, DropBody(0, 1).Id }),
                 "refused prediction had no reply and could leave phantom tanks");
             f.Packets.Clear();
             f.Receive(f.Drop(new[] { DropBody(0, 2) }));
             f.AssertScore(2, 3, -1);
-            TestRunner.Assert(f.Packets.Any(p => p is { Peer: 2, Message.Sender: 2, Message.Payload: DropMessage }),
+            TestRunner.Assert(f.Packets.Any(p => p.Peer == 2 && ModeWireFixtures.AcceptedSpill(p.Message) != null),
                 "accepted prediction did not confirm its ids to the sender");
         });
         runner.Run("server/tuning requires original debug creator", () =>
@@ -299,9 +300,9 @@ public static class ServerTests
         public readonly int Id;
         public readonly MatchSetup Setup;
 
-        public Fixture(bool debug = true, bool playing = true, int bots = 0, Func<ParticipantRoster>? rosterFactory = null)
+        public Fixture(bool debug = true, bool playing = true, int bots = 0, Func<ParticipantRoster>? rosterFactory = null, ModeDefinition? mode = null)
         {
-            Server = new LobbyServer(PacketTransports.CreateServer(), Clock) { StartScore = 4 };
+            Server = new LobbyServer(PacketTransports.CreateServer(), Clock) { StartScore = 4, LobbyMode = mode ?? ModeRegistry.TankBank };
             if (rosterFactory != null) Server.RosterFactory = rosterFactory;
             Server.SendOverride = (peer, bytes, _) => Packets.Add((peer, MessageCodec.Decode(bytes, true)));
             for (var peer = 2; peer <= 3; peer++)
@@ -374,20 +375,31 @@ public static class ServerTests
                 TestRunner.Assert(authority.Request == request && authority.Peer == peer, "refusal changed its request identity");
                 return;
             }
-            if (Packets.Count == 1 && Packets[0] is { Message.Payload: DropRefusedMessage reply } && Packets[0].Peer == peer)
+            if (Packets.Count == 1 && ModeWireFixtures.Refused(Packets[0].Message) is { } reply && Packets[0].Peer == peer)
             {
-                // Only a fully decoded Drop may receive a refusal. Malformed packets must emit nothing.
-                var drop = MessageCodec.Decode(bytes, false).Payload as DropMessage;
-                TestRunner.Assert(drop != null && reply.Ids.SequenceEqual(drop.Tanks.Select(t => t.Id)), "refusal changed the predicted ids");
+                // Only a fully decoded spill may receive a refusal. Malformed packets must emit nothing.
+                var drop = (MessageCodec.Decode(bytes, false).Payload as ModeEnvelope)?.Payload as TankBankSpill;
+                TestRunner.Assert(drop != null && reply.SequenceEqual(drop.Tanks.Select(t => t.Id)), "refusal changed the predicted ids");
             }
             else
             {
                 TestRunner.Assert(Packets.Count == 0, $"invalid {(bytes.Length > 0 ? ((Msg)bytes[0]).ToString() : "empty")} mutated or relayed {Packets.Count} packets");
             }
         }
-        public byte[] Drop(IReadOnlyList<BodyState> tanks, byte reason = 1) => MessageCodec.Encode(new NetMessage(Msg.Drop, Id, 0, new DropMessage(reason, tanks)), false);
-        public void AssertScore(int player, int score, int delta) => TestRunner.Assert(Packets.Any(p => p.Message.Payload is ScoreMessage s &&
-            s.Player == ActorId(player) && s.Score == score && s.Delta == delta), $"expected score {score}, delta {delta}");
+        private uint NextAction(int peer)
+        {
+            var action = actions.GetValueOrDefault(peer) + 1;
+            actions[peer] = action;
+            return action;
+        }
+        /// <summary>A spill ticket from this peer's actor, sharing its action sequence with its other actor messages.</summary>
+        public byte[] Drop(IReadOnlyList<BodyState> tanks, byte reason = 1, int peer = 2) => MessageCodec.Encode(
+            ModeWireFixtures.Spill(Id, ActorId(peer), 1, NextAction(peer), (SpillReason)reason, tanks), false);
+        /// <summary>A spill envelope whose declared count is invalid, with no bodies following.</summary>
+        public byte[] RawSpill(byte reason, int count, int peer = 2) => new NetWriter(Msg.ModeEvent, Id).UInt(1).UInt(1).Byte(ModeRegistry.TankBankId)
+            .UShort(1).Int(ActorId(peer)).UInt(1).UInt(NextAction(peer)).UShort(ModeSchemas.TankBankKinds.Spill).UShort(2).Byte(reason).Byte((byte)count).ToArray();
+        public void AssertScore(int player, int score, int delta) => TestRunner.Assert(Packets.Any(p => p.Message.Payload is ModeEnvelope { Payload: TankBankScore s } e &&
+            e.ActorId == ActorId(player) && s.Score == score && s.Delta == delta), $"expected score {score}, delta {delta}");
         public void Dispose() { Server.Free(); Tuning.Dispose(); }
     }
 }
