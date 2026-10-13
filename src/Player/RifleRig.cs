@@ -145,8 +145,9 @@ public partial class RifleRig : SkeletonModifier3D
         yaw = Mathf.Lerp(yaw, Mathf.DegToRad(strike.TorsoYaw), strike.Weight);
         var pitch = Mathf.Asin(Mathf.Clamp(aimDir.Y, -1, 1));
         var pitchShare = Mathf.Lerp(t.RifleHipPitchShare, t.RifleAimPitchShare, aim) * (1 - sprint * t.RifleSprintPitchSuppression);
+        // Positive pitches the chest up: a shot rocks the shoulder back with the climbing muzzle.
         var torsoPitch = pitch * pitchShare * (1 - strike.Weight) - Mathf.DegToRad(strike.TorsoLean)
-            - Mathf.DegToRad(t.RifleRecoilLiftDegrees) * kick * t.RifleRecoilTorsoShare;
+            + Mathf.DegToRad(t.RifleRecoilLiftDegrees) * kick * t.RifleRecoilTorsoShare;
         var torso = new Quaternion(aimRight, torsoPitch) * new Quaternion(Vector3.Up, yaw);
         var shares = new Vector3(t.RifleSpineLowerShare, t.RifleSpineMiddleShare, t.RifleSpineUpperShare);
         shares /= Mathf.Max(shares.X + shares.Y + shares.Z, 0.0001f);
@@ -186,15 +187,15 @@ public partial class RifleRig : SkeletonModifier3D
         var relaxedDir = CarryDirection(chestForward, chestRight, t.RifleCarryPitchDegrees, t.RifleCarryYawDegrees);
         var relaxedBasis = Basis.LookingAt(relaxedDir, Vector3.Up).Rotated(relaxedDir, Mathf.DegToRad(t.RifleCarryRollDegrees));
         var relaxed = new Transform3D(relaxedBasis, hipPocket - relaxedBasis * Rifle.ButtLocal.Origin);
-        hip = relaxed.InterpolateWith(hip, Mathf.SmoothStep(0, 1, Mathf.Max(ReadyAmount, AimAmount)));
+        hip = Blend(relaxed, hip, Mathf.SmoothStep(0, 1, Mathf.Max(ReadyAmount, AimAmount)));
 
         // Sprint: low port, muzzle down and slightly inboard, stock still tucked.
         var lowDir = CarryDirection(chestForward, chestRight, t.RifleSprintPitchDegrees, t.RifleSprintYawDegrees);
         var lowBasis = Basis.LookingAt(lowDir, Vector3.Up);
         var port = new Transform3D(lowBasis, hipPocket + up * (t.RifleHipDown - t.RifleSprintDown) - lowBasis * Rifle.ButtLocal.Origin);
 
-        var stance = hip.InterpolateWith(aimed, aim);
-        stance = stance.InterpolateWith(port, sprint);
+        var stance = Blend(hip, aimed, aim);
+        stance = Blend(stance, port, sprint);
 
         // Reload: the rifle comes in front of the chest, canted, with the magazine well where the left hand works.
         var reloadWeight = Reload > 0 ? Mathf.SmoothStep(0, t.RifleReloadBlendFraction, Reload) * (1f - Mathf.SmoothStep(1f - t.RifleReloadBlendFraction, 1f, Reload)) : 0f;
@@ -204,7 +205,7 @@ public partial class RifleRig : SkeletonModifier3D
             var reloadBasis = Basis.LookingAt(reloadDir, Vector3.Up).Rotated(reloadDir, Mathf.DegToRad(t.RifleReloadRollDegrees));
             var shoulderL = from * skeleton.GetBoneGlobalPose(upperL).Origin;
             var well = shoulder.Lerp(shoulderL, 0.5f) + chestForward * t.RifleReloadForward - up * t.RifleReloadDown;
-            stance = stance.InterpolateWith(new Transform3D(reloadBasis, well - reloadBasis * Rifle.MagWellLocal.Origin), reloadWeight);
+            stance = Blend(stance, new Transform3D(reloadBasis, well - reloadBasis * Rifle.MagWellLocal.Origin), reloadWeight);
         }
 
         // Butt strike: the stock leads, driven by the torso; keys are in the twisted chest frame.
@@ -213,7 +214,7 @@ public partial class RifleRig : SkeletonModifier3D
             var dir = CarryDirection(chestForward, chestRight, -strike.Pitch, strike.Heading);
             var basis = Basis.LookingAt(dir, Vector3.Up).Rotated(dir, Mathf.DegToRad(strike.Roll));
             var butt = shoulder + chestRight * strike.Butt.X + up * strike.Butt.Y + chestForward * strike.Butt.Z;
-            stance = stance.InterpolateWith(new Transform3D(basis, butt - basis * Rifle.ButtLocal.Origin), strike.Weight);
+            stance = Blend(stance, new Transform3D(basis, butt - basis * Rifle.ButtLocal.Origin), strike.Weight);
         }
 
         // 4. Cheek to the stock: drop the head toward the sight rather than raising the rifle to the eye.
@@ -232,6 +233,13 @@ public partial class RifleRig : SkeletonModifier3D
         stance = new Transform3D(lift * stance.Basis, pivot + lift * (stance.Origin - pivot)
             + stance.Basis.Column2.Normalized() * t.RifleRecoilBack * kick).Orthonormalized();
 
+        // A stance can hold a grip a little beyond its arm (a long reach to the foregrip, say): slide the rifle
+        // toward that shoulder by the shortfall, so the hand closes on the grip instead of stopping short.
+        var upperRWorld = from * skeleton.GetBoneGlobalPose(upperR).Origin;
+        var upperLWorld = from * skeleton.GetBoneGlobalPose(upperL).Origin;
+        stance.Origin += Shortfall(upperLWorld, LeftHandTransform(stance, Rifle.LeftHandLocal, Rifle.LeftGripBasis).Origin, ArmLength(skeleton, upperL, lowerL, handL));
+        stance.Origin += Shortfall(upperRWorld, RightHandTransform(stance).Origin, ArmLength(skeleton, upperR, lowerR, handR));
+
         // While the rig fades in at the end of a get-up, hand the rifle over from wherever the hand already is.
         var handNow = (from * skeleton.GetBoneGlobalPose(handR)).Orthonormalized();
         var leftNow = (from * skeleton.GetBoneGlobalPose(handL)).Orthonormalized();
@@ -244,8 +252,6 @@ public partial class RifleRig : SkeletonModifier3D
         // 5. Hands onto the grips: the pistol grip, and the foregrip or, mid-reload, the magazine and bolt catch.
         RightTarget = handNow.InterpolateWith(RightHandTransform(stance), Weight);
         LeftTarget = leftNow.InterpolateWith(LeftHandTransform(stance, Rifle.LeftHandLocal, Rifle.LeftGripBasis), Weight);
-        var upperRWorld = from * skeleton.GetBoneGlobalPose(upperR).Origin;
-        var upperLWorld = from * skeleton.GetBoneGlobalPose(upperL).Origin;
         var poleR = upperRWorld + chestRight * t.RifleElbowOut - up * t.RifleElbowDown;
         var poleL = upperLWorld - chestRight * t.RifleElbowOut - up * t.RifleElbowDown;
         SolveTwoBone(skeleton, upperR, lowerR, handR, to * RightTarget, to * poleR);
@@ -253,6 +259,29 @@ public partial class RifleRig : SkeletonModifier3D
         Rifle.Animate(dt, Reload);
         PoseFingers(skeleton);
     }
+
+    /// <summary>Blends two rifle placements about the butt, so the stock stays where both stances hold it and the
+    /// rifle swings around it as a person raises one, instead of the pistol grip cutting a straight line.</summary>
+    private Transform3D Blend(Transform3D from, Transform3D to, float weight)
+    {
+        if (weight <= 0) return from;
+        if (weight >= 1) return to;
+        var butt = Rifle!.ButtLocal.Origin;
+        var basis = new Basis(from.Basis.GetRotationQuaternion().Slerp(to.Basis.GetRotationQuaternion(), weight));
+        return new Transform3D(basis, (from * butt).Lerp(to * butt, weight) - basis * butt);
+    }
+
+    /// <summary>How far to move a grip toward its shoulder so a two-bone arm, slightly bent, reaches it.</summary>
+    private static Vector3 Shortfall(Vector3 shoulder, Vector3 grip, float reach)
+    {
+        var offset = shoulder - grip;
+        var excess = offset.Length() - reach * 0.98f;
+        return excess > 0 ? offset.Normalized() * excess : Vector3.Zero;
+    }
+
+    private static float ArmLength(Skeleton3D s, int upper, int lower, int hand) =>
+        s.GetBoneGlobalPose(upper).Origin.DistanceTo(s.GetBoneGlobalPose(lower).Origin) +
+        s.GetBoneGlobalPose(lower).Origin.DistanceTo(s.GetBoneGlobalPose(hand).Origin);
 
     /// <summary>Turns a bone so its forward (+Z) moves toward <paramref name="target"/>, by a fraction.</summary>
     private static void LookAt(Skeleton3D skeleton, int bone, Vector3 target, float weight, Transform3D from, Transform3D to)

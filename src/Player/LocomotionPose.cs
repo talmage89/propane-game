@@ -104,8 +104,11 @@ public sealed class LocomotionPose
         if (speed > 0.05f)
         {
             // Turn the heading of travel rather than blending weights: even a reversal sweeps through a side
-            // direction, where the front/back pair has almost no weight, so no clip pops in.
-            heading = Mathf.LerpAngle(heading, Mathf.Atan2(travel.X, travel.Y), 1 - Mathf.Exp(-3 * blend));
+            // direction, where the front/back pair has almost no weight, so no clip pops in. At most a quarter
+            // turn per gait blend time, so a sudden reversal still crosses the side over several frames.
+            var turn = Mathf.Wrap(Mathf.Atan2(travel.X, travel.Y) - heading, -Mathf.Pi, Mathf.Pi);
+            var limit = Mathf.Pi / 2 * blend;
+            heading = Mathf.Wrap(heading + Mathf.Clamp(turn * (1 - Mathf.Exp(-3 * blend)), -limit, limit), -Mathf.Pi, Mathf.Pi);
         }
         var direction = new Vector2(Mathf.Sin(heading), Mathf.Cos(heading));
         // Diamond (L1) weights interpolate linearly between neighboring clips; 45 degrees is half of each.
