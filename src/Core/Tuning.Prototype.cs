@@ -37,6 +37,6 @@ public partial class Tuning
     [LabDial(10, 40, 1, Scenario = "king")] public float KingSpotRing { get; set; } = 20f;
     [LabDial(1, 12, 1, Scenario = "king")] public int KingPileCount { get; set; } = 6;
     [LabDial(5, 80, 5, Scenario = "king")] public float KingBeamHeight { get; set; } = 40f;
-    [LabDial(0.05, 0.8, 0.05, Scenario = "king")] public float KingBeamAlpha { get; set; } = 0.3f;
+    [LabDial(0.05, 0.75, 0.05, Scenario = "king")] public float KingBeamAlpha { get; set; } = 0.3f;
     [LabDial(0.2, 4, 0.1, Scenario = "king")] public float KingMaterializeSeconds { get; set; } = 1.2f;
 }
