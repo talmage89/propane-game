@@ -45,8 +45,8 @@ public sealed record ModeActor(int ActorId, string Name, bool Present = true, in
 /// <summary>Where a mode's world comes from: the server's transmitted suburb plan, or the empty construct.</summary>
 public enum ModeWorldSource : byte { SuburbPlan, Void }
 
-/// <summary>The world a run starts in, as plain facts.</summary>
-public sealed record ModeWorld(ModeWorldSource Source, uint Revision = 1, int MapTanks = 0);
+/// <summary>The world a run starts in, as plain facts. <paramref name="Spots"/> are points a mode may use, such as piles.</summary>
+public sealed record ModeWorld(ModeWorldSource Source, uint Revision = 1, int MapTanks = 0, IReadOnlyList<ModeSpot>? Spots = null);
 
 /// <summary>An immutable copy of the tuner values a mode's rules read, by tuner name.</summary>
 public sealed class ModeTuners
@@ -76,6 +76,9 @@ public enum TankOrigin : byte { Map, Drop }
 
 /// <summary>The ledger accepted a detonation credited to this actor (the chain's initiator).</summary>
 public sealed record TankDetonated(int ActorId, TankOrigin Origin) : AcceptedEvent;
+
+/// <summary>A mode created one banked tank for this actor from nothing (a held zone). Tank Bank never mints.</summary>
+public sealed record TankMinted(int ActorId) : AcceptedEvent;
 
 /// <summary>Why a victim spills: a bullet hit, or being thrown (ragdolled).</summary>
 public enum SpillReason : byte { Hit, Thrown }

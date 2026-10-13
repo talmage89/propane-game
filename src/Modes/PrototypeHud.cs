@@ -1,0 +1,99 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using Godot;
+
+namespace Propane.Modes;
+
+/// <summary>
+/// Ring Out's HUD: how many are still standing, this player's knock-offs, a clock to the next dissolve, a banner
+/// while the rim warns, the out-state once off the slab, and a feed of the latest eliminations.
+/// </summary>
+public sealed class RingOutHud : IModeHudPresenter
+{
+    public const int FeedLength = 4;
+    private static readonly string[] Columns = { "Placement" };
+
+    public ModeHud Present(ModeHudInput input)
+    {
+        if (input.Rules is not RingOutRules rules) return ModeHud.Empty;
+        var elapsed = rules.Elapsed(input.Clock);
+        var plan = rules.Plan;
+        var next = plan.NextDissolve(elapsed);
+        var band = plan.NextBand(elapsed);
+        var warning = !rules.Over && band >= 0 && elapsed >= plan.WarnsAt(band);
+        var me = input.LocalActor;
+        var outState = rules.Place(me) is { } place && !(rules.Over && place == 1) ? $"OUT · {Ordinal(place)}" : "";
+        var banner = rules.Over ? Result(rules, me) : warning ? "THE RIM IS DISSOLVING" : "";
+        var credits = rules.Credits(me);
+        return new ModeHud(
+            new[] { new HudCounter(rules.AliveCount, "STANDING"), new HudCounter(credits, credits == 1 ? "KNOCK-OFF" : "KNOCK-OFFS") },
+            Columns,
+            rules.Over ? null : double.IsInfinity(next) ? new HudTimer((float)elapsed, RoundTimer.CountUp) : new HudTimer((float)(next - elapsed), RoundTimer.Countdown),
+            Array.Empty<Vector3>(), false, banner, outState,
+            rules.Eliminations.TakeLast(FeedLength).Select(e => Line(rules, e)).ToArray());
+    }
+
+    public static string Line(RingOutRules rules, ActorEliminated e) => e.Cause switch
+    {
+        EliminationCause.Left => $"{rules.Name(e.ActorId)} left",
+        _ when e.CreditedTo != 0 => $"{rules.Name(e.CreditedTo)} knocked {rules.Name(e.ActorId)} off",
+        EliminationCause.Dissolved => $"{rules.Name(e.ActorId)} went down with the rim",
+        _ => $"{rules.Name(e.ActorId)} fell",
+    };
+
+    private static string Result(RingOutRules rules, int me)
+    {
+        var winners = rules.Snapshot().Standings.Where(s => rules.Place(s.ActorId) == 1).Select(s => s.Name).ToArray();
+        if (rules.Place(me) == 1) return winners.Length > 1 ? "SHARED WIN" : "LAST ONE STANDING";
+        return winners.Length == 0 ? "NOBODY STANDS" : $"{string.Join(" & ", winners).ToUpperInvariant()} WINS";
+    }
+
+    public static string Ordinal(int place) => place + (place % 100 is 11 or 12 or 13 ? "TH" : (place % 10) switch { 1 => "ST", 2 => "ND", 3 => "RD", _ => "TH" });
+}
+
+/// <summary>
+/// King of the Cul-de-sac's HUD: the bank as in Tank Bank, the tanks this player minted, the match clock, an arrow
+/// to the zone (and to the next one while it warns), and a banner for holding, contesting or the coming move.
+/// </summary>
+public sealed class KingHud : IModeHudPresenter
+{
+    private static readonly string[] Columns = { TankBankHud.Column };
+
+    public ModeHud Present(ModeHudInput input)
+    {
+        if (input.Rules is not KingRules rules) return ModeHud.Empty;
+        var me = input.LocalActor;
+        var bank = input.Scores.GetValueOrDefault(me);
+        var live = input.Phase is ModePhase.Round;
+        var elapsed = rules.Elapsed(input.Clock);
+        var objectives = new List<Vector3>();
+        var banner = "";
+        if (live && rules.Zone >= 0)
+        {
+            objectives.Add(Point(rules.SpotOf(rules.Zone)));
+            if (rules.Warning(elapsed))
+            {
+                objectives.Add(Point(rules.SpotOf(rules.Zone + 1)));
+                banner = $"THE ZONE MOVES IN {Math.Ceiling(rules.UntilMove(elapsed)):0}";
+            }
+            else if (rules.Holder == me)
+            {
+                banner = "HOLDING THE ZONE";
+            }
+            else if (rules.Contested && rules.Occupants.Contains(me))
+            {
+                banner = "CONTESTED";
+            }
+        }
+        var minted = rules.MintedBy(me);
+        return new ModeHud(
+            new[] { new HudCounter(bank, bank == 1 ? "TANK BANKED" : "TANKS BANKED"), new HudCounter(minted, "MINTED IN THE ZONE") },
+            Columns,
+            input.Phase is ModePhase.Round or ModePhase.RoundEnd or ModePhase.MatchEnd or ModePhase.Results
+                ? new HudTimer(input.TimeLeft, RoundTimer.Countdown) : null,
+            objectives, live, banner);
+    }
+
+    private static Vector3 Point(ModeSpot spot) => new((float)spot.X, (float)spot.Y + 1f, (float)spot.Z);
+}

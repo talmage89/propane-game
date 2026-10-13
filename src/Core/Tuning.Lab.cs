@@ -2,13 +2,17 @@ using System;
 
 namespace Propane.Core;
 
-/// <summary>Local UI range; unlike Export, this never enters a match snapshot.</summary>
+/// <summary>
+/// Local UI range; unlike Export, this never enters a match snapshot. <see cref="Scenario"/> names the one Lab
+/// scenario a dial lays out (a prototype's), or is null for dials every scenario may read.
+/// </summary>
 [AttributeUsage(AttributeTargets.Property)]
 public sealed class LabDialAttribute(double min, double max, double step = 1) : Attribute
 {
     public double Min { get; } = min;
     public double Max { get; } = max;
     public double Step { get; } = step;
+    public string? Scenario { get; init; }
 }
 
 public partial class Tuning

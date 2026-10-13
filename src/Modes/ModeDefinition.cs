@@ -57,6 +57,25 @@ public static class ModeRegistry
         new ModeSupply(SuburbPlans.Match, LimitedAmmo: true, Pickups: true), RoundTimer.Countdown, () => new TankBankHud(),
         seed => new BankingBot(seed), TankBankRules.Tuners);
 
+    public const byte RingOutId = 3;
+    public const byte KingId = 4;
+
+    /// <summary>Lab prototype: sumo on a dissolving slab. Unlimited ammo, no cans; the round counts up until one stands.</summary>
+    public static readonly ModeDefinition RingOut = new(RingOutId, "Ring Out", 1, () => new RingOutRules(), ModeWorldSource.Void,
+        new ModeSupply((tuning, _) => SuburbPlans.SinglePlayer(tuning), LimitedAmmo: false, Pickups: false), RoundTimer.CountUp,
+        () => new RingOutHud(), seed => new RingOutBot(seed), RingOutRules.Tuners);
+
+    /// <summary>Lab prototype: hold a moving zone to mint banked tanks, with Tank Bank's bank and spills.</summary>
+    public static readonly ModeDefinition King = new(KingId, "King of the Cul-de-sac", 1, () => new KingRules(), ModeWorldSource.Void,
+        new ModeSupply((tuning, _) => SuburbPlans.SinglePlayer(tuning), LimitedAmmo: false, Pickups: false), RoundTimer.Countdown,
+        () => new KingHud(), seed => new KingBot(seed), KingRules.Tuners);
+
+    /// <summary>
+    /// Modes tried only in the Lab. They are not in <see cref="All"/>: no lobby, MatchStart or envelope schema names
+    /// them, so they change nothing a match shares.
+    /// </summary>
+    public static IReadOnlyList<ModeDefinition> Prototypes { get; } = new[] { RingOut, King };
+
     private static readonly List<ModeDefinition> registered = new() { Sandbox, TankBank };
     public static IReadOnlyList<ModeDefinition> All => registered.AsReadOnly();
 
