@@ -104,6 +104,9 @@ test-world: build ## Compare all formations built in two fresh processes
 # each line of a job's output with its name. The bot matches share this checkout's port and build/ names, so they run
 # in one serial job; the menu lifetime run shares test-behavior's port and settings file, so it waits for it.
 LABEL := tools/dev/label.sh
+# The offline jobs give way to the bot matches, whose server and clients run in real time and fail when starved. Their
+# results never depend on wall time; only check_lab.py bounds each session at 600 seconds.
+YIELD := nice -n 19
 # Four contiguous shards of the whole generator sweep; test-full-generator-coverage proves they hold exactly its seeds.
 GENERATOR_FULL := --seeds=200 --large-seeds=100 --formation-seeds=6
 GENERATOR_1 := --first-seed=1 --seeds=50 --first-large-seed=1 --large-seeds=25 --first-formation-seed=1 --formation-seeds=2
@@ -129,28 +132,28 @@ test-full-bots: build
 	$(LABEL) bots tools/dev/net_bots.sh -n 2 -l 20 -o "$(CURDIR)/build/loading-readiness-gate" -- --scenario=body-stream --tank-check-ready-stall=Bot2
 
 $(LAB_SHARDS): test-full-lab-%: build
-	$(LABEL) lab-$* env GODOT="$(GODOT)" python3 -B tools/dev/check_lab.py --full --only=$(LAB_$*)
+	$(LABEL) lab-$* $(YIELD) env GODOT="$(GODOT)" python3 -B tools/dev/check_lab.py --full --only=$(LAB_$*)
 
 test-full-piles: build
-	$(LABEL) piles "$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/upright_pile_tests.tscn -- --deep --awake
+	$(LABEL) piles $(YIELD) "$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/upright_pile_tests.tscn -- --deep --awake
 
 test-full-menu: build test-behavior
 	$(LABEL) menu "$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/menu_test.tscn -- --scenario=lifetime --port=$(PORT)
 
 test-full-range: build
-	$(LABEL) range "$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/player_range.tscn -- --scenario=melee-reloads --assert-motion --assert-grip
-	$(LABEL) range "$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/player_range.tscn -- --scenario=recoil --stance=air --assert-grip --assert-motion
-	$(LABEL) range "$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/player_range.tscn -- --scenario=bot-recoil --magazines=10
+	$(LABEL) range $(YIELD) "$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/player_range.tscn -- --scenario=melee-reloads --assert-motion --assert-grip
+	$(LABEL) range $(YIELD) "$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/player_range.tscn -- --scenario=recoil --stance=air --assert-grip --assert-motion
+	$(LABEL) range $(YIELD) "$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/player_range.tscn -- --scenario=bot-recoil --magazines=10
 
 $(GENERATOR_SHARDS): test-full-generator-%: build
-	$(LABEL) generator-$* "$(GODOT)" --headless --path . res://scenes/dev/generator_tests.tscn -- $(GENERATOR_$*)
+	$(LABEL) generator-$* $(YIELD) "$(GODOT)" --headless --path . res://scenes/dev/generator_tests.tscn -- $(GENERATOR_$*)
 
 test-full-generator-coverage: build
-	$(LABEL) generator-coverage env GODOT="$(GODOT)" python3 -B tools/dev/check_generator_shards.py --full='$(GENERATOR_FULL)' \
+	$(LABEL) generator-coverage $(YIELD) env GODOT="$(GODOT)" python3 -B tools/dev/check_generator_shards.py --full='$(GENERATOR_FULL)' \
 		--shard='$(GENERATOR_1)' --shard='$(GENERATOR_2)' --shard='$(GENERATOR_3)' --shard='$(GENERATOR_4)'
 
 test-full-navigation: build
-	$(LABEL) navigation "$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/bot_navigation_course.tscn -- --seeds=100
+	$(LABEL) navigation $(YIELD) "$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/bot_navigation_course.tscn -- --seeds=100
 
 test-capacity: build ## Repeat the separate-client tested-capacity gate (three clean and three faulted matches)
 	tools/dev/capacity_acceptance.sh
