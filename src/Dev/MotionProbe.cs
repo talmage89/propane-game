@@ -78,6 +78,11 @@ public partial class MotionProbe : SkeletonModifier3D
         for (var i = 0; i < previous.Length; i++)
         {
             var q = s.GetBonePoseRotation(i).Normalized();
+            // Bones under the root are measured in world space: when the model turns to the get-up heading, the root
+            // and its children re-express the same pose in the new frame, which is not motion.
+            var parent = s.GetBoneParent(i);
+            if (parent >= 0 && s.GetBoneParent(parent) < 0)
+                q = (s.GlobalBasis.GetRotationQuaternion() * s.GetBonePoseRotation(parent) * q).Normalized();
             invalid |= !float.IsFinite(q.LengthSquared());
             if (time > 0.2 && !teleported && !SkipNextPose)
             {

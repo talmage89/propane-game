@@ -14,6 +14,9 @@ public partial class PoseBlend : SkeletonModifier3D
     private bool blending;
     private float duration;
     private float elapsed;
+    // Each bone's animated and captured rotations on the previous fade frame, signs kept continuous.
+    private Quaternion[] animatedPath = System.Array.Empty<Quaternion>(), capturedPath = System.Array.Empty<Quaternion>();
+    private bool pathStarted;
 
     public bool HasCapture => captured != null && !captureRequested;
 
@@ -39,6 +42,12 @@ public partial class PoseBlend : SkeletonModifier3D
         duration = Mathf.Max(seconds, 0.01f);
         elapsed = 0;
         blending = captured != null;
+        pathStarted = false;
+        if (blending && animatedPath.Length != captured!.Length)
+        {
+            animatedPath = new Quaternion[captured.Length];
+            capturedPath = new Quaternion[captured.Length];
+        }
     }
 
     public override void _ProcessModificationWithDelta(double delta)
@@ -82,10 +91,25 @@ public partial class PoseBlend : SkeletonModifier3D
             var local = parent >= 0 ? (toSkeleton * captured[parent]).AffineInverse() * global : global;
             local = local.Orthonormalized();
             var current = skeleton.GetBonePose(i);
-            var rotation = current.Basis.Orthonormalized().GetRotationQuaternion()
-                .Slerp(local.Basis.GetRotationQuaternion(), weight);
+            // Keep one path per bone for the whole fade: re-choosing the shortest arc every frame switches sides
+            // when the animation passes half a turn from the captured pose, flipping the limb in one frame.
+            var animated = current.Basis.Orthonormalized().GetRotationQuaternion();
+            var target = local.Basis.GetRotationQuaternion();
+            if (!pathStarted)
+            {
+                if (animated.Dot(target) < 0) target = -target;
+            }
+            else
+            {
+                if (animated.Dot(animatedPath[i]) < 0) animated = -animated;
+                if (target.Dot(capturedPath[i]) < 0) target = -target;
+            }
+            animatedPath[i] = animated;
+            capturedPath[i] = target;
+            var rotation = animated.Slerpni(target, weight).Normalized();
             skeleton.SetBonePoseRotation(i, rotation);
             skeleton.SetBonePosePosition(i, current.Origin.Lerp(local.Origin, weight));
         }
+        pathStarted = true;
     }
 }
