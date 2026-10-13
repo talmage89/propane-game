@@ -11,7 +11,7 @@ length=60
 out=""
 godot="${GODOT:-godot-mono}"
 windowed=0
-port=$((24700 + RANDOM % 200))
+port=""
 server_args=""
 remote=""
 brains=""
@@ -53,10 +53,34 @@ if [[ -n "$remote" ]]; then
   address="${remote%%:*}"
   [[ "$remote" == *:* ]] && port="${remote##*:}" || port=24680
 else
-  "$godot" --headless --path "$project" -- --server --port="$port" $server_args >"$out/server.log" 2>&1 &
-  server=$!
-  trap 'kill $server 2>/dev/null || true' EXIT
-  sleep 1.5
+  # Without -p, pick a port no other run is listening on, and pick again if a concurrent run takes it first.
+  pick=0
+  [[ -z "$port" ]] && pick=1
+  for attempt in 1 2 3 4 5; do
+    if (( pick )); then
+      port=$(python3 -c 'import random, socket
+for _ in range(200):
+    port = random.randrange(24700, 24900)
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
+        try:
+            probe.bind(("", port))
+        except OSError:
+            continue
+    print(port)
+    break')
+    fi
+    "$godot" --headless --path "$project" -- --server --port="$port" $server_args >"$out/server.log" 2>&1 &
+    server=$!
+    trap 'kill $server 2>/dev/null || true' EXIT
+    sleep 1.5
+    grep -q "Couldn't create an ENet host" "$out/server.log" 2>/dev/null || break
+    kill $server 2>/dev/null || true
+    wait $server 2>/dev/null || true
+    if (( !pick || attempt == 5 )); then
+      echo "FAIL: the server could not listen on port $port" >&2
+      exit 1
+    fi
+  done
 fi
 
 pids=()
