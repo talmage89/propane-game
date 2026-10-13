@@ -33,6 +33,8 @@ public sealed class BankingBot : IBotGoalPolicy
     private Vector3 unaimedAnchor;
     private Tuning tuning = null!;
     private readonly BotNavigator navigator = new();
+    private readonly NavigationQueries queries = new();
+    private CollisionShape3D? capsule;
     private Vector3? navigationGoal;
     public int StuckEvents => navigator.StuckEvents;
     public int Replans => navigator.Replans;
@@ -64,7 +66,11 @@ public sealed class BankingBot : IBotGoalPolicy
         if (seed is { } value) rng.Seed = value;
     }
 
-    public void Dispose() => rng.Dispose();
+    public void Dispose()
+    {
+        rng.Dispose();
+        queries.Dispose();
+    }
 
     public PlayerIntent Read()
     {
@@ -628,12 +634,14 @@ public sealed class BankingBot : IBotGoalPolicy
             var wish = basis * new Vector3(intent.Move.X, 0, -intent.Move.Y);
             navigationGoal = player.GlobalPosition + wish.Normalized() * tuning.BotRouteSpacing * 2;
         }
-        var shape = player.GetChildren().OfType<CollisionShape3D>().Single();
+        // The actor's capsule never changes; finding it once avoids marshaling every child each tick.
+        var shape = capsule != null && GodotObject.IsInstanceValid(capsule) && capsule.GetParent() == player ? capsule
+            : capsule = player.GetChildren().OfType<CollisionShape3D>().Single();
         var capabilities = new NavigationCapabilities(shape.Shape, shape.Position, ((CapsuleShape3D)shape.Shape).Radius,
             tuning.RunSpeed, tuning.SprintSpeed, tuning.JumpVelocity, tuning.PlayerGravity, tuning.Acceleration, tuning.AirControl);
         var hazards = match.LiveTanks.Select(t => new NavigationHazard(t.GlobalPosition,
             t.State == PropaneTank.TankState.Venting ? tuning.RagdollRadius + tuning.BotVentClearance : tuning.BotTankClearance)).ToArray();
-        var world = new NavigationWorld(player.World.Physics.DirectSpaceState, capabilities, hazards, tuning.BotJumpMargin, tuning.BotJumpMinimumRange, player.GlobalPosition);
+        var world = new NavigationWorld(player.World.Physics.DirectSpaceState, capabilities, hazards, tuning.BotJumpMargin, tuning.BotJumpMinimumRange, player.GlobalPosition, queries);
         var move = navigator.Navigate(world, new NavigationState(player.GlobalPosition, player.Velocity, player.IsOnFloor()),
             capabilities, navigationGoal.Value, tuning, dt);
         if (move.Failed)
