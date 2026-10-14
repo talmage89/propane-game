@@ -55,27 +55,32 @@ historical-release branch; direct current-build `SceneTree.Quit` calls still fai
 | `test-world` | All four saved formation plans built and hashed in two fresh processes |
 
 The generator gate keeps every assertion and all 14 explicit pile counts (0–128), with fewer random layouts.
-`make test-full` runs the gate, then 200 single-player and 2-player seeds, 100 each at the four large sizes,
+`make test-full` adds 200 single-player and 2-player seeds, 100 each at the four large sizes,
 six forced seeds per formation/size, 100 navigation seeds, and the melee-reload pose sweep. It includes every seed formerly in the gate:
 ordinary seeds 21–100, large seeds 4–10 and forced seeds 3–6 moved to this deeper sweep.
 
 Each deep step is its own `test-full-*` target, so `make -j4 test-full` runs them side by side with the gate's four
 partitions; [test-speed.md](test-speed.md#parallel-deep-sweeps) has the timings. `tools/dev/label.sh` prefixes every line
-a deep job prints with its name (`[generator-3]`, `[lab-1]`, `[bots]`) and, on failure, prints that name, the exit
+a deep job prints with its name (`[generator-3]`, `[lab-king]`, `[bots]`) and, on failure, prints that name, the exit
 status and the command; make then names the failed target. The jobs:
 
 | Target | Runs |
 | --- | --- |
-| `test-full-generator-1`…`4` | The generator sweep in four contiguous seed ranges: 50 single-player and 2-player seeds, 25 at each large size, and two, two, one and one forced seeds |
-| `test-full-generator-coverage` | `check_generator_shards.py`: the shards' `--list-seeds` listings hold exactly the 944 seeds of `--seeds=200 --large-seeds=100 --formation-seeds=6`, each once |
-| `test-full-lab-1`…`3` | `check_lab.py --full --only=…`: the void soak, the suburb soak, and the other five sessions |
+| `test-full-generator-1`…`4` | The generator sweep in four contiguous seed ranges: 50 single-player and 2-player seeds, 25 at each large size and segment stream, and two, two, one and one forced seeds |
+| `test-full-generator-coverage` | `check_generator_shards.py`: the shards' `--list-seeds` listings hold exactly the 1,044 seeds of `--seeds=200 --large-seeds=100 --formation-seeds=6 --segment-seeds=100`, each once |
+| `test-full-lab-*` | All 18 full Lab sessions in 25 jobs: independent rounds/seeds, four lifetime shards, eight dial shards, both soaks; King keeps its cross-round mint assertion |
+| `test-full-lab-coverage` | Every full Lab session/setting/seed and all 530 dial fixtures occur exactly once |
+| `test-full-engine` | Build isolated optimized Debug for deep probes; each probe verifies optimization and `DEBUG` |
 | `test-full-navigation` | 100 navigation seeds in one process, since its pass rate is over all of them |
 | `test-full-bots` | The rifle soak, duel lane and loading-readiness matches, one at a time and after every other job: they share this checkout's `build/` names and run in real time |
 | `test-full-piles`, `test-full-range` | The deep awake pile trial; melee reloads, airborne recoil and the ten-magazine bot recoil run |
 | `test-full-menu` | The menu lifetime run, after `test-behavior`, whose port and `user://menu_test_settings.cfg` it shares |
 
 Every other deep job is offline and writes its own log names, so jobs never share a port, a settings file or an output
-path; all Godot processes of a checkout still append to its one `user://logs`, as under `make -j4 check`. The bot
+path. Deep probes borrow the imported resources into `build/test-full-engine/project`, compile optimized Debug
+with separate intermediate/output directories, and verify both optimization and the `DEBUG` symbol at scene entry.
+Normal `make test`, `make check`, CI and the final real-time bot tail retain unoptimized Debug; the benchmark smoke
+can rebuild it without replacing a running deep probe's assembly. All Godot processes of a checkout still append to its one `user://logs`, as under `make -j4 check`. The bot
 matches run alone, after every other job: their server and clients run in real time, and beside other jobs on four
 CPUs, clients dropped to a few frames a second and failed tank agreement, and the loading-readiness match lost its
 stalled client far more often ([test-speed.md](test-speed.md#parallel-deep-sweeps)). `-j` is not
