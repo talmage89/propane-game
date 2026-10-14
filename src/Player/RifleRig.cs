@@ -29,6 +29,8 @@ public partial class RifleRig : SkeletonModifier3D
     private bool meleeReloadForward, hadMelee;
     private float reloadBlend, grip;
     private Vector3 lookDirection;
+    private float torsoYaw;
+    private bool hasTorsoYaw;
 
     /// <summary>Wrist targets of the last pose, for contact diagnostics.</summary>
     public Transform3D RightTarget { get; private set; }
@@ -121,6 +123,7 @@ public partial class RifleRig : SkeletonModifier3D
             recoil.Reset();
             reloadBlend = 0;
             lookDirection = Vector3.Zero;
+            hasTorsoYaw = false;
             Rifle.Animate(dt, 0);
             grip = Mathf.MoveToward(grip, 0, blendStep);
             if (grip > 0) PoseFingers(skeleton, grip);
@@ -161,6 +164,12 @@ public partial class RifleRig : SkeletonModifier3D
         var limit = Mathf.DegToRad(t.CombatSpineTwistDegrees);
         var yaw = Mathf.Clamp(forward.SignedAngleTo(flatAim, Vector3.Up), -limit, limit) - blade;
         yaw = Mathf.Lerp(yaw, Mathf.DegToRad(strike.TorsoYaw), strike.Weight);
+        // Crossing the rear direction changes SignedAngleTo from +pi to -pi. Clamping can then switch
+        // twist limits even when aimDir moved only a fraction of a degree (especially after a get-up).
+        // Bound the applied torso turn with the same tuner as the visual aim; logical aim stays immediate.
+        torsoYaw = hasTorsoYaw ? Mathf.MoveToward(torsoYaw, yaw, Mathf.DegToRad(t.RifleAimTurnSpeed) * dt) : yaw;
+        hasTorsoYaw = true;
+        yaw = torsoYaw;
         var pitch = Mathf.Asin(Mathf.Clamp(aimDir.Y, -1, 1));
         var pitchShare = Mathf.Lerp(t.RifleHipPitchShare, t.RifleAimPitchShare, aim) * (1 - sprint * t.RifleSprintPitchSuppression);
         // Positive pitches the chest up: a shot rocks the shoulder back with the climbing muzzle.
