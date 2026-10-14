@@ -3,6 +3,7 @@
 import os
 import pathlib
 import re
+import shlex
 import shutil
 import subprocess
 import tempfile
@@ -54,7 +55,7 @@ fi
     counter = scratch / "world-count"
     environment = dict(os.environ, PATH=f"{scratch}:{os.environ['PATH']}", GODOT=str(scratch / "godot"),
                        COMMAND_LOG=str(log), WORLD_COUNT=str(counter), TMPDIR=str(scratch))
-    checkers = ["check_test_threads.py", "check_world_tests.py", "time_gate_tests.py", "check_scores_tests.py", "check_capacity_tests.py", "compare_vents_tests.py", "compare_tanks_tests.py", "net_bots_tests.py",
+    checkers = ["check_test_threads.py", "bench_tests.py", "check_world_tests.py", "time_gate_tests.py", "check_scores_tests.py", "check_capacity_tests.py", "compare_vents_tests.py", "compare_tanks_tests.py", "net_bots_tests.py",
                 "check_shader_capacity.py", "check_lab.py", "animation_review_tests.py", "animation_metrics.py build/animation-review-gate/metrics.csv --output build/animation-review-gate/results.json"]
     scenes = ["shutdown_tests.tscn", "shutdown_tests.tscn -- --paused --window-close --repeat-quit", "core_tests.tscn", "mode_test.tscn", "blast_query_tests.tscn", "gather_range.tscn",
               "gather_range.tscn -- --scenario=grant-races",
@@ -163,6 +164,44 @@ fi
                         f"{mode} ignored or misattributed deep failure: {failure}", output)
     print("PASS: plain and parallel test-full include the gate and every deep shard, and name the job that failed")
 
+
+def check_scale_knobs(scratch):
+    knobs = "CONFIG BOTS TANKS RENDERED SECONDS REPEATS WARMUP BENCH_ARGS".split()
+    environment = {name: value for name, value in os.environ.items() if name not in knobs}
+    # Append an unrelated target to the real Makefile: scale defaults must not reach it.
+    probe = scratch / "scale-knobs.mk"
+    probe.write_text(".PHONY: probe-scale-knobs\nprobe-scale-knobs:\n\t@echo " +
+                     " ".join(f"{name}=$(origin {name})" for name in knobs) + "\n")
+    arguments = ["make", "--no-print-directory", "-n", "-f", "Makefile", "-f", str(probe)]
+    origins = "echo " + " ".join(f"{name}=undefined" for name in knobs)
+    for target in ("probe-scale-knobs", "bench", "play"):
+        code, output = run(ROOT, *arguments, target, environment=environment)
+        require(code == 0, f"{target} dry run failed", output)
+        if target == "probe-scale-knobs":
+            require(output.strip() == origins, "scale defaults leaked into another target", output)
+        elif target == "bench":
+            require(shlex.split(output.splitlines()[-1]) == ["python3", "-B", "tools/dev/bench.py",
+                    "--bots=0,2,4,8,16", "--tanks=1,2,4,8", "--config=Debug", "--rendered=0,1",
+                    "--seconds=10", "--repeats=3", "--warmup=2"], "bench defaults changed", output)
+        elif target == "play":
+            require(shlex.split(output.splitlines()[-1]) == ["python3", "-B", "tools/dev/source_run.py", "--config", "Release"],
+                    "play must default to Release", output)
+
+    overrides = dict(BOTS="2", TANKS="4", RENDERED="0", SECONDS=".5", REPEATS="1", WARMUP=".2",
+                     BENCH_ARGS="--output=build/probe.json")
+    for source in ("command line", "environment"):
+        for target in ("bench", "play"):
+            configured = dict(overrides, CONFIG="Debug,Release" if target == "bench" else "Debug")
+            assignments = [f"{name}={value}" for name, value in configured.items()] if source == "command line" else []
+            selected = dict(environment, **configured) if source == "environment" else environment
+            code, output = run(ROOT, *arguments, target, *assignments, environment=selected)
+            require(code == 0, f"{target} dry run with {source} overrides failed", output)
+            command = shlex.split(output.splitlines()[-1])
+            expected = (["python3", "-B", "tools/dev/bench.py", "--bots=2", "--tanks=4", "--config=Debug,Release", "--rendered=0",
+                         "--seconds=.5", "--repeats=1", "--warmup=.2", "--output=build/probe.json"] if target == "bench" else
+                        ["python3", "-B", "tools/dev/source_run.py", "--config", "Debug"])
+            require(command == expected, f"{target} lost {source} overrides", output)
+    print("PASS: bench/play defaults stay local and accept command-line/environment overrides")
 
 
 def check_core_wiring():
@@ -289,6 +328,7 @@ public static class Formatting
         require(code == 0, "corrected code did not pass", output)
         print("PASS: whitespace and style drift fail; corrected code passes formatting and build")
         check_make_order(scratch)
+        check_scale_knobs(scratch)
         check_installer(scratch)
         check_core_wiring()
         check_ci_partitions()

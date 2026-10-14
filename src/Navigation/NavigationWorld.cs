@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Godot;
 using Propane.Core;
+using Propane.Fx;
 
 namespace Propane.Navigation;
 
@@ -83,6 +84,7 @@ public sealed class NavigationWorld : INavigationWorld
 
     private bool Clear(Vector3 from, Vector3 to)
     {
+        using var profile = EffectProfile.Measure(EffectProfile.System.NavigationSweep);
         var query = queries?.Shape ?? new PhysicsShapeQueryParameters3D();
         try
         {
@@ -127,6 +129,7 @@ public sealed class NavigationWorld : INavigationWorld
 
     private bool Support(Vector3 feet)
     {
+        using var profile = EffectProfile.Measure(EffectProfile.System.NavigationSupport);
         var ray = queries?.Ray ?? new PhysicsRayQueryParameters3D();
         try
         {

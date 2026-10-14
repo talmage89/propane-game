@@ -39,8 +39,9 @@ Requires Godot 4.7.2 (.NET edition) and the .NET 10 SDK.
 - First: `make setup` imports the assets and compiles. Run it again after switching branches or pulling. It also
   gives the checkout its own Godot user data folder, `Propane-dev/<folder name>`, in a gitignored `override.cfg`.
 - Editor: open `project.godot` and press Play (F5).
-- Command line: `make run`. `make` lists the other tasks (tests, a local server, bots, releases); they find Godot on
-  `PATH` (`godot-mono` or `godot`) or in `/Applications`, or set `GODOT` to its binary.
+- Command line: `make run`. `make play` runs optimized Release C# locally (`CONFIG=Debug` selects Debug); see
+  [Measuring scale](docs/measuring-scale.md#playing-optimized-c-locally). `make` lists the other tasks (tests, a local
+  server, bots, releases); they find Godot on `PATH` (`godot-mono` or `godot`) or in `/Applications`, or set `GODOT` to its binary.
 - Quality gate: `make lint` verifies C# formatting and rebuilds with warnings as errors. `make check` runs lint,
   then `make test`. Run it before submitting a change. `tools/dev/check_world.sh` prints log tails and keeps its
   scratch directory on failure. GitHub Actions runs the same checks on pushes to `dev`
@@ -52,6 +53,12 @@ checks. The gate follows the existing code's style and checks correctness withou
 
 The game opens maximized on the main menu: Single player, Multiplayer, Lab or Quit. In play it captures the mouse; click
 the window to recapture it after switching away.
+
+## Measuring scale
+
+`make bench` measures a fixed suburb across 0/2/4/8/16 in-process bots and 1×/2×/4×/8× tank supply,
+headless and rendered, with three repetitions and JSON comparisons. `make bench CONFIG=Debug,Release` alternates
+the two C# builds per case. [Workload, columns and comparison procedure](docs/measuring-scale.md).
 
 ## Lab
 

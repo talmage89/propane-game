@@ -30,6 +30,8 @@ public partial class CaptureDirector : Node
     private System.Threading.Thread? recordWriter;
     private readonly System.Collections.Concurrent.BlockingCollection<(byte[] Data, int Repeat)> recordQueue = new(3);
 
+    public bool CollectFrameMetrics { get; init; } = true;
+
     public float QuitAfter { get; set; } = -1;
 
     public void At(float time, Action action) => timeline.Add((time, action));
@@ -38,7 +40,7 @@ public partial class CaptureDirector : Node
 
     public override void _Ready()
     {
-        if (DevArgs.Get("frame-metrics") != null)
+        if (CollectFrameMetrics && DevArgs.Get("frame-metrics") != null)
             AddChild(new FrameMetrics { ProcessPriority = int.MaxValue });
         timeline.Sort((a, b) => a.Time.CompareTo(b.Time));
         ProcessMode = ProcessModeEnum.Always;
