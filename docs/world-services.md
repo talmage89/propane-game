@@ -11,6 +11,16 @@ sleep/wake and relocation between gather scans; vents retain the same thrust and
 `GatherGroups` searches neighboring spatial cells, retaining exact radius connectivity, ordered membership and
 revision-keyed delay clocks. Neither service changes the puncture, fuse or gathering rules.
 
+`DebrisQueue` also lives under the effects root. A burst captures its selected fragment poses, velocities and
+cosmetic randomness, then the queue registers at most `DebrisSpawnPerFrame` bodies per presentation frame.
+It checks each fragment's originating content before creating it; content retirement discards pending fragments,
+and world invalidation clears the queue. Spawned bodies stay in their originating content. Deferred fragments
+start at the captured burst pose, so very large queues delay shell breakup and subsequent fragment collisions.
+Debris uses an independent cosmetic random generator, keeping queue drain timing out of `World.Random`.
+Full-explosion counts are scoped to the world and released on effect retirement. Over the budget, a blast keeps
+its immediate core flash/fireball while omitting the secondary layers. All physical blast and chain work remains
+synchronous, including receiver callbacks and causal network requests.
+
 Each simulation lives in a viewport with rendering disabled. The application viewport shares the selected
 `World3D` to present it; camera nodes stay under the facade and query their injected world's physics space. This
 presentation bridge preserves the facades. Actors carry camera-independent logical aim; explicit local views

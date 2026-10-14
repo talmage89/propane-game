@@ -382,6 +382,9 @@ public partial class PropaneTank : RigidBody3D
         }
         Disturb();
         State = TankState.Exploded;
+        // Queued deletion is delayed until the frame ends. Later blasts must not query an already absent shell.
+        CollisionLayer = 0;
+        CollisionMask = 0;
         var groundY = GroundHeightBelow(center);
 
         vent?.Extinguish();
@@ -472,22 +475,7 @@ public partial class PropaneTank : RigidBody3D
 
     private void SpawnDebris(Vector3 center)
     {
-        using var profile = EffectProfile.Measure(EffectProfile.System.Debris);
-        var tuning = World.Tuning;
-        var rng = new RandomNumberGenerator();
-        var inherited = LinearVelocity;
-        foreach (var piece in GameAssets.Debris)
-        {
-            var body = DebrisBody.Create(World, piece);
-            ContentSpawn.InWorld(body);
-            body.GlobalTransform = GlobalTransform;
-            var pieceCenter = GlobalTransform * piece.Centroid;
-            var outward = pieceCenter - center;
-            outward = outward.LengthSquared() > 0.0001f ? outward.Normalized() : Vector3.Up;
-            var speed = tuning.DebrisSpeed * rng.RandfRange(0.45f, 1.15f);
-            body.LinearVelocity = inherited + (outward + Vector3.Up * rng.RandfRange(0.3f, 1.1f)).Normalized() * speed;
-            body.AngularVelocity = new Vector3(rng.RandfRange(-1, 1), rng.RandfRange(-1, 1), rng.RandfRange(-1, 1)) * tuning.DebrisSpin;
-        }
+        DebrisQueue.Enqueue(World, ContentSpawn, GlobalTransform, LinearVelocity, center);
     }
 
     private void SpawnScorch(Vector3 groundPoint)

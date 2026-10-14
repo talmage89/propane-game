@@ -13,6 +13,64 @@ public static class EffectResourceTests
 {
     public static void Register(TestRunner runner)
     {
+        runner.Run("effects/crowded blasts keep fireballs and restore full slots on retirement", () =>
+        {
+            using var tuning = Tuning.LoadBaked();
+            using var world = new WorldContext(runner, tuning);
+            using var other = new WorldContext(runner, tuning);
+            world.Tuning.ExplosionFullEffectBudget = 2;
+            var first = ExplosionEffect.Create(world, Vector3.Zero, 0);
+            var second = ExplosionEffect.Create(world, Vector3.Right, 0);
+            var compact = ExplosionEffect.Create(world, Vector3.Left, 0);
+            Assert(first.GetChildren().OfType<GpuParticles3D>().Count() == 5 &&
+                second.GetChildren().OfType<GpuParticles3D>().Count() == 5 &&
+                compact.GetChildren().OfType<GpuParticles3D>().Count() == 1 &&
+                !compact.GetChildren().OfType<OmniLight3D>().Any(), "full explosion budget or essential fireball was lost");
+            var independent = ExplosionEffect.Create(other, Vector3.Zero, 0);
+            Assert(independent.GetChildren().OfType<GpuParticles3D>().Count() == 5, "another world's blasts consumed full slots");
+            compact._Process(.2);
+            Assert(!compact.IsProcessing(), "compact flash retained managed work after fading");
+            world.Clock.Advance(2);
+            Assert(compact.IsQueuedForDeletion(), "compact fireball did not retire after its native particles");
+            first.Free();
+            var restored = ExplosionEffect.Create(world, Vector3.Zero, 0);
+            Assert(restored.GetChildren().OfType<GpuParticles3D>().Count() == 5, "retired full blast did not release its slot");
+        });
+        runner.Run("effects/debris queue bounds work and cancels retired content", () =>
+        {
+            using var tuning = Tuning.LoadBaked();
+            using var world = new WorldContext(runner, tuning);
+            using var other = new WorldContext(runner, tuning);
+            world.Tuning.DebrisPiecesPerTank = 6;
+            world.Tuning.DebrisSpawnPerFrame = 2;
+            var pieces = GameAssets.Debris.Count;
+            foreach (var count in Enumerable.Range(1, pieces))
+            {
+                var indices = Enumerable.Range(0, count).Select(i => DebrisQueue.PieceIndex(i, count, pieces)).ToArray();
+                Assert(indices.Distinct().Count() == count && indices.All(i => i >= 0 && i < pieces),
+                    "fragment selection repeated or escaped the authored pieces");
+            }
+            var randomState = world.Random.State;
+            DebrisQueue.Enqueue(world, world.Spawn, Transform3D.Identity, Vector3.Zero, PropaneTank.LocalCenter);
+            var queue = world.EffectsRoot.GetChildren().OfType<DebrisQueue>().Single();
+            Assert(queue.PendingCount == 6 && !world.ContentRoot.GetChildren().OfType<DebrisBody>().Any(),
+                "fragment registration was not deferred");
+            queue._Process(0);
+            Assert(queue.PendingCount == 4 && world.ContentRoot.GetChildren().OfType<DebrisBody>().Count() == 2,
+                "per-frame registration budget was ignored");
+            Assert(world.Random.State == randomState, "presentation work changed simulation randomness");
+            DebrisQueue.Enqueue(other, other.Spawn, Transform3D.Identity, Vector3.Zero, PropaneTank.LocalCenter);
+            var independent = other.EffectsRoot.GetChildren().OfType<DebrisQueue>().Single();
+            var outgoing = world.ContentRoot;
+            var incoming = new Node3D(); world.Root.AddChild(incoming); world.SetContentRoot(incoming);
+            world.RetireContent(outgoing);
+            queue._Process(0);
+            Assert(queue.PendingCount == 0 && incoming.GetChildCount() == 0 && independent.PendingCount == other.Tuning.DebrisPiecesPerTank,
+                "retirement spawned stale fragments or crossed worlds");
+            DebrisQueue.Enqueue(world, world.Spawn, Transform3D.Identity, Vector3.Zero, PropaneTank.LocalCenter);
+            world.Invalidate();
+            Assert(queue.PendingCount == 0, "invalidation retained deferred fragment work");
+        });
         runner.Run("effects/shared resources survive live tuning and another world", () =>
         {
             using var tuning = Tuning.LoadBaked();

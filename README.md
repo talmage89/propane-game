@@ -153,6 +153,11 @@ Upright tiers span two collars below, using `PileUprightLayerHeight`; rows retai
 Rifle hits puncture, then detonate. A blast within `ChainRadius` acts as a shot: an intact neighbor punctures and
 keeps venting and moving; an already-venting neighbor detonates after its `ChainFuseMin`/`ChainFuseMax` fuse.
 
+Dense chains use **Explosion full effect budget** (16 overlapping full blasts); additional blasts keep their core
+flash and fireball. **Debris pieces per tank** selects 6 of the authored 25 fragments, and **Debris spawn per frame**
+limits body creation to 64 per frame. Spawned debris stays until the suburb retires. These dials affect presentation
+and fragment physics; punctures, chain fuses, blast pushes and banking happen immediately.
+
 Loose intact tanks gather with nearby resting neighbors after 20 undisturbed seconds. The **Tank Gather** tuners
 control radius (3 m), minimum group size (2), delay, a three-stage lift/glide/settle and optional scan shimmer (set
 `GatherShimmer` to 0 to disable it). Connected neighbors gather at a clear center; isolated singles, venting tanks,

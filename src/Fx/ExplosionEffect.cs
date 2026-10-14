@@ -1,3 +1,5 @@
+using System;
+using System.Runtime.CompilerServices;
 using Godot;
 using Propane.Core;
 
@@ -24,12 +26,20 @@ public partial class ExplosionEffect : Node3D
     private const int MaxShadowedFlashes = 3;
 
     private static Texture2D? flipbookTexture;
+    private static readonly QuadMesh quad = new() { Size = Vector2.One };
+    private static readonly SphereMesh sphere = new() { Radius = 0.5f, Height = 1f, RadialSegments = 32, Rings = 16 };
+    private static readonly PlaneMesh plane = new() { Size = Vector2.One * 2f };
     private static float processScale;
     private static readonly ParticleProcessMaterial?[] sharedProcesses = new ParticleProcessMaterial?[5];
     private static readonly StringName opacityParameter = new("opacity");
     private static readonly StringName progressParameter = new("progress");
     private static readonly StringName emissionParameter = new("emission");
     private bool castsShadow;
+    private sealed class Budget { public int Full; }
+    private static readonly ConditionalWeakTable<WorldContext, Budget> budgets = new();
+    private Budget? budget;
+    private bool full;
+    private GpuParticles3D fireball = null!;
 
     private float elapsed;
     private OmniLight3D flash = null!;
@@ -67,77 +77,91 @@ public partial class ExplosionEffect : Node3D
         var scale = tuning.FireballScale;
         PrepareProcesses(scale);
         var groundOffset = groundHeight - GlobalPosition.Y;
+        budget = budgets.GetValue(World, static _ => new Budget());
+        full = budget.Full < tuning.ExplosionFullEffectBudget;
+        if (full) budget.Full++;
 
-        flash = new OmniLight3D
+        if (full)
         {
-            LightColor = new Color(1f, 0.62f, 0.3f),
-            LightEnergy = tuning.FlashEnergy,
-            OmniRange = tuning.FlashRange,
-            OmniAttenuation = 1.4f,
-            ShadowEnabled = castsShadow = World.ShadowedFlashes < MaxShadowedFlashes,
-            LightSize = 0.4f,
-            Position = new Vector3(0, 0.8f * scale, 0),
-        };
-        AddChild(flash);
-        if (castsShadow)
-        {
-            World.ShadowedFlashes++;
+            flash = new OmniLight3D
+            {
+                LightColor = new Color(1f, 0.62f, 0.3f),
+                LightEnergy = tuning.FlashEnergy,
+                OmniRange = tuning.FlashRange,
+                OmniAttenuation = 1.4f,
+                ShadowEnabled = castsShadow = World.ShadowedFlashes < MaxShadowedFlashes,
+                LightSize = 0.4f,
+                Position = new Vector3(0, 0.8f * scale, 0),
+            };
+            AddChild(flash);
+            if (castsShadow)
+            {
+                World.ShadowedFlashes++;
+            }
         }
 
         coreMaterial = new ShaderMaterial { Shader = GD.Load<Shader>("res://shaders/fx_glow.gdshader") };
         coreMaterial.SetShaderParameter("dot_texture", FxLibrary.SoftDotTexture);
         coreMaterial.SetShaderParameter("color", new Color(1f, 0.85f, 0.6f));
         coreMaterial.SetShaderParameter("intensity", 5f);
-        coreFlash = new MeshInstance3D { Mesh = new QuadMesh { Size = Vector2.One, Material = coreMaterial } };
+        coreFlash = new MeshInstance3D { Mesh = quad, MaterialOverride = coreMaterial };
         AddChild(coreFlash);
+        fireball = CreateFireballCore(scale);
+        AddChild(fireball);
 
-        flipbookTexture ??= GD.Load<Texture2D>("res://assets/tank/T_Fireball_SubUV_8x8.png");
-        flipbookMaterial = new ShaderMaterial { Shader = GD.Load<Shader>("res://shaders/fx_flipbook.gdshader") };
-        flipbookMaterial.SetShaderParameter("flipbook", flipbookTexture);
-        flipbookMaterial.SetShaderParameter(emissionParameter, 2.2f);
-        flipbook = new MeshInstance3D
+        if (full)
         {
-            Mesh = new QuadMesh { Size = Vector2.One, Material = flipbookMaterial },
-            Scale = new Vector3(FlipbookWidth, FlipbookHeight, 1) * scale * FlipbookScale,
-            Position = new Vector3(0, groundOffset + FlipbookHeight * scale * FlipbookScale * 0.5f, 0),
-            CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
-            SortingOffset = -0.5f,
-        };
-        AddChild(flipbook);
+            flipbookTexture ??= GD.Load<Texture2D>("res://assets/tank/T_Fireball_SubUV_8x8.png");
+            flipbookMaterial = new ShaderMaterial { Shader = GD.Load<Shader>("res://shaders/fx_flipbook.gdshader") };
+            flipbookMaterial.SetShaderParameter("flipbook", flipbookTexture);
+            flipbookMaterial.SetShaderParameter(emissionParameter, 2.2f);
+            flipbook = new MeshInstance3D
+            {
+                Mesh = quad,
+                MaterialOverride = flipbookMaterial,
+                Scale = new Vector3(FlipbookWidth, FlipbookHeight, 1) * scale * FlipbookScale,
+                Position = new Vector3(0, groundOffset + FlipbookHeight * scale * FlipbookScale * 0.5f, 0),
+                CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+                SortingOffset = -0.5f,
+            };
+            AddChild(flipbook);
 
-        AddChild(CreateFireballCore(scale));
-        AddChild(CreateFireballBillows(scale));
-        AddChild(CreateSmoke(scale, tuning.SmokeAmount));
-        AddChild(CreateEmbers(scale, tuning.EmberAmount));
-        var dust = CreateDust(scale);
-        dust.Position = new Vector3(0, groundOffset + 0.25f, 0);
-        AddChild(dust);
+            AddChild(CreateFireballBillows(scale));
+            AddChild(CreateSmoke(scale, tuning.SmokeAmount));
+            AddChild(CreateEmbers(scale, tuning.EmberAmount));
+            var dust = CreateDust(scale);
+            dust.Position = new Vector3(0, groundOffset + 0.25f, 0);
+            AddChild(dust);
 
-        shockwaveMaterial = new ShaderMaterial { Shader = GD.Load<Shader>("res://shaders/fx_shockwave.gdshader") };
-        shockwave = new MeshInstance3D
-        {
-            Mesh = new SphereMesh { Radius = 0.5f, Height = 1f, RadialSegments = 32, Rings = 16, Material = shockwaveMaterial },
-            CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
-            Visible = tuning.ShockwaveScale > 0,
-        };
-        AddChild(shockwave);
+            shockwaveMaterial = new ShaderMaterial { Shader = GD.Load<Shader>("res://shaders/fx_shockwave.gdshader") };
+            shockwave = new MeshInstance3D
+            {
+                Mesh = sphere,
+                MaterialOverride = shockwaveMaterial,
+                CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+                Visible = tuning.ShockwaveScale > 0,
+            };
+            AddChild(shockwave);
 
-        groundRingMaterial = new ShaderMaterial { Shader = GD.Load<Shader>("res://shaders/fx_ground_ring.gdshader") };
-        groundRingMaterial.SetShaderParameter("noise_texture", FxLibrary.Noise);
-        groundRing = new MeshInstance3D
-        {
-            Mesh = new PlaneMesh { Size = Vector2.One * 2f, Material = groundRingMaterial },
-            Position = new Vector3(0, groundOffset + 0.06f, 0),
-            CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
-            Visible = tuning.ShockwaveScale > 0,
-        };
-        AddChild(groundRing);
+            groundRingMaterial = new ShaderMaterial { Shader = GD.Load<Shader>("res://shaders/fx_ground_ring.gdshader") };
+            groundRingMaterial.SetShaderParameter("noise_texture", FxLibrary.Noise);
+            groundRing = new MeshInstance3D
+            {
+                Mesh = plane,
+                MaterialOverride = groundRingMaterial,
+                Position = new Vector3(0, groundOffset + 0.06f, 0),
+                CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+                Visible = tuning.ShockwaveScale > 0,
+            };
+            AddChild(groundRing);
+        }
 
         UpdateLayers(0);
     }
 
     public override void _ExitTree()
     {
+        if (full && budget != null) { budget.Full--; budget = null; }
         if (castsShadow)
         {
             World.ShadowedFlashes--;
@@ -150,6 +174,13 @@ public partial class ExplosionEffect : Node3D
         using var profile = EffectProfile.Measure(EffectProfile.System.ExplosionProcess);
         elapsed += (float)delta;
         UpdateLayers(elapsed);
+        if (!full && elapsed >= CoreFlashDuration)
+        {
+            // The native fireball finishes without managed updates; retire when its particles have faded.
+            SetProcess(false);
+            World.Schedule(this, Math.Max(0, fireball.Lifetime - elapsed), QueueFree);
+            return;
+        }
         if (elapsed > Lifetime)
         {
             QueueFree();
@@ -160,6 +191,11 @@ public partial class ExplosionEffect : Node3D
     {
         var tuning = World.Tuning;
         var scale = tuning.FireballScale;
+        var core = Mathf.Clamp(t / CoreFlashDuration, 0, 1);
+        coreFlash.Scale = Vector3.One * Mathf.Lerp(1.2f, 4.5f, Mathf.Sqrt(core)) * scale;
+        coreMaterial.SetShaderParameter(opacityParameter, 1f - core);
+        coreFlash.Visible = core < 1f;
+        if (!full) return;
 
         // Light: a hard pop that decays with a long orange tail.
         var flashT = t / Mathf.Max(tuning.FlashDuration, 0.01f);
@@ -167,11 +203,6 @@ public partial class ExplosionEffect : Node3D
                             + tuning.FlashEnergy * 0.08f * Mathf.Max(0, 1f - t / 2.4f);
         flash.LightColor = new Color(1f, 0.72f, 0.42f).Lerp(new Color(1f, 0.42f, 0.12f), Mathf.Clamp(flashT, 0, 1));
         flash.Visible = flash.LightEnergy > 0.01f;
-
-        var core = Mathf.Clamp(t / CoreFlashDuration, 0, 1);
-        coreFlash.Scale = Vector3.One * Mathf.Lerp(1.2f, 4.5f, Mathf.Sqrt(core)) * scale;
-        coreMaterial.SetShaderParameter(opacityParameter, 1f - core);
-        coreFlash.Visible = core < 1f;
 
         var book = Mathf.Clamp((t - 0.03f) / FlipbookDuration, 0, 1);
         flipbookMaterial.SetShaderParameter(progressParameter, book);

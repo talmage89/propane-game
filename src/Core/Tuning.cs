@@ -212,6 +212,8 @@ public partial class Tuning : Resource
     // ---------------------------------------------------------------- Blast effects
     [ExportGroup("Explosion Effects")]
     [Export(PropertyHint.Range, "0.1,4,0.05")] public float FireballScale { get; set; } = 1f;
+    /// <summary>Overlapping full explosions; excess blasts retain their core flash and particle fireball.</summary>
+    [Export(PropertyHint.Range, "1,128,1")] public int ExplosionFullEffectBudget { get; set; } = 16;
     [Export(PropertyHint.Range, "0,4,0.05")] public float SmokeAmount { get; set; } = 1f;
     [Export(PropertyHint.Range, "0,4,0.05")] public float EmberAmount { get; set; } = 1f;
     [Export(PropertyHint.Range, "0,200,1")] public float FlashEnergy { get; set; } = 40f;
@@ -219,6 +221,10 @@ public partial class Tuning : Resource
     [Export(PropertyHint.Range, "0.05,3,0.01")] public float FlashDuration { get; set; } = 0.55f;
     [Export(PropertyHint.Range, "0,60,0.5")] public float DebrisSpeed { get; set; } = 9f;
     [Export(PropertyHint.Range, "0,60,0.5")] public float DebrisSpin { get; set; } = 22f;
+    /// <summary>Well-spread pieces of the authored 25-piece shell; the remaining fragments are cosmetic detail.</summary>
+    [Export(PropertyHint.Range, "0,25,1")] public int DebrisPiecesPerTank { get; set; } = 6;
+    /// <summary>Deferred rigid-body registrations per presentation frame; tank/blast rules never wait on this queue.</summary>
+    [Export(PropertyHint.Range, "1,256,1")] public int DebrisSpawnPerFrame { get; set; } = 64;
     [Export(PropertyHint.Range, "0,10,0.1")] public float ScorchSize { get; set; } = 4.2f;
     [Export(PropertyHint.Range, "0,4,0.05")] public float ShockwaveScale { get; set; } = 1f;
 
