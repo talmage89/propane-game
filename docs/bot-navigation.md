@@ -68,7 +68,9 @@ the first physics tick; buffers for newly discovered heights or growing dynamic 
 
 Brains steer and aim every physics tick, but cache sight lines for `BotSightInterval`, watchers for
 `BotWatchInterval` and cover for `BotCoverInterval`. Target selection retains its periodic cadence and seeded
-random stream. Hot paths use indexed lists, reusable query nodes and deferred status formatting instead of LINQ,
+random stream. When all tanks are banked, `BotHuntWhenEmpty` lets a trailing banker pursue a richer opponent
+beyond sight/rifle range, then react and fire after closing in; clearing the map cannot leave it idle indefinitely.
+Hot paths use indexed lists, reusable query nodes and deferred status formatting instead of LINQ,
 physics-result dictionaries and interpolated status strings. `Status` allocates only when a log or overlay reads it.
 
 `Plan` is synchronous for tests/offline callers. The grid supports horizontal ground and ballistic jumps, rather

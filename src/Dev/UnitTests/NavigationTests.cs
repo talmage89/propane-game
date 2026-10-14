@@ -1,9 +1,12 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using Godot;
 using Propane.Bots;
 using Propane.Core;
 using Propane.Navigation;
+using Propane.Net;
+using Propane.Player;
 using Propane.Tank;
 
 namespace Propane.Dev.UnitTests;
@@ -43,6 +46,23 @@ internal static class NavigationTests
         public bool Supported(Vector3 feet) => course.Supported(feet);
         public bool Sweep(Vector3 from, Vector3 to) => course.Sweep(from, to);
         public bool Flight(Vector3 from, Vector3 direction) => course.Flight(from, direction);
+    }
+
+    private sealed class BankingWorld(WorldContext world, PlayerCharacter player, PlayerCharacter enemy) : IBotWorld, IDisposable
+    {
+        public WorldContext World => world;
+        public PlayerCharacter Player => player;
+        public bool IsPlaying => true;
+        public float TimeLeft => 180;
+        public int MyScore => 0;
+        public IReadOnlyDictionary<int, int> Scores { get; } = new Dictionary<int, int> { [1] = 0, [2] = 8 };
+        public double Now => 0;
+        public double LastHitTime => double.NegativeInfinity;
+        public int LastHitBy => 0;
+        public IReadOnlyList<PlayerCharacter> RemoteBodies { get; } = new[] { enemy };
+        public IReadOnlyList<AmmoPickup> Pickups => Array.Empty<AmmoPickup>();
+        public BotServices Services { get; } = new(world);
+        public void Dispose() => Services.Dispose();
     }
 
     private static float FlatDistance(Vector3 a, Vector3 b) => new Vector2(a.X - b.X, a.Z - b.Z).Length();
@@ -307,6 +327,34 @@ internal static class NavigationTests
                 nav.Navigate(grid, hazards, state, goal, tuning, 1f / 120);
             }
             TestRunner.Assert(GC.GetAllocatedBytesForCurrentThread() == before, "steady route and hazard hot paths allocate");
+        });
+        runner.Run("banking bots pursue a richer opponent after the suburb is cleared", () =>
+        {
+            var player = new PlayerCharacter { World = runner.World, ActorId = 1, Ammo = AmmoState.Starting(tuning) };
+            var enemy = new PlayerCharacter { World = runner.World, ActorId = 2, Position = Vector3.Right * 100 };
+            runner.World.Root.AddChild(player);
+            runner.World.Root.AddChild(enemy);
+            using var observations = new BankingWorld(runner.World, player, enemy);
+            using var brain = new BankingBot(23);
+            var old = runner.World.Tuning.BotHuntWhenEmpty;
+            try
+            {
+                brain.Prepare(observations);
+                for (var i = 0; i < 100; i++) brain.Think(observations, 1f / 120);
+                TestRunner.Assert(brain.Status.StartsWith("closing on 2", StringComparison.Ordinal), "empty suburb must not leave a trailing bot idle");
+                TestRunner.Assert(!brain.Read().FireHeld, "do not shoot a target beyond rifle range");
+                var before = GC.GetAllocatedBytesForCurrentThread();
+                for (var i = 0; i < 100; i++) brain.Think(observations, 1f / 120);
+                TestRunner.Assert(GC.GetAllocatedBytesForCurrentThread() == before, "steady banking thoughts allocate");
+                runner.World.Tuning.BotHuntWhenEmpty = false;
+                for (var i = 0; i < 100; i++) brain.Think(observations, 1f / 120);
+                TestRunner.Assert(brain.Status == "no target", "pursuit is controlled by its local tuner");
+            }
+            finally
+            {
+                runner.World.Tuning.BotHuntWhenEmpty = old;
+                player.Free(); enemy.Free();
+            }
         });
         runner.Run("bot tuners preserve the match snapshot schema", () =>
         {

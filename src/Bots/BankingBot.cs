@@ -392,6 +392,7 @@ public sealed class BankingBot : IBotGoalPolicy
         var bestScore = float.MinValue;
         // Players worth shooting: in sight, in range, with tanks to spill.
         var bodies = match.RemoteBodies;
+        var cleared = tuning.BotHuntWhenEmpty && match.Services.Tanks.Count == 0;
         for (var i = 0; i < bodies.Count; i++)
         {
             var enemy = bodies[i];
@@ -400,14 +401,15 @@ public sealed class BankingBot : IBotGoalPolicy
             // A fight costs ammo and invites return fire: worth it for a real bank, for a cheap close one, or
             // against whoever just shot this bot.
             var avenging = enemy.ActorId == match.LastHitBy && match.Now - match.LastHitTime < 3;
+            var hunting = cleared && banked > match.MyScore;
             var worth = protecting ? banked > match.MyScore : banked >= 3 || banked >= 1 && distance < 18f || avenging && banked > 0;
-            if (blacklist.ContainsKey(enemy.GetInstanceId()) || !worth || distance > PlayerRange)
+            if (blacklist.ContainsKey(enemy.GetInstanceId()) || !worth && !hunting || distance > PlayerRange && !hunting)
             {
                 continue;
             }
             // Worth it against anyone holding more; against smaller banks only when this bot has little to lose.
             var score = 60f + banked * 6f - distance - (match.MyScore > banked + 2 ? 45f : 0f);
-            if (score > bestScore && CanSee(match, player, Aim(enemy)))
+            if (score > bestScore && (hunting || CanSee(match, player, Aim(enemy))))
             {
                 bestScore = score;
                 best = enemy;
@@ -489,6 +491,17 @@ public sealed class BankingBot : IBotGoalPolicy
         {
             fightTarget = enemy;
             fightTime = 0;
+        }
+        if (distance > PlayerRange || !Sees(match, player, enemy, Aim(enemy)))
+        {
+            // Clearing the suburb must not strand a trailing bot outside rifle range forever. Route to the
+            // richer opponent's actual position, rather than a short leg that may end inside a house.
+            fightTime = 0;
+            Face(player, Aim(enemy), dt);
+            MoveToward(player, Flat((enemy.IsRagdolled ? enemy.PelvisPosition : enemy.GlobalPosition) - player.GlobalPosition));
+            intent.Sprint = distance > tuning.BotSprintDistance;
+            status.Set("closing on {0} at {1:0.0} m", enemy.ActorId, distance);
+            return;
         }
         fightTime += dt;
         // Aim like a person: a moment to react, then an error that wanders and tightens while tracking.

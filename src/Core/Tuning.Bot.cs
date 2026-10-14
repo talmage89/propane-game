@@ -12,10 +12,13 @@ public partial class Tuning
     // search expansions. Searches past them wait for the next tick, so many bots cost no more per tick than a few.
     public int BotQueriesPerTick { get; set; } = 64;
     public int BotExpansionsPerTick { get; set; } = 160;
-    // Seconds that navigation answers near an explosion are kept only briefly, while thrown props settle.
+    // Pursue a richer rival after the tank supply has been cleared, instead of waiting outside rifle range.
+    public bool BotHuntWhenEmpty { get; set; } = true;
+    // Periodic observations leave steering and aiming at the physics rate.
     public float BotSightInterval { get; set; } = 0.1f;
     public float BotWatchInterval { get; set; } = 0.2f;
     public float BotCoverInterval { get; set; } = 0.5f;
+    // Seconds that navigation answers near an explosion expire while thrown props settle.
     public float BotDisturbSettle { get; set; } = 3f;
     public float BotWaypointRadius { get; set; } = 0.45f;
     public float BotGoalRadius { get; set; } = 0.6f;
