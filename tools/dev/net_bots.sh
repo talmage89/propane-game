@@ -78,7 +78,18 @@ for _ in range(200):
     "$godot" --headless --path "$project" -- --server --port="$port" $server_args >"$out/server.log" 2>&1 &
     server=$!
     trap 'kill $server 2>/dev/null || true' EXIT
-    sleep 1.5
+    # Wait for the actual bind, not a fixed startup delay. A loaded editor may need longer than 1.5 s.
+    startup_deadline=$((SECONDS + 30))
+    while ! grep -qE "listening on UDP $port |Couldn't create an ENet host" "$out/server.log"; do
+      if ! kill -0 "$server" 2>/dev/null || (( SECONDS >= startup_deadline )); then
+        # A process may exit between the log read and kill -0; read its final output before deciding.
+        grep -qE "listening on UDP $port |Couldn't create an ENet host" "$out/server.log" && break
+        echo "FAIL: server did not become ready on port $port" >&2
+        tail -30 "$out/server.log" >&2
+        exit 1
+      fi
+      sleep 0.05
+    done
     grep -q "Couldn't create an ENet host" "$out/server.log" 2>/dev/null || break
     kill $server 2>/dev/null || true
     wait $server 2>/dev/null || true
