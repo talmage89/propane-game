@@ -254,6 +254,10 @@ public partial class LabTest : Node
         template.LabBankBots = (int)DevArgs.GetFloat("bots", 1);
         DevArgs.ApplyTuningOverrides(template);
         var lab = Enter(LabScenarios.Get("duel"), DevArgs.Get("environment") == "suburb" ? LabEnvironment.Suburb : LabEnvironment.Void);
+        Assert(lab.Session.Actors.Count == template.LabBankBots + 1, "banking roster ignored the bot count");
+        Assert(lab.Session.Actors.Select(a => a.Character.GlobalPosition).Distinct().Count() == lab.Session.Actors.Count, "banking actors share a start");
+        Assert(lab.Session.Actors.Where(a => a.Character != lab.Player).All(a => a.Character.View == null && a.Character.InputOverride is IBotGoalPolicy),
+            "banking bots need owned brains without local views");
         if (soak) lab.Bank!.AttachBot(lab.Player);
         else lab.Player.InputOverride = new ScriptedPlayer(lab);
         // The scripted player taps visible tanks through the actor intent/aim path; neither bank is granted.
@@ -270,6 +274,16 @@ public partial class LabTest : Node
         // A bot that freezes for most of the round (the suburb once banked one tank in 180 s) must not pass.
         if (soak) Assert(bank.Earned[1] + bank.Earned[2] >= 10, $"two banking bots earned only {bank.Earned[1] + bank.Earned[2]} tanks");
         Assert(bank.Scores.Values.Sum() + lab.LiveTanks.Count() == bank.InitialSupply, "bank conservation");
+        if (!bank.IsPlaying)
+        {
+            await Frames(2).ConfigureAwait(true);
+            var best = bank.Scores.Where(s => s.Key != lab.Player.ActorId).OrderByDescending(s => s.Value).First();
+            var mine = bank.Scores[lab.Player.ActorId];
+            var name = template.LabBankBots == 1 ? "BOT" : $"BOT {best.Key - 1}";
+            var expected = mine > best.Value ? "YOU WIN" : mine == best.Value ? "TIED" : $"{name} WINS";
+            Assert(lab.Overlay.ResultTitle == expected, "banking result ignored the strongest bot");
+            Assert(lab.Overlay.StatusText.Contains($"  {best.Value}    ·", StringComparison.Ordinal), "banking HUD omitted the best opponent's score");
+        }
         Assert(lab.Opponent!.View == null && !lab.World.Networked, "duel needs camera/network");
         capture.Screenshot(soak ? "duel_soak_end" : "duel_bot_bank");
         if (!bank.IsPlaying)

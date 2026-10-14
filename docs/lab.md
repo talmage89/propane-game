@@ -21,7 +21,8 @@ the rest of Propane. Huge stack and Range use void; the banking duel and Free tu
   The void arena is marked by a ring of floor disks, half a step off both start points; the markings are reference
   points, not walls or a new boundary rule. A bot whose rifle ray stays blocked for `BotStuckAimTime` (4 s) without
   moving gives up that pile for `BotTargetRetryTime`: the vantage search can see past a loose fence panel that still
-  stops the shot. The round's result replaces the controls panel's title when the clock ends.
+  stops the shot. With several opponents, the HUD shows the strongest bot and the result compares every bank.
+  The round's result replaces the controls panel's title when the clock ends.
 - **Free tuning** opens the tuning panel after a short settling delay on a range fixture or a generated suburb.
   Opening it manually cancels that introductory opening. It is also available in every
   other starter through F1/` or the Lab controls menu. Opening it pauses this world and its clock. Sliders and

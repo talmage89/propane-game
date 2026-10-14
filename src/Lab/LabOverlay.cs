@@ -80,6 +80,9 @@ public partial class LabOverlay : CanvasLayer
         UpdateStatus();
     }
 
+    internal string ResultTitle => title.Text;
+    internal string StatusText => status.Text;
+
     /// <summary>A prototype's status line, and once decided its result title and the full order.</summary>
     private (string Line, string Winner, string Summary) Prototype(PrototypeRunner prototype)
     {
@@ -159,11 +162,18 @@ public partial class LabOverlay : CanvasLayer
         if (Lab.Bank is { } bank)
         {
             resume.Disabled = !bank.IsPlaying;
-            status.Text = $"You  {bank.Scores[1]}    ·    Bot  {bank.Scores[2]}    ·    {Mathf.CeilToInt(bank.TimeLeft) / 60}:{Mathf.CeilToInt(bank.TimeLeft) % 60:00}";
-            // The round's result takes the panel's title; the controls below stay for resetting or leaving.
-            title.Text = bank.IsPlaying ? Lab.Scenario.Name.ToUpperInvariant() : bank.Scores[1] == bank.Scores[2] ? "TIED" :
-                bank.Scores[1] > bank.Scores[2] ? "YOU WIN" : "BOT WINS";
-            result.Text = bank.IsPlaying ? "Paused · the clock is stopped" : $"Time’s up · you banked {bank.Scores[1]}, the bot {bank.Scores[2]}";
+            var best = 2;
+            foreach (var (actor, score) in bank.Scores)
+                if (actor != Lab.Player.ActorId && score > bank.Scores[best]) best = actor;
+            var mine = bank.Scores[Lab.Player.ActorId];
+            var other = bank.Scores[best];
+            var name = bank.Scores.Count == 2 ? "Bot" : $"Bot {best - 1}";
+            status.Text = $"You  {mine}    ·    {name}  {other}    ·    {Mathf.CeilToInt(bank.TimeLeft) / 60}:{Mathf.CeilToInt(bank.TimeLeft) % 60:00}";
+            // Compare every opponent: the first bot need not be the strongest in a larger Lab session.
+            title.Text = bank.IsPlaying ? Lab.Scenario.Name.ToUpperInvariant() : mine == other ? "TIED" :
+                mine > other ? "YOU WIN" : $"{name.ToUpperInvariant()} WINS";
+            result.Text = bank.IsPlaying ? "Paused · the clock is stopped" :
+                $"Time’s up · you banked {mine}, {(bank.Scores.Count == 2 ? "the bot" : name)} {other}";
         }
         else if (Lab.Prototype is { } prototype)
         {
