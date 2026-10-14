@@ -13,6 +13,94 @@ public static class EffectResourceTests
 {
     public static void Register(TestRunner runner)
     {
+        runner.Run("effects/overlapping dense leases restore the prior catch-up value", () =>
+        {
+            var original = Engine.MaxPhysicsStepsPerFrame;
+            try
+            {
+                Engine.MaxPhysicsStepsPerFrame = 8;
+                using var tuning = Tuning.LoadBaked();
+                tuning.DenseChainFuseThreshold = 1;
+                using var first = new WorldContext(runner, tuning);
+                using var second = new WorldContext(runner, tuning);
+                second.Tuning.DenseChainPhysicsSteps = 2;
+                foreach (var world in new[] { first, second })
+                {
+                    var tank = PropaneTank.Create(world); world.Spawn.InWorld(tank);
+                    tank.FuseScheduleOverride = (_, _) => { };
+                    tank.PunctureRemote(Vector3.Up * .2f, Vector3.Right, 1);
+                    tank.ChainHit(Vector3.Zero, 0);
+                }
+                Assert(Engine.MaxPhysicsStepsPerFrame == 2, "overlapping leases did not select the smaller budget");
+                second.Invalidate();
+                Assert(Engine.MaxPhysicsStepsPerFrame == 4, "one world's retirement lost the other lease");
+                var simulation = first.EffectsRoot.GetChildren().OfType<TankSimulation>().Single();
+                first.Tuning.DenseChainPhysicsSteps = 0; simulation._Process(0);
+                Assert(Engine.MaxPhysicsStepsPerFrame == 8, "disabling the limiter lost the prior engine setting");
+                first.Tuning.DenseChainPhysicsSteps = 12; simulation._Process(0);
+                Assert(Engine.MaxPhysicsStepsPerFrame == 8, "dense lease raised the ordinary catch-up budget");
+                first.Invalidate();
+                Assert(Engine.MaxPhysicsStepsPerFrame == 8, "retirement did not restore the prior setting");
+            }
+            finally { Engine.MaxPhysicsStepsPerFrame = original; }
+        });
+        runner.Run("effects/dense catch-up is transient, offline and restores the engine budget", () =>
+        {
+            var original = Engine.MaxPhysicsStepsPerFrame;
+            try
+            {
+                Engine.MaxPhysicsStepsPerFrame = 12;
+                using var tuning = Tuning.LoadBaked();
+                tuning.DenseChainFuseThreshold = 2;
+                using var world = new WorldContext(runner, tuning);
+                PropaneTank Fuse(WorldContext owner)
+                {
+                    var tank = PropaneTank.Create(owner); owner.Spawn.InWorld(tank);
+                    tank.FuseScheduleOverride = (_, _) => { };
+                    tank.PunctureRemote(Vector3.Up * .2f, Vector3.Right, 1);
+                    return tank;
+                }
+                var first = Fuse(world);
+                var second = Fuse(world);
+                var simulation = world.EffectsRoot.GetChildren().OfType<TankSimulation>().Single();
+                var now = 0d;
+                simulation.CatchupClock = () => now;
+                first.ChainHit(Vector3.Zero, 0);
+                Assert(Engine.MaxPhysicsStepsPerFrame == 12, "ordinary chain changed the engine budget");
+                second.ChainHit(Vector3.Zero, 0);
+                Assert(Engine.MaxPhysicsStepsPerFrame == 4, "dense offline chain did not bound catch-up");
+                first.RestoreIntact();
+                simulation._Process(0);
+                Assert(Engine.MaxPhysicsStepsPerFrame == 4, "dense lease lost its short tail");
+                now = 1;
+                simulation._Process(0);
+                Assert(Engine.MaxPhysicsStepsPerFrame == 12, "dense lease changed game speed after expiry");
+                first.PunctureRemote(Vector3.Up * .2f, Vector3.Right, 1);
+                first.ChainHit(Vector3.Zero, 0);
+                Assert(Engine.MaxPhysicsStepsPerFrame == 4, "dense lease failed to rearm");
+                using (var network = new WorldContext(runner, tuning, networked: true))
+                {
+                    _ = Fuse(network);
+                    Assert(Engine.MaxPhysicsStepsPerFrame == 12, "offline lease slowed a concurrent network world");
+                    Assert(!network.EffectsRoot.GetChildren().OfType<TankSimulation>().Single().IsProcessing(),
+                        "network simulation retained offline render-frame bookkeeping");
+                }
+                Assert(Engine.MaxPhysicsStepsPerFrame == 4, "network retirement lost an offline lease");
+                world.ContentRoot.ProcessMode = Node.ProcessModeEnum.Disabled;
+                simulation._Process(0);
+                Assert(Engine.MaxPhysicsStepsPerFrame == 12, "disabled retiring source retained its dense lease");
+                world.ContentRoot.ProcessMode = Node.ProcessModeEnum.Inherit;
+                first.CancelChainFuse(); second.CancelChainFuse();
+                first.ChainHit(Vector3.Zero, 0); second.ChainHit(Vector3.Zero, 0);
+                world.SetPaused(true); simulation._Process(0);
+                Assert(Engine.MaxPhysicsStepsPerFrame == 12, "pause retained its dense lease");
+                world.SetPaused(false); simulation._Process(0);
+                Assert(Engine.MaxPhysicsStepsPerFrame == 4, "resume lost pending fuse pressure");
+                world.Invalidate();
+                Assert(Engine.MaxPhysicsStepsPerFrame == 12, "world invalidation leaked the engine budget");
+            }
+            finally { Engine.MaxPhysicsStepsPerFrame = original; }
+        });
         runner.Run("effects/crowded blasts keep fireballs and restore full slots on retirement", () =>
         {
             using var tuning = Tuning.LoadBaked();

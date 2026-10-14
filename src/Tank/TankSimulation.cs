@@ -12,6 +12,12 @@ public partial class TankSimulation : Node
 {
     private static readonly ConditionalWeakTable<WorldContext, TankSimulation> worlds = new();
     private readonly List<PropaneTank> tanks = new();
+    private readonly HashSet<PropaneTank> pendingFuses = new();
+    private static readonly HashSet<TankSimulation> active = new();
+    private static int? ordinaryCatchup;
+    private double denseUntil;
+    private int limitedSteps;
+    internal Func<double> CatchupClock { get; set; } = static () => Time.GetTicksUsec() / 1000000d;
     public required WorldContext World { get; init; }
     internal int Count => tanks.Count;
 
@@ -20,8 +26,13 @@ public partial class TankSimulation : Node
         world.EnsureAlive();
         var simulation = worlds.GetValue(world, static owner =>
         {
-            var node = new TankSimulation { World = owner, Name = "TankSimulation" };
+            // Poll the lease even when its world pauses; tank ticks still require their ordinary eligibility.
+            var node = new TankSimulation { World = owner, Name = "TankSimulation", ProcessMode = ProcessModeEnum.Always };
             owner.EffectsRoot.AddChild(node);
+            node.SetProcess(!owner.Networked);
+            active.Add(node);
+            owner.OnStopping(node.ReleaseCatchup);
+            RefreshCatchup();
             return node;
         });
         simulation.tanks.Add(tank);
@@ -30,8 +41,78 @@ public partial class TankSimulation : Node
 
     internal void Remove(PropaneTank tank) => tanks.Remove(tank);
 
+    internal void CancelFuse(PropaneTank tank) => pendingFuses.Remove(tank);
+
+    internal void LightFuse(PropaneTank tank)
+    {
+        if (World.Networked || !tank.CanProcess()) return;
+        pendingFuses.Add(tank);
+        if (!World.Networked && limitedSteps == 0 && pendingFuses.Count >= World.Tuning.DenseChainFuseThreshold) UpdateCatchup();
+    }
+
+    public override void _Process(double delta) => UpdateCatchup();
+
+    private void UpdateCatchup()
+    {
+        pendingFuses.RemoveWhere(t => !IsInstanceValid(t) || !t.ChainFusePending);
+        var eligible = 0;
+        foreach (var tank in pendingFuses)
+        {
+            // A retiring source must not lend its catch-up limit to the incoming suburb.
+            if (tank.CanProcess()) eligible++;
+            else denseUntil = 0;
+        }
+        var tuning = World.Tuning;
+        limitedSteps = 0;
+        if (World.IsAlive && !World.Networked && !World.Paused && World.Root.CanProcess() && tuning.DenseChainPhysicsSteps > 0)
+        {
+            var now = CatchupClock();
+            if (eligible >= tuning.DenseChainFuseThreshold) denseUntil = now + tuning.DenseChainCatchupHold;
+            if (eligible >= tuning.DenseChainFuseThreshold || now < denseUntil)
+                limitedSteps = Math.Clamp(tuning.DenseChainPhysicsSteps, 1, 12);
+        }
+        else
+        {
+            denseUntil = 0;
+        }
+
+        RefreshCatchup();
+    }
+
+    // Engine catch-up is application-wide. Any live network world vetoes an offline lease, and overlapping
+    // offline worlds take the smallest requested budget. Restore the prior engine value when the last lease ends.
+    private static void RefreshCatchup()
+    {
+        var steps = int.MaxValue;
+        foreach (var simulation in active)
+        {
+            if (!simulation.World.IsAlive) continue;
+            if (simulation.World.Networked) { steps = int.MaxValue; break; }
+            if (simulation.limitedSteps > 0) steps = Math.Min(steps, simulation.limitedSteps);
+        }
+        if (steps == int.MaxValue)
+        {
+            if (ordinaryCatchup is { } previous) Engine.MaxPhysicsStepsPerFrame = previous;
+            ordinaryCatchup = null;
+        }
+        else
+        {
+            ordinaryCatchup ??= Engine.MaxPhysicsStepsPerFrame;
+            Engine.MaxPhysicsStepsPerFrame = Math.Min(ordinaryCatchup.Value, steps);
+        }
+    }
+
+    private void ReleaseCatchup()
+    {
+        active.Remove(this);
+        pendingFuses.Clear();
+        limitedSteps = 0;
+        RefreshCatchup();
+    }
+
     public override void _PhysicsProcess(double delta)
     {
+        if (!World.IsAlive || World.Paused || !World.Root.CanProcess()) return;
         using var profile = EffectProfile.Measure(EffectProfile.System.TankPhysics);
         foreach (var tank in tanks)
         {
@@ -44,6 +125,7 @@ public partial class TankSimulation : Node
 
     public override void _ExitTree()
     {
+        ReleaseCatchup();
         tanks.Clear();
         if (worlds.TryGetValue(World, out var current) && ReferenceEquals(current, this)) worlds.Remove(World);
     }

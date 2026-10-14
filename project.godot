@@ -47,8 +47,8 @@ project/assembly_name="Propane"
 [physics]
 
 common/physics_ticks_per_second=120
-; Bound catch-up work during a chain; at 60 fps this still supplies every 120 Hz step.
-common/max_physics_steps_per_frame=2
+; Preserve ordinary simulation time; offline dense chains temporarily bound catch-up in TankSimulation.
+common/max_physics_steps_per_frame=12
 3d/physics_engine="Jolt Physics"
 jolt_physics_3d/limits/temporary_memory_buffer_size=128
 jolt_physics_3d/limits/world_boundary_shape_size=8000.0

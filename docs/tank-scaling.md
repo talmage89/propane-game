@@ -1,6 +1,9 @@
 # Tank scaling
 
 The performance work is substantial, but this branch **does not satisfy the complete acceptance brief**.
+The original FPS tables below used a rejected two-step catch-up policy and include simulation slowdown.
+The lead-review follow-up restores ordinary catch-up and measures simulation/wall ratios explicitly; those
+results supersede the original pacing claims. Historical runs and failures remain available for comparison.
 The ordinary 4× native Release match median is 66.5 fps with an 81.03 ms median maximum, but one of three runs
 averages 55.6 fps. The official four-bot 4× disturbed view reaches 37.2 fps, dominated by navigation. The earlier
 sixteen-client Debug and native Release gates failed; both final merged Debug sixteen-client soaks also fail. Treat the branch
@@ -29,10 +32,101 @@ Spawned fragments retain their convex hulls, CCD and persistent lifetime. Retire
 world invalidation clears it. A backlog visibly delays fragment breakup and its collisions. Raising the count
 or registration dial can reproduce the previous cost; debris randomness now uses a separate cosmetic generator.
 
-The engine still runs 120 Hz physics, with at most two catch-up steps per presentation frame. At 60 fps this
-supplies every step. Under overload, simulation falls behind wall time; server deadlines still use their ordinary
-monotonic clock. This deliberately sacrifices catch-up accuracy to prevent a burst from amplifying into a large
-frame. No solver/contact reduction, tank hull replacement or distance-based tank freezing was introduced.
+The engine still runs 120 Hz physics, with its ordinary twelve-step catch-up budget. Only offline dense chains
+(64 or more pending fuses) lease a four-step budget, with a 0.5-real-second tail after fuse pressure drops.
+`DenseChainFuseThreshold`, `DenseChainPhysicsSteps` (0 disables it) and `DenseChainCatchupHold` control this policy.
+Live network tank simulations veto offline leases; overlapping offline leases select the smallest budget and
+restore the previous engine setting on expiry, pause, retirement or world invalidation. This preserves ordinary
+and multiplayer catch-up while bounding the offline burst; that burst can still temporarily slow simulation.
+No solver/contact reduction, tank hull replacement or distance-based tank freezing was introduced.
+
+## Lead review: simulation speed and scoped catch-up
+
+The rejected two-step policy makes 30 fps run at half speed. Constant caps 2/4/6/12 were compared on the same
+branch gameplay code in 108 rendered invocations at 1920×1080, with VSync disabled. Each candidate has three
+repetitions; each is adjacent to a cap-12 anchor, and the second repetition reverses the order. Cap 12 therefore
+has nine samples per workload. Every run records `uptime` before/after. No timing run logged an engine error.
+[All cap comparisons](tank-scaling/catchup-caps.csv).
+
+The dense fixture is the existing 160-tank primed square, with 180 startup frames, three simulated warm-up
+seconds and four measured simulated seconds. Its CSV now records simulation elapsed time and the actual cap.
+The ordinary match is five separate native Linux ExportRelease clients, one primary view and four headless,
+seed 23, 160 map tanks, `--melee-start`, and a 30-second server-clock round. Its playing window is trimmed by
+0.1 seconds at either boundary; simulation elapsed is actual physics ticks / 120, not the server clock.
+The owner case is a primary-view Debug Lab Tank Bank session with four production banking brains and five
+clear starts, 40 tanks, the default 150 m Lab suburb, and seed 23. It warms for three simulated seconds, then
+measures 30 wall seconds. The optional 30 fps ceiling is an explicit pacing stress test; several bot-heavy
+runs cannot sustain that ceiling. The Lab's own simulation clock is compared with monotonic wall time.
+
+All table entries are medians of each run's statistic; frame times are milliseconds. A favorable FPS with a
+low simulation/wall ratio is slow motion, not a successful performance result. One cap-2 30-fps match failed
+the physical tank checker; it remains a valid timing sample with `process_exit=1`, not a successful soak.
+
+| Workload | Cap | FPS | Frame p50 / p95 / p99 / max ms | Simulation / wall |
+| --- | ---: | ---: | --- | ---: |
+| 4× dense chain / native Release | 2 | 91.7 | 8.69 / 17.48 / 69.04 / 75.61 | 0.8781 |
+| 4× dense chain / native Release | 4 | 80.5 | 9.93 / 18.90 / 84.57 / 134.71 | 0.9102 |
+| 4× dense chain / native Release | 6 | 79.9 | 10.41 / 16.29 / 85.41 / 166.49 | 0.9278 |
+| 4× dense chain / native Release | 12 | 87.6 | 9.63 / 14.76 / 73.95 / 206.62 | 0.9566 |
+| 4× dense chain / Debug | 2 | 36.3 | 24.23 / 61.17 / 122.19 / 152.65 | 0.6019 |
+| 4× dense chain / Debug | 4 | 26.0 | 33.28 / 81.86 / 172.46 / 191.80 | 0.7831 |
+| 4× dense chain / Debug | 6 | 24.8 | 24.30 / 98.05 / 161.13 / 238.30 | 0.8343 |
+| 4× dense chain / Debug | 12 | 27.0 | 27.80 / 64.08 / 183.14 / 259.86 | 0.9028 |
+| 4× ordinary match / native Release | 2 | 64.3 | 12.92 / 29.00 / 48.96 / 104.10 | 0.8503 |
+| 4× ordinary match / native Release | 4 | 58.2 | 12.94 / 40.57 / 69.45 / 151.62 | 0.9201 |
+| 4× ordinary match / native Release | 6 | 61.2 | 13.88 / 31.13 / 60.82 / 182.88 | 0.9748 |
+| 4× ordinary match / native Release | 12 | 55.2 | 13.73 / 50.49 / 93.83 / 234.08 | 0.9828 |
+| 4× ordinary match / native Release / 30 fps ceiling | 2 | 30.0 | 33.28 / 37.44 / 54.61 / 80.61 | 0.5000 |
+| 4× ordinary match / native Release / 30 fps ceiling | 4 | 29.8 | 33.32 / 37.09 / 55.47 / 95.21 | 0.9898 |
+| 4× ordinary match / native Release / 30 fps ceiling | 6 | 29.6 | 33.33 / 50.26 / 73.33 / 125.91 | 0.9895 |
+| 4× ordinary match / native Release / 30 fps ceiling | 12 | 28.4 | 33.33 / 51.93 / 99.49 / 218.21 | 0.9901 |
+| 1× four-bot primary Lab view / Debug | 2 | 52.0 | 13.49 / 46.91 / 67.88 / 96.90 | 0.7122 |
+| 1× four-bot primary Lab view / Debug | 4 | 49.1 | 11.99 / 68.65 / 109.19 / 146.73 | 0.7847 |
+| 1× four-bot primary Lab view / Debug | 6 | 47.2 | 12.10 / 72.20 / 114.69 / 177.00 | 0.8582 |
+| 1× four-bot primary Lab view / Debug | 12 | 30.1 | 13.54 / 124.61 / 203.43 / 299.72 | 0.8549 |
+| 1× four-bot primary Lab view / Debug / 30 fps ceiling | 2 | 29.6 | 33.22 / 56.76 / 72.71 / 83.71 | 0.4921 |
+| 1× four-bot primary Lab view / Debug / 30 fps ceiling | 4 | 23.1 | 35.46 / 90.09 / 106.63 / 116.56 | 0.7390 |
+| 1× four-bot primary Lab view / Debug / 30 fps ceiling | 6 | 19.5 | 38.05 / 115.20 / 132.22 / 155.52 | 0.7661 |
+| 1× four-bot primary Lab view / Debug / 30 fps ceiling | 12 | 19.8 | 34.03 / 143.61 / 213.22 / 285.70 | 0.8758 |
+
+A blanket four-step cap is not selected: its unrestricted ordinary-match median is 0.9201, and its owner-view
+median is 0.7847. Six steps still yield 0.9748 in ordinary matches. Twelve steps deliver 0.9828 in ordinary
+matches and 0.9901 with the 30 fps ceiling, without introducing another global game-speed limit.
+
+The chosen policy restores twelve-step catch-up everywhere, then leases four steps **only for an offline dense
+chain** with at least 64 pending fuses. It holds for 0.5 real seconds after pressure drops. Network tank worlds
+veto the lease even when an offline world is present. Fuses, pushes, detonation and banking remain synchronous
+on their original paths; no blast gameplay work is deferred. The existing eight-fragment registration budget
+and overlapping-effect budget continue to spread/bound presentation work. The temporary offline limit can slow
+the burst itself, but it no longer slows ordinary play simply because it renders below 60 fps.
+
+The follow-up compares this policy against constant cap 12 in three alternating chain pairs, and separately
+against `d067ef6` in three alternating owner-view pairs. The baseline receives only the same diagnostic Lab
+harness; gameplay and physics settings remain its own. [Per-run policy comparisons](tank-scaling/catchup-policy.csv).
+
+| Workload | Side | FPS | Frame p50 / p95 / p99 / max ms | Simulation / wall |
+| --- | --- | ---: | --- | ---: |
+| chain-native | cap 12 | 98.8 | 8.38 / 13.36 / 50.84 / 166.51 | 0.9868 |
+| chain-native | branch policy | 95.0 | 8.74 / 15.04 / 57.10 / 130.27 | 0.9231 |
+| chain-debug | cap 12 | 36.1 | 18.19 / 33.32 / 172.11 / 330.73 | 0.9232 |
+| chain-debug | branch policy | 38.1 | 21.63 / 44.31 / 113.25 / 146.09 | 0.8895 |
+| owner-default | dev d067ef6 | 29.8 | 12.98 / 131.51 / 186.78 / 267.71 | 0.8660 |
+| owner-default | branch policy | 62.6 | 10.73 / 43.73 / 120.73 / 195.41 | 0.9716 |
+| owner-30 | dev d067ef6 | 21.3 | 34.29 / 133.54 / 181.54 / 228.24 | 0.9172 |
+| owner-30 | branch policy | 20.4 | 34.11 / 149.66 / 215.74 / 285.37 | 0.8879 |
+
+Native chain peak medians fall from 166.51 to 130.27 ms; Debug falls from 330.73 to 146.09 ms. The native lease
+lasted 1.046/1.008/1.883 wall seconds and returned from 4 to 12 in every trial. Native policy peaks were
+130.27/107.66/358.68 ms; the noisy third trial is retained, not excluded. The 0.9231 native and 0.8895 Debug
+chain ratios are the visible temporary slowdown cost. A reliable 100 ms ceiling is still not proven.
+
+The owner case remains below the 0.98 requirement on **both** revisions: unrestricted ratios are 0.8661 on dev
+and 0.9716 on the branch; at a 30 fps ceiling, 0.9172 and 0.8879. Those ceilings actually render at medians of
+21.3 and 20.4 fps. The limiter cannot arm in this 40-point fixture (its threshold is 64 pending fuses), so this
+is existing bot/frame-burst pressure, not another four-step game-speed policy. Unrestricted owner profiles
+measure brain/navigation medians of 4.804/4.093 ms per tick on dev and 2.938/2.667 ms on the branch. Fixing the
+separately owned bot/navigation work remains necessary; raising a catch-up budget cannot guarantee real time
+when the workload overruns it. This follow-up does not claim that requirement is achieved.
 
 ## Measurement method
 
@@ -431,7 +525,7 @@ assertions, including turning, firing, jumping, melee, reload and Lab controller
 
 ![Single blast at 0.20 seconds](tank-scaling/blast-after.png)
 
-## Final verification and remaining limits
+## Earlier integration verification and remaining limits
 
 The timing grids, ordinary native matches and initial twelve scale soaks predate the final online King merge.
 Their revision labels and failures remain historical evidence; they are not measurements of Protocol 3. The
@@ -479,7 +573,7 @@ limits and the tank/player/scoring rules when addressing these follow-ups.
 
 ## Compatibility
 
-The four new exported tuners, scaled supply/formation construction, fragment physics and catch-up policy are
+The seven new exported tuners, scaled supply/formation construction, fragment physics and catch-up policy are
 shared match behavior and require the next release to be minor (0.4 after the merged 0.3.0 release). Tank scaling
 does not change message layouts or bump the protocol. The final `dev` integration brings online King's message
 changes and `Protocol.Version` **3**; earlier measured revisions used Protocol 2. See

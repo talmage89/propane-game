@@ -168,8 +168,11 @@ flash and fireball. **Debris pieces per tank** selects 6 of the authored 25 frag
 limits body creation to 8 per frame. Spawned debris stays until the suburb retires. These dials affect presentation
 and fragment physics; punctures, chain fuses, blast pushes and banking happen immediately.
 
-Physics remains at 120 Hz, with at most two catch-up steps per rendered frame. That covers normal 60 fps play;
-under overload, simulation time falls behind wall time instead of running a large catch-up burst in one frame.
+Physics remains at 120 Hz with the usual twelve-step catch-up budget. An offline chain with at least 64 pending
+fuses temporarily limits catch-up to four steps, retaining the limit for 0.5 real seconds after pressure drops.
+The **Dense chain** tuners control the threshold, steps (0 disables it) and tail. Network worlds veto this limit;
+their body ownership stays on the ordinary timeline. Dense offline bursts can briefly slow simulation, but a
+low frame rate alone no longer activates a lower budget.
 [Tank scale trials](docs/tank-scaling.md) records the trade-offs, timing and compatibility.
 
 Loose intact tanks gather with nearby resting neighbors after 20 undisturbed seconds. The **Tank Gather** tuners

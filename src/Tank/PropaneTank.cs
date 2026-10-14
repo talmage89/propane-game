@@ -45,6 +45,7 @@ public partial class PropaneTank : RigidBody3D
     private float swirlSign = 1f;
     private float ventAge;
     private bool fuseLit;
+    internal bool ChainFusePending => fuseLit && State == TankState.Venting;
     private float flutterPhase;
     // Fresh owner velocities replace speculative observer jet impulses. Their rotation-error steering
     // must also survive integration; owners, stale observers and local predictions keep ordinary physics.
@@ -256,6 +257,7 @@ public partial class PropaneTank : RigidBody3D
 
     internal void CancelChainFuse()
     {
+        simulation?.CancelFuse(this);
         fuseLit = false;
         fuseGeneration++;
         ChainCause = 0;
@@ -284,6 +286,7 @@ public partial class PropaneTank : RigidBody3D
             return;
         }
         fuseLit = true;
+        simulation?.LightFuse(this);
         var tuning = World.Tuning;
         var closeness = Mathf.Clamp(distance / Mathf.Max(tuning.ChainRadius, 0.01f), 0, 1);
         var fuse = Mathf.Lerp(tuning.ChainFuseMin, tuning.ChainFuseMax, closeness) * World.Random.RandfRange(0.85f, 1.15f);
@@ -382,6 +385,7 @@ public partial class PropaneTank : RigidBody3D
         }
         Disturb();
         State = TankState.Exploded;
+        simulation?.CancelFuse(this);
         // Queued deletion is delayed until the frame ends. Later blasts must not query an already absent shell.
         CollisionLayer = 0;
         CollisionMask = 0;

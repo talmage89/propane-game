@@ -214,6 +214,12 @@ public partial class Tuning : Resource
     [Export(PropertyHint.Range, "0.1,4,0.05")] public float FireballScale { get; set; } = 1f;
     /// <summary>Overlapping full explosions; excess blasts retain their core flash and particle fireball.</summary>
     [Export(PropertyHint.Range, "1,128,1")] public int ExplosionFullEffectBudget { get; set; } = 16;
+    /// <summary>Pending fuses needed to bound an offline dense chain; ordinary play and network worlds keep engine catch-up.</summary>
+    [Export(PropertyHint.Range, "1,512,1")] public int DenseChainFuseThreshold { get; set; } = 64;
+    /// <summary>Offline catch-up steps during that chain; 0 disables the transient limit.</summary>
+    [Export(PropertyHint.Range, "0,12,1")] public int DenseChainPhysicsSteps { get; set; } = 4;
+    /// <summary>Real seconds to retain the transient limit after fuse pressure drops.</summary>
+    [Export(PropertyHint.Range, "0,2,0.01")] public float DenseChainCatchupHold { get; set; } = 0.5f;
     [Export(PropertyHint.Range, "0,4,0.05")] public float SmokeAmount { get; set; } = 1f;
     [Export(PropertyHint.Range, "0,4,0.05")] public float EmberAmount { get; set; } = 1f;
     [Export(PropertyHint.Range, "0,200,1")] public float FlashEnergy { get; set; } = 40f;
