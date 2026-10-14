@@ -12,7 +12,7 @@ PORT ?= $(if $(SLOT),$(shell echo $$((24680 + $(SLOT)))),24680)
 SERVER ?= 127.0.0.1:$(PORT)
 
 .DEFAULT_GOAL := help
-.PHONY: help setup run build lint check test test-core test-behavior test-generator test-world test-full test-capacity server bots bots-stop package deploy release-patch release-minor release-major
+.PHONY: help setup run play bench build lint check test test-core test-behavior test-generator test-world test-full test-capacity server bots bots-stop package deploy release-patch release-minor release-major
 
 help: ## List the tasks
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN { FS = ":.*## " } { printf "  make %-14s %s\n", $$1, $$2 }'
@@ -24,6 +24,22 @@ setup: ## Import the assets and compile: a fresh clone, or after switching branc
 
 run: build ## Play from source
 	"$(GODOT)" --path .
+
+# Keep these generic defaults local to bench/play. SECONDS is also a Bash timer variable.
+play: CONFIG ?= Release
+play: ## Play optimized C# from source (CONFIG=Release default for this target; Debug also supported)
+	python3 -B tools/dev/source_run.py --config $(CONFIG)
+
+bench: CONFIG ?= Debug
+bench: BOTS ?= 0,2,4,8,16
+bench: TANKS ?= 1,2,4,8
+bench: RENDERED ?= 0,1
+bench: SECONDS ?= 10
+bench: REPEATS ?= 3
+bench: WARMUP ?= 2
+bench: BENCH_ARGS ?=
+bench: ## Measure the bot/tank grid (BOTS, TANKS, CONFIG, RENDERED, SECONDS, REPEATS, WARMUP)
+	python3 -B tools/dev/bench.py --bots=$(BOTS) --tanks=$(TANKS) --config=$(CONFIG) --rendered=$(RENDERED) --seconds=$(SECONDS) --repeats=$(REPEATS) --warmup=$(WARMUP) $(BENCH_ARGS)
 
 build: ## Compile the C# code
 	dotnet build Propane.sln -c Debug -nologo -v quiet
@@ -43,6 +59,7 @@ test: test-core test-behavior test-generator test-world ## Run the fast headless
 
 test-core: build ## Run checker, platform, movement, unit and scripted mode-rule assertions
 	GODOT="$(GODOT)" python3 -B tools/dev/check_test_threads.py
+	GODOT="$(GODOT)" python3 -B tools/dev/bench_tests.py
 	python3 -B tools/dev/check_world_tests.py
 	python3 -B tools/dev/time_gate_tests.py
 	python3 -B tools/dev/check_scores_tests.py
