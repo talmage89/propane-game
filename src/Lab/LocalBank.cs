@@ -4,6 +4,7 @@ using System.Linq;
 using Godot;
 using Propane.Bots;
 using Propane.Core;
+using Propane.Fx;
 using Propane.Modes;
 using Propane.Net;
 using Propane.Player;
@@ -30,6 +31,10 @@ public partial class LocalBank : Node
     private BotServices services = null!;
     private int botTurn;
     private uint nextTicket;
+    private long profiledTicks, warmTicks, warmBytes, allocatingTicks;
+    private double warmSeconds, worstSeconds;
+    private readonly long[] tickHistogram = new long[1001];
+    private bool profiled;
     public IReadOnlyDictionary<int, int> Scores => scores;
     public IReadOnlyList<AmmoPickup> Pickups => pickups;
     public float TimeLeft { get; private set; }
@@ -83,6 +88,8 @@ public partial class LocalBank : Node
         {
             foreach (var (brain, actor, _) in brains) { actor.InputOverride = null; brain.Dispose(); }
             services.Dispose();
+            if (profiled)
+                GD.Print(FormattableString.Invariant($"[bank bot cost] bots={brains.Count} warm_ticks={warmTicks} mean_ms={warmSeconds * 1000 / Math.Max(1, warmTicks):F3} p50_ms={TickPercentile(0.5):F2} p95_ms={TickPercentile(0.95):F2} p99_ms={TickPercentile(0.99):F2} worst_ms={worstSeconds * 1000:F3} bytes={warmBytes} allocating_ticks={allocatingTicks}"));
             brains.Clear(); directShots.Clear(); drops.Clear(); pickups.Clear();
         });
     }
@@ -103,6 +110,9 @@ public partial class LocalBank : Node
     {
         if (!IsPlaying) return;
         TimeLeft = Mathf.Max(0, TimeLeft - (float)delta);
+        var measuring = EffectProfile.Enabled;
+        var started = measuring ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
+        var allocated = measuring ? GC.GetAllocatedBytesForCurrentThread() : 0;
         if (brains.Count > 0)
         {
             services.BeginTick(Lab.BotTanks);
@@ -114,6 +124,21 @@ public partial class LocalBank : Node
             view.Refresh();
             brain.Skill = World.Tuning.LabBotSkill;
             brain.Think(view, (float)delta);
+        }
+        if (measuring)
+        {
+            profiled = true;
+            var seconds = System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalSeconds;
+            var bytes = GC.GetAllocatedBytesForCurrentThread() - allocated;
+            if (++profiledTicks > 1200) // Ten simulated seconds to discover initial routes/heights.
+            {
+                warmTicks++;
+                warmSeconds += seconds;
+                worstSeconds = Math.Max(worstSeconds, seconds);
+                warmBytes += bytes;
+                if (bytes > 0) allocatingTicks++;
+                tickHistogram[Math.Min(tickHistogram.Length - 1, (int)(seconds * 100000))]++;
+            }
         }
         var actors = Lab.Session.Actors;
         for (var i = 0; i < actors.Count; i++)
@@ -139,6 +164,18 @@ public partial class LocalBank : Node
             World.SetPaused(true);
             if (Lab.CreateLocalView) World.Defer(() => Lab.SetMenu(true), whilePaused: true);
         }
+    }
+
+    private double TickPercentile(double fraction)
+    {
+        var wanted = (long)Math.Ceiling(warmTicks * fraction);
+        long count = 0;
+        for (var i = 0; i < tickHistogram.Length; i++)
+        {
+            count += tickHistogram[i];
+            if (count >= wanted) return i / 100d;
+        }
+        return 0;
     }
 
     private void Track(PropaneTank tank)
