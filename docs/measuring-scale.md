@@ -84,6 +84,11 @@ Do not add these together or subtract GPU time from wall time as if CPU and GPU 
 `Match.BotCost` retains its existing think/allocation counters and accumulates inclusive navigation seconds
 when profiling is enabled. No `dotnet-counters` or `dotnet-trace` installation is required.
 
+The optional `BENCH_ARGS=--camera=near|far` follows the first bot (the idle player in a zero-bot case),
+from a close view or 50 m back. Overview remains the standard grid. Camera mode is comparison metadata;
+never compare these views against the overview as if the workload were identical. Direct scene runs can use
+`--record=$PWD/build/<clip>.mp4` for visual evidence, separate from timing runs.
+
 For rendering attribution, `BENCH_ARGS=--omit=actors|shadows|effects|debris` omits one feature at a time.
 Actors omits mannequin/rifle meshes (including their shadows), shadows disables every light's shadow maps,
 effects hides the world effect root and attached vents, and debris hides tank fragments. Simulation still runs:

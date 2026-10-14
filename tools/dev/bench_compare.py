@@ -27,8 +27,8 @@ def read(path):
 def compare(a, b):
     old, acases = read(a)
     new, bcases = read(b)
-    for key in ("seed", "seconds", "warmup", "resolution", "presentation", "omitted_render_feature"):
-        if old.get(key, "none") != new.get(key, "none"):
+    for key in ("seed", "seconds", "warmup", "resolution", "presentation", "omitted_render_feature", "camera_mode"):
+        if old.get(key, "overview" if key == "camera_mode" else "none") != new.get(key, "overview" if key == "camera_mode" else "none"):
             raise ValueError(f"workload mismatch: {key}")
     if acases.keys() != bcases.keys():
         raise ValueError("case grids differ; select the same BOTS/TANKS/RENDERED")
@@ -48,8 +48,8 @@ def merge(paths):
         data, incoming = read(path)
         if combined is None:
             combined = copy.deepcopy(data)
-        for key in ("revision", "config", "seed", "seconds", "warmup", "resolution", "presentation", "omitted_render_feature"):
-            if combined.get(key, "none") != data.get(key, "none"):
+        for key in ("revision", "config", "seed", "seconds", "warmup", "resolution", "presentation", "omitted_render_feature", "camera_mode"):
+            if combined.get(key, "overview" if key == "camera_mode" else "none") != data.get(key, "overview" if key == "camera_mode" else "none"):
                 raise ValueError(f"cannot merge different {key}")
         for key, case in incoming.items():
             if key not in cases:

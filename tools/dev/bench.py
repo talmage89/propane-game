@@ -120,6 +120,7 @@ def main():
     parser.add_argument("--repeats", type=int, default=3)
     parser.add_argument("--output", type=Path)
     parser.add_argument("--capture", action="store_true")
+    parser.add_argument("--camera", choices=("overview", "near", "far"), default="overview")
     parser.add_argument("--omit", choices=("none", "actors", "shadows", "effects", "debris"), default="none")
     args = parser.parse_args()
     configs = args.config.split(",")
@@ -139,7 +140,7 @@ def main():
     dirty = bool(subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT, text=True).strip())
     documents = {config: dict(schema=SCHEMA, revision=revision, dirty=dirty, config=config, seed=23,
                               seconds=args.seconds, warmup=args.warmup, repeats=args.repeats,
-                              resolution="1280x720", presentation="no-idle-wait-vsync-disabled-gamescope-wsi-disabled", omitted_render_feature=args.omit, platform=platform.platform(), paired_configs=configs, cases=[])
+                              resolution="1280x720", presentation="no-idle-wait-vsync-disabled-gamescope-wsi-disabled", omitted_render_feature=args.omit, camera_mode=args.camera, platform=platform.platform(), paired_configs=configs, cases=[])
                  for config in configs}
     outputs = {config: output if len(configs) == 1 else output.with_stem(output.stem + "-" + config) for config in configs}
     print("cfg     view bots tank×   FPS   wall p50/p95/p99/max ms      proc phys brain/tick nav% query Jolt≤ GPU tank vent GC pause RSS", flush=True)
@@ -162,7 +163,7 @@ def main():
                             command.append("--headless")
                         command += ["res://scenes/dev/scale_bench.tscn", "--", f"--bots={bots}", f"--tanks={tanks}",
                                     f"--config={config}", f"--seconds={args.seconds}", f"--warmup={args.warmup}",
-                                    f"--frame-metrics={directory}", f"--omit={args.omit}"]
+                                    f"--frame-metrics={directory}", f"--omit={args.omit}", f"--camera={args.camera}"]
                         if args.capture and rendered and repeat == 0:
                             command.append(f"--capture-dir={directory}")
                         with assembly(config, build=False), (directory / "run.log").open("w") as log:

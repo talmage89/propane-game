@@ -103,6 +103,13 @@ class BenchTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "omitted_render_feature"):
                 bench_compare.merge([path, other])
             data["omitted_render_feature"] = "none"
+            data["camera_mode"] = "near"
+            other.write_text(json.dumps(data))
+            with self.assertRaisesRegex(ValueError, "camera_mode"):
+                list(bench_compare.compare(path, other))
+            with self.assertRaisesRegex(ValueError, "camera_mode"):
+                bench_compare.merge([path, other])
+            data["camera_mode"] = "overview"
             data["cases"][0]["runs"][0]["world_hash"] = "wrong"
             other.write_text(json.dumps(data))
             with self.assertRaisesRegex(ValueError, "world_hash"):
