@@ -14,6 +14,11 @@ public sealed class LogicalAim : System.IDisposable
     {
         World = world;
         currentDistance = world.Tuning.CameraDistance;
+        cameraQuery = new PhysicsShapeQueryParameters3D
+        {
+            Shape = probe,
+            CollisionMask = Layers.World | Layers.Props | Layers.Floor,
+        };
     }
 
     private const float PitchMin = -75f;
@@ -32,6 +37,7 @@ public sealed class LogicalAim : System.IDisposable
     private float currentDistance;
     private Vector3 smoothedTarget;
     private bool hasTarget;
+    private readonly PhysicsShapeQueryParameters3D cameraQuery;
     private readonly SphereShape3D probe = new() { Radius = CollisionRadius };
     private readonly FastNoiseLite shakeNoise = new() { Frequency = 0.9f, NoiseType = FastNoiseLite.NoiseTypeEnum.Perlin };
 
@@ -166,16 +172,11 @@ public sealed class LogicalAim : System.IDisposable
         {
             return to;
         }
-        var query = new PhysicsShapeQueryParameters3D
-        {
-            Shape = probe,
-            Transform = new Transform3D(Basis.Identity, from),
-            Motion = motion,
-            // The void floor too, so looking up from outside the suburb never puts the camera under it.
-            CollisionMask = Layers.World | Layers.Props | Layers.Floor,
-            Exclude = Exclude,
-        };
-        var result = space.CastMotion(query);
+        cameraQuery.Transform = new Transform3D(Basis.Identity, from);
+        cameraQuery.Motion = motion;
+        // Callers can update exclusions; reuse the query without retaining an obsolete exclusion set.
+        cameraQuery.Exclude = Exclude;
+        var result = space.CastMotion(cameraQuery);
         var safe = result.Length > 0 ? result[0] : 1f;
         return from + motion * safe;
     }
@@ -192,6 +193,7 @@ public sealed class LogicalAim : System.IDisposable
     {
         if (disposed) return;
         disposed = true;
+        cameraQuery.Dispose();
         probe.Dispose();
         shakeNoise.Dispose();
         Exclude.Clear();

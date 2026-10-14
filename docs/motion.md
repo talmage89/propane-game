@@ -67,3 +67,7 @@ ragdoll limbs and the root bone, and measures the pelvis in world space, because
 heading re-expresses the same pose. The get-up fade keeps each bone on one interpolation path, so a limb never flips
 where the shortest arc to the captured pose changes sides. It also keeps the logical
 recoil climb checks; aimed creep allows 8 cm of lateral muzzle sway (the walk clip's shoulders sway about 6.6 cm). Judge the stance from rendered clips ([animation review](animation-review.md)).
+
+Actor presentation caches rifle clip names and lengths at assembly, and reuses camera-shape and aim-ray
+query parameters. Query geometry, exclusions and cadence are unchanged. Native query result arrays/dictionaries
+still allocate; this does not claim an allocation-free physics path.

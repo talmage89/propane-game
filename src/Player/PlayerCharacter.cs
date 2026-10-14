@@ -79,6 +79,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
     private float settleTimer;
     private Vector3 aimTarget;
     private Godot.Collections.Array<Rid> shotExclude = new();
+    private readonly PhysicsRayQueryParameters3D aimQuery = new() { CollisionMask = Layers.ShotMask };
     private Color bodyColor = new(0.92f, 0.44f, 0.16f);
     private StandardMaterial3D? bodyMaterial;
     private ShaderMaterial? bodyRim;
@@ -243,6 +244,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
             bone.AddCollisionExceptionWith(this);
         }
 
+        aimQuery.Exclude = shotExclude;
         facingYaw = Rotation.Y;
         if (!IsRemote)
         {
@@ -260,6 +262,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         World.Unregister(this);
         World.Events.Explosion -= Aim.OnExplosion;
         Runtime.Dispose();
+        aimQuery.Dispose();
     }
 
     public override void _Notification(int what)
