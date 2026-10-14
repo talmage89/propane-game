@@ -46,6 +46,7 @@ public sealed class BotNavigator
     private bool preparing;
     private bool runwayChosen;
     private int preparedBudget;
+    private NavigationGrid? activeGrid;
 
     public int StuckEvents { get; private set; }
     public int Replans { get; private set; }
@@ -87,6 +88,17 @@ public sealed class BotNavigator
         Vector3 requestedGoal, Tuning tuning, float dt, INavigationArea? area = null)
     {
         Prepare(tuning);
+        if (!ReferenceEquals(activeGrid, grid))
+        {
+            activeGrid = grid;
+            if (flying)
+            {
+                // A launched jump belongs to the actor's controller now. Finish it, then plan on the new grid.
+                route.Clear();
+                searching = hasGoal = false;
+            }
+            else { Reset(); }
+        }
         var capabilities = grid.Capabilities;
         // Once committed, finish the jump even if tactical targeting changes. Held aim cannot slow the runway
         // or alter this flight; the caller suppresses aim when Jumping is true.

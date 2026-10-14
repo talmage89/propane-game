@@ -77,7 +77,7 @@ internal static class NavigationTests
     private static float FlatDistance(Vector3 a, Vector3 b) => new Vector2(a.X - b.X, a.Z - b.Z).Length();
 
     private static NavigationGrid Grid(INavigationWorld world, NavigationCapabilities caps, Tuning tuning) =>
-        new(world, caps, tuning.BotRouteSpacing, tuning.BotJumpMinimumRange);
+        new(world, caps, tuning.BotRouteSpacing, tuning.BotJumpMinimumRange, tuning.BotLayerTolerance);
 
     public static void Register(TestRunner runner)
     {
@@ -98,6 +98,19 @@ internal static class NavigationTests
         });
         using var shape = new CapsuleShape3D { Radius = 0.32f, Height = 1.8f };
         using var tuning = Tuning.LoadBaked();
+        runner.Run("navigation/ground plane sharing follows the local accuracy tuner", () =>
+        {
+            var caps = new NavigationCapabilities(shape.Radius, shape.Height, tuning.RunSpeed, tuning.SprintSpeed,
+                tuning.JumpVelocity, tuning.PlayerGravity, tuning.Acceleration, tuning.AirControl);
+            var shared = Grid(new CourseWorld(), caps, tuning);
+            TestRunner.Assert(ReferenceEquals(shared.LayerAt(0), shared.LayerAt(0.1f)), "near ground planes should share by default");
+            using var precise = Tuning.LoadBaked();
+            precise.BotLayerTolerance = 0.05f;
+            var separate = Grid(new CourseWorld(), caps, precise);
+            TestRunner.Assert(!ReferenceEquals(separate.LayerAt(0), separate.LayerAt(0.1f)), "accuracy override was ignored");
+            precise.BotLayerTolerance = -1;
+            TestRunner.Throws<ArgumentOutOfRangeException>(() => Grid(new CourseWorld(), caps, precise));
+        });
         runner.Run("navigation/prototype walking recovery respects live hazards and dissolved ground without allocation", () =>
         {
             var hazards = new NavigationHazards();
@@ -258,20 +271,35 @@ internal static class NavigationTests
         runner.Run("navigation bounds unreachable searches and stabilizes nearby goals", () =>
         {
             var nav = new BotNavigator();
+            var world = Grid(new CourseWorld(), caps, tuning);
             var state = new NavigationState(Vector3.Zero, Vector3.Zero, true);
             for (var tick = 0; tick < 60; tick++)
             {
                 var goal = new Vector3(0.1f * Mathf.Sin(tick), 0, -12);
-                nav.Navigate(Grid(new CourseWorld(), caps, tuning), new NavigationHazards(), state with { Position = new Vector3(0, 0, -tick * 0.1f) }, goal, tuning, 1f / 60);
+                nav.Navigate(world, new NavigationHazards(), state with { Position = new Vector3(0, 0, -tick * 0.1f) }, goal, tuning, 1f / 60);
             }
             TestRunner.Assert(nav.Replans == 1 && nav.StuckEvents == 0, "small target changes do not thrash the route");
             nav.Reset();
+            world = Grid(new CourseWorld { Impossible = true }, caps, tuning);
             var failed = false;
             for (var tick = 0; tick < 120 && !failed; tick++)
             {
-                failed = nav.Navigate(Grid(new CourseWorld { Impossible = true }, caps, tuning), new NavigationHazards(), state, new Vector3(0, 0, -12), tuning, 1f / 60).Failed;
+                failed = nav.Navigate(world, new NavigationHazards(), state, new Vector3(0, 0, -12), tuning, 1f / 60).Failed;
             }
             TestRunner.Assert(failed, "unreachable goals fail after bounded retries");
+        });
+        runner.Run("navigation abandons cached routes when its shared grid is replaced", () =>
+        {
+            var nav = new BotNavigator();
+            var state = new NavigationState(Vector3.Zero, Vector3.Zero, true);
+            var goal = Vector3.Forward * 12;
+            var open = Grid(new CourseWorld(), caps, tuning);
+            TestRunner.Assert(nav.Navigate(open, new NavigationHazards(), state, goal, tuning, 1f / 60).Direction.LengthSquared() > 0,
+                "fixture did not plan an open route");
+            var replaced = Grid(new CourseWorld { Impossible = true }, caps, tuning);
+            var move = nav.Navigate(replaced, new NavigationHazards(), state, goal, tuning, 1f / 60);
+            TestRunner.Assert(move.Direction == Vector3.Zero && nav.Route.Count == 0 && nav.Replans == 2,
+                "route or search from the retired grid survived replacement");
         });
         runner.Run("navigation finishes a committed jump when its goal changes", () =>
         {
@@ -288,7 +316,7 @@ internal static class NavigationTests
                 position += velocity / 60;
                 if (move.Jump)
                 {
-                    var air = nav.Navigate(world, new NavigationHazards(), new NavigationState(position, velocity, false),
+                    var air = nav.Navigate(Grid(new CourseWorld { Impossible = true }, caps, tuning), new NavigationHazards(), new NavigationState(position, velocity, false),
                         new Vector3(20, 0, 7), tuning, 1f / 60);
                     TestRunner.Assert(air.Direction.DistanceTo(move.Direction) < 0.001f && !air.Sprint && !air.Jump,
                         "air intent preserves the safe arc and emits only one jump press");
@@ -331,10 +359,11 @@ internal static class NavigationTests
                 var position = Vector3.Zero;
                 var velocity = Vector3.Zero;
                 var legacyStuck = 0f;
+                var world = Grid(new CourseWorld(), caps, tuning);
                 var dt = 1f / rate;
                 for (var tick = 0; tick < rate * 6; tick++)
                 {
-                    var move = nav.Navigate(Grid(new CourseWorld(), caps, tuning), new NavigationHazards(), new NavigationState(position, velocity, true),
+                    var move = nav.Navigate(world, new NavigationHazards(), new NavigationState(position, velocity, true),
                         new Vector3(0, 0, -24), tuning, dt);
                     TestRunner.Assert(!move.Failed && nav.StuckEvents == 0, "valid creep must not trigger recovery or target exclusion");
                     // The player resolver's ordinary aimed gait. The old per-tick detector mistakes this
@@ -490,7 +519,8 @@ internal static class NavigationTests
                 TestRunner.Assert(!brain.Read().FireHeld, "do not shoot a target beyond rifle range");
                 var before = GC.GetAllocatedBytesForCurrentThread();
                 for (var i = 0; i < 100; i++) brain.Think(observations, 1f / 120);
-                TestRunner.Assert(GC.GetAllocatedBytesForCurrentThread() == before, "steady banking thoughts allocate");
+                var bytes = GC.GetAllocatedBytesForCurrentThread() - before;
+                TestRunner.Assert(bytes == 0, $"steady banking thoughts allocate {bytes} bytes");
                 runner.World.Tuning.BotHuntWhenEmpty = false;
                 for (var i = 0; i < 100; i++) brain.Think(observations, 1f / 120);
                 TestRunner.Assert(brain.Status == "no target", "pursuit is controlled by its local tuner");

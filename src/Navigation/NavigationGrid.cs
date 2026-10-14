@@ -34,8 +34,7 @@ public sealed class NavigationGrid
     private const int ChunkBits = 4;
     private const int ChunkSize = 1 << ChunkBits;
     private const int ChunkMask = ChunkSize - 1;
-    /// <summary>Feet within this height of a layer's plane navigate on it; the lattice is not a stair navigator.</summary>
-    private const float LayerTolerance = 0.35f;
+    private readonly float layerTolerance;
 
     private readonly INavigationWorld world;
     private readonly float support;
@@ -61,10 +60,13 @@ public sealed class NavigationGrid
     public INavigationWorld World => world;
     private bool CanQuery(int count = 1) => world.Queries - tickStart + count <= QueryBudget;
 
-    public NavigationGrid(INavigationWorld world, NavigationCapabilities capabilities, float spacing, float minimumJumpRange)
+    public NavigationGrid(INavigationWorld world, NavigationCapabilities capabilities, float spacing, float minimumJumpRange,
+        float layerTolerance)
     {
         if (spacing <= 0 || capabilities.Speed <= 0) throw new ArgumentOutOfRangeException(nameof(spacing), "navigation needs a positive spacing and speed");
         this.world = world;
+        if (!float.IsFinite(layerTolerance) || layerTolerance < 0) throw new ArgumentOutOfRangeException(nameof(layerTolerance));
+        this.layerTolerance = layerTolerance;
         Capabilities = capabilities;
         Spacing = spacing;
         support = spacing / SupportDivisions;
@@ -138,7 +140,7 @@ public sealed class NavigationGrid
     {
         foreach (var layer in layers)
         {
-            if (Math.Abs(layer.Y - y) <= LayerTolerance) return layer;
+            if (Math.Abs(layer.Y - y) <= layerTolerance) return layer;
         }
         var made = new Layer(y, reservedChunks);
         layers.Add(made);

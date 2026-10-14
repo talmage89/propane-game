@@ -6,6 +6,8 @@ public partial class Tuning
     // patch compatibility. DevArgs --tune.Bot... and C# callers can tune them. The difficulty profiles below are
     // local too: a bot's difficulty changes its brain on its creator's game, never the match's physics or schema.
     public float BotRouteSpacing { get; set; } = 1.5f;
+    // Feet within this height of a cached ground plane share its answers.
+    public float BotLayerTolerance { get; set; } = 0.35f;
     public int BotSearchPerTick { get; set; } = 24;
     public int BotSearchBudget { get; set; } = 900;
     // Shared by every bot one process runs in a world, per physics tick: navigation physics queries and route

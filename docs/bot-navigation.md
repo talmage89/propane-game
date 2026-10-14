@@ -63,11 +63,14 @@ to permit one arc. Pending searches resume after the budget refills and suspend 
 the first brain each tick so every bot gets a turn at an unspent budget.
 
 The grid remembers support, capsule fit and eight walking/jump links at each lattice point. Queries happen only
-on demand, so construction stays quick. Ground samples use a finer grid. An explosion invalidates nearby answers,
+on demand, so construction stays quick. Ground samples use a finer grid, and feet within `BotLayerTolerance` of
+a cached ground plane share its answers. An explosion invalidates nearby answers,
 and answers obtained while props settle expire after `BotDisturbSettle`; inadequate progress invalidates local
 answers too. Straight route shortcuts and takeoffs stay live. This handles loose fences and cars without sweeping
 the physics world for every node on every search. Search buffers and known-map answer storage are reserved before
 the first physics tick; buffers for newly discovered heights or growing dynamic populations can still grow.
+Changing body capabilities or grid accuracy tuning replaces the shared grid; bots discard its old searches and
+routes, finishing an already launched jump before planning again.
 
 Brains steer and aim every physics tick, but cache sight lines for `BotSightInterval`, watchers for
 `BotWatchInterval` and cover for `BotCoverInterval`. Target selection retains its periodic cadence and seeded
