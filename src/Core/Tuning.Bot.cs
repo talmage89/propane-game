@@ -6,8 +6,17 @@ public partial class Tuning
     // patch compatibility. DevArgs --tune.Bot... and C# callers can tune them. The difficulty profiles below are
     // local too: a bot's difficulty changes its brain on its creator's game, never the match's physics or schema.
     public float BotRouteSpacing { get; set; } = 1.5f;
-    public int BotSearchPerTick { get; set; } = 12;
+    public int BotSearchPerTick { get; set; } = 24;
     public int BotSearchBudget { get; set; } = 900;
+    // Shared by every bot one process runs in a world, per physics tick: navigation physics queries and route
+    // search expansions. Searches past them wait for the next tick, so many bots cost no more per tick than a few.
+    public int BotQueriesPerTick { get; set; } = 64;
+    public int BotExpansionsPerTick { get; set; } = 160;
+    // Seconds that navigation answers near an explosion are kept only briefly, while thrown props settle.
+    public float BotSightInterval { get; set; } = 0.1f;
+    public float BotWatchInterval { get; set; } = 0.2f;
+    public float BotCoverInterval { get; set; } = 0.5f;
+    public float BotDisturbSettle { get; set; } = 3f;
     public float BotWaypointRadius { get; set; } = 0.45f;
     public float BotGoalRadius { get; set; } = 0.6f;
     public float BotReplanInterval { get; set; } = 0.4f;

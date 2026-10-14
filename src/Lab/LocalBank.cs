@@ -21,12 +21,14 @@ public partial class LocalBank : Node
     public required LabSession Lab { get; init; }
     private readonly ModeDefinition mode = ModeRegistry.TankBank;
     private readonly TankBankRules rules = new();
-    private readonly Dictionary<int, int> scores = new() { [1] = 0, [2] = 0 };
+    private readonly Dictionary<int, int> scores = new();
     public IReadOnlyDictionary<int, int> Earned => scores.Keys.ToDictionary(id => id, id => rules.StatsFor(id).Gained);
     private readonly Dictionary<PropaneTank, int> directShots = new();
     private readonly HashSet<PropaneTank> drops = new();
     private readonly List<AmmoPickup> pickups = new();
-    private readonly List<(IBotGoalPolicy Brain, PlayerCharacter Actor)> brains = new();
+    private readonly List<(IBotGoalPolicy Brain, PlayerCharacter Actor, BotWorld View)> brains = new();
+    private BotServices services = null!;
+    private int botTurn;
     private uint nextTicket;
     public IReadOnlyDictionary<int, int> Scores => scores;
     public IReadOnlyList<AmmoPickup> Pickups => pickups;
@@ -43,9 +45,12 @@ public partial class LocalBank : Node
 
     public override void _Ready()
     {
+        services = new BotServices(World, Lab.BotBounds);
         TimeLeft = World.Tuning.LabDuelSeconds;
         InitialSupply = Lab.LiveTanks.Count();
-        rules.Initialize(new ModeSetup(new[] { new ModeActor(1, "You"), new ModeActor(2, "Bot") },
+        var roster = Lab.Session.Actors.Select(a => new ModeActor(a.Character.ActorId, a.Character.ActorId == 1 ? "You" : a.Character.ActorId == 2 ? "Bot" : a.Character.Name)).ToArray();
+        foreach (var actor in roster) scores[actor.ActorId] = 0;
+        rules.Initialize(new ModeSetup(roster,
             new ModeWorld(Lab.EnvironmentKind == LabEnvironment.Void ? ModeWorldSource.Void : ModeWorldSource.SuburbPlan, 1, InitialSupply),
             mode.CopyTuners(World.Tuning), 0));
         foreach (var tank in Lab.LiveTanks) Track(tank);
@@ -64,7 +69,8 @@ public partial class LocalBank : Node
             actor.Ragdolled += Thrown;
             Lab.Session.OnUnsubscribing(() => { actor.ShotImpacting -= Impact; actor.Ragdolled -= Thrown; });
         }
-        AttachBot(Lab.Opponent!);
+        foreach (var entry in Lab.Session.Actors)
+            if (entry.Character != Lab.Player) AttachBot(entry.Character);
         var positions = Lab.AmmoPositions ??
             new[] { new Vector3(World.Tuning.LabArenaRadius * 0.8f, 0.05f, 0), new Vector3(-World.Tuning.LabArenaRadius * 0.8f, 0.05f, 0) };
         foreach (var position in positions)
@@ -75,7 +81,8 @@ public partial class LocalBank : Node
         }
         Lab.Session.OnStopping(() =>
         {
-            foreach (var (brain, actor) in brains) { actor.InputOverride = null; brain.Dispose(); }
+            foreach (var (brain, actor, _) in brains) { actor.InputOverride = null; brain.Dispose(); }
+            services.Dispose();
             brains.Clear(); directShots.Clear(); drops.Clear(); pickups.Clear();
         });
     }
@@ -87,17 +94,23 @@ public partial class LocalBank : Node
         var brain = mode.CreateBot!(World.Random.Randi());
         brain.Skill = World.Tuning.LabBotSkill;
         actor.InputOverride = brain;
-        brains.Add((brain, actor));
+        var view = new BotWorld(this, actor);
+        brain.Prepare(view);
+        brains.Add((brain, actor, view));
     }
 
     public override void _PhysicsProcess(double delta)
     {
         if (!IsPlaying) return;
         TimeLeft = Mathf.Max(0, TimeLeft - (float)delta);
-        foreach (var (brain, actor) in brains)
+        services.BeginTick(Lab.BotTanks);
+        if (brains.Count > 0) botTurn = (botTurn + 1) % brains.Count;
+        for (var i = 0; i < brains.Count; i++)
         {
+            var (brain, _, view) = brains[(botTurn + i) % brains.Count];
+            view.Refresh();
             brain.Skill = World.Tuning.LabBotSkill;
-            brain.Think(new BotWorld(this, actor), (float)delta);
+            brain.Think(view, (float)delta);
         }
         foreach (var actor in Lab.Session.Actors.Select(a => a.Character))
         {
@@ -232,8 +245,18 @@ public partial class LocalBank : Node
         public double Now => World.Clock.Now;
         public double LastHitTime => actor.Runtime.LastHitTime;
         public int LastHitBy => actor.Runtime.LastHitBy;
-        public IEnumerable<PlayerCharacter> RemoteBodies => bank.Lab.Session.Actors.Select(a => a.Character).Where(a => a != actor);
+        private readonly List<PlayerCharacter> others = new();
+        public IReadOnlyList<PlayerCharacter> RemoteBodies => others;
+        public BotServices Services => bank.services;
+        public void Refresh()
+        {
+            others.Clear();
+            foreach (var entry in bank.Lab.Session.Actors)
+            {
+                var a = entry.Character;
+                if (a != actor) others.Add(a);
+            }
+        }
         public IReadOnlyList<AmmoPickup> Pickups => bank.pickups;
-        public IEnumerable<PropaneTank> LiveTanks => bank.Lab.LiveTanks;
     }
 }

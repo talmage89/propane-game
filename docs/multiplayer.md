@@ -657,9 +657,10 @@ removes all of the peer's actors (`RemovePeer`), and in a match each one's `Acto
 and the conservation audit, while body ownership passes to the new host. Survivors remove every actor of the departed
 peer on `PlayerLeft`, and the owners of other bots refresh their brains' view of the others.
 
-**Cost.** Brains share the navigation budget (`BotSearchPerTick` per bot per tick). The runtime glue allocates nothing
-per tick; the brain's own LINQ queries are unchanged. `Match.BotCost` counts thinks, seconds and allocated bytes, and
-`net_test` logs them at the end of a match. Measurements are in [network-soak.md](network-soak.md#lobby-bots-a8).
+**Cost.** Brains share one cached navigation grid and process-wide query/expansion budgets, with rotating priority.
+Sight and goal selection run less often than steering; the hot paths reuse buffers and query nodes.
+[Bot navigation](bot-navigation.md) describes the cache, dynamic checks and allocation limits. `Match.BotCost` counts thinks, total/worst tick seconds, allocated bytes and queries;
+`net_test` logs them at the end of a match, plus tick percentiles and allocations after ten simulated seconds of warm-up. Measurements are in [network-soak.md](network-soak.md#lobby-bots-a8).
 
 **Tests.** `BotTests` covers the requests (add, edit, remove, ownership, capacity, stale revisions, names, malformed
 input), the profiles, the owner's runtime and departure. `menu_test --scenario=bots` adds, edits, cancels and removes

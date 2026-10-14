@@ -45,6 +45,8 @@ public partial class LabSession : Node3D
     public event Action? ExitRequested;
     private readonly List<PropaneTank> tanks = new();
     internal IEnumerable<Vector3>? AmmoPositions => suburb?.Plan.AmmoSpots.Select(p => Suburb.ToWorld(p, 0.05f));
+    internal List<PropaneTank> BotTanks => tanks;
+    internal Rect2? BotBounds => suburb?.Plan.Bounds;
     public IEnumerable<PropaneTank> LiveTanks => tanks.Where(t => IsInstanceValid(t) && t.State != PropaneTank.TankState.Exploded);
     /// <summary>Dissolve Run's seed for this run.</summary>
     public int RunSeed { get; private set; }
@@ -93,7 +95,7 @@ public partial class LabSession : Node3D
         else
         {
             source = EnvironmentKind == LabEnvironment.Void ? new VoidWorldSource() :
-            new SuburbWorldSource(Scenario.Banking ? Scenario.Definition.Supply.Suburb(settings, 2) with { MapSize = settings.LabSuburbSize } :
+            new SuburbWorldSource(Scenario.Banking ? Scenario.Definition.Supply.Suburb(settings, settings.LabBankBots + 1) with { MapSize = settings.LabSuburbSize } :
                 Scenario.Definition.Supply.Suburb(settings, Scenario.Prototype ? settings.LabPrototypeBots + 1 : 1), seed);
         }
 
@@ -463,24 +465,32 @@ public partial class LabSession : Node3D
             lab.environment.Follow = lab.Player;
             if (lab.Scenario.Banking)
             {
-                lab.Opponent = new PlayerCharacter
+                var count = session.World.Tuning.LabBankBots + 1;
+                for (var i = 1; i < count; i++)
                 {
-                    World = session.World,
-                    Name = "BankingBot",
-                    ActorId = 2,
-                    OwnerPeerId = 1,
-                    Ammo = AmmoState.Starting(session.World.Tuning),
-                    BodyColor = new Color(0.26f, 0.58f, 0.8f)
-                };
-                session.AddActor(lab.Opponent);
-                var at = new Vector3(0, 0.05f, -session.World.Tuning.LabArenaRadius);
-                var yaw = Mathf.Pi;
-                if (lab.suburb != null)
-                {
-                    var spawn = lab.suburb.Plan.Spawns[1];
-                    at = Suburb.ToWorld(spawn.Position, 0.05f); yaw = spawn.Yaw + Mathf.Pi;
+                    var bot = new PlayerCharacter
+                    {
+                        World = session.World,
+                        Name = i == 1 ? "BankingBot" : $"BankingBot{i}",
+                        ActorId = i + 1,
+                        OwnerPeerId = 1,
+                        Ammo = AmmoState.Starting(session.World.Tuning),
+                        BodyColor = BotColors[(i - 1) % BotColors.Length],
+                    };
+                    session.AddActor(bot);
+                    if (i == 1) lab.Opponent = bot;
+                    // Default duel retains its two opposite starts; additional bots share the same perimeter.
+                    var angle = i * Mathf.Tau / count;
+                    var at = new Vector3(Mathf.Sin(angle), 0, Mathf.Cos(angle)) * session.World.Tuning.LabArenaRadius;
+                    at.Y = 0.05f;
+                    var yaw = angle;
+                    if (lab.suburb != null)
+                    {
+                        var spawn = lab.suburb.Plan.Spawns[i];
+                        at = Suburb.ToWorld(spawn.Position, 0.05f); yaw = spawn.Yaw + Mathf.Pi;
+                    }
+                    bot.Teleport(at, yaw);
                 }
-                lab.Opponent.Teleport(at, yaw);
                 lab.Bank = new LocalBank { Lab = lab, Name = "LocalBank", ProcessPhysicsPriority = -10 };
                 session.World.Root.AddChild(lab.Bank);
             }

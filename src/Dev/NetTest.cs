@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using Godot;
+using Propane.Bots;
 using Propane.Core;
 using Propane.Net;
 using Propane.Player;
@@ -45,6 +46,11 @@ public partial class NetTest : Node
     private int lobbyBots;
     private int lobbyBotsTotal;
     private uint lobbyBotRequest;
+
+    public override void _ExitTree()
+    {
+        if (bot is IDisposable owned) owned.Dispose();
+    }
 
     public override void _Ready()
     {
@@ -179,6 +185,14 @@ public partial class NetTest : Node
                 if (match.BotCost is { Bots: > 0 } cost)
                 {
                     Log(FormattableString.Invariant($"lobby bots {cost.Bots}: {cost.Thinks} thinks, mean {cost.Seconds * 1000 / Math.Max(cost.Thinks, 1):0.000} ms, {cost.Bytes / Math.Max(cost.Thinks, 1)} B allocated per think"));
+                    var warm = match.WarmBotCost;
+                    Log(FormattableString.Invariant($"bot ticks {cost.Ticks}: mean_ms={cost.Seconds * 1000 / Math.Max(cost.Ticks, 1):F3} worst_ms={cost.Worst * 1000:F3} queries={cost.Queries} rays={cost.Rays}"));
+                    Log(FormattableString.Invariant($"bot warm ticks {warm.Ticks}: mean_ms={warm.Seconds * 1000 / Math.Max(warm.Ticks, 1):F3} p50_ms={match.BotTickPercentile(0.5):F2} p95_ms={match.BotTickPercentile(0.95):F2} p99_ms={match.BotTickPercentile(0.99):F2} worst_ms={warm.Worst * 1000:F3} bytes={warm.Bytes} allocating_ticks={warm.AllocatingTicks} peak_bytes={warm.PeakBytes}"));
+                    foreach (var actor in match.Session.OwnedActors)
+                    {
+                        if (match.BotBrain(actor.Character.ActorId) is BankingBot bank)
+                            Log($"bot navigation {actor.Character.ActorId}: stuck={bank.StuckEvents} blacklist={bank.BlacklistedTargets} replans={bank.Replans} jumps={bank.Jumps}");
+                    }
                 }
                 Digest();
                 if (!tankCheckFinal) { LogTankCheck(final: true); }

@@ -1,13 +1,15 @@
 using System;
-using System.Collections.Generic;
 using Godot;
 using Propane.Core;
 
 namespace Propane.Navigation;
 
-/// <summary>Feet positions, a collision shape and movement physics supplied by the actor, independent of Match.</summary>
-public readonly record struct NavigationCapabilities(Shape3D Shape, Vector3 ShapeOffset, float Radius, float Speed,
-    float SprintSpeed, float JumpVelocity, float Gravity, float Acceleration, float AirControl)
+/// <summary>
+/// The actor's upright capsule (feet-based: its center is half its height above the feet) and movement physics,
+/// independent of Match.
+/// </summary>
+public readonly record struct NavigationCapabilities(float Radius, float Height, float Speed, float SprintSpeed,
+    float JumpVelocity, float Gravity, float Acceleration, float AirControl)
 {
     public float FlightTime => 2 * JumpVelocity / Gravity;
     public float JumpRange => Speed * FlightTime;
@@ -16,169 +18,122 @@ public readonly record struct NavigationCapabilities(Shape3D Shape, Vector3 Shap
 
 public readonly record struct NavigationHazard(Vector3 Center, float Radius);
 
+/// <summary>
+/// What the static geometry allows the actor's body, without hazards: the questions the shared lattice
+/// (<see cref="NavigationGrid"/>) caches. Every answer is about feet positions.
+/// </summary>
 public interface INavigationWorld
 {
-    bool Standable(Vector3 feet);
-    bool Walk(Vector3 from, Vector3 to);
-    bool Jump(Vector3 from, Vector3 to);
+    /// <summary>The body fits standing here: it overlaps nothing.</summary>
+    bool Fits(Vector3 feet);
+    /// <summary>Level ground lies just under these feet.</summary>
+    bool Supported(Vector3 feet);
+    /// <summary>The body moves from one place to the other without touching anything, start and end included.</summary>
+    bool Sweep(Vector3 from, Vector3 to);
+    /// <summary>
+    /// The body's ballistic jump from these feet along a horizontal unit direction at the run gait touches nothing
+    /// before it lands, one <see cref="NavigationCapabilities.JumpRange"/> away. Whether it can stand there is the
+    /// caller's question.
+    /// </summary>
+    bool Flight(Vector3 from, Vector3 direction);
+    /// <summary>Physics queries made so far, for budgets and measurements.</summary>
+    long Queries { get; }
+    /// <summary>Upper bound on the queries in one complete flight check, for atomic budget reservation.</summary>
+    int FlightQueries { get; }
 }
 
 /// <summary>
-/// Query objects one caller reuses across its navigation worlds, instead of creating and freeing a native object per
-/// sweep or ray. Every query sets all the fields it uses, so results equal fresh queries.
+/// The physics answers, from the world's live collision shapes: houses, curbs, trees, fences, cars and loose props.
+/// Tanks are left out: they move and burn, so navigation treats them as hazards in each search instead. The queries
+/// run through one shape cast and one ray cast node, reused for every query, so asking allocates nothing.
 /// </summary>
-public sealed class NavigationQueries : IDisposable
+public sealed class NavigationWorld : INavigationWorld, IDisposable
 {
-    internal readonly PhysicsShapeQueryParameters3D Shape = new();
-    internal readonly PhysicsRayQueryParameters3D Ray = new();
-    public void Dispose()
-    {
-        Shape.Dispose();
-        Ray.Dispose();
-    }
-}
+    /// <summary>What blocks the body: everything the player's capsule collides with except tanks.</summary>
+    public const uint Obstacles = Layers.World | Layers.Props;
+    /// <summary>What a foot can stand on.</summary>
+    public const uint Ground = Layers.Floor | Layers.World | Layers.Props;
+    // A small numerical lift keeps a query off the slab that supports it.
+    private const float Lift = 0.002f;
 
-/// <summary>
-/// Capsule sweeps test the whole route, including the ballistic arc and a clear, supported landing. A world answers for
-/// one physics tick: callers build a new one each tick, so its remembered answers never outlive the physics they saw.
-/// </summary>
-public sealed class NavigationWorld : INavigationWorld
-{
-    private readonly PhysicsDirectSpaceState3D space;
     private readonly NavigationCapabilities capabilities;
-    private readonly IReadOnlyList<NavigationHazard> hazards;
     private readonly float margin;
-    private readonly float minimumJumpRange;
-    private readonly Vector3? escapeFrom;
-    private readonly NavigationQueries? queries;
+    private readonly ShapeCast3D sweep;
+    private readonly RayCast3D ray;
+    private readonly Vector3 center;
+    private readonly int flightChords;
 
-    public NavigationWorld(PhysicsDirectSpaceState3D space, NavigationCapabilities capabilities,
-        IReadOnlyList<NavigationHazard> hazards, float margin, float minimumJumpRange, Vector3? escapeFrom = null,
-        NavigationQueries? queries = null)
+    public long Queries { get; private set; }
+    public int FlightQueries => flightChords;
+
+    /// <summary>
+    /// The probes join <paramref name="root"/>, which must be in the world's tree; they leave with it or on
+    /// <see cref="Dispose"/>. <paramref name="jumpMargin"/> lowers the tested arc, a conservative allowance.
+    /// </summary>
+    public NavigationWorld(Node root, NavigationCapabilities capabilities, float jumpMargin)
     {
-        this.queries = queries;
-        this.space = space;
         this.capabilities = capabilities;
-        this.hazards = hazards;
-        this.margin = margin;
-        this.minimumJumpRange = minimumJumpRange;
-        this.escapeFrom = escapeFrom;
-    }
-
-    private bool Safe(Vector3 point, bool allowEscape = true)
-    {
-        foreach (var hazard in hazards)
+        margin = jumpMargin;
+        center = Vector3.Up * (capabilities.Height / 2 + Lift);
+        // Chords under the arc: each lies at most g·dt²/8 below it (under 2 cm at the baked jump), the safe side.
+        flightChords = Math.Max(4, (int)Math.Ceiling(capabilities.FlightTime * 12));
+        // The controller already leaves a contact gap. Expanding the capsule would trap an actor touching a fence or a
+        // moving prop, because every route would start inside that expanded overlap; so no margin.
+        sweep = new ShapeCast3D
         {
-            var d = point - hazard.Center;
-            d.Y = 0;
-            if (d.LengthSquared() < hazard.Radius * hazard.Radius)
-            {
-                // A bot already inside danger must be able to run out, but can never jump through it.
-                if (!allowEscape || escapeFrom == null || d.LengthSquared() + 0.001f <
-                    new Vector2(escapeFrom.Value.X - hazard.Center.X, escapeFrom.Value.Z - hazard.Center.Z).LengthSquared()) { return false; }
-            }
-        }
-        return true;
+            Name = "NavigationSweep",
+            TopLevel = true,
+            Enabled = false,
+            Shape = new CapsuleShape3D { Radius = capabilities.Radius, Height = capabilities.Height },
+            CollisionMask = Obstacles,
+            Margin = 0,
+            MaxResults = 1,
+        };
+        ray = new RayCast3D { Name = "NavigationRay", TopLevel = true, Enabled = false, CollisionMask = Ground };
+        root.AddChild(sweep);
+        root.AddChild(ray);
     }
 
-    private bool Clear(Vector3 from, Vector3 to)
+    public bool Fits(Vector3 feet) => Cast(feet, Vector3.Zero);
+
+    public bool Sweep(Vector3 from, Vector3 to) => Cast(from, to - from);
+
+    private bool Cast(Vector3 feet, Vector3 motion)
     {
-        var query = queries?.Shape ?? new PhysicsShapeQueryParameters3D();
-        try
-        {
-            query.Shape = capabilities.Shape;
-            query.Transform = new Transform3D(Basis.Identity, from + capabilities.ShapeOffset + Vector3.Up * 0.002f);
-            query.Motion = to - from;
-            query.CollisionMask = Layers.World | Layers.Props | Layers.Tanks;
-            // The controller already leaves a contact gap. Expanding the walking capsule traps an actor
-            // touching a fence or moving tank, because every possible route starts in that expanded overlap.
-            query.Margin = 0;
-            if (space.IntersectShape(query, 1).Count > 0) { return false; }
-            var motion = space.CastMotion(query);
-            return motion.Length == 2 && motion[0] >= 0.999f;
-        }
-        finally
-        {
-            if (queries == null) query.Dispose();
-        }
+        Queries++;
+        sweep.Position = feet + center;
+        sweep.TargetPosition = motion;
+        sweep.ForceShapecastUpdate();
+        return !sweep.IsColliding();
     }
 
-    // A world lives for one tick, while physics stands still, so a point's answer cannot change. Searches ask again for
-    // the same cells (a cell check, then its walk and jump links, then a walk's end samples), so remember each answer.
-    private Dictionary<Vector3, bool>? standable;
-
-    public bool Standable(Vector3 feet)
+    public bool Supported(Vector3 feet)
     {
-        standable ??= new();
-        if (standable.TryGetValue(feet, out var known)) { return known; }
-        var result = Safe(feet) && Clear(feet, feet) && Supported(feet);
-        standable[feet] = result;
-        return result;
+        Queries++;
+        ray.Position = feet + Vector3.Up * 0.2f;
+        ray.TargetPosition = Vector3.Down * 0.45f;
+        ray.ForceRaycastUpdate();
+        return ray.IsColliding() && ray.GetCollisionNormal().Y > 0.9f && Math.Abs(ray.GetCollisionPoint().Y - feet.Y) < 0.2f;
     }
 
-    private Dictionary<Vector3, bool>? supported;
-
-    private bool Supported(Vector3 feet)
+    public bool Flight(Vector3 from, Vector3 direction)
     {
-        supported ??= new();
-        if (supported.TryGetValue(feet, out var known)) { return known; }
-        return supported[feet] = Support(feet);
-    }
-
-    private bool Support(Vector3 feet)
-    {
-        var ray = queries?.Ray ?? new PhysicsRayQueryParameters3D();
-        try
-        {
-            ray.From = feet + Vector3.Up * 0.2f;
-            ray.To = feet - Vector3.Up * 0.25f;
-            ray.CollisionMask = Layers.Floor | Layers.World | Layers.Props | Layers.Tanks;
-            var hit = space.IntersectRay(ray);
-            return hit.Count > 0 && hit["normal"].AsVector3().Y > 0.9f &&
-                Math.Abs(hit["position"].AsVector3().Y - feet.Y) < 0.2f;
-        }
-        finally
-        {
-            if (queries == null) ray.Dispose();
-        }
-    }
-
-    public bool Walk(Vector3 from, Vector3 to)
-    {
-        if (!Standable(to) || !Clear(from, to)) { return false; }
-        var samples = Math.Max(1, (int)Math.Ceiling(from.DistanceTo(to) / capabilities.Radius));
-        for (var i = 0; i <= samples; i++)
-        {
-            if (!Safe(from.Lerp(to, (float)i / samples)) || !Supported(from.Lerp(to, (float)i / samples))) { return false; }
-        }
-        return true;
-    }
-
-    public bool Jump(Vector3 from, Vector3 to)
-    {
-        if (capabilities.JumpVelocity <= 0 || capabilities.Gravity <= 0 || capabilities.Speed <= 0 ||
-            !Safe(from, false) || !Safe(to, false) || !Standable(from) || !Standable(to)) { return false; }
-        var direction = to - from;
-        direction.Y = 0;
-        var distance = direction.Length();
-        // Jump links use the run gait, never creep or sprint. A grid endpoint may be a little before touchdown;
-        // test the actual full arc as well, so an unchecked tank or wall just beyond that endpoint is rejected.
-        // The range costs nothing, so it goes before the walk test's sweeps; either refusal gives the same answer.
-        if (distance < capabilities.JumpRange * minimumJumpRange || distance > capabilities.JumpRange) { return false; }
-        if (Walk(from, to)) { return false; }
-        direction = direction.Normalized();
-        var landing = from + direction * capabilities.JumpRange;
-        if (!Safe(landing, false) || !Standable(landing)) { return false; }
+        if (capabilities.JumpVelocity <= 0 || capabilities.Gravity <= 0 || capabilities.Speed <= 0) return false;
         var previous = from;
-        var steps = (int)Math.Ceiling(capabilities.FlightTime * 60);
-        for (var i = 1; i <= steps; i++)
+        for (var i = 1; i <= flightChords; i++)
         {
-            var t = capabilities.FlightTime * i / steps;
+            var t = capabilities.FlightTime * i / flightChords;
             var point = from + direction * (capabilities.Speed * t) +
                 Vector3.Up * Mathf.Max(0, capabilities.JumpVelocity * t - capabilities.Gravity * t * t / 2 - margin);
-            if (!Safe(point, false) || !Clear(previous, point)) { return false; }
+            if (!Sweep(previous, point)) return false;
             previous = point;
         }
         return true;
+    }
+
+    public void Dispose()
+    {
+        if (GodotObject.IsInstanceValid(sweep)) sweep.QueueFree();
+        if (GodotObject.IsInstanceValid(ray)) ray.QueueFree();
     }
 }

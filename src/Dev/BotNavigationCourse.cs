@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Godot;
+using Propane.Bots;
 using Propane.Core;
 using Propane.Navigation;
 using Propane.Player;
@@ -14,7 +15,10 @@ namespace Propane.Dev;
 public partial class BotNavigationCourse : Node3D, IPlayerInputSource
 {
     private WorldContext world = null!;
-    public override void _ExitTree() => world.Dispose();
+    public override void _ExitTree() { services?.Dispose(); world.Dispose(); }
+    private BotServices? services;
+    private List<Tank.PropaneTank> tanks = new();
+    private CapsuleShape3D capsule = null!;
 
     private readonly BotNavigator navigator = new();
     private PlayerCharacter player = null!;
@@ -59,6 +63,7 @@ public partial class BotNavigationCourse : Node3D, IPlayerInputSource
         AddChild(new VoidEnvironment());
         player = new PlayerCharacter { World = world, Name = "CourseBot", InputOverride = this };
         AddChild(player);
+        capsule = BotServices.Capsule(player);
         observer = new Camera3D { Current = true, Fov = 55 };
         AddChild(observer);
         director = new CaptureDirector();
@@ -69,6 +74,8 @@ public partial class BotNavigationCourse : Node3D, IPlayerInputSource
 
     private void Begin()
     {
+        services?.Dispose();
+        services = new BotServices(world);
         if (suburb != null)
         {
             RemoveChild(suburb);
@@ -114,6 +121,7 @@ public partial class BotNavigationCourse : Node3D, IPlayerInputSource
         player.Velocity = Vector3.Zero;
         player.Aim.SetOrientation(0, 0);
         goal = suburb.GlobalTransform * new Vector3((seed * 7 % 5 - 2) * 0.25f, Suburb.GroundHeight, -7 - seed % 2 * 0.3f);
+        tanks = suburb.LiveTanks.ToList();
         navigator.Reset();
         courseJumps = navigator.Jumps;
         var fence = suburb.DynamicRoot.GetChildren().OfType<PhysicsBody3D>().First(p => p.Name == "FencePanel");
@@ -166,12 +174,11 @@ public partial class BotNavigationCourse : Node3D, IPlayerInputSource
         else
         {
             var t = world.Tuning;
-            var shape = player.GetChildren().OfType<CollisionShape3D>().Single();
-            var capabilities = new NavigationCapabilities(shape.Shape, shape.Position, ((CapsuleShape3D)shape.Shape).Radius,
-                t.RunSpeed, t.SprintSpeed, t.JumpVelocity, t.PlayerGravity, t.Acceleration, t.AirControl);
-            var hazards = suburb!.LiveTanks.Select(tank => new NavigationHazard(tank.GlobalPosition, t.BotTankClearance)).ToArray();
-            var navigation = new NavigationWorld(GetWorld3D().DirectSpaceState, capabilities, hazards, t.BotJumpMargin, minimumJumpRange: t.BotJumpMinimumRange);
-            var move = navigator.Navigate(navigation, new NavigationState(here, player.Velocity, player.IsOnFloor()), capabilities, goal, t, dt);
+            var capabilities = BotServices.Capabilities(capsule, t);
+            services!.BeginTick(tanks);
+            var grid = services.Navigation(capabilities);
+            var hazards = services.Hazards;
+            var move = navigator.Navigate(grid, hazards, new NavigationState(here, player.Velocity, player.IsOnFloor()), goal, t, dt);
             if (move.Direction.LengthSquared() > 0)
             {
                 var yaw = Mathf.RadToDeg(Mathf.Atan2(-move.Direction.X, -move.Direction.Z));
@@ -180,8 +187,9 @@ public partial class BotNavigationCourse : Node3D, IPlayerInputSource
             }
             if (!player.IsOnFloor())
             {
-                foreach (var hazard in hazards)
+                for (var i = 0; i < hazards.Count; i++)
                 {
+                    var hazard = hazards[i];
                     var flat = new Vector2(here.X - hazard.Center.X, here.Z - hazard.Center.Z);
                     if (flat.Length() < hazard.Radius) { throw new InvalidOperationException("jump entered the tank pile clearance zone"); }
                 }
@@ -191,19 +199,20 @@ public partial class BotNavigationCourse : Node3D, IPlayerInputSource
             if (move.Jump)
             {
                 var landing = here + move.Direction * capabilities.JumpRange;
-                var pile = new NavigationWorld(GetWorld3D().DirectSpaceState, capabilities,
-                    new[] { new NavigationHazard(here.Lerp(landing, 0.5f), t.BotTankClearance) }, t.BotJumpMargin, t.BotJumpMinimumRange);
-                var vent = new NavigationWorld(GetWorld3D().DirectSpaceState, capabilities,
-                    new[] { new NavigationHazard(landing, t.RagdollRadius + 1) }, t.BotJumpMargin, t.BotJumpMinimumRange);
-                if (pile.Jump(here, landing) || vent.Jump(here, landing))
+                var pile = new NavigationHazards();
+                pile.Add(here.Lerp(landing, 0.5f), t.BotTankClearance);
+                var vent = new NavigationHazards();
+                vent.Add(landing, t.RagdollRadius + 1);
+                if (pile.SafeAlong(here, landing, 0.25f) || vent.SafeAlong(here, landing, 0.25f))
                 {
                     throw new InvalidOperationException("jump must reject pile and vent clearance zones");
                 }
                 if (course == 0)
                 {
-                    var escape = new NavigationWorld(GetWorld3D().DirectSpaceState, capabilities,
-                        new[] { new NavigationHazard(here, t.RagdollRadius + 1) }, t.BotJumpMargin, t.BotJumpMinimumRange, here);
-                    if (!escape.Walk(here, here - move.Direction * 2))
+                    var escape = new NavigationHazards();
+                    escape.Add(here, t.RagdollRadius + 1);
+                    var toSafety = here - move.Direction * 2;
+                    if (!escape.SafeAlong(here, toSafety, capabilities.Radius, here) || !grid.World.Sweep(here, toSafety))
                     {
                         throw new InvalidOperationException("a bot already inside danger must be able to walk out");
                     }

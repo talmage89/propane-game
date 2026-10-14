@@ -162,7 +162,7 @@ public partial class LabTest : Node
         var lab = Enter(scenario, environment);
         var tankCount = lab.LiveTanks.Count();
         Assert(tankCount > 0, "fixture has no tanks");
-        Assert(!lab.World.Networked && lab.Session.Actors.Count == (scenario.Banking ? 2 :
+        Assert(!lab.World.Networked && lab.Session.Actors.Count == (scenario.Banking ? template.LabBankBots + 1 :
             scenario.Prototype && scenario.Definition != ModeRegistry.DissolveRun ? template.LabPrototypeBots + 1 : 1),
             "local actors/world");
         Assert(lab.Opponent?.View == null, "bot acquired a camera");
@@ -251,6 +251,8 @@ public partial class LabTest : Node
     private async Task Duel(bool soak = false)
     {
         if (DevArgs.Get("duel-seconds") != null) template.LabDuelSeconds = DevArgs.GetFloat("duel-seconds", 180);
+        template.LabBankBots = (int)DevArgs.GetFloat("bots", 1);
+        DevArgs.ApplyTuningOverrides(template);
         var lab = Enter(LabScenarios.Get("duel"), DevArgs.Get("environment") == "suburb" ? LabEnvironment.Suburb : LabEnvironment.Void);
         if (soak) lab.Bank!.AttachBot(lab.Player);
         else lab.Player.InputOverride = new ScriptedPlayer(lab);
@@ -502,7 +504,7 @@ public partial class LabTest : Node
                 if (DevArgs.Get("trace") != null && frame % 300 == 0 && lab.Prototype is { } traced)
                 {
                     GD.Print($"[lab trace] {traced.Elapsed:F1}s " + string.Join(" | ", lab.Session.Actors.Select(a =>
-                        $"{a.Character.ActorId} {((ShortFuseRules)traced.Rules).Health.Health(a.Character.ActorId, traced.Clock.Now):0} {traced.BotStatus(a.Character.ActorId)}")));
+                        $"{a.Character.ActorId} {((ShortFuseRules)traced.Rules).Health.Health(a.Character.ActorId, traced.Clock.Now):0} {traced.BotStatus(a.Character.ActorId)} pos={a.Character.GlobalPosition} nav={traced.BotNavigation(a.Character.ActorId)}")));
                 }
                 await Frames(1).ConfigureAwait(true);
             }

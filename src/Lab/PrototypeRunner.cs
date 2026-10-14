@@ -34,7 +34,9 @@ public partial class PrototypeRunner : Node
     private readonly Dictionary<int, int> scores = new();
     private readonly Dictionary<PropaneTank, int> directShots = new();
     private readonly HashSet<PropaneTank> drops = new();
-    private readonly List<(IBotGoalPolicy Brain, PlayerCharacter Actor)> brains = new();
+    private readonly List<(IBotGoalPolicy Brain, PlayerCharacter Actor, BotWorld View)> brains = new();
+    private BotServices services = null!;
+    private int botTurn;
     private readonly HashSet<int> spectating = new();
     private readonly Dictionary<int, uint> shots = new();
     private (int Actor, ulong Frame) blastCause;
@@ -65,6 +67,7 @@ public partial class PrototypeRunner : Node
         IsPlaying ? (Mode.Timer == RoundTimer.Countdown ? offset + length : double.PositiveInfinity) : offset + elapsed);
     public bool Spectating(int actorId) => spectating.Contains(actorId);
     public string BotStatus(int actorId) => brains.FirstOrDefault(b => b.Actor.ActorId == actorId).Brain?.Status ?? "";
+    internal string BotNavigation(int actorId) => brains.FirstOrDefault(b => b.Actor.ActorId == actorId).Brain?.NavigationDiagnostics ?? "";
     private WorldContext World => Lab.World;
     private bool Banking => Rules is KingRules;
     private bool Health => Rules is ShortFuseRules;
@@ -73,6 +76,7 @@ public partial class PrototypeRunner : Node
 
     public override void _Ready()
     {
+        services = new BotServices(World, Lab.BotBounds);
         var tuning = World.Tuning;
         length = Mode.Id == ModeRegistry.KingId ? tuning.KingRoundSeconds : Mode.Id == ModeRegistry.ShortFuseId ? tuning.ShortFuseRoundSeconds : 0;
         roster = Lab.Session.Actors.Select(a => new ModeActor(a.Character.ActorId, a.Character.Name)).ToArray();
@@ -103,7 +107,8 @@ public partial class PrototypeRunner : Node
         Apply(Rules.Handle(new PhaseEntered(ModePhase.Round, new RoundInfo(round, round, Mode.Timer, offset, length)), Clock));
         Lab.Session.OnStopping(() =>
         {
-            foreach (var (brain, actor) in brains) { actor.InputOverride = null; brain.Dispose(); }
+            foreach (var (brain, actor, _) in brains) { actor.InputOverride = null; brain.Dispose(); }
+            services.Dispose();
             brains.Clear(); directShots.Clear(); drops.Clear();
             Decided = null;
         });
@@ -115,7 +120,9 @@ public partial class PrototypeRunner : Node
         var brain = Mode.CreateBot!(World.Random.Randi());
         brain.Skill = World.Tuning.LabBotSkill;
         actor.InputOverride = brain;
-        brains.Add((brain, actor));
+        var view = new BotWorld(this, actor);
+        brain.Prepare(view);
+        brains.Add((brain, actor, view));
     }
 
     public override void _PhysicsProcess(double delta)
@@ -123,10 +130,14 @@ public partial class PrototypeRunner : Node
         if (!IsPlaying) return;
         elapsed += delta;
         var started = System.Diagnostics.Stopwatch.GetTimestamp();
-        foreach (var (brain, actor) in brains)
+        services.BeginTick(Lab.BotTanks);
+        if (brains.Count > 0) botTurn = (botTurn + 1) % brains.Count;
+        for (var i = 0; i < brains.Count; i++)
         {
+            var (brain, _, view) = brains[(botTurn + i) % brains.Count];
+            view.Refresh();
             brain.Skill = World.Tuning.LabBotSkill;
-            brain.Think(new BotWorld(this, actor), (float)delta);
+            brain.Think(view, (float)delta);
             Thinks++;
         }
         ThinkSeconds += System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalSeconds;
@@ -353,10 +364,19 @@ public partial class PrototypeRunner : Node
         public double LastHitTime => actor.Runtime.LastHitTime;
         public int LastHitBy => actor.Runtime.LastHitBy;
         // Spectators are out of play: nobody chases or shoots them.
-        public IEnumerable<PlayerCharacter> RemoteBodies => runner.Lab.Session.Actors.Select(a => a.Character)
-            .Where(a => a != actor && !runner.spectating.Contains(a.ActorId));
+        private readonly List<PlayerCharacter> others = new();
+        public IReadOnlyList<PlayerCharacter> RemoteBodies => others;
+        public BotServices Services => runner.services;
+        public void Refresh()
+        {
+            others.Clear();
+            foreach (var entry in runner.Lab.Session.Actors)
+            {
+                var a = entry.Character;
+                if (a != actor && !runner.spectating.Contains(a.ActorId)) others.Add(a);
+            }
+        }
         public IReadOnlyList<AmmoPickup> Pickups => runner.Lab.Dissolve?.Pickups ?? Array.Empty<AmmoPickup>();
-        public IEnumerable<PropaneTank> LiveTanks => runner.Lab.LiveTanks;
         public IModeRules? Rules => runner.Rules;
         public ModeClock Clock => runner.Clock;
     }

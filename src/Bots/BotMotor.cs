@@ -1,4 +1,3 @@
-using System.Linq;
 using Godot;
 using Propane.Core;
 using Propane.Navigation;
@@ -12,23 +11,27 @@ namespace Propane.Bots;
 /// buttons to press each tick; this turns them into intent through the shared navigation (<see cref="BotNavigator"/>)
 /// and aiming (<see cref="BotAim"/>), with the same capsule, hazards and jump capabilities as the banking brain.
 /// </summary>
-public sealed class BotMotor : System.IDisposable
+public sealed class BotMotor
 {
     private readonly BotNavigator navigator = new();
-    private readonly NavigationQueries queries = new();
     private readonly BotAim aim = new();
-    private CollisionShape3D? capsule;
+    private CapsuleShape3D? capsule;
+    private PlayerCharacter? capsuleOwner;
     private float tapCooldown;
     private Vector3? goal;
     private bool sprint;
-    private Vector3 stallAnchor;
-    private float stalled;
-    private float direct;
     public PlayerIntent Intent;
     public float Skill { get; set; } = 1f;
+    public string NavigationDiagnostics => navigator.Diagnostics;
     public bool Failed { get; private set; }
 
-    public void Dispose() => queries.Dispose();
+    public void Prepare(IBotWorld world)
+    {
+        capsule = BotServices.Capsule(world.Player);
+        capsuleOwner = world.Player;
+        world.Services.Navigation(BotServices.Capabilities(capsule, world.World.Tuning));
+        navigator.Prepare(world.World.Tuning);
+    }
 
     /// <summary>Starts a tick: clears the buttons and the destination.</summary>
     public void Begin(float dt)
@@ -88,9 +91,13 @@ public sealed class BotMotor : System.IDisposable
 
     public static float MeleeReach(Tuning tuning) => tuning.MeleeRange + tuning.MeleeLungeSpeed * (tuning.MeleeWindup + tuning.MeleeActive);
 
-    /// <summary>Resolves the destination into movement, or strafes on <see cref="Intent"/>.Move when there is none.</summary>
-    public void Navigate(PlayerCharacter player, System.Collections.Generic.IEnumerable<PropaneTank> tanks, float dt)
+    /// <summary>
+    /// Resolves the destination into movement, or strafes on <see cref="Intent"/>.Move when there is none.
+    /// <paramref name="area"/> is the mode's own limit on where to step, if any.
+    /// </summary>
+    public void Navigate(IBotWorld world, float dt, INavigationArea? area = null)
     {
+        var player = world.Player;
         var tuning = player.World.Tuning;
         if (goal == null)
         {
@@ -99,34 +106,15 @@ public sealed class BotMotor : System.IDisposable
             var wish = basis * new Vector3(Intent.Move.X, 0, -Intent.Move.Y);
             goal = player.GlobalPosition + wish.Normalized() * tuning.BotRouteSpacing * 2;
         }
-        // A planner that keeps searching without a route leaves the bot standing. After a stall, steer straight at the
-        // destination for a moment: the prototypes' arenas are mostly open floor.
-        if (player.GlobalPosition.DistanceTo(stallAnchor) > 0.5f) { stallAnchor = player.GlobalPosition; stalled = 0; }
-        else if (Flat(goal.Value - player.GlobalPosition).Length() > tuning.BotGoalRadius * 2)
+        if (capsuleOwner != player || capsule == null)
         {
-            stalled += dt;
+            capsule = BotServices.Capsule(player);
+            capsuleOwner = player;
         }
-
-        if (stalled > StallTime) { direct = DirectTime; stalled = 0; navigator.Reset(); }
-        if (direct > 0)
-        {
-            direct -= dt;
-            Steer(player, Flat(goal.Value - player.GlobalPosition).Normalized(), sprint);
-            return;
-        }
-        var shape = capsule != null && GodotObject.IsInstanceValid(capsule) && capsule.GetParent() == player ? capsule
-            : capsule = player.GetChildren().OfType<CollisionShape3D>().Single();
-        var capabilities = new NavigationCapabilities(shape.Shape, shape.Position, ((CapsuleShape3D)shape.Shape).Radius,
-            tuning.RunSpeed, tuning.SprintSpeed, tuning.JumpVelocity, tuning.PlayerGravity, tuning.Acceleration, tuning.AirControl);
-        // Only tanks near enough to matter: every route probe tests every hazard, and a King arena holds dozens.
-        var here = player.GlobalPosition;
-        var horizon = here.DistanceTo(goal.Value) + tuning.RagdollRadius + 4f;
-        var hazards = tanks.Where(t => t.GlobalPosition.DistanceTo(here) < horizon).Select(t => new NavigationHazard(t.GlobalPosition,
-            t.State == PropaneTank.TankState.Venting ? tuning.RagdollRadius + tuning.BotVentClearance : tuning.BotTankClearance)).ToArray();
-        var world = new NavigationWorld(player.World.Physics.DirectSpaceState, capabilities, hazards, tuning.BotJumpMargin,
-            tuning.BotJumpMinimumRange, player.GlobalPosition, queries);
-        var move = navigator.Navigate(world, new NavigationState(player.GlobalPosition, player.Velocity, player.IsOnFloor()),
-            capabilities, goal.Value, tuning, dt);
+        var services = world.Services;
+        var grid = services.Navigation(BotServices.Capabilities(capsule, tuning));
+        var move = navigator.Navigate(grid, services.Hazards, new NavigationState(player.GlobalPosition, player.Velocity, player.IsOnFloor()),
+            goal.Value, tuning, dt, area);
         if (move.Failed)
         {
             Failed = true;
@@ -143,8 +131,6 @@ public sealed class BotMotor : System.IDisposable
         Intent.JumpPressed = move.Jump;
     }
 
-    private const float StallTime = 1.2f;
-    private const float DirectTime = 1f;
 
     private void Steer(PlayerCharacter player, Vector3 direction, bool run)
     {
@@ -161,29 +147,21 @@ public sealed class BotMotor : System.IDisposable
     /// <summary>Where to aim at a body: its pelvis when down, its chest when up.</summary>
     public static Vector3 AimPoint(PlayerCharacter body) => body.IsRagdolled ? body.PelvisPosition : body.GlobalPosition + Vector3.Up * 1.15f;
 
-    public static bool CanSee(PlayerCharacter player, Vector3 point)
-    {
-        var eye = player.GlobalPosition + Vector3.Up * 1.6f;
-        return player.World.Physics.DirectSpaceState.IntersectRay(PhysicsRayQueryParameters3D.Create(eye, point, Layers.World | Layers.Props)).Count == 0;
-    }
+    /// <summary>Nothing solid between this player's eye and a point.</summary>
+    public static bool CanSee(IBotWorld world, PlayerCharacter player, Vector3 point) =>
+        world.Services.Clear(player.GlobalPosition + Vector3.Up * 1.6f, point, Layers.World | Layers.Props);
 
     /// <summary>The crosshair is on the target, with nothing in the way.</summary>
-    public static bool OnTarget(PlayerCharacter player, Node3D target)
+    public static bool OnTarget(IBotWorld world, PlayerCharacter player, Node3D target)
     {
         var view = player.Aim;
         var forward = -view.EyeTransform.Basis.Z;
         var start = view.EyeOrigin + forward * 2.5f;
-        var hit = player.World.Physics.DirectSpaceState.IntersectRay(PhysicsRayQueryParameters3D.Create(start, start + forward * 80f, Layers.ShotMask));
-        var collider = hit.Count > 0 ? hit["collider"].As<GodotObject>() : null;
+        var collider = world.Services.Ray(start, start + forward * 80f, Layers.ShotMask, out var hit) ? hit.Collider : null;
         return collider == target || target is PlayerCharacter body && PlayerCharacter.Owning(collider) == body;
     }
 
     /// <summary>The nearest venting tank close enough to fear, if any.</summary>
-    public static PropaneTank? Danger(PlayerCharacter player, System.Collections.Generic.IEnumerable<PropaneTank> tanks)
-    {
-        var here = player.GlobalPosition;
-        var radius = player.World.Tuning.RagdollRadius + 1f;
-        return tanks.Where(t => t.State == PropaneTank.TankState.Venting && t.GlobalPosition.DistanceTo(here) < radius)
-            .OrderBy(t => t.GlobalPosition.DistanceTo(here)).FirstOrDefault();
-    }
+    public static PropaneTank? Danger(IBotWorld world, PlayerCharacter player) =>
+        world.Services.NearestVenting(player.GlobalPosition, player.World.Tuning.RagdollRadius + 1f);
 }

@@ -140,7 +140,7 @@ public partial class LabMenu : CanvasLayer
                 }, "difficulty");
                 layout.AddChild(UiStyle.Text(scenario.Prototype
                     ? $"Prototype · you and {draft.LabPrototypeBots} bot{(draft.LabPrototypeBots == 1 ? "" : "s")} · rules on trial · no server needed"
-                    : "Local tank bank · one bot · three minutes · no server needed", 16, UiStyle.SoftInk, HorizontalAlignment.Center));
+                    : $"Local tank bank · {draft.LabBankBots} bot{(draft.LabBankBots == 1 ? "" : "s")} · no server needed", 16, UiStyle.SoftInk, HorizontalAlignment.Center));
             }
             layout.AddChild(new HSeparator());
             Button("Enter Lab", () => StartRequested?.Invoke(scenario, environment, draft), "enter");

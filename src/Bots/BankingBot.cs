@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Linq;
 using Godot;
 using Propane.Core;
 using Propane.Navigation;
@@ -16,6 +15,8 @@ namespace Propane.Bots;
 /// - it shoots players only when they have tanks to spill, and then sets off what they spilled;
 /// - it prefers venting tanks (one shot from a point) and big piles, especially piles with another player near them;
 /// - it strafes in a fight, keeps its magazine topped up when nothing is happening, and fetches ammo when low.
+/// It chooses a few times a second and steers every tick; whether something is in sight is asked at most
+/// <see cref="Tuning.BotSightInterval"/> apart, and a tick allocates nothing.
 /// </summary>
 public sealed class BankingBot : IBotGoalPolicy
 {
@@ -24,7 +25,10 @@ public sealed class BankingBot : IBotGoalPolicy
     private const float AmmoLow = 15;
 
     private readonly RandomNumberGenerator rng = new();
-    private readonly Dictionary<ulong, float> blacklist = new();
+    private readonly Dictionary<ulong, float> blacklist = new(1024);
+    private readonly List<ulong> expired = new(1024);
+    private readonly BotStatus status = new();
+    private readonly Vantage[] vantages = new Vantage[48];
     private PlayerIntent intent;
     private Node3D? target;
     private float retarget;
@@ -33,8 +37,8 @@ public sealed class BankingBot : IBotGoalPolicy
     private Vector3 unaimedAnchor;
     private Tuning tuning = null!;
     private readonly BotNavigator navigator = new();
-    private readonly NavigationQueries queries = new();
-    private CollisionShape3D? capsule;
+    private CapsuleShape3D? capsule;
+    private PlayerCharacter? capsuleOwner;
     private Vector3? navigationGoal;
     public int StuckEvents => navigator.StuckEvents;
     public int Replans => navigator.Replans;
@@ -54,9 +58,20 @@ public sealed class BankingBot : IBotGoalPolicy
     private float strafeSide = 1f;
     private float clock;
     private readonly BotAim aimControl = new();
+    // Sight lines asked a few times a second and remembered in between.
+    private Node3D? sighted;
+    private bool sightedVisible;
+    private float sightTimer;
+    private PlayerCharacter? coverObserver;
+    private PlayerCharacter? shooterSeen;
+    private PlayerCharacter? watcher;
+    private float watchTimer;
+    private bool shooterVisible;
+    private float shooterTimer;
 
     /// <summary>What the bot is doing, for logs.</summary>
-    public string Status { get; private set; } = "";
+    public string Status => status.ToString();
+    public string NavigationDiagnostics => navigator.Diagnostics;
 
     /// <summary>0..1: how quickly it turns onto a target and how tightly it holds aim. 1 is the hardest.</summary>
     public float Skill { get; set; } = 1f;
@@ -64,12 +79,19 @@ public sealed class BankingBot : IBotGoalPolicy
     public BankingBot(ulong? seed = null)
     {
         if (seed is { } value) rng.Seed = value;
+        // Bots that start together choose on different ticks.
+        retarget = rng.Randf() * RetargetInterval;
     }
 
-    public void Dispose()
+    public void Dispose() => rng.Dispose();
+
+    public void Prepare(IBotWorld world)
     {
-        rng.Dispose();
-        queries.Dispose();
+        tuning = world.World.Tuning;
+        capsule = BotServices.Capsule(world.Player);
+        capsuleOwner = world.Player;
+        world.Services.Navigation(BotServices.Capabilities(capsule, tuning));
+        navigator.Prepare(tuning);
     }
 
     public PlayerIntent Read()
@@ -87,6 +109,9 @@ public sealed class BankingBot : IBotGoalPolicy
         tuning = match.World.Tuning;
         clock += dt;
         tapCooldown -= dt;
+        sightTimer -= dt;
+        watchTimer -= dt;
+        shooterTimer -= dt;
         var player = match.Player;
         intent = new PlayerIntent();
         navigationGoal = null;
@@ -106,9 +131,7 @@ public sealed class BankingBot : IBotGoalPolicy
         {
             fleeing = null;
         }
-        var danger = fleeing ?? match.LiveTanks.Where(t => t.State == PropaneTank.TankState.Venting)
-            .Where(t => t.GlobalPosition.DistanceTo(here) < tuning.RagdollRadius + 1f)
-            .OrderBy(t => t.GlobalPosition.DistanceTo(here)).FirstOrDefault();
+        var danger = fleeing ?? match.Services.NearestVenting(here, tuning.RagdollRadius + 1f);
         fleeing = danger;
         if (danger != null)
         {
@@ -118,7 +141,7 @@ public sealed class BankingBot : IBotGoalPolicy
             Face(player, here + away * 10f + Vector3.Up * 1.4f, dt);
             MoveToward(player, away * 10f);
             intent.Sprint = true;
-            Status = $"fleeing venting tank {danger.GlobalPosition.DistanceTo(here):0.0} m away";
+            status.Set("fleeing venting tank {1:0.0} m away", first: danger.GlobalPosition.DistanceTo(here));
             Navigate(match, dt);
             return;
         }
@@ -127,9 +150,7 @@ public sealed class BankingBot : IBotGoalPolicy
         if (target is not PropaneTank || !player.ResolvedState.EffectiveAim)
         {
             var reach = tuning.MeleeRange + tuning.MeleeLungeSpeed * (tuning.MeleeWindup + tuning.MeleeActive);
-            var close = match.RemoteBodies.Where(e => !e.IsRagdolled && e.GlobalPosition.DistanceTo(here) <= reach &&
-                    CanSee(e, here + Vector3.Up * tuning.MeleeContactHeight))
-                .OrderBy(e => e.GlobalPosition.DistanceSquaredTo(here)).FirstOrDefault();
+            var close = Closest(match, here, reach, tuning.MeleeContactHeight);
             if (close != null)
             {
                 Face(player, Aim(close), dt);
@@ -137,7 +158,7 @@ public sealed class BankingBot : IBotGoalPolicy
                 var forward = Flat(-player.Aim.EyeTransform.Basis.Z).Normalized();
                 intent.MeleePressed = player.CanMelee && MeleeContact.InArc(direction, forward, reach, tuning.MeleeHalfAngleDegrees);
                 MoveToward(player, direction);
-                Status = $"melee {close.ActorId} at {direction.Length():0.0} m";
+                status.Set("melee {0} at {1:0.0} m", close.ActorId, direction.Length());
                 Navigate(match, dt);
                 return;
             }
@@ -147,21 +168,19 @@ public sealed class BankingBot : IBotGoalPolicy
         //    line of sight. A shooter holding more gets shot back.
         if (match.MyScore > 0 && match.Now - match.LastHitTime < 2.5)
         {
-            var shooter = match.RemoteBodies.FirstOrDefault(b => b.ActorId == match.LastHitBy);
-            if (shooter != null && match.Scores.GetValueOrDefault(shooter.ActorId) < match.MyScore && CanSee(shooter, here + Vector3.Up * 1.2f))
+            var shooter = Body(match, match.LastHitBy);
+            if (shooter != null && match.Scores.GetValueOrDefault(shooter.ActorId) < match.MyScore)
             {
-                coverTimer -= dt;
-                if (cover == null || coverTimer <= 0 && CanSeeFrom(shooter, cover.Value + Vector3.Up * 1.2f))
+                if (shooter != shooterSeen || shooterTimer <= 0)
                 {
-                    coverTimer = 0.5f;
-                    cover = FindCover(player, shooter);
+                    shooterSeen = shooter;
+                    shooterTimer = tuning.BotSightInterval;
+                    shooterVisible = CanSee(match, shooter, here + Vector3.Up * 1.2f);
                 }
-                if (cover != null)
+                if (shooterVisible && Cover(match, player, shooter, dt) is { } spot)
                 {
-                    Face(player, cover.Value + Vector3.Up * 1.4f, dt);
-                    MoveToward(player, Flat(cover.Value - here));
-                    intent.Sprint = true;
-                    Status = $"taking cover {Flat(cover.Value - here).Length():0.0} m away";
+                    RunTo(player, spot, dt);
+                    status.Set("taking cover {1:0.0} m away", first: Flat(spot - here).Length());
                     Navigate(match, dt);
                     return;
                 }
@@ -171,32 +190,23 @@ public sealed class BankingBot : IBotGoalPolicy
         protecting = Protecting(match);
         if (protecting)
         {
-            var watcher = match.RemoteBodies.Where(e => !e.IsRagdolled && e.GlobalPosition.DistanceTo(here) < 45f &&
-                                                        match.Scores.GetValueOrDefault(e.ActorId) <= match.MyScore && CanSee(e, here + Vector3.Up * 1.2f))
-                .OrderBy(e => e.GlobalPosition.DistanceTo(here)).FirstOrDefault();
-            if (watcher != null)
+            if (watchTimer <= 0 || watcher != null && (!GodotObject.IsInstanceValid(watcher) || watcher.IsRagdolled))
             {
-                coverTimer -= dt;
-                if (cover == null || coverTimer <= 0 && CanSeeFrom(watcher, cover.Value + Vector3.Up * 1.2f))
-                {
-                    coverTimer = 0.5f;
-                    cover = FindCover(player, watcher);
-                }
-                if (cover != null && Flat(cover.Value - here).Length() > 0.8f)
-                {
-                    Face(player, cover.Value + Vector3.Up * 1.4f, dt);
-                    MoveToward(player, Flat(cover.Value - here));
-                    intent.Sprint = true;
-                    Status = $"protecting {match.MyScore}: hiding from {watcher.ActorId}";
-                    Navigate(match, dt);
-                    return;
-                }
+                watchTimer = tuning.BotWatchInterval;
+                watcher = Watcher(match, here);
+            }
+            if (watcher != null && Cover(match, player, watcher, dt) is { } spot && Flat(spot - here).Length() > 0.8f)
+            {
+                RunTo(player, spot, dt);
+                status.Set("protecting {1:0}: hiding from {0}", watcher.ActorId, match.MyScore);
+                Navigate(match, dt);
+                return;
             }
         }
         cover = null;
 
         retarget -= dt;
-        if (retarget <= 0 || !IsValid(target))
+        if (retarget <= 0 || target != null && !IsValid(target))
         {
             retarget = RetargetInterval;
             var chosen = Choose(match, ammo);
@@ -215,7 +225,7 @@ public sealed class BankingBot : IBotGoalPolicy
         }
         if (target == null)
         {
-            Status = "no target";
+            status.Set("no target");
             if (navigator.Jumping) { Navigate(match, dt); }
             return;
         }
@@ -223,7 +233,7 @@ public sealed class BankingBot : IBotGoalPolicy
         switch (target)
         {
             case AmmoPickup pickup:
-                Status = $"fetching ammo {pickup.GlobalPosition.DistanceTo(here):0.0} m away";
+                status.Set("fetching ammo {1:0.0} m away", first: pickup.GlobalPosition.DistanceTo(here));
                 Face(player, pickup.GlobalPosition + Vector3.Up * 0.4f, dt);
                 MoveToward(player, Flat(pickup.GlobalPosition - here));
                 intent.Sprint = true;
@@ -250,8 +260,93 @@ public sealed class BankingBot : IBotGoalPolicy
     private static bool Protecting(IBotWorld match)
     {
         var mine = match.MyScore;
-        var best = match.Scores.Where(s => s.Key != match.Player.ActorId).Select(s => s.Value).DefaultIfEmpty(0).Max();
-        return mine >= 4 && (mine > best || match.TimeLeft < 40f);
+        if (mine < 4) return false;
+        if (match.TimeLeft < 40f) return true;
+        var bodies = match.RemoteBodies;
+        for (var i = 0; i < bodies.Count; i++)
+        {
+            if (match.Scores.GetValueOrDefault(bodies[i].ActorId) >= mine) return false;
+        }
+        return true;
+    }
+
+    /// <summary>The nearest upright player within 45 m holding no more than this bot that can see it, or null.</summary>
+    private static PlayerCharacter? Watcher(IBotWorld match, Vector3 here)
+    {
+        var bodies = match.RemoteBodies;
+        var tried = -1f;
+        while (true)
+        {
+            PlayerCharacter? next = null;
+            var nextDistance = 45f;
+            for (var i = 0; i < bodies.Count; i++)
+            {
+                var e = bodies[i];
+                var distance = e.GlobalPosition.DistanceTo(here);
+                if (distance > tried && distance < nextDistance && !e.IsRagdolled && match.Scores.GetValueOrDefault(e.ActorId) <= match.MyScore)
+                {
+                    next = e;
+                    nextDistance = distance;
+                }
+            }
+            if (next == null || CanSee(match, next, here + Vector3.Up * 1.2f)) return next;
+            tried = nextDistance;
+        }
+    }
+
+    /// <summary>The nearest upright opponent within melee reach whose eye sees this bot's chest, or null.</summary>
+    private static PlayerCharacter? Closest(IBotWorld match, Vector3 here, float reach, float height)
+    {
+        var bodies = match.RemoteBodies;
+        var tried = -1f;
+        while (true)
+        {
+            PlayerCharacter? next = null;
+            var nextDistance = float.MaxValue;
+            for (var i = 0; i < bodies.Count; i++)
+            {
+                var e = bodies[i];
+                var distance = e.GlobalPosition.DistanceSquaredTo(here);
+                if (!e.IsRagdolled && distance > tried && distance < nextDistance && e.GlobalPosition.DistanceTo(here) <= reach)
+                {
+                    next = e;
+                    nextDistance = distance;
+                }
+            }
+            if (next == null || CanSee(match, next, here + Vector3.Up * height)) return next;
+            tried = nextDistance;
+        }
+    }
+
+    private static PlayerCharacter? Body(IBotWorld match, int actorId)
+    {
+        var bodies = match.RemoteBodies;
+        for (var i = 0; i < bodies.Count; i++)
+        {
+            if (bodies[i].ActorId == actorId) return bodies[i];
+        }
+        return null;
+    }
+
+    /// <summary>Cover from an observer, found again when there is none yet or the observer sees it; null when there is none.</summary>
+    private Vector3? Cover(IBotWorld match, PlayerCharacter player, PlayerCharacter observer, float dt)
+    {
+        coverTimer -= dt;
+        if (observer != coverObserver || coverTimer <= 0)
+        {
+            coverObserver = observer;
+            coverTimer = tuning.BotCoverInterval;
+            if (cover == null || CanSeeFrom(match, observer, cover.Value + Vector3.Up * 1.2f))
+                cover = FindCover(match, player, observer);
+        }
+        return cover;
+    }
+
+    private void RunTo(PlayerCharacter player, Vector3 spot, float dt)
+    {
+        Face(player, spot + Vector3.Up * 1.4f, dt);
+        MoveToward(player, Flat(spot - player.GlobalPosition));
+        intent.Sprint = true;
     }
 
     private void Tap()
@@ -267,14 +362,26 @@ public sealed class BankingBot : IBotGoalPolicy
     {
         var player = match.Player;
         var here = player.GlobalPosition;
-        foreach (var key in blacklist.Keys.Where(k => blacklist[k] < clock).ToList())
+        expired.Clear();
+        foreach (var (key, until) in blacklist)
         {
-            blacklist.Remove(key);
+            if (until < clock) expired.Add(key);
         }
+        foreach (var key in expired) blacklist.Remove(key);
 
         // Ammo: go out of the way for it when low; grab a can on the way when it is close.
         var rounds = ammo.Magazine + ammo.Reserve;
-        var pickup = match.Pickups.Where(p => p.Available && !blacklist.ContainsKey(p.GetInstanceId())).OrderBy(p => p.GlobalPosition.DistanceTo(here)).FirstOrDefault();
+        AmmoPickup? pickup = null;
+        var pickups = match.Pickups;
+        for (var i = 0; i < pickups.Count; i++)
+        {
+            var p = pickups[i];
+            if (p.Available && !blacklist.ContainsKey(p.GetInstanceId()) &&
+                (pickup == null || p.GlobalPosition.DistanceTo(here) < pickup.GlobalPosition.DistanceTo(here)))
+            {
+                pickup = p;
+            }
+        }
         if (pickup != null && ammo.Reserve < tuning.MaxReserve &&
             (rounds < AmmoLow || rounds < AmmoLow * 3 && pickup.GlobalPosition.DistanceTo(here) < 12f))
         {
@@ -284,41 +391,45 @@ public sealed class BankingBot : IBotGoalPolicy
         Node3D? best = null;
         var bestScore = float.MinValue;
         // Players worth shooting: in sight, in range, with tanks to spill.
-        foreach (var enemy in match.RemoteBodies)
+        var bodies = match.RemoteBodies;
+        for (var i = 0; i < bodies.Count; i++)
         {
+            var enemy = bodies[i];
             var banked = match.Scores.GetValueOrDefault(enemy.ActorId);
             var distance = enemy.GlobalPosition.DistanceTo(here);
             // A fight costs ammo and invites return fire: worth it for a real bank, for a cheap close one, or
             // against whoever just shot this bot.
             var avenging = enemy.ActorId == match.LastHitBy && match.Now - match.LastHitTime < 3;
             var worth = protecting ? banked > match.MyScore : banked >= 3 || banked >= 1 && distance < 18f || avenging && banked > 0;
-            if (blacklist.ContainsKey(enemy.GetInstanceId()) || !worth || distance > PlayerRange || !CanSee(player, Aim(enemy)))
+            if (blacklist.ContainsKey(enemy.GetInstanceId()) || !worth || distance > PlayerRange)
             {
                 continue;
             }
             // Worth it against anyone holding more; against smaller banks only when this bot has little to lose.
             var score = 60f + banked * 6f - distance - (match.MyScore > banked + 2 ? 45f : 0f);
-            if (score > bestScore)
+            if (score > bestScore && CanSee(match, player, Aim(enemy)))
             {
                 bestScore = score;
                 best = enemy;
             }
         }
 
-        var tanks = match.LiveTanks.Where(t => !t.Invulnerable || t.GlobalPosition.DistanceTo(here) < 30f).ToList();
-        foreach (var tank in tanks)
+        var services = match.Services;
+        var tanks = services.Tanks;
+        for (var i = 0; i < tanks.Count; i++)
         {
-            if (blacklist.ContainsKey(tank.GetInstanceId()))
-            {
-                continue;
-            }
+            var tank = tanks[i];
             var at = tank.GlobalPosition;
             var distance = at.DistanceTo(here);
-            var pile = tanks.Count(t => t.GlobalPosition.DistanceTo(at) < tuning.ChainRadius);
-            if (protecting && match.RemoteBodies.Any(e => e.GlobalPosition.DistanceTo(at) < 25f))
+            if (tank.Invulnerable && distance >= 30f || blacklist.ContainsKey(tank.GetInstanceId()))
             {
                 continue;
             }
+            if (protecting && Near(bodies, at, 25f, upright: false))
+            {
+                continue;
+            }
+            var pile = services.PileCount(i);
             var score = (tank.State == PropaneTank.TankState.Venting ? 25f : 10f) + Mathf.Min(pile, 10) * 6f - distance * 0.7f;
             if (distance < 20f)
             {
@@ -326,8 +437,9 @@ public sealed class BankingBot : IBotGoalPolicy
                 score += 12f;
             }
             // A pile with a rival beside it: setting it off throws them, spilling five.
-            foreach (var enemy in match.RemoteBodies)
+            for (var j = 0; j < bodies.Count; j++)
             {
+                var enemy = bodies[j];
                 if (!enemy.IsRagdolled && match.Scores.GetValueOrDefault(enemy.ActorId) > 0 &&
                     enemy.GlobalPosition.DistanceTo(at) < tuning.RagdollRadius)
                 {
@@ -347,7 +459,28 @@ public sealed class BankingBot : IBotGoalPolicy
         return best;
     }
 
+    private static bool Near(IReadOnlyList<PlayerCharacter> bodies, Vector3 at, float within, bool upright)
+    {
+        for (var i = 0; i < bodies.Count; i++)
+        {
+            if ((!upright || !bodies[i].IsRagdolled) && bodies[i].GlobalPosition.DistanceTo(at) < within) return true;
+        }
+        return false;
+    }
+
     // ------------------------------------------------------------------ Acting
+
+    /// <summary>Whether a target is in sight from this bot's eye, asked at most every <see cref="Tuning.BotSightInterval"/>.</summary>
+    private bool Sees(IBotWorld match, PlayerCharacter player, Node3D what, Vector3 point)
+    {
+        if (what != sighted || sightTimer <= 0)
+        {
+            sighted = what;
+            sightTimer = tuning.BotSightInterval;
+            sightedVisible = CanSee(match, player, point);
+        }
+        return sightedVisible;
+    }
 
     private void Fight(IBotWorld match, PlayerCharacter player, PlayerCharacter enemy, float dt)
     {
@@ -379,7 +512,7 @@ public sealed class BankingBot : IBotGoalPolicy
         var aim = player.Aim;
         var off = Mathf.RadToDeg((-aim.EyeTransform.Basis.Z).AngleTo(aimPoint - aim.EyeOrigin));
         var reacted = fightTime > Mathf.Lerp(tuning.BotReactionEasy, tuning.BotReactionHard, Skill);
-        var firing = reacted && off < 2f && CanSee(player, Aim(enemy));
+        var firing = reacted && off < 2f && Sees(match, player, enemy, Aim(enemy));
         // Short bursts, letting the aim settle in between.
         burstClock += dt;
         var inBurst = Mathf.PosMod(burstClock, 0.65f) < 0.35f;
@@ -388,7 +521,7 @@ public sealed class BankingBot : IBotGoalPolicy
             intent.FireHeld = true;
             intent.FirePressed = true;
         }
-        Status = $"fighting {enemy.ActorId} at {distance:0.0} m, error {error:0.00} m, firing {firing}";
+        status.Set("fighting {0} at {1:0.0} m, error {2:0.00} m, firing {4}", enemy.ActorId, distance, error, word: firing ? "True" : "False");
     }
 
     private void Demolish(IBotWorld match, PlayerCharacter player, PropaneTank tank, float dt)
@@ -398,12 +531,12 @@ public sealed class BankingBot : IBotGoalPolicy
         var distance = Flat(center - here).Length();
         // Setting a tank off needs distance: past its blast, and past the blasts of the pile it sets off. Both shots
         // come from there, in one burst: the first punctures, the next sets it (and its pile) off before it moves.
-        var spread = match.LiveTanks.Where(t => t.GlobalPosition.DistanceTo(tank.GlobalPosition) < tuning.ChainRadius)
-            .Select(t => t.GlobalPosition.DistanceTo(tank.GlobalPosition)).DefaultIfEmpty(0).Max();
+        var index = match.Services.IndexOf(tank);
+        var spread = index >= 0 ? match.Services.PileSpread(index) : 0;
         var safe = tuning.RagdollRadius + 1.2f + spread;
         var near = safe;
         var far = Mathf.Max(near + 8f, 18f);
-        var clear = distance >= near && distance <= far + 4f && CanSee(player, center);
+        var clear = distance >= near && distance <= far + 4f && Sees(match, player, tank, center);
         if (here.DistanceTo(unaimedAnchor) > 2f)
         {
             unaimedAnchor = here;
@@ -416,12 +549,12 @@ public sealed class BankingBot : IBotGoalPolicy
             Face(player, center, dt);
             intent.Aim = true;
             vantage = null;
-            Status = $"shooting {tank.State} tank at {distance:0.0} m (keeping {near:0.0})";
+            status.Set("shooting {4} tank at {1:0.0} m (keeping {2:0.0})", first: distance, second: near, word: BotStatus.Name(tank.State));
             if (tank.Invulnerable)
             {
                 return;
             }
-            if (OnTarget(player, tank))
+            if (OnTarget(match, player, tank))
             {
                 // Single taps: one punctures, the next sets it off. Ammo is scarce.
                 Tap();
@@ -436,16 +569,17 @@ public sealed class BankingBot : IBotGoalPolicy
                 {
                     // The vantage search sees past things the shot cannot (a loose fence panel in front of the
                     // rifle), so it can keep choosing this very spot. Leave this pile for a while.
-                    foreach (var neighbor in match.LiveTanks.Where(t => t.GlobalPosition.DistanceTo(tank.GlobalPosition) <= tuning.ChainRadius).ToList())
+                    var tanks = match.Services.Tanks;
+                    for (var i = 0; i < tanks.Count; i++)
                     {
-                        Blacklist(neighbor, tuning.BotTargetRetryTime);
+                        if (tanks[i].GlobalPosition.DistanceTo(tank.GlobalPosition) <= tuning.ChainRadius) Blacklist(tanks[i], tuning.BotTargetRetryTime);
                     }
                     Blacklist(tank, tuning.BotTargetRetryTime);
                     target = null;
                     vantage = null;
                     retarget = 0;
                     unaimed = 0;
-                    Status = "no clear shot: leaving this pile";
+                    status.Set("no clear shot: leaving this pile");
                 }
             }
             return;
@@ -455,16 +589,16 @@ public sealed class BankingBot : IBotGoalPolicy
         vantageTimer -= dt;
         if (vantage == null || vantageTimer <= 0 &&
             (Flat(vantage.Value - center).Length() < near || Flat(vantage.Value - center).Length() > far + 4f ||
-             !VisibleFrom(player, vantage.Value + Vector3.Up * 1.6f, center)))
+             !VisibleFrom(match, vantage.Value + Vector3.Up * 1.6f, center)))
         {
             vantageTimer = 0.6f;
-            vantage = FindVantage(player, center, near, far);
+            vantage = FindVantage(match, player, center, near, far);
             blocked = 0;
             if (vantage == null)
             {
                 Blacklist(tank, 10f);
                 retarget = 0;
-                Status = "no vantage point";
+                status.Set("no vantage point");
                 return;
             }
         }
@@ -489,76 +623,97 @@ public sealed class BankingBot : IBotGoalPolicy
             MoveToward(player, to);
             intent.Sprint = to.Length() > 8f;
         }
-        Status = $"moving to a vantage {to.Length():0.0} m away for a {tank.State} tank at {distance:0.0} m (keeping {near:0.0})";
+        status.Set("moving to a vantage {1:0.0} m away for a {4} tank at {2:0.0} m (keeping {3:0.0})", first: to.Length(), second: distance,
+            third: near, word: BotStatus.Name(tank.State));
+    }
+
+    private struct Vantage
+    {
+        public Vector3 Point;
+        public float Distance;
     }
 
     /// <summary>
     /// The nearest open spot between <paramref name="near"/> and <paramref name="far"/> from a target with a clear
-    /// view of it, on the ground (not a roof), preferring spots this bot can walk to in a straight line.
+    /// view of it, on the ground (not a roof), preferring spots this bot can walk to in a straight line. Spots are
+    /// tried nearest first and the search stops once no untried spot could beat the best, so it casts few rays.
     /// </summary>
-    private Vector3? FindVantage(PlayerCharacter player, Vector3 target, float near, float far)
+    private Vector3? FindVantage(IBotWorld match, PlayerCharacter player, Vector3 target, float near, float far)
     {
-        var space = player.World.Physics.DirectSpaceState;
+        var services = match.Services;
         var here = player.GlobalPosition;
-        Vector3? best = null;
-        var bestCost = float.MaxValue;
         var turn = rng.RandfRange(0, Mathf.Tau);
-        foreach (var radius in new[] { near + 1f, (near + far) / 2f, far })
+        var count = 0;
+        for (var ring = 0; ring < 3; ring++)
         {
+            var radius = ring == 0 ? near + 1f : ring == 1 ? (near + far) / 2f : far;
             for (var i = 0; i < 16; i++)
             {
                 var angle = turn + i * Mathf.Tau / 16f;
                 var p = target + new Vector3(Mathf.Cos(angle), 0, Mathf.Sin(angle)) * radius;
-                var ground = space.IntersectRay(PhysicsRayQueryParameters3D.Create(new Vector3(p.X, 4f, p.Z), new Vector3(p.X, -1f, p.Z),
-                    Layers.World | Layers.Props | Layers.Floor));
-                if (ground.Count == 0 || ground["position"].AsVector3().Y > 0.6f || ground["normal"].AsVector3().Y < 0.8f)
-                {
-                    continue;
-                }
-                var spot = ground["position"].AsVector3();
-                var eye = spot + Vector3.Up * 1.6f;
-                if (space.IntersectRay(PhysicsRayQueryParameters3D.Create(eye, target, Layers.World | Layers.Props)).Count > 0)
-                {
-                    continue;
-                }
-                var path = space.IntersectRay(PhysicsRayQueryParameters3D.Create(here + Vector3.Up * 0.6f, spot + Vector3.Up * 0.6f, Layers.World | Layers.Props));
-                var cost = here.DistanceTo(spot) + (path.Count > 0 ? 40f : 0f);
-                if (cost < bestCost)
-                {
-                    bestCost = cost;
-                    best = spot;
-                }
+                vantages[count++] = new Vantage { Point = p, Distance = Flat(p - here).Length() };
+            }
+        }
+        // Insertion sort: 48 spots, nearest first.
+        for (var i = 1; i < count; i++)
+        {
+            var item = vantages[i];
+            var j = i - 1;
+            for (; j >= 0 && vantages[j].Distance > item.Distance; j--) vantages[j + 1] = vantages[j];
+            vantages[j + 1] = item;
+        }
+        Vector3? best = null;
+        var bestCost = float.MaxValue;
+        for (var i = 0; i < count && vantages[i].Distance < bestCost; i++)
+        {
+            var p = vantages[i].Point;
+            if (!services.Ray(new Vector3(p.X, 4f, p.Z), new Vector3(p.X, -1f, p.Z), Layers.World | Layers.Props | Layers.Floor, out var ground) ||
+                ground.Point.Y > 0.6f || ground.Normal.Y < 0.8f)
+            {
+                continue;
+            }
+            var spot = ground.Point;
+            if (!services.Clear(spot + Vector3.Up * 1.6f, target, Layers.World | Layers.Props))
+            {
+                continue;
+            }
+            var walk = services.Clear(here + Vector3.Up * 0.6f, spot + Vector3.Up * 0.6f, Layers.World | Layers.Props);
+            var cost = here.DistanceTo(spot) + (walk ? 0f : 40f);
+            if (cost < bestCost)
+            {
+                bestCost = cost;
+                best = spot;
             }
         }
         return best;
     }
 
     /// <summary>The nearest spot within a short run that the shooter cannot see, if there is one.</summary>
-    private Vector3? FindCover(PlayerCharacter player, PlayerCharacter shooter)
+    private Vector3? FindCover(IBotWorld match, PlayerCharacter player, PlayerCharacter shooter)
     {
-        var space = player.World.Physics.DirectSpaceState;
+        var services = match.Services;
         var here = player.GlobalPosition;
         var eye = shooter.GlobalPosition + Vector3.Up * 1.6f;
         Vector3? best = null;
         var bestCost = float.MaxValue;
-        foreach (var radius in new[] { 3f, 6f, 10f, 14f })
+        for (var ring = 0; ring < 4; ring++)
         {
+            var radius = ring == 0 ? 3f : ring == 1 ? 6f : ring == 2 ? 10f : 14f;
             for (var i = 0; i < 12; i++)
             {
                 var angle = i * Mathf.Tau / 12f;
                 var p = here + new Vector3(Mathf.Cos(angle), 0, Mathf.Sin(angle)) * radius;
-                var ground = space.IntersectRay(PhysicsRayQueryParameters3D.Create(new Vector3(p.X, 4f, p.Z), new Vector3(p.X, -1f, p.Z),
-                    Layers.World | Layers.Props | Layers.Floor));
-                if (ground.Count == 0 || ground["position"].AsVector3().Y > 0.6f)
+                if (!services.Ray(new Vector3(p.X, 4f, p.Z), new Vector3(p.X, -1f, p.Z), Layers.World | Layers.Props | Layers.Floor, out var ground) ||
+                    ground.Point.Y > 0.6f)
                 {
                     continue;
                 }
-                var spot = ground["position"].AsVector3();
-                if (space.IntersectRay(PhysicsRayQueryParameters3D.Create(eye, spot + Vector3.Up * 1.2f, Layers.World)).Count == 0)
+                var spot = ground.Point;
+                if (services.Clear(eye, spot + Vector3.Up * 1.2f, Layers.World))
                 {
                     continue;
                 }
-                var blockedPath = space.IntersectRay(PhysicsRayQueryParameters3D.Create(here + Vector3.Up * 0.6f, spot + Vector3.Up * 0.6f, Layers.World | Layers.Props)).Count > 0;
+                var blockedPath = !services.Clear(here + Vector3.Up * 0.6f, spot + Vector3.Up * 0.6f, Layers.World | Layers.Props);
                 var cost = radius + (blockedPath ? tuning.BotCoverDetourCost : 0) + spot.DistanceTo(eye) * -0.05f;
                 if (cost < bestCost)
                 {
@@ -588,21 +743,9 @@ public sealed class BankingBot : IBotGoalPolicy
     private static Vector3 Aim(PlayerCharacter enemy) => enemy.IsRagdolled ? enemy.PelvisPosition : enemy.GlobalPosition + Vector3.Up * 1.15f;
 
     /// <summary>The crosshair is on the target, with nothing in the way.</summary>
-    private static bool OnTarget(PlayerCharacter player, Node3D target)
-    {
-        var aim = player.Aim;
-        var forward = -aim.EyeTransform.Basis.Z;
-        var start = aim.EyeOrigin + forward * 2.5f;
-        var hit = player.World.Physics.DirectSpaceState.IntersectRay(PhysicsRayQueryParameters3D.Create(start, start + forward * 80f, Layers.ShotMask));
-        var collider = hit.Count > 0 ? hit["collider"].As<GodotObject>() : null;
-        return collider == target || target is PlayerCharacter pc && PlayerCharacter.Owning(collider) == pc;
-    }
+    private static bool OnTarget(IBotWorld match, PlayerCharacter player, Node3D target) => BotMotor.OnTarget(match, player, target);
 
-    private static bool CanSee(PlayerCharacter player, Vector3 point)
-    {
-        var eye = player.GlobalPosition + Vector3.Up * 1.6f;
-        return player.World.Physics.DirectSpaceState.IntersectRay(PhysicsRayQueryParameters3D.Create(eye, point, Layers.World | Layers.Props)).Count == 0;
-    }
+    private static bool CanSee(IBotWorld match, PlayerCharacter player, Vector3 point) => BotMotor.CanSee(match, player, point);
 
     private static bool IsValid(Node3D? node) => node != null && GodotObject.IsInstanceValid(node) &&
                                                  node is not PropaneTank { State: PropaneTank.TankState.Exploded } &&
@@ -616,11 +759,10 @@ public sealed class BankingBot : IBotGoalPolicy
         BlacklistedTargets++;
     }
 
-    private static bool CanSeeFrom(PlayerCharacter observer, Vector3 point) =>
-        VisibleFrom(observer, observer.GlobalPosition + Vector3.Up * 1.6f, point);
+    private static bool CanSeeFrom(IBotWorld match, PlayerCharacter observer, Vector3 point) =>
+        VisibleFrom(match, observer.GlobalPosition + Vector3.Up * 1.6f, point);
 
-    private static bool VisibleFrom(PlayerCharacter player, Vector3 eye, Vector3 point) =>
-        player.World.Physics.DirectSpaceState.IntersectRay(PhysicsRayQueryParameters3D.Create(eye, point, Layers.World | Layers.Props)).Count == 0;
+    private static bool VisibleFrom(IBotWorld match, Vector3 eye, Vector3 point) => match.Services.Clear(eye, point, Layers.World | Layers.Props);
 
     private void Navigate(IBotWorld match, float dt)
     {
@@ -635,15 +777,15 @@ public sealed class BankingBot : IBotGoalPolicy
             navigationGoal = player.GlobalPosition + wish.Normalized() * tuning.BotRouteSpacing * 2;
         }
         // The actor's capsule never changes; finding it once avoids marshaling every child each tick.
-        var shape = capsule != null && GodotObject.IsInstanceValid(capsule) && capsule.GetParent() == player ? capsule
-            : capsule = player.GetChildren().OfType<CollisionShape3D>().Single();
-        var capabilities = new NavigationCapabilities(shape.Shape, shape.Position, ((CapsuleShape3D)shape.Shape).Radius,
-            tuning.RunSpeed, tuning.SprintSpeed, tuning.JumpVelocity, tuning.PlayerGravity, tuning.Acceleration, tuning.AirControl);
-        var hazards = match.LiveTanks.Select(t => new NavigationHazard(t.GlobalPosition,
-            t.State == PropaneTank.TankState.Venting ? tuning.RagdollRadius + tuning.BotVentClearance : tuning.BotTankClearance)).ToArray();
-        var world = new NavigationWorld(player.World.Physics.DirectSpaceState, capabilities, hazards, tuning.BotJumpMargin, tuning.BotJumpMinimumRange, player.GlobalPosition, queries);
-        var move = navigator.Navigate(world, new NavigationState(player.GlobalPosition, player.Velocity, player.IsOnFloor()),
-            capabilities, navigationGoal.Value, tuning, dt);
+        if (capsuleOwner != player || capsule == null)
+        {
+            capsule = BotServices.Capsule(player);
+            capsuleOwner = player;
+        }
+        var services = match.Services;
+        var grid = services.Navigation(BotServices.Capabilities(capsule, tuning));
+        var move = navigator.Navigate(grid, services.Hazards, new NavigationState(player.GlobalPosition, player.Velocity, player.IsOnFloor()),
+            navigationGoal.Value, tuning, dt);
         if (move.Failed)
         {
             if (target != null) { Blacklist(target, tuning.BotTargetRetryTime); }

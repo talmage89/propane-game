@@ -29,6 +29,7 @@ public partial class Tuning
     [LabDial(1, 20)] public int LabRangePileCount { get; set; } = 5;
     [LabDial(10, 50)] public float LabStackDistance { get; set; } = 12f;
     [LabDial(0, 1, 0.05)] public float LabBotSkill { get; set; } = 0.6f;
+    [LabDial(1, 15, Scenario = "duel")] public int LabBankBots { get; set; } = 1;
     [LabDial(30, 600, 30)] public float LabDuelSeconds { get; set; } = 180f;
     [LabDial(10, 50)] public float LabArenaRadius { get; set; } = 24f;
     [LabDial(2, 8)] public int LabDuelPiles { get; set; } = 4;

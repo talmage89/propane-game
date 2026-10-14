@@ -12,7 +12,7 @@ the rest of Propane. Huge stack and Range use void; the banking duel and Free tu
   distance label grows with its distance, so the far lanes read from the line.
   Move along the line to line up with a lane; practice shots, punctures, melee and blast throws. Reset respawns
   the entire fixture and clears its debris.
-- **Duel vs a banking bot** runs two owned actors in one offline world. The bot has no camera and uses the
+- **Duel vs a banking bot** defaults to two owned actors in one offline world. **Lab bank bots** allows 1–15 bots; layout changes apply on reset. The bot has no camera and uses the
   existing banking brain. Easy, Normal and Hard are the lobby bots' difficulty profiles: they set the
   `LabBotSkill` dial to that profile's skill (0.2, 0.6 or 1), which free tuning can still set between them; the menu
   shows the nearest profile. They change its skill, not tank/player physics. The default is three
@@ -31,7 +31,7 @@ the rest of Propane. Huge stack and Range use void; the banking duel and Free tu
 ## Prototype modes
 
 Below the starters, **Prototype modes · rules on trial** lists modes the owner is trying before setting their rules.
-Each but Dissolve Run plays you against Lab bots (Lab prototype bots, 1–5, default 3; the duel's difficulty sets their skill) in an
+Each but Dissolve Run plays you against Lab bots (Lab prototype bots, 1–15, default 3; the duel's difficulty sets their skill) in an
 offline round, with the match HUD on top. Their rules are in [modes.md](modes.md#lab-prototypes); every number is a
 Lab dial in the tuning panel's Lab section, and layout dials apply on reset.
 
@@ -69,8 +69,9 @@ Lab dial in the tuning panel's Lab section, and layout dials apply on reset.
   (kept per seed choice in `user://dissolve_run.cfg`). Every number is a Dissolve dial in the tuning panel's Lab
   section, the sheet's glow and height included; segment and layout dials apply on reset.
 
-Ring Out, King and Short Fuse have unlimited ammo and no ammo cans. Bots run on the Lab's main thread; more than three in one process may not
-hold 120 Hz physics on a small machine.
+Ring Out, King and Short Fuse have unlimited ammo and no ammo cans. Bots run on the Lab’s main thread with shared navigation budgets and cached sight lines
+([bot navigation](bot-navigation.md)); the bot limit is 15 beside the player. Full matches still include tank,
+character and rendering costs, which vary with hardware and activity.
 
 R / X resets non-duel starters; R / X reloads in a duel. Backspace resets any starter, from the controls panel too,
 so a finished duel is one key from the next. Esc / Start opens Lab controls, where Reset/Respawn, Free tuning and Lab

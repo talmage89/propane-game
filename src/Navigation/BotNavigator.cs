@@ -9,13 +9,24 @@ public readonly record struct NavigationState(Vector3 Position, Vector3 Velocity
 public readonly record struct NavigationIntent(Vector3 Direction, bool Sprint, bool Jump, bool Arrived, bool Failed);
 public readonly record struct NavigationStep(Vector3 From, Vector3 To, bool Jump);
 
+/// <summary>Where a bot's mode lets it set foot beyond what the geometry allows, such as Ring Out's dissolving lots.</summary>
+public interface INavigationArea
+{
+    bool Allows(Vector3 feet);
+}
+
 /// <summary>
-/// Persistent, bounded A* routes with ballistic links. Brains supply a goal; only after alternate routes have
-/// failed does Failed ask them to reconsider it. No scene, player facade, target selection or Match dependencies.
+/// Persistent, bounded A* routes over the shared lattice (<see cref="NavigationGrid"/>), with ballistic jump links.
+/// Brains supply a goal; only after alternate routes have failed does Failed ask them to reconsider it. Searches,
+/// routes and recovery allocate nothing once their buffers have grown. No scene, player facade, target selection or
+/// Match dependencies.
 /// </summary>
 public sealed class BotNavigator
 {
-    private RouteSearch? search;
+    // Shortcut tests along a route grow 1, 2, 4... steps ahead and stop at the first that fails.
+    private const int ShortcutTries = 4;
+
+    private readonly RouteSearch search = new();
     private readonly List<NavigationStep> route = new();
     private readonly List<Vector3> avoided = new();
     private Vector3 goal;
@@ -28,21 +39,24 @@ public sealed class BotNavigator
     private float flightTime;
     private float retryTime;
     private int retries;
+    private bool searching;
     private bool hasGoal;
     private bool flying;
     private bool sawAir;
     private bool preparing;
     private bool runwayChosen;
+    private int preparedBudget;
 
     public int StuckEvents { get; private set; }
     public int Replans { get; private set; }
     public int Jumps { get; private set; }
     public IReadOnlyList<NavigationStep> Route => route;
+    public string Diagnostics => $"searching={searching} replans={Replans} jumps={Jumps} stuck={StuckEvents} retries={retries} goal={goal} route={route.Count} search={search.Diagnostics}";
 
     public void Reset()
     {
         route.Clear();
-        search = null;
+        searching = false;
         avoided.Clear();
         hasGoal = flying = sawAir = preparing = runwayChosen = false;
         progressTime = validationTime = retryTime = 0;
@@ -50,11 +64,30 @@ public sealed class BotNavigator
         direction = Vector3.Zero;
     }
 
+    /// <summary>Reserves bounded search buffers during actor setup, before measured physics ticks.</summary>
+    public void Prepare(Tuning tuning)
+    {
+        if (preparedBudget != tuning.BotSearchBudget)
+        {
+            search.Reserve(tuning.BotSearchBudget);
+            route.EnsureCapacity(tuning.BotSearchBudget + 2);
+            avoided.EnsureCapacity(tuning.BotRouteRetries + 2);
+            preparedBudget = tuning.BotSearchBudget;
+        }
+    }
+
     private static Vector3 Flat(Vector3 point) => new(point.X, 0, point.Z);
 
-    public NavigationIntent Navigate(INavigationWorld world, NavigationState state, NavigationCapabilities capabilities,
-        Vector3 requestedGoal, Tuning tuning, float dt)
+    /// <summary>
+    /// One physics tick of movement toward <paramref name="requestedGoal"/>. The grid supplies the body and the static
+    /// world; <paramref name="hazards"/> are this tick's circles to keep out of; <paramref name="area"/>, if any, the
+    /// mode's own limits on where to step.
+    /// </summary>
+    public NavigationIntent Navigate(NavigationGrid grid, NavigationHazards hazards, NavigationState state,
+        Vector3 requestedGoal, Tuning tuning, float dt, INavigationArea? area = null)
     {
+        Prepare(tuning);
+        var capabilities = grid.Capabilities;
         // Once committed, finish the jump even if tactical targeting changes. Held aim cannot slow the runway
         // or alter this flight; the caller suppresses aim when Jumping is true.
         if (flying)
@@ -80,7 +113,7 @@ public sealed class BotNavigator
             goal = requestedGoal;
             hasGoal = true;
             route.Clear();
-            search = null;
+            searching = false;
             runwayChosen = false;
             avoided.Clear();
             retries = 0;
@@ -96,7 +129,8 @@ public sealed class BotNavigator
             return new NavigationIntent(Vector3.Zero, false, false, true, false);
         }
 
-        if (search == null) { progressTime += dt; }
+        var layer = grid.LayerAt(state.Position.Y);
+        if (!searching) { progressTime += dt; }
         if (progressTime >= tuning.BotProgressWindow)
         {
             if (Flat(state.Position - progressPosition).Length() < tuning.BotProgressDistance)
@@ -106,6 +140,8 @@ public sealed class BotNavigator
                 route.Clear();
                 preparing = false;
                 retries++;
+                // The world disagrees with what the lattice remembers here (a prop moved): ask it again.
+                grid.Invalidate(state.Position, grid.Spacing * 2);
             }
             else { retries = 0; }
             progressPosition = state.Position;
@@ -119,16 +155,17 @@ public sealed class BotNavigator
         if (route.Count == 0)
         {
             if (retryTime > 0) { return new NavigationIntent(Vector3.Zero, false, false, false, false); }
-            if (search == null)
+            if (!searching)
             {
                 Replans++;
                 runwayChosen = false;
-                search = new RouteSearch(world, state.Position, goal, capabilities, tuning, avoided);
+                searching = true;
+                search.Start(layer, state.Position, goal, avoided);
             }
-            search.Advance(world, tuning.BotSearchPerTick);
+            search.Advance(grid, hazards, area, tuning, tuning.BotSearchPerTick);
             if (!search.Complete) { return new NavigationIntent(Vector3.Zero, false, false, false, false); }
+            searching = false;
             route.AddRange(search.Result);
-            search = null;
             progressTime = 0;
             progressPosition = state.Position;
             validationTime = 0; // Recheck against the current world after a multi-tick search.
@@ -144,20 +181,16 @@ public sealed class BotNavigator
         {
             route.RemoveAt(0);
         }
-        // Skip walk-only corners whenever the full capsule can reach further along the route. Never skip a runway.
-        for (var i = 1; validationTime <= 0 && i < route.Count && !route[i - 1].Jump && !route[i].Jump; i++)
-        {
-            if (!Avoids(state.Position, route[i].To, avoided, tuning.BotRouteSpacing * 0.75f) || !world.Walk(state.Position, route[i].To)) { break; }
-            route.RemoveRange(0, i);
-            i = 0;
-        }
+        if (validationTime <= 0) { Shortcut(grid, hazards, area, layer, state.Position, tuning); }
         var step = route[0];
         validationTime -= dt;
         if (validationTime <= 0 && !step.Jump)
         {
             validationTime = tuning.BotReplanInterval;
-            if (!world.Walk(state.Position, step.To))
+            if (Walkable(grid, hazards, area, layer, state.Position, step.To, tuning) == NavigationAnswer.No)
             {
+                // Something now stands where the lattice remembers open ground: forget it there and plan again.
+                grid.Invalidate((state.Position + step.To) / 2, Flat(step.To - state.Position).Length() / 2 + grid.Spacing);
                 route.Clear();
                 return new NavigationIntent(Vector3.Zero, false, false, false, false);
             }
@@ -169,7 +202,9 @@ public sealed class BotNavigator
             if (!runwayChosen)
             {
                 runway = step.From - jumpDirection * runup;
-                if (!world.Walk(step.From, runway))
+                var clear = Walkable(grid, hazards, area, layer, step.From, runway, tuning);
+                if (clear == NavigationAnswer.Pending) { return new NavigationIntent(Vector3.Zero, false, false, false, false); }
+                if (clear == NavigationAnswer.No)
                 {
                     avoided.Add(step.To);
                     route.Clear();
@@ -192,8 +227,10 @@ public sealed class BotNavigator
                 (Flat(state.Velocity) - jumpDirection * capabilities.Speed).Length() <= capabilities.Speed * tuning.BotLaunchSpeedTolerance &&
                 Flat(state.Position - step.From).Length() < capabilities.Radius * 2)
             {
-                // Dynamic props/tanks can invalidate a previously safe jump. Check immediately before takeoff.
-                if (!world.Jump(state.Position, state.Position + jumpDirection * capabilities.JumpRange))
+                // Dynamic props/tanks can invalidate a previously safe jump. Check immediately before takeoff, live.
+                var takeoff = Takeoff(grid, hazards, area, state.Position, jumpDirection);
+                if (takeoff == NavigationAnswer.Pending) return new NavigationIntent(Vector3.Zero, false, false, false, false);
+                if (takeoff == NavigationAnswer.No)
                 {
                     avoided.Add(step.To);
                     route.Clear();
@@ -224,9 +261,44 @@ public sealed class BotNavigator
 
     public bool Jumping => flying || route.Count > 0 && route[0].Jump;
 
-    private static bool Avoids(Vector3 from, Vector3 to, IReadOnlyList<Vector3>? avoided, float radius)
+    /// <summary>
+    /// Skips walk-only corners when the body can reach further along the route in a straight line. Never skips a
+    /// runway. Each test is one live sweep, so they grow 1, 2, 4... steps ahead and stop at the first that fails.
+    /// </summary>
+    private void Shortcut(NavigationGrid grid, NavigationHazards hazards, INavigationArea? area, NavigationGrid.Layer layer, Vector3 position, Tuning tuning)
     {
-        if (avoided == null) { return true; }
+        var walks = 0;
+        while (walks < route.Count && !route[walks].Jump) { walks++; }
+        for (int ahead = 1, tries = 0; ahead < walks && tries < ShortcutTries; ahead *= 2, tries++)
+        {
+            if (Walkable(grid, hazards, area, layer, position, route[ahead].To, tuning) != NavigationAnswer.Yes) { break; }
+            route.RemoveRange(0, ahead);
+            walks -= ahead;
+        }
+    }
+
+    /// <summary>A straight walk from where the bot stands, through the hazards it may already be inside.</summary>
+    private NavigationAnswer Walkable(NavigationGrid grid, NavigationHazards hazards, INavigationArea? area, NavigationGrid.Layer layer,
+        Vector3 from, Vector3 to, Tuning tuning)
+    {
+        if (!Avoids(from, to, avoided, tuning.BotRouteSpacing * 0.75f) || !hazards.SafeAlong(from, to, grid.Capabilities.Radius, from) ||
+            area != null && !area.Allows(to)) { return NavigationAnswer.No; }
+        return grid.WalkSegment(layer, from, to);
+    }
+
+    /// <summary>The jump about to be taken, asked live: the arc and landing clear of everything, hazards included.</summary>
+    private static NavigationAnswer Takeoff(NavigationGrid grid, NavigationHazards hazards, INavigationArea? area, Vector3 from, Vector3 direction)
+    {
+        var landing = from + direction * grid.Capabilities.JumpRange;
+        if (!hazards.SafeAlong(from, landing, JumpHazardStep, null) || area != null && !area.Allows(landing)) return NavigationAnswer.No;
+        return grid.Takeoff(from, direction);
+    }
+
+    /// <summary>Hazards along a jump are tested this often (meters): no sample may fall inside one.</summary>
+    private const float JumpHazardStep = 0.25f;
+
+    private static bool Avoids(Vector3 from, Vector3 to, List<Vector3> avoided, float radius)
+    {
         var segment = Flat(to - from);
         foreach (var point in avoided)
         {
@@ -237,117 +309,240 @@ public sealed class BotNavigator
     }
 
     /// <summary>Synchronous entry point for tests and offline callers; runtime navigation budgets work per tick.</summary>
-    public static IReadOnlyList<NavigationStep> Plan(INavigationWorld world, Vector3 start, Vector3 goal,
-        NavigationCapabilities capabilities, Tuning tuning, IReadOnlyList<Vector3>? avoided = null)
+    public static IReadOnlyList<NavigationStep> Plan(NavigationGrid grid, NavigationHazards hazards, Vector3 start, Vector3 goal, Tuning tuning,
+        IReadOnlyList<Vector3>? avoided = null, INavigationArea? area = null)
     {
-        var search = new RouteSearch(world, start, goal, capabilities, tuning, avoided);
-        while (!search.Complete) { search.Advance(world, tuning.BotSearchBudget); }
-        return search.Result;
+        var search = new RouteSearch();
+        var list = new List<Vector3>();
+        if (avoided != null) list.AddRange(avoided);
+        search.Start(grid.LayerAt(start.Y), start, goal, list);
+        while (!search.Complete)
+        {
+            grid.Refill();
+            search.Advance(grid, hazards, area, tuning, tuning.BotSearchBudget);
+        }
+        return search.Result.ToArray();
     }
 
+    /// <summary>
+    /// One bot's A* over the lattice, reused for every search. The start and goal need not lie on lattice points: the
+    /// search first tries walking straight there, then joins the lattice at the points around the start and leaves it
+    /// from any point near the goal. Waiting on the grid's budget resumes exactly where it stopped.
+    /// </summary>
     private sealed class RouteSearch
     {
-        private readonly Vector3 start;
-        private readonly Vector3 goal;
-        private readonly NavigationCapabilities capabilities;
-        private readonly Tuning tuning;
-        private readonly List<Vector3> avoided;
-        private readonly PriorityQueue<Vector2I, float> frontier = new();
-        private readonly Dictionary<Vector2I, float> costs = new() { [Vector2I.Zero] = 0 };
-        private readonly Dictionary<Vector2I, (Vector2I Parent, bool Jump)> parents = new();
-        private readonly HashSet<Vector2I> closed = new();
-        private readonly Dictionary<Vector2I, bool> points = new();
-        private int expansions;
+        private const long Origin = long.MinValue;
 
+        private struct Node
+        {
+            public float Cost;
+            public long Parent;
+            public bool Jump;
+            public bool Closed;
+        }
+
+        private readonly PriorityQueue<long, float> frontier = new();
+        private readonly Dictionary<long, Node> nodes = new();
+        private readonly List<Vector3> avoided = new();
+        private NavigationGrid.Layer layer = null!;
+        private Vector3 start;
+        private Vector3 goal;
+        private int expansions;
+        private int stage;
+        private int seed;
+
+        public string Diagnostics => $"stage{stage}/nodes{nodes.Count}/expansions{expansions}";
         public bool Complete { get; private set; }
         public List<NavigationStep> Result { get; } = new();
 
-        public RouteSearch(INavigationWorld world, Vector3 start, Vector3 goal, NavigationCapabilities capabilities,
-            Tuning tuning, IReadOnlyList<Vector3>? avoided)
+        private static long Key(Vector2I cell) => ((long)cell.X << 32) | (uint)cell.Y;
+        private static Vector2I Cell(long key) => new((int)(key >> 32), (int)key);
+
+        public void Reserve(int budget)
         {
-            if (tuning.BotRouteSpacing <= 0 || tuning.BotSearchBudget <= 0 || tuning.BotSearchPerTick <= 0 || capabilities.Speed <= 0)
-            {
-                throw new ArgumentOutOfRangeException(nameof(tuning), "navigation needs positive spacing, search budgets and speed");
-            }
-            this.start = start;
-            this.goal = goal;
-            this.capabilities = capabilities;
-            this.tuning = tuning;
-            this.avoided = avoided == null ? new() : new List<Vector3>(avoided);
-            if (Avoids(start, goal, this.avoided, tuning.BotRouteSpacing * 0.75f) && world.Walk(start, goal))
-            {
-                Result.Add(new NavigationStep(start, goal, false));
-                Complete = true;
-            }
-            else { frontier.Enqueue(Vector2I.Zero, 0); }
+            if (budget <= 0) throw new ArgumentOutOfRangeException(nameof(budget));
+            // Each closed node introduces at most sixteen links. Reserve once, rather than grow in a hot tick.
+            var capacity = checked(budget * 16 + 16);
+            nodes.EnsureCapacity(capacity);
+            frontier.EnsureCapacity(capacity);
+            Result.EnsureCapacity(budget + 2);
+            avoided.EnsureCapacity(budget + 2);
         }
 
-        private Vector3 Point(Vector2I cell) => start + new Vector3(cell.X * tuning.BotRouteSpacing, 0, cell.Y * tuning.BotRouteSpacing);
-
-        private bool Allowed(INavigationWorld world, Vector2I cell)
+        public void Start(NavigationGrid.Layer on, Vector3 from, Vector3 to, List<Vector3> avoid)
         {
-            if (points.TryGetValue(cell, out var allowed)) { return allowed; }
-            var point = Point(cell);
-            allowed = world.Standable(point);
-            foreach (var blocked in avoided)
-            {
-                if (Flat(point - blocked).Length() < tuning.BotRouteSpacing * 0.75f) { allowed = false; break; }
-            }
-            points[cell] = allowed;
-            return allowed;
+            layer = on;
+            start = from;
+            // A ground navigator: goals are reached on the lattice's own plane.
+            goal = new Vector3(to.X, on.Y, to.Z);
+            avoided.Clear();
+            avoided.AddRange(avoid);
+            frontier.Clear();
+            nodes.Clear();
+            Result.Clear();
+            expansions = stage = seed = 0;
+            Complete = false;
         }
 
-        public void Advance(INavigationWorld world, int budget)
+        public void Advance(NavigationGrid grid, NavigationHazards hazards, INavigationArea? area, Tuning tuning, int budget)
         {
             if (Complete) { return; }
-            var spacing = tuning.BotRouteSpacing;
-            var jumpCells = (int)(capabilities.JumpRange / spacing);
-            var worked = 0;
-            while (worked < budget && expansions < tuning.BotSearchBudget && frontier.TryDequeue(out var cell, out _))
+            if (tuning.BotRouteSpacing <= 0 || tuning.BotSearchBudget <= 0 || tuning.BotSearchPerTick <= 0 || budget <= 0)
             {
-                if (!closed.Add(cell)) { continue; }
-                expansions++;
-                worked++;
-                var from = Point(cell);
-                if (Flat(from - goal).Length() < spacing * 2 && Avoids(from, goal, avoided, spacing * 0.75f) && world.Walk(from, goal))
+                throw new ArgumentOutOfRangeException(nameof(tuning), "navigation needs positive spacing and search budgets");
+            }
+            var spacing = grid.Spacing;
+            var radius = grid.Capabilities.Radius;
+            var speed = grid.Capabilities.Speed;
+            if (stage == 0)
+            {
+                // Straight there, if nothing is in the way.
+                var direct = Walk(grid, hazards, area, start, goal, tuning);
+                if (direct == NavigationAnswer.Pending) { return; }
+                if (direct == NavigationAnswer.Yes)
                 {
-                    Result.Add(new NavigationStep(from, goal, false));
-                    while (parents.TryGetValue(cell, out var parent))
-                    {
-                        Result.Add(new NavigationStep(Point(parent.Parent), Point(cell), parent.Jump));
-                        cell = parent.Parent;
-                    }
-                    Result.Reverse();
+                    Result.Add(new NavigationStep(start, goal, false));
                     Complete = true;
                     return;
                 }
-                for (var x = -1; x <= 1; x++)
+                stage = 1;
+            }
+            if (stage == 1)
+            {
+                // Join the lattice at the four points around the start, else at the twelve around those.
+                var corner = grid.CellBelow(start);
+                for (; seed < 16; seed++)
                 {
-                    for (var z = -1; z <= 1; z++)
+                    if (seed == 4 && frontier.Count > 0) { break; }
+                    var offset = seed < 4 ? new Vector2I(seed & 1, seed >> 1) : Ring[seed - 4];
+                    var cell = corner + offset;
+                    var allowed = Allowed(grid, hazards, area, cell, tuning);
+                    if (allowed == NavigationAnswer.Pending) { return; }
+                    if (allowed == NavigationAnswer.No) { continue; }
+                    var point = grid.Point(layer, cell);
+                    var walk = Walk(grid, hazards, area, start, point, tuning);
+                    if (walk == NavigationAnswer.Pending) { return; }
+                    if (walk == NavigationAnswer.No) { continue; }
+                    var cost = Flat(point - start).Length() / speed;
+                    nodes[Key(cell)] = new Node { Cost = cost, Parent = Origin };
+                    frontier.Enqueue(Key(cell), cost + Flat(point - goal).Length() / speed);
+                }
+                stage = 2;
+            }
+            var worked = 0;
+            while (worked < budget && expansions < tuning.BotSearchBudget && frontier.TryPeek(out var key, out var priority) && grid.TryExpand())
+            {
+                frontier.Dequeue();
+                worked++;
+                var node = nodes[key];
+                if (node.Closed) { continue; }
+                var cell = Cell(key);
+                var from = grid.Point(layer, cell);
+                if (Flat(from - goal).Length() < spacing * 2)
+                {
+                    var finish = Walk(grid, hazards, area, from, goal, tuning);
+                    if (finish == NavigationAnswer.Pending) { frontier.Enqueue(key, priority); return; }
+                    if (finish == NavigationAnswer.Yes)
                     {
-                        if (x == 0 && z == 0) { continue; }
-                        var offset = new Vector2I(x, z);
-                        Explore(cell + offset, false);
-                        if (jumpCells >= 2)
-                        {
-                            var length = x != 0 && z != 0 ? (int)(jumpCells / Mathf.Sqrt(2)) : jumpCells;
-                            if (length >= 2) { Explore(cell + offset * length, true); }
-                        }
+                        Finish(grid, key);
+                        return;
                     }
                 }
-                void Explore(Vector2I next, bool jump)
+                for (var direction = 0; direction < NavigationGrid.Steps.Length; direction++)
                 {
-                    if (closed.Contains(next) || !Allowed(world, next)) { return; }
-                    var to = Point(next);
-                    var cost = costs[cell] + from.DistanceTo(to) / capabilities.Speed + (jump ? tuning.BotJumpCost : 0);
-                    if (costs.TryGetValue(next, out var old) && cost >= old) { return; }
-                    if (!Avoids(from, to, avoided, spacing * 0.75f) || (jump ? !world.Jump(from, to) : !world.Walk(from, to))) { return; }
-                    costs[next] = cost;
-                    parents[next] = (cell, jump);
-                    frontier.Enqueue(next, cost + Flat(to - goal).Length() / capabilities.Speed);
+                    var step = NavigationGrid.Steps[direction];
+                    if (!Explore(grid, hazards, area, tuning, key, node.Cost, cell, from, cell + step, direction, false) ||
+                        !Explore(grid, hazards, area, tuning, key, node.Cost, cell, from, cell + step * grid.JumpCells(direction), direction, true))
+                    {
+                        // The budget ran out mid-expansion: come back to this point next tick. Links already taken
+                        // are kept and will not be taken again.
+                        frontier.Enqueue(key, priority);
+                        return;
+                    }
                 }
+                node.Closed = true;
+                nodes[key] = node;
+                expansions++;
             }
             Complete = frontier.Count == 0 || expansions >= tuning.BotSearchBudget;
         }
+
+        /// <summary>Relaxes one link; false when an answer is pending on the budget.</summary>
+        private bool Explore(NavigationGrid grid, NavigationHazards hazards, INavigationArea? area, Tuning tuning,
+            long parent, float parentCost, Vector2I cell, Vector3 from, Vector2I next, int direction, bool jump)
+        {
+            if (jump && grid.JumpCells(direction) == 0) { return true; }
+            var key = Key(next);
+            var known = nodes.TryGetValue(key, out var old);
+            if (known && old.Closed) { return true; }
+            var to = grid.Point(layer, next);
+            var cost = parentCost + Flat(to - from).Length() / grid.Capabilities.Speed + (jump ? tuning.BotJumpCost : 0);
+            if (known && cost >= old.Cost) { return true; }
+            var allowed = Allowed(grid, hazards, area, next, tuning);
+            if (allowed != NavigationAnswer.Yes) { return allowed != NavigationAnswer.Pending; }
+            if (!Avoids(from, to, avoided, grid.Spacing * 0.75f)) { return true; }
+            NavigationAnswer link;
+            if (jump)
+            {
+                link = grid.Jump(layer, cell, direction);
+                if (link == NavigationAnswer.Yes)
+                {
+                    var landing = from + Flat(to - from).Normalized() * grid.Capabilities.JumpRange;
+                    if (!hazards.SafeAlong(from, landing, JumpHazardStep, null) || area != null && !area.Allows(landing)) { return true; }
+                }
+            }
+            else
+            {
+                link = grid.Walk(layer, cell, direction);
+                if (link == NavigationAnswer.Yes && !hazards.SafeAlong(from, to, grid.Capabilities.Radius, start)) { return true; }
+            }
+            if (link != NavigationAnswer.Yes) { return link != NavigationAnswer.Pending; }
+            nodes[key] = new Node { Cost = cost, Parent = parent, Jump = jump };
+            frontier.Enqueue(key, cost + Flat(to - goal).Length() / grid.Capabilities.Speed);
+            return true;
+        }
+
+        private NavigationAnswer Allowed(NavigationGrid grid, NavigationHazards hazards, INavigationArea? area, Vector2I cell, Tuning tuning)
+        {
+            var point = grid.Point(layer, cell);
+            if (!hazards.Safe(point, start) || area != null && !area.Allows(point)) { return NavigationAnswer.No; }
+            foreach (var blocked in avoided)
+            {
+                if (Flat(point - blocked).Length() < tuning.BotRouteSpacing * 0.75f) { return NavigationAnswer.No; }
+            }
+            return grid.Standable(layer, cell);
+        }
+
+        private NavigationAnswer Walk(NavigationGrid grid, NavigationHazards hazards, INavigationArea? area, Vector3 from, Vector3 to, Tuning tuning)
+        {
+            if (!Avoids(from, to, avoided, tuning.BotRouteSpacing * 0.75f) || !hazards.SafeAlong(from, to, grid.Capabilities.Radius, start) ||
+                area != null && !area.Allows(to)) { return NavigationAnswer.No; }
+            return grid.WalkSegment(layer, from, to);
+        }
+
+        private void Finish(NavigationGrid grid, long key)
+        {
+            Result.Add(new NavigationStep(grid.Point(layer, Cell(key)), goal, false));
+            while (true)
+            {
+                var node = nodes[key];
+                var to = grid.Point(layer, Cell(key));
+                if (node.Parent == Origin)
+                {
+                    Result.Add(new NavigationStep(start, to, false));
+                    break;
+                }
+                Result.Add(new NavigationStep(grid.Point(layer, Cell(node.Parent)), to, node.Jump));
+                key = node.Parent;
+            }
+            Result.Reverse();
+            Complete = true;
+        }
+
+        private static readonly Vector2I[] Ring =
+        {
+            new(-1, -1), new(0, -1), new(1, -1), new(2, -1), new(-1, 0), new(2, 0),
+            new(-1, 1), new(2, 1), new(-1, 2), new(0, 2), new(1, 2), new(2, 2),
+        };
     }
 }
