@@ -39,7 +39,7 @@ public partial class MenuTest : Node
             AddChild(new MenuLifetimeTest { Main = main });
             return;
         }
-        if (DevArgs.Get("scenario") is "gamepad" or "devices" or "mouse" or "bots")
+        if (DevArgs.Get("scenario") is "gamepad" or "devices" or "mouse" or "bots" or "king")
         {
             AddChild(new MenuGamepadTest { Main = main });
             return;

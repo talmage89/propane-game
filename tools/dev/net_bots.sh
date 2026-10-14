@@ -3,6 +3,7 @@
 # Logs go to the output directory; tank agreement and final scores are checked automatically.
 # Usage: tools/dev/net_bots.sh [-n bots] [-l match seconds] [-o out dir, default build/net] [-g godot] [-w windowed bots] [-s "server args"] [-S host:port of an existing server]
 #   [-k skip checks] [-t faults|clean] [-b brain per bot, e.g. smart,simple,simple] [-c hex colors per bot, e.g. 12ABEF,12ABEF,F6F6F6] [-- extra bot args]
+#   King: -- --mode=king [--mint-seconds=2]; -n 3 -l 110 -k with --scenario=king-late --tune.PlayerSendRate=20 --delay-who=Bot3 --match-delay=70 tests a late builder; check scores separately.
 # Extra bot args (after --) go to every bot, e.g. --net-lag=120 --net-jitter=30 --net-loss=5 --capture-dir=... --shot-every=5
 #   --lobby-bots=2 (or 2,1 per bot) gives each client lobby bots it runs itself; --leave-at=30 --leave-who=Bot2 makes one leave
 set -euo pipefail

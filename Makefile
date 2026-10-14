@@ -85,6 +85,7 @@ test-behavior: build ## Run isolated physics, navigation, menu, grip and feet pr
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/menu_test.tscn -- --scenario=input --port=$(PORT)
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/menu_test.tscn -- --scenario=mouse --port=$(PORT)
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/menu_test.tscn -- --scenario=bots --port=$(PORT)
+	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/menu_test.tscn -- --scenario=king --port=$(PORT)
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/player_range.tscn -- --scenario=grip --grip-sweep --assert-grip --assert-motion
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/player_range.tscn -- --scenario=ragdoll --assert-grip --assert-motion
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/player_range.tscn -- --scenario=feet --assert-feet --assert-motion

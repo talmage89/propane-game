@@ -7,8 +7,9 @@ around you. There is no health and no score.
 
 ![Thrown by a chain reaction](docs/readme_still.jpg)
 
-Multiplayer is **tank bank**, a free-for-all with creator-selected capacity (2–16 players, default 5): every tank you blow up is banked as a point, and getting
-shot (or thrown by a blast) spills your tanks back out for anyone to take. Most banked when the clock runs out wins.
+Multiplayer defaults to **Tank Bank**, a free-for-all with creator-selected capacity (2–16 players, default 5): every tank you blow up is banked as a point, and getting
+shot (or thrown by a blast) spills your tanks back out for anyone to take. Most banked when the clock runs out wins. The lobby also offers **King of the Cul-de-sac**: hold a moving zone alone
+to mint banked tanks, with a creator-selected mint pace.
 
 [design/VISION.md](design/VISION.md) is what the game is and must stay. [docs/multiplayer.md](docs/multiplayer.md) gives
 tank bank's full rules and how multiplayer is built.
@@ -64,7 +65,7 @@ controller-accessible controls menu. Unsaved tuning changes stay in that Lab ses
 
 Choose Multiplayer, type your name and the server's address (`host` or `host:port`, UDP port 24680 by default), then
 create a lobby or join one. Everyone picks a name and any color in the lobby (duplicates are allowed), and whoever
-created it sets capacity and match length and starts. **Host on this computer** runs a server inside your game instead; the
+created it sets capacity, mode, length and King mint pace and starts. **Host on this computer** runs a server inside your game instead; the
 lobby then shows the addresses friends can use. Versions with the same major and minor number play together
 (0.2.0 with 0.2.5); the server turns away others and says which version it needs.
 
@@ -164,7 +165,7 @@ Rebuilt piles use `PileBuilder`'s upright cluster: every count fits, and removin
 Match settings use the actual player count. Tank supply is `MpTankCount + MpTanksPerPlayer × players`, ammo cans are
 `PickupCount + PickupsPerPlayer × players`, and map width is `MpMapSizeBase + MpMapSizePerPlayer × players`. Pile
 limits gain `floor(MpPileSizePerPlayer × players)`. `MpStartSpacing` is a hard minimum between clear road starts;
-invalid settings fail generation instead of placing players on top of one another. Lobby capacity is a separate creator setting, bounded by the tested technical ceiling of 16. These shared plan and tuner changes require the next release to be minor (`Protocol.Version` is 2).
+invalid settings fail generation instead of placing players on top of one another. Lobby capacity is a separate creator setting, bounded by the tested technical ceiling of 16. These shared plan and tuner changes require the next release to be minor (`Protocol.Version` is 3).
 
 [World services](docs/world-services.md) documents scoped ownership, cleanup, and simulation/network clock boundaries.
 
@@ -175,7 +176,7 @@ invalid settings fail generation instead of placing players on top of one anothe
 | `src/Main.cs` | The root: menus over their backdrop, then single player, Lab, a match, or the server. |
 | `src/Game.cs` | Single player: the void, player, HUD, menus, and the suburb swap with its dissolve and materialize. |
 | `src/Net` | Multiplayer: the server, the client connection, the match world, body sync, ammo pickups, the mode runner and envelope. |
-| `src/Modes` | Pure mode rules (Sandbox, Tank Bank), mode definitions, phases and HUD presenters ([modes](docs/modes.md)). |
+| `src/Modes` | Pure mode rules (Sandbox, Tank Bank, King and Lab prototypes), mode definitions, phases and HUD presenters ([modes](docs/modes.md)). |
 | `src/Lab`, `src/Bots` | Shipped Lab scenarios, local bank adapter and camera-free banking brain. |
 | `src/Session` | Ordered session assembly, actors, local views and retirement. |
 | `src/Core` | Tuning, input map, physics and render layers, shared assets, events, spawn roots. |

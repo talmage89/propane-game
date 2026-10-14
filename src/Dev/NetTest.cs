@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using Godot;
 using Propane.Core;
+using Propane.Modes;
 using Propane.Net;
 using Propane.Player;
 using Propane.Tank;
@@ -54,8 +55,6 @@ public partial class NetTest : Node
         Engine.MaxFps = 60;
         DevLog.Enabled = DevArgs.Get("verbose-log") != null;
         role = DevArgs.Get("role") ?? "host";
-        // --brain=simple plays the first, easy bot; the default is the stronger one.
-        bot = DevArgs.Get("brain") == "simple" ? new SimpleBot() : new Bot { Skill = DevArgs.GetFloat("bot-skill", 1f) };
         players = (int)DevArgs.GetFloat("players", 2);
         matchesWanted = (int)DevArgs.GetFloat("matches", 1);
         ParseLobbyBots();
@@ -132,7 +131,7 @@ public partial class NetTest : Node
         {
             appearanceMenus?.Show(UI.Menus.Screen.None);
             if (DevArgs.Get("scenario") == "appearance") { CheckAppearances(setup.Players.Select(p => p.Player)); }
-            var delay = DevArgs.GetFloat("match-delay", 0);
+            var delay = DevArgs.Get("delay-who") is not { } delayed || delayed == net.PlayerName ? DevArgs.GetFloat("match-delay", 0) : 0;
             if (DevArgs.Get("scenario") == "capacity" && DevArgs.Get("name") == $"Bot{players}") delay = 26;
             if (delay > 0)
             {
@@ -151,6 +150,10 @@ public partial class NetTest : Node
                 Log("tank-check loading stall 9s");
                 System.Threading.Thread.Sleep(TimeSpan.FromSeconds(9));
             }
+            (bot as IDisposable)?.Dispose();
+            // The transmitted definition chooses the policy. The original simple benchmark remains Tank Bank only.
+            bot = setup.ModeId == ModeRegistry.TankBankId && DevArgs.Get("brain") == "simple" ? new SimpleBot()
+                : new Bot(setup.Mode) { Skill = DevArgs.GetFloat("bot-skill", 1f) };
             match = new Match
             {
                 Name = "Match",
@@ -161,7 +164,7 @@ public partial class NetTest : Node
             };
             match.Finished += () =>
             {
-                if (DevArgs.Get("scenario") is "duel" or "pickup" or "drop-refusal" or "puncture-race" or "appearance" or "gather" or "melee" or "body-stream" or "vent-contact")
+                if (DevArgs.Get("scenario") is "duel" or "pickup" or "drop-refusal" or "puncture-race" or "appearance" or "gather" or "melee" or "body-stream" or "vent-contact" or "king" or "king-late")
                 {
                     ScenarioAssert(scenarioPassed, "scenario ended before all assertions passed");
                 }
@@ -183,6 +186,8 @@ public partial class NetTest : Node
                 Digest();
                 if (!tankCheckFinal) { LogTankCheck(final: true); }
                 LogTankCheck(completion: true);
+                if (match.ModeView is KingState king)
+                    Log($"finished king {match.Setup.Id}; minted " + string.Join(" ", match.Setup.Players.OrderBy(p => p.Player.Id).Select(p => $"{p.Player.Id}={king.MintedBy(p.Player.Id)}")));
                 Log($"finished match {match.Setup.Id}; final scores {ScoreLine()}");
                 RemoveChild(match);
                 match.QueueFree();
@@ -196,6 +201,8 @@ public partial class NetTest : Node
                     GetTree().CreateTimer(1.0).Timeout += () => ShutdownGuard.Quit(GetTree());
                 }
             };
+            kingStage = -1; kingCamera = null; kingCaptured.Clear();
+            kingHeld = kingContested = kingWarned = kingMoved = kingPiled = false;
             raceTick = raceSamples = 0;
             raceVent = null;
             raceCamera = null;
@@ -215,6 +222,13 @@ public partial class NetTest : Node
                 raceVent = canonical.Vent;
             };
             AddChild(match);
+            if (delay >= 70 && setup.ModeId == ModeRegistry.KingId)
+            {
+                ScenarioAssert(match.IsPlaying && match.ModeView is KingState { Zone: >= 1 },
+                    "King late builder did not replay the current moved zone before readiness");
+                Log($"King catch-up at readiness: zone {(match.ModeView as KingState)?.Zone}, minted " +
+                    string.Join(" ", (match.ModeView as KingState)?.Minted.Select(m => $"{m.ActorId}={m.Count}") ?? Array.Empty<string>()));
+            }
             if (DevArgs.Get("tank-check-ready-stall") == net.PlayerName)
             {
                 // Readiness can be sent from packet delivery while construction still blocks native ACK service.
@@ -302,6 +316,8 @@ public partial class NetTest : Node
         GetTree().CreateTimer(DevArgs.Get("host-server") != null ? 0.3 : 0.05).Timeout += () => net.Connect(address, port, name, appearance);
     }
 
+    public override void _ExitTree() => (bot as IDisposable)?.Dispose();
+
     private void ParseLobbyBots()
     {
         if (DevArgs.Get("lobby-bots") is not { } text) return;
@@ -330,6 +346,8 @@ public partial class NetTest : Node
             lobby.Members.Count >= players + lobbyBotsTotal)
         {
             started = true;
+            net.SetMode(new ModeSettings(DevArgs.Get("mode") == "king" ? ModeRegistry.KingId : ModeRegistry.TankBankId,
+                DevArgs.GetFloat("mint-seconds", (float)KingRules.MintPaceDefault)));
             net.SetMatchLength(DevArgs.GetFloat("length", 60));
             GetTree().CreateTimer(0.5).Timeout += net.StartMatch;
         }
@@ -360,7 +378,15 @@ public partial class NetTest : Node
             ShutdownGuard.Quit(GetTree());
             return;
         }
-        if (DevArgs.Get("scenario") == "capacity")
+        if (DevArgs.Get("scenario") == "king")
+        {
+            KingScenario(match);
+        }
+        else if (DevArgs.Get("scenario") == "king-late")
+        {
+            KingLateScenario(match);
+        }
+        else if (DevArgs.Get("scenario") == "capacity")
         {
             CapacityScenario(dt);
         }

@@ -70,7 +70,7 @@ fi
               "player_range.tscn -- --scenario=melee --assert-motion --assert-grip",
               "bot_navigation_course.tscn -- --seeds=5",
               "menu_test.tscn -- --scenario=gamepad", "menu_test.tscn -- --scenario=devices", "menu_test.tscn -- --scenario=input", "menu_test.tscn -- --scenario=mouse",
-              "menu_test.tscn -- --scenario=bots",
+              "menu_test.tscn -- --scenario=bots", "menu_test.tscn -- --scenario=king",
               "player_range.tscn -- --scenario=grip --grip-sweep --assert-grip --assert-motion",
               "player_range.tscn -- --scenario=ragdoll --assert-grip --assert-motion",
               "player_range.tscn -- --scenario=feet --assert-feet --assert-motion",
