@@ -147,7 +147,13 @@ and the whole tree's nodes to stay bounded (the last third of the run holding no
 `--only=soak-void,dials` runs only the named sessions (`lifetime`, `rules`, `aimstall`, `duel`, `ringout`, `king`,
 `shortfuse`, `shortfuse-combo`, `dissolve`, and with `--full` `dials`, `soak-void`, `soak-suburb`, `ringout-full`, `king-full`,
 `king-suburb`, `shortfuse-full`, `dissolve-full`, `dissolve-pace`); `make test-full` splits
-`--full` into four such jobs. A prototype round alone: `lab_test.tscn -- --scenario=prototype --mode=ringout|king
+`--full` into 25 jobs: separate sessions, individual Ring Out/Short Fuse/Dissolve seeds, four lifetime shards and eight dial shards.
+King keeps its three rounds together because its mint assertion spans the rounds. `--dial-shard=1 --dial-shards=8`
+selects one eighth of the actual dial/scenario/environment cases; `--list-dials` lists those cases without building
+worlds. Lifetime has the same listing and shard arguments (`--list-lifetime`, `--lifetime-shard`, `--lifetime-shards`); each selected pair keeps its two warm-ups and all ten checked cycles. `make test-full-lab-coverage` proves that the shards cover every full session, setting and dial fixture
+exactly once. The fast checker retains its 600-second session timeout. Full sessions have 1,800 seconds, while dial
+sweeps have `max(600, 2400 / shards)` seconds; a timeout kills the engine and any timing wrapper together.
+A prototype round alone: `lab_test.tscn -- --scenario=prototype --mode=ringout|king
 [--environment=suburb] [--seeds=3] [--first-seed=1] [--bots=2] [--quick]`; `--shots=4,12.5` adds `--capture-dir`
 screenshots at those round times. Short Fuse matches alone: `lab_test.tscn -- --scenario=shortfuse [--seeds=2]
 [--first-seed=1] [--bots=2] [--quick] [--trace]`; `--capture-events` adds `--capture-dir` screenshots of the first

@@ -46,7 +46,9 @@ Requires Godot 4.7.2 (.NET edition) and the .NET 10 SDK.
   then `make test`. Run it before submitting a change. `tools/dev/check_world.sh` prints log tails and keeps its
   scratch directory on failure. GitHub Actions runs the same checks on pushes to `dev`
   and every pull request. `make -j4 test-full` adds the deep sweeps as parallel jobs, each line prefixed with its job's
-  name; plain `make test-full` runs the same jobs one at a time.
+  name; plain `make test-full` runs the same jobs one at a time. Deep probes use an isolated optimized Debug
+  assembly (all `DEBUG` checks and tuners retained); fast tests and the final real-time bot matches use normal Debug.
+  Both generator and Lab shard coverage are checked. See [gate measurements](docs/test-speed.md).
 
 [docs/code-quality.md](docs/code-quality.md) describes the formatting and analyzer baseline and its regression
 checks. The gate follows the existing code's style and checks correctness without API design or naming churn.

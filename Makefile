@@ -166,38 +166,48 @@ FULL := test-full-lab-king test-behavior test-full-lab-soak-void test-full-lab-s
 test-full: $(FULL) test ## Run the gate plus deep sweeps (make -j4 test-full runs them side by side)
 	@$(MAKE) --no-print-directory test-full-bots
 
+# The deep probes use optimized Debug (DEBUG/TOOLS and the Debug Godot API), in a separate runtime project.
+# Normal test/check/CI, benchmark smoke and the real-time bot matches retain the normal Debug build.
+FULL_GODOT := $(CURDIR)/tools/dev/full_engine.py
+DEEP := $(filter-out test-core test-behavior,$(FULL))
+.PHONY: test-full-engine
+test-full-engine: build
+	$(LABEL) engine python3 -B tools/dev/full_engine.py --prepare --godot="$(GODOT)"
+
+$(DEEP): test-full-engine
+
 test-full-bots: build
 	$(LABEL) bots tools/dev/net_bots.sh -o "$(CURDIR)/build/rifle-soak-gate" -n 4 -w 0 -l 90 -s '--match-seed=25' -- --melee-start --net-seed=2 --net-lag=120 --net-jitter=30 --net-loss=3
 	$(LABEL) bots tools/dev/net_bots.sh -n 2 -w 0 -l 20 -s '--start-score=8 --match-seed=23' -o "$(CURDIR)/build/duel-lane-gate" -- --scenario=duel --matches=2 --duel-blocked --tune.DropScatter=0 --tune.DropToss=0 --net-lag=120 --net-jitter=30 --net-loss=3
 	$(LABEL) bots tools/dev/net_bots.sh -n 2 -l 20 -o "$(CURDIR)/build/loading-readiness-gate" -- --scenario=body-stream --tank-check-ready-stall=Bot2
 
 $(LAB_SHARDS): test-full-lab-%: build
-	$(LABEL) lab-$* env GODOT="$(GODOT)" python3 -B tools/dev/check_lab.py --full $(LAB_$*)
+	$(LABEL) lab-$* env GODOT="$(FULL_GODOT)" python3 -B tools/dev/check_lab.py --full $(LAB_$*)
 
 test-full-lab-coverage: build
-	$(LABEL) lab-coverage env GODOT="$(GODOT)" python3 -B tools/dev/check_lab_shards.py \
+	$(LABEL) lab-coverage env GODOT="$(FULL_GODOT)" python3 -B tools/dev/check_lab_shards.py \
 		$(foreach job,$(LAB_JOBS),--shard='--full $(LAB_$(job))')
 
 test-full-piles: build
-	$(LABEL) piles "$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/upright_pile_tests.tscn -- --deep --awake
+	$(LABEL) piles "$(FULL_GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/upright_pile_tests.tscn -- --deep --awake
 
 test-full-menu: build test-behavior
-	$(LABEL) menu "$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/menu_test.tscn -- --scenario=lifetime --port=$(PORT)
+	$(LABEL) menu "$(FULL_GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/menu_test.tscn -- --scenario=lifetime --port=$(PORT)
 
 test-full-range: build
-	$(LABEL) range "$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/player_range.tscn -- --scenario=melee-reloads --assert-motion --assert-grip
-	$(LABEL) range "$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/player_range.tscn -- --scenario=recoil --stance=air --assert-grip --assert-motion
-	$(LABEL) range "$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/player_range.tscn -- --scenario=bot-recoil --magazines=10
+	$(LABEL) range "$(FULL_GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/player_range.tscn -- --scenario=melee-reloads --assert-motion --assert-grip
+	$(LABEL) range "$(FULL_GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/player_range.tscn -- --scenario=recoil --stance=air --assert-grip --assert-motion
+	$(LABEL) range "$(FULL_GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/player_range.tscn -- --scenario=bot-recoil --magazines=10
 
 $(GENERATOR_SHARDS): test-full-generator-%: build
-	$(LABEL) generator-$* "$(GODOT)" --headless --path . res://scenes/dev/generator_tests.tscn -- $(GENERATOR_$*)
+	$(LABEL) generator-$* "$(FULL_GODOT)" --headless --path . res://scenes/dev/generator_tests.tscn -- $(GENERATOR_$*)
 
 test-full-generator-coverage: build
-	$(LABEL) generator-coverage env GODOT="$(GODOT)" python3 -B tools/dev/check_generator_shards.py --full='$(GENERATOR_FULL)' \
+	$(LABEL) generator-coverage env GODOT="$(FULL_GODOT)" python3 -B tools/dev/check_generator_shards.py --full='$(GENERATOR_FULL)' \
 		--shard='$(GENERATOR_1)' --shard='$(GENERATOR_2)' --shard='$(GENERATOR_3)' --shard='$(GENERATOR_4)'
 
 test-full-navigation: build
-	$(LABEL) navigation "$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/bot_navigation_course.tscn -- --seeds=100
+	$(LABEL) navigation "$(FULL_GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/bot_navigation_course.tscn -- --seeds=100
 
 test-capacity: build ## Repeat the separate-client tested-capacity gate (three clean and three faulted matches)
 	tools/dev/capacity_acceptance.sh

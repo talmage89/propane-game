@@ -126,6 +126,7 @@ fi
     generator = "generator_tests.tscn -- "
     bots = {"--melee-start --net-seed=2": 4, "--duel-blocked": 2, "--tank-check-ready-stall=Bot2": 2}
     deep = {**dict.fromkeys(bots, "bots"),
+            "full_engine.py --prepare": "engine",
             "upright_pile_tests.tscn -- --deep --awake": "piles",
             "menu_test.tscn -- --scenario=lifetime": "menu",
             "--scenario=melee-reloads --assert-motion --assert-grip": "range",
@@ -340,6 +341,8 @@ public static class Formatting
         code, output = run(scratch, "dotnet", "build", "Probe.csproj", "-nologo", "-v", "quiet", "-warnaserror")
         require(code == 0, "corrected code did not pass", output)
         print("PASS: whitespace and style drift fail; corrected code passes formatting and build")
+        code, output = run(ROOT, "python3", "-B", "tools/dev/full_engine_tests.py")
+        require(code == 0, "deep engine isolation fixtures failed", output)
         code, output = run(ROOT, "python3", "-B", "tools/dev/check_lab_shards_tests.py")
         require(code == 0, "Lab coverage negative fixtures failed", output)
         check_make_order(scratch)
