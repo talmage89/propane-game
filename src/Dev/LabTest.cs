@@ -855,6 +855,10 @@ public partial class LabTest : Node
 
     private async Task Measure()
     {
+        // The dummy headless renderer otherwise sleeps 6.9 ms even with low-processor mode disabled.
+        OS.LowProcessorUsageMode = false;
+        OS.LowProcessorUsageModeSleepUsec = 0;
+        Engine.MaxFps = 0;
         var count = (int)DevArgs.GetFloat("count", Tuning.LabStackMaximum);
         Assert(count >= Tuning.LabStackMinimum && count <= 1024, "measurement count must be 24..1024");
         template.LabStackCount = Math.Min(count, Tuning.LabStackMaximum);
@@ -863,6 +867,15 @@ public partial class LabTest : Node
         var lab = Enter(scenario, LabEnvironment.Void);
         RenderingServer.ViewportSetMeasureRenderTime(GetViewport().GetViewportRid(), true);
         await Frames(180).ConfigureAwait(true);
+        var warmup = DevArgs.GetFloat("measure-warmup", 0);
+        var seconds = DevArgs.GetFloat("measure-seconds", 0);
+        Assert(float.IsFinite(warmup) && (warmup == 0 || warmup is >= .1f and <= 120), "measurement warm-up must be 0 or 0.1..120 seconds");
+        Assert(float.IsFinite(seconds) && (seconds == 0 || seconds is >= .1f and <= 120), "measurement duration must be 0 or 0.1..120 seconds");
+        if (warmup > 0)
+        {
+            var warmUntil = lab.World.Clock.Now + warmup;
+            while (lab.World.Clock.Now < warmUntil) await Frames(1).ConfigureAwait(true);
+        }
         var phase = DevArgs.Get("phase") ?? "idle";
         Assert(phase is "idle" or "blast" or "chain", "unknown measurement phase");
         EffectProfile.Enabled = true;
@@ -913,7 +926,8 @@ public partial class LabTest : Node
             if (!series.TryGetValue(name, out var values)) series[name] = values = new List<double>();
             values.Add(value);
         }
-        for (var i = 0; i < 600; i++)
+        var measureUntil = lab.World.Clock.Now + seconds;
+        for (var i = 0; seconds > 0 ? lab.World.Clock.Now < measureUntil : i < 600; i++)
         {
             await Frames(1).ConfigureAwait(true);
             var now = Time.GetTicksUsec(); Sample("wall", (now - last) / 1000d); last = now;
@@ -948,7 +962,7 @@ public partial class LabTest : Node
         foreach (var (name, values) in series)
         {
             values.Sort();
-            GD.Print($"[lab profile] {name} p50={values[300]:F3} p95={values[570]:F3} worst={values[^1]:F3}");
+            GD.Print($"[lab profile] {name} p50={values[(int)(values.Count * .5)]:F3} p95={values[(int)(values.Count * .95)]:F3} worst={values[^1]:F3}");
         }
         capture.Screenshot($"stack_{count}");
         lab.Session.Dispose(); lab.Free();

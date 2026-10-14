@@ -160,6 +160,7 @@ and fragment physics; punctures, chain fuses, blast pushes and banking happen im
 
 Physics remains at 120 Hz, with at most two catch-up steps per rendered frame. That covers normal 60 fps play;
 under overload, simulation time falls behind wall time instead of running a large catch-up burst in one frame.
+[Tank scale trials](docs/tank-scaling.md) records the trade-offs, timing and compatibility.
 
 Loose intact tanks gather with nearby resting neighbors after 20 undisturbed seconds. The **Tank Gather** tuners
 control radius (3 m), minimum group size (2), delay, a three-stage lift/glide/settle and optional scan shimmer (set
@@ -300,6 +301,10 @@ $GODOT --fixed-fps 60 --resolution 1280x720 res://scenes/dev/game_test.tscn -- -
 
 # Soak: punctures every tank, then detonates them all at once, and reports frame times. Run without --fixed-fps.
 $GODOT res://scenes/dev/soak.tscn
+
+# A dense pile with equal simulation-time measurement windows, including its primed chain.
+# Omit --measure-seconds to retain the 600-frame measurement; --measure-warmup adds simulated warm-up time.
+DISABLE_GAMESCOPE_WSI=1 $GODOT --disable-vsync --resolution 1920x1080 res://scenes/dev/lab_test.tscn -- --scenario=measure --count=160 --phase=chain --measure-warmup=3 --measure-seconds=4 --metrics="$PWD/build/chain.csv"
 
 # Tank close-ups (scenarios: full, vent, blast, look), the character and rifle rig, the world kit, map overviews.
 $GODOT --fixed-fps 60 res://scenes/dev/tank_range.tscn -- --capture-dir=/tmp/t --scenario=blast
