@@ -16,7 +16,7 @@ public partial class DebrisQueue : Node
     public required WorldContext World { get; init; }
     internal int PendingCount => pending.Count;
 
-    public static void Enqueue(WorldContext world, Spawn spawn, Transform3D pose, Vector3 inherited, Vector3 center)
+    public static void Enqueue(WorldContext world, Spawn spawn, Transform3D pose, Vector3 inherited, Vector3 center, uint netId = 0)
     {
         var count = Math.Clamp(world.Tuning.DebrisPiecesPerTank, 0, GameAssets.Debris.Count);
         if (count == 0) return;
@@ -30,6 +30,9 @@ public partial class DebrisQueue : Node
         });
         // Visual randomness must not depend on when the presentation queue drains.
         using var rng = new RandomNumberGenerator();
+        // Fragments collide and can intercept shots. Network peers must use the same physical scatter rather
+        // than new local entropy; keep it independent of gameplay randomness and presentation drain order.
+        if (netId != 0) rng.Seed = netId;
         for (var i = 0; i < count; i++)
         {
             var piece = GameAssets.Debris[PieceIndex(i, count, GameAssets.Debris.Count)];

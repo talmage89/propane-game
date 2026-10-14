@@ -13,6 +13,28 @@ public static class EffectResourceTests
 {
     public static void Register(TestRunner runner)
     {
+        runner.Run("effects/network fragment scatter ignores peer randomness and drain order", () =>
+        {
+            using var tuning = Tuning.LoadBaked();
+            using var first = new WorldContext(runner, tuning, networked: true);
+            using var second = new WorldContext(runner, tuning, networked: true);
+            first.Random.Seed = 11; second.Random.Seed = 97;
+            first.Tuning.DebrisSpawnPerFrame = 1;
+            second.Tuning.DebrisSpawnPerFrame = 25;
+            var pose = new Transform3D(Basis.Identity.Rotated(Vector3.Up, .7f), new Vector3(2, 3, 4));
+            foreach (var world in new[] { first, second })
+                DebrisQueue.Enqueue(world, world.Spawn, pose, Vector3.Right, pose * PropaneTank.LocalCenter, 0x10000012);
+            var a = first.EffectsRoot.GetChildren().OfType<DebrisQueue>().Single();
+            var b = second.EffectsRoot.GetChildren().OfType<DebrisQueue>().Single();
+            b._Process(0);
+            while (a.PendingCount > 0) a._Process(0);
+            var piecesA = first.ContentRoot.GetChildren().OfType<DebrisBody>().ToArray();
+            var piecesB = second.ContentRoot.GetChildren().OfType<DebrisBody>().ToArray();
+            Assert(piecesA.Length == tuning.DebrisPiecesPerTank && piecesA.Length == piecesB.Length, "peer fragment counts differ");
+            Assert(piecesA.Zip(piecesB).All(pair => pair.First.GlobalTransform == pair.Second.GlobalTransform &&
+                pair.First.LinearVelocity == pair.Second.LinearVelocity && pair.First.AngularVelocity == pair.Second.AngularVelocity),
+                "peer-local randomness or deferred drain changed network fragment motion");
+        });
         runner.Run("effects/overlapping dense leases restore the prior catch-up value", () =>
         {
             var original = Engine.MaxPhysicsStepsPerFrame;

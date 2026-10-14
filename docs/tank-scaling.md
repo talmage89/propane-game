@@ -30,7 +30,10 @@ the core flash and particle fireball. Slots return when the full effect exits it
 velocities and cosmetic randomness at the burst, then registers eight bodies per presentation frame.
 Spawned fragments retain their convex hulls, CCD and persistent lifetime. Retired content discards queued work;
 world invalidation clears it. A backlog visibly delays fragment breakup and its collisions. Raising the count
-or registration dial can reproduce the previous cost; debris randomness now uses a separate cosmetic generator.
+or registration dial can reproduce the previous cost; debris randomness uses a separate generator. Network fragments seed it with the tank’s stable `NetId` so
+peers choose the same initial physical scatter independently of gameplay RNG and queue drain order; offline
+fragments retain local variation. Fragment poses, inherited velocities and registration times can still differ
+between peers, so this does not make debris a synchronized network body.
 
 The engine still runs 120 Hz physics, with its ordinary twelve-step catch-up budget. Only offline dense chains
 (64 or more pending fuses) lease a four-step budget, with a 0.5-real-second tail after fuse pressure drops.

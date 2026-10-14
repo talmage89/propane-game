@@ -479,7 +479,7 @@ public partial class PropaneTank : RigidBody3D
 
     private void SpawnDebris(Vector3 center)
     {
-        DebrisQueue.Enqueue(World, ContentSpawn, GlobalTransform, LinearVelocity, center);
+        DebrisQueue.Enqueue(World, ContentSpawn, GlobalTransform, LinearVelocity, center, NetId);
     }
 
     private void SpawnScorch(Vector3 groundPoint)
