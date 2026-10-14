@@ -28,6 +28,7 @@ public partial class MotionProbe : SkeletonModifier3D
     private int frames, creepFrames;
     private bool invalid;
     private bool rotationFailed;
+    private string firstSnap = "";
     private readonly float[] pitchBefore = new float[2];
     private readonly float[] expectedClimb = new float[2];
     private bool climbFailed;
@@ -94,7 +95,12 @@ public partial class MotionProbe : SkeletonModifier3D
                 // A snap detector, not a smoothing bound: clips and stance changes may move fast, never jump.
                 // Fingers close quickly on a grip, so they get a wider bound.
                 // The root only re-expresses the pose when the model turns to its get-up heading; it has no mesh.
-                if ((!physical || digit) && name != "root") rotationFailed |= degrees / delta > (digit ? DigitSnapRate : SnapRate);
+                if ((!physical || digit) && name != "root" && degrees / delta > (digit ? DigitSnapRate : SnapRate))
+                {
+                    if (!rotationFailed)
+                        firstSnap = FormattableString.Invariant($" first-snap={name}@{time:F3}s {degrees:F2}deg/{delta:F5}s physical={physical}");
+                    rotationFailed = true;
+                }
                 var statistics = physical && !digit ? physicalMaxima : maxima;
                 if (physical && digit)
                 {
@@ -160,7 +166,7 @@ public partial class MotionProbe : SkeletonModifier3D
         // The walk clip's shoulders sway about 6.6 cm peak to peak at an aimed creep; 8 cm still catches a lost aim.
         var failed = invalid || frames < 100 || rotationFailed ||
             (RequireCreep && (creepFrames < 50 || !float.IsFinite(range) || range > 0.08f || recoilFrames < 20 || burstFinished.Any(done => !done) || climbFailed));
-        GD.Print(FormattableString.Invariant($"[motion] {(assert && failed ? "FAIL" : assert ? "PASS" : "MEASURED")} frames={frames} max={maximum:F3}deg physical-max={physicalMaximum:F3}deg rate={maximumRate:F2}deg/s creep-frames={creepFrames} muzzle-range={range:F6}m recoil-frames={recoilFrames} aim-climb={maximumClimb:F6}deg"));
+        GD.Print(FormattableString.Invariant($"[motion] {(assert && failed ? "FAIL" : assert ? "PASS" : "MEASURED")} frames={frames} max={maximum:F3}deg physical-max={physicalMaximum:F3}deg rate={maximumRate:F2}deg/s creep-frames={creepFrames} muzzle-range={range:F6}m recoil-frames={recoilFrames} aim-climb={maximumClimb:F6}deg{firstSnap}"));
         var directory = DevArgs.Get("capture-dir");
         if (directory != null)
         {
