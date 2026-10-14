@@ -161,6 +161,7 @@ public partial class Tuning : Resource
     // ---------------------------------------------------------------- Actor presentation
     [ExportGroup("Actor Detail")]
     [Export] public bool ActorPoseLod { get; set; } = true;
+    [Export(PropertyHint.Range, "0.01,1,0.01")] public float ActorMeshLodBias { get; set; } = 0.1f;
     [Export(PropertyHint.Range, "0,200,1")] public float ActorPoseNearDistance { get; set; } = 30f;
     [Export(PropertyHint.Range, "0,500,1")] public float ActorPoseFarDistance { get; set; } = 80f;
     [Export(PropertyHint.Range, "0,20,0.5")] public float ActorPoseHysteresis { get; set; } = 3f;

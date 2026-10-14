@@ -87,19 +87,23 @@ The **Actor Detail** tuners sample a camera-free actor's animation tree and skel
 30 m, 15 Hz beyond 80 m, or 10 Hz outside the camera frustum. A 3 m outward hysteresis prevents boundary chatter;
 entering the near distance always restores full updates immediately. The local viewed character, actors without
 a camera viewing their world, and all ragdoll/capture/get-up states keep the engine's original idle callbacks.
-`ActorPoseLod=false` restores full pose updates everywhere. Rates/distances remain live tuners, including during
-matches; they affect presentation, not movement, intent, recoil aim, shot queries or network snapshots.
+`ActorPoseLod=false` restores full pose updates and the imported mesh LOD bias everywhere. Rates/distances remain
+live tuners, including during matches; they affect presentation, not movement, intent, recoil aim, shot queries
+or network snapshots.
 
 Stride, jump, turning travel and reload presentation clocks still advance each frame. Throttled pose samples
 receive actual accumulated time; actors stagger their sample phases, and a hitch samples one current pose instead
 of replaying missed poses. The top-level rifle follows its last final pose in the moving visual frame between
 samples, so it stays in the held skinned hands. Muzzle flashes and logical aim still update normally. Distant
-limbs step between samples; near meshes, shadows, animations and IK retain their current fidelity. A throw cancels
-the cadence immediately, and native ragdoll recovery remains at full rate.
+limbs step between samples. Their mannequin and rifle use `ActorMeshLodBias` (default 0.1) times the imported
+bias to choose coarser generated mesh LODs; 1 retains the imported bias. Near meshes, shadows, animations and IK
+retain their current fidelity. A throw cancels the cadence immediately, and native ragdoll recovery remains at
+full rate.
 
 `actor_detail_tests` exercises near, mid-distance, far, hidden, near restoration, a local view looking through an
 observer camera, and far ragdoll/get-up. It checks actual native modifier counts, movement, aim/support, sampled
-contacts and rifle contacts on frames that hold the previous skinned pose. Its reload uses the existing rule:
+contacts and rifle contacts on frames that hold the previous skinned pose. It also checks near/distant/owning
+mesh bias, live mesh-bias changes and full detail during recovery. Its reload uses the existing rule:
 reload suppresses aim and allows the ordinary movement gait. The unit suite checks distance hysteresis, live rate
 changes, time conservation, staggered clocks and zero clock allocations. Both run in `make test`.
 

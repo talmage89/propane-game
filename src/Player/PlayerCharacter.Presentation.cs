@@ -9,6 +9,8 @@ public partial class PlayerCharacter
     private ActorPoseCadence poseCadence = null!;
     private bool poseThrottled, hasRiflePose;
     private Transform3D rifleInVisual;
+    private (MeshInstance3D Mesh, float Bias)[] detailMeshes = [];
+    private float meshDetail = 1;
 
     private bool PoseSample(float dt, out float sampleDelta)
     {
@@ -20,6 +22,7 @@ public partial class PlayerCharacter
             camera == null ? 0 : camera.GlobalPosition.DistanceTo(center),
             camera == null || camera.IsPositionInFrustum(center), forceFull);
         var throttled = interval > 0;
+        SetMeshDetail(throttled ? World.Tuning.ActorMeshLodBias : 1);
         if (poseThrottled != throttled)
         {
             poseThrottled = throttled;
@@ -40,9 +43,17 @@ public partial class PlayerCharacter
     private void ResetPoseCadence()
     {
         poseCadence.Reset();
+        SetMeshDetail(1);
         poseThrottled = false;
         animator.SetThrottled(false);
         skeleton.ModifierCallbackModeProcess = Skeleton3D.ModifierCallbackModeProcessEnum.Idle;
+    }
+
+    private void SetMeshDetail(float bias)
+    {
+        if (meshDetail == bias) return;
+        meshDetail = bias;
+        foreach (var (mesh, original) in detailMeshes) mesh.LodBias = original * bias;
     }
 
     public override void _Process(double delta)

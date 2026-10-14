@@ -216,6 +216,9 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
 
         rifle = new Rifle { World = World, Name = "Rifle", TopLevel = true };
         AddChild(rifle);
+        detailMeshes = GameAssets.MeshInstances(model).Concat(GameAssets.MeshInstances(rifle))
+            .Where(mesh => (mesh.Layers & RenderLayers.Actors) != 0)
+            .Select(mesh => (mesh, mesh.LodBias)).ToArray();
         if (Ammo != null || IsRemote)
         {
             // A match, where reloads drop magazines.

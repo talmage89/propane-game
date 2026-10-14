@@ -21,6 +21,7 @@ public partial class ActorDetailTests : Node3D
     private Callable checkFrame;
     private int frames, phase = -1, phaseFrames, poseCalls, recoveryFrames;
     private bool gotUp, wasDown, sawRecovery;
+    private (MeshInstance3D Mesh, float Bias)[] meshes = [];
 
     public override void _Ready()
     {
@@ -32,6 +33,8 @@ public partial class ActorDetailTests : Node3D
         world.Random.Seed = 9023;
         world.Spawn.InWorld(new VoidEnvironment());
         player = world.Spawn.InWorld(new PlayerCharacter { World = world, ActorId = 8, InputOverride = input });
+        meshes = GameAssets.MeshInstances(player).Where(mesh => (mesh.Layers & RenderLayers.Actors) != 0)
+            .Select(mesh => (mesh, mesh.LodBias)).ToArray();
         player.Ammo = new AmmoState { Tuning = world.Tuning, Magazine = 5, Reserve = 90 };
         input.Hold(0, 12, new PlayerIntent { Move = Vector2.Right, Aim = true });
         input.Reload(4.2f);
@@ -95,11 +98,15 @@ public partial class ActorDetailTests : Node3D
             {
                 recoveryFrames++;
                 Assert(calls > 0, "far recovery skipped its native pose update");
+                Assert(meshes.All(part => part.Mesh.LodBias == part.Bias), "recovery retained distant mesh detail");
             }
+            if (phase == 3 && phaseFrames == 45) world.Tuning.ActorMeshLodBias = .2f;
             contact.VerifyHeldContact();
             if (phaseFrames == 90 && phase <= 5) capture.Screenshot($"actor-detail-{phase}");
             if (phase <= 5 && phaseFrames == 90)
             {
+                var bias = phase is 1 or 2 or 3 ? world.Tuning.ActorMeshLodBias : 1;
+                Assert(meshes.Length > 0 && meshes.All(part => part.Mesh.LodBias == part.Bias * bias), "near/distant/owning mesh detail missing");
                 var reloading = player.Ammo!.Reloading;
                 var speed = reloading ? world.Tuning.RunSpeed : world.Tuning.CreepSpeed;
                 Assert(Math.Abs(player.Velocity.X - speed) < .01f, "LOD changed actor movement");
