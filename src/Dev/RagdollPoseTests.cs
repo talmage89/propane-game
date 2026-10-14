@@ -3,6 +3,7 @@ using System.Linq;
 using Godot;
 using Propane.Core;
 using Propane.Player;
+using Propane.Tank;
 using Propane.World;
 
 namespace Propane.Dev;
@@ -12,6 +13,7 @@ public partial class RagdollPoseTests : Node3D
 {
     private WorldContext world = null!;
     private PlayerCharacter full = null!, distant = null!;
+    private PlayerCharacter hitFull = null!, hitDistant = null!;
     private Camera3D observer = null!;
     private int ticks;
 
@@ -32,6 +34,9 @@ public partial class RagdollPoseTests : Node3D
         full = Actor(1, Vector3.Right * 20);
         distant = Actor(8, Vector3.Zero);
         LocalView.Attach(full, this).Hud.ShowHud(false);
+        hitFull = Actor(2, Vector3.Right * 60);
+        hitDistant = Actor(9, Vector3.Right * 40);
+        LocalView.Attach(hitFull, this).Hud.ShowHud(false);
         observer = world.AddView(this, new Camera3D { Current = true });
         observer.LookAtFromPosition(new Vector3(0, 3, 140), Vector3.Up);
         ProcessPhysicsPriority = int.MinValue;
@@ -44,25 +49,27 @@ public partial class RagdollPoseTests : Node3D
             observer.MakeCurrent();
             ((ScriptedInput)full.InputOverride!).Advance((float)delta);
             ((ScriptedInput)distant.InputOverride!).Advance((float)delta);
-            if (++ticks != 150) return;
-            full.Collapse();
-            distant.Collapse();
-            var a = full.FindChildren("*", "PhysicalBoneSimulator3D", owned: false).OfType<Ragdoll>().Single();
-            var b = distant.FindChildren("*", "PhysicalBoneSimulator3D", owned: false).OfType<Ragdoll>().Single();
-            if (a.Bones.Count == 0 || a.Bones.Count != b.Bones.Count)
-                throw new InvalidOperationException("actors must expose the same nonempty physical-bone rig");
-            var offset = full.GlobalPosition - distant.GlobalPosition;
-            var maximum = 0f;
-            var rotation = 0f;
-            for (var i = 0; i < a.Bones.Count; i++)
+            ((ScriptedInput)hitFull.InputOverride!).Advance((float)delta);
+            ((ScriptedInput)hitDistant.InputOverride!).Advance((float)delta);
+            ticks++;
+            if (ticks == 139 && (Tree(distant).CallbackModeProcess != AnimationMixer.AnimationCallbackModeProcess.Manual ||
+                Tree(hitDistant).CallbackModeProcess != AnimationMixer.AnimationCallbackModeProcess.Manual))
             {
-                maximum = Math.Max(maximum, (a.Bones[i].GlobalPosition - offset).DistanceTo(b.Bones[i].GlobalPosition));
-                rotation = Math.Max(rotation, Mathf.RadToDeg(a.Bones[i].GlobalBasis.GetRotationQuaternion()
-                    .AngleTo(b.Bones[i].GlobalBasis.GetRotationQuaternion())));
+                throw new InvalidOperationException("fixture must hold both distant animation trees before the hit");
             }
-            if (!float.IsFinite(maximum) || !float.IsFinite(rotation) || maximum > .001f || rotation > .1f)
-                throw new InvalidOperationException($"render cadence changed initial physical-bone transforms by {maximum:F6}m/{rotation:F4}deg");
-            GD.Print($"[ragdoll pose] PASS full vs 1-Hz presentation initial bone error={maximum:F6}m/{rotation:F4}deg");
+
+            if (ticks == 140)
+            {
+                var distance = (world.Tuning.RagdollRadius + world.Tuning.StaggerRadius) / 2;
+                var blast = new BlastInfo(Vector3.Zero, Vector3.Forward, distance, .5f);
+                hitFull.ReceiveBlast(blast);
+                hitDistant.ReceiveBlast(blast);
+            }
+            if (ticks != 150) return;
+            if (!Tree(hitFull).Get("parameters/hit/active").AsBool() || !Tree(hitDistant).Get("parameters/hit/active").AsBool())
+                throw new InvalidOperationException("both actors must play the hit before the physical throw");
+            Compare(full, distant, "walking");
+            Compare(hitFull, hitDistant, "hit reaction");
             ShutdownGuard.Quit(GetTree());
         }
         catch (Exception error)
@@ -70,6 +77,31 @@ public partial class RagdollPoseTests : Node3D
             GD.PushError($"[ragdoll pose] FAIL {error}");
             ShutdownGuard.Quit(GetTree(), 1);
         }
+    }
+
+    private static AnimationTree Tree(PlayerCharacter actor) => actor.FindChildren("*", "AnimationTree", owned: false)
+        .OfType<AnimationTree>().Single();
+
+    private static void Compare(PlayerCharacter control, PlayerCharacter held, string label)
+    {
+        control.Collapse();
+        held.Collapse();
+        var a = control.FindChildren("*", "PhysicalBoneSimulator3D", owned: false).OfType<Ragdoll>().Single();
+        var b = held.FindChildren("*", "PhysicalBoneSimulator3D", owned: false).OfType<Ragdoll>().Single();
+        if (a.Bones.Count == 0 || a.Bones.Count != b.Bones.Count)
+            throw new InvalidOperationException("actors must expose the same nonempty physical-bone rig");
+        var offset = control.GlobalPosition - held.GlobalPosition;
+        var maximum = 0f;
+        var rotation = 0f;
+        for (var i = 0; i < a.Bones.Count; i++)
+        {
+            maximum = Math.Max(maximum, (a.Bones[i].GlobalPosition - offset).DistanceTo(b.Bones[i].GlobalPosition));
+            rotation = Math.Max(rotation, Mathf.RadToDeg(a.Bones[i].GlobalBasis.GetRotationQuaternion()
+                .AngleTo(b.Bones[i].GlobalBasis.GetRotationQuaternion())));
+        }
+        if (!float.IsFinite(maximum) || !float.IsFinite(rotation) || maximum > .001f || rotation > .1f)
+            throw new InvalidOperationException($"{label}: render cadence changed initial physical-bone transforms by {maximum:F6}m/{rotation:F4}deg");
+        GD.Print($"[ragdoll pose] PASS {label} full vs 1-Hz initial bone error={maximum:F6}m/{rotation:F4}deg");
     }
 
     public override void _ExitTree() => world.Dispose();

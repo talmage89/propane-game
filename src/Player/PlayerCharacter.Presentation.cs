@@ -16,7 +16,7 @@ public partial class PlayerCharacter
     {
         var camera = World.Viewport.GetCamera3D();
         var forceFull = View != null || state != State.Active || camera == null ||
-            camera.GetWorld3D() != World.Physics;
+            camera.GetWorld3D() != World.Physics || animator.HitPlaying;
         var center = GlobalPosition + Vector3.Up;
         var interval = poseCadence.Interval(World.Tuning,
             camera == null ? 0 : camera.GlobalPosition.DistanceTo(center),
@@ -54,6 +54,20 @@ public partial class PlayerCharacter
         if (meshDetail == bias) return;
         meshDetail = bias;
         foreach (var (mesh, original) in detailMeshes) mesh.LodBias = original * bias;
+    }
+
+    private void PlayHit()
+    {
+        if (poseThrottled)
+        {
+            // Consume only the old animation time before queuing this new one-shot. Its pose can become
+            // physical if another hit throws us, so keep the reaction at full rate through its fade.
+            animator.ApplyPose();
+            animator.Sample(poseCadence.PendingTime);
+            skeleton.Advance(poseCadence.PendingTime);
+            ResetPoseCadence();
+        }
+        animator.PlayHit();
     }
 
     public override void _Process(double delta)

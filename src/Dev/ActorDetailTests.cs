@@ -3,6 +3,7 @@ using System.Linq;
 using Godot;
 using Propane.Core;
 using Propane.Player;
+using Propane.Tank;
 using Propane.World;
 
 namespace Propane.Dev;
@@ -21,6 +22,8 @@ public partial class ActorDetailTests : Node3D
     private Callable checkFrame;
     private int frames, phase = -1, phaseFrames, poseCalls, recoveryFrames;
     private bool gotUp, wasDown, sawRecovery;
+    private bool hitStarted, sawHit;
+    private AnimationTree tree = null!;
     private (MeshInstance3D Mesh, float Bias)[] meshes = [];
 
     public override void _Ready()
@@ -40,6 +43,7 @@ public partial class ActorDetailTests : Node3D
         input.Reload(4.2f);
         player.GotUp += (_, _) => gotUp = true;
         var skeleton = player.FindChildren("*", "Skeleton3D", owned: false).OfType<Skeleton3D>().Single(s => s.FindBone("hand_r") >= 0);
+        tree = player.FindChildren("*", "AnimationTree", owned: false).OfType<AnimationTree>().Single();
         contact = new ActorDetailContact { Player = player };
         skeleton.AddChild(contact);
         grip = GripProbe.Attach(player);
@@ -112,12 +116,29 @@ public partial class ActorDetailTests : Node3D
                 Assert(Math.Abs(player.Velocity.X - speed) < .01f, "LOD changed actor movement");
                 Assert(player.ResolvedState.EffectiveAim == !reloading && player.ResolvedState.Grounded, "LOD changed aim/support");
             }
-            Assert(frames < 1800, "far ragdoll/get-up timed out");
+            Assert(frames < 1800, "far recovery/hit restoration timed out");
             if (frames < 1200 || !gotUp || player.IsRagdolled) return;
+            if (!hitStarted)
+            {
+                hitStarted = true;
+                var distance = (world.Tuning.RagdollRadius + world.Tuning.StaggerRadius) / 2;
+                player.ReceiveBlast(new BlastInfo(Vector3.Zero, Vector3.Forward, distance, .5f));
+                return;
+            }
+            if (tree.Get("parameters/hit/active").AsBool() || tree.Get("parameters/hit/internal_active").AsBool())
+            {
+                sawHit = true;
+                Assert(calls > 0 && tree.CallbackModeProcess == AnimationMixer.AnimationCallbackModeProcess.Idle,
+                    "distant hit skipped its native pose update");
+                Assert(meshes.All(part => part.Mesh.LodBias == part.Bias), "hit retained distant mesh detail");
+                return;
+            }
+            if (!sawHit || tree.CallbackModeProcess != AnimationMixer.AnimationCallbackModeProcess.Manual) return;
+            Assert(meshes.All(part => part.Mesh.LodBias == part.Bias * world.Tuning.ActorMeshLodBias), "hit did not restore distant mesh detail");
             FinishPhase();
             Assert(wasDown && gotUp && sawRecovery && recoveryFrames >= 60, "far ragdoll/get-up path missing");
             grip.Finish();
-            GD.Print("[actor-detail] PASS movement, sampled/held contacts, distance/visibility/owning-view cadence, ragdoll/get-up");
+            GD.Print("[actor-detail] PASS movement, sampled/held contacts, distance/visibility/owning-view cadence, ragdoll/get-up, hit/restore");
             ShutdownGuard.Quit(GetTree());
         }
         catch (Exception error)

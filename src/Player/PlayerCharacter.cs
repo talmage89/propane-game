@@ -568,7 +568,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
             // A small hop, applied once.
             Velocity += Vector3.Up * Mathf.Min(push * 0.25f, 3f);
             staggerTimer = StaggerControlTime;
-            animator.PlayHit();
+            PlayHit();
             staggers++;
         }
     }
@@ -805,7 +805,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
                 if (remoteState.Staggers != remoteStaggers)
                 {
                     remoteStaggers = remoteState.Staggers;
-                    animator.PlayHit();
+                    PlayHit();
                 }
                 break;
             case State.Ragdoll:

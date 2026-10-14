@@ -51,6 +51,8 @@ public sealed class CharacterAnimator
     private static readonly StringName Land = "parameters/land/blend_amount";
     private static readonly StringName Hold = "parameters/hold/blend_amount";
     private static readonly StringName Hit = "parameters/hit/request";
+    private static readonly StringName HitActive = "parameters/hit/active";
+    private static readonly StringName HitInternalActive = "parameters/hit/internal_active";
     private static readonly StringName GetUp = "parameters/getup/request";
     private static readonly StringName GetUpScale = "parameters/getup_scale/scale";
 
@@ -156,6 +158,9 @@ public sealed class CharacterAnimator
     }
 
     public void PlayHit() => tree.Set(Hit, (int)AnimationNodeOneShot.OneShotRequest.Fire);
+
+    public bool HitPlaying => tree.Get(Hit).AsInt32() != (int)AnimationNodeOneShot.OneShotRequest.None ||
+        tree.Get(HitActive).AsBool() || tree.Get(HitInternalActive).AsBool();
 
     public void PlayGetUp() => tree.Set(GetUp, (int)AnimationNodeOneShot.OneShotRequest.Fire);
 
