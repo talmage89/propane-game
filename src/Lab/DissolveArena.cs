@@ -36,6 +36,7 @@ public partial class DissolveArena : Node3D
     private readonly List<double> retireMilliseconds = new();
     private PrototypeRunner? runner;
     private MeshInstance3D wall = null!;
+    private ShaderMaterial wallMaterial = null!;
     private float horizon;
     private float? caughtCut;
     private int sweepAge;
@@ -76,10 +77,9 @@ public partial class DissolveArena : Node3D
         wall = new MeshInstance3D
         {
             Name = "Front",
-            Mesh = new QuadMesh { Size = new Vector2(Source.Settings.Suburb.MapSize + 20f, 14f), Orientation = PlaneMesh.OrientationEnum.X },
-            MaterialOverride = new ShaderMaterial { Shader = GD.Load<Shader>("res://shaders/dissolve_front.gdshader") },
+            Mesh = new QuadMesh { Size = new Vector2(Source.Settings.Suburb.MapSize + 20f, WallHeight), Orientation = PlaneMesh.OrientationEnum.X },
+            MaterialOverride = wallMaterial = new ShaderMaterial { Shader = GD.Load<Shader>("res://shaders/dissolve_front.gdshader") },
             CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
-            Position = new Vector3(Back, 7f, 0),
         };
         AddChild(wall);
         BestScore = LoadBest();
@@ -165,7 +165,15 @@ public partial class DissolveArena : Node3D
     /// <summary>Time freeing retired segments may take per physics step.</summary>
     public const double RetireBudgetMilliseconds = 1.5;
 
-    public override void _Process(double delta) => wall.Position = new Vector3(Back, 7f, Lab.Player.GlobalPosition.Z);
+    public override void _Process(double delta)
+    {
+        var height = Tuning.DissolveFrontHeight;
+        wall.Scale = new Vector3(1, height / WallHeight, 1);
+        wall.Position = new Vector3(Back, height / 2f, Lab.Player.GlobalPosition.Z);
+        wallMaterial.SetShaderParameter("strength", Tuning.DissolveFrontGlow);
+    }
+
+    private const float WallHeight = 14f;
 
     /// <summary>The window, for every mesh tagged with it: geometry exists only between the back edge and the horizon.</summary>
     private void Window() => RenderingServer.GlobalShaderParameterSet(WindowParameter, new Vector4(1, 0, Back, horizon));

@@ -65,7 +65,8 @@ Lab dial in the tuning panel's Lab section, and layout dials apply on reset.
   ammo (R / X reloads; Backspace starts a new run). The menu chooses the seed: a new one each run, or today's, the same
   street for everyone that day. The HUD shows the score, meters and tanks, the run's clock, a bar for the front's gap
   (hot under 8 m), the open chain and the latest scoring chains; the controls panel shows the result and the best run
-  (kept per seed choice in `user://dissolve_run.cfg`).
+  (kept per seed choice in `user://dissolve_run.cfg`). Every number is a Dissolve dial in the tuning panel's Lab
+  section, the sheet's glow and height included; segment and layout dials apply on reset.
 
 Ring Out, King and Short Fuse have unlimited ammo and no ammo cans. Bots run on the Lab's main thread; more than three in one process may not
 hold 120 Hz physics on a small machine.

@@ -24,6 +24,10 @@ public partial class Tuning
     /// <summary>A chain closes once none of its tanks has gone up for this long (longer than a chain fuse).</summary>
     [LabDial(0.2, 5, 0.1, Scenario = "dissolve")] public float DissolveChainWindow { get; set; } = 1f;
 
+    // The front's look: the glowing sheet standing across the street at the front.
+    [LabDial(0, 3, 0.1, Scenario = "dissolve")] public float DissolveFrontGlow { get; set; } = 1f;
+    [LabDial(2, 40, 1, Scenario = "dissolve")] public float DissolveFrontHeight { get; set; } = 14f;
+
     // The window: how far ahead the street has materialized, and how far beyond it segments are built.
     [LabDial(20, 120, 5, Scenario = "dissolve")] public float DissolveAhead { get; set; } = 60f;
     [LabDial(0, 60, 5, Scenario = "dissolve")] public float DissolveBuildLead { get; set; } = 20f;
