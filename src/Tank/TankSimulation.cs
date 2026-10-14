@@ -35,7 +35,8 @@ public partial class TankSimulation : Node
         using var profile = EffectProfile.Measure(EffectProfile.System.TankPhysics);
         foreach (var tank in tanks)
         {
-            if (tank.State == PropaneTank.TankState.Exploded) continue;
+            // Staged sources disable bodies before freeing them; match their former native callback eligibility.
+            if (tank.State == PropaneTank.TankState.Exploded || !tank.CanProcess()) continue;
             if (tank.NeedsTick) tank.Tick(delta);
             else tank.ObserveRest();
         }

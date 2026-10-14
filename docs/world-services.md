@@ -8,12 +8,13 @@ Immutable asset, shader, material, mesh, collision and catalog caches remain sha
 `TankSimulation` lives under each world's effects root and batches tank physics callbacks. Tanks register on
 entry and unregister on exit. Intact tanks still observe rest/motion every physics tick, including scripted
 sleep/wake and relocation between gather scans; vents retain the same thrust and correction path.
+The batch respects each tank's effective process mode, so disabled staged content leaves simulation immediately.
 `GatherGroups` searches neighboring spatial cells, retaining exact radius connectivity, ordered membership and
 revision-keyed delay clocks. Neither service changes the puncture, fuse or gathering rules.
 
 `DebrisQueue` also lives under the effects root. A burst captures its selected fragment poses, velocities and
 cosmetic randomness, then the queue registers at most `DebrisSpawnPerFrame` bodies per presentation frame.
-It checks each fragment's originating content before creating it; content retirement discards pending fragments,
+It checks each fragment's originating content before creating it; disabling or retiring content discards pending fragments,
 and world invalidation clears the queue. Spawned bodies stay in their originating content. Deferred fragments
 start at the captured burst pose, so very large queues delay shell breakup and subsequent fragment collisions.
 Debris uses an independent cosmetic random generator, keeping queue drain timing out of `World.Random`.

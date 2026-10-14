@@ -52,7 +52,7 @@ public partial class DebrisQueue : Node
         {
             var root = fragment.Spawn.ContentRoot;
             // Retiring a suburb also cancels work that has not yet reached its content tree.
-            if (!World.IsAlive || !IsInstanceValid(root) || !root.IsInsideTree() || root.IsQueuedForDeletion()) continue;
+            if (!World.IsAlive || !IsInstanceValid(root) || !root.CanProcess() || root.IsQueuedForDeletion()) continue;
             var body = DebrisBody.Create(World, fragment.Piece, fragment.Soot);
             fragment.Spawn.InWorld(body);
             body.GlobalTransform = fragment.Pose;

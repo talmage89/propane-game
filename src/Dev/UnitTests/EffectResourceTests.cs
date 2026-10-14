@@ -62,6 +62,12 @@ public static class EffectResourceTests
             DebrisQueue.Enqueue(other, other.Spawn, Transform3D.Identity, Vector3.Zero, PropaneTank.LocalCenter);
             var independent = other.EffectsRoot.GetChildren().OfType<DebrisQueue>().Single();
             var outgoing = world.ContentRoot;
+            outgoing.ProcessMode = Node.ProcessModeEnum.Disabled;
+            queue._Process(0);
+            Assert(queue.PendingCount == 0 && outgoing.GetChildren().OfType<DebrisBody>().Count() == 2,
+                "disabled retiring source received deferred fragments");
+            outgoing.ProcessMode = Node.ProcessModeEnum.Inherit;
+            DebrisQueue.Enqueue(world, world.Spawn, Transform3D.Identity, Vector3.Zero, PropaneTank.LocalCenter);
             var incoming = new Node3D(); world.Root.AddChild(incoming); world.SetContentRoot(incoming);
             world.RetireContent(outgoing);
             queue._Process(0);
