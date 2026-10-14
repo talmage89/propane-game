@@ -56,16 +56,16 @@ public static class PrototypeModeTests
         new(0, 0, 0), new(20, 0, 0), new(0, 0, 20), new(-20, 0, 0), new(0, 0, -20), new(60, 0, 60),
     };
 
-    private static KingRules King(int actors, ulong seed = 3, IReadOnlyList<ModeSpot>? spots = null)
+    private static KingRules King(int actors, ulong seed = 3, IReadOnlyList<ModeSpot>? spots = null, double start = 0)
     {
         var rules = new KingRules();
         rules.Initialize(new ModeSetup(Enumerable.Range(1, actors).Select(i => new ModeActor(i, $"P{i}")).ToArray(),
             new ModeWorld(ModeWorldSource.Void, 1, 0, spots ?? Spots), KingTuners, seed));
-        rules.Handle(new PhaseEntered(ModePhase.Round, new RoundInfo(1, 1, RoundTimer.Countdown, 0, 180)), new ModeClock(ModePhase.Round, 1, 0, 180));
+        rules.Handle(new PhaseEntered(ModePhase.Round, new RoundInfo(1, 1, RoundTimer.Countdown, start, 180)), new ModeClock(ModePhase.Round, 1, start, start + 180));
         return rules;
     }
 
-    private static ModeClock KingAt(double now) => new(ModePhase.Round, 1, now, 180);
+    private static ModeClock KingAt(double now) => new(ModePhase.Round, 1, now, 1000);
 
     private static IReadOnlyList<ModeCommand> KingSample(KingRules rules, double now, params ActorSample[] samples) =>
         rules.Handle(new ActorsSampled(samples), KingAt(now));
@@ -228,8 +228,9 @@ public static class PrototypeModeTests
             var commit = rules.Handle(new SpillRegistered(ticket), KingAt(9));
             TestRunner.Assert(commit.OfType<SpillCommitted>().Any() && rules.Bank.Bank(2) == 0, "spills work as in Tank Bank");
             TestRunner.Assert(rules.Handle(new TankMinted(2), KingAt(9)).Count == 0, "only the zone mints");
-            var audit = rules.Snapshot().Report.Single(r => r.Kind == ModeReportKind.Audit).Text;
-            TestRunner.Assert(audit == "king audit initial=0 map=1 drops=0 minted=2 spills=2 banked=1 expected=1 ok=True", audit);
+            var audits = rules.Snapshot().Report.Where(r => r.Kind == ModeReportKind.Audit).Select(r => r.Text).ToArray();
+            TestRunner.Assert(audits.SequenceEqual(new[] { "king audit initial=0 map=1 drops=0 minted=2 spills=2 banked=1 expected=1 ok=True", "king minted 1=1 2=1" }),
+                string.Join("; ", audits));
             TestRunner.Assert(rules.Snapshot().Standings.Single(s => s.ActorId == 1) is { Present: false, Score: 1 }, "the departed keep their bank");
         });
 
@@ -254,8 +255,43 @@ public static class PrototypeModeTests
             TestRunner.Assert(next.Zip(next.Skip(1)).All(p => p.First != p.Second), "with nothing in range it still moves to the nearest miss");
             var lone = King(1, 3, new ModeSpot[] { new(4, 0, 4) });
             TestRunner.Assert(lone.SpotOf(3) == new ModeSpot(4, 0, 4), "a single spot keeps the zone in place");
-            var hud = new KingHud().Present(new ModeHudInput(1, ModePhase.Round, 100, new Dictionary<int, int> { [1] = 0 }, [], true, rules, KingAt(88)));
+            var hud = new KingHud().Present(new ModeHudInput(1, ModePhase.Round, 100, new Dictionary<int, int> { [1] = 0 }, [], true, View: rules.State(KingAt(88))));
             TestRunner.Assert(hud.Objectives.Count == 2 && hud.Banner == "THE ZONE MOVES IN 2", $"warning HUD: {hud.Banner}, {hud.Objectives.Count}");
+        });
+
+        runner.Run("prototypes/king state carries the zone, its clocks and the mints in round time", () =>
+        {
+            var rules = King(3, start: 100);
+            TestRunner.Assert(rules.State(KingAt(100)) == null, "no state before the first sample places the zone");
+            KingSample(rules, 100, InZone(rules, 1));
+            var held = rules.State(KingAt(101.5))!;
+            TestRunner.Assert(held is { Zone: 0, Holder: 1, Contested: false, NextMint: 2, MintSeconds: 2, MoveAt: 45, WarningSeconds: 3, Radius: 6, Elapsed: 1.5 } &&
+                held.Spot == rules.SpotOf(0) && held.Next == rules.SpotOf(1) && held.Occupants.SequenceEqual(new[] { 1 }) &&
+                System.Math.Abs(held.MintProgress - 0.75) < 1e-9 && !held.Warning && held.UntilMove == 43.5, $"holding: {held}");
+            KingSample(rules, 102, InZone(rules, 1));
+            var minted = rules.State(KingAt(102))!;
+            TestRunner.Assert(minted.NextMint == 4 && minted.MintedBy(1) == 1 && minted.MintProgress == 0 && !minted.Matches(held),
+                "a mint changes what peers must be told");
+            TestRunner.Assert(minted.At(3).Matches(minted) && minted.At(3).MintProgress == 0.5, "the clocks advance without a new state");
+            KingSample(rules, 103, InZone(rules, 3, 2), InZone(rules, 1));
+            var contested = rules.State(KingAt(103))!;
+            TestRunner.Assert(contested is { Holder: 0, Contested: true, NextMint: 0 } && contested.Occupants.SequenceEqual(new[] { 1, 3 }) &&
+                contested.MintProgress == 0, "a contest lists its occupants in actor order and mints nothing");
+            rules.Handle(new ActorLeft(3), KingAt(103.5));
+            var left = rules.State(KingAt(103.5))!;
+            TestRunner.Assert(left is { Holder: 0, Contested: false, Occupants.Count: 0 } && left.MintedBy(1) == 1,
+                "a departing occupant releases the zone until the next sample decides it");
+            TestRunner.Assert(KingSample(rules, 104, InZone(rules, 1)).Count == 0 && rules.State(KingAt(104))!.Holder == 1, "the one left inside holds");
+            var warned = rules.State(KingAt(142))!;
+            TestRunner.Assert(warned.Warning && warned.UntilMove == 3 && !rules.State(KingAt(141.9))!.Warning, "the warning opens its tuner before the move");
+            var hud = new KingHud().Present(new ModeHudInput(1, ModePhase.Round, 70, new Dictionary<int, int> { [1] = 1 }, [], true,
+                View: rules.State(KingAt(105))));
+            TestRunner.Assert(hud.Banner == "HOLDING THE ZONE" && hud.Bar is { Caption: "NEXT TANK" } bar && System.Math.Abs(bar.Value - 0.5f) < 1e-6 &&
+                hud.Counters[1] is { Value: 1, Caption: "MINTED IN THE ZONE" }, "the holder sees its mint progress and minted count");
+            var rival = new KingHud().Present(new ModeHudInput(2, ModePhase.Round, 70, new Dictionary<int, int>(), [], true, View: rules.State(KingAt(105))));
+            TestRunner.Assert(rival.Bar == null && rival.Banner == "" && rival.Objectives.Count == 1, "others see only the zone");
+            var waiting = new KingHud().Present(new ModeHudInput(2, ModePhase.Countdown, 0, new Dictionary<int, int>(), [], true));
+            TestRunner.Assert(waiting.Counters.Count == 2 && waiting.Objectives.Count == 0 && waiting.Timer == null, "before any state the HUD shows the counters");
         });
     }
 }

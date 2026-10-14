@@ -190,4 +190,11 @@ public static class UiStyle
         button.AddThemeColorOverride("font_disabled_color", new Color(Ink, 0.35f));
         return button;
     }
+
+    /// <summary>Minutes and seconds, as the lobby and the Lab show a match or round length ("2:30").</summary>
+    public static string FormatTime(float seconds)
+    {
+        var whole = Mathf.RoundToInt(seconds);
+        return $"{whole / 60}:{whole % 60:00}";
+    }
 }

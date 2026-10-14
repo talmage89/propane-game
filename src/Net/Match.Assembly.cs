@@ -128,6 +128,7 @@ public partial class Match
         matchHud = new MatchHud { World = World, Name = "MatchHud" };
         Session.AddView(this, matchHud);
         matchHud.Show(PresentHud(tankGroups, false));
+        BuildKingZone();
         results = new ResultsScreen { Name = "Results" };
         Session.AddView(this, results);
         menu = new MatchMenu { Name = "Menu" };

@@ -54,7 +54,9 @@ public sealed class RingOutHud : IModeHudPresenter
 
 /// <summary>
 /// King of the Cul-de-sac's HUD: the bank as in Tank Bank, the tanks this player minted, the match clock, an arrow
-/// to the zone (and to the next one while it warns), and a banner for holding, contesting or the coming move.
+/// to the zone (and to the next one while it warns), a banner for holding, contesting or the coming move, and the
+/// holder's progress toward its next tank. It reads the zone from <see cref="KingState"/>, which the Lab produces
+/// from its rules and a match decodes from the server's snapshot.
 /// </summary>
 public sealed class KingHud : IModeHudPresenter
 {
@@ -62,37 +64,38 @@ public sealed class KingHud : IModeHudPresenter
 
     public ModeHud Present(ModeHudInput input)
     {
-        if (input.Rules is not KingRules rules) return ModeHud.Empty;
         var me = input.LocalActor;
         var bank = input.Scores.GetValueOrDefault(me);
         var live = input.Phase is ModePhase.Round;
-        var elapsed = rules.Elapsed(input.Clock);
+        var state = input.View as KingState;
         var objectives = new List<Vector3>();
         var banner = "";
-        if (live && rules.Zone >= 0)
+        HudBar? bar = null;
+        if (live && state != null)
         {
-            objectives.Add(Point(rules.SpotOf(rules.Zone)));
-            if (rules.Warning(elapsed))
+            objectives.Add(Point(state.Spot));
+            if (state.Warning)
             {
-                objectives.Add(Point(rules.SpotOf(rules.Zone + 1)));
-                banner = $"THE ZONE MOVES IN {Math.Ceiling(rules.UntilMove(elapsed)):0}";
+                objectives.Add(Point(state.Next));
+                banner = $"THE ZONE MOVES IN {Math.Ceiling(state.UntilMove):0}";
             }
-            else if (rules.Holder == me)
+            else if (state.Holder == me)
             {
                 banner = "HOLDING THE ZONE";
             }
-            else if (rules.Contested && rules.Occupants.Contains(me))
+            else if (state.Contested && state.Occupants.Contains(me))
             {
                 banner = "CONTESTED";
             }
+            if (state.Holder == me) bar = new HudBar((float)state.MintProgress, 1, "NEXT TANK");
         }
-        var minted = rules.MintedBy(me);
+        var minted = state?.MintedBy(me) ?? 0;
         return new ModeHud(
             new[] { new HudCounter(bank, bank == 1 ? "TANK BANKED" : "TANKS BANKED"), new HudCounter(minted, "MINTED IN THE ZONE") },
             Columns,
             input.Phase is ModePhase.Round or ModePhase.RoundEnd or ModePhase.MatchEnd or ModePhase.Results
                 ? new HudTimer(input.TimeLeft, RoundTimer.Countdown) : null,
-            objectives, live, banner);
+            objectives, live, banner, Bar: bar);
     }
 
     private static Vector3 Point(ModeSpot spot) => new((float)spot.X, (float)spot.Y + 1f, (float)spot.Z);

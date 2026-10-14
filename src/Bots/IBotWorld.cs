@@ -33,12 +33,17 @@ public interface IBotWorld
     /// <summary>The tanks in play this tick.</summary>
     IReadOnlyList<PropaneTank> LiveTanks => Services.Tanks;
     /// <summary>
-    /// The mode's rules as this peer runs them, for policies that read mode-specific state (a boundary, a zone), or
-    /// null where the peer does not run them. Only the Lab's prototype runner supplies them so far.
+    /// The mode's rules as this peer runs them, for policies that read mode-specific state (a boundary), or null
+    /// where the peer does not run them. Only the Lab's prototype runner supplies them.
     /// </summary>
     IModeRules? Rules => null;
     /// <summary>The mode clock to read <see cref="Rules"/> with.</summary>
     ModeClock Clock => default;
+    /// <summary>
+    /// The mode's own state as this peer sees it now (King's zone), from the rules in the Lab or the mode's snapshot
+    /// in a match; null when the mode has none or none has arrived yet.
+    /// </summary>
+    IModeView? View => null;
 }
 
 /// <summary>

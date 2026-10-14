@@ -10,7 +10,8 @@ namespace Propane.Bots;
 /// King of the Cul-de-sac's goal policy, kept simple for the prototype: get into the zone and hold it; shove anyone
 /// else inside out with melee, and shoot intruders it can see (a hit spills their bank); with nobody to fight, shoot
 /// tanks in sight from a safe distance to bank them; head for the next spot
-/// when the zone is about to move and it could not otherwise make it in time. It reads the zone from the rules.
+/// when the zone is about to move and it could not otherwise make it in time. It reads the zone from the mode's
+/// <see cref="KingState"/>: the Lab's rules, or the server's snapshot in a match.
 /// Sight lines are asked a few times a second, not every tick.
 /// </summary>
 public sealed class KingBot : IBotGoalPolicy
@@ -55,7 +56,7 @@ public sealed class KingBot : IBotGoalPolicy
     {
         motor.Begin(dt);
         var player = world.Player;
-        if (!world.IsPlaying || world.Rules is not KingRules rules || player.IsRagdolled || rules.Zone < 0)
+        if (!world.IsPlaying || world.View is not KingState state || player.IsRagdolled)
         {
             motor.Reset();
             status.Set(player.IsRagdolled ? "down" : "waiting");
@@ -63,12 +64,11 @@ public sealed class KingBot : IBotGoalPolicy
         }
         var tuning = world.World.Tuning;
         var here = player.GlobalPosition;
-        var elapsed = rules.Elapsed(world.Clock);
-        var zone = rules.Zone;
-        var spot = ToVector(rules.SpotOf(zone));
+        var zone = state.Zone;
+        var spot = ToVector(state.Spot);
         // Leave early for the next spot only when the walk would otherwise outlast the warning.
-        var next = ToVector(rules.SpotOf(zone + 1));
-        if (rules.Warning(elapsed) && rules.UntilMove(elapsed) < BotMotor.Flat(next - here).Length() / tuning.SprintSpeed + 0.5)
+        var next = ToVector(state.Next);
+        if (state.Warning && state.UntilMove < BotMotor.Flat(next - here).Length() / tuning.SprintSpeed + 0.5)
         {
             zone++;
             spot = next;
@@ -77,16 +77,16 @@ public sealed class KingBot : IBotGoalPolicy
         {
             // A spot sits on its pile, which nobody can stand in: hold the zone from beside it.
             standZone = zone;
-            PickStand(rules, world, spot);
+            PickStand(state, world, spot);
         }
         standCheck -= dt;
         if (standCheck <= 0)
         {
             // Piles move and new ones materialize: a stand point a tank has rolled onto is no longer reachable.
             standCheck = 0.5f;
-            if (!Clear(world, spot + standOffset)) PickStand(rules, world, spot);
+            if (!Clear(world, spot + standOffset)) PickStand(state, world, spot);
         }
-        var radius = (float)rules.Radius;
+        var radius = (float)state.Radius;
 
         if (BotMotor.Danger(world, player) is { } danger)
         {
@@ -166,11 +166,11 @@ public sealed class KingBot : IBotGoalPolicy
                 fightTime = 0;
                 if (watch != null) motor.Face(player, BotMotor.AimPoint(watch), dt);
                 if (BotMotor.Flat(spot + standOffset - here).Length() > 1f) motor.MoveTo(spot + standOffset);
-                status.Set(rules.Holder == player.ActorId ? "holding the zone" : "in the zone");
+                status.Set(state.Holder == player.ActorId ? "holding the zone" : "in the zone");
             }
         }
         motor.Navigate(world, dt);
-        if (motor.Failed) PickStand(rules, world, spot);
+        if (motor.Failed) PickStand(state, world, spot);
     }
 
     private static bool Intruding(PlayerCharacter? body, Vector3 spot, float radius) =>
@@ -286,12 +286,12 @@ public sealed class KingBot : IBotGoalPolicy
     }
 
     /// <summary>A point inside the zone, beside its pile and clear of every tank, to hold it from.</summary>
-    private void PickStand(KingRules rules, IBotWorld world, Vector3 spot)
+    private void PickStand(KingState state, IBotWorld world, Vector3 spot)
     {
         for (var attempt = 0; attempt < 12; attempt++)
         {
             var angle = rng.RandfRange(0, Mathf.Tau);
-            standOffset = new Vector3(Mathf.Cos(angle), 0, Mathf.Sin(angle)) * (float)rules.Radius * rng.RandfRange(0.4f, 0.8f);
+            standOffset = new Vector3(Mathf.Cos(angle), 0, Mathf.Sin(angle)) * (float)state.Radius * rng.RandfRange(0.4f, 0.8f);
             if (Clear(world, spot + standOffset)) return;
         }
     }

@@ -33,6 +33,7 @@ public partial class Match
         public IReadOnlyList<PlayerCharacter> RemoteBodies => Others;
         public IReadOnlyList<AmmoPickup> Pickups => match.pickups;
         public BotServices Services => services;
+        public Modes.IModeView? View => match.ModeView;
     }
 
     internal Dictionary<uint, PropaneTank>.ValueCollection BotTanks => tanks.Values;
