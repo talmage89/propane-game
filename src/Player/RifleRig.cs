@@ -19,6 +19,7 @@ public partial class RifleRig : SkeletonModifier3D
     private int[] spine = null!;
     private int neck, head;
     private readonly int[,] fingers = new int[10, 3];
+    private readonly Quaternion[,] fingerRest = new Quaternion[10, 3];
     private int upperR, lowerR, handR;
     private int upperL, lowerL, handL;
     private bool resolved;
@@ -424,7 +425,7 @@ public partial class RifleRig : SkeletonModifier3D
                     angle = Mathf.Lerp(angle, trigger[j], Mathf.Clamp(Recoil, 0, 1));
                 }
                 var bone = fingers[f, j];
-                var pose = skeleton.GetBoneRest(bone).Basis.GetRotationQuaternion() * new Quaternion(Vector3.Right, Mathf.DegToRad(angle));
+                var pose = fingerRest[f, j] * new Quaternion(Vector3.Right, Mathf.DegToRad(angle));
                 skeleton.SetBonePoseRotation(bone, skeleton.GetBonePoseRotation(bone).Normalized().Slerp(pose, weight));
             }
         }
@@ -472,7 +473,12 @@ public partial class RifleRig : SkeletonModifier3D
             for (var f = 0; f < names.Length; f++)
             {
                 for (var j = 0; j < 3; j++)
-                    fingers[side * 5 + f, j] = skeleton.FindBone($"{names[f]}_{j + 1:00}_{(side == 0 ? "l" : "r")}");
+                {
+                    var digit = side * 5 + f;
+                    var bone = fingers[digit, j] = skeleton.FindBone($"{names[f]}_{j + 1:00}_{(side == 0 ? "l" : "r")}");
+                    // Authored clips modify poses, never this imported skeleton's immutable rest rotations.
+                    fingerRest[digit, j] = skeleton.GetBoneRest(bone).Basis.GetRotationQuaternion();
+                }
             }
         }
         upperR = skeleton.FindBone("upperarm_r");

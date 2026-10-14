@@ -79,7 +79,7 @@ heading determines whether the ordinary ragdoll fixture crosses that wrap.
 
 ## Actor detail
 
-Actor presentation caches rifle clip names and lengths at assembly, and reuses camera-shape and aim-ray
+Actor presentation caches rifle clip names/lengths and immutable finger rest rotations, and reuses camera-shape and aim-ray
 query parameters. Query geometry, exclusions and cadence are unchanged. Native query result arrays/dictionaries
 still allocate; this does not claim an allocation-free physics path.
 
