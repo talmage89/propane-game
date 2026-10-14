@@ -10,7 +10,7 @@ around you. There is no health and no score.
 Multiplayer defaults to **Tank Bank**, a free-for-all with creator-selected capacity (2–16 players, default 5): every tank you blow up is banked as a point, and getting
 shot (or thrown by a blast) spills your tanks back out for anyone to take. Most banked when the clock runs out wins.
 The lobby also offers **King of the Cul-de-sac**: hold a moving zone alone to mint banked tanks, with a
-creator-selected mint pace.
+creator-selected mint pace. Both modes offer **Tank supply**, 1×–8× in integer steps (default 1×).
 
 [design/VISION.md](design/VISION.md) is what the game is and must stay. [docs/multiplayer.md](docs/multiplayer.md) gives
 tank bank's full rules and how multiplayer is built.
@@ -75,7 +75,7 @@ controller-accessible controls menu. Unsaved tuning changes stay in that Lab ses
 
 Choose Multiplayer, type your name and the server's address (`host` or `host:port`, UDP port 24680 by default), then
 create a lobby or join one. Everyone picks a name and any color in the lobby (duplicates are allowed), and whoever
-created it sets capacity, mode, length and King mint pace and starts. **Host on this computer** runs a server inside your game instead; the
+created it sets capacity, mode, length, tank supply and King mint pace and starts. Tank supply scales the suburb's tanks and pile sizes and locks at match start; everyone sees the choice. **Host on this computer** runs a server inside your game instead; the
 lobby then shows the addresses friends can use. Versions with the same major and minor number play together
 (0.2.0 with 0.2.5); the server turns away others and says which version it needs.
 
@@ -185,7 +185,10 @@ and player bumps reset the wait or interrupt a gliding tank. Cramped groups wait
 Rebuilt piles use `PileBuilder`'s upright cluster: every count fits, and removing one tank leaves no suspended tier.
 
 **Tank count multiplier** (World, 1–8) scales suburb tank supply and pile sizes; rebuild the suburb to apply it.
-It defaults to 1. The Lab's Huge stack offers 24–512 tanks, starting at 40.
+It defaults to 1. A match uses the lobby's **Tank supply** instead of anyone's saved multiplier; the lobby previews
+the current roster's count at default tuning (custom debug tuning can change that count). Lab suburb setups
+offer the same 1×–8× choice and remember it in their unsaved draft. Void fixtures and Dissolve Run keep their own counts.
+The Lab's Huge stack offers 24–512 tanks, starting at 40.
 
 Match settings use the actual player count. Before the multiplier, tank supply is `MpTankCount + MpTanksPerPlayer × players`, ammo cans are
 `PickupCount + PickupsPerPlayer × players`, and map width is `MpMapSizeBase + MpMapSizePerPlayer × players`. Pile
@@ -400,6 +403,7 @@ $GODOT --fixed-fps 60 --resolution 1280x720 res://scenes/dev/menu_test.tscn -- -
 # Multiplayer: a local server and bot players under simulated lag and loss; asserts tank agreement and scores.
 # Logs go to build/net (-o picks another directory).
 GODOT=$GODOT tools/dev/net_bots.sh -n 3 -l 60 -- --net-lag=120 --net-jitter=30 --net-loss=3
+# Add --tank-supply=4 to the bot arguments for 4× lobby supply in either mode.
 # Logged engine/protocol errors also fail the run. make test-full includes a 90-second faulted rifle soak.
 # -t clean uses tighter tank limits; -k skips post-run checks.
 # Rerun a comparison: tools/dev/compare_tanks.py [--profile clean] build/net/bot*.log

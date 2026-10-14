@@ -26,7 +26,7 @@ public partial class MenuNavigation : Node
     public required CanvasLayer Screen { get; init; }
     public required Control Root { get; init; }
     public Action? Back { get; init; }
-    /// <summary>Values that left/right change while focused, by focus key (the lobby's match length and mint pace).</summary>
+    /// <summary>Values that left/right change while focused, by focus key (the lobby's match length, tank supply and mint pace).</summary>
     public IReadOnlyDictionary<string, Action<int>> Adjusters { get; init; } = new Dictionary<string, Action<int>>();
 
     /// <summary>Shared across front end and play, including while the tree is paused. Ignore idle stick drift.</summary>

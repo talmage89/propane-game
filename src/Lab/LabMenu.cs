@@ -47,6 +47,7 @@ public partial class LabMenu : CanvasLayer
         using var previous = draft;
         draft = Template.Copy();
         draft.CopyLocalTunersFrom(previous);
+        draft.TankCountMultiplier = previous.TankCountMultiplier;
         Visible = true;
         selected = null;
         Rebuild();
@@ -107,6 +108,18 @@ public partial class LabMenu : CanvasLayer
                 row.AddChild(UiStyle.Text($"{draft.LabStackCount} tanks", 22));
                 Button("+", () => { draft.LabStackCount = Mathf.Min(Tuning.LabStackMaximum, draft.LabStackCount + Tuning.LabStackStep); Rebuild("larger"); }, "larger", draft.LabStackCount >= Tuning.LabStackMaximum, row);
                 layout.AddChild(UiStyle.Text($"{Tuning.LabStackMinimum}–{Tuning.LabStackMaximum} tanks · bigger stacks cost more during a blast.", 16, UiStyle.SoftInk, HorizontalAlignment.Center));
+            }
+            if (environment == LabEnvironment.Suburb && scenario.Definition != Modes.ModeRegistry.DissolveRun)
+            {
+                var row = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.Center };
+                layout.AddChild(row);
+                row.AddChild(UiStyle.Text("Tank supply", 22));
+                Button("−", () => { draft.TankCountMultiplier = Math.Max(Tuning.TankSupplyMinimum, draft.TankCountMultiplier - 1); Rebuild("tank_less"); },
+                    "tank_less", draft.TankCountMultiplier <= Tuning.TankSupplyMinimum, row);
+                row.AddChild(UiStyle.Text($"{draft.TankCountMultiplier}×", 22));
+                Button("+", () => { draft.TankCountMultiplier = Math.Min(Tuning.TankSupplyMaximum, draft.TankCountMultiplier + 1); Rebuild("tank_more"); },
+                    "tank_more", draft.TankCountMultiplier >= Tuning.TankSupplyMaximum, row);
+                layout.AddChild(UiStyle.Text("Scales suburb tanks and pile sizes · F1 tunes it during play too.", 16, UiStyle.SoftInk, HorizontalAlignment.Center));
             }
             if (scenario.Id == "king")
             {
