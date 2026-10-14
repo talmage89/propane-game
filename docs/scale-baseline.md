@@ -3,6 +3,8 @@
 Baseline for dev `91c97bb`, before bot/tank optimization, with measurement-only commits through `c167cd6`.
 The full reports (all 40 cases, three repetitions per case, stage summaries and load readings) are not committed:
 `make bench` writes them to `build/bench/`, and `tools/dev/bench_compare.py` compares two of them.
+[The actor follow-up](scale-actors.md) adds per-system CPU and rendering-feature attribution, with a new
+paired baseline after tank scaling; its mixed frame-rate results and remaining brain cost are recorded explicitly.
 
 Measured 2026-10-14T04:42:41.967366+00:00 through 2026-10-14T06:26:14.385297+00:00 (last run start), on Intel(R) Core(TM) i5-10400F CPU @ 2.90GHz (12 logical CPUs),
 NVIDIA GeForce GTX 1660, Godot 4.7.2-stable (arch_linux), .NET 10.0.12, Linux.

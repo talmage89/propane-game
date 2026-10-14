@@ -7,7 +7,8 @@ the rest of Propane. Huge stack and Range use void; the banking duel and Free tu
 - **Huge stack** builds a square upright pyramid using the generator's `PileBuilder`. Choose its count before
   entering, or change **Lab stack count** in tuning and reset. First shots puncture; second shots and blasts use
   the ordinary chain rules. The stack starts intact, so the first blast punctures its intact neighbors.
-  The shipped range is 24–40 tanks, capped by crowded vent rendering on the measured hardware, not body capacity.
+  The shipped range is 24–512 tanks, starting at 40. Larger stacks are scale trials; persistent vents and chains
+  cost more than an intact sleeping stack.
 - **Range** alternates single tanks and small upright piles at marked distances from the orange firing line; each
   distance label grows with its distance, so the far lanes read from the line.
   Move along the line to line up with a lane; practice shots, punctures, melee and blast throws. Reset respawns
@@ -29,6 +30,13 @@ the rest of Propane. Huge stack and Range use void; the banking duel and Free tu
   toggles work with the mouse, keyboard or controller. **Defaults** restores code defaults; **Save** explicitly
   writes gameplay dials to the saved template. Unsaved edits never touch that template.
 
+Suburb setup pages (the banking duel, Free tuning, King and Short Fuse) offer **Tank supply** in every integer
+step from 1× to 8×. It scales both the suburb's starting tanks and pile sizes through `TankCountMultiplier`.
+Choose −/+ with the mouse, or focus either button and use Enter / A. The choice stays in the unsaved Lab draft
+across scenario changes and returning from play; launching copies it into the session without editing saved
+tuning. F1 still changes it offline, with a reset required to rebuild. The control appears only for a generated
+suburb: void fixtures and Dissolve Run's segment supply use their own counts.
+
 ## Prototype modes
 
 Below the starters, **Prototype modes · rules on trial** lists modes the owner is trying before setting their rules.
@@ -47,7 +55,7 @@ interior road starts too. This changes only local actor placement, not the gener
   tank. Every 45 s the zone moves to another pile 15–25 m away after a 3 s warning (a pale beam marks the next spot)
   and a fresh pile materializes on the nearest clear, flat ground beside it. Banking, hits and throws spill as in Tank
   Bank. The void lays out a ring of eight pile spots around one in the middle; a suburb uses the plan's own piles.
-  Most banked when the clock runs out wins. The King setup page sets the two things a multiplayer lobby sets for King,
+  Most banked when the clock runs out wins. The King setup page also sets the pace and length a multiplayer lobby sets for King,
   on the lobby's steps: the mint pace (0.5 to 10 s) and the round length (3:00 in the Lab; the lobby keeps its existing 2:30 default).
   King is also playable online with humans and lobby bots; its HUD and zone visuals use the same state view.
 - **Short Fuse** (suburb only). Last one standing, with health: 100 each, bullets take 7, a blast 90 at its center
@@ -151,7 +159,13 @@ and the whole tree's nodes to stay bounded (the last third of the run holding no
 `--only=soak-void,dials` runs only the named sessions (`lifetime`, `rules`, `aimstall`, `duel`, `ringout`, `king`,
 `shortfuse`, `shortfuse-combo`, `dissolve`, and with `--full` `dials`, `soak-void`, `soak-suburb`, `ringout-full`, `king-full`,
 `king-suburb`, `shortfuse-full`, `dissolve-full`, `dissolve-pace`); `make test-full` splits
-`--full` into four such jobs. A prototype round alone: `lab_test.tscn -- --scenario=prototype --mode=ringout|king
+`--full` into 25 jobs: separate sessions, individual Ring Out/Short Fuse/Dissolve seeds, four lifetime shards and eight dial shards.
+King keeps its three rounds together because its mint assertion spans the rounds. `--dial-shard=1 --dial-shards=8`
+selects one eighth of the actual dial/scenario/environment cases; `--list-dials` lists those cases without building
+worlds. Lifetime has the same listing and shard arguments (`--list-lifetime`, `--lifetime-shard`, `--lifetime-shards`); each selected pair keeps its two warm-ups and all ten checked cycles. `make test-full-lab-coverage` proves that the shards cover every full session, setting and dial fixture
+exactly once. The fast checker retains its 600-second session timeout. Full sessions have 1,800 seconds, while dial
+sweeps have `max(600, 2400 / shards)` seconds; a timeout kills the engine and any timing wrapper together.
+A prototype round alone: `lab_test.tscn -- --scenario=prototype --mode=ringout|king
 [--environment=suburb] [--seeds=3] [--first-seed=1] [--bots=2] [--quick]`; `--shots=4,12.5` adds `--capture-dir`
 screenshots at those round times. Short Fuse matches alone: `lab_test.tscn -- --scenario=shortfuse [--seeds=2]
 [--first-seed=1] [--bots=2] [--quick] [--trace]`; `--capture-events` adds `--capture-dir` screenshots of the first

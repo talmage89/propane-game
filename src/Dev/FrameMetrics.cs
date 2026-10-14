@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using Godot;
 using Propane.Fx;
+using Propane.Player;
 
 namespace Propane.Dev;
 
@@ -22,20 +23,25 @@ public partial class FrameMetrics : Node
     private ulong physicsFrames;
     private StreamWriter? output;
     private ulong last;
+    private Rid viewport;
     private int frames;
     private static readonly EffectProfile.System[] systems = Enum.GetValues<EffectProfile.System>()
         .Where(s => s != EffectProfile.System.Count).ToArray();
 
-    private readonly double[] values = new double[16 + systems.Length];
+    private static readonly ActorProfile.System[] actorSystems = Enum.GetValues<ActorProfile.System>()
+        .Where(s => s != ActorProfile.System.Count).ToArray();
+    private readonly double[] values = new double[16 + systems.Length + actorSystems.Length * 3 + 6];
 
     public override void _Ready()
     {
         var directory = DevArgs.Get("frame-metrics")!;
         Directory.CreateDirectory(directory);
         output = new StreamWriter(Path.Combine(directory, $"frames-{OS.GetProcessId()}.csv"));
-        output.WriteLine("frame,wall,gpu,process,physics," + string.Join(",", systems) + ",time,blast_count,explosion_count,physics_steps,physics_tail,stage,process_callbacks,physics_callbacks,brain_calls,navigation_sweep_calls,navigation_support_calls");
-        RenderingServer.ViewportSetMeasureRenderTime(GetViewport().GetViewportRid(), true);
+        output.WriteLine("frame,wall,gpu,process,physics," + string.Join(",", systems) + ",time,blast_count,explosion_count,physics_steps,physics_tail,stage,process_callbacks,physics_callbacks,brain_calls,navigation_sweep_calls,navigation_support_calls," + string.Join(",", actorSystems.SelectMany(s => new[] { "Actor" + s, "Actor" + s + "Bytes", "Actor" + s + "Calls" })) + ",render_cpu,render_setup_cpu,visible_draw_calls,shadow_draw_calls,visible_primitives,shadow_primitives");
+        viewport = GetViewport().GetViewportRid();
+        RenderingServer.ViewportSetMeasureRenderTime(viewport, true);
         EffectProfile.Enabled = true;
+        ActorProfile.Enabled = true;
         last = Time.GetTicksUsec();
         physicsFrames = Engine.GetPhysicsFrames();
         if (MeasurePhysicsTail)
@@ -51,7 +57,7 @@ public partial class FrameMetrics : Node
         var timestamp = (double)System.Diagnostics.Stopwatch.GetTimestamp() / System.Diagnostics.Stopwatch.Frequency;
         values[0] = frames;
         values[1] = (now - last) / 1000d;
-        values[2] = RenderingServer.ViewportGetMeasuredRenderTimeGpu(GetViewport().GetViewportRid());
+        values[2] = RenderingServer.ViewportGetMeasuredRenderTimeGpu(viewport);
         values[3] = Performance.GetMonitor(Performance.Monitor.TimeProcess) * 1000;
         values[4] = Performance.GetMonitor(Performance.Monitor.TimePhysicsProcess) * 1000;
         for (var i = 0; i < systems.Length; i++) values[5 + i] = EffectProfile.Drain(systems[i]);
@@ -63,9 +69,23 @@ public partial class FrameMetrics : Node
         values[10 + systems.Length] = Stage;
         values[11 + systems.Length] = processCallbacksStart == 0 ? 0 : (now - processCallbacksStart) / 1000d;
         values[12 + systems.Length] = physicsCallbacks;
-        values[^3] = EffectProfile.DrainCalls(EffectProfile.System.BotBrain);
-        values[^2] = EffectProfile.DrainCalls(EffectProfile.System.NavigationSweep);
-        values[^1] = EffectProfile.DrainCalls(EffectProfile.System.NavigationSupport);
+        values[13 + systems.Length] = EffectProfile.DrainCalls(EffectProfile.System.BotBrain);
+        values[14 + systems.Length] = EffectProfile.DrainCalls(EffectProfile.System.NavigationSweep);
+        values[15 + systems.Length] = EffectProfile.DrainCalls(EffectProfile.System.NavigationSupport);
+        for (var i = 0; i < actorSystems.Length; i++)
+        {
+            var sample = ActorProfile.Drain(actorSystems[i]);
+            var index = 16 + systems.Length + i * 3;
+            values[index] = sample.Milliseconds;
+            values[index + 1] = sample.Bytes;
+            values[index + 2] = sample.Calls;
+        }
+        values[^6] = RenderingServer.ViewportGetMeasuredRenderTimeCpu(viewport);
+        values[^5] = RenderingServer.GetFrameSetupTimeCpu();
+        values[^4] = RenderingServer.ViewportGetRenderInfo(viewport, RenderingServer.ViewportRenderInfoType.Visible, RenderingServer.ViewportRenderInfo.DrawCallsInFrame);
+        values[^3] = RenderingServer.ViewportGetRenderInfo(viewport, RenderingServer.ViewportRenderInfoType.Shadow, RenderingServer.ViewportRenderInfo.DrawCallsInFrame);
+        values[^2] = RenderingServer.ViewportGetRenderInfo(viewport, RenderingServer.ViewportRenderInfoType.Visible, RenderingServer.ViewportRenderInfo.PrimitivesInFrame);
+        values[^1] = RenderingServer.ViewportGetRenderInfo(viewport, RenderingServer.ViewportRenderInfoType.Shadow, RenderingServer.ViewportRenderInfo.PrimitivesInFrame);
         physicsCallbacks = 0;
         physicsTail = 0;
         physicsFrames = Engine.GetPhysicsFrames();
@@ -125,5 +145,6 @@ public partial class FrameMetrics : Node
         }
         output?.Dispose();
         EffectProfile.Enabled = false;
+        ActorProfile.Enabled = false;
     }
 }

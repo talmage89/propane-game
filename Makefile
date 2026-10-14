@@ -87,6 +87,8 @@ test-behavior: build ## Run isolated physics, navigation, menu, grip and feet pr
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/animation_review.tscn -- --cases=walk_000,jog_000,creep_000,creep_180,creep_090,sprint,aim_idle --metrics=$(CURDIR)/build/animation-review-gate/metrics.csv
 	python3 -B tools/dev/animation_metrics.py build/animation-review-gate/metrics.csv --output build/animation-review-gate/results.json
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/world_services_tests.tscn
+	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/actor_detail_tests.tscn
+	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/ragdoll_pose_tests.tscn
 	"$(GODOT)" --headless --path . --fixed-fps 60 res://scenes/dev/blast_query_tests.tscn
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/upright_pile_tests.tscn
 	"$(GODOT)" --headless --path . --fixed-fps 60 res://scenes/dev/gather_range.tscn
@@ -134,20 +136,47 @@ GENERATOR_2 := --first-seed=51 --seeds=50 --first-large-seed=26 --large-seeds=25
 GENERATOR_3 := --first-seed=101 --seeds=50 --first-large-seed=51 --large-seeds=25 --first-formation-seed=5 --formation-seeds=1 --first-segment-seed=51 --segment-seeds=25
 GENERATOR_4 := --first-seed=151 --seeds=50 --first-large-seed=76 --large-seeds=25 --first-formation-seed=6 --formation-seeds=1 --first-segment-seed=76 --segment-seeds=25
 GENERATOR_SHARDS := test-full-generator-1 test-full-generator-2 test-full-generator-3 test-full-generator-4
-# The Lab sessions of check_lab.py --full, split by cost.
-LAB_1 := soak-void,shortfuse-full,dissolve-pace
-LAB_2 := soak-suburb
-LAB_3 := lifetime,rules,aimstall,duel,ringout,king,shortfuse,shortfuse-combo,dissolve,dials
-LAB_4 := ringout-full,king-full,king-suburb,dissolve-full
-LAB_SHARDS := test-full-lab-1 test-full-lab-2 test-full-lab-3 test-full-lab-4
-# Longest first, so make -j starts the jobs that would otherwise finish last early. The Lab soaks are unseeded bot
-# matches whose cost varies several-fold between runs, so they start before the steadier generator shards.
-FULL := test-full-lab-1 test-full-lab-2 test-full-lab-4 $(GENERATOR_SHARDS) test-full-navigation test-full-lab-3 test-full-piles \
-	test-full-range test-full-menu test-full-generator-coverage
-.PHONY: $(FULL) test-full-bots
+# Independent full Lab sessions; keep King's cross-round mint assertion in one process.
+LAB_soak-void := --only=soak-void
+LAB_soak-suburb := --only=soak-suburb
+LAB_king := --only=king-full
+LAB_king-suburb := --only=king-suburb
+LAB_fast := --only=rules,aimstall,duel,ringout,king,shortfuse,shortfuse-combo,dissolve
+LAB_pace := --only=dissolve-pace
+LAB_ringout-11 := --only=ringout-full --first-seed=11 --seeds=1
+LAB_ringout-12 := --only=ringout-full --first-seed=12 --seeds=1
+LAB_ringout-13 := --only=ringout-full --first-seed=13 --seeds=1
+LAB_shortfuse-11 := --only=shortfuse-full --first-seed=11 --seeds=1
+LAB_shortfuse-12 := --only=shortfuse-full --first-seed=12 --seeds=1
+LAB_dissolve-11 := --only=dissolve-full --first-seed=11 --seeds=1
+LAB_dissolve-12 := --only=dissolve-full --first-seed=12 --seeds=1
+LIFETIME_PARTS := 1 2 3 4
+$(foreach part,$(LIFETIME_PARTS),$(eval LAB_lifetime-$(part) := --only=lifetime --lifetime-shard=$(part) --lifetime-shards=$(words $(LIFETIME_PARTS))))
+DIAL_PARTS := 1 2 3 4 5 6 7 8
+$(foreach part,$(DIAL_PARTS),$(eval LAB_dials-$(part) := --only=dials --dial-shard=$(part) --dial-shards=$(words $(DIAL_PARTS))))
+LAB_JOBS := king king-suburb fast soak-void soak-suburb shortfuse-11 shortfuse-12 dissolve-11 dissolve-12 pace \
+	ringout-11 ringout-12 ringout-13 $(addprefix lifetime-,$(LIFETIME_PARTS)) $(addprefix dials-,$(DIAL_PARTS))
+LAB_SHARDS := $(addprefix test-full-lab-,$(LAB_JOBS))
+# Start long and variable-cost jobs early; enough bounded jobs keep four slots busy through the tail. The gate
+# overlaps deep probes, and menu lifetime still waits for behavior before using its settings and server port.
+FULL := test-full-lab-king test-behavior test-full-lab-soak-void test-full-lab-soak-suburb $(GENERATOR_SHARDS) \
+	test-full-lab-fast test-full-navigation test-full-lab-king-suburb test-full-piles test-core \
+	$(filter-out test-full-lab-king test-full-lab-king-suburb test-full-lab-fast test-full-lab-soak-void test-full-lab-soak-suburb,$(LAB_SHARDS)) \
+	test-full-range test-full-menu test-full-generator-coverage test-full-lab-coverage
+.PHONY: $(FULL) $(LAB_SHARDS) test-full-bots
 
-test-full: test $(FULL) ## Run the gate plus deep sweeps (make -j4 test-full runs them side by side)
+test-full: $(FULL) test ## Run the gate plus deep sweeps (make -j4 test-full runs them side by side)
 	@$(MAKE) --no-print-directory test-full-bots
+
+# The deep probes use optimized Debug (DEBUG/TOOLS and the Debug Godot API), in a separate runtime project.
+# Normal test/check/CI, benchmark smoke and the real-time bot matches retain the normal Debug build.
+FULL_GODOT := $(CURDIR)/tools/dev/full_engine.py
+DEEP := $(filter-out test-core test-behavior,$(FULL))
+.PHONY: test-full-engine
+test-full-engine: build
+	$(LABEL) engine python3 -B tools/dev/full_engine.py --prepare --godot="$(GODOT)"
+
+$(DEEP): test-full-engine
 
 test-full-bots: build
 	$(LABEL) bots tools/dev/net_bots.sh -o "$(CURDIR)/build/rifle-soak-gate" -n 4 -w 0 -l 90 -s '--match-seed=25' -- --melee-start --net-seed=2 --net-lag=120 --net-jitter=30 --net-loss=3
@@ -155,28 +184,32 @@ test-full-bots: build
 	$(LABEL) bots tools/dev/net_bots.sh -n 2 -l 20 -o "$(CURDIR)/build/loading-readiness-gate" -- --scenario=body-stream --tank-check-ready-stall=Bot2
 
 $(LAB_SHARDS): test-full-lab-%: build
-	$(LABEL) lab-$* env GODOT="$(GODOT)" python3 -B tools/dev/check_lab.py --full --only=$(LAB_$*)
+	$(LABEL) lab-$* env GODOT="$(FULL_GODOT)" python3 -B tools/dev/check_lab.py --full $(LAB_$*)
+
+test-full-lab-coverage: build
+	$(LABEL) lab-coverage env GODOT="$(FULL_GODOT)" python3 -B tools/dev/check_lab_shards.py \
+		$(foreach job,$(LAB_JOBS),--shard='--full $(LAB_$(job))')
 
 test-full-piles: build
-	$(LABEL) piles "$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/upright_pile_tests.tscn -- --deep --awake
+	$(LABEL) piles "$(FULL_GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/upright_pile_tests.tscn -- --deep --awake
 
 test-full-menu: build test-behavior
-	$(LABEL) menu "$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/menu_test.tscn -- --scenario=lifetime --port=$(PORT)
+	$(LABEL) menu "$(FULL_GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/menu_test.tscn -- --scenario=lifetime --port=$(PORT)
 
 test-full-range: build
-	$(LABEL) range "$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/player_range.tscn -- --scenario=melee-reloads --assert-motion --assert-grip
-	$(LABEL) range "$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/player_range.tscn -- --scenario=recoil --stance=air --assert-grip --assert-motion
-	$(LABEL) range "$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/player_range.tscn -- --scenario=bot-recoil --magazines=10
+	$(LABEL) range "$(FULL_GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/player_range.tscn -- --scenario=melee-reloads --assert-motion --assert-grip
+	$(LABEL) range "$(FULL_GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/player_range.tscn -- --scenario=recoil --stance=air --assert-grip --assert-motion
+	$(LABEL) range "$(FULL_GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/player_range.tscn -- --scenario=bot-recoil --magazines=10
 
 $(GENERATOR_SHARDS): test-full-generator-%: build
-	$(LABEL) generator-$* "$(GODOT)" --headless --path . res://scenes/dev/generator_tests.tscn -- $(GENERATOR_$*)
+	$(LABEL) generator-$* "$(FULL_GODOT)" --headless --path . res://scenes/dev/generator_tests.tscn -- $(GENERATOR_$*)
 
 test-full-generator-coverage: build
-	$(LABEL) generator-coverage env GODOT="$(GODOT)" python3 -B tools/dev/check_generator_shards.py --full='$(GENERATOR_FULL)' \
+	$(LABEL) generator-coverage env GODOT="$(FULL_GODOT)" python3 -B tools/dev/check_generator_shards.py --full='$(GENERATOR_FULL)' \
 		--shard='$(GENERATOR_1)' --shard='$(GENERATOR_2)' --shard='$(GENERATOR_3)' --shard='$(GENERATOR_4)'
 
 test-full-navigation: build
-	$(LABEL) navigation "$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/bot_navigation_course.tscn -- --seeds=100
+	$(LABEL) navigation "$(FULL_GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/bot_navigation_course.tscn -- --seeds=100
 
 test-capacity: build ## Repeat the separate-client tested-capacity gate (three clean and three faulted matches)
 	tools/dev/capacity_acceptance.sh

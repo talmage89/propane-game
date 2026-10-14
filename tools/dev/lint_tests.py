@@ -30,6 +30,11 @@ printf '%s %s\\n' "${0##*/}" "$*" >> "$COMMAND_LOG"
 if [[ "${0##*/}" == dotnet && "$1" == format && "$PROBE_FAIL" == format ]]; then exit 1; fi
 if [[ "${0##*/}" == dotnet && "$*" == *-warnaserror* && "$PROBE_FAIL" == build ]]; then exit 1; fi
 if [[ "$PROBE_FAIL" != none && "$PROBE_FAIL" != format && "$PROBE_FAIL" != build && "$*" == *"$PROBE_FAIL"* ]]; then exit 1; fi
+if [[ "${0##*/}" == godot && " $* " == *" --server "* ]]; then
+  for argument in "$@"; do
+    if [[ "$argument" == --port=* ]]; then printf 'listening on UDP %s (test)\\n' "${argument#*=}"; fi
+  done
+fi
 if [[ "${0##*/}" == godot && "$*" == *--hash-world-plans=* ]]; then
   if [[ "$PROBE_FAIL" == world-missing ]]; then exit 0; fi
   count=0
@@ -62,7 +67,7 @@ fi
               "gather_range.tscn -- --scenario=appearance",
               "game_test.tscn -- --scenario=gather --tune.FixedSeed=23",
               "game_test.tscn -- --scenario=clear --quit=32 --tune.FixedSeed=23",
-              "world_services_tests.tscn", "body_correction_tests.tscn", "server_tuning_tests.tscn -- --server --tune.MaxPlayers=6",
+              "world_services_tests.tscn", "actor_detail_tests.tscn", "ragdoll_pose_tests.tscn", "body_correction_tests.tscn", "server_tuning_tests.tscn -- --server --tune.MaxPlayers=6",
               "transport_physics_tests.tscn -- --server",
               "server_seed_tests.tscn -- --server --match-seed=23",
               "session_actors_tests.tscn", "upright_pile_tests.tscn", "melee_range.tscn", "rifle_reach_tests.tscn",
@@ -121,23 +126,34 @@ fi
     generator = "generator_tests.tscn -- "
     bots = {"--melee-start --net-seed=2": 4, "--duel-blocked": 2, "--tank-check-ready-stall=Bot2": 2}
     deep = {**dict.fromkeys(bots, "bots"),
+            "full_engine.py --prepare": "engine",
             "upright_pile_tests.tscn -- --deep --awake": "piles",
             "menu_test.tscn -- --scenario=lifetime": "menu",
             "--scenario=melee-reloads --assert-motion --assert-grip": "range",
             "--scenario=recoil --stance=air --assert-grip --assert-motion": "range",
             "player_range.tscn -- --scenario=bot-recoil --magazines=10": "range",
             "bot_navigation_course.tscn -- --seeds=100": "navigation",
-            "check_lab.py --full --only=soak-void,shortfuse-full,dissolve-pace": "lab-1",
-            "check_lab.py --full --only=soak-suburb": "lab-2",
-            "check_lab.py --full --only=lifetime,rules,aimstall,duel,ringout,king,shortfuse,shortfuse-combo,dissolve,dials": "lab-3",
-            "check_lab.py --full --only=ringout-full,king-full,king-suburb,dissolve-full": "lab-4",
+            "check_lab.py --full --only=king-full": "lab-king",
+            "check_lab.py --full --only=king-suburb": "lab-king-suburb",
+            "check_lab.py --full --only=rules,aimstall,duel,ringout,king,shortfuse,shortfuse-combo,dissolve": "lab-fast",
+            "check_lab.py --full --only=soak-void": "lab-soak-void",
+            "check_lab.py --full --only=soak-suburb": "lab-soak-suburb",
+            "check_lab.py --full --only=dissolve-pace": "lab-pace",
+            "check_lab_shards.py": "lab-coverage",
             "check_generator_shards.py --full=--seeds=200 --large-seeds=100 --formation-seeds=6 --segment-seeds=100": "generator-coverage",
             generator + "--first-seed=1 --seeds=50 --first-large-seed=1 --large-seeds=25 --first-formation-seed=1 --formation-seeds=2 --first-segment-seed=1 --segment-seeds=25": "generator-1",
             generator + "--first-seed=51 --seeds=50 --first-large-seed=26 --large-seeds=25 --first-formation-seed=3 --formation-seeds=2 --first-segment-seed=26 --segment-seeds=25": "generator-2",
             generator + "--first-seed=101 --seeds=50 --first-large-seed=51 --large-seeds=25 --first-formation-seed=5 --formation-seeds=1 --first-segment-seed=51 --segment-seeds=25": "generator-3",
             generator + "--first-seed=151 --seeds=50 --first-large-seed=76 --large-seeds=25 --first-formation-seed=6 --formation-seeds=1 --first-segment-seed=76 --segment-seeds=25": "generator-4"}
-    lab = ["lifetime", "rules", "aimstall", "duel", "ringout", "king", "shortfuse", "shortfuse-combo", "dissolve", "dials", "soak-void",
-           "soak-suburb", "ringout-full", "king-full", "king-suburb", "shortfuse-full", "dissolve-full", "dissolve-pace"]
+    for name, session, seeds in (("ringout", "ringout-full", range(11, 14)),
+                                 ("shortfuse", "shortfuse-full", range(11, 13)),
+                                 ("dissolve", "dissolve-full", range(11, 13))):
+        for seed in seeds:
+            deep[f"check_lab.py --full --only={session} --first-seed={seed} --seeds=1"] = f"lab-{name}-{seed}"
+    for shard in range(1, 5):
+        deep[f"check_lab.py --full --only=lifetime --lifetime-shard={shard} --lifetime-shards=4"] = f"lab-lifetime-{shard}"
+    for shard in range(1, 9):
+        deep[f"check_lab.py --full --only=dials --dial-shard={shard} --dial-shards=8"] = f"lab-dials-{shard}"
     for jobs, failures in ((["-j4"], ["none", *deep]), ([], ["none", generator + "--first-seed=101"])):
         for failure in failures:
             log.write_text("")
@@ -152,8 +168,6 @@ fi
                     require(sum(probe in c for c in commands) == bots.get(probe, 1),
                             f"{mode} skipped or duplicated {probe}", output)
                 require(sum(generator in c and "--hash-segments=" not in c for c in commands) == 4 + 1, f"{mode} runs other generator sweeps", output)
-                sessions = [name for c in commands if "check_lab.py --full" in c for name in c.split("--only=")[1].split(",")]
-                require(sorted(sessions) == sorted(lab), f"{mode} Lab shards differ from every --full session", output)
                 first_bot = min(i for i, c in enumerate(commands) if any(probe in c for probe in bots))
                 require(all(i < first_bot for i, c in enumerate(commands)
                             if "core_tests.tscn" in c or any(probe in c for probe in deep if probe not in bots)),
@@ -327,6 +341,10 @@ public static class Formatting
         code, output = run(scratch, "dotnet", "build", "Probe.csproj", "-nologo", "-v", "quiet", "-warnaserror")
         require(code == 0, "corrected code did not pass", output)
         print("PASS: whitespace and style drift fail; corrected code passes formatting and build")
+        code, output = run(ROOT, "python3", "-B", "tools/dev/full_engine_tests.py")
+        require(code == 0, "deep engine isolation fixtures failed", output)
+        code, output = run(ROOT, "python3", "-B", "tools/dev/check_lab_shards_tests.py")
+        require(code == 0, "Lab coverage negative fixtures failed", output)
         check_make_order(scratch)
         check_scale_knobs(scratch)
         check_installer(scratch)

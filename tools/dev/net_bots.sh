@@ -3,6 +3,7 @@
 # Logs go to the output directory; tank agreement and final scores are checked automatically.
 # Usage: tools/dev/net_bots.sh [-n bots] [-l match seconds] [-o out dir, default build/net] [-g godot] [-w windowed bots] [-s "server args"] [-S host:port of an existing server]
 #   [-k skip checks] [-t faults|clean] [-b brain per bot, e.g. smart,simple,simple] [-c hex colors per bot, e.g. 12ABEF,12ABEF,F6F6F6] [-- extra bot args]
+#   --tank-supply=1..8 sets the lobby supply in either mode; defaults to the local TankCountMultiplier tuner.
 #   King: -- --mode=king [--mint-seconds=2]; -n 3 -l 110 -k with --scenario=king-late --tune.PlayerSendRate=20 --delay-who=Bot3 --match-delay=70 tests a late builder; check scores separately.
 # Extra bot args (after --) go to every bot, e.g. --net-lag=120 --net-jitter=30 --net-loss=5 --capture-dir=... --shot-every=5
 #   --lobby-bots=2 (or 2,1 per bot) gives each client lobby bots it runs itself; --leave-at=30 --leave-who=Bot2 makes one leave
@@ -77,7 +78,18 @@ for _ in range(200):
     "$godot" --headless --path "$project" -- --server --port="$port" $server_args >"$out/server.log" 2>&1 &
     server=$!
     trap 'kill $server 2>/dev/null || true' EXIT
-    sleep 1.5
+    # Wait for the actual bind, not a fixed startup delay. A loaded editor may need longer than 1.5 s.
+    startup_deadline=$((SECONDS + 30))
+    while ! grep -qE "listening on UDP $port |Couldn't create an ENet host" "$out/server.log"; do
+      if ! kill -0 "$server" 2>/dev/null || (( SECONDS >= startup_deadline )); then
+        # A process may exit between the log read and kill -0; read its final output before deciding.
+        grep -qE "listening on UDP $port |Couldn't create an ENet host" "$out/server.log" && break
+        echo "FAIL: server did not become ready on port $port" >&2
+        tail -30 "$out/server.log" >&2
+        exit 1
+      fi
+      sleep 0.05
+    done
     grep -q "Couldn't create an ENet host" "$out/server.log" 2>/dev/null || break
     kill $server 2>/dev/null || true
     wait $server 2>/dev/null || true

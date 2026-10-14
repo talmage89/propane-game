@@ -258,12 +258,12 @@ public partial class LobbyServer : Node
                     }
                     break;
                 case Msg.SetMode:
-                    // The codec admitted only lobby modes at a mint pace on the lobby's steps.
+                    // The codec admitted only lobby modes, valid mint steps and bounded tank supply.
                     if (client.Lobby is { Phase: LobbyPhase.Waiting } modeLobby && modeLobby.CreatorId == client.Id)
                     {
                         modeLobby.Settings = (ModeSettings)message.Payload;
                         modeLobby.Mode = modeLobby.Settings.Mode;
-                        Log($"lobby {modeLobby.Id}: {modeLobby.Mode.Name}, a tank every {modeLobby.Settings.MintSeconds:0.0} s in the zone");
+                        Log($"lobby {modeLobby.Id}: {modeLobby.Mode.Name}, {modeLobby.Settings.TankSupply}× tank supply, a tank every {modeLobby.Settings.MintSeconds:0.0} s in the zone");
                         SendLobbyState(modeLobby);
                         BroadcastLobbyList();
                     }
@@ -582,7 +582,7 @@ public partial class LobbyServer : Node
         if (actors.Count == 0 || actors.Count > lobby.Capacity || !actors.Any(a => a.OwnerPeerId == client.Id))
         { Notice(client, "The creator needs an actor to start."); return; }
         // Everyone plays on the creator's tuning: the baked values in a release build, the live ones in debug. The
-        // lobby's mode settings are the server's own dials for this match (King's mint pace).
+        // lobby's mode settings are the server's own dials for this match (tank supply and King's mint pace).
         var tuning = Tuning.FromSnapshot(snapshot);
         lobby.Settings.Apply(tuning);
         var match = new MatchRun
@@ -901,6 +901,8 @@ public partial class LobbyServer : Node
             case TuningMessage tune:
                 // The original creator's debug capability is captured at start, never transferred with hosting.
                 if (client.Id != match.CreatorId || !match.CreatorDebug) { throw new InvalidDataException("tuning requires the debug creator"); }
+                // Supply belongs to the locked lobby choice, not live debug edits or Defaults.
+                if (tune.Name == nameof(Tuning.TankCountMultiplier)) return;
                 match.Tuning.Apply(new Godot.Collections.Dictionary { [tune.Name] = tune.Value });
                 match.Mode.Apply(match.Host, new TunersChanged(match.Mode.Definition.CopyTuners(match.Tuning)), clock.Seconds);
                 break;

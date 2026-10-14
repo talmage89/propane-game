@@ -224,7 +224,9 @@ public partial class LabTest
             var final = (DissolveRunRules)runner.Rules;
             foreach (var line in final.Snapshot().Report) GD.Print($"[lab dissolve] seed {seed}: {line.Text}");
             Assert(caught >= 0 && final.Caught && final.Over && runner.Finished, $"dissolve seed {seed}: the run must end by the front catching the runner");
-            Assert(lab.Player.GlobalPosition.Y < -3f, $"dissolve seed {seed}: a caught runner falls (y={lab.Player.GlobalPosition.Y:F1})");
+            // A ragdolled body keeps the height it went down at; the pelvis is where the runner is.
+            var fallen = lab.Player.IsRagdolled ? lab.Player.PelvisPosition : lab.Player.GlobalPosition;
+            Assert(fallen.Y < -3f, $"dissolve seed {seed}: a caught runner falls (y={fallen.Y:F1}, ragdolled={lab.Player.IsRagdolled})");
             Assert(final.Score == final.Meters + tuning.DissolveTankPoints * final.Tanks + final.Bonus, "the score adds up");
             Assert(final.Bonus == chains.Sum(c => c.Bonus) && chains.Sum(c => c.Tanks) == final.Tanks && final.Pushes == final.Tanks,
                 "every tank is in one chain, pushes the front once, and the chain bonuses add up");

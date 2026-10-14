@@ -158,6 +158,17 @@ public partial class Tuning : Resource
         }
     }
 
+    // ---------------------------------------------------------------- Actor presentation
+    [ExportGroup("Actor Detail")]
+    [Export] public bool ActorPoseLod { get; set; } = true;
+    [Export(PropertyHint.Range, "0.01,1,0.01")] public float ActorMeshLodBias { get; set; } = 0.1f;
+    [Export(PropertyHint.Range, "0,200,1")] public float ActorPoseNearDistance { get; set; } = 30f;
+    [Export(PropertyHint.Range, "0,500,1")] public float ActorPoseFarDistance { get; set; } = 80f;
+    [Export(PropertyHint.Range, "0,20,0.5")] public float ActorPoseHysteresis { get; set; } = 3f;
+    [Export(PropertyHint.Range, "1,240,1")] public float ActorPoseRate { get; set; } = 30f;
+    [Export(PropertyHint.Range, "1,240,1")] public float ActorPoseFarRate { get; set; } = 15f;
+    [Export(PropertyHint.Range, "1,240,1")] public float ActorPoseHiddenRate { get; set; } = 10f;
+
     // ---------------------------------------------------------------- Melee
     [ExportGroup("Melee")]
     [Export(PropertyHint.Range, "0.05,1,0.01")] public float MeleeWindup { get; set; } = 0.24f;
@@ -212,6 +223,14 @@ public partial class Tuning : Resource
     // ---------------------------------------------------------------- Blast effects
     [ExportGroup("Explosion Effects")]
     [Export(PropertyHint.Range, "0.1,4,0.05")] public float FireballScale { get; set; } = 1f;
+    /// <summary>Overlapping full explosions; excess blasts retain their core flash and particle fireball.</summary>
+    [Export(PropertyHint.Range, "1,128,1")] public int ExplosionFullEffectBudget { get; set; } = 16;
+    /// <summary>Pending fuses needed to bound an offline dense chain; ordinary play and network worlds keep engine catch-up.</summary>
+    [Export(PropertyHint.Range, "1,512,1")] public int DenseChainFuseThreshold { get; set; } = 64;
+    /// <summary>Offline catch-up steps during that chain; 0 disables the transient limit.</summary>
+    [Export(PropertyHint.Range, "0,12,1")] public int DenseChainPhysicsSteps { get; set; } = 4;
+    /// <summary>Real seconds to retain the transient limit after fuse pressure drops.</summary>
+    [Export(PropertyHint.Range, "0,2,0.01")] public float DenseChainCatchupHold { get; set; } = 0.5f;
     [Export(PropertyHint.Range, "0,4,0.05")] public float SmokeAmount { get; set; } = 1f;
     [Export(PropertyHint.Range, "0,4,0.05")] public float EmberAmount { get; set; } = 1f;
     [Export(PropertyHint.Range, "0,200,1")] public float FlashEnergy { get; set; } = 40f;
@@ -219,6 +238,10 @@ public partial class Tuning : Resource
     [Export(PropertyHint.Range, "0.05,3,0.01")] public float FlashDuration { get; set; } = 0.55f;
     [Export(PropertyHint.Range, "0,60,0.5")] public float DebrisSpeed { get; set; } = 9f;
     [Export(PropertyHint.Range, "0,60,0.5")] public float DebrisSpin { get; set; } = 22f;
+    /// <summary>Well-spread pieces of the authored 25-piece shell; the remaining fragments are cosmetic detail.</summary>
+    [Export(PropertyHint.Range, "0,25,1")] public int DebrisPiecesPerTank { get; set; } = 6;
+    /// <summary>Deferred rigid-body registrations per presentation frame; tank/blast rules never wait on this queue.</summary>
+    [Export(PropertyHint.Range, "1,256,1")] public int DebrisSpawnPerFrame { get; set; } = 8;
     [Export(PropertyHint.Range, "0,10,0.1")] public float ScorchSize { get; set; } = 4.2f;
     [Export(PropertyHint.Range, "0,4,0.05")] public float ShockwaveScale { get; set; } = 1f;
 
@@ -488,9 +511,14 @@ public partial class Tuning : Resource
     [Export(PropertyHint.Range, "0,90,1")] public float RifleTriggerIndex2Degrees { get; set; } = 20f;
     [Export(PropertyHint.Range, "0,90,1")] public float RifleTriggerIndex3Degrees { get; set; } = 45f;
 
+    public const int TankSupplyMinimum = 1;
+    public const int TankSupplyMaximum = 8;
+
     // ---------------------------------------------------------------- World
     [ExportGroup("World")]
     [Export(PropertyHint.Range, "1,80,1")] public int TankCount { get; set; } = 30;
+    /// <summary>Scales suburb supply and pile sizes in single player and matches; rebuild to apply.</summary>
+    [Export(PropertyHint.Range, "1,8,1")] public int TankCountMultiplier { get; set; } = 1;
     /// <summary>Tanks stand in groups of between these sizes, close enough to set each other off.</summary>
     [Export(PropertyHint.Range, "1,16,1")] public int ClusterSizeMin { get; set; } = 1;
     [Export(PropertyHint.Range, "1,16,1")] public int ClusterSizeMax { get; set; } = 10;

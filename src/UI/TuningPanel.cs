@@ -13,6 +13,8 @@ public partial class TuningPanel : CanvasLayer
 {
     public required Tuning Target { get; init; }
     public bool IncludeLabDials { get; init; }
+    /// <summary>Values fixed by session setup; omitted from sliders and Defaults.</summary>
+    public IReadOnlyCollection<string> LockedProperties { get; init; } = System.Array.Empty<string>();
     public event System.Action? CloseRequested;
     private readonly List<(string Property, Range Slider, Label Value, bool IsInt)> rows = new();
     private readonly List<(string Property, CheckButton Toggle)> toggles = new();
@@ -112,6 +114,7 @@ public partial class TuningPanel : CanvasLayer
             {
                 continue;
             }
+            if (LockedProperties.Contains(name)) continue;
             var type = (Variant.Type)entry["type"].AsInt64();
             if (type != Variant.Type.Float && type != Variant.Type.Int && type != Variant.Type.Bool)
             {
@@ -137,6 +140,7 @@ public partial class TuningPanel : CanvasLayer
             list.AddChild(UiStyle.Text("LAB · LAYOUT APPLIES ON RESET", 15, UiStyle.Accent));
             foreach (var property in typeof(Tuning).GetProperties())
             {
+                if (LockedProperties.Contains(property.Name)) continue;
                 if (System.Attribute.GetCustomAttribute(property, typeof(LabDialAttribute)) is not LabDialAttribute dial) continue;
                 var hint = System.FormattableString.Invariant($"{dial.Min},{dial.Max},{dial.Step}");
                 AddNumber(list, property.Name, property.PropertyType == typeof(int), hint);

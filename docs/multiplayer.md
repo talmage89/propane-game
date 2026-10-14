@@ -31,7 +31,7 @@ the Lab duel; [modes.md](modes.md) describes the framework, the spill tickets an
 
 1. **Main menu:** single player (the sandbox), multiplayer or quit.
 2. **Multiplayer:** the player connects to a server, then creates a lobby or joins an existing one.
-3. **Lobby:** each player sets a name and color and may add bots. The creator chooses Tank Bank (default) or King of the Cul-de-sac, its length and, for King, mint pace, then starts.
+3. **Lobby:** each player sets a name and color and may add bots. The creator chooses Tank Bank (default) or King of the Cul-de-sac, its length, **Tank supply** (every integer from 1× to 8×, default 1×) and, for King, mint pace, then starts. Everyone sees supply; only the waiting creator can change it.
 4. **Match start:** the server sends the suburb's plan. Each client builds it, it materializes as in single player, and play begins when the timer starts.
 5. **Match:** runs for the lobby's match length.
 6. **End:** a results screen, then back to the lobby.
@@ -100,6 +100,19 @@ outside wire limits are dropped and logged. Packets are capped at 1 MiB, collect
 at 20), strings at 1024 UTF-8 bytes, and vector components at one million meters. These are wire safety ceilings;
 the match's tuners still determine gameplay. Hello, Welcome and Rejected allow trailing extensions so incompatible
 clients can still be told why they were rejected.
+
+**Tank supply.** The lobby settings carry an int32 multiplier after the mode id and mint pace in SetMode and
+LobbyState. Values outside 1–8, missing fields and trailing bytes are rejected, just as invalid mint steps are.
+Switching modes preserves supply and mint pace. Mouse −/+ buttons change supply; focus its value and use
+keyboard arrows, D-pad or left stick. Bounds disable the corresponding button, and focus survives lobby updates.
+The roster preview uses default tuning and says so, because guests do not have the creator's debug tuning yet.
+
+At start the creator copies its tuning and applies the lobby choice before sending its snapshot; its saved
+offline multiplier stays unchanged. The server independently applies the choice before suburb generation and before
+sending MatchStart's tuning snapshot. Every peer, including a late builder, constructs the transmitted plan with
+that shared tuning. Lobby settings lock in Loading and stay locked through the match. Offline F1 still exposes
+TankCountMultiplier; the match panel omits it (including from Defaults), and the server ignores live debug
+attempts to change it. Tank supply remains the lobby choice for the entire match.
 
 **The world.** The server generates the match's suburb and sends the whole plan (roughly 10–30 KB compressed at 2–32 players) rather than just its seed. The generator's trigonometry can differ in the last bit between an Apple Silicon Mac and an x86 Linux machine, and a single flipped comparison would give the players different suburbs. The plan includes every tank's position, elevation, rotation and pile identity; clients do not reroll formations. Houses and other static parts never need syncing.
 
@@ -704,3 +717,27 @@ controls. `Protocol.Version` is **3**, superseding the earlier unreleased Protoc
 
 [King online verification](king-online.md) records the soaks, delayed builder, device controls, reviewed captures
 and known vent outlier.
+
+## Lobby supply probes
+
+`net_test` and `tools/dev/net_bots.sh` accept `--tank-supply=N` after `--`, with integer N from 1 to 8.
+Without it, the harness uses its local `TankCountMultiplier` tuner as the lobby choice; an explicit supply wins
+over `--tune.TankCountMultiplier`. Normal player-created lobbies always start at 1×. Both human players and lobby
+bots count toward the scaled supply, regardless of which peer owns them.
+
+```sh
+tools/dev/net_bots.sh -n 4 -l 90 -t clean -o "$PWD/build/lobby-tanks-net-clean4" -- --tank-supply=4 --melee-start
+tools/dev/net_bots.sh -n 4 -l 90 -o "$PWD/build/lobby-tanks-net-fault4" -- --tank-supply=4 --melee-start --net-lag=120 --net-jitter=30 --net-loss=3
+tools/dev/net_bots.sh -n 4 -l 90 -t clean -o "$PWD/build/lobby-tanks-net-king4" -- --mode=king --tank-supply=4 --melee-start
+godot-mono --fixed-fps 60 --resolution 1280x720 res://scenes/dev/menu_test.tscn -- --scenario=king --capture-dir="$PWD/build/lobby-tanks-menu"
+```
+
+The King menu probe also covers tank supply in both lobby modes and the Lab with real mouse, keyboard and
+controller events, bounds, guest presentation, mode switching and draft retention. `LobbySupplyTests` covers every
+wire step, malformed choices, creator snapshot conflicts, server generation with lobby bots, phase locks, and a
+late client assembling the same tank identities and poses after buffered Go.
+
+These trailing lobby settings fields are part of unreleased Protocol 3 for 0.4.0. No further protocol bump is made;
+Hello, Welcome and Rejected are unchanged.
+
+[Lobby tank supply verification](lobby-tanks.md) records the gates, reviewed captures, native matrix and stock-soak variability.

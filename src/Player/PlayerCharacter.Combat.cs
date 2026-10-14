@@ -12,6 +12,7 @@ public partial class PlayerCharacter
 
     private void UpdateAim()
     {
+        using var profile = ActorProfile.Measure(ActorProfile.System.AimRay);
         if (ResolvedState.Weapon == WeaponAction.Melee)
         {
             aimTarget = GlobalPosition + Vector3.Up * World.Tuning.MeleeContactHeight + meleeDirection * World.Tuning.ShotRange;
@@ -20,8 +21,9 @@ public partial class PlayerCharacter
         var origin = Aim.EyeOrigin;
         var forward = Aim.Forward;
         var start = origin + forward * Mathf.Max(0, (GlobalPosition + Vector3.Up * 1.4f - origin).Dot(forward));
-        var query = PhysicsRayQueryParameters3D.Create(start, start + forward * World.Tuning.ShotRange, Layers.ShotMask, shotExclude);
-        var hit = World.Physics.DirectSpaceState.IntersectRay(query);
+        aimQuery.From = start;
+        aimQuery.To = start + forward * World.Tuning.ShotRange;
+        var hit = World.Physics.DirectSpaceState.IntersectRay(aimQuery);
         aimTarget = hit.Count > 0 ? hit["position"].AsVector3() : start + forward * World.Tuning.ShotRange;
         // Never aim at something right behind or inside the character.
         var chest = GlobalPosition + Vector3.Up * 1.35f;

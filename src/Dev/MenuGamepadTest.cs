@@ -622,7 +622,7 @@ public partial class MenuGamepadTest : Node
                      })
             {
                 // Left/right on match length adjusts the value instead of following a neighbor.
-                if ((MenuNavigation.Key(next.Control) is "match_length" or "mint_pace" || next.Control is HSlider or HsvColorSlider) && button is JoyButton.DpadLeft or JoyButton.DpadRight) { continue; }
+                if ((MenuNavigation.Key(next.Control) is "match_length" or "mint_pace" or "tank_supply" || next.Control is HSlider or HsvColorSlider) && button is JoyButton.DpadLeft or JoyButton.DpadRight) { continue; }
                 var control = next.Control.GetNodeOrNull<Control>(neighbor);
                 if (control != null) { queue.Enqueue((control, next.Path.Append(button).ToList())); }
             }

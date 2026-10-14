@@ -17,12 +17,12 @@ public sealed class LabDialAttribute(double min, double max, double step = 1) : 
 
 public partial class Tuning
 {
-    // GTX 1660 / 1080p: persistent vents, rather than sleeping bodies, bound the shipped stack preset.
+    // Larger piles are available for scale trials; retain the ordinary starter size.
     public const int LabStackMinimum = 24;
-    public const int LabStackMaximum = 40;
+    public const int LabStackMaximum = 512;
     public const int LabStackStep = 8;
     // Session copies include these via CopyLocalTunersFrom. Layout edits apply on Reset; physics edits are live.
-    [LabDial(LabStackMinimum, LabStackMaximum, LabStackStep)] public int LabStackCount { get; set; } = LabStackMaximum;
+    [LabDial(LabStackMinimum, LabStackMaximum, LabStackStep, Scenario = "stack")] public int LabStackCount { get; set; } = 40;
     [LabDial(5, 30, 5)] public float LabRangeStep { get; set; } = 10f;
     [LabDial(2, 6)] public int LabRangeLanes { get; set; } = 4;
     [LabDial(2, 10, 0.5)] public float LabLaneSpacing { get; set; } = 4f;

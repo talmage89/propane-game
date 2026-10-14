@@ -75,7 +75,7 @@ public partial class Menus : CanvasLayer
             Screen = this,
             Root = layout,
             Back = GoBack,
-            Adjusters = new Dictionary<string, Action<int>> { ["match_length"] = AdjustMatchLength, ["mint_pace"] = AdjustMintPace },
+            Adjusters = new Dictionary<string, Action<int>> { ["match_length"] = AdjustMatchLength, ["mint_pace"] = AdjustMintPace, ["tank_supply"] = AdjustTankSupply },
         };
         AddChild(navigation);
 
@@ -592,7 +592,7 @@ public partial class Menus : CanvasLayer
 
     /// <summary>
     /// The mode the lobby will play, which everyone sees and only the creator changes: Tank Bank or King of the
-    /// Cul-de-sac, and King's mint pace (seconds a lone holder needs for each tank) on the Lab's steps.
+    /// Cul-de-sac, tank supply, and King's mint pace (seconds a lone holder needs for each tank) on the Lab's steps.
     /// </summary>
     private void BuildModeChoice(LobbyInfo lobby)
     {
@@ -623,45 +623,69 @@ public partial class Menus : CanvasLayer
         layout.AddChild(UiStyle.Text(chosen.Id == Modes.ModeRegistry.KingId
             ? "Hold the beam alone to mint banked tanks; it moves between tank piles. Hits and throws spill."
             : "Every tank you blow up is banked; getting hit or thrown spills them. Most banked wins.", 15, UiStyle.SoftInk, HorizontalAlignment.Center));
-        if (chosen.Id != Modes.ModeRegistry.KingId) return;
-        var pace = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.Center };
-        pace.AddThemeConstantOverride("separation", 12);
-        pace.AddChild(UiStyle.Text("Mint pace", 20));
-        var text = $"A tank every {settings.MintSeconds:0.0} s";
+        BuildLobbyDial("Tank supply", $"{settings.TankSupply}×", "tank_supply", "tank_less", "tank_more",
+            waiting, settings.TankSupply <= Tuning.TankSupplyMinimum, settings.TankSupply >= Tuning.TankSupplyMaximum, AdjustTankSupply);
+        // Guests do not have the creator's debug tuning until match start. Label the default-tuning preview rather
+        // than pretending their local template describes this match; generation remains the server's job.
+        using var defaults = new Tuning();
+        settings.Apply(defaults);
+        var count = chosen.Supply.Suburb(defaults, lobby.Members.Count).TankCount;
+        layout.AddChild(UiStyle.Text($"{count} tanks at default tuning · {lobby.Members.Count} players", 15, UiStyle.SoftInk, HorizontalAlignment.Center));
+        if (chosen.Id == Modes.ModeRegistry.KingId)
+        {
+            BuildLobbyDial("Mint pace", $"A tank every {settings.MintSeconds:0.0} s", "mint_pace", "mint_faster", "mint_slower",
+                waiting, settings.MintSeconds <= Modes.KingRules.MintPaceMin, settings.MintSeconds >= Modes.KingRules.MintPaceMax, AdjustMintPace);
+        }
+    }
+
+    /// <summary>The mouse buttons flank a value that keyboard and controller left/right adjust.</summary>
+    private void BuildLobbyDial(string label, string text, string key, string lessKey, string moreKey,
+        bool waiting, bool atMinimum, bool atMaximum, Action<int> adjust)
+    {
+        var row = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.Center };
+        row.AddThemeConstantOverride("separation", 12);
+        row.AddChild(UiStyle.Text(label, 20));
         if (Net.IsCreator)
         {
-            var faster = UiStyle.Button("−");
-            faster.SetMeta("focus_key", "mint_faster");
-            faster.CustomMinimumSize = new Vector2(44, 40);
-            faster.Disabled = !waiting || settings.MintSeconds <= Modes.KingRules.MintPaceMin;
-            faster.Pressed += () => AdjustMintPace(-1);
-            pace.AddChild(faster);
+            var less = UiStyle.Button("−");
+            less.SetMeta("focus_key", lessKey);
+            less.CustomMinimumSize = new Vector2(44, 40);
+            less.Disabled = !waiting || atMinimum;
+            less.Pressed += () => adjust(-1);
+            row.AddChild(less);
             var value = UiStyle.Button(text);
-            value.SetMeta("focus_key", "mint_pace");
-            value.TooltipText = "Left / right to change how fast the zone mints";
+            value.SetMeta("focus_key", key);
+            value.TooltipText = $"Left / right to change {label.ToLowerInvariant()}";
             value.Disabled = !waiting;
-            // The −/+ buttons serve the mouse; the value itself is the keyboard and controller adjustment target.
             value.GuiInput += e =>
             {
                 if (e is InputEventKey && (e.IsActionPressed("ui_left") || e.IsActionPressed("ui_right")))
                 {
-                    AdjustMintPace(e.IsActionPressed("ui_left") ? -1 : 1);
+                    adjust(e.IsActionPressed("ui_left") ? -1 : 1);
                     value.AcceptEvent();
                 }
             };
-            pace.AddChild(value);
-            var slower = UiStyle.Button("+");
-            slower.SetMeta("focus_key", "mint_slower");
-            slower.CustomMinimumSize = new Vector2(44, 40);
-            slower.Disabled = !waiting || settings.MintSeconds >= Modes.KingRules.MintPaceMax;
-            slower.Pressed += () => AdjustMintPace(1);
-            pace.AddChild(slower);
+            row.AddChild(value);
+            var more = UiStyle.Button("+");
+            more.SetMeta("focus_key", moreKey);
+            more.CustomMinimumSize = new Vector2(44, 40);
+            more.Disabled = !waiting || atMaximum;
+            more.Pressed += () => adjust(1);
+            row.AddChild(more);
         }
         else
         {
-            pace.AddChild(UiStyle.Title(text, 24));
+            row.AddChild(UiStyle.Title(text, 24));
         }
-        layout.AddChild(pace);
+
+        layout.AddChild(row);
+    }
+
+    private void AdjustTankSupply(int direction)
+    {
+        if (Net.Lobby is not { Phase: LobbyServer.LobbyPhase.Waiting } lobby || !Net.IsCreator) return;
+        var supply = Math.Clamp(lobby.Mode.TankSupply + direction, Tuning.TankSupplyMinimum, Tuning.TankSupplyMaximum);
+        if (supply != lobby.Mode.TankSupply) Net.SetMode(lobby.Mode with { TankSupply = supply });
     }
 
     /// <summary>One step of King's mint pace: left is faster (fewer seconds per tank), right slower.</summary>

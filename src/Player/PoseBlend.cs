@@ -52,6 +52,7 @@ public partial class PoseBlend : SkeletonModifier3D
 
     public override void _ProcessModificationWithDelta(double delta)
     {
+        using var profile = ActorProfile.Measure(ActorProfile.System.PoseBlend);
         var skeleton = GetSkeleton();
         if (skeleton == null)
         {

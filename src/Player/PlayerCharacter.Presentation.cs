@@ -6,12 +6,86 @@ namespace Propane.Player;
 // Body presentation remains on the actor: skeleton poses also supply ragdoll recovery and muzzle placement.
 public partial class PlayerCharacter
 {
+    private ActorPoseCadence poseCadence = null!;
+    private bool poseThrottled, hasRiflePose;
+    private Transform3D rifleInVisual;
+    private (MeshInstance3D Mesh, float Bias)[] detailMeshes = [];
+    private float meshDetail = 1;
+
+    private bool PoseSample(float dt, out float sampleDelta)
+    {
+        var camera = World.Viewport.GetCamera3D();
+        var forceFull = View != null || state != State.Active || camera == null ||
+            camera.GetWorld3D() != World.Physics || animator.HitPlaying;
+        var center = GlobalPosition + Vector3.Up;
+        var interval = poseCadence.Interval(World.Tuning,
+            camera == null ? 0 : camera.GlobalPosition.DistanceTo(center),
+            camera == null || camera.IsPositionInFrustum(center), forceFull);
+        var throttled = interval > 0;
+        SetMeshDetail(throttled ? World.Tuning.ActorMeshLodBias : 1);
+        if (poseThrottled != throttled)
+        {
+            poseThrottled = throttled;
+            animator.SetThrottled(throttled);
+            skeleton.ModifierCallbackModeProcess = throttled
+                ? Skeleton3D.ModifierCallbackModeProcessEnum.Manual : Skeleton3D.ModifierCallbackModeProcessEnum.Idle;
+        }
+        return poseCadence.Advance(dt, interval, out sampleDelta);
+    }
+
+    private void RememberRiflePose()
+    {
+        if (!Initialized) return;
+        rifleInVisual = visual.GlobalTransform.AffineInverse() * rifle.GlobalTransform;
+        hasRiflePose = true;
+    }
+
+    private void ResetPoseCadence()
+    {
+        poseCadence.Reset();
+        SetMeshDetail(1);
+        poseThrottled = false;
+        animator.SetThrottled(false);
+        skeleton.ModifierCallbackModeProcess = Skeleton3D.ModifierCallbackModeProcessEnum.Idle;
+    }
+
+    private void SetMeshDetail(float bias)
+    {
+        if (meshDetail == bias) return;
+        meshDetail = bias;
+        foreach (var (mesh, original) in detailMeshes) mesh.LodBias = original * bias;
+    }
+
+    private void PlayHit()
+    {
+        if (poseThrottled)
+        {
+            // Consume only the old animation time before queuing this new one-shot. Its pose can become
+            // physical if another hit throws us, so keep the reaction at full rate through its fade.
+            animator.ApplyPose();
+            animator.Sample(poseCadence.PendingTime);
+            skeleton.Advance(poseCadence.PendingTime);
+            ResetPoseCadence();
+        }
+        animator.PlayHit();
+    }
+
     public override void _Process(double delta)
     {
+        using var profile = ActorProfile.Measure(ActorProfile.System.Presentation);
         var dt = (float)delta;
         var tuning = World.Tuning;
         UpdateBodyContrast();
-        animator.UpdateLocomotion(ResolvedState.Active ? BodyTravel(dt) : Vector2.Zero, dt, ResolvedState.Gait);
+        var sample = PoseSample(dt, out var sampleDelta);
+        if (!poseThrottled && sampleDelta > dt)
+        {
+            // Catch up the old tree before writing this frame's seeks. Its ordinary idle callback then
+            // samples the exact current stride/jump phase, rather than advancing past a consumed seek.
+            var pending = sampleDelta - dt;
+            animator.Sample(pending);
+            skeleton.Advance(pending);
+        }
+        animator.UpdateLocomotion(ResolvedState.Active ? BodyTravel(dt) : Vector2.Zero, dt, ResolvedState.Gait, sample);
 
         visual.Rotation = new Vector3(0, facingYaw, 0);
         rig.AimTarget = aimTarget;
@@ -22,6 +96,16 @@ public partial class PlayerCharacter
         rig.MeleeProgress = IsRemote ? remoteState.Melee : ResolvedState.MeleeProgress;
         rig.Melee = ResolvedState.Weapon == WeaponAction.Melee;
         rig.AdvanceReload(dt, IsRemote, rig.Melee);
+        if (sample && poseThrottled)
+        {
+            animator.Sample(sampleDelta);
+            skeleton.Advance(sampleDelta);
+        }
+        else if (!sample && hasRiflePose)
+        {
+            // The rifle is top-level: carry its held pose with the moving body between skeleton samples.
+            rifle.GlobalTransform = visual.GlobalTransform * rifleInVisual;
+        }
         if (IsRemote)
         {
             return;

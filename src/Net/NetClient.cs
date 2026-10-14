@@ -11,19 +11,24 @@ public sealed record LobbySummary(int Id, string CreatorName, int Players, Lobby
     byte ModeId = Modes.ModeRegistry.TankBankId);
 
 /// <summary>
-/// The mode a lobby's creator chose and its settings: the mint pace a King lobby plays (kept while Tank Bank is
+/// The mode a lobby's creator chose, tank supply for either mode, and King's mint pace (kept while Tank Bank is
 /// chosen, so switching back remembers it). The lobby's match length is the round length of either.
 /// </summary>
-public sealed record ModeSettings(byte ModeId, float MintSeconds)
+public sealed record ModeSettings(byte ModeId, float MintSeconds, int TankSupply = 1)
 {
     public static readonly ModeSettings Default = new(Modes.ModeRegistry.TankBankId, (float)Modes.KingRules.MintPaceDefault);
     public Modes.ModeDefinition Mode => Modes.ModeRegistry.ForLobby(ModeId) ?? throw new InvalidOperationException($"no lobby mode {ModeId}");
 
-    /// <summary>A mode a lobby may play, at a mint pace on the lobby's steps.</summary>
-    public bool Valid => Modes.ModeRegistry.ForLobby(ModeId) != null && Modes.KingRules.ValidMintPace(MintSeconds);
+    /// <summary>A lobby mode, a mint pace on the lobby's steps, and integer tank supply within its range.</summary>
+    public bool Valid => Modes.ModeRegistry.ForLobby(ModeId) != null && Modes.KingRules.ValidMintPace(MintSeconds) &&
+        TankSupply is >= Tuning.TankSupplyMinimum and <= Tuning.TankSupplyMaximum;
 
     /// <summary>Puts these settings into a match's tuning: they are the server's dials for it.</summary>
-    public void Apply(Tuning tuning) => tuning.KingMintSeconds = MintSeconds;
+    public void Apply(Tuning tuning)
+    {
+        tuning.KingMintSeconds = MintSeconds;
+        tuning.TankCountMultiplier = TankSupply;
+    }
 }
 
 /// <summary>A player in a lobby or match.</summary>
@@ -334,7 +339,8 @@ public partial class NetClient : Node
 
     public void StartMatch()
     {
-        var tuning = OS.IsDebugBuild() ? Template : Tuning.LoadBaked();
+        using var tuning = OS.IsDebugBuild() ? Template.Copy() : Tuning.LoadBaked();
+        Lobby?.Mode.Apply(tuning);
         Send(new NetWriter(Msg.StartMatch).Snapshot(tuning.Snapshot()));
     }
 

@@ -79,6 +79,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
     private float settleTimer;
     private Vector3 aimTarget;
     private Godot.Collections.Array<Rid> shotExclude = new();
+    private readonly PhysicsRayQueryParameters3D aimQuery = new() { CollisionMask = Layers.ShotMask };
     private Color bodyColor = new(0.92f, 0.44f, 0.16f);
     private StandardMaterial3D? bodyMaterial;
     private ShaderMaterial? bodyRim;
@@ -215,6 +216,9 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
 
         rifle = new Rifle { World = World, Name = "Rifle", TopLevel = true };
         AddChild(rifle);
+        detailMeshes = GameAssets.MeshInstances(model).Concat(GameAssets.MeshInstances(rifle))
+            .Where(mesh => (mesh.Layers & RenderLayers.Actors) != 0)
+            .Select(mesh => (mesh, mesh.LodBias)).ToArray();
         if (Ammo != null || IsRemote)
         {
             // A match, where reloads drop magazines.
@@ -243,6 +247,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
             bone.AddCollisionExceptionWith(this);
         }
 
+        aimQuery.Exclude = shotExclude;
         facingYaw = Rotation.Y;
         if (!IsRemote)
         {
@@ -252,6 +257,8 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         aimTarget = GlobalPosition + Forward(facingYaw) * 20f;
         Rotation = Vector3.Zero;
         visual.Rotation = new Vector3(0, facingYaw, 0);
+        poseCadence = new ActorPoseCadence(ActorId > 0 ? (ulong)ActorId : GetInstanceId());
+        skeleton.SkeletonUpdated += RememberRiflePose;
         Initialized = true;
     }
 
@@ -259,7 +266,9 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
     {
         World.Unregister(this);
         World.Events.Explosion -= Aim.OnExplosion;
+        if (IsInstanceValid(skeleton)) skeleton.SkeletonUpdated -= RememberRiflePose;
         Runtime.Dispose();
+        aimQuery.Dispose();
     }
 
     public override void _Notification(int what)
@@ -275,6 +284,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
     public void Teleport(Vector3 position, float yaw)
     {
         ResetToActive();
+        ResetPoseCadence();
         resolver.Reset();
         ResolvedState = default;
         airTime = 0;
@@ -315,6 +325,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
 
     public override void _PhysicsProcess(double delta)
     {
+        using var profile = ActorProfile.Measure(ActorProfile.System.Physics);
         var dt = (float)delta;
         if (IsRemote)
         {
@@ -383,6 +394,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
 
     private void UpdateMovement(float dt)
     {
+        using var profile = ActorProfile.Measure(ActorProfile.System.Movement);
         var tuning = World.Tuning;
         var grounded = ResolvedState.Grounded;
 
@@ -431,7 +443,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         }
 
         Velocity = velocity + knockback;
-        MoveAndSlide();
+        using (ActorProfile.Measure(ActorProfile.System.MoveAndSlide)) { MoveAndSlide(); }
         // Remove the knockback part again so it does not compound through the acceleration step.
         var after = Velocity;
         Velocity = new Vector3(after.X - knockback.X, after.Y, after.Z - knockback.Z);
@@ -556,7 +568,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
             // A small hop, applied once.
             Velocity += Vector3.Up * Mathf.Min(push * 0.25f, 3f);
             staggerTimer = StaggerControlTime;
-            animator.PlayHit();
+            PlayHit();
             staggers++;
         }
     }
@@ -571,6 +583,14 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
 
     private void BeginRagdoll(Vector3 velocity, Vector3 spin)
     {
+        if (poseThrottled)
+        {
+            // PhysicalBonesStartSimulation reads the authored pose immediately. Refresh its current clocks
+            // before clearing presentation state, so a held distant pose cannot change initial colliders.
+            animator.ApplyPose();
+            animator.Sample(poseCadence.PendingTime);
+        }
+        ResetPoseCadence();
         state = State.Ragdoll;
         // A blast can arrive between our ticks. Drop control/presentation immediately so neither snapshots nor
         // the returning rig inherit an aimed or sprinting pose from before the throw.
@@ -598,6 +618,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
 
     private void UpdateRagdoll(float dt)
     {
+        using var profile = ActorProfile.Measure(ActorProfile.System.Ragdoll);
         var tuning = World.Tuning;
         stateTimer += dt;
         settleTimer = ragdoll.AverageSpeed() < RagdollSettleSpeed ? settleTimer + dt : 0;
@@ -669,6 +690,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
 
     private void UpdateGettingUp(float dt)
     {
+        using var profile = ActorProfile.Measure(ActorProfile.System.GetUp);
         stateTimer += dt;
         var duration = animator.GetUpDuration;
         var rigIn = Mathf.Clamp((stateTimer - (duration - RigReturnTime)) / RigReturnTime, 0, 1);
@@ -677,7 +699,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         if (!IsRemote)
         {
             Velocity = new Vector3(0, Velocity.Y - World.Tuning.PlayerGravity * dt, 0);
-            MoveAndSlide();
+            using (ActorProfile.Measure(ActorProfile.System.MoveAndSlide)) { MoveAndSlide(); }
         }
         if (stateTimer >= duration)
         {
@@ -783,7 +805,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
                 if (remoteState.Staggers != remoteStaggers)
                 {
                     remoteStaggers = remoteState.Staggers;
-                    animator.PlayHit();
+                    PlayHit();
                 }
                 break;
             case State.Ragdoll:

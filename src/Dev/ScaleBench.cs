@@ -8,6 +8,7 @@ using System.Text.Json;
 using Godot;
 using Propane.Core;
 using Propane.Lab;
+using Propane.Player;
 using Propane.Tank;
 using Propane.World;
 
@@ -29,6 +30,10 @@ public partial class ScaleBench : Node3D
     private bool finished, pendingStart;
     private int tankCount;
     private string worldHash = "";
+    private string omit = "none";
+    private string cameraMode = "overview";
+    private Camera3D camera = null!;
+    private PlayerCharacter cameraActor = null!;
     private readonly Process process = Process.GetCurrentProcess();
 
     public override void _Ready()
@@ -47,6 +52,12 @@ public partial class ScaleBench : Node3D
                 throw new ArgumentException("invalid scale benchmark workload");
             var config = typeof(ScaleBench).Assembly.GetCustomAttribute<AssemblyConfigurationAttribute>()!.Configuration;
             if (config != DevArgs.Get("config")) throw new InvalidOperationException($"loaded {config}, expected {DevArgs.Get("config")}");
+            cameraMode = DevArgs.Get("camera") ?? "overview";
+            if (cameraMode is not ("overview" or "near" or "far")) throw new ArgumentException("unknown benchmark camera");
+            omit = DevArgs.Get("omit") ?? "none";
+            if (omit is not ("none" or "actors" or "shadows" or "effects" or "debris"))
+                throw new ArgumentException("unknown rendering feature omission");
+            if (omit != "none") GetTree().NodeAdded += OmitFeature;
             using var tuning = Tuning.LoadBaked();
             tuning.FixedSeed = 23;
             // Single-player pile sizes and map stay constant across the grid. Always reserve the same starts/pickups.
@@ -75,7 +86,8 @@ public partial class ScaleBench : Node3D
             if (lab.LiveTanks.Count() != tankCount || lab.Session.Actors.Count != bots + 1)
                 throw new InvalidOperationException("fixture supply/actors differs from requested workload");
             lab.World.Present(GetViewport());
-            var camera = new Camera3D { Fov = 55, Current = true };
+            camera = new Camera3D { Fov = 55, Current = true };
+            cameraActor = lab.Session.Actors[bots > 0 ? 1 : 0].Character;
             lab.World.AddView(this, camera);
             var plan = ((Session.SuburbWorldSource)lab.Session.Source).Suburb.Plan;
             worldHash = Convert.ToHexString(SHA256.HashData(Net.PlanCodec.Encode(plan)));
@@ -123,6 +135,14 @@ public partial class ScaleBench : Node3D
             if (ticks >= warmup + measured) finished = true;
         }
         catch (Exception error) { Fail(error); }
+    }
+
+    public override void _Process(double delta)
+    {
+        if (cameraMode == "overview") return;
+        var focus = cameraActor.BlastTargetPosition;
+        var offset = cameraMode == "near" ? new Vector3(2, 1, 5) : new Vector3(0, 12, 50);
+        camera.LookAtFromPosition(focus + new Basis(Vector3.Up, cameraActor.FacingYaw) * offset, focus);
     }
 
     private void FrameEnded()
@@ -185,7 +205,9 @@ public partial class ScaleBench : Node3D
                 cpu = OS.GetProcessorName(),
                 cpu_count = System.Environment.ProcessorCount,
                 gpu = RenderingServer.GetVideoAdapterName(),
-                rendered = DisplayServer.GetName() != "headless"
+                rendered = DisplayServer.GetName() != "headless",
+                omitted_render_feature = omit,
+                camera_mode = cameraMode
             };
             File.WriteAllText(Path.Combine(DevArgs.Get("frame-metrics")!, "summary.json"), JsonSerializer.Serialize(summary));
             // Captures happen after measurement, so image readback/encoding cannot contaminate the timings.
@@ -203,5 +225,26 @@ public partial class ScaleBench : Node3D
         ShutdownGuard.Quit(GetTree(), 1);
     }
 
-    public override void _ExitTree() => process.Dispose();
+    // Rendering-only ablations: all brains, collisions and effect lifetimes continue unchanged.
+    private void OmitFeature(Node node)
+    {
+        if (omit == "shadows" && node is Light3D light) light.ShadowEnabled = false;
+        if (omit == "effects" && node is Node3D effect &&
+            (node.Name == "Effects" || node is VentJet)) { effect.Visible = false; }
+        if (omit == "debris" && node is DebrisBody debris) debris.Visible = false;
+        if (omit != "actors" || node is not MeshInstance3D mesh) return;
+        for (var parent = node.GetParent(); parent != null; parent = parent.GetParent())
+        {
+            if (parent is not PlayerCharacter) continue;
+            // Styling runs in the actor's Ready after NodeAdded; apply after it has assigned visual layers.
+            Callable.From(() => { if (IsInstanceValid(mesh)) mesh.Layers = 0; }).CallDeferred();
+            break;
+        }
+    }
+
+    public override void _ExitTree()
+    {
+        if (omit != "none") GetTree().NodeAdded -= OmitFeature;
+        process.Dispose();
+    }
 }

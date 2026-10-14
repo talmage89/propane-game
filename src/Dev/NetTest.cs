@@ -47,6 +47,7 @@ public partial class NetTest : Node
     private float shotTimer;
     private int matches;
     private int matchesWanted = 1;
+    private int tankSupply;
     private int lobbyBots;
     private int lobbyBotsTotal;
     private uint lobbyBotRequest;
@@ -61,6 +62,14 @@ public partial class NetTest : Node
         role = DevArgs.Get("role") ?? "host";
         players = (int)DevArgs.GetFloat("players", 2);
         matchesWanted = (int)DevArgs.GetFloat("matches", 1);
+        tankSupply = Tuning.SavedTemplate.TankCountMultiplier;
+        if (DevArgs.Get("tank-supply") is { } supply && !int.TryParse(supply, out tankSupply) ||
+            tankSupply is < Tuning.TankSupplyMinimum or > Tuning.TankSupplyMaximum)
+        {
+            GD.PushError("[nettest] --tank-supply needs an integer from 1 to 8");
+            ShutdownGuard.Quit(GetTree(), 1);
+            return;
+        }
         ParseLobbyBots();
         var address = DevArgs.Get("server") ?? "127.0.0.1";
         var port = (int)DevArgs.GetFloat("port", Protocol.DefaultPort);
@@ -366,7 +375,8 @@ public partial class NetTest : Node
         {
             started = true;
             net.SetMode(new ModeSettings(DevArgs.Get("mode") == "king" ? ModeRegistry.KingId : ModeRegistry.TankBankId,
-                DevArgs.GetFloat("mint-seconds", (float)KingRules.MintPaceDefault)));
+                DevArgs.GetFloat("mint-seconds", (float)KingRules.MintPaceDefault),
+                tankSupply));
             net.SetMatchLength(DevArgs.GetFloat("length", 60));
             GetTree().CreateTimer(0.5).Timeout += net.StartMatch;
         }
