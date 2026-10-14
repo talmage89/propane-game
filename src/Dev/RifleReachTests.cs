@@ -22,6 +22,8 @@ public partial class RifleReachTests : Node3D
     private int echoes;
     private int samples;
     private float maxResidual;
+    private Quaternion[] turnPose = Array.Empty<Quaternion>();
+    private float maxTurn;
 
     public override void _ExitTree() => world.Dispose();
 
@@ -73,6 +75,25 @@ public partial class RifleReachTests : Node3D
                 await Frames(2).ConfigureAwait(true);
             }
             Assert(samples >= 100 && echoes == 40, $"missing final-pose coverage: {samples} samples, {echoes}/40 echoes");
+            Apply(Vector3.Zero, Mathf.Pi);
+            await Frames(60).ConfigureAwait(true);
+            stage = "aim crossing behind the body";
+            for (var frame = 0; frame < 120; frame++)
+            {
+                // A get-up can leave the body facing away from the camera. A tiny aim change across the rear
+                // must not switch the clamped torso from one twist limit to the other in a single frame.
+                remote.SetRemoteState(new PlayerNetState
+                {
+                    Position = Vector3.Zero,
+                    Yaw = Mathf.Pi,
+                    AimTarget = new Vector3(frame < 60 ? -.1f : .1f, 1.4f, -20),
+                    Grounded = true,
+                    Support = PlayerSupport.Grounded,
+                });
+                remote._PhysicsProcess(1.0 / Engine.PhysicsTicksPerSecond);
+                await Frames(1).ConfigureAwait(true);
+            }
+            turnPose = Array.Empty<Quaternion>();
             for (var aimed = 0; aimed < 2; aimed++)
             {
                 for (var yaw = 0; yaw < 8; yaw++)
@@ -110,7 +131,7 @@ public partial class RifleReachTests : Node3D
                 await Frames(1).ConfigureAwait(true);
             }
             Assert(handoffShots >= 3, $"missing get-up echoes: {handoffShots}");
-            GD.Print($"[rifle reach] PASS samples={samples} echoes={echoes} wrist={maxResidual:F6}m");
+            GD.Print($"[rifle reach] PASS samples={samples} echoes={echoes} wrist={maxResidual:F6}m rear-turn={maxTurn:F3}deg");
             ShutdownGuard.Quit(GetTree());
         }
         catch (Exception error)
@@ -156,6 +177,17 @@ public partial class RifleReachTests : Node3D
         {
             if (samples++ < 2) return;
             if (rig.Weight <= .001f) return;
+            if (stage == "aim crossing behind the body")
+            {
+                var pose = Enumerable.Range(0, skeleton.GetBoneCount()).Select(skeleton.GetBonePoseRotation).ToArray();
+                for (var i = 0; i < turnPose.Length; i++)
+                {
+                    var degrees = Mathf.RadToDeg(turnPose[i].AngleTo(pose[i]));
+                    maxTurn = Mathf.Max(maxTurn, degrees);
+                    Assert(degrees <= 60, $"rear aim crossing snapped {skeleton.GetBoneName(i)} by {degrees:F3} degrees");
+                }
+                turnPose = pose;
+            }
             foreach (var side in new[] { "r", "l" })
             {
                 var wrist = skeleton.GlobalTransform * skeleton.GetBoneGlobalPose(skeleton.FindBone($"hand_{side}")).Origin;
