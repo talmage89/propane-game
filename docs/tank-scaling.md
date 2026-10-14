@@ -2,8 +2,8 @@
 
 The performance work is substantial, but this branch **does not satisfy the complete acceptance brief**.
 The ordinary 4× native Release match median is 66.5 fps with an 81.03 ms median maximum, but one of three runs
-averages 55.6 fps. The official four-bot 4× disturbed view reaches 37.2 fps, dominated by navigation. Both
-sixteen-client Debug convergence checks and both native Release sixteen-client gates fail. Treat the branch
+averages 55.6 fps. The official four-bot 4× disturbed view reaches 37.2 fps, dominated by navigation. The earlier
+sixteen-client Debug and native Release gates failed; both final merged Debug sixteen-client soaks also fail. Treat the branch
 as measured optimization work awaiting the bot/navigation and networking follow-ups, not as a proven 4×
 capacity release. Failed runs remain in the evidence below.
 
@@ -365,6 +365,40 @@ Counters come from `metrics client` samples wholly within the playing phase. Rat
 | Release | 8 | faults | 0.077 / 0.289 | 0.022–0.084 | 0.284–0.343 | 2.574 |
 | Release | 16 | faults | 0.040 / 0.321 | 0.008–0.061 | 0.301–0.356 | 5.459 |
 
+### Final Protocol 3 integration rerun
+
+After merging online King, six additional Debug Tank Bank soaks used `91f2927`, the same seed, 90-second length,
+4× override, `--melee-start` and clean/fault flags above. Server logs confirm 144/208/336 map tanks. All clients
+completed every match, all six sets of bank audits agree, and all engine logs are clean. Four- and eight-client
+cases passed; both sixteen-client cases still failed the unchanged tank checker. The eight-client clean episode
+of 1.45 seconds is close to its 1.5-second limit. [Results and before/after loads](tank-scaling/net-protocol3.csv).
+
+| Clients | Profile | Result | Final rest / moving (m) | Longest episode (s) | Disagreements | Audits agree | Engine errors |
+| ---: | --- | --- | ---: | ---: | ---: | --- | ---: |
+| 4 | clean | PASS | 0.007 / 0.092 | 0.25 | 0 | True | 0 |
+| 4 | faults | PASS | 0.014 / 0.196 | 0.95 | 0 | True | 0 |
+| 8 | clean | PASS | 0.018 / 0.107 | 1.45 | 0 | True | 0 |
+| 8 | faults | PASS | 0.001 / 0.200 | 0.65 | 0 | True | 0 |
+| 16 | clean | FAIL | 0.000 / 0.731 | 2.85 | 164 | True | 0 |
+| 16 | faults | FAIL | 0.007 / 0.319 | 13.00 | 121 | True | 0 |
+
+The faulted sixteen-client final drift is within its limit, but earlier discrepancies persist too long; a final
+snapshot alone would conceal that failure. Its peak moving discrepancy was 25.114 m. No checker limit changed.
+Native Release timing and soaks were not repeated after this final wire integration.
+
+[Per-client Protocol 3 payload measurements](tank-scaling/bandwidth-protocol3.csv) use the same playing-phase
+counter differences and exclusions as above. These are measured application payload costs, excluding transport
+overhead/retransmission, and do not establish a capacity bound. Both sixteen-client matches failed convergence.
+
+| Clients | Profile | Creator up / down Mbps | Client up range | Client down range | Sum receive Mbps |
+| ---: | --- | ---: | ---: | ---: | ---: |
+| 4 | clean | 0.137 / 0.125 | 0.035–0.137 | 0.125–0.223 | 0.786 |
+| 4 | faults | 0.058 / 0.141 | 0.019–0.077 | 0.119–0.177 | 0.591 |
+| 8 | clean | 0.050 / 0.255 | 0.011–0.100 | 0.207–0.302 | 2.169 |
+| 8 | faults | 0.068 / 0.217 | 0.016–0.068 | 0.217–0.268 | 1.988 |
+| 16 | clean | 0.014 / 0.400 | 0.005–0.204 | 0.210–0.436 | 6.192 |
+| 16 | faults | 0.028 / 0.273 | 0.004–0.061 | 0.246–0.308 | 4.580 |
+
 ## Rendered review
 
 Seed 23's four-player suburb has 144 tanks at 4×. The baseline reproduces the same supply and pile limits with
@@ -399,11 +433,16 @@ assertions, including turning, firing, jumping, melee, reload and Lab controller
 
 ## Final verification and remaining limits
 
-After merging `dev` through `e7ff766` (Dissolve Run, King's mint setup, 0.3.0 metadata and the scale benchmark),
+The timing grids, ordinary native matches and initial twelve scale soaks predate the final online King merge.
+Their revision labels and failures remain historical evidence; they are not measurements of Protocol 3. The
+additional six Debug soaks above verify the final wire integration.
+
+After merging `dev` through `d067ef6` (Dissolve Run, King's mint setup and online mode, 0.3.0 metadata and the
+scale benchmark),
 `make setup`, `make build`, `make check`, `make -j4 test-full`, and `python3 -B tools/dev/lint_tests.py` passed.
-The final check rebuild reported zero warnings and errors. Both final gates discovered 340 unit tests with zero
-failures. The full gate passed 502 Lab dial-end/build/reset sessions, the deep navigation/generator/segment
-sweeps, and its stock faulted rifle, two-match blocked duel and loading-readiness network probes; their tank
+The final check rebuild reported zero warnings and errors. Both final gates discovered 351 unit tests with zero
+failures. The full gate passed 510 Lab dial-end/build/reset sessions (510.2 seconds), the deep
+navigation/generator/segment sweeps, and its stock faulted rifle, two-match blocked duel and loading-readiness network probes; their tank
 checks and scoring audits agree. These stock probes do not substitute for the failed sixteen-client 4× tests.
 
 The deep upright fixture passed 53 piles / 738 tanks, 120 simulated seconds and 60 player passes, with maximum
@@ -413,6 +452,9 @@ singles, shields, vents, interruptions and grant-race behavior. The body-correct
 observer jet impulse, 2.338 m/s owner peak, 2 μm custom/automatic-center drift and 56 μm settled contact drift.
 Blast-query completeness passed 1,100 bodies with duplicate shapes. The real-device input path passed all 163
 assertions headlessly in the gate and in the reviewed rendered `menu_test --scenario=input` capture.
+The final rendered rerun is under `build/tanks-input-king`; I inspected `single_02_after_turn.png` and
+`single_03_jump.png`, showing the turned view and the airborne player. The merged lobby's real-device King
+scenario also passed its 69 assertions in both gates.
 
 Rendered commands used `--fixed-fps 60 --resolution 1280x720` and absolute `--capture-dir` paths under `build/`:
 `suburb_preview --seed=23 --players=4` with the 4×/equivalent baseline overrides above; `tank_range
@@ -438,5 +480,8 @@ limits and the tank/player/scoring rules when addressing these follow-ups.
 ## Compatibility
 
 The four new exported tuners, scaled supply/formation construction, fragment physics and catch-up policy are
-shared match behavior and require the next release to be minor (0.4 after the merged 0.3.0 release). Message layouts and `Protocol.Version` (2) are unchanged.
+shared match behavior and require the next release to be minor (0.4 after the merged 0.3.0 release). Tank scaling
+does not change message layouts or bump the protocol. The final `dev` integration brings online King's message
+changes and `Protocol.Version` **3**; earlier measured revisions used Protocol 2. See
+[King's compatibility notes](multiplayer.md#king-online-protocol-3) for that separate change.
 At multiplier 1, separate-process world hashes for all four formations equal the baseline hashes.
