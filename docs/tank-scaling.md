@@ -101,6 +101,11 @@ the physical tank checker; it remains a valid timing sample with `process_exit=1
 | 1× four-bot primary Lab view / Debug / 30 fps ceiling | 6 | 19.5 | 38.05 / 115.20 / 132.22 / 155.52 | 0.7661 |
 | 1× four-bot primary Lab view / Debug / 30 fps ceiling | 12 | 19.8 | 34.03 / 143.61 / 213.22 / 285.70 | 0.8758 |
 
+The constant-cap matrix uses `026a32a` gameplay plus the common diagnostic harness; the following policy
+trials measure the offline policy implementation. Both timing grids precede the network-fragment seed fix
+and the final `ac3a725` integration. Final integration gates and soaks verify those changes, without claiming
+that the earlier performance numbers remeasure their complete final revision.
+
 A blanket four-step cap is not selected: its unrestricted ordinary-match median is 0.9201, and its owner-view
 median is 0.7847. Six steps still yield 0.9748 in ordinary matches. Twelve steps deliver 0.9828 in ordinary
 matches and 0.9901 with the 30 fps ceiling, without introducing another global game-speed limit.
@@ -132,7 +137,7 @@ lasted 1.046/1.008/1.883 wall seconds and returned from 4 to 12 in every trial. 
 130.27/107.66/358.68 ms; the noisy third trial is retained, not excluded. The 0.9231 native and 0.8895 Debug
 chain ratios are the visible temporary slowdown cost. A reliable 100 ms ceiling is still not proven.
 
-The owner case remains below the 0.98 requirement on **both** revisions: unrestricted ratios are 0.8661 on dev
+The owner case remains below the 0.98 requirement on **both** revisions: unrestricted ratios are 0.8660 on dev
 and 0.9716 on the branch; at a 30 fps ceiling, 0.9172 and 0.8879. Those ceilings actually render at medians of
 21.3 and 20.4 fps. The limiter cannot arm in this 40-point fixture (its threshold is 64 pending fuses), so this
 is existing bot/frame-burst pressure, not another four-step game-speed policy. Unrestricted owner profiles
@@ -178,6 +183,59 @@ ordinary 84-tank suburb; passing it does not contradict the ordinary soak failur
 also passes both profiles: clean/faulted comparisons cover 41,074,324 / 40,535,134 body pairs with zero
 disagreements, agreeing remaining-client audits and zero engine errors. The raw supplemental runs and
 before/after `uptime` records remain in `build/tanks-review-capacity-final*`.
+
+## Lead-review final integration verification
+
+The final gameplay revision includes `6a4781e` (ordinary catch-up restored and offline dense leases),
+`a4a51f0` (canonical network fragment scatter) and merge `9ef6726` (dev `ac3a725`). No checker threshold,
+stock timeout or gameplay rule was changed in this follow-up. The final commands all completed successfully:
+
+| Command | Result |
+| --- | --- |
+| `make setup` after merging dev | Imported and built; zero warnings/errors. |
+| `make build` and headless `unit_tests.tscn` during implementation | Zero warnings; final implementation has 354 assertions/tests, zero failures. |
+| `make check` | Passed formatting, warnings-as-errors compilation and every fast test partition; zero warnings. Includes 354 unit tests, 163 real-device input assertions, pile/gather probes and matching separate-process world hashes for all four formations. |
+| `python3 -B tools/dev/lint_tests.py` | Passed negative analyzer/formatting probes, make ordering, benchmark defaults, installer error propagation, core wiring and CI partition checks. |
+| `dotnet build Propane.sln -c ExportRelease -nologo -v quiet -warnaserror` | Passed with zero warnings/errors. |
+| `make -j4 test-full` | Passed once at the end, including its isolated network jobs. Generator coverage is exactly 1,044 seeds; navigation succeeds on 700/700 goals; all 510 Lab dial sessions build/reset in 468.6 seconds under the stock 600-second timeout. |
+| `make test-capacity` | All three clean and three faulted sixteen-actor acceptance cases passed. |
+| `tools/dev/capacity_acceptance.sh -r 1 -o "$PWD/build/tanks-review-capacity-final"` | Both final-code profiles passed; zero disagreements, agreeing audits and zero engine errors. |
+
+The deep awake pile fixture stands 53 piles / 738 tanks through 120 simulated seconds and 60 player passes:
+maximum drift 0.001669 m and tilt 0.151 degrees. Its topple/gather probes pass, including eight disturbed
+original pyramid tanks rebuilding as upright clusters. Menu lifetime has no orphans after ten single-player
+and ten solo-match cycles. The full gate's four-client faulted melee soak has zero disagreements and agreeing
+audits; both blocked-duel matches and the loading-readiness case also pass. Their client/server logs contain
+zero engine errors.
+
+The timing drivers were `python3 -B build/tanks_review_caps.py` (108 invocations) and
+`python3 -B build/tanks_review_policy.py` (24), with workloads, quantiles, slowdown costs and the one failed
+physical checker already recorded above. Default sixteen-client comparisons use
+`build/tanks_review_default_net.py`, `build/tanks_review_default_extra.py` and
+`build/tanks_review_default_seeded.py` (8 + 4 + 4 invocations); all their failed physical checks remain in the
+versioned CSV, rather than being relabeled as passing soaks. Every timing/comparison run records `uptime`.
+
+Supplemental rendered device delivery uses `godot-mono --disable-vsync --resolution 1280x720 --fixed-fps 60`
+with `menu_test.tscn --scenario=input --port=24699 --capture-dir="$PWD/build/tanks-review-input-isolated"`:
+163 assertions pass with a clean engine log. Reviewed `lab_03_jump.png` and `match_03_jump.png` show the
+primary-view player airborne after real device events. An earlier invocation used a port occupied by a soak,
+failed ENet hosting and is invalid; its log remains `build/tanks-review-input.log`. Likewise, an initial
+`dotnet build -c Release` attempt failed before compilation because this Godot solution defines `ExportRelease`,
+not `Release`; the corrected configuration passes above.
+
+The 160-tank Square `tank_range.tscn --chain=primed` rendered capture/recording passes its 154-neighbor chain
+assertion. Reviewed `build/tanks-review-chain-shots/02_chain.png`, `03_chain.png`, and sampled 6/10-second
+frames of the 23.5-second `build/tanks-review-chain.mp4` retain the white flash, thrown shells and generous
+orange fire/smoke/sparks. The scratch RNG probe (`godot-mono --headless --script build/tanks-review-rng.gd`)
+asserts that fresh default generators have different seeds; eight constructions produced six distinct seeds.
+This corroborates the avoidable peer-local entropy corrected by the canonical-scatter unit test.
+
+Final code gates establish integration, not the missing capacity targets. Ordinary sixteen-process suburb
+convergence remains unreliable; the owner Debug view remains below a 0.98 simulation/wall ratio; the noisy
+358.68 ms native chain spike is retained. Final-revision quiet-machine timing, 4× bandwidth remeasurement
+after this follow-up, exact internal Jolt solver attribution and Windows/macOS behavior remain unverified.
+Temporary native-export and detached-baseline project copies were removed; raw logs, metrics and reviewed
+captures remain under `build/`. No branch was pushed or merged into dev.
 
 ## Measurement method
 
@@ -479,7 +537,7 @@ The required sixteen-client scale gate is **not met**. Six 90-second Debug soaks
 | Release | 16 / 336 | faults | FAIL | 0.007 / 0.758 | 3.85 | 207 | True | 0 |
 | Release | 16 / 336 | clean | FAIL: disconnect / missing coverage | incomplete | — | — | False | 0 |
 
-The Debug sixteen-client clean completion included resting drops 0.146 m apart; faulted completion had a roughly 1.98 m resting discrepancy. Release faulted had aggregate final moving drift 0.758 m and a 3.85-second episode, exceeding the existing 0.50 m / 2-second limits. Its peak moving discrepancy was 42.267 m during a transient. These are real failed checks, not successful scale evidence. A further scratch-only experiment restored the former twelve-step headless catch-up budget: its clean run lost several clients during loading and its faulted run still failed moving convergence. That experiment was not adopted. The production two-step policy therefore retains a significant under-load network risk.
+The Debug sixteen-client clean completion included resting drops 0.146 m apart; faulted completion had a roughly 1.98 m resting discrepancy. Release faulted had aggregate final moving drift 0.758 m and a 3.85-second episode, exceeding the existing 0.50 m / 2-second limits. Its peak moving discrepancy was 42.267 m during a transient. These are real failed checks, not successful scale evidence. A further scratch-only experiment restored the former twelve-step headless catch-up budget: its clean run lost several clients during loading and its faulted run still failed moving convergence. That scratch experiment was not adopted in the original measured revision. The lead-review follow-up above subsequently removes the production two-step policy, restores twelve-step network catch-up, and compares shipping-default convergence against dev explicitly. The older failed captures remain evidence of the measured revision, not the final pacing policy.
 
 The native clean disconnect had no engine/protocol error or explicit reason from ENet. The twelve-step experiment also exposed a 3.831-second synchronous server generation/poll stall before sending the loading packet. This is evidence of an additional startup limitation, not proof of the disconnect cause. Fixing startup delivery and investigating the late physical disagreement remain follow-ups; changing gameplay rules, ignoring failed peers or widening the checker is not a substitute.
 
