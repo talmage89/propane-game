@@ -4,6 +4,8 @@ using System.Linq;
 using Godot;
 using Propane.Bots;
 using Propane.Core;
+using Propane.Lab;
+using Propane.Modes;
 using Propane.Navigation;
 using Propane.Net;
 using Propane.Player;
@@ -95,6 +97,26 @@ internal static class NavigationTests
         });
         using var shape = new CapsuleShape3D { Radius = 0.32f, Height = 1.8f };
         using var tuning = Tuning.LoadBaked();
+        runner.Run("navigation/large Short Fuse rosters use separated road starts across resets", () =>
+        {
+            var settings = ModeRegistry.ShortFuse.Supply.Suburb(tuning, 16);
+            for (var seed = 11; seed <= 13; seed++)
+            {
+                for (var round = 1; round <= 4; round++)
+                {
+                    var planSeed = 100 + seed * 37 + 7919 * (round - 1);
+                    var plan = Propane.World.SuburbPlans.Generate(settings, planSeed);
+                    var starts = ShortFuseArena.RimSpawns(plan, 16, (ulong)planSeed, tuning.MpStartSpacing);
+                    TestRunner.Assert(starts.Count == 16 && starts.Distinct().Count() == 16, "sixteen starts must be unique");
+                    TestRunner.Assert(starts.SequenceEqual(ShortFuseArena.RimSpawns(plan, 16, (ulong)planSeed, tuning.MpStartSpacing)), "starts must be seeded");
+                    for (var i = 0; i < starts.Count; i++)
+                    {
+                        for (var j = 0; j < i; j++)
+                            TestRunner.Assert(starts[i].DistanceTo(starts[j]) > 10, $"seed {planSeed}: starts {i}/{j} are crowded");
+                    }
+                }
+            }
+        });
         var caps = new NavigationCapabilities(shape.Radius, shape.Height, tuning.RunSpeed,
             tuning.SprintSpeed, tuning.JumpVelocity, tuning.PlayerGravity, tuning.Acceleration, tuning.AirControl);
         runner.Run("navigation uses actor jump and gait capabilities", () =>

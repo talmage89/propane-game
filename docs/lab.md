@@ -35,6 +35,8 @@ Below the starters, **Prototype modes · rules on trial** lists modes the owner 
 Each but Dissolve Run plays you against Lab bots (Lab prototype bots, 1–15, default 3; the duel's difficulty sets their skill) in an
 offline round, with the match HUD on top. Their rules are in [modes.md](modes.md#lab-prototypes); every number is a
 Lab dial in the tuning panel's Lab section, and layout dials apply on reset.
+Short Fuse prefers rim starts; when a large roster exhausts starts separated by `MpStartSpacing`, it uses clear
+interior road starts too. This changes only local actor placement, not the generated suburb or the mode's rules.
 
 - **Ring Out** (void only). A slab of 5 × 5 lots of 16 m floats over the void, with four piles ringed around the
   middle. Every 15 s a band of the rim pulses orange for 4 s and dissolves, until the center lot remains. Fall off, or
