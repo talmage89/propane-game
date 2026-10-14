@@ -107,6 +107,17 @@ public partial class LabMenu : CanvasLayer
                 Button("+", () => { draft.LabStackCount = Mathf.Min(Tuning.LabStackMaximum, draft.LabStackCount + Tuning.LabStackStep); Rebuild("larger"); }, "larger", draft.LabStackCount >= Tuning.LabStackMaximum, row);
                 layout.AddChild(UiStyle.Text($"{Tuning.LabStackMinimum}–{Tuning.LabStackMaximum} tanks · bigger stacks cost more during a blast.", 16, UiStyle.SoftInk, HorizontalAlignment.Center));
             }
+            if (scenario.Id == "king")
+            {
+                // The zone's mint pace: seconds a lone holder needs for each tank.
+                const float step = 0.5f, fastest = 0.5f, slowest = 10f;
+                var row = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.Center };
+                layout.AddChild(row);
+                Button("−", () => { draft.KingMintSeconds = Mathf.Max(fastest, draft.KingMintSeconds - step); Rebuild("faster"); }, "faster", draft.KingMintSeconds <= fastest, row);
+                row.AddChild(UiStyle.Text($"A tank every {draft.KingMintSeconds:0.0} s", 22));
+                Button("+", () => { draft.KingMintSeconds = Mathf.Min(slowest, draft.KingMintSeconds + step); Rebuild("slower"); }, "slower", draft.KingMintSeconds >= slowest, row);
+                layout.AddChild(UiStyle.Text("Mint pace while you hold the zone alone · F1 tunes it during play too.", 16, UiStyle.SoftInk, HorizontalAlignment.Center));
+            }
             if (scenario.Banking || scenario.Prototype)
             {
                 // The lobby's difficulty profiles; the Lab's skill dial keeps fine control between them.

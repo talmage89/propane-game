@@ -40,7 +40,8 @@ Lab dial in the tuning panel's Lab section, and layout dials apply on reset.
   stand where the ground went, and you are out; the feed credits whoever threw you within 6 s. You then watch from a
   ledge off one side, free to look around. The last one standing wins; the controls panel shows every place.
 - **King of the Cul-de-sac** (void or suburb). A beam marks a 12 m zone on a pile. Stand in it alone to mint a banked
-  tank every 2 s; anyone else upright inside stops it (the beam pulses red). Every 45 s the zone moves to another pile
+  tank every 2 s (the King setup page sets this pace, from 0.5 to 10 s); anyone else upright inside stops it (the beam
+  pulses red). Every 45 s the zone moves to another pile
   15–25 m away after a 3 s warning (a pale beam marks the next spot) and a fresh pile materializes there. Banking,
   hits and throws spill as in Tank Bank. The void lays out a ring of six pile spots around one in the middle; a suburb
   uses its own tank groups. Most banked when the clock runs out wins.
