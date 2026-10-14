@@ -428,6 +428,7 @@ public partial class NetTest : Node
                      p.Player.Kind == ActorKind.Bot)).OrderBy(b => b.GlobalPosition.DistanceTo(match.Player.GlobalPosition)).FirstOrDefault() is { } watched)
         {
             // --look-at-bots: a still observer facing the nearest bot, including actors this peer owns.
+            match.Player.Spectating = watched;
             AimAt(match.Player, watched.GlobalPosition + Vector3.Up * 1.2f);
         }
         else if (DevArgs.Get("human") != "idle") // --human=idle: a still player, so frame costs measure lobby bots alone.

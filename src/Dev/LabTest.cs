@@ -262,10 +262,14 @@ public partial class LabTest : Node
         else lab.Player.InputOverride = new ScriptedPlayer(lab);
         // The scripted player taps visible tanks through the actor intent/aim path; neither bank is granted.
         var seconds = (int)DevArgs.GetFloat("seconds", soak ? 180 : 45);
+        var shots = (DevArgs.Get("shots") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries)
+            .Select(v => double.Parse(v, CultureInfo.InvariantCulture)).ToArray();
+        var shot = 0;
         var frame = 0;
         while (lab.Bank!.IsPlaying && lab.World.Clock.Now < seconds)
         {
             Assert(frame++ < seconds * 120, "duel simulation stalled");
+            if (shot < shots.Length && lab.World.Clock.Now >= shots[shot]) capture.Screenshot($"duel_{shots[shot++]:000}s");
             await Frames(1).ConfigureAwait(true);
         }
         var bank = lab.Bank!;
