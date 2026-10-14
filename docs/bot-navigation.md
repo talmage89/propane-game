@@ -113,6 +113,9 @@ unchanged match tuning schema.
 
 ## Measured checks
 
+The following measurements record the original navigator. The shared-cache implementation's
+[scale verification](bot-scale.md) includes its final course sweeps, paired match outcomes and frame/brain costs.
+
 Linux, Godot 4.7.2 .NET/Jolt, baked movement tuning, physics at 120 Hz and courses at fixed 60 FPS:
 
 | Course run | Goals reached | Mean successful time | Stuck events |
