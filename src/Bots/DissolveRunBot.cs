@@ -78,8 +78,8 @@ public sealed class DissolveRunBot : IBotGoalPolicy
         }
 
         retarget -= dt;
-        if (target != null && (!GodotObject.IsInstanceValid(target) || target.State == PropaneTank.TankState.Exploded)) target = null;
-        if (retarget <= 0 || target == null)
+        if (target != null && (!GodotObject.IsInstanceValid(target) || target.State == PropaneTank.TankState.Exploded)) { target = null; retarget = 0; }
+        if (retarget <= 0)
         {
             retarget = 0.4f;
             var safe = tuning.RagdollRadius + 1.5f;

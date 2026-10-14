@@ -16,6 +16,7 @@ public partial class Tuning
     public bool BotHuntWhenEmpty { get; set; } = true;
     // Periodic observations leave steering and aiming at the physics rate.
     public float BotSightInterval { get; set; } = 0.1f;
+    public float BotPrizeInterval { get; set; } = 0.4f;
     public float BotWatchInterval { get; set; } = 0.2f;
     public float BotCoverInterval { get; set; } = 0.5f;
     // Seconds that navigation answers near an explosion expire while thrown props settle.

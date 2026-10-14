@@ -105,7 +105,8 @@ public sealed class KingBot : IBotGoalPolicy
         if (look) sightTimer = tuning.BotSightInterval;
         var reach = BotMotor.MeleeReach(tuning);
         var close = NearestIntruder(world, spot, radius, here, reach + 0.4f);
-        if (close == null && inZone && (look || !Intruding(rival, spot, radius))) rival = VisibleIntruder(world, player, spot, radius);
+        if (!Intruding(rival, spot, radius)) rival = null;
+        if (close == null && inZone && look) rival = VisibleIntruder(world, player, spot, radius);
         if (close != null)
         {
             motor.Face(player, BotMotor.AimPoint(close), dt);
@@ -249,12 +250,14 @@ public sealed class KingBot : IBotGoalPolicy
         var here = player.GlobalPosition;
         var safe = tuning.RagdollRadius + 2.5f;
         prizeTimer -= dt;
-        if (prize != null && GodotObject.IsInstanceValid(prize) && prize.State != PropaneTank.TankState.Exploded && prizeTimer > 0 &&
-            prize.GlobalPosition.DistanceTo(here) > safe)
+        if (prize != null && (!GodotObject.IsInstanceValid(prize) || prize.State == PropaneTank.TankState.Exploded ||
+            prize.GlobalPosition.DistanceTo(here) <= safe))
         {
-            return prize;
+            prize = null;
         }
-        prizeTimer = 0.4f;
+
+        if (prizeTimer > 0) return prize;
+        prizeTimer = tuning.BotPrizeInterval;
         candidates.Clear();
         var tanks = world.LiveTanks;
         var bodies = world.RemoteBodies;
