@@ -328,7 +328,8 @@ $GODOT --fixed-fps 60 res://scenes/dev/tank_range.tscn -- --capture-dir=/tmp/t -
 $GODOT --fixed-fps 60 res://scenes/dev/gather_range.tscn -- --capture-dir=/tmp/gather
 $GODOT --headless --fixed-fps 60 res://scenes/dev/gather_range.tscn -- --scenario=grant-races
 # A real single-player rifle blast knocks intact tanks loose, then they gather; seed 23 fixes the road fixture.
-# Once the knock is proven, the fixture removes random blast fragments so departure paths stay clear.
+# Once the knock is proven, the fixture clears nearby loose props and blast fragments so departure paths stay clear.
+# --gather-trace buffers per-physics-tick member states/positions and nearby bodies, then prints them at the result.
 $GODOT --fixed-fps 60 res://scenes/dev/game_test.tscn -- --scenario=gather --tune.FixedSeed=23 --capture-dir=/tmp/gather-game
 # Upright pyramids: every physics tick for 120 simulated seconds, player passes, gather neighbors and toppling.
 $GODOT --headless --fixed-fps 60 res://scenes/dev/upright_pile_tests.tscn
