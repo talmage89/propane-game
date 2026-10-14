@@ -160,7 +160,10 @@ shielded drops and tanks still in their original or gathered pile stay put. Shot
 and player bumps reset the wait or interrupt a gliding tank. Cramped groups wait for a clear site and path.
 Rebuilt piles use `PileBuilder`'s upright cluster: every count fits, and removing one tank leaves no suspended tier.
 
-Match settings use the actual player count. Tank supply is `MpTankCount + MpTanksPerPlayer × players`, ammo cans are
+**Tank count multiplier** (World, 1–8) scales suburb tank supply and pile sizes; rebuild the suburb to apply it.
+It defaults to 1. The Lab's Huge stack offers 24–512 tanks, starting at 40.
+
+Match settings use the actual player count. Before the multiplier, tank supply is `MpTankCount + MpTanksPerPlayer × players`, ammo cans are
 `PickupCount + PickupsPerPlayer × players`, and map width is `MpMapSizeBase + MpMapSizePerPlayer × players`. Pile
 limits gain `floor(MpPileSizePerPlayer × players)`. `MpStartSpacing` is a hard minimum between clear road starts;
 invalid settings fail generation instead of placing players on top of one another. Lobby capacity is a separate creator setting, bounded by the tested technical ceiling of 16. These shared plan and tuner changes require the next release to be minor (`Protocol.Version` is 2).

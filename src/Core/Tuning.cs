@@ -491,6 +491,8 @@ public partial class Tuning : Resource
     // ---------------------------------------------------------------- World
     [ExportGroup("World")]
     [Export(PropertyHint.Range, "1,80,1")] public int TankCount { get; set; } = 30;
+    /// <summary>Scales suburb supply and pile sizes in single player and matches; rebuild to apply.</summary>
+    [Export(PropertyHint.Range, "1,8,1")] public int TankCountMultiplier { get; set; } = 1;
     /// <summary>Tanks stand in groups of between these sizes, close enough to set each other off.</summary>
     [Export(PropertyHint.Range, "1,16,1")] public int ClusterSizeMin { get; set; } = 1;
     [Export(PropertyHint.Range, "1,16,1")] public int ClusterSizeMax { get; set; } = 10;
