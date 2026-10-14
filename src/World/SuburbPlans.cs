@@ -15,18 +15,18 @@ public static class SuburbPlans
 
     public static SuburbSettings SinglePlayer(Tuning tuning) => Piles(tuning) with
     {
-        TankCount = tuning.TankCount,
-        ClusterSizeMin = tuning.ClusterSizeMin,
-        ClusterSizeMax = Mathf.Max(tuning.ClusterSizeMin, tuning.ClusterSizeMax),
+        TankCount = tuning.TankCount * tuning.TankCountMultiplier,
+        ClusterSizeMin = tuning.ClusterSizeMin * tuning.TankCountMultiplier,
+        ClusterSizeMax = Mathf.Max(tuning.ClusterSizeMin, tuning.ClusterSizeMax) * tuning.TankCountMultiplier,
     };
 
     /// <summary>A player-scaled suburb: piles near the center, a clear start for every player, and ammo pickups.</summary>
     public static SuburbSettings Match(Tuning tuning, int players) => Piles(tuning) with
     {
         MapSize = tuning.MpMapSizeBase + tuning.MpMapSizePerPlayer * Mathf.Max(players, 1),
-        TankCount = tuning.MpTankCount + tuning.MpTanksPerPlayer * Mathf.Max(players, 1),
-        ClusterSizeMin = tuning.MpClusterSizeMin + (int)(tuning.MpPileSizePerPlayer * Mathf.Max(players, 1)),
-        ClusterSizeMax = Mathf.Max(tuning.MpClusterSizeMin, tuning.MpClusterSizeMax) + (int)(tuning.MpPileSizePerPlayer * Mathf.Max(players, 1)),
+        TankCount = (tuning.MpTankCount + tuning.MpTanksPerPlayer * Mathf.Max(players, 1)) * tuning.TankCountMultiplier,
+        ClusterSizeMin = (tuning.MpClusterSizeMin + (int)(tuning.MpPileSizePerPlayer * Mathf.Max(players, 1))) * tuning.TankCountMultiplier,
+        ClusterSizeMax = (Mathf.Max(tuning.MpClusterSizeMin, tuning.MpClusterSizeMax) + (int)(tuning.MpPileSizePerPlayer * Mathf.Max(players, 1))) * tuning.TankCountMultiplier,
         CenterBias = tuning.MpCenterBias,
         CenterRadius = tuning.MpCenterRadius,
         PlayerSpawns = Mathf.Max(players, 1),

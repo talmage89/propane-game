@@ -16,6 +16,16 @@ public sealed class GatherGroups
     public IReadOnlyList<Sample[]> Advance(IEnumerable<Sample> samples, float radius, int minimum, float delay, float delta)
     {
         var eligible = samples.Where(s => s.Eligible).OrderBy(s => s.Id).ToArray();
+        var cells = new Dictionary<Vector3I, List<Sample>>();
+        var width = radius == 0 ? 1 : Mathf.Abs(radius);
+        Vector3I Cell(Vector3 position) => new(Mathf.FloorToInt(position.X / width),
+            Mathf.FloorToInt(position.Y / width), Mathf.FloorToInt(position.Z / width));
+        foreach (var sample in eligible)
+        {
+            var cell = Cell(sample.Position);
+            if (!cells.TryGetValue(cell, out var bucket)) { bucket = new List<Sample>(); cells.Add(cell, bucket); }
+            bucket.Add(sample);
+        }
         var seen = new HashSet<ulong>();
         var next = new Dictionary<string, float>();
         var ready = new List<Sample[]>();
@@ -25,12 +35,23 @@ public sealed class GatherGroups
             var group = new List<Sample> { seed };
             for (var i = 0; i < group.Count; i++)
             {
-                foreach (var sample in eligible)
+                var cell = Cell(group[i].Position);
+                for (var x = -1; x <= 1; x++)
                 {
-                    if (!seen.Contains(sample.Id) && group[i].Position.DistanceSquaredTo(sample.Position) <= radius * radius)
+                    for (var y = -1; y <= 1; y++)
                     {
-                        seen.Add(sample.Id);
-                        group.Add(sample);
+                        for (var z = -1; z <= 1; z++)
+                        {
+                            if (!cells.TryGetValue(cell + new Vector3I(x, y, z), out var bucket)) continue;
+                            foreach (var sample in bucket)
+                            {
+                                if (!seen.Contains(sample.Id) && group[i].Position.DistanceSquaredTo(sample.Position) <= radius * radius)
+                                {
+                                    seen.Add(sample.Id);
+                                    group.Add(sample);
+                                }
+                            }
+                        }
                     }
                 }
             }

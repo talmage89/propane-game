@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using Godot;
 using Propane.Net;
@@ -14,6 +15,65 @@ public static class GatherTests
 
     public static void Register(TestRunner runner)
     {
+        runner.Run("gather/spatial neighbors match exhaustive connectivity and stable clocks", () =>
+        {
+            var rng = new Random(23);
+            var samples = Enumerable.Range(1, 512).Select(i => new GatherGroups.Sample((ulong)i,
+                new Vector3(rng.Next(-10, 11), rng.Next(-3, 4), rng.Next(-10, 11)), i % 7 != 0, 0)).ToArray();
+            foreach (var radius in new[] { 0f, 1f, 3f, 8f })
+            {
+                var remaining = samples.Where(s => s.Eligible).OrderBy(s => s.Id).ToList();
+                var expected = new List<string>();
+                while (remaining.Count > 0)
+                {
+                    var group = new List<GatherGroups.Sample> { remaining[0] }; remaining.RemoveAt(0);
+                    for (var i = 0; i < group.Count; i++)
+                    {
+                        var neighbors = remaining.Where(s => s.Position.DistanceSquaredTo(group[i].Position) <= radius * radius).ToArray();
+                        foreach (var neighbor in neighbors) { remaining.Remove(neighbor); group.Add(neighbor); }
+                    }
+                    if (group.Count >= 2) expected.Add(string.Join(",", group.Select(s => s.Id).Order()));
+                }
+                var detector = new GatherGroups();
+                detector.Advance(samples, radius, 2, 1, 0);
+                var actual = detector.Advance(samples.Reverse(), radius, 2, 1, 1);
+                Assert(actual.Select(g => string.Join(",", g.Select(s => s.Id))).SequenceEqual(expected),
+                    $"spatial connectivity or clocks differ at radius {radius}");
+            }
+        });
+        runner.Run("gather/batched tanks observe scripted wake and asleep relocation", () =>
+        {
+            using var world = new Propane.Core.WorldContext(runner, runner.World.Tuning);
+            var tank = PropaneTank.Create(world); world.ContentRoot.AddChild(tank);
+            var simulation = world.EffectsRoot.GetChildren().OfType<TankSimulation>().Single();
+            Assert(simulation.Count == 1 && !tank.IsPhysicsProcessing(), "tank retained an individual callback");
+            tank.Sleeping = true;
+            simulation._PhysicsProcess(1d / 120);
+            Assert(!tank.NeedsTick, "resting tank retained vent/gather work");
+            var revision = tank.Disturbance;
+            tank.GlobalPosition += Vector3.Right * world.Tuning.GatherRestDistance * 2;
+            Assert(TankGather.Eligible(tank) && tank.Disturbance > revision, "asleep relocation retained a gather clock");
+            revision = tank.Disturbance;
+            tank.Sleeping = false; tank.LinearVelocity = Vector3.Right;
+            simulation._PhysicsProcess(1d / 120);
+            Assert(tank.Disturbance > revision, "scripted wake escaped the batch");
+            tank.Sleeping = true;
+            simulation._PhysicsProcess(1d / 120);
+            revision = tank.Disturbance;
+            world.ContentRoot.ProcessMode = Node.ProcessModeEnum.Disabled;
+            tank.GlobalPosition += Vector3.Right * world.Tuning.GatherRestDistance * 2;
+            simulation._PhysicsProcess(1d / 120);
+            Assert(tank.Disturbance == revision, "disabled source retained tank callbacks");
+            world.ContentRoot.ProcessMode = Node.ProcessModeEnum.Inherit;
+            simulation._PhysicsProcess(1d / 120);
+            Assert(tank.Disturbance > revision, "source re-entry failed to resume tank callbacks");
+            tank.ProcessMode = Node.ProcessModeEnum.Disabled;
+            tank.PunctureRemote(Vector3.Right, Vector3.Right, 1);
+            simulation._PhysicsProcess(1d / 120);
+            Assert(!tank.CanProcess(), "disabled vent resumed before source retirement");
+            tank.Free();
+            Assert(simulation.Count == 0, "freed tank retained a simulation registration");
+        });
         runner.Run("gather/radius boundary is inclusive and transitive", () =>
         {
             var groups = new GatherGroups().Advance(new[] { S(1, 0), S(2, 3), S(3, 6), S(4, 9.001f) }, 3, 2, 0, 0);
