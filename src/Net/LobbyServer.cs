@@ -56,6 +56,9 @@ public partial class LobbyServer : Node
         public MatchRun? Match;
         public int Capacity;
         public ParticipantRoster Roster = null!;
+        /// <summary>The mode and settings its creator chose, as every member sees them.</summary>
+        public ModeSettings Settings = ModeSettings.Default;
+        /// <summary>The mode its next match plays: the creator's choice, or a test's synthetic mode.</summary>
         public ModeDefinition Mode = ModeRegistry.TankBank;
     }
 
@@ -82,6 +85,9 @@ public partial class LobbyServer : Node
         public Tuning Tuning = null!;
         public bool[] PickupUp = Array.Empty<bool>();
         public double[] PickupBack = Array.Empty<double>();
+        /// <summary>Each actor's latest reported position, for a mode whose rules read where bodies are.</summary>
+        public readonly Dictionary<int, ActorSample> Samples = new();
+        public double NextSample;
     }
 
     private readonly IPacketTransport transport;
@@ -108,7 +114,10 @@ public partial class LobbyServer : Node
     internal Func<ParticipantRoster> RosterFactory { get; set; } = () => new();
     /// <summary>The roster revision of a peer's lobby (0 outside one), for request fixtures.</summary>
     internal uint RosterRevision(int peer) => clients.GetValueOrDefault(peer)?.Lobby?.Roster.Revision ?? 0;
-    /// <summary>The mode new lobbies play. Tank Bank is the only networked mode; tests run synthetic ones.</summary>
+    /// <summary>
+    /// The mode new lobbies start in (Tank Bank). Tests may start them in any lobby mode, or play a synthetic one, which
+    /// lobbies then advertise as Tank Bank.
+    /// </summary>
     internal ModeDefinition LobbyMode { get; set; } = ModeRegistry.TankBank;
 
     public int Port { get; set; } = Protocol.DefaultPort;
@@ -248,6 +257,17 @@ public partial class LobbyServer : Node
                         SendLobbyState(lobby);
                     }
                     break;
+                case Msg.SetMode:
+                    // The codec admitted only lobby modes at a mint pace on the lobby's steps.
+                    if (client.Lobby is { Phase: LobbyPhase.Waiting } modeLobby && modeLobby.CreatorId == client.Id)
+                    {
+                        modeLobby.Settings = (ModeSettings)message.Payload;
+                        modeLobby.Mode = modeLobby.Settings.Mode;
+                        Log($"lobby {modeLobby.Id}: {modeLobby.Mode.Name}, a tank every {modeLobby.Settings.MintSeconds:0.0} s in the zone");
+                        SendLobbyState(modeLobby);
+                        BroadcastLobbyList();
+                    }
+                    break;
                 case Msg.SetCapacity:
                     if (client.Lobby is { Phase: LobbyPhase.Waiting } capacityLobby && capacityLobby.CreatorId == client.Id &&
                         ((IntMessage)message.Payload).Value >= capacityLobby.Roster.Present.Count)
@@ -316,6 +336,7 @@ public partial class LobbyServer : Node
             MatchLength = Tuning.SavedTemplate.MatchLengthDefault,
             Capacity = Math.Clamp(Tuning.SavedTemplate.MaxPlayers, 2, Protocol.TestedActorCeiling),
             Roster = RosterFactory(),
+            Settings = ModeSettings.Default with { ModeId = ModeRegistry.ForLobby(LobbyMode.Id)?.Id ?? ModeRegistry.TankBankId },
             Mode = LobbyMode,
         };
         lobbies[lobby.Id] = lobby;
@@ -389,6 +410,7 @@ public partial class LobbyServer : Node
             foreach (var actor in match.Actors.Values.Where(a => a.OwnerPeerId == client.Id).ToArray())
             {
                 match.Actors[actor.Id] = actor with { Present = false };
+                match.Samples.Remove(actor.Id);
                 match.Mode.Apply(match.Host, new ActorLeft(actor.Id), clock.Seconds);
             }
             var transfers = match.Players.Count > 0 ? match.Tanks.Transfer(client.Id, match.HostId) : Array.Empty<BodyAuthority>();
@@ -442,7 +464,7 @@ public partial class LobbyServer : Node
     {
         var actors = lobby.Roster.Present.Select(PlayerProfile.From).ToArray();
         var state = new LobbyInfo(lobby.Id, lobby.CreatorId, lobby.MatchLength, lobby.Phase, actors, lobby.Capacity, lobby.Roster.Revision)
-        { Peers = lobby.Members.ToArray() };
+        { Peers = lobby.Members.ToArray(), Mode = lobby.Settings };
         var bytes = MessageCodec.Encode(new NetMessage(Msg.LobbyState, 0, 0, state), true);
         var roster = MessageCodec.Encode(new NetMessage(Msg.RosterState, 0, 0,
             new RosterStateMessage(lobby.Id, lobby.Roster.Revision, actors)), true);
@@ -530,7 +552,7 @@ public partial class LobbyServer : Node
         foreach (var lobby in lobbies.Values.OrderBy(l => l.Id))
         {
             var creator = clients.GetValueOrDefault(lobby.CreatorId);
-            w.Int(lobby.Id).String(creator?.Name ?? "?").Int(lobby.Roster.Present.Count).Byte((byte)lobby.Phase).Int(lobby.Capacity);
+            w.Int(lobby.Id).String(creator?.Name ?? "?").Int(lobby.Roster.Present.Count).Byte((byte)lobby.Phase).Int(lobby.Capacity).Byte(lobby.Settings.ModeId);
         }
         return w.ToArray();
     }
@@ -559,8 +581,10 @@ public partial class LobbyServer : Node
         var actors = lobby.Roster.Present;
         if (actors.Count == 0 || actors.Count > lobby.Capacity || !actors.Any(a => a.OwnerPeerId == client.Id))
         { Notice(client, "The creator needs an actor to start."); return; }
-        // Everyone plays on the creator's tuning: the baked values in a release build, the live ones in debug.
+        // Everyone plays on the creator's tuning: the baked values in a release build, the live ones in debug. The
+        // lobby's mode settings are the server's own dials for this match (King's mint pace).
         var tuning = Tuning.FromSnapshot(snapshot);
+        lobby.Settings.Apply(tuning);
         var match = new MatchRun
         {
             Id = matchIds.Allocate(),
@@ -588,7 +612,7 @@ public partial class LobbyServer : Node
         match.Tanks = new TankLedger(plan, match.HostId);
         match.Host = new MatchHost(this, match);
         match.Mode = new ModeRunner(mode, new ModeSetup(actors.Select(a => new ModeActor(a.ActorId, a.Name, true, StartScore)).ToArray(),
-            new ModeWorld(mode.World, 1, plan.Tanks.Count), mode.CopyTuners(tuning), unchecked((ulong)plan.Seed)));
+            new ModeWorld(mode.World, 1, plan.Tanks.Count, KingRules.SpotsFrom(plan)), mode.CopyTuners(tuning), unchecked((ulong)plan.Seed)));
         for (var i = 0; i < plan.Props.Count; i++)
         {
             if (plan.Props[i].Body != World.Plan.PropBody.Static && !plan.Props[i].Model.StartsWith("car:")) { match.LooseProps.Add(i); }
@@ -651,6 +675,7 @@ public partial class LobbyServer : Node
                 match.NextClock += 1;
                 Broadcast(match, new NetWriter(Msg.Clock, match.Id).Float((float)Math.Max(0, match.PhaseEnds - now)), traffic: TrafficClass.UnreliablePlayerPoses);
             }
+            SampleActors(match, now);
         }
         // One timed step per tick; a round's end resolves through RoundEnd, MatchEnd and Results at once.
         if (match.Mode.Phases.Advance(now, Times(match), match.Players.All(match.Loaded.Contains)) is { } change)
@@ -671,6 +696,7 @@ public partial class LobbyServer : Node
             case ModePhase.Round:
                 lobby.Phase = LobbyPhase.Playing;
                 match.NextClock = now + 1;
+                match.NextSample = now;
                 Broadcast(match, new NetWriter(Msg.MatchGo, match.Id).Float((float)change.Round.Length));
                 match.Mode.Apply(match.Host, new PhaseEntered(ModePhase.Round, change.Round), now);
                 Log($"lobby {lobby.Id}: match on");
@@ -708,7 +734,8 @@ public partial class LobbyServer : Node
                         _ => $"lobby {lobby.Id}: {report.Text}",
                     });
                 }
-                if (match.Mode.Rules is TankBankRules bank && (bank.MapDetonations != match.Tanks.MapDetonations || bank.DropDetonations != match.Tanks.DropDetonations))
+                if ((match.Mode.Rules as TankBankRules ?? (match.Mode.Rules as KingRules)?.Bank) is { } bank &&
+                    (bank.MapDetonations != match.Tanks.MapDetonations || bank.DropDetonations != match.Tanks.DropDetonations))
                 {
                     Log($"match {match.Id}: ledger disagreement map={match.Tanks.MapDetonations} drops={match.Tanks.DropDetonations}");
                 }
@@ -758,6 +785,24 @@ public partial class LobbyServer : Node
         BroadcastLobbyList();
     }
 
+    /// <summary>
+    /// Feeds the rules where every present actor is, at the rate players send their positions, from those positions:
+    /// the feet while up, the pelvis while thrown or getting up.
+    /// </summary>
+    private static void SampleActors(MatchRun match, double now)
+    {
+        if (!match.Mode.Definition.SamplesActors || now < match.NextSample) return;
+        match.NextSample = now + 1.0 / Math.Max(1f, match.Tuning.PlayerSendRate);
+        match.Mode.Apply(match.Host, new ActorsSampled(match.Samples.Values.ToArray()), now);
+    }
+
+    private static ActorSample Sample(int actorId, Player.PlayerNetState state)
+    {
+        var down = state.State != Player.PlayerNetState.Mode.Active;
+        var at = down ? state.PelvisPosition : state.Position;
+        return new ActorSample(actorId, at.X, at.Y, at.Z, down);
+    }
+
     private void ClaimPickup(Client client, int actorId, int index)
     {
         if (client.Lobby is not { Match: { } match } || !match.Mode.Permits(ModeGate.Pickup, clock.Seconds) ||
@@ -788,6 +833,9 @@ public partial class LobbyServer : Node
         var playOpen = match.Mode.Permits(ModeGate.World, clock.Seconds);
         switch (message.Payload)
         {
+            case PlayerStateMessage state:
+                if (match.Mode.Definition.SamplesActors) match.Samples[actorId] = Sample(actorId, state.State);
+                break;
             case ExplodeMessage explosion:
                 var detonation = match.Tanks.Detonate(client.Id, explosion, actorId, playOpen);
                 PublishAuthority(match, detonation);
@@ -881,7 +929,8 @@ public partial class LobbyServer : Node
         if (envelope.ModeId != match.Mode.Definition.Id || envelope.SchemaVersion != match.Mode.Definition.SchemaVersion)
             throw new InvalidDataException($"mode event for schema {envelope.ModeId}/{envelope.SchemaVersion} in a {match.Mode.Definition.Name} run");
         var kind = ModeSchemas.Find(envelope.ModeId, envelope.SchemaVersion).Kind(envelope.Kind, ModeDirection.Event);
-        if (kind.Reporter == ModeReporter.ActorOwner && !AcceptActor(client, match, message)) return;
+        if (kind.Reporter == ModeReporter.WorldAuthority && client.Id != match.HostId) return;
+        if (kind.Reporter is ModeReporter.ActorOwner or ModeReporter.WorldAuthority && !AcceptActor(client, match, message)) return;
         var now = clock.Seconds;
         if (kind.Dependency?.Invoke(envelope.Payload) is { } dependency && !match.Tanks.Exploded(dependency.Peer, dependency.Request))
         {
@@ -905,8 +954,11 @@ public partial class LobbyServer : Node
         public void RegisterEntities(int actorId, int peer, IReadOnlyList<BodyState> bodies) =>
             match.Tanks.RegisterDrops(match.Slots[actorId], peer, bodies);
 
+        public IReadOnlyList<BodyState> SpawnWorldTanks(IReadOnlyList<Transform3D> poses) => match.Tanks.SpawnWorldTanks(match.HostId, poses);
         public uint Life(int actorId) => match.Actors[actorId].LifeId;
-        public void Log(string text) => LobbyServer.Log(text);
+        public int WorldAuthority => match.HostId;
+        public Tuning Tuning => match.Tuning;
+        public void Log(string text) => LobbyServer.Log($"match {match.Id}: {text}");
     }
 
     private static bool ValidTarget(MatchRun match, int actor, uint life) =>

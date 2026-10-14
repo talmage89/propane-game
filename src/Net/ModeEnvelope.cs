@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using Godot;
 using Propane.Modes;
 
 namespace Propane.Net;
@@ -19,8 +20,11 @@ public sealed record ModeEnvelope(uint RoundId, uint WorldRevision, byte ModeId,
 
 public enum ModeDirection : byte { Event, Command, Snapshot }
 
-/// <summary>Who may report an event: the owner of the actor in its header (checked with that actor's life and sequence).</summary>
-public enum ModeReporter : byte { ActorOwner, Server }
+/// <summary>
+/// Who may report an event: the owner of the actor in its header (checked with that actor's life and sequence), or
+/// the match's current world authority, as one of its own actors (checked the same way).
+/// </summary>
+public enum ModeReporter : byte { ActorOwner, Server, WorldAuthority }
 
 /// <summary>An accepted request an event can depend on, such as a peer's explosion request.</summary>
 public readonly record struct ModeDependency(int Peer, uint Request);
@@ -49,6 +53,15 @@ public sealed record TankBankScore(int Score, int Delta);
 public sealed record TankBankRefused(IReadOnlyList<uint> Ids);
 public sealed record TankBankBanks(IReadOnlyList<(int Actor, int Bank, bool Present)> Banks);
 
+// King of the Cul-de-sac's own payloads; its bank kinds are Tank Bank's, and its Zone snapshot is a KingState.
+
+/// <summary>The server asks the world authority to place zone <paramref name="Zone"/>'s fresh pile near the spot.</summary>
+public sealed record KingPileWanted(int Zone, Vector3 Spot, int Count, float Reach, float Clearance);
+/// <summary>The world authority's placement: the pile's transforms, or none when no ground within reach was clear.</summary>
+public sealed record KingPilePlaced(int Zone, IReadOnlyList<Transform3D> Tanks);
+/// <summary>The server registered the pile: its tanks, owned by the world authority, for everyone to build.</summary>
+public sealed record KingPileSpawned(int Zone, int Owner, IReadOnlyList<BodyState> Tanks);
+
 /// <summary>Every schema a build understands. Unknown schemas fail explicitly instead of being skipped.</summary>
 public static class ModeSchemas
 {
@@ -65,7 +78,26 @@ public static class ModeSchemas
         public const ushort Banks = 1;          // Snapshot: every bank at round start.
     }
 
+    /// <summary>King of the Cul-de-sac's kinds. The bank's are Tank Bank's, under the same ids, so its wire serves both.</summary>
+    public static class KingKinds
+    {
+        public const ushort Spill = TankBankKinds.Spill;                 // Event: as Tank Bank's.
+        public const ushort PilePlaced = 2;                              // Event: the world authority's pile placement.
+        public const ushort Score = TankBankKinds.Score;                 // Command: as Tank Bank's.
+        public const ushort SpillAccepted = TankBankKinds.SpillAccepted; // Command: as Tank Bank's.
+        public const ushort SpillRefused = TankBankKinds.SpillRefused;   // Command: as Tank Bank's.
+        public const ushort PileWanted = 4;                              // Command: to the world authority only.
+        public const ushort PileSpawned = 5;                             // Command: a registered fresh pile, to everyone.
+        public const ushort Banks = TankBankKinds.Banks;                 // Snapshot: as Tank Bank's.
+        public const ushort Zone = 2;                                    // Snapshot: the zone, whenever it changes.
+    }
+
     private const int BodyBytes = 64;
+    private const int TransformBytes = 28;
+    private const int SpotBytes = 12;
+    /// <summary>Wire bound on a round's zone index and on the zone's radius (meters).</summary>
+    public const int MaxZone = ushort.MaxValue;
+    public const float MaxZoneRadius = 1000;
 
     private static readonly List<ModeSchema> registered = new()
     {
@@ -78,6 +110,22 @@ public static class ModeSchemas
             new ModeKind(TankBankKinds.SpillAccepted, "SpillAccepted", ModeDirection.Command, ModeReporter.Server, 2 + MaxSpill * BodyBytes, ReadSpill, WriteSpill),
             new ModeKind(TankBankKinds.SpillRefused, "SpillRefused", ModeDirection.Command, ModeReporter.Server, 1 + MaxSpill * 4, ReadRefused, WriteRefused),
             new ModeKind(TankBankKinds.Banks, "Banks", ModeDirection.Snapshot, ModeReporter.Server, 1 + Protocol.MaxWireActors * 9, ReadBanks, WriteBanks),
+        }),
+        new ModeSchema(ModeRegistry.KingId, 1, new[]
+        {
+            new ModeKind(KingKinds.Spill, "Spill", ModeDirection.Event, ModeReporter.ActorOwner, 2 + MaxSpill * BodyBytes, ReadSpill, WriteSpill),
+            new ModeKind(KingKinds.PilePlaced, "PilePlaced", ModeDirection.Event, ModeReporter.WorldAuthority, 3 + MaxSpill * TransformBytes,
+                ReadPilePlaced, WritePilePlaced),
+            new ModeKind(KingKinds.Score, "Score", ModeDirection.Command, ModeReporter.Server, 8,
+                r => new TankBankScore(Nonnegative(r.Int()), r.Int()), (w, p) => { var s = (TankBankScore)p; w.Int(s.Score).Int(s.Delta); }),
+            new ModeKind(KingKinds.SpillAccepted, "SpillAccepted", ModeDirection.Command, ModeReporter.Server, 2 + MaxSpill * BodyBytes, ReadSpill, WriteSpill),
+            new ModeKind(KingKinds.SpillRefused, "SpillRefused", ModeDirection.Command, ModeReporter.Server, 1 + MaxSpill * 4, ReadRefused, WriteRefused),
+            new ModeKind(KingKinds.PileWanted, "PileWanted", ModeDirection.Command, ModeReporter.Server, 2 + SpotBytes + 1 + 8, ReadPileWanted, WritePileWanted),
+            new ModeKind(KingKinds.PileSpawned, "PileSpawned", ModeDirection.Command, ModeReporter.Server, 7 + MaxSpill * BodyBytes,
+                ReadPileSpawned, WritePileSpawned),
+            new ModeKind(KingKinds.Banks, "Banks", ModeDirection.Snapshot, ModeReporter.Server, 1 + Protocol.MaxWireActors * 9, ReadBanks, WriteBanks),
+            new ModeKind(KingKinds.Zone, "Zone", ModeDirection.Snapshot, ModeReporter.Server,
+                2 + 2 * SpotBytes + 4 + 4 + 1 + Protocol.MaxWireActors * 4 + 16 + 1 + Protocol.MaxWireActors * 8 + 4, ReadZone, WriteZone),
         }),
     };
 
@@ -173,6 +221,89 @@ public static class ModeSchemas
         foreach (var (actor, bank, present) in banks.Banks) w.Int(actor).Int(bank).Bool(present);
     }
 
+    private static KingPileWanted ReadPileWanted(NetReader r) => new(r.UShort(), MessageCodec.ReadVector(r), Range(r.Byte(), 1, MaxSpill),
+        Range(r.Float(), 0, MaxZoneRadius), Range(r.Float(), 0, MaxZoneRadius));
+
+    private static void WritePileWanted(NetWriter w, object payload)
+    {
+        var wanted = (KingPileWanted)payload;
+        w.UShort((ushort)Range(wanted.Zone, 0, MaxZone)).Vec3(wanted.Spot).Byte((byte)Range(wanted.Count, 1, MaxSpill)).Float(wanted.Reach).Float(wanted.Clearance);
+    }
+
+    private static KingPilePlaced ReadPilePlaced(NetReader r)
+    {
+        var zone = (int)r.UShort();
+        var tanks = new Transform3D[Range(r.Byte(), 0, MaxSpill)];
+        for (var i = 0; i < tanks.Length; i++) tanks[i] = MessageCodec.ReadTransform(r);
+        return new KingPilePlaced(zone, tanks);
+    }
+
+    private static void WritePilePlaced(NetWriter w, object payload)
+    {
+        var placed = (KingPilePlaced)payload;
+        w.UShort((ushort)Range(placed.Zone, 0, MaxZone)).Byte((byte)Range(placed.Tanks.Count, 0, MaxSpill));
+        foreach (var tank in placed.Tanks) w.Transform(tank);
+    }
+
+    private static KingPileSpawned ReadPileSpawned(NetReader r)
+    {
+        var zone = (int)r.UShort();
+        var owner = Range(r.Int(), 1, int.MaxValue);
+        var tanks = new BodyState[Range(r.Byte(), 1, MaxSpill)];
+        for (var i = 0; i < tanks.Length; i++) tanks[i] = MessageCodec.ReadBody(r);
+        if (tanks.Select(t => t.Id).Distinct().Count() != tanks.Length) throw new InvalidDataException("duplicate ids");
+        if (tanks.Any(t => t.Id < BodySync.MapTankBase || t.Id >= BodySync.DropTankBase)) throw new InvalidDataException("pile tank outside the world's ids");
+        return new KingPileSpawned(zone, owner, tanks);
+    }
+
+    private static void WritePileSpawned(NetWriter w, object payload)
+    {
+        var spawned = (KingPileSpawned)payload;
+        w.UShort((ushort)Range(spawned.Zone, 0, MaxZone)).Int(spawned.Owner).Byte((byte)Range(spawned.Tanks.Count, 1, MaxSpill));
+        foreach (var tank in spawned.Tanks) MessageCodec.WriteBody(w, tank);
+    }
+
+    /// <summary>
+    /// King's zone: the state every peer reads (<see cref="KingState"/>), in round time. Decoding checks that it is one
+    /// a server could hold: one occupant is the holder, several contest it, and none means nobody holds.
+    /// </summary>
+    private static KingState ReadZone(NetReader r)
+    {
+        var zone = (int)r.UShort();
+        var spot = Spot(MessageCodec.ReadVector(r));
+        var next = Spot(MessageCodec.ReadVector(r));
+        var radius = Range(r.Float(), float.Epsilon, MaxZoneRadius);
+        var holder = Nonnegative(r.Int());
+        var occupants = new int[Range(r.Byte(), 0, Protocol.MaxWireActors)];
+        for (var i = 0; i < occupants.Length; i++) occupants[i] = Range(r.Int(), 1, int.MaxValue);
+        if (occupants.Distinct().Count() != occupants.Length) throw new InvalidDataException("duplicate occupants");
+        if (holder != (occupants.Length == 1 ? occupants[0] : 0)) throw new InvalidDataException("zone holder disagrees with its occupants");
+        var nextMint = Range(r.Float(), 0, float.MaxValue);
+        var mintSeconds = Range(r.Float(), float.Epsilon, float.MaxValue);
+        var moveAt = Range(r.Float(), 0, float.MaxValue);
+        var warning = Range(r.Float(), 0, float.MaxValue);
+        var minted = new KingMinted[Range(r.Byte(), 0, Protocol.MaxWireActors)];
+        for (var i = 0; i < minted.Length; i++) minted[i] = new KingMinted(Range(r.Int(), 1, int.MaxValue), Nonnegative(r.Int()));
+        if (minted.Select(m => m.ActorId).Distinct().Count() != minted.Length) throw new InvalidDataException("duplicate minted actors");
+        var elapsed = Range(r.Float(), 0, float.MaxValue);
+        return new KingState(zone, spot, next, radius, holder, occupants, nextMint, mintSeconds, moveAt, warning, minted, elapsed);
+    }
+
+    private static void WriteZone(NetWriter w, object payload)
+    {
+        var state = (KingState)payload;
+        w.UShort((ushort)Range(state.Zone, 0, MaxZone)).Vec3(Point(state.Spot)).Vec3(Point(state.Next)).Float((float)state.Radius)
+            .Int(state.Holder).Byte((byte)Range(state.Occupants.Count, 0, Protocol.MaxWireActors));
+        foreach (var occupant in state.Occupants) w.Int(occupant);
+        w.Float((float)state.NextMint).Float((float)state.MintSeconds).Float((float)state.MoveAt).Float((float)state.WarningSeconds)
+            .Byte((byte)Range(state.Minted.Count, 0, Protocol.MaxWireActors));
+        foreach (var entry in state.Minted) w.Int(entry.ActorId).Int(entry.Count);
+        w.Float((float)state.Elapsed);
+    }
+
+    private static ModeSpot Spot(Vector3 at) => new(at.X, at.Y, at.Z);
+    private static Vector3 Point(ModeSpot spot) => new((float)spot.X, (float)spot.Y, (float)spot.Z);
+    private static float Range(float n, float min, float max) => n >= min && n <= max ? n : throw new InvalidDataException($"number out of range: {n}");
     private static int Range(int n, int min, int max) => n >= min && n <= max ? n : throw new InvalidDataException($"integer out of range: {n}");
     private static int Nonnegative(int n) => Range(n, 0, int.MaxValue);
     private static uint Id(uint id) => id != 0 ? id : throw new InvalidDataException("zero mode id");

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using Godot;
 using Propane.Bots;
@@ -74,7 +75,7 @@ public partial class Menus : CanvasLayer
             Screen = this,
             Root = layout,
             Back = GoBack,
-            AdjustLength = AdjustMatchLength,
+            Adjusters = new Dictionary<string, Action<int>> { ["match_length"] = AdjustMatchLength, ["mint_pace"] = AdjustMintPace },
         };
         AddChild(navigation);
 
@@ -492,10 +493,13 @@ public partial class Menus : CanvasLayer
         layout.AddChild(custom);
         layout.AddChild(new HSeparator());
 
-        // Match length: the creator sets it.
+        BuildModeChoice(lobby);
+
+        // Match length (a King round's length): the creator sets it.
+        var king = lobby.Mode.ModeId == Modes.ModeRegistry.KingId;
         var length = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.Center };
         length.AddThemeConstantOverride("separation", 12);
-        length.AddChild(UiStyle.Text("Match length", 20));
+        length.AddChild(UiStyle.Text(king ? "Round length" : "Match length", 20));
         var step = Mathf.Max(tuning.MatchLengthStep, 1f);
         if (Net.IsCreator)
         {
@@ -509,7 +513,7 @@ public partial class Menus : CanvasLayer
         {
             var minutes = UiStyle.Button(UiStyle.FormatTime(lobby.MatchLength));
             minutes.SetMeta("focus_key", "match_length");
-            minutes.TooltipText = "Left / right to change match length";
+            minutes.TooltipText = $"Left / right to change {(king ? "round" : "match")} length";
             minutes.CustomMinimumSize = new Vector2(80, 40);
             // Keep the existing mouse −/+ buttons; the time itself is a controller adjustment target.
             minutes.GuiInput += e =>
@@ -582,6 +586,88 @@ public partial class Menus : CanvasLayer
         buttons.AddChild(leave);
         layout.AddChild(buttons);
         AddMessage();
+    }
+
+    /// <summary>
+    /// The mode the lobby will play, which everyone sees and only the creator changes: Tank Bank or King of the
+    /// Cul-de-sac, and King's mint pace (seconds a lone holder needs for each tank) on the Lab's steps.
+    /// </summary>
+    private void BuildModeChoice(LobbyInfo lobby)
+    {
+        var settings = lobby.Mode;
+        var chosen = Modes.ModeRegistry.ForLobby(settings.ModeId) ?? Modes.ModeRegistry.TankBank;
+        var waiting = lobby.Phase == LobbyServer.LobbyPhase.Waiting;
+        var modes = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.Center };
+        modes.AddThemeConstantOverride("separation", 10);
+        modes.AddChild(UiStyle.Text("Mode", 20));
+        if (Net.IsCreator)
+        {
+            foreach (var mode in Modes.ModeRegistry.Lobby)
+            {
+                var button = UiStyle.Button(mode.Name);
+                button.SetMeta("focus_key", $"mode_{mode.Id}");
+                button.Disabled = !waiting;
+                UiStyle.Choose(button, mode == chosen);
+                var id = mode.Id;
+                button.Pressed += () => { if (id != Net.Lobby?.Mode.ModeId) Net.SetMode(settings with { ModeId = id }); };
+                modes.AddChild(button);
+            }
+        }
+        else
+        {
+            modes.AddChild(UiStyle.Title(chosen.Name, 24));
+        }
+        layout.AddChild(modes);
+        layout.AddChild(UiStyle.Text(chosen.Id == Modes.ModeRegistry.KingId
+            ? "Hold the beam alone to mint banked tanks; it moves to another pile every 45 s. Hits and throws spill."
+            : "Every tank you blow up is banked; getting hit or thrown spills them. Most banked wins.", 15, UiStyle.SoftInk, HorizontalAlignment.Center));
+        if (chosen.Id != Modes.ModeRegistry.KingId) return;
+        var pace = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.Center };
+        pace.AddThemeConstantOverride("separation", 12);
+        pace.AddChild(UiStyle.Text("Mint pace", 20));
+        var text = $"A tank every {settings.MintSeconds:0.0} s";
+        if (Net.IsCreator)
+        {
+            var faster = UiStyle.Button("−");
+            faster.SetMeta("focus_key", "mint_faster");
+            faster.CustomMinimumSize = new Vector2(44, 40);
+            faster.Disabled = !waiting || settings.MintSeconds <= Modes.KingRules.MintPaceMin;
+            faster.Pressed += () => AdjustMintPace(-1);
+            pace.AddChild(faster);
+            var value = UiStyle.Button(text);
+            value.SetMeta("focus_key", "mint_pace");
+            value.TooltipText = "Left / right to change how fast the zone mints";
+            value.Disabled = !waiting;
+            // The −/+ buttons serve the mouse; the value itself is the keyboard and controller adjustment target.
+            value.GuiInput += e =>
+            {
+                if (e is InputEventKey && (e.IsActionPressed("ui_left") || e.IsActionPressed("ui_right")))
+                {
+                    AdjustMintPace(e.IsActionPressed("ui_left") ? -1 : 1);
+                    value.AcceptEvent();
+                }
+            };
+            pace.AddChild(value);
+            var slower = UiStyle.Button("+");
+            slower.SetMeta("focus_key", "mint_slower");
+            slower.CustomMinimumSize = new Vector2(44, 40);
+            slower.Disabled = !waiting || settings.MintSeconds >= Modes.KingRules.MintPaceMax;
+            slower.Pressed += () => AdjustMintPace(1);
+            pace.AddChild(slower);
+        }
+        else
+        {
+            pace.AddChild(UiStyle.Title(text, 24));
+        }
+        layout.AddChild(pace);
+    }
+
+    /// <summary>One step of King's mint pace: left is faster (fewer seconds per tank), right slower.</summary>
+    private void AdjustMintPace(int direction)
+    {
+        if (Net.Lobby is not { Phase: LobbyServer.LobbyPhase.Waiting } lobby || !Net.IsCreator) return;
+        var seconds = (float)Math.Clamp(lobby.Mode.MintSeconds + direction * Modes.KingRules.MintPaceStep, Modes.KingRules.MintPaceMin, Modes.KingRules.MintPaceMax);
+        if (seconds != lobby.Mode.MintSeconds) Net.SetMode(lobby.Mode with { MintSeconds = seconds });
     }
 
     private void OpenBotEditor(PlayerProfile? editing)

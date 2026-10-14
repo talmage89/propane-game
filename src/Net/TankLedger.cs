@@ -18,9 +18,11 @@ public sealed class TankLedger
     private readonly Dictionary<uint, BodyAuthority> bodies = new();
     private readonly Dictionary<(int Peer, uint Request), int> explosions = new();
     private readonly Dictionary<uint, (uint Epoch, uint Sequence)> gathers = new();
+    private int worldTanks; // Map-range tanks so far, the plan's first; a mode's fresh piles follow them.
 
     public TankLedger(SuburbPlan plan, int host)
     {
+        worldTanks = plan.Tanks.Count;
         for (var i = 0; i < plan.Tanks.Count; i++)
         {
             var tank = plan.Tanks[i];
@@ -139,6 +141,17 @@ public sealed class TankLedger
             throw new InvalidDataException("invalid or reused drop id");
         }
         foreach (var drop in drops) { Register(drop, owner, rest: false); }
+    }
+
+    /// <summary>
+    /// New world tanks (a mode's fresh pile) at these poses, resting and owned by <paramref name="owner"/>. Their ids
+    /// follow the plan's map tanks and are never reused, so they detonate and are audited as map tanks.
+    /// </summary>
+    public IReadOnlyList<BodyState> SpawnWorldTanks(int owner, IReadOnlyList<Transform3D> poses)
+    {
+        var spawned = poses.Select(pose => new BodyState(BodySync.MapTankId(worldTanks++), pose, Vector3.Zero, Vector3.Zero)).ToArray();
+        foreach (var body in spawned) { Register(body, owner, rest: true); }
+        return spawned;
     }
 
     private void Register(BodyState body, int owner, bool rest) =>

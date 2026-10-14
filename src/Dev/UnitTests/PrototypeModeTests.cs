@@ -228,8 +228,9 @@ public static class PrototypeModeTests
             var commit = rules.Handle(new SpillRegistered(ticket), KingAt(9));
             TestRunner.Assert(commit.OfType<SpillCommitted>().Any() && rules.Bank.Bank(2) == 0, "spills work as in Tank Bank");
             TestRunner.Assert(rules.Handle(new TankMinted(2), KingAt(9)).Count == 0, "only the zone mints");
-            var audit = rules.Snapshot().Report.Single(r => r.Kind == ModeReportKind.Audit).Text;
-            TestRunner.Assert(audit == "king audit initial=0 map=1 drops=0 minted=2 spills=2 banked=1 expected=1 ok=True", audit);
+            var audits = rules.Snapshot().Report.Where(r => r.Kind == ModeReportKind.Audit).Select(r => r.Text).ToArray();
+            TestRunner.Assert(audits.SequenceEqual(new[] { "king audit initial=0 map=1 drops=0 minted=2 spills=2 banked=1 expected=1 ok=True", "king minted 1=1 2=1" }),
+                string.Join("; ", audits));
             TestRunner.Assert(rules.Snapshot().Standings.Single(s => s.ActorId == 1) is { Present: false, Score: 1 }, "the departed keep their bank");
         });
 

@@ -297,7 +297,7 @@ public partial class Match : Node3D
 
     /// <summary>The mode's HUD data for this peer's view; the local view adds crosshair, ammo and feedback.</summary>
     private ModeHud PresentHud(IReadOnlyList<Vector3> objectives, bool showObjectives) =>
-        hudPresenter.Present(new ModeHudInput(player.ActorId, ModePhase, timeLeft, scores, objectives, showObjectives));
+        hudPresenter.Present(new ModeHudInput(player.ActorId, ModePhase, timeLeft, scores, objectives, showObjectives, View: ModeView));
 
     /// <summary>Groups of live tanks (the plan's and dropped ones), for the arrows.</summary>
     private List<Vector3> TankGroups() => suburb.TankGroupCenters();
@@ -1044,6 +1044,9 @@ public partial class Match : Node3D
                     refused.Detonated -= OnTankDetonated;
                     refused.QueueFree();
                 }
+                break;
+            default:
+                OnKing(envelope.Payload);
                 break;
         }
     }

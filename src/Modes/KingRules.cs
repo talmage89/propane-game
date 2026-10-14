@@ -163,7 +163,9 @@ public sealed class KingRules : IModeRules
         var report = state.Report.Select(line => line.Kind == ModeReportKind.Audit
             ? new ModeReport(ModeReportKind.Audit, $"king audit initial={bank.Initial} map={bank.MapDetonations} drops={bank.DropDetonations} " +
                 $"minted={bank.Minted} spills={bank.Spilled} banked={bank.Banked} expected={bank.Expected} ok={bank.Conserved}")
-            : line).Append(new ModeReport(ModeReportKind.Summary, "tanks minted in the zone: " +
+            : line).Append(new ModeReport(ModeReportKind.Audit, "king minted " +
+                string.Join(" ", state.Standings.OrderBy(s => s.ActorId).Select(s => $"{s.ActorId}={MintedBy(s.ActorId)}"))))
+            .Append(new ModeReport(ModeReportKind.Summary, "tanks minted in the zone: " +
                 string.Join(", ", state.Standings.OrderBy(s => s.ActorId).Select(s => $"{s.Name} {MintedBy(s.ActorId)}")))).ToArray();
         return state with { Report = report };
     }
