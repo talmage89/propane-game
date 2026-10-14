@@ -15,6 +15,7 @@ import subprocess
 from source_run import ROOT, assembly, godot, interrupted
 
 SCHEMA = 3
+RENDER_METRICS = ("render_cpu", "render_setup_cpu", "visible_draw_calls", "shadow_draw_calls", "visible_primitives", "shadow_primitives")
 METRICS = ("fps", "wall_p50_ms", "wall_p95_ms", "wall_p99_ms", "wall_max_ms", "process_ms", "physics_ms",
            "process_peak_monitor_ms", "physics_peak_monitor_ms", "brain_tick_ms", "brain_bot_tick_ms", "navigation_tick_ms", "navigation_share_pct", "navigation_queries_tick_ms", "navigation_queries_per_tick",
            "jolt_step_upper_ms", "gpu_ms", "tank_tick_ms", "vent_frame_ms", "gc_count", "gc_pause_ms", "rss_mib")
@@ -59,7 +60,7 @@ def summarize(rows, bots):
                   navigation_queries_tick_ms=tick("NavigationSweep") + tick("NavigationSupport"),
                   navigation_queries_per_tick=tick("navigation_sweep_calls") + tick("navigation_support_calls"),
                   jolt_step_upper_ms=tick("physics_tail"), tank_tick_ms=tick("TankPhysics"), vent_frame_ms=mean("VentProcess"))
-    result["effects_ms_per_frame"] = {key: mean(key) for key in rows[0] if not key.startswith("Actor") and key not in
+    result["effects_ms_per_frame"] = {key: mean(key) for key in rows[0] if not key.startswith("Actor") and key not in RENDER_METRICS and key not in
                                       ("frame", "wall", "gpu", "process", "physics", "time", "blast_count", "explosion_count",
                                        "physics_steps", "physics_tail", "stage", "process_callbacks", "physics_callbacks",
                                        "brain_calls", "navigation_sweep_calls", "navigation_support_calls")}
@@ -67,6 +68,7 @@ def summarize(rows, bots):
     result["actors"] = {key[5:]: dict(ms_per_frame=mean(key), ms_per_tick=tick(key),
                                     allocated_bytes=sum(r[key + "Bytes"] for r in rows),
                                     calls=sum(r[key + "Calls"] for r in rows)) for key in actor_systems}
+    result["rendering"] = {key: mean(key) for key in RENDER_METRICS if key in rows[0]}
     result["brain_calls"] = thinks
     result["frames"] = len(rows)
     result["sampled_physics_ticks"] = ticks

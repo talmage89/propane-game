@@ -71,13 +71,19 @@ See Godot's [frame loop](https://github.com/godotengine/godot/blob/master/main/m
 
 The `actors` dictionary adds opt-in inclusive CPU scopes for actor physics, movement and `MoveAndSlide`,
 ragdoll/get-up decisions, presentation, locomotion parameter updates, rifle pose/IK, pose recovery, hand follow,
-and logical aim/camera collision queries. Each scope retains ms per frame, ms per physics tick, current-thread
+and logical aim/camera collision queries plus the physics-tick target ray. Each scope retains ms per frame, ms per physics tick, current-thread
 managed allocation bytes and call counts, including separate intact/disturbed stages. Native animation-tree
 sampling, skinning and physical-bone engine updates are outside these script scopes; they remain in the callback
 residual/native tail. Timers do not identify exact native solver cost. Per-frame presentation should be compared
 per frame, since catch-up changes the ratio of process frames to physics ticks.
 
-Scopes are inclusive: actor physics contains movement, movement contains `MoveAndSlide`, presentation contains
+The `rendering` dictionary retains main-viewport rendering CPU time, global render setup CPU time, and separate
+visible/shadow draw-call and primitive counts from `RenderingServer`. These are previous rendered-frame values;
+headless counters are zero. Draw counts identify submitted work, not elapsed GPU time for an individual pass.
+The `AnimationTree` actor scope times explicitly advanced distant samples; nearby automatic engine sampling
+remains outside that scope. Keep this distinction when comparing full and throttled pose modes.
+
+Scopes are inclusive: actor physics contains movement and the target ray, movement contains `MoveAndSlide`, presentation contains
 locomotion parameters and aim, aim contains camera queries; brain contains navigation, navigation contains queries, and blast contains its subscopes.
 Do not add these together or subtract GPU time from wall time as if CPU and GPU ran sequentially. Opt-in
 `EffectProfile` timers add measurement overhead; ordinary play does not read clocks/allocations for these scopes.
