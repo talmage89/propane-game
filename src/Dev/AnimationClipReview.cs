@@ -50,7 +50,6 @@ public partial class AnimationClipReview : Node3D
             AddChild(character);
             model = character.GetNode<Node3D>("Visual/Model");
             foreach (var tree in model.FindChildren("*", "AnimationTree", owned: false).OfType<AnimationTree>()) tree.Active = false;
-            foreach (var feet in model.FindChildren("*", "SkeletonModifier3D", owned: false).OfType<FootPlacement>()) feet.Active = false;
         }
         else
         {

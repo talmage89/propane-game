@@ -122,17 +122,18 @@ Pause and focus changes clear pending presses and mouse motion, and resample hel
 
 `src/Player/PlayerState.cs` resolves lifecycle, support, gait and weapon action once per physics tick, from intent and
 pre-move floor contact. The accepted jump overrides contact; landing is the first tick that samples contact again.
-Held aim is intent, effective aim owns creep/spread, and recent fire only owns ready presentation. Animation blends
-walk, jog and sprint over actual speed on one stride clock; the resolved creep gait retains its walk presentation.
-A foot modifier plants world-space contacts, steps in the travel direction and adjusts the pelvis to static ground;
-remote clips follow displayed snapshot displacement. Jump poses follow latched takeoff, vertical velocity and
-impact-scaled landing. See [the locomotion review](docs/locomotion.md) for measurements and captures. The node
-facade owns collisions, ammo and lifecycle transitions; the resolver has no scene or engine dependencies.
-Rifle and torso sway follow that stride; walk is subtle and aimed creep stays steady. Shots climb the logical aim;
-the player pulls against the retained recoil. Short rifle and camera springs supply the visible kick. During a
-burst the barrel tracks each shot, with both hands attached. Contact-aware upper-body blends retain contacts
-through stance changes, reload and get-up. See [the recoil review](docs/recoil.md) for climb, barrel-angle and bot
-measurements, and [the motion review](docs/motion.md) for the other captures and bounds.
+Held aim is intent, effective aim owns creep/spread, and recent fire only owns ready presentation. Animation plays
+polished public clips as authored ([sources](docs/animation-sources.md)): walk, jog and sprint blend over actual
+speed on one stride clock, and while aiming or after firing the walk and creep step in any direction relative to
+the aim (backpedal, sidesteps and diagonals). Running, the legs turn toward travel or run backward under the
+twisted torso. Remote clips follow displayed snapshot displacement. Jump poses follow latched takeoff, vertical
+velocity and impact-scaled landing. See [locomotion](docs/locomotion.md). The node facade owns collisions, ammo and
+lifecycle transitions; the resolver has no scene or engine dependencies.
+A light rifle stance layers authored rifle poses (carry, hip ready, shouldered, sprint port, reload and the butt
+strike), the aim twist and pitch, and two-bone hand IK over the clips ([rifle stance](docs/motion.md)). Shots, their
+obstruction and hits come only from the logical aim, never from the animated pose. Shots climb the logical aim; the
+player pulls against the retained recoil. Short rifle and camera springs supply the visible kick. See
+[the recoil review](docs/recoil.md) for climb and bot measurements.
 A throw immediately clears weapon poses and cancels reload, so get-up cannot restore a pose from before the throw.
 
 ## Tuning
@@ -180,7 +181,7 @@ invalid settings fail generation instead of placing players on top of one anothe
 | `src/Core` | Tuning, input map, physics and render layers, shared assets, events, spawn roots. |
 | `src/World` | The void environment, the model catalog, and the suburb builder. `Plan/` holds the pure-data generator. |
 | `src/Tank` | Propane tanks, the vent jet, blasts, debris and breakaway fence panels. |
-| `src/Player` | Character controller, camera, animation, the procedural rifle rig, ragdoll and get-up. |
+| `src/Player` | Character controller, camera, animation, the rifle stance, ragdoll and get-up. |
 | `src/Fx` | Explosions, tracers, impacts, hitstop, particle helpers, and the shader warm-up. |
 | `src/UI` | HUD, menus (main, multiplayer, lobby, pause, match, results), match HUD, tuning panel. |
 | `src/Navigation` | Reusable bot routes, capsule sweeps, jump links and bounded recovery. |
@@ -316,9 +317,9 @@ $GODOT --fixed-fps 60 res://scenes/dev/player_range.tscn -- --scenario=melee --v
 $GODOT --headless --fixed-fps 60 res://scenes/dev/player_range.tscn -- --scenario=melee-reloads --assert-grip --assert-motion
 # Motion: all gaits, hip/aimed bursts, walking reload and get-up into run, captured at 60 Hz.
 $GODOT --fixed-fps 60 res://scenes/dev/player_range.tscn -- --scenario=motion --view=side --assert-motion --assert-grip --capture-dir="$PWD/build/motion"
-# Final remote firing contacts through snapshot relocation/turns, delayed reload echoes and catch-up delivery.
+# Remote grips stay on the rifle through snapshot relocation/turns, delayed shot echoes, reload, melee and get-up.
 $GODOT --headless --fixed-fps 60 res://scenes/dev/rifle_reach_tests.tscn
-# Full-auto magazine, persistent aim climb and shot/rendered barrel alignment; aim, hip or creep.
+# Full-auto magazine, persistent aim climb and the raised barrel's direction; aim, hip or creep.
 $GODOT --fixed-fps 60 --resolution 1280x720 res://scenes/dev/player_range.tscn -- --scenario=recoil --stance=aim --view=player --assert-grip --assert-motion --capture-dir="$PWD/build/rcl-player"
 # Ten magazines against a player capsule with the production bot aim controller.
 $GODOT --headless --fixed-fps 60 res://scenes/dev/player_range.tscn -- --scenario=bot-recoil --skill=1 --distance=20
@@ -327,8 +328,8 @@ $GODOT --headless --fixed-fps 60 res://scenes/dev/menu_test.tscn -- --scenario=i
 # Player scenarios: stances (default), reload, ragdoll, creep (two measured strides), movement (labeled gait/jump transitions),
 # sprint-repro (discovery sequence, exact-tick assertions and transition log), grip (all rifle contacts).
 # feet (all eight body-relative directions in every gait) and feet-events (local starts/stops/turns/jumps/terrain)
-# write final-pose feet.csv and drift/angular metrics.
-# --assert-feet enforces contacts, continuity and jump timing in make test; --feet-corrections exercises snapshot snaps.
+# write final-pose feet.csv and report near-floor drift and ankle separation.
+# --assert-feet enforces finite poses, no snaps, jump phases and stepping turns; --feet-corrections exercises snapshot snaps.
 # --view=rifleleft or rifleright follows the rifle up close.
 $GODOT --fixed-fps 60 res://scenes/dev/player_range.tscn -- --capture-dir=/tmp/p --scenario=reload --view=rifleleft
 $GODOT --fixed-fps 60 res://scenes/dev/player_range.tscn -- --capture-dir=/tmp/movement --scenario=movement --view=side
@@ -381,15 +382,16 @@ with assertions and labeled frames), `drop-refusal` (rolling back a refused pred
 [docs/multiplayer.md](docs/multiplayer.md) lists the commands.
 
 The creep probe reports median and 75th-percentile horizontal foot/toe drift for adjacent samples within 3 cm of
-each bone's minimum height, after two seconds of settling. These are near-floor proxies for planted contacts;
-they do not prove contact classification, lateral stepping or foot IK. The headless movement suite also checks
-actual facade velocity and animation playback at 0.98, 1.6, 2.2 and 2.8 m/s.
+each bone's minimum height, after two seconds of settling. These are near-floor proxies for planted contacts, not
+a contact proof. The headless movement suite also checks actual facade velocity and animation playback at 0.98,
+1.6, 2.2 and 2.8 m/s.
 [docs/movement.md](docs/movement.md) records the speed comparison and the default's trade-off.
 
 The rifle probe measures final wrist position/rotation residuals, sampled skinned hand-surface penetration into
 solid rifle proxies, and right-eye distance from `Socket_Eye` while fully aimed. `--assert-grip` exits 1 on
-failures or missing scenario coverage. The sample is a regression proxy; rendered views still judge the fingers,
-shoulder pocket and cheek weld. [docs/rifle-contact.md](docs/rifle-contact.md) records calibration and limits.
+non-finite values, missing scenario coverage, a wrist more than 2 cm off its grip, a hand 1 cm into the rifle, or an
+aimed eye more than 15 cm from the sight. These are sanity bounds; rendered views judge the fingers, shoulder pocket
+and cheek weld. [docs/rifle-contact.md](docs/rifle-contact.md) records the wrist and finger calibration.
 
 ## Versions and releases
 
