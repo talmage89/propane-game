@@ -12,7 +12,7 @@ config_version=5
 
 config/name="Propane"
 config/description="Run around a procedural suburb and shoot propane tanks."
-config/version="0.2.0"
+config/version="0.3.0"
 run/main_scene="res://scenes/main.tscn"
 config/features=PackedStringArray("4.7", "C#", "Forward Plus")
 config/icon="res://icon.svg"
@@ -70,3 +70,10 @@ textures/default_filters/anisotropic_filtering_level=3
 environment/ssil/quality=1
 anti_aliasing/quality/msaa_3d=2
 anti_aliasing/quality/use_debanding=true
+
+[shader_globals]
+
+reveal_window={
+"type": "vec4",
+"value": Vector4(1, 0, -100000, 100000)
+}

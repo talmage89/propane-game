@@ -126,17 +126,17 @@ test-world: build ## Compare all formations built in two fresh processes
 # time and fail when other jobs starve them, so test-full runs them alone, one at a time, after everything else.
 LABEL := tools/dev/label.sh
 # Four contiguous shards of the whole generator sweep; test-full-generator-coverage proves they hold exactly its seeds.
-GENERATOR_FULL := --seeds=200 --large-seeds=100 --formation-seeds=6
-GENERATOR_1 := --first-seed=1 --seeds=50 --first-large-seed=1 --large-seeds=25 --first-formation-seed=1 --formation-seeds=2
-GENERATOR_2 := --first-seed=51 --seeds=50 --first-large-seed=26 --large-seeds=25 --first-formation-seed=3 --formation-seeds=2
-GENERATOR_3 := --first-seed=101 --seeds=50 --first-large-seed=51 --large-seeds=25 --first-formation-seed=5 --formation-seeds=1
-GENERATOR_4 := --first-seed=151 --seeds=50 --first-large-seed=76 --large-seeds=25 --first-formation-seed=6 --formation-seeds=1
+GENERATOR_FULL := --seeds=200 --large-seeds=100 --formation-seeds=6 --segment-seeds=100
+GENERATOR_1 := --first-seed=1 --seeds=50 --first-large-seed=1 --large-seeds=25 --first-formation-seed=1 --formation-seeds=2 --first-segment-seed=1 --segment-seeds=25
+GENERATOR_2 := --first-seed=51 --seeds=50 --first-large-seed=26 --large-seeds=25 --first-formation-seed=3 --formation-seeds=2 --first-segment-seed=26 --segment-seeds=25
+GENERATOR_3 := --first-seed=101 --seeds=50 --first-large-seed=51 --large-seeds=25 --first-formation-seed=5 --formation-seeds=1 --first-segment-seed=51 --segment-seeds=25
+GENERATOR_4 := --first-seed=151 --seeds=50 --first-large-seed=76 --large-seeds=25 --first-formation-seed=6 --formation-seeds=1 --first-segment-seed=76 --segment-seeds=25
 GENERATOR_SHARDS := test-full-generator-1 test-full-generator-2 test-full-generator-3 test-full-generator-4
 # The Lab sessions of check_lab.py --full, split by cost.
-LAB_1 := soak-void,shortfuse-full
+LAB_1 := soak-void,shortfuse-full,dissolve-pace
 LAB_2 := soak-suburb
-LAB_3 := lifetime,rules,aimstall,duel,ringout,king,shortfuse,shortfuse-combo,dials
-LAB_4 := ringout-full,king-full,king-suburb
+LAB_3 := lifetime,rules,aimstall,duel,ringout,king,shortfuse,shortfuse-combo,dissolve,dials
+LAB_4 := ringout-full,king-full,king-suburb,dissolve-full
 LAB_SHARDS := test-full-lab-1 test-full-lab-2 test-full-lab-3 test-full-lab-4
 # Longest first, so make -j starts the jobs that would otherwise finish last early. The Lab soaks are unseeded bot
 # matches whose cost varies several-fold between runs, so they start before the steadier generator shards.

@@ -1,8 +1,8 @@
 # Scale baseline
 
 Baseline for dev `91c97bb`, before bot/tank optimization, with measurement-only commits through `c167cd6`.
-The two portable reports retain all 40 cases, three repetitions per case, stage summaries and load readings:
-[Debug](scale-baseline/Debug.json) and [Release](scale-baseline/Release.json).
+The full reports (all 40 cases, three repetitions per case, stage summaries and load readings) are not committed:
+`make bench` writes them to `build/bench/`, and `tools/dev/bench_compare.py` compares two of them.
 
 Measured 2026-10-14T04:42:41.967366+00:00 through 2026-10-14T06:26:14.385297+00:00 (last run start), on Intel(R) Core(TM) i5-10400F CPU @ 2.90GHz (12 logical CPUs),
 NVIDIA GeForce GTX 1660, Godot 4.7.2-stable (arch_linux), .NET 10.0.12, Linux.

@@ -62,8 +62,9 @@ the two C# builds per case. [Workload, columns and comparison procedure](docs/me
 
 Choose **Lab** for an upright huge stack, a marked shooting range, a local duel against the banking bot, or free
 session tuning. Void is the default; duel and free tuning also offer a suburb. Under **Prototype modes**, Ring Out,
-King of the Cul-de-sac and Short Fuse (last one standing, with health) are new modes on trial against Lab bots, so their
-rules can be judged before anything ships. Each starter can reset and has a
+King of the Cul-de-sac and Short Fuse (last one standing, with health) are new modes on trial against Lab bots, and
+Dissolve Run is a solo run down an endless street that builds ahead and dissolves behind, so their rules can be judged
+before anything ships. Each starter can reset and has a
 controller-accessible controls menu. Unsaved tuning changes stay in that Lab session. [Lab controls and verification](docs/lab.md).
 
 ## Multiplayer
