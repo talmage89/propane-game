@@ -353,6 +353,10 @@ $GODOT --fixed-fps 60 res://scenes/dev/player_range.tscn -- --scenario=melee --v
 $GODOT --headless --fixed-fps 60 res://scenes/dev/player_range.tscn -- --scenario=melee-reloads --assert-grip --assert-motion
 # Motion: all gaits, hip/aimed bursts, walking reload and get-up into run, captured at 60 Hz.
 $GODOT --fixed-fps 60 res://scenes/dev/player_range.tscn -- --scenario=motion --view=side --assert-motion --assert-grip --capture-dir="$PWD/build/motion"
+# Camera-free actor detail: native near/far/hidden pose rates, mesh detail, rifle contacts, owning view and far recovery.
+$GODOT --fixed-fps 60 res://scenes/dev/actor_detail_tests.tscn -- --capture-dir="$PWD/build/actor-detail"
+# A held distant pose cannot change physical-bone starts during walking, hits, aim, reload or melee.
+$GODOT --headless --fixed-fps 60 res://scenes/dev/ragdoll_pose_tests.tscn
 # Remote grips stay on the rifle through snapshot relocation/turns, delayed shot echoes, reload, melee and get-up.
 $GODOT --headless --fixed-fps 60 res://scenes/dev/rifle_reach_tests.tscn
 # Full-auto magazine, persistent aim climb and the raised barrel's direction; aim, hip or creep.

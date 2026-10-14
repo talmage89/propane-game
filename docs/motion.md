@@ -76,3 +76,44 @@ recoil climb checks; aimed creep allows 8 cm of lateral muzzle sway (the walk cl
 `rifle_reach_tests` also crosses the aim behind a stationary body and checks every final bone against the same
 60-degree frame bound. This deterministically reproduces the intermittent ragdoll head snap; the physical get-up
 heading determines whether the ordinary ragdoll fixture crosses that wrap.
+
+## Actor detail
+
+Actor presentation caches rifle clip names/lengths and immutable finger rest rotations, and reuses camera-shape and aim-ray
+query parameters. Query geometry, exclusions and cadence are unchanged. Native query result arrays/dictionaries
+still allocate; this does not claim an allocation-free physics path.
+
+The **Actor Detail** tuners sample a camera-free actor's animation tree and skeleton modifiers at 30 Hz beyond
+30 m, 15 Hz beyond 80 m, or 10 Hz outside the camera frustum. A 3 m outward hysteresis prevents boundary chatter;
+entering the near distance always restores full updates immediately. The local viewed character, actors without
+a camera viewing their world, active hit reactions (including their fade) and all ragdoll/capture/get-up states
+keep the engine's original idle callbacks. A hit catches up the held tree before queuing the new reaction, so
+earlier elapsed time cannot consume the new one-shot.
+`ActorPoseLod=false` restores full pose updates and the imported mesh LOD bias everywhere. Rates/distances remain
+live tuners, including during matches; they affect presentation, not movement, intent, recoil aim, shot queries
+or network snapshots.
+
+Stride, jump, turning travel and reload presentation clocks still advance each frame. Throttled pose samples
+receive actual accumulated time; actors stagger their sample phases, and a hitch samples one current pose instead
+of replaying missed poses. The top-level rifle follows its last final pose in the moving visual frame between
+samples, so it stays in the held skinned hands. Muzzle flashes and logical aim still update normally. Distant
+limbs step between samples. Their mannequin and rifle use `ActorMeshLodBias` (default 0.1) times the imported
+bias to choose coarser generated mesh LODs; 1 retains the imported bias. Near meshes, shadows, animations and IK
+retain their current fidelity. A throw cancels the cadence immediately, and native ragdoll recovery remains at
+full rate.
+
+`actor_detail_tests` exercises near, mid-distance, far, hidden, near restoration, a local view looking through an
+observer camera, and far ragdoll/get-up. It checks actual native modifier counts, movement, aim/support, sampled
+contacts and rifle contacts on frames that hold the previous skinned pose. It also checks near/distant/owning
+mesh bias, live mesh-bias changes, full detail during recovery/hit reactions and distant restoration after a hit.
+Its reload uses the existing rule:
+reload suppresses aim and allows the ordinary movement gait. The unit suite checks distance hysteresis, live rate
+changes, time conservation, staggered clocks and zero clock allocations. Both run in `make test`.
+
+Before a throttled actor starts a ragdoll, its tree samples the current authored pose with its pending animation
+time. This restores the same initial collider geometry as a full-rate actor, without advancing locomotion clocks
+again or delaying the throw. `ragdoll_pose_tests` compares every first physical-bone transform against a full-rate
+control while the other actor renders at 1 Hz, during walking, a hit reaction, aim, reload and melee. The fixture
+asserts that the held trees really use manual sampling and each weapon action really is active before the throw.
+The bounds are 1 mm and 0.1 degree. It fails before the refresh (29.4 cm), or without the full-rate hit transition (65.0 cm/116 degrees),
+and runs in `make test`.

@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Linq;
 using Godot;
 using Propane.Core;
@@ -51,6 +52,8 @@ public partial class Rifle : Node3D
     private int magazineBone;
     private Vector3 boltCatchLocal;
     private string clip = "Idle";
+    private string posedClip = "";
+    private readonly Dictionary<string, (StringName Name, float Length)> clips = new();
     private float clipTime;
     private bool boltLocked;
     private string? reloadClip;
@@ -140,6 +143,11 @@ public partial class Rifle : Node3D
         // The clips are posed from code each frame, so a reload follows its progress exactly.
         animations = model.FindChildren("*", "AnimationPlayer", owned: false).OfType<AnimationPlayer>().First();
         animations.CallbackModeProcess = AnimationMixer.AnimationCallbackModeProcess.Manual;
+        foreach (var name in new[] { "Idle", "Fire", "FireSemi", "FireLast", "Reload", "ReloadEmpty" })
+        {
+            var key = new StringName(name);
+            clips.Add(name, (key, (float)animations.GetAnimation(key).Length));
+        }
         Pose("Idle", 0);
         LeftHandLocal = ForegripLocal.Origin;
         MagazinePose = MagazineLocal();
@@ -335,14 +343,20 @@ public partial class Rifle : Node3D
 
     private void Pose(string name, float time)
     {
-        if (animations.CurrentAnimation != name)
+        if (posedClip != name)
         {
-            animations.Play(name);
+            animations.Play(clips[name].Name);
+            posedClip = name;
         }
         animations.Seek(time, update: true);
     }
 
-    private float ClipLength(string name) => (float)animations.GetAnimation(name).Length;
+    private float ClipLength(string name) => clips[name].Length;
+
+    public override void _ExitTree()
+    {
+        foreach (var (name, _) in clips.Values) name.Dispose();
+    }
 
     private static StandardMaterial3D CreateBodyMaterial()
     {
