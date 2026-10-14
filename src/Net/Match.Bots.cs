@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using Propane.Bots;
 using Propane.Core;
+using Propane.Fx;
 using Propane.Player;
 using Propane.Tank;
 
@@ -43,7 +44,7 @@ public partial class Match
     /// Owned bot actors and their brains' cost on this peer: think calls, physics ticks with bots, seconds (in all and
     /// in the worst tick), managed bytes allocated, and the navigation physics queries and sight rays they made.
     /// </summary>
-    internal (int Bots, long Thinks, long Ticks, double Seconds, double Worst, long Bytes, long Queries, long Rays) BotCost { get; private set; }
+    internal (int Bots, long Thinks, long Ticks, double Seconds, double Worst, long Bytes, long Queries, long Rays, double NavigationSeconds) BotCost { get; private set; }
 
     internal (long Ticks, double Seconds, double Worst, long Bytes, long AllocatingTicks, long PeakBytes) WarmBotCost { get; private set; }
     private long playingBotTicks;
@@ -85,7 +86,7 @@ public partial class Match
             bots.Add(view);
         }
         RefreshBotPeers();
-        BotCost = (bots.Count, 0, 0, 0, 0, 0, 0, 0);
+        BotCost = (bots.Count, 0, 0, 0, 0, 0, 0, 0, 0);
         Session.OnStopping(() =>
         {
             foreach (var bot in bots) bot.Brain.Dispose();
@@ -112,6 +113,7 @@ public partial class Match
         if (bots.Count == 0 || botServices == null) return;
         var started = Stopwatch.GetTimestamp();
         var allocated = System.GC.GetAllocatedBytesForCurrentThread();
+        var navigation = EffectProfile.Enabled ? EffectProfile.Peek(EffectProfile.System.BotNavigation) : 0;
         var queries = botServices.NavigationQueries;
         var rays = botServices.RayLines;
         botServices.BeginTick(tanks.Values);
@@ -134,6 +136,7 @@ public partial class Match
         var cost = BotCost;
         BotCost = (cost.Bots, cost.Thinks + bots.Count, cost.Ticks + 1, cost.Seconds + seconds, System.Math.Max(cost.Worst, seconds),
             cost.Bytes + bytes, cost.Queries + botServices.NavigationQueries - queries,
-            cost.Rays + botServices.RayLines - rays);
+            cost.Rays + botServices.RayLines - rays,
+            cost.NavigationSeconds + (EffectProfile.Enabled ? (EffectProfile.Peek(EffectProfile.System.BotNavigation) - navigation) / 1000 : 0));
     }
 }

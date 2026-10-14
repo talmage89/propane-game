@@ -1,6 +1,7 @@
 using System;
 using Godot;
 using Propane.Core;
+using Propane.Fx;
 
 namespace Propane.Navigation;
 
@@ -100,6 +101,7 @@ public sealed class NavigationWorld : INavigationWorld, IDisposable
 
     private bool Cast(Vector3 feet, Vector3 motion)
     {
+        using var profile = EffectProfile.Measure(EffectProfile.System.NavigationSweep);
         Queries++;
         sweep.Position = feet + center;
         sweep.TargetPosition = motion;
@@ -109,6 +111,7 @@ public sealed class NavigationWorld : INavigationWorld, IDisposable
 
     public bool Supported(Vector3 feet)
     {
+        using var profile = EffectProfile.Measure(EffectProfile.System.NavigationSupport);
         Queries++;
         ray.Position = feet + Vector3.Up * 0.2f;
         ray.TargetPosition = Vector3.Down * 0.45f;

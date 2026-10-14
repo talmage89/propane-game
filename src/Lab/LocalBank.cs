@@ -103,8 +103,11 @@ public partial class LocalBank : Node
     {
         if (!IsPlaying) return;
         TimeLeft = Mathf.Max(0, TimeLeft - (float)delta);
-        services.BeginTick(Lab.BotTanks);
-        if (brains.Count > 0) botTurn = (botTurn + 1) % brains.Count;
+        if (brains.Count > 0)
+        {
+            services.BeginTick(Lab.BotTanks);
+            botTurn = (botTurn + 1) % brains.Count;
+        }
         for (var i = 0; i < brains.Count; i++)
         {
             var (brain, _, view) = brains[(botTurn + i) % brains.Count];

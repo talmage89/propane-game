@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using Godot;
 using Propane.Core;
+using Propane.Fx;
 using Propane.Navigation;
 using Propane.Net;
 using Propane.Player;
@@ -106,6 +107,7 @@ public sealed class BankingBot : IBotGoalPolicy
 
     public void Think(IBotWorld match, float dt)
     {
+        using var profile = EffectProfile.Measure(EffectProfile.System.BotBrain);
         tuning = match.World.Tuning;
         clock += dt;
         tapCooldown -= dt;
@@ -360,6 +362,7 @@ public sealed class BankingBot : IBotGoalPolicy
 
     private Node3D? Choose(IBotWorld match, AmmoState ammo)
     {
+        using var profile = EffectProfile.Measure(EffectProfile.System.BotChoose);
         var player = match.Player;
         var here = player.GlobalPosition;
         expired.Clear();
@@ -779,6 +782,7 @@ public sealed class BankingBot : IBotGoalPolicy
 
     private void Navigate(IBotWorld match, float dt)
     {
+        using var profile = EffectProfile.Measure(EffectProfile.System.BotNavigation);
         var player = match.Player;
         if (navigationGoal == null)
         {

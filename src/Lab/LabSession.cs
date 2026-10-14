@@ -21,6 +21,9 @@ public partial class LabSession : Node3D
     public Tuning Template { get; init; } = Tuning.SavedTemplate;
     public bool PauseOnFocusLoss { get; set; } = true;
     internal ulong? TestRandomSeed { get; init; }
+    // The scale fixture fixes supply/starts across cases and can request zero or sixteen bots.
+    internal SuburbSettings? TestSuburbSettings { get; init; }
+    internal int? TestBankBots { get; init; }
     public bool CreateLocalView { get; init; } = true;
     public SessionContext Session { get; private set; } = null!;
     public WorldContext World => Session.World;
@@ -95,8 +98,8 @@ public partial class LabSession : Node3D
         else
         {
             source = EnvironmentKind == LabEnvironment.Void ? new VoidWorldSource() :
-            new SuburbWorldSource(Scenario.Banking ? Scenario.Definition.Supply.Suburb(settings, settings.LabBankBots + 1) with { MapSize = settings.LabSuburbSize } :
-                Scenario.Definition.Supply.Suburb(settings, Scenario.Prototype ? settings.LabPrototypeBots + 1 : 1), seed);
+            new SuburbWorldSource(TestSuburbSettings ?? (Scenario.Banking ? Scenario.Definition.Supply.Suburb(settings, (TestBankBots ?? settings.LabBankBots) + 1) with { MapSize = settings.LabSuburbSize } :
+                Scenario.Definition.Supply.Suburb(settings, Scenario.Prototype ? settings.LabPrototypeBots + 1 : 1)), seed);
         }
 
         SessionFactory.Build(this, settings, source, new Mode(this), session => { Session = session; if (TestRandomSeed is { } seed) World.Random.Seed = seed; }, present: CreateLocalView);
@@ -465,7 +468,7 @@ public partial class LabSession : Node3D
             lab.environment.Follow = lab.Player;
             if (lab.Scenario.Banking)
             {
-                var count = session.World.Tuning.LabBankBots + 1;
+                var count = (lab.TestBankBots ?? session.World.Tuning.LabBankBots) + 1;
                 for (var i = 1; i < count; i++)
                 {
                     var bot = new PlayerCharacter
@@ -475,7 +478,7 @@ public partial class LabSession : Node3D
                         ActorId = i + 1,
                         OwnerPeerId = 1,
                         Ammo = AmmoState.Starting(session.World.Tuning),
-                        BodyColor = BotColors[(i - 1) % BotColors.Length],
+                        BodyColor = BotColors[lab.TestBankBots.HasValue ? 0 : (i - 1) % BotColors.Length],
                     };
                     session.AddActor(bot);
                     if (i == 1) lab.Opponent = bot;
