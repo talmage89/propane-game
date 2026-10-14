@@ -365,8 +365,7 @@ public partial class LabTest : Node
                     var winners = starters.Where(a => ring.Place(a) == 1).ToArray();
                     Assert(ring.Over && ring.PlacementsComplete && winners.Length >= 1, $"ring out seed {seed}: no winner or incomplete placements");
                     Assert(starters.All(a => ring.Place(a) is >= 1 and var p && p <= starters.Length), "placements out of range");
-                    Assert(ring.Eliminations.Count == starters.Length - winners.Length &&
-                        ring.Eliminations.All(e => runner.Spectating(e.ActorId) && !winners.Contains(e.ActorId)), "eliminations and spectators disagree");
+                    Assert(RingEliminationsAgree(ring, starters, runner.Spectating), "eliminations and spectators disagree");
                     // Elimination order is placement order: anyone out later never places worse.
                     Assert(ring.Eliminations.Zip(ring.Eliminations.Skip(1)).All(p => p.Second.Place <= p.First.Place), "placements out of elimination order");
                     Assert(ring.Eliminations.Sum(e => e.CreditedTo != 0 ? 1 : 0) == starters.Sum(ring.Credits), "credit totals");
@@ -788,6 +787,15 @@ public partial class LabTest : Node
             fired = true;
             return new PlayerIntent { Aim = true, FirePressed = true };
         }
+    }
+
+    internal static bool RingEliminationsAgree(RingOutRules ring, IReadOnlyList<int> starters, Func<int, bool> spectating)
+    {
+        var eliminated = ring.Eliminations.Select(e => e.ActorId).ToHashSet();
+        // The last actors out together share first place and still become spectators.
+        return eliminated.Count == ring.Eliminations.Count && eliminated.SetEquals(starters.Where(spectating)) &&
+            starters.Where(a => !eliminated.Contains(a)).All(a => ring.Place(a) == 1) &&
+            ring.Eliminations.All(e => ring.Place(e.ActorId) == e.Place);
     }
 
     private async Task EffectFrames()
