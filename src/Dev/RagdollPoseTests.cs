@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using Godot;
 using Propane.Core;
@@ -14,6 +15,7 @@ public partial class RagdollPoseTests : Node3D
     private WorldContext world = null!;
     private PlayerCharacter full = null!, distant = null!;
     private PlayerCharacter hitFull = null!, hitDistant = null!;
+    private readonly List<(string Label, PlayerCharacter Full, PlayerCharacter Distant, WeaponAction Action)> weaponPairs = [];
     private Camera3D observer = null!;
     private int ticks;
 
@@ -25,11 +27,20 @@ public partial class RagdollPoseTests : Node3D
         world = new WorldContext(this, tuning, present: true);
         world.SetContentRoot(world.Root);
         world.Spawn.InWorld(new VoidEnvironment());
-        PlayerCharacter Actor(int id, Vector3 position)
+        PlayerCharacter Actor(int id, Vector3 position, WeaponAction action = WeaponAction.Carry)
         {
             var input = new ScriptedInput();
-            input.Hold(0, 3, new PlayerIntent { Move = Vector2.Up });
-            return world.Spawn.InWorld(new PlayerCharacter { World = world, ActorId = id, Position = position, InputOverride = input });
+            input.Hold(0, 3, new PlayerIntent { Move = Vector2.Up, Aim = action == WeaponAction.Aim });
+            if (action == WeaponAction.Reload) input.Reload(.8f);
+            if (action == WeaponAction.Melee) input.Melee(1);
+            return world.Spawn.InWorld(new PlayerCharacter
+            {
+                World = world,
+                ActorId = id,
+                Position = position,
+                InputOverride = input,
+                Ammo = action == WeaponAction.Reload ? new AmmoState { Tuning = world.Tuning, Magazine = 5, Reserve = 90 } : null,
+            });
         }
         full = Actor(1, Vector3.Right * 20);
         distant = Actor(8, Vector3.Zero);
@@ -37,6 +48,14 @@ public partial class RagdollPoseTests : Node3D
         hitFull = Actor(2, Vector3.Right * 60);
         hitDistant = Actor(9, Vector3.Right * 40);
         LocalView.Attach(hitFull, this).Hud.ShowHud(false);
+        foreach (var (label, action) in new[] { ("aiming", WeaponAction.Aim), ("reload", WeaponAction.Reload), ("melee", WeaponAction.Melee) })
+        {
+            var i = weaponPairs.Count;
+            var control = Actor(3 + i, Vector3.Right * (100 + i * 40), action);
+            var held = Actor(10 + i, Vector3.Right * (80 + i * 40), action);
+            LocalView.Attach(control, this).Hud.ShowHud(false);
+            weaponPairs.Add((label, control, held, action));
+        }
         observer = world.AddView(this, new Camera3D { Current = true });
         observer.LookAtFromPosition(new Vector3(0, 3, 140), Vector3.Up);
         ProcessPhysicsPriority = int.MinValue;
@@ -51,11 +70,17 @@ public partial class RagdollPoseTests : Node3D
             ((ScriptedInput)distant.InputOverride!).Advance((float)delta);
             ((ScriptedInput)hitFull.InputOverride!).Advance((float)delta);
             ((ScriptedInput)hitDistant.InputOverride!).Advance((float)delta);
+            foreach (var pair in weaponPairs)
+            {
+                ((ScriptedInput)pair.Full.InputOverride!).Advance((float)delta);
+                ((ScriptedInput)pair.Distant.InputOverride!).Advance((float)delta);
+            }
             ticks++;
             if (ticks == 139 && (Tree(distant).CallbackModeProcess != AnimationMixer.AnimationCallbackModeProcess.Manual ||
-                Tree(hitDistant).CallbackModeProcess != AnimationMixer.AnimationCallbackModeProcess.Manual))
+                Tree(hitDistant).CallbackModeProcess != AnimationMixer.AnimationCallbackModeProcess.Manual ||
+                weaponPairs.Any(pair => Tree(pair.Distant).CallbackModeProcess != AnimationMixer.AnimationCallbackModeProcess.Manual)))
             {
-                throw new InvalidOperationException("fixture must hold both distant animation trees before the hit");
+                throw new InvalidOperationException("fixture must hold every distant animation tree before the hit");
             }
 
             if (ticks == 140)
@@ -70,6 +95,12 @@ public partial class RagdollPoseTests : Node3D
                 throw new InvalidOperationException("both actors must play the hit before the physical throw");
             Compare(full, distant, "walking");
             Compare(hitFull, hitDistant, "hit reaction");
+            foreach (var pair in weaponPairs)
+            {
+                if (pair.Full.ResolvedState.Weapon != pair.Action || pair.Distant.ResolvedState.Weapon != pair.Action)
+                    throw new InvalidOperationException($"both actors must be {pair.Label} before the physical throw");
+                Compare(pair.Full, pair.Distant, pair.Label);
+            }
             ShutdownGuard.Quit(GetTree());
         }
         catch (Exception error)

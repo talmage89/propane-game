@@ -113,6 +113,7 @@ changes, time conservation, staggered clocks and zero clock allocations. Both ru
 Before a throttled actor starts a ragdoll, its tree samples the current authored pose with its pending animation
 time. This restores the same initial collider geometry as a full-rate actor, without advancing locomotion clocks
 again or delaying the throw. `ragdoll_pose_tests` compares every first physical-bone transform against a full-rate
-control while the other actor renders at 1 Hz, both walking and after a stagger; the bounds are 1 mm and 0.1
-degree. It fails before the refresh (29.4 cm), or without the full-rate hit transition (65.0 cm/116 degrees),
+control while the other actor renders at 1 Hz, during walking, a hit reaction, aim, reload and melee. The fixture
+asserts that the held trees really use manual sampling and each weapon action really is active before the throw.
+The bounds are 1 mm and 0.1 degree. It fails before the refresh (29.4 cm), or without the full-rate hit transition (65.0 cm/116 degrees),
 and runs in `make test`.
