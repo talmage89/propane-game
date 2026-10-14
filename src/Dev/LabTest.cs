@@ -273,10 +273,13 @@ public partial class LabTest : Node
             await Frames(1).ConfigureAwait(true);
         }
         var bank = lab.Bank!;
-        GD.Print($"[lab duel] seconds={seconds} simulation={lab.World.Clock.Now:F3} banked={bank.BankedTotal} spilled={bank.SpilledTotal} hits={bank.Hits} you={bank.Scores[1]} bot={bank.Scores[2]} earned_you={bank.Earned[1]} earned_bot={bank.Earned[2]} live={lab.LiveTanks.Count()}");
-        Assert(bank.BankedTotal > 0 && bank.Earned[2] > 0, "banking bot earned no bank");
+        var botEarned = bank.Earned.Where(s => s.Key != lab.Player.ActorId).Sum(s => s.Value);
+        GD.Print($"[lab duel] seconds={seconds} simulation={lab.World.Clock.Now:F3} banked={bank.BankedTotal} spilled={bank.SpilledTotal} hits={bank.Hits} you={bank.Scores[1]} bot={bank.Scores[2]} earned_you={bank.Earned[1]} earned_bot={bank.Earned[2]} live={lab.LiveTanks.Count()} earned_bots={botEarned}");
+        // In a larger roster the first rival can finish empty while the other bots bank.
+        Assert(bank.BankedTotal > 0 && botEarned > 0, "banking bots earned no bank");
         // A bot that freezes for most of the round (the suburb once banked one tank in 180 s) must not pass.
-        if (soak) Assert(bank.Earned[1] + bank.Earned[2] >= 10, $"two banking bots earned only {bank.Earned[1] + bank.Earned[2]} tanks");
+        var earned = bank.Earned.Values.Sum();
+        if (soak) Assert(earned >= 10, $"banking bots earned only {earned} tanks");
         Assert(bank.Scores.Values.Sum() + lab.LiveTanks.Count() == bank.InitialSupply, "bank conservation");
         if (!bank.IsPlaying)
         {
