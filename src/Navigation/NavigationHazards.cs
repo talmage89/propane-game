@@ -6,18 +6,21 @@ namespace Propane.Navigation;
 
 /// <summary>
 /// Circles on the ground that routes keep out of (tank piles and venting tanks), refilled each tick and shared by
-/// every bot that plans in the world. A bucket grid finds the few circles near a point, so testing one costs the
-/// same with ten tanks or a thousand. Filling and asking allocate nothing once the buffers have grown.
+/// every bot that plans in the world. A sparse bucket grid finds the circles near a point, avoiding
+/// a scan of every tank for each route node. Filling and asking allocate nothing once the buffers have grown.
 /// </summary>
 public sealed class NavigationHazards
 {
     private const float BaseBucket = 4f;
-    private const int MaxBuckets = 1 << 16;
     private readonly List<NavigationHazard> hazards = new(512);
-    private float bucket = BaseBucket;
-    private int[] starts = new int[MaxBuckets + 1];
-    private int[] entries = new int[512 * 25];
-    private int minX, minZ, columns, rows;
+    private double bucket = BaseBucket;
+    private readonly Dictionary<long, int> buckets = new(512 * 16);
+    private Entry[] entries = new Entry[512 * 16];
+    private struct Entry
+    {
+        public int Hazard;
+        public int Next;
+    }
     private bool built;
 
     public int Count => hazards.Count;
@@ -32,7 +35,7 @@ public sealed class NavigationHazards
     public void Add(Vector3 center, float radius)
     {
         // A body flung out of the world reports no usable position; it is no hazard to anyone either.
-        if (!float.IsFinite(center.X) || !float.IsFinite(center.Z) || !(radius > 0)) return;
+        if (!float.IsFinite(center.X) || !float.IsFinite(center.Z) || !float.IsFinite(radius) || !(radius > 0)) return;
         hazards.Add(new NavigationHazard(center, radius));
         built = false;
     }
@@ -41,64 +44,42 @@ public sealed class NavigationHazards
     public void Build()
     {
         built = true;
-        columns = rows = 0;
-        if (hazards.Count == 0) return;
-        float x0 = float.MaxValue, z0 = float.MaxValue, x1 = float.MinValue, z1 = float.MinValue;
-        foreach (var h in hazards)
-        {
-            x0 = Math.Min(x0, h.Center.X - h.Radius); z0 = Math.Min(z0, h.Center.Z - h.Radius);
-            x1 = Math.Max(x1, h.Center.X + h.Radius); z1 = Math.Max(z1, h.Center.Z + h.Radius);
-        }
-        // Coarser buckets when something has flown far away, so the index stays small.
+        buckets.Clear();
         bucket = BaseBucket;
-        while ((x1 - x0) / bucket * ((z1 - z0) / bucket) > MaxBuckets) bucket *= 2;
-        minX = (int)MathF.Floor(x0 / bucket);
-        minZ = (int)MathF.Floor(z0 / bucket);
-        columns = (int)MathF.Floor(x1 / bucket) - minX + 1;
-        rows = (int)MathF.Floor(z1 / bucket) - minZ + 1;
-        if (starts.Length < columns * rows + 1) starts = new int[Math.Max(columns * rows + 1, starts.Length * 2)];
-        Array.Clear(starts, 0, columns * rows + 1);
-        // Two passes: count each bucket's circles, then place them, so the index is one flat array.
-        for (var pass = 0; pass < 2; pass++)
+        foreach (var h in hazards) bucket = Math.Max(bucket, h.Radius);
+        // A circle covers at most three buckets per axis (reserve a fourth for numerical boundary rounding). Memory and lookup cost depend on the population,
+        // never on how far a tank has flown or the aspect ratio of its bounding box.
+        var capacity = checked(hazards.Count * 16);
+        buckets.EnsureCapacity(capacity);
+        if (entries.Length < capacity) entries = new Entry[Math.Max(capacity, entries.Length * 2)];
+        var used = 0;
+        for (var index = 0; index < hazards.Count; index++)
         {
-            for (var index = 0; index < hazards.Count; index++)
+            var h = hazards[index];
+            var x0 = Coordinate((double)h.Center.X - h.Radius);
+            var x1 = Coordinate((double)h.Center.X + h.Radius);
+            var z0 = Coordinate((double)h.Center.Z - h.Radius);
+            var z1 = Coordinate((double)h.Center.Z + h.Radius);
+            for (var z = z0; z <= z1; z++)
             {
-                var h = hazards[index];
-                var bx0 = (int)MathF.Floor((h.Center.X - h.Radius) / bucket) - minX;
-                var bx1 = (int)MathF.Floor((h.Center.X + h.Radius) / bucket) - minX;
-                var bz0 = (int)MathF.Floor((h.Center.Z - h.Radius) / bucket) - minZ;
-                var bz1 = (int)MathF.Floor((h.Center.Z + h.Radius) / bucket) - minZ;
-                for (var bz = bz0; bz <= bz1; bz++)
+                for (var x = x0; x <= x1; x++)
                 {
-                    for (var bx = bx0; bx <= bx1; bx++)
-                    {
-                        var cell = bz * columns + bx;
-                        if (pass == 0) starts[cell + 1]++;
-                        else entries[starts[cell]++] = index;
-                    }
+                    var key = Key(x, z);
+                    entries[used] = new Entry { Hazard = index, Next = buckets.GetValueOrDefault(key, -1) };
+                    buckets[key] = used++;
                 }
             }
-            if (pass == 0)
-            {
-                for (var i = 0; i < columns * rows; i++) starts[i + 1] += starts[i];
-                if (entries.Length < starts[columns * rows]) entries = new int[Math.Max(starts[columns * rows], entries.Length * 2)];
-            }
         }
-        // Placing advanced each start to the next bucket's; shift them back.
-        for (var i = columns * rows; i > 0; i--) starts[i] = starts[i - 1];
-        starts[0] = 0;
     }
 
-    private bool Bucketed(float x, float z, out int first, out int last)
+    private int Coordinate(double value) => (int)Math.Clamp(Math.Floor(value / bucket), int.MinValue + 1d, int.MaxValue - 1d);
+
+    private static long Key(int x, int z) => ((long)x << 32) | (uint)z;
+
+    private int BucketAt(float x, float z)
     {
         if (!built) Build();
-        first = last = 0;
-        var bx = (int)MathF.Floor(x / bucket) - minX;
-        var bz = (int)MathF.Floor(z / bucket) - minZ;
-        if (bx < 0 || bz < 0 || bx >= columns || bz >= rows) return false;
-        first = starts[bz * columns + bx];
-        last = starts[bz * columns + bx + 1];
-        return first < last;
+        return buckets.GetValueOrDefault(Key(Coordinate(x), Coordinate(z)), -1);
     }
 
     /// <summary>
@@ -107,10 +88,9 @@ public sealed class NavigationHazards
     /// </summary>
     public bool Safe(Vector3 point, Vector3? escapeFrom = null)
     {
-        if (!Bucketed(point.X, point.Z, out var first, out var last)) return true;
-        for (var i = first; i < last; i++)
+        for (var i = BucketAt(point.X, point.Z); i >= 0; i = entries[i].Next)
         {
-            var h = hazards[entries[i]];
+            var h = hazards[entries[i].Hazard];
             var dx = point.X - h.Center.X;
             var dz = point.Z - h.Center.Z;
             var d = dx * dx + dz * dz;
@@ -138,16 +118,16 @@ public sealed class NavigationHazards
     /// <summary>The nearest circle containing a point, by distance to its center, or -1.</summary>
     public int Containing(Vector3 point)
     {
-        if (!Bucketed(point.X, point.Z, out var first, out var last)) return -1;
         var best = -1;
         var bestDistance = float.MaxValue;
-        for (var i = first; i < last; i++)
+        for (var i = BucketAt(point.X, point.Z); i >= 0; i = entries[i].Next)
         {
-            var h = hazards[entries[i]];
+            var h = hazards[entries[i].Hazard];
             var dx = point.X - h.Center.X;
             var dz = point.Z - h.Center.Z;
             var d = dx * dx + dz * dz;
-            if (d < h.Radius * h.Radius && d < bestDistance) { best = entries[i]; bestDistance = d; }
+            if (d < h.Radius * h.Radius && (d < bestDistance || d == bestDistance && entries[i].Hazard < best))
+            { best = entries[i].Hazard; bestDistance = d; }
         }
         return best;
     }

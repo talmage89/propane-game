@@ -269,6 +269,25 @@ internal static class NavigationTests
             TestRunner.Assert(hazards.SafeAlong(Vector3.Right, Vector3.Right * 6, 0.3f, Vector3.Right), "walk out of danger");
             TestRunner.Assert(!hazards.Safe(Vector3.Zero, Vector3.Right), "never walk farther into danger");
         });
+        runner.Run("hazard indexing stays local when one tank flies far along an axis", () =>
+        {
+            var hazards = new NavigationHazards();
+            hazards.Add(Vector3.Zero, 4);
+            hazards.Add(new Vector3(100000000, 0, 0), 4);
+            hazards.Build();
+            var before = GC.GetAllocatedBytesForCurrentThread();
+            for (var i = 0; i < 100; i++)
+            {
+                hazards.Clear();
+                hazards.Add(Vector3.Zero, 4);
+                var far = new Vector3(10000000000f + i * 100000, 0, 0);
+                hazards.Add(far, 4);
+                hazards.Build();
+                TestRunner.Assert(!hazards.Safe(Vector3.Zero) && !hazards.Safe(far) && hazards.Safe(new Vector3(0, 0, 10)),
+                    "far hazards must preserve local answers");
+            }
+            TestRunner.Assert(GC.GetAllocatedBytesForCurrentThread() == before, "moving hazards allocate by world span");
+        });
         runner.Run("warm cached navigation allocates no managed bytes", () =>
         {
             var grid = Grid(new CourseWorld(), caps, tuning);

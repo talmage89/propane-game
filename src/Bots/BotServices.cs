@@ -12,7 +12,7 @@ namespace Propane.Bots;
 /// What every bot one process runs in a world shares, refreshed once per physics tick before they think: the tanks in
 /// play, which of them vent, how big a pile each belongs to, the hazard circles routes keep out of, and the navigation
 /// lattice (<see cref="NavigationGrid"/>) with its per-tick budgets. Brains read it instead of each scanning the world,
-/// so a bot costs the same whether it plays alone or with fifteen others, and reading it allocates nothing.
+/// so route searches share observations and reading them allocates nothing.
 /// </summary>
 public sealed class BotServices : IDisposable
 {

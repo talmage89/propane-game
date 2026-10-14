@@ -16,7 +16,7 @@ namespace Propane.Bots;
 /// - it prefers venting tanks (one shot from a point) and big piles, especially piles with another player near them;
 /// - it strafes in a fight, keeps its magazine topped up when nothing is happening, and fetches ammo when low.
 /// It chooses a few times a second and steers every tick; whether something is in sight is asked at most
-/// <see cref="Tuning.BotSightInterval"/> apart, and a tick allocates nothing.
+/// <see cref="Tuning.BotSightInterval"/> apart; hot paths reuse their storage.
 /// </summary>
 public sealed class BankingBot : IBotGoalPolicy
 {
