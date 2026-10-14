@@ -738,3 +738,5 @@ late client assembling the same tank identities and poses after buffered Go.
 
 These trailing lobby settings fields are part of unreleased Protocol 3 for 0.4.0. No further protocol bump is made;
 Hello, Welcome and Rejected are unchanged.
+
+[Lobby tank supply verification](lobby-tanks.md) records the gates, reviewed captures, native matrix and stock-soak variability.
