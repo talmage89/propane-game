@@ -8,6 +8,7 @@ public partial class PlayerCharacter
 {
     public override void _Process(double delta)
     {
+        using var profile = ActorProfile.Measure(ActorProfile.System.Presentation);
         var dt = (float)delta;
         var tuning = World.Tuning;
         UpdateBodyContrast();

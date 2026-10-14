@@ -59,10 +59,14 @@ def summarize(rows, bots):
                   navigation_queries_tick_ms=tick("NavigationSweep") + tick("NavigationSupport"),
                   navigation_queries_per_tick=tick("navigation_sweep_calls") + tick("navigation_support_calls"),
                   jolt_step_upper_ms=tick("physics_tail"), tank_tick_ms=tick("TankPhysics"), vent_frame_ms=mean("VentProcess"))
-    result["effects_ms_per_frame"] = {key: mean(key) for key in rows[0] if key not in
+    result["effects_ms_per_frame"] = {key: mean(key) for key in rows[0] if not key.startswith("Actor") and key not in
                                       ("frame", "wall", "gpu", "process", "physics", "time", "blast_count", "explosion_count",
                                        "physics_steps", "physics_tail", "stage", "process_callbacks", "physics_callbacks",
                                        "brain_calls", "navigation_sweep_calls", "navigation_support_calls")}
+    actor_systems = [key for key in rows[0] if key.startswith("Actor") and not key.endswith(("Bytes", "Calls"))]
+    result["actors"] = {key[5:]: dict(ms_per_frame=mean(key), ms_per_tick=tick(key),
+                                    allocated_bytes=sum(r[key + "Bytes"] for r in rows),
+                                    calls=sum(r[key + "Calls"] for r in rows)) for key in actor_systems}
     result["brain_calls"] = thinks
     result["frames"] = len(rows)
     result["sampled_physics_ticks"] = ticks
@@ -116,6 +120,7 @@ def main():
     parser.add_argument("--repeats", type=int, default=3)
     parser.add_argument("--output", type=Path)
     parser.add_argument("--capture", action="store_true")
+    parser.add_argument("--omit", choices=("none", "actors", "shadows", "effects", "debris"), default="none")
     args = parser.parse_args()
     configs = args.config.split(",")
     if len(set(configs)) != len(configs) or any(c not in ("Debug", "Release") for c in configs):
@@ -134,7 +139,7 @@ def main():
     dirty = bool(subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT, text=True).strip())
     documents = {config: dict(schema=SCHEMA, revision=revision, dirty=dirty, config=config, seed=23,
                               seconds=args.seconds, warmup=args.warmup, repeats=args.repeats,
-                              resolution="1280x720", presentation="no-idle-wait-vsync-disabled-gamescope-wsi-disabled", platform=platform.platform(), paired_configs=configs, cases=[])
+                              resolution="1280x720", presentation="no-idle-wait-vsync-disabled-gamescope-wsi-disabled", omitted_render_feature=args.omit, platform=platform.platform(), paired_configs=configs, cases=[])
                  for config in configs}
     outputs = {config: output if len(configs) == 1 else output.with_stem(output.stem + "-" + config) for config in configs}
     print("cfg     view bots tank×   FPS   wall p50/p95/p99/max ms      proc phys brain/tick nav% query Jolt≤ GPU tank vent GC pause RSS", flush=True)
@@ -157,7 +162,7 @@ def main():
                             command.append("--headless")
                         command += ["res://scenes/dev/scale_bench.tscn", "--", f"--bots={bots}", f"--tanks={tanks}",
                                     f"--config={config}", f"--seconds={args.seconds}", f"--warmup={args.warmup}",
-                                    f"--frame-metrics={directory}"]
+                                    f"--frame-metrics={directory}", f"--omit={args.omit}"]
                         if args.capture and rendered and repeat == 0:
                             command.append(f"--capture-dir={directory}")
                         with assembly(config, build=False), (directory / "run.log").open("w") as log:

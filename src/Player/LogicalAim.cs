@@ -113,6 +113,7 @@ public sealed class LogicalAim : System.IDisposable
 
     public void Advance(double delta)
     {
+        using var profile = ActorProfile.Measure(ActorProfile.System.Aim);
         var dt = (float)delta;
         var tuning = World.Tuning;
 
@@ -158,6 +159,7 @@ public sealed class LogicalAim : System.IDisposable
 
     private Vector3 CastClear(Vector3 from, Vector3 to)
     {
+        using var profile = ActorProfile.Measure(ActorProfile.System.AimQuery);
         var space = World.Physics.DirectSpaceState;
         var motion = to - from;
         if (motion.LengthSquared() < 0.0001f)

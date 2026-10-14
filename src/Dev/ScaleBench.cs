@@ -8,6 +8,7 @@ using System.Text.Json;
 using Godot;
 using Propane.Core;
 using Propane.Lab;
+using Propane.Player;
 using Propane.Tank;
 using Propane.World;
 
@@ -29,6 +30,7 @@ public partial class ScaleBench : Node3D
     private bool finished, pendingStart;
     private int tankCount;
     private string worldHash = "";
+    private string omit = "none";
     private readonly Process process = Process.GetCurrentProcess();
 
     public override void _Ready()
@@ -47,6 +49,10 @@ public partial class ScaleBench : Node3D
                 throw new ArgumentException("invalid scale benchmark workload");
             var config = typeof(ScaleBench).Assembly.GetCustomAttribute<AssemblyConfigurationAttribute>()!.Configuration;
             if (config != DevArgs.Get("config")) throw new InvalidOperationException($"loaded {config}, expected {DevArgs.Get("config")}");
+            omit = DevArgs.Get("omit") ?? "none";
+            if (omit is not ("none" or "actors" or "shadows" or "effects" or "debris"))
+                throw new ArgumentException("unknown rendering feature omission");
+            if (omit != "none") GetTree().NodeAdded += OmitFeature;
             using var tuning = Tuning.LoadBaked();
             tuning.FixedSeed = 23;
             // Single-player pile sizes and map stay constant across the grid. Always reserve the same starts/pickups.
@@ -185,7 +191,8 @@ public partial class ScaleBench : Node3D
                 cpu = OS.GetProcessorName(),
                 cpu_count = System.Environment.ProcessorCount,
                 gpu = RenderingServer.GetVideoAdapterName(),
-                rendered = DisplayServer.GetName() != "headless"
+                rendered = DisplayServer.GetName() != "headless",
+                omitted_render_feature = omit
             };
             File.WriteAllText(Path.Combine(DevArgs.Get("frame-metrics")!, "summary.json"), JsonSerializer.Serialize(summary));
             // Captures happen after measurement, so image readback/encoding cannot contaminate the timings.
@@ -203,5 +210,26 @@ public partial class ScaleBench : Node3D
         ShutdownGuard.Quit(GetTree(), 1);
     }
 
-    public override void _ExitTree() => process.Dispose();
+    // Rendering-only ablations: all brains, collisions and effect lifetimes continue unchanged.
+    private void OmitFeature(Node node)
+    {
+        if (omit == "shadows" && node is Light3D light) light.ShadowEnabled = false;
+        if (omit == "effects" && node is Node3D effect &&
+            (node.Name == "Effects" || node is VentJet)) { effect.Visible = false; }
+        if (omit == "debris" && node is DebrisBody debris) debris.Visible = false;
+        if (omit != "actors" || node is not MeshInstance3D mesh) return;
+        for (var parent = node.GetParent(); parent != null; parent = parent.GetParent())
+        {
+            if (parent is not PlayerCharacter) continue;
+            // Styling runs in the actor's Ready after NodeAdded; apply after it has assigned visual layers.
+            Callable.From(() => { if (IsInstanceValid(mesh)) mesh.Layers = 0; }).CallDeferred();
+            break;
+        }
+    }
+
+    public override void _ExitTree()
+    {
+        if (omit != "none") GetTree().NodeAdded -= OmitFeature;
+        process.Dispose();
+    }
 }

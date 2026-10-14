@@ -315,6 +315,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
 
     public override void _PhysicsProcess(double delta)
     {
+        using var profile = ActorProfile.Measure(ActorProfile.System.Physics);
         var dt = (float)delta;
         if (IsRemote)
         {
@@ -383,6 +384,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
 
     private void UpdateMovement(float dt)
     {
+        using var profile = ActorProfile.Measure(ActorProfile.System.Movement);
         var tuning = World.Tuning;
         var grounded = ResolvedState.Grounded;
 
@@ -431,7 +433,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         }
 
         Velocity = velocity + knockback;
-        MoveAndSlide();
+        using (ActorProfile.Measure(ActorProfile.System.MoveAndSlide)) { MoveAndSlide(); }
         // Remove the knockback part again so it does not compound through the acceleration step.
         var after = Velocity;
         Velocity = new Vector3(after.X - knockback.X, after.Y, after.Z - knockback.Z);
@@ -598,6 +600,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
 
     private void UpdateRagdoll(float dt)
     {
+        using var profile = ActorProfile.Measure(ActorProfile.System.Ragdoll);
         var tuning = World.Tuning;
         stateTimer += dt;
         settleTimer = ragdoll.AverageSpeed() < RagdollSettleSpeed ? settleTimer + dt : 0;
@@ -669,6 +672,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
 
     private void UpdateGettingUp(float dt)
     {
+        using var profile = ActorProfile.Measure(ActorProfile.System.GetUp);
         stateTimer += dt;
         var duration = animator.GetUpDuration;
         var rigIn = Mathf.Clamp((stateTimer - (duration - RigReturnTime)) / RigReturnTime, 0, 1);
@@ -677,7 +681,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         if (!IsRemote)
         {
             Velocity = new Vector3(0, Velocity.Y - World.Tuning.PlayerGravity * dt, 0);
-            MoveAndSlide();
+            using (ActorProfile.Measure(ActorProfile.System.MoveAndSlide)) { MoveAndSlide(); }
         }
         if (stateTimer >= duration)
         {

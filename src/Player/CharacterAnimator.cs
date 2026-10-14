@@ -98,6 +98,7 @@ public sealed class CharacterAnimator
     /// <summary><paramref name="travel"/> is planar velocity in the body frame: x right, y forward (m/s).</summary>
     public void UpdateLocomotion(Vector2 travel, float delta, PlayerGait resolvedGait)
     {
+        using var profile = ActorProfile.Measure(ActorProfile.System.Locomotion);
         Pose.Update(travel, resolvedGait, delta);
         var phase = Pose.Phase;
         tree.Set(WalkSeek, Mathf.PosMod(phase + WalkContact, 1) * walkLength);

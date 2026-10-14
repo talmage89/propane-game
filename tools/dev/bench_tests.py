@@ -71,6 +71,9 @@ class BenchTests(unittest.TestCase):
             self.assertEqual((run["headless_idle_usec"], run["max_fps"], run["frame_delay_ms"]), (0, 0, 0))
             self.assertEqual(run["bots"], 2)
             self.assertGreater(run["tanks"], 0)
+            self.assertGreater(run["actors"]["Physics"]["ms_per_tick"], 0)
+            self.assertGreater(run["actors"]["MoveAndSlide"]["calls"], 0)
+            self.assertGreater(run["actors"]["AimQuery"]["allocated_bytes"], 0)
             self.assertGreater(run["brain_tick_ms"], 0)
             self.assertGreater(run["tank_tick_ms"], 0)
             self.assertGreater(run["jolt_step_upper_ms"], 0)
@@ -93,6 +96,13 @@ class BenchTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "seconds"):
                 list(bench_compare.compare(path, other))
             data["seconds"] -= 1
+            data["omitted_render_feature"] = "shadows"
+            other.write_text(json.dumps(data))
+            with self.assertRaisesRegex(ValueError, "omitted_render_feature"):
+                list(bench_compare.compare(path, other))
+            with self.assertRaisesRegex(ValueError, "omitted_render_feature"):
+                bench_compare.merge([path, other])
+            data["omitted_render_feature"] = "none"
             data["cases"][0]["runs"][0]["world_hash"] = "wrong"
             other.write_text(json.dumps(data))
             with self.assertRaisesRegex(ValueError, "world_hash"):

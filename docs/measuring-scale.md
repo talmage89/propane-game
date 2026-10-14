@@ -69,11 +69,28 @@ that difference. A profiler-capable engine is needed to split the native tail in
 See Godot's [frame loop](https://github.com/godotengine/godot/blob/master/main/main.cpp) and
 [Jolt server](https://github.com/godotengine/godot/blob/master/modules/jolt_physics/jolt_physics_server_3d.cpp).
 
-Scopes are inclusive: brain contains navigation, navigation contains queries, and blast contains its subscopes.
+The `actors` dictionary adds opt-in inclusive CPU scopes for actor physics, movement and `MoveAndSlide`,
+ragdoll/get-up decisions, presentation, locomotion parameter updates, rifle pose/IK, pose recovery, hand follow,
+and logical aim/camera collision queries. Each scope retains ms per frame, ms per physics tick, current-thread
+managed allocation bytes and call counts, including separate intact/disturbed stages. Native animation-tree
+sampling, skinning and physical-bone engine updates are outside these script scopes; they remain in the callback
+residual/native tail. Timers do not identify exact native solver cost. Per-frame presentation should be compared
+per frame, since catch-up changes the ratio of process frames to physics ticks.
+
+Scopes are inclusive: actor physics contains movement, movement contains `MoveAndSlide`, presentation contains
+locomotion parameters and aim, aim contains camera queries; brain contains navigation, navigation contains queries, and blast contains its subscopes.
 Do not add these together or subtract GPU time from wall time as if CPU and GPU ran sequentially. Opt-in
 `EffectProfile` timers add measurement overhead; ordinary play does not read clocks/allocations for these scopes.
 `Match.BotCost` retains its existing think/allocation counters and accumulates inclusive navigation seconds
 when profiling is enabled. No `dotnet-counters` or `dotnet-trace` installation is required.
+
+For rendering attribution, `BENCH_ARGS=--omit=actors|shadows|effects|debris` omits one feature at a time.
+Actors omits mannequin/rifle meshes (including their shadows), shadows disables every light's shadow maps,
+effects hides the world effect root and attached vents, and debris hides tank fragments. Simulation still runs:
+these are feature ablations, not independent GPU pass timers. Effects includes transient meshes, particles,
+lights and decals under that root, but excludes rifle muzzle flashes. Particle simulation can still run while
+hidden. Deferred mesh-layer edits and a node-added observer exist only in ablated runs; compare GPU time,
+not their CPU cost. JSON records the omitted feature and comparison/merge refuses unlike feature settings.
 
 ## Comparing optimization branches
 
