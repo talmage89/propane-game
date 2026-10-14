@@ -149,8 +149,11 @@ public sealed class TankLedger
     /// </summary>
     public IReadOnlyList<BodyState> SpawnWorldTanks(int owner, IReadOnlyList<Transform3D> poses)
     {
-        var spawned = poses.Select(pose => new BodyState(BodySync.MapTankId(worldTanks++), pose, Vector3.Zero, Vector3.Zero)).ToArray();
+        if (owner <= 0 || poses.Count > BodySync.MaxWorldEntities - worldTanks)
+            throw new InvalidDataException("world tank allocation space exhausted or invalid owner");
+        var spawned = poses.Select((pose, index) => new BodyState(BodySync.MapTankId(worldTanks + index), pose, Vector3.Zero, Vector3.Zero)).ToArray();
         foreach (var body in spawned) { Register(body, owner, rest: true); }
+        worldTanks += spawned.Length;
         return spawned;
     }
 

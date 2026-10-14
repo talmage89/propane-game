@@ -3,9 +3,9 @@
 How a game mode plugs into Propane: pure rules, a definition that selects everything mode-specific, a runner that
 supplies the clock and transport, and one fixed network envelope. Tank Bank is the first mode on this framework and
 plays exactly as before; its rules are in [multiplayer.md](multiplayer.md#tank-bank). Sandbox is the second. Ring Out,
-King of the Cul-de-sac, Short Fuse and Dissolve Run are Lab prototypes, the framework's first test with new rules
-([below](#lab-prototypes)); Short Fuse is the first to use the optional [health state](#health), and Dissolve Run the
-first [segment world source](#segments).
+King of the Cul-de-sac, Short Fuse and Dissolve Run began as Lab prototypes, the framework's first test with new rules
+([below](#lab-prototypes)); King also plays online. Short Fuse is the first to use the optional [health state](#health),
+and Dissolve Run the first [segment world source](#segments).
 
 | Path | Contents |
 | --- | --- |
@@ -13,7 +13,7 @@ first [segment world source](#segments).
 | `src/Modes/TankBankRules.cs` | Tank Bank's bank, spill tickets, gates, standings, statistics and audit; victim-owner helpers. |
 | `src/Modes/ModePhases.cs` | The pure phase machine the server's runner drives. |
 | `src/Modes/ModeHud.cs` | Plain HUD data and the Tank Bank and Sandbox presenters. |
-| `src/Modes/ModeDefinition.cs` | `ModeDefinition`, supply policy and `ModeRegistry` (Sandbox and Tank Bank; the prototypes apart). |
+| `src/Modes/ModeDefinition.cs` | `ModeDefinition`, supply policy and `ModeRegistry` (Sandbox, Tank Bank and King; the other prototypes apart). |
 | `src/Modes/BodyEvents.cs` | Sampled positions, attributed throws, eliminations, `RoundOver` and a pure seeded generator. |
 | `src/Modes/Health.cs` | The optional health state: damage reports, validation, attribution, invulnerability, death, respawn. |
 | `src/Modes/RingOutRules.cs`, `KingRules.cs`, `ShortFuseRules.cs`, `DissolveRunRules.cs` | The prototypes' rules: Ring Out's slab plan, King's zone schedule, Short Fuse's rounds, Dissolve Run's front and score. |
@@ -21,7 +21,7 @@ first [segment world source](#segments).
 | `src/World/SegmentPlans.cs`, `src/Session/SegmentWorldSource.cs` | Segment plans from a run seed and index; the segment world source and its feed. |
 | `src/Lab/PrototypeRunner.cs`, `LabMatch.cs` | The offline runner that drives a prototype's rules in the Lab, and a multi-round match it carries. |
 | `src/Net/ModeEnvelope.cs` | The envelope record, schema registry, Tank Bank codecs, the causal gate and command order. |
-| `src/Net/ModeRunner.cs` | One run's mode on the server, and Tank Bank's wire adapter. |
+| `src/Net/ModeRunner.cs` | One run's mode on the server, with Tank Bank and King wire adapters. |
 | `src/Bots/IBotWorld.cs` | Bot observations and the per-mode goal policy interface. |
 
 ## Rules are pure
@@ -44,12 +44,13 @@ presenter, the bot goal policy, the tuners the rules copy and the envelope schem
 | Sandbox (1) | no score, no spills, nothing gated | void | single-player suburb, unlimited ammo, no cans | none | tank arrows | none |
 | Tank Bank (2) | `TankBankRules` | suburb plan | `SuburbPlans.Match`, limited ammo, cans | countdown | bank, clock, arrows | `BankingBot` |
 | Ring Out (3), Lab only | `RingOutRules` | the Lab's slab | unlimited ammo, no cans | count-up | standing, knock-offs, next dissolve, feed | `RingOutBot` |
-| King of the Cul-de-sac (4), Lab only | `KingRules` | the Lab's choice | unlimited ammo, no cans | countdown | bank, minted, clock, zone arrows | `KingBot` |
+| King of the Cul-de-sac (4) | `KingRules` | suburb plan (Lab: void or suburb) | unlimited ammo, no cans | countdown | bank, minted, clock, zone arrows | `KingBot` |
 | Short Fuse (5), Lab only | `ShortFuseRules` | a suburb per round | `SuburbPlans.Match` on a Lab-sized slab, unlimited ammo, no cans | countdown | wins, standing, kills, health bar, feed | `ShortFuseBot` |
 | Dissolve Run (6), Lab only | `DissolveRunRules` | a segment stream | strip segments of the single-player piles, limited ammo, cans | count-up | score, meters, tanks, front bar, chain banner, feed | `DissolveRunBot` |
 
-Multiplayer lobbies play Tank Bank; `MatchStart` appends the mode id and schema version, and a client that does not
-know the pair fails decoding by name. Lab scenarios name a mode: the banking duel plays Tank Bank and the other
+Multiplayer lobbies default to Tank Bank; the creator can choose King and its mint pace (0.5–10 s in 0.5 s steps,
+default 2 s). The lobby's length is the round length. `MatchStart` appends the mode id and schema version, and a client
+that does not know the pair fails decoding by name. Lab scenarios name a mode: the banking duel plays Tank Bank and the other
 starters play Sandbox. A Lab scenario's environment choice replaces the mode's world source, so a prototype can try
 a mode in either the void or a suburb.
 
@@ -107,7 +108,7 @@ Three fixed outer messages carry everything mode-specific: `ModeEvent` (client t
 | RunId | Int32 | The match id, as on every match message. |
 | RoundId | UInt32 | The round the message belongs to (nonzero). |
 | WorldRevision | UInt32 | The world it was sent against (nonzero). |
-| ModeId | UInt8 | Sandbox 1, Tank Bank 2. |
+| ModeId | UInt8 | Sandbox 1, Tank Bank 2, King 4. |
 | SchemaVersion | UInt16 | The mode's payload schema. |
 | ActorId, LifeId | Int32, UInt32 | An event's reporter, or a command's subject (both zero when it has none). |
 | EventId | UInt32 | An event's actor action sequence, or a command's monotonic id (nonzero). |
@@ -147,6 +148,32 @@ Behavior is preserved message for message: a detonation's score follows its Auth
 precedes its echo, and a round start sends one bank snapshot where the server used to restate every nonzero
 starting score.
 
+King's schema (version 1) shares Tank Bank's bank kinds under the same ids, plus:
+
+| Direction | Kind | Payload |
+| --- | --- | --- |
+| Event | 2 PilePlaced | zone (UInt16), count (0–64), transforms; only the current world authority may report |
+| Command | 4 PileWanted | zone, spot, count, reach, clearance; only to the world authority |
+| Command | 5 PileSpawned | zone, owner peer, count (1–64), registered body states; to everyone |
+| Snapshot | 2 Zone | zone, spot, next spot, radius, holder, occupants, next mint, mint interval, move time, warning length, per-actor mints, elapsed |
+
+The server samples its latest accepted player poses at `PlayerSendRate`. Upright actors occupy by feet position;
+ragdolled/getting-up actors do not occupy. Actor lives and pose sequences use the ordinary validation; departure
+removes all that peer's samples and releases its hold. Only the server runs `KingRules`. Zone snapshots are reliable
+and restated when holder, occupants, schedule, dials or mints change. Times are seconds since Go; peers advance only
+presentation clocks (`KingState.At`), never occupancy, minting or moves. The snapshot retains minted counts for results.
+The Lab preserves its original single-player suburb supply; hosted King uses match supply scaled by actor count.
+A late builder replays buffered zone snapshots and pile creation commands in receive order, ending at current state.
+Lobby admission remains waiting-only; reconnecting does not resume a running match.
+
+On a move, the server asks the current world authority to find a clear pile site through `PileSite`, since the
+server has no physics. The authority reports transforms, or an empty answer if no ground is clear. The server checks
+authority, round, world, zone, count and bounds, assigns unused map-range ids after the plan's tanks, registers the
+whole pile resting in the ledger, then broadcasts PileSpawned before any body publication can be accepted. These
+are ordinary world tanks: punctures, claims, chains and detonations use the existing paths, and the audit counts them
+as map detonations. A pending request passes to a successor authority; duplicate, superseded and closed-round
+answers cannot create a second pile. No world revision or suburb rebuild is needed.
+
 ## HUD
 
 A presenter turns mode state into plain `ModeHud` data: counters (the first renders large with its caption),
@@ -165,14 +192,15 @@ work that would need its own bot-behavior proof.
 
 ## Lab prototypes
 
-Ring Out and King of the Cul-de-sac are definitions in `ModeRegistry.Prototypes`, not `ModeRegistry.All`: no lobby,
-`MatchStart` or envelope schema names them, so they change nothing a match shares and `Protocol.Version` is untouched.
+Ring Out, Short Fuse and Dissolve Run remain Lab-only definitions in `ModeRegistry.Prototypes`. King is in both
+`Prototypes` and `All`, with a lobby choice and envelope schema; its online promotion uses Protocol 3 and needs a
+minor release.
 The Lab plays them against its own bots ([lab.md](lab.md#prototype-modes)) through `PrototypeRunner`, which feeds the
 rules what a server would: the round's phases on its clock, and every step the positions of all actors
 (`ActorsSampled`; a server would sample what its clients already send, so a mode needs no traffic of its own), who
 knocked whom down (`ActorThrown`: a melee hit's attacker, or the initiator of the chain whose blast threw them), and
-for King the attributed detonations, hits and throws exactly as the Lab duel feeds Tank Bank. Their dials are local
-Lab dials (`Tuning.Prototype.cs`), copied into `ModeTuners` like any mode's.
+for King the attributed detonations, hits and throws exactly as the Lab duel feeds Tank Bank. King's shared zone and pile dials (`Tuning.Prototype.cs`) are exported and transmitted with match tuning;
+the other prototypes and Lab-only layout dials remain local. Rules copy their dials into `ModeTuners`.
 
 **Ring Out** (`RingOutRules`). A square slab of lots (`RingOutLots` per side, odd, `RingOutLotSize` meters) centered
 on the origin; its top is at height zero and the void's floor lies `RingOutVoidDepth` (150 m) below, far enough for
@@ -239,8 +267,8 @@ tanks= chains= bonus= best_chain= pushes= score= caught= front=`. Its world is a
   acts on it yet.
 - Tank Bank's goal selection still lives inside `BankingBot`; the prototype policies share `BotMotor`, a small layer
   over `BotNavigator` and `BotAim` that `BankingBot` could adopt later.
-- The Lab has no networked session, so the prototypes are not playable in a hosted match. That needs envelope
-  schemas, wires (`IModeWire`) and snapshot payloads for eliminations and the zone.
+- King now has a wire and snapshot view, shared by its HUD, zone presenter and bots; the Lab still supplies that
+  view from its rules. Ring Out, Short Fuse and Dissolve Run need their own schemas and wires to play online.
 - `ModePhaseMachine` can rebuild a world between rounds (`NextRound(RebuildWorld)`), but a server match cannot yet: it
   ends the match instead. Short Fuse's new suburb each round works only in the Lab, which rebuilds its whole session.
 - `RoundInfo.StartsAt` and the clock are the runner's; the Lab keeps a match's mode clock running across its round

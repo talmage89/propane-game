@@ -347,9 +347,11 @@ public partial class Menus : CanvasLayer
         {
             var row = new HBoxContainer();
             row.AddThemeConstantOverride("separation", 10);
-            var name = UiStyle.Text($"{lobby.CreatorName}'s lobby", 20);
-            name.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
-            row.AddChild(name);
+            var description = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+            description.AddThemeConstantOverride("separation", 0);
+            description.AddChild(UiStyle.Text($"{lobby.CreatorName}'s lobby", 20));
+            description.AddChild(UiStyle.Text(Modes.ModeRegistry.ForLobby(lobby.ModeId)!.Name, 15, UiStyle.SoftInk));
+            row.AddChild(description);
             var inMatch = lobby.Phase != LobbyServer.LobbyPhase.Waiting;
             row.AddChild(UiStyle.Text(inMatch ? "in a match" : $"{lobby.Players} / {lobby.Capacity}", 18, UiStyle.SoftInk));
             var join = UiStyle.Button("Join");
@@ -619,7 +621,7 @@ public partial class Menus : CanvasLayer
         }
         layout.AddChild(modes);
         layout.AddChild(UiStyle.Text(chosen.Id == Modes.ModeRegistry.KingId
-            ? "Hold the beam alone to mint banked tanks; it moves to another pile every 45 s. Hits and throws spill."
+            ? "Hold the beam alone to mint banked tanks; it moves between tank piles. Hits and throws spill."
             : "Every tank you blow up is banked; getting hit or thrown spills them. Most banked wins.", 15, UiStyle.SoftInk, HorizontalAlignment.Center));
         if (chosen.Id != Modes.ModeRegistry.KingId) return;
         var pace = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.Center };

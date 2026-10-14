@@ -93,7 +93,8 @@ public partial class LabSession : Node3D
         else
         {
             source = EnvironmentKind == LabEnvironment.Void ? new VoidWorldSource() :
-            new SuburbWorldSource(Scenario.Banking ? Scenario.Definition.Supply.Suburb(settings, 2) with { MapSize = settings.LabSuburbSize } :
+            new SuburbWorldSource(Scenario.Definition == Modes.ModeRegistry.King ? SuburbPlans.SinglePlayer(settings) :
+                Scenario.Banking ? Scenario.Definition.Supply.Suburb(settings, 2) with { MapSize = settings.LabSuburbSize } :
                 Scenario.Definition.Supply.Suburb(settings, Scenario.Prototype ? settings.LabPrototypeBots + 1 : 1), seed);
         }
 

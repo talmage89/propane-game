@@ -622,7 +622,7 @@ public partial class LobbyServer : Node
         Log($"lobby {lobby.Id}: match for {actors.Count} on seed {plan.Seed} ({plan.Lots.Count} lots, {plan.Tanks.Count} tanks, " +
             $"{plan.AmmoSpots.Count} pickups, {planBytes.Length / 1024f:0.0} KB plan, generated in {Time.GetTicksMsec() - started} ms)");
 
-        var setup = new MatchSetup(match.Id, planBytes, match.HostId, match.CreatorDebug, match.Length, snapshot,
+        var setup = new MatchSetup(match.Id, planBytes, match.HostId, match.CreatorDebug, match.Length, tuning.Snapshot(),
             actors.Select((a, spawn) => (PlayerProfile.From(a), spawn)).ToArray())
         {
             RosterRevision = lobby.Roster.Revision,

@@ -15,9 +15,9 @@ public partial class Match
 
     /// <summary>
     /// The mode's own state as this peer knows it now, for the HUD, bots and harnesses: King's zone, from the server's
-    /// latest Zone snapshot read at this peer's round clock. Null outside play and before the first snapshot.
+    /// latest Zone snapshot read at this peer's round clock. Retained for results; null before the first snapshot.
     /// </summary>
-    public IModeView? ModeView => phase == Phase.Playing && kingState != null ? kingState.At(Math.Max(0, Setup.Length - timeLeft)) : null;
+    public IModeView? ModeView => kingState != null ? kingState.At(Math.Max(0, Setup.Length - timeLeft)) : null;
 
     /// <summary>The King zone's presenter, when this peer has a view and plays King.</summary>
     private void BuildKingZone()
@@ -27,7 +27,7 @@ public partial class Match
         {
             World = World,
             Name = "KingZone",
-            State = () => ModeView as KingState,
+            State = () => IsPlaying ? ModeView as KingState : null,
             ActorColor = id => profiles.TryGetValue(id, out var profile) ? profile.Appearance.Color : null,
         };
         suburb.AddChild(kingZone);

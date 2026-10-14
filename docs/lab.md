@@ -45,7 +45,8 @@ Lab dial in the tuning panel's Lab section, and layout dials apply on reset.
   and a fresh pile materializes on the nearest clear, flat ground beside it. Banking, hits and throws spill as in Tank
   Bank. The void lays out a ring of eight pile spots around one in the middle; a suburb uses the plan's own piles.
   Most banked when the clock runs out wins. The King setup page sets the two things a multiplayer lobby sets for King,
-  on the lobby's steps: the mint pace (0.5 to 10 s) and the round length (3:00 by default).
+  on the lobby's steps: the mint pace (0.5 to 10 s) and the round length (3:00 in the Lab; the lobby keeps its existing 2:30 default).
+  King is also playable online with humans and lobby bots; its HUD and zone visuals use the same state view.
 - **Short Fuse** (suburb only). Last one standing, with health: 100 each, bullets take 7, a blast 90 at its center
   down to 30 at the edge of its throw and nothing beyond, and 5 HP/s comes back after 5 s unhit. You get 0.75 s of
   protection once you are back on your feet after a throw. A thrown player is helpless, so a blast sets up the kill
@@ -80,7 +81,7 @@ scenario list; Main menu returns to the front end.
 
 Reset preserves the session's unsaved tuning but retires every actor, local view, timer, effect and physics
 resource before rebuilding. Re-entry uses the menu's settings and a fresh copy of the saved gameplay template.
-Lab layout and difficulty properties are local `Tuning` dials (no `Export`), copied with each session but excluded
+King's shared zone and pile dials are exported for online matches and retain their Lab controls. Other Lab layout and difficulty properties are local `Tuning` dials (no `Export`), copied with each session but excluded
 from match snapshots and saved `.tres` files. Layout changes take effect on reset; bot skill changes take effect
 on resume. No socket or server is created by the Lab.
 
