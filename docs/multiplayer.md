@@ -700,3 +700,6 @@ SetMode (16), LobbyList's mode id and LobbyState's mode/settings change message 
 King schema 4/1. King's shared zone, pile and presentation dials are now exported tuning values, retaining their Lab
 controls. `Protocol.Version` is **3**, superseding the earlier unreleased Protocol 2 entries above; this requires a
 **minor release**. Hello, Welcome and Rejected retain their layouts. Ring Out, Short Fuse and Dissolve Run remain Lab-only.
+
+[King online verification](king-online.md) records the soaks, delayed builder, device controls, reviewed captures
+and known vent outlier.

@@ -8,8 +8,9 @@ around you. There is no health and no score.
 ![Thrown by a chain reaction](docs/readme_still.jpg)
 
 Multiplayer defaults to **Tank Bank**, a free-for-all with creator-selected capacity (2–16 players, default 5): every tank you blow up is banked as a point, and getting
-shot (or thrown by a blast) spills your tanks back out for anyone to take. Most banked when the clock runs out wins. The lobby also offers **King of the Cul-de-sac**: hold a moving zone alone
-to mint banked tanks, with a creator-selected mint pace.
+shot (or thrown by a blast) spills your tanks back out for anyone to take. Most banked when the clock runs out wins.
+The lobby also offers **King of the Cul-de-sac**: hold a moving zone alone to mint banked tanks, with a
+creator-selected mint pace.
 
 [design/VISION.md](design/VISION.md) is what the game is and must stay. [docs/multiplayer.md](docs/multiplayer.md) gives
 tank bank's full rules and how multiplayer is built.
@@ -165,7 +166,9 @@ Rebuilt piles use `PileBuilder`'s upright cluster: every count fits, and removin
 Match settings use the actual player count. Tank supply is `MpTankCount + MpTanksPerPlayer × players`, ammo cans are
 `PickupCount + PickupsPerPlayer × players`, and map width is `MpMapSizeBase + MpMapSizePerPlayer × players`. Pile
 limits gain `floor(MpPileSizePerPlayer × players)`. `MpStartSpacing` is a hard minimum between clear road starts;
-invalid settings fail generation instead of placing players on top of one another. Lobby capacity is a separate creator setting, bounded by the tested technical ceiling of 16. These shared plan and tuner changes require the next release to be minor (`Protocol.Version` is 3).
+invalid settings fail generation instead of placing players on top of one another. Lobby capacity is a separate
+creator setting, bounded by the tested technical ceiling of 16. King's new messages and shared tuners require the next
+release to be minor (`Protocol.Version` is 3).
 
 [World services](docs/world-services.md) documents scoped ownership, cleanup, and simulation/network clock boundaries.
 
