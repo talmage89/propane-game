@@ -4,9 +4,9 @@ The performance work is substantial, but this branch **does not satisfy the comp
 The original FPS tables below used a rejected two-step catch-up policy and include simulation slowdown.
 The lead-review follow-up restores ordinary catch-up and measures simulation/wall ratios explicitly; those
 results supersede the original pacing claims. Historical runs and failures remain available for comparison.
-The ordinary 4× native Release match median is 66.5 fps with an 81.03 ms median maximum, but one of three runs
+The historical two-step ordinary 4× native Release match median is 66.5 fps with an 81.03 ms median maximum, but one of three runs
 averages 55.6 fps. The official four-bot 4× disturbed view reaches 37.2 fps, dominated by navigation. The earlier
-sixteen-client Debug and native Release gates failed; both final merged Debug sixteen-client soaks also fail. Treat the branch
+sixteen-client Debug and native Release gates failed; both earlier merged 4× Debug sixteen-client soaks also fail. Treat the branch
 as measured optimization work awaiting the bot/navigation and networking follow-ups, not as a proven 4×
 capacity release. Failed runs remain in the evidence below.
 
@@ -60,6 +60,15 @@ The owner case is a primary-view Debug Lab Tank Bank session with four productio
 clear starts, 40 tanks, the default 150 m Lab suburb, and seed 23. It warms for three simulated seconds, then
 measures 30 wall seconds. The optional 30 fps ceiling is an explicit pacing stress test; several bot-heavy
 runs cannot sustain that ceiling. The Lab's own simulation clock is compared with monotonic wall time.
+
+The diagnostic flags accept only the reviewed caps (2/4/6/12) and frame ceilings (0/30). For example:
+
+```sh
+godot-mono --disable-vsync --resolution 1920x1080 res://scenes/dev/lab_test.tscn -- \
+  --scenario=measure-play --measure-seconds=30 --measure-physics-cap=4 --measure-max-fps=30 \
+  --frame-metrics="$PWD/build/owner-cap4"
+# Omit --measure-physics-cap to test the product policy rather than a constant diagnostic cap.
+```
 
 All table entries are medians of each run's statistic; frame times are milliseconds. A favorable FPS with a
 low simulation/wall ratio is slow motion, not a successful performance result. One cap-2 30-fps match failed
@@ -130,6 +139,45 @@ is existing bot/frame-burst pressure, not another four-step game-speed policy. U
 measure brain/navigation medians of 4.804/4.093 ms per tick on dev and 2.938/2.667 ms on the branch. Fixing the
 separately owned bot/navigation work remains necessary; raising a catch-up budget cannot guarantee real time
 when the workload overruns it. This follow-up does not claim that requirement is achieved.
+
+## Shipping-default sixteen-client comparison
+
+The review pins the baseline to `d067ef6` in an isolated detached scratch worktree, never another agent's
+checkout. Both sides run `tools/dev/net_bots.sh -n 16 -l 90 -w 0`, seed 23, `--melee-start`, and the shipping
+1× multiplier: 84 initial map tanks. Clean pairs run dev/branch then branch/dev; six faulted pairs alternate
+likewise. Faults are seed 2, 120 ms lag, 30 ms jitter and 3% loss. Every invocation records `uptime`.
+[Per-run convergence and audit results](tank-scaling/default16-review.csv).
+
+Before the fragment-seed correction, both revisions fail both clean runs; both pass two of four faulted runs.
+Faulted pass/fail outcomes swap across adjacent pairs. All sixteen clients agree with server bank audits in all
+12 runs; there are zero logged engine errors. This reproduces a physical convergence limit at shipping density
+on dev, not a sixteen-client failure that first appears at 4× on this branch. It does not prove all branch
+physics changes harmless, or establish quiet-machine capacity.
+
+The instrumented third/fourth faulted pairs show severe simulation starvation even with twelve-step catch-up.
+Across their sixteen clients, simulation/wall minimum / median / maximum ratios are 0.2121 / 0.3338 / 0.4254
+and 0.2717 / 0.4232 / 0.5562 on dev, versus 0.3367 / 0.5215 / 0.7059 and 0.3617 / 0.6028 / 0.7172 on the branch.
+Median client FPS is 3.47 / 4.34 on dev and 6.38 / 8.51 on the branch. These simultaneous processes substantially
+overrun the available machine; restoring catch-up alone cannot keep their timelines real-time.
+
+Investigation also found avoidable branch-specific local entropy in colliding shell fragments. The correction
+seeds network fragment scatter from stable tank identity, and a unit assertion proves identical initial
+transforms and velocities with different gameplay RNG states and drain budgets. This corrects an inconsistency;
+it is not evidence that scatter alone caused the observed soak failures. Two further faulted pairs compare
+`d067ef6` against the seeded branch after merging `ac3a725`: dev fails both, while the branch fails the first
+and passes the second. All sixteen runs have agreeing bank audits and zero engine errors. The final two
+pairs contain no baseline-pass/branch-fail result, but their small noisy sample cannot establish causality or
+prove the ordinary sixteen-client convergence gate fixed.
+
+`make test-capacity` passes all six stock cases (three clean, three faulted), with zero engine errors. It is a
+controlled sixteen-actor acceptance scene with one map tank and 128 banked starting supply; one client deliberately
+departs, so all fifteen remaining audits must agree. Its conservation, loading, contested-body, throw, departure
+and physical agreement assertions all pass. This is a different workload from sixteen navigation brains in the
+ordinary 84-tank suburb; passing it does not contradict the ordinary soak failures. The command's before/after
+`uptime` records are retained. After the fragment fix and dev merge, `tools/dev/capacity_acceptance.sh -r 1`
+also passes both profiles: clean/faulted comparisons cover 41,074,324 / 40,535,134 body pairs with zero
+disagreements, agreeing remaining-client audits and zero engine errors. The raw supplemental runs and
+before/after `uptime` records remain in `build/tanks-review-capacity-final*`.
 
 ## Measurement method
 
