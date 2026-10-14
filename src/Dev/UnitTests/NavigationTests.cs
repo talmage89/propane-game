@@ -67,7 +67,8 @@ internal static class NavigationTests
         public double Now => 0;
         public double LastHitTime => double.NegativeInfinity;
         public int LastHitBy => 0;
-        public IReadOnlyList<PlayerCharacter> RemoteBodies { get; } = new[] { enemy };
+        public IReadOnlyList<PlayerCharacter> RemoteBodies { get; init; } = new[] { enemy };
+        public IModeView? View { get; init; }
         public IReadOnlyList<AmmoPickup> Pickups => Array.Empty<AmmoPickup>();
         public BotServices Services { get; } = new(world);
         public void Dispose() => Services.Dispose();
@@ -97,6 +98,50 @@ internal static class NavigationTests
         });
         using var shape = new CapsuleShape3D { Radius = 0.32f, Height = 1.8f };
         using var tuning = Tuning.LoadBaked();
+        runner.Run("navigation/crowded King recovery regroups forward then returns without warm allocation", () =>
+        {
+            var player = new PlayerCharacter { World = runner.World, ActorId = 1, Position = Vector3.Right * 2 };
+            var enemy = new PlayerCharacter { World = runner.World, ActorId = 2, Position = Vector3.Right * 100 };
+            runner.World.Root.AddChild(player);
+            runner.World.Root.AddChild(enemy);
+            var view = new KingState(0, new ModeSpot(0, 0, 0), new ModeSpot(20, 0, 0), 6, 1, new[] { 1 },
+                2, 2, 45, 3, Array.Empty<KingMinted>(), 0);
+            using var crowd = new BankingWorld(runner.World, player, enemy)
+            {
+                View = view,
+                RemoteBodies = Enumerable.Repeat(enemy, 15).ToArray(),
+            };
+            using var brain = new KingBot(23);
+            try
+            {
+                brain.Prepare(crowd);
+                player.RemoteRagdoll(player.GlobalPosition, Vector3.Zero, Vector3.Zero);
+                brain.Think(crowd, 1f / 120);
+                TestRunner.Assert(brain.Status == "down", "knockdown must suspend intent");
+                player.Teleport(Vector3.Right * 2, 0);
+                brain.Think(crowd, 1f / 120);
+                TestRunner.Assert(brain.Status == "regrouping outside the zone", "crowded recovery must not immediately charge back");
+                for (var i = 0; i < 100; i++) brain.Think(crowd, 1f / 120);
+                var yaw = Mathf.DegToRad(player.Aim.Yaw);
+                TestRunner.Assert(new Vector3(-Mathf.Sin(yaw), 0, -Mathf.Cos(yaw)).Dot(Vector3.Right) > 0.9f,
+                    "retreat must face outward so the controller permits sprint");
+                var before = GC.GetAllocatedBytesForCurrentThread();
+                for (var i = 0; i < 100; i++) brain.Think(crowd, 1f / 120);
+                TestRunner.Assert(GC.GetAllocatedBytesForCurrentThread() == before, "warmed regroup thoughts allocate");
+                brain.Think(crowd, runner.World.Tuning.BotKingRegroupMax + 1);
+                brain.Think(crowd, 1f / 120);
+                TestRunner.Assert(brain.Status != "regrouping outside the zone", "regroup must end and resume the zone policy");
+                using var small = new BankingWorld(runner.World, player, enemy) { View = view };
+                using var original = new KingBot(23);
+                original.Prepare(small);
+                player.RemoteRagdoll(player.GlobalPosition, Vector3.Zero, Vector3.Zero);
+                original.Think(small, 1f / 120);
+                player.Teleport(Vector3.Right * 2, 0);
+                original.Think(small, 1f / 120);
+                TestRunner.Assert(original.Status != "regrouping outside the zone", "small matches must retain immediate reentry");
+            }
+            finally { player.Free(); enemy.Free(); }
+        });
         runner.Run("navigation/King bot views match snapshots without steady allocation", () =>
         {
             var rules = new KingRules();

@@ -19,6 +19,10 @@ public partial class Tuning
     public float BotPrizeInterval { get; set; } = 0.4f;
     public float BotWatchInterval { get; set; } = 0.2f;
     public float BotCoverInterval { get; set; } = 0.5f;
+    // Crowded King zones need recovery space: a knocked-down bot briefly regroups outside before returning.
+    public int BotKingRegroupPlayers { get; set; } = 8;
+    public float BotKingRegroupMin { get; set; } = 3f;
+    public float BotKingRegroupMax { get; set; } = 30f;
     // Seconds that navigation answers near an explosion expire while thrown props settle.
     public float BotDisturbSettle { get; set; } = 3f;
     public float BotWaypointRadius { get; set; } = 0.45f;

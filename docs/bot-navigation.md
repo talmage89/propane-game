@@ -74,6 +74,9 @@ Hot paths use indexed lists, reusable query nodes and deferred status formatting
 physics-result dictionaries and interpolated status strings. `Status` allocates only when a log or overlay reads it.
 King brains read a small value view of the rules or received zone at the owner's clock; they do not construct the
 HUD/wire snapshot or its minted roster for each thought.
+With at least `BotKingRegroupPlayers` actors, a King bot knocked down in the crowd regroups outside the zone for
+a seeded interval between `BotKingRegroupMin` and `BotKingRegroupMax`, then returns. Immediate synchronized
+reentry kept sixteen bots shoving indefinitely without a lone holder; minting and combat rules stay unchanged.
 
 `Plan` is synchronous for tests/offline callers. The grid supports horizontal ground and ballistic jumps, rather
 than general stairs or roofs. Navigation caching and these local bot dials change no player physics, match

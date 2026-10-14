@@ -34,6 +34,9 @@ public sealed class KingBot : IBotGoalPolicy
     private PropaneTank? blocker;
     private float sightTimer;
     private bool sightStarted;
+    private bool wasDown;
+    private float regroupTime;
+    private Vector3 regroupGoal;
 
     public string Status => status.ToString();
     public string NavigationDiagnostics => motor.NavigationDiagnostics;
@@ -56,16 +59,38 @@ public sealed class KingBot : IBotGoalPolicy
     {
         motor.Begin(dt);
         var player = world.Player;
-        if (!world.IsPlaying || world.King is not KingBotView state || player.IsRagdolled)
+        if (!world.IsPlaying || world.King is not KingBotView state)
         {
             motor.Reset();
-            status.Set(player.IsRagdolled ? "down" : "waiting");
+            wasDown = false;
+            regroupTime = 0;
+            status.Set("waiting");
+            return;
+        }
+        if (player.IsRagdolled)
+        {
+            wasDown = true;
+            motor.Reset();
+            status.Set("down");
             return;
         }
         var tuning = world.World.Tuning;
         var here = player.GlobalPosition;
         var zone = state.Zone;
         var spot = ToVector(state.Spot);
+        if (wasDown)
+        {
+            wasDown = false;
+            if (world.RemoteBodies.Count + 1 >= tuning.BotKingRegroupPlayers && tuning.BotKingRegroupMax > 0)
+            {
+                regroupTime = rng.RandfRange(Mathf.Max(0, tuning.BotKingRegroupMin),
+                    Mathf.Max(tuning.BotKingRegroupMin, tuning.BotKingRegroupMax));
+                var away = BotMotor.Flat(here - spot).Normalized();
+                if (away == Vector3.Zero) away = Vector3.Right.Rotated(Vector3.Up, rng.RandfRange(0, Mathf.Tau));
+                regroupGoal = spot + away * ((float)state.Radius + tuning.BotTankClearance * 2);
+                motor.Reset();
+            }
+        }
         // Leave early for the next spot only when the walk would otherwise outlast the warning.
         var next = ToVector(state.Next);
         if (state.Warning && state.UntilMove < BotMotor.Flat(next - here).Length() / tuning.SprintSpeed + 0.5)
@@ -94,6 +119,18 @@ public sealed class KingBot : IBotGoalPolicy
             motor.Face(player, away + Vector3.Up * 1.4f, dt);
             motor.MoveTo(away, run: true);
             status.Set("clearing a venting tank");
+            motor.Navigate(world, dt);
+            return;
+        }
+
+        if (regroupTime > 0)
+        {
+            // Charging straight back after every knockdown keeps a large roster permanently contested. Recover
+            // outside for independently seeded intervals, then resume the same competitive zone policy.
+            regroupTime -= dt;
+            motor.Face(player, regroupGoal + Vector3.Up * 1.4f, dt);
+            motor.MoveTo(regroupGoal, run: true);
+            status.Set("regrouping outside the zone");
             motor.Navigate(world, dt);
             return;
         }
