@@ -155,8 +155,11 @@ keeps venting and moving; an already-venting neighbor detonates after its `Chain
 
 Dense chains use **Explosion full effect budget** (16 overlapping full blasts); additional blasts keep their core
 flash and fireball. **Debris pieces per tank** selects 6 of the authored 25 fragments, and **Debris spawn per frame**
-limits body creation to 64 per frame. Spawned debris stays until the suburb retires. These dials affect presentation
+limits body creation to 8 per frame. Spawned debris stays until the suburb retires. These dials affect presentation
 and fragment physics; punctures, chain fuses, blast pushes and banking happen immediately.
+
+Physics remains at 120 Hz, with at most two catch-up steps per rendered frame. That covers normal 60 fps play;
+under overload, simulation time falls behind wall time instead of running a large catch-up burst in one frame.
 
 Loose intact tanks gather with nearby resting neighbors after 20 undisturbed seconds. The **Tank Gather** tuners
 control radius (3 m), minimum group size (2), delay, a three-stage lift/glide/settle and optional scan shimmer (set

@@ -224,7 +224,7 @@ public partial class Tuning : Resource
     /// <summary>Well-spread pieces of the authored 25-piece shell; the remaining fragments are cosmetic detail.</summary>
     [Export(PropertyHint.Range, "0,25,1")] public int DebrisPiecesPerTank { get; set; } = 6;
     /// <summary>Deferred rigid-body registrations per presentation frame; tank/blast rules never wait on this queue.</summary>
-    [Export(PropertyHint.Range, "1,256,1")] public int DebrisSpawnPerFrame { get; set; } = 64;
+    [Export(PropertyHint.Range, "1,256,1")] public int DebrisSpawnPerFrame { get; set; } = 8;
     [Export(PropertyHint.Range, "0,10,0.1")] public float ScorchSize { get; set; } = 4.2f;
     [Export(PropertyHint.Range, "0,4,0.05")] public float ShockwaveScale { get; set; } = 1f;
 
