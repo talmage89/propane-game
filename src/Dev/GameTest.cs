@@ -423,6 +423,7 @@ public partial class GameTest : Node
         void Require(bool condition, string message)
         {
             if (condition) { return; }
+            GD.Print(gatherTrace.ToString());
             GD.PushError($"[game gather] FAIL {message}");
             ShutdownGuard.Quit(GetTree(), 1);
             throw new System.InvalidOperationException(message);
@@ -434,6 +435,9 @@ public partial class GameTest : Node
             direction = new Vector3(road.Direction.X, 0, road.Direction.Y);
             var across = direction.Cross(Vector3.Up);
             members = game.Current.LiveTanks.Take(3).ToArray();
+            gatherTraceMembers = members;
+            if (DevArgs.Get("gather-trace") != null)
+                game.Current.GetNode<TankGather>("Gather").Trace = message => gatherTrace.AppendLine($"[gather lease] clock={clock:F3} {message}");
             for (var i = 0; i < members.Length; i++)
             {
                 var tank = members[i];
@@ -459,15 +463,49 @@ public partial class GameTest : Node
         {
             Require(exploded && members.Count(t => t.Loose && t.State == PropaneTank.TankState.Intact) >= 2,
                 "player's blast did not knock an intact group loose");
-            // The blast proof is complete. Random shell fragments can legitimately block every departure path;
-            // remove only those fragments so this fixture measures gather timing and stability, not debris luck.
-            foreach (var debris in game.Current!.DynamicRoot.GetChildren().OfType<DebrisBody>().ToArray()) { debris.Free(); }
+            // The blast proof is complete. A tank can settle beside a parked van with no clear departure sweep,
+            // even after the random shell fragments are gone. Clear nearby props too: this fixture measures
+            // gather timing and stability; gather_range covers blocked paths and searching around obstacles.
+            foreach (var body in game.Current!.DynamicRoot.GetChildren().OfType<RigidBody3D>().Where(b =>
+                b is DebrisBody || (b.CollisionLayer & Layers.Props) != 0 && b.GlobalPosition.DistanceTo(center) <= game.World.Tuning.BlastRadius).ToArray())
+            {
+                body.Free();
+            }
             var camera = new Camera3D { Current = true }; AddChild(camera);
             camera.LookAtFromPosition(center + new Vector3(5, 4, 7), center + direction * 3 + Vector3.Up * 0.5f);
         });
         for (var i = 0; i < 10; i++) { director.ShotAt(7 + i, $"gather_{i + 1:00}"); }
         director.At(18, () =>
         {
+            if (DevArgs.Get("gather-trace") != null)
+            {
+                var gather = game.Current!.GetNode<TankGather>("Gather");
+                gatherTrace.AppendLine($"[gather result] completed={gather.Completed} interrupted={gather.Interrupted}");
+                var exclude = new Godot.Collections.Array<Rid>(members.Select(t => t.GetRid()));
+                foreach (var tank in members)
+                {
+                    var reach = game.World.Tuning.GatherGroundRay;
+                    var floor = game.World.Physics.DirectSpaceState.IntersectRay(PhysicsRayQueryParameters3D.Create(
+                        tank.GlobalPosition + Vector3.Up * reach, tank.GlobalPosition + Vector3.Down * reach, Layers.Floor));
+                    if (floor.Count > 0 && !exclude.Contains(floor["rid"].AsRid())) exclude.Add(floor["rid"].AsRid());
+                }
+                var radius = Mathf.Sqrt(World.Plan.PileBuilder.Height * World.Plan.PileBuilder.Height / 4 +
+                    World.Plan.PileBuilder.Radius * World.Plan.PileBuilder.Radius) + game.World.Tuning.GatherClearance;
+                foreach (var tank in members)
+                {
+                    var query = new PhysicsShapeQueryParameters3D
+                    {
+                        Shape = new SphereShape3D { Radius = radius },
+                        Transform = new Transform3D(Basis.Identity, tank.GlobalTransform * PropaneTank.LocalCenter),
+                        Exclude = exclude,
+                        CollisionMask = Layers.World | Layers.Props | Layers.Tanks | Layers.Player | Layers.Ragdoll | Layers.Debris
+                    };
+                    foreach (var hit in game.World.Physics.DirectSpaceState.IntersectShape(query))
+                    {
+                        gatherTrace.AppendLine($"[gather departure blocker] tank={tank.GlobalPosition} collider={hit["collider"].As<Node>().Name}");
+                    }
+                }
+            }
             Require(members.Count(t => !t.Loose && !t.Gathering && t.AtRest) >= 2, "knocked tanks did not gather");
             foreach (var tank in members.Where(t => !t.Loose)) { poses[tank] = tank.GlobalTransform; }
         });
@@ -475,11 +513,14 @@ public partial class GameTest : Node
         {
             Require(poses.Count >= 2 && poses.All(p => p.Key.GlobalPosition.DistanceTo(p.Value.Origin) <= 0.006f &&
                 p.Key.GlobalBasis.GetRotationQuaternion().AngleTo(p.Value.Basis.GetRotationQuaternion()) <= Mathf.DegToRad(0.5f)), "gathered pile moved or tipped");
+            GD.Print(gatherTrace.ToString());
             GD.Print($"[game gather] PASS player shot a blast that knocked the pile loose; {poses.Count} intact tanks gathered and remained stable");
         });
     }
 
+    private readonly System.Text.StringBuilder gatherTrace = new();
     private float clock;
+    private PropaneTank[] gatherTraceMembers = System.Array.Empty<PropaneTank>();
 
     private static void Press(string action)
     {
@@ -492,6 +533,22 @@ public partial class GameTest : Node
     public override void _PhysicsProcess(double delta)
     {
         clock += (float)delta;
+        if (DevArgs.Get("gather-trace") != null)
+        {
+            for (var i = 0; i < gatherTraceMembers.Length; i++)
+            {
+                var tank = gatherTraceMembers[i];
+                gatherTrace.AppendLine(System.FormattableString.Invariant($"[gather trace] frame={Engine.GetProcessFrames()} clock={clock:F3} scale={Engine.TimeScale:F3} member={i} loose={tank.Loose} gathering={tank.Gathering} rest={tank.AtRest} revision={tank.Disturbance} pos={tank.GlobalPosition} speed={tank.LinearVelocity.Length():F4} spin={tank.AngularVelocity.Length():F4}"));
+            }
+            if (gatherTraceMembers.Length > 0 && Engine.GetPhysicsFrames() % 60 == 0)
+            {
+                foreach (var body in game.Current!.DynamicRoot.GetChildren().OfType<RigidBody3D>().Where(b =>
+                    !gatherTraceMembers.Contains(b) && gatherTraceMembers.Any(t => t.GlobalPosition.DistanceTo(b.GlobalPosition) < 8)))
+                {
+                    gatherTrace.AppendLine($"[gather neighbor] clock={clock:F3} {body.Name}/{body.GetChild(0).Name} at={body.GlobalPosition} speed={body.LinearVelocity.Length():F3}");
+                }
+            }
+        }
         input.Advance((float)delta);
         if (target != null && IsInstanceValid(target))
         {
