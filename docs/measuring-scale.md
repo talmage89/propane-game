@@ -14,7 +14,11 @@ python3 -B tools/dev/bench_compare.py build/bench/a.json build/bench/b.json
 `BOTS=0,2,4,8,16`, `TANKS=1,2,4,8`, and `RENDERED=0,1` accept comma-separated subsets. `TANKS` is a multiplier
 of the baked single-player tank count (currently 40), not a new pile size. Defaults are `SECONDS=10` simulated
 seconds, `WARMUP=2`, and `REPEATS=3`. The runner uses 120 Hz physics, unthrottled process frames and disabled
-vsync. It never uses `--fixed-fps`, which would hide how much wall time the workload costs. A process frame may
+vsync. It also sets the benchmark process's idle sleep, max FPS and fixed frame delay to zero: Godot otherwise
+sleeps 6900 microseconds whenever a headless window cannot draw, capping it near 144 FPS even with low processor
+mode off ([engine pacing](https://github.com/godotengine/godot/blob/master/core/os/os.cpp)). JSON records and
+checks those settings. It never uses `--fixed-fps`, which would hide how much wall time the workload costs.
+A process frame may
 contain up to twelve physics ticks; the final frame finishes, so JSON records both requested and actual ticks.
 Brains and physics play during warm-up, which ends at a frame boundary. Short smoke timings have no statistical significance.
 
@@ -36,7 +40,8 @@ physics. Rendering can change process/physics cadence, so compare each view sepa
 ## Reading the measurements
 
 Each table entry is the median of that statistic across repetitions. Raw frames and individual run summaries
-remain beside the JSON. Each run records UTC start, `uptime` before/after, engine/.NET versions, CPU, GPU, build
+remain beside the JSON. CSV telemetry reuses its sample buffer and formats numbers into a stack buffer to
+avoid per-frame managed garbage. Each run records UTC start, `uptime` before/after, engine/.NET versions, CPU, GPU, build
 configuration, optimization flag, actual ticks, live tanks remaining, GC generation counts and memory.
 
 | Column / JSON metric | Meaning |
@@ -99,7 +104,7 @@ For a visual check, use `make bench BENCH_ARGS=--capture` or add `--capture` to 
 and remain invisible on the desktop. The runner sets `DISABLE_GAMESCOPE_WSI=1` for its child processes: the
 shim still runs gamescope's headless compositor, but its optional Vulkan presentation layer no longer forces
 Godot's NVIDIA swapchain back to vsync. The runner rejects logs containing that fallback. This is a per-run
-environment override; it edits no system/shim configuration. JSON records this presentation policy, and schema 2
+environment override; it edits no system/shim configuration. JSON records this presentation policy, and schema 3
 rejects earlier prototype runs that could be capped. The layer's
 [manifest](https://github.com/ValveSoftware/gamescope/blob/master/layer/VkLayer_FROG_gamescope_wsi.json.in)
 defines the environment switch.

@@ -14,7 +14,7 @@ import subprocess
 
 from source_run import ROOT, assembly, godot, interrupted
 
-SCHEMA = 2
+SCHEMA = 3
 METRICS = ("fps", "wall_p50_ms", "wall_p95_ms", "wall_p99_ms", "wall_max_ms", "process_ms", "physics_ms",
            "process_peak_monitor_ms", "physics_peak_monitor_ms", "brain_tick_ms", "brain_bot_tick_ms", "navigation_tick_ms", "navigation_share_pct", "navigation_queries_tick_ms", "navigation_queries_per_tick",
            "jolt_step_upper_ms", "gpu_ms", "tank_tick_ms", "vent_frame_ms", "gc_count", "gc_pause_ms", "rss_mib")
@@ -73,6 +73,8 @@ def load_case(directory, bots, config):
     summary = json.loads((directory / "summary.json").read_text())
     if summary["assembly_config"] != config or summary["assembly_optimized"] != (config == "Release"):
         raise ValueError("wrong loaded assembly configuration")
+    if summary["headless_idle_usec"] or summary["max_fps"] or summary["frame_delay_ms"]:
+        raise ValueError("engine frame pacing was not disabled")
     files = list(directory.glob("frames-*.csv"))
     if len(files) != 1:
         raise ValueError("expected one frame metrics stream")
@@ -132,7 +134,7 @@ def main():
     dirty = bool(subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT, text=True).strip())
     documents = {config: dict(schema=SCHEMA, revision=revision, dirty=dirty, config=config, seed=23,
                               seconds=args.seconds, warmup=args.warmup, repeats=args.repeats,
-                              resolution="1280x720", presentation="vsync-disabled-gamescope-wsi-disabled", platform=platform.platform(), paired_configs=configs, cases=[])
+                              resolution="1280x720", presentation="no-idle-wait-vsync-disabled-gamescope-wsi-disabled", platform=platform.platform(), paired_configs=configs, cases=[])
                  for config in configs}
     outputs = {config: output if len(configs) == 1 else output.with_stem(output.stem + "-" + config) for config in configs}
     print("cfg     view bots tank×   FPS   wall p50/p95/p99/max ms      proc phys brain/tick nav% query Jolt≤ GPU tank vent GC pause RSS", flush=True)
@@ -150,7 +152,7 @@ def main():
                         directory.mkdir()
                         load = subprocess.check_output(["uptime"], text=True).strip()
                         started = datetime.now(timezone.utc).isoformat()
-                        command = [godot(), "--path", str(ROOT), "--disable-vsync", "--resolution", "1280x720"]
+                        command = [godot(), "--path", str(ROOT), "--disable-vsync", "--max-fps", "0", "--frame-delay", "0", "--resolution", "1280x720"]
                         if not rendered:
                             command.append("--headless")
                         command += ["res://scenes/dev/scale_bench.tscn", "--", f"--bots={bots}", f"--tanks={tanks}",

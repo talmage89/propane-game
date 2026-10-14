@@ -26,6 +26,8 @@ public partial class FrameMetrics : Node
     private static readonly EffectProfile.System[] systems = Enum.GetValues<EffectProfile.System>()
         .Where(s => s != EffectProfile.System.Count).ToArray();
 
+    private readonly double[] values = new double[16 + systems.Length];
+
     public override void _Ready()
     {
         var directory = DevArgs.Get("frame-metrics")!;
@@ -47,7 +49,6 @@ public partial class FrameMetrics : Node
     {
         var now = Time.GetTicksUsec();
         var timestamp = (double)System.Diagnostics.Stopwatch.GetTimestamp() / System.Diagnostics.Stopwatch.Frequency;
-        var values = new double[16 + systems.Length];
         values[0] = frames;
         values[1] = (now - last) / 1000d;
         values[2] = RenderingServer.ViewportGetMeasuredRenderTimeGpu(GetViewport().GetViewportRid());
@@ -69,7 +70,19 @@ public partial class FrameMetrics : Node
         physicsTail = 0;
         physicsFrames = Engine.GetPhysicsFrames();
         last = now;
-        if (frames++ >= WarmupFrames && Recording) output!.WriteLine(string.Join(",", values.Select(v => v.ToString("R", CultureInfo.InvariantCulture))));
+        if (frames++ >= WarmupFrames && Recording)
+        {
+            // Unthrottled headless frames must not manufacture GC pressure by allocating numeric strings/arrays.
+            Span<char> formatted = stackalloc char[32];
+            for (var i = 0; i < values.Length; i++)
+            {
+                if (i > 0) output!.Write(',');
+                if (!values[i].TryFormat(formatted, out var written, "R", CultureInfo.InvariantCulture))
+                    throw new InvalidOperationException("frame metric did not fit the formatting buffer");
+                output!.Write(formatted[..written]);
+            }
+            output!.WriteLine();
+        }
         AfterSample?.Invoke();
     }
 

@@ -35,6 +35,10 @@ public partial class ScaleBench : Node3D
     {
         try
         {
+            // Headless cannot draw, so Godot otherwise applies its default 6900-us idle wait even with vsync off.
+            OS.LowProcessorUsageMode = false;
+            OS.LowProcessorUsageModeSleepUsec = 0;
+            Engine.MaxFps = 0;
             var bots = (int)DevArgs.GetFloat("bots", 2);
             var multiplier = (int)DevArgs.GetFloat("tanks", 1);
             warmup = (int)(DevArgs.GetFloat("warmup", 2) * Engine.PhysicsTicksPerSecond);
@@ -154,6 +158,9 @@ public partial class ScaleBench : Node3D
             process.Refresh();
             var summary = new
             {
+                headless_idle_usec = OS.LowProcessorUsageModeSleepUsec,
+                max_fps = Engine.MaxFps,
+                frame_delay_ms = ProjectSettings.GetSetting("application/run/frame_delay_msec", 0).AsInt32(),
                 assembly_config = typeof(ScaleBench).Assembly.GetCustomAttribute<AssemblyConfigurationAttribute>()!.Configuration,
                 assembly_optimized = !(typeof(ScaleBench).Assembly.GetCustomAttribute<DebuggableAttribute>()?.IsJITOptimizerDisabled ?? false),
                 world_hash = worldHash,

@@ -68,6 +68,7 @@ class BenchTests(unittest.TestCase):
             run = case["runs"][0]
             self.assertEqual(run["assembly_config"], "Debug")
             self.assertFalse(run["assembly_optimized"])
+            self.assertEqual((run["headless_idle_usec"], run["max_fps"], run["frame_delay_ms"]), (0, 0, 0))
             self.assertEqual(run["bots"], 2)
             self.assertGreater(run["tanks"], 0)
             self.assertGreater(run["brain_tick_ms"], 0)
@@ -78,6 +79,7 @@ class BenchTests(unittest.TestCase):
             self.assertGreaterEqual(run["physics_ticks"], run["requested_physics_ticks"])
             self.assertLess(run["physics_ticks"] - run["requested_physics_ticks"], 12)
             self.assertEqual(set(run["stages"]), {"intact", "disturbed"})
+            self.assertGreater(run["stages"]["disturbed"]["effects_ms_per_frame"]["VentProcess"], 0)
             compared = list(bench_compare.compare(path, path))
             self.assertEqual(compared[0][1], compared[0][2])
             subprocess.run(["python3", "-B", "tools/dev/bench_compare.py", str(path), str(path)], cwd=bench.ROOT,
