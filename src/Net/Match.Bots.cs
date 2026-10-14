@@ -33,6 +33,7 @@ public partial class Match
         public IEnumerable<PlayerCharacter> RemoteBodies => Others;
         public IReadOnlyList<AmmoPickup> Pickups => match.pickups;
         public IEnumerable<PropaneTank> LiveTanks => match.LiveTanks;
+        public Modes.IModeView? View => match.ModeView;
     }
 
     private readonly List<OwnedBot> bots = new();

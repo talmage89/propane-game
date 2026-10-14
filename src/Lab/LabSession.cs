@@ -96,7 +96,8 @@ public partial class LabSession : Node3D
         else
         {
             source = EnvironmentKind == LabEnvironment.Void ? new VoidWorldSource() :
-            new SuburbWorldSource(TestSuburbSettings ?? (Scenario.Banking ? Scenario.Definition.Supply.Suburb(settings, 2) with { MapSize = settings.LabSuburbSize } :
+            new SuburbWorldSource(TestSuburbSettings ?? (Scenario.Definition == Modes.ModeRegistry.King ? SuburbPlans.SinglePlayer(settings) :
+                Scenario.Banking ? Scenario.Definition.Supply.Suburb(settings, 2) with { MapSize = settings.LabSuburbSize } :
                 Scenario.Definition.Supply.Suburb(settings, Scenario.Prototype ? settings.LabPrototypeBots + 1 : 1)), seed);
         }
 
@@ -315,7 +316,7 @@ public partial class LabSession : Node3D
     {
         King = new KingArena { Lab = this, Name = "King" };
         World.ContentRoot.AddChild(King);
-        King.Layout(suburb?.TankGroupCenters());
+        King.Layout(suburb?.Plan);
         if (suburb == null) (start, startYaw) = King.Spawn(0, World.Tuning.LabPrototypeBots + 1, null, 0);
     }
 
@@ -349,11 +350,18 @@ public partial class LabSession : Node3D
     {
         var tuning = World.Tuning;
         var spacing = new Vector3(tuning.PileSpacing, tuning.PileLayerHeight, tuning.PileDepthSpacing);
+        return AddTanks(PileBuilder.Build(PileFormation.Square, count, spacing, tuning.PileUprightLayerHeight)
+            .Select(t => new Transform3D(t.Basis, t.Origin + at)));
+    }
+
+    /// <summary>A pile's tanks at these transforms, standing as built.</summary>
+    internal List<PropaneTank> AddTanks(IEnumerable<Transform3D> transforms)
+    {
         var added = new List<PropaneTank>();
-        foreach (var transform in PileBuilder.Build(PileFormation.Square, count, spacing, tuning.PileUprightLayerHeight))
+        foreach (var transform in transforms)
         {
             var tank = PropaneTank.Create(World);
-            tank.Transform = new Transform3D(transform.Basis, transform.Origin + at);
+            tank.Transform = transform;
             World.ContentRoot.AddChild(tank);
             tank.MarkPile();
             tanks.Add(tank);

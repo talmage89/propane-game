@@ -59,7 +59,7 @@ public static class MessageCodec
         if (data.Length == 0 || data.Length > Protocol.MaxPacketBytes) { throw new InvalidDataException("bad packet size"); }
         var type = (Msg)data[0];
         var relay = Protocol.IsRelay(type);
-        if (!(fromServer ? type is >= Msg.Welcome and <= Msg.ModeSnapshot || relay : type is >= Msg.Hello and <= Msg.ModeEvent || relay))
+        if (!(fromServer ? type is >= Msg.Welcome and <= Msg.ModeSnapshot || relay : type is >= Msg.Hello and <= Msg.SetMode || relay))
         {
             throw new InvalidDataException($"unknown or wrong-direction message {(byte)type}");
         }
@@ -83,6 +83,7 @@ public static class MessageCodec
             Msg.RosterState => new RosterStateMessage(Positive(r.Int()), Id(r.UInt()), ReadProfiles(r)),
             Msg.ActorRequestResult => new ActorRequestResultMessage(Id(r.UInt()), r.Bool(), Id(r.UInt()), r.String()),
             Msg.SetMatchLength => new FloatMessage(Range(r.Float(), 10, 3600)),
+            Msg.SetMode => ReadModeSettings(r),
             Msg.StartMatch => r.Snapshot(),
             Msg.ClaimPickup => new IntMessage(Nonnegative(r.Int())),
             Msg.Ping => new TimeMessage(Time(r.Double())),
@@ -154,14 +155,16 @@ public static class MessageCodec
             case Godot.Collections.Dictionary p: w.Snapshot(p); break;
             case LobbyListMessage p:
                 w.Int(p.Capacity).Int(p.Lobbies.Count);
-                foreach (var lobby in p.Lobbies) { w.Int(lobby.Id).String(lobby.CreatorName).Int(lobby.Players).Byte((byte)lobby.Phase).Int(lobby.Capacity); }
+                foreach (var lobby in p.Lobbies) { w.Int(lobby.Id).String(lobby.CreatorName).Int(lobby.Players).Byte((byte)lobby.Phase).Int(lobby.Capacity).Byte(lobby.ModeId); }
                 break;
             case LobbyInfo p:
                 w.Int(p.Id).Int(p.CreatorId).Float(p.MatchLength).Byte((byte)p.Phase).Int(p.Capacity).UInt(p.RosterRevision).Int(p.Peers.Count);
                 foreach (var peer in p.Peers) w.Int(peer);
                 w.Int(p.Members.Count);
                 foreach (var player in p.Members) { WriteProfile(w, player); }
+                w.Byte(p.Mode.ModeId).Float(p.Mode.MintSeconds);
                 break;
+            case ModeSettings p: w.Byte(p.ModeId).Float(p.MintSeconds); break;
             case MatchSetup p:
                 w.Bytes(p.Plan).Int(p.HostId).Bool(p.CreatorDebug).Float(p.Length).Snapshot(p.Tuning).UInt(p.RosterRevision).Int(p.CreatorId).Int(p.Peers.Count);
                 foreach (var peer in p.Peers) w.Int(peer.PeerId).Bool(peer.DebugTuning);
@@ -244,7 +247,18 @@ public static class MessageCodec
     }
 
     private static LobbyListMessage ReadLobbyList(NetReader r) => new(Range(r.Int(), 2, Protocol.TestedActorCeiling),
-        ReadArray(r, r.Int(), 64, () => new LobbySummary(Positive(r.Int()), r.String(), Range(r.Int(), 0, Protocol.MaxWireActors), Phase(r.Byte()), Range(r.Int(), 2, Protocol.TestedActorCeiling))));
+        ReadArray(r, r.Int(), 64, () => new LobbySummary(Positive(r.Int()), r.String(), Range(r.Int(), 0, Protocol.MaxWireActors), Phase(r.Byte()),
+            Range(r.Int(), 2, Protocol.TestedActorCeiling), LobbyMode(r.Byte()))));
+
+    /// <summary>A lobby's mode and settings: a mode lobbies play, at a mint pace on the lobby's steps.</summary>
+    private static ModeSettings ReadModeSettings(NetReader r)
+    {
+        var settings = new ModeSettings(LobbyMode(r.Byte()), r.Float());
+        if (!settings.Valid) { throw new InvalidDataException($"mint pace off the lobby's steps: {settings.MintSeconds}"); }
+        return settings;
+    }
+
+    private static byte LobbyMode(byte id) => Modes.ModeRegistry.ForLobby(id) != null ? id : throw new InvalidDataException($"no lobby mode {id}");
 
     private static LobbyInfo ReadLobby(NetReader r)
     {
@@ -254,7 +268,7 @@ public static class MessageCodec
         var members = ReadProfiles(r);
         Unique(members.Select(p => p.Id).ToArray());
         if (!peers.Contains(creator) || members.Any(p => !peers.Contains(p.OwnerPeerId))) { throw new InvalidDataException("creator missing from lobby"); }
-        return new LobbyInfo(id, creator, length, phase, members, capacity, revision) { Peers = peers };
+        return new LobbyInfo(id, creator, length, phase, members, capacity, revision) { Peers = peers, Mode = ReadModeSettings(r) };
     }
 
     private static MatchSetup ReadSetup(NetReader r, int matchId)
@@ -442,6 +456,10 @@ public static class MessageCodec
         return w.Bool(p.Present).Int(p.AllocationSlot).UInt(p.LifeId);
     }
     internal static BodyState ReadBody(NetReader r) => new(Id(r.UInt()), Transform(r), Vector(r), Vector(r), Id(r.UInt()), r.UInt());
+    /// <summary>A position or velocity inside the wire limits, for mode payloads.</summary>
+    internal static Vector3 ReadVector(NetReader r) => Vector(r);
+    /// <summary>A transform inside the wire limits with a valid rotation, for mode payloads.</summary>
+    internal static Transform3D ReadTransform(NetReader r) => Transform(r);
     internal static void WriteBody(NetWriter w, BodyState p) => w.UInt(p.Id).Transform(p.Transform).Vec3(p.Linear).Vec3(p.Angular).UInt(p.Epoch).UInt(p.Sequence);
 
     private static ClaimMessage ReadClaim(NetReader r)

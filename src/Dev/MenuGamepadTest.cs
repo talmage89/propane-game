@@ -38,6 +38,10 @@ public partial class MenuGamepadTest : Node
             {
                 await Devices().ConfigureAwait(true);
             }
+            else if (DevArgs.Get("scenario") == "king")
+            {
+                await KingLobby().ConfigureAwait(true);
+            }
             else if (DevArgs.Get("scenario") == "bots")
             {
                 await Bots().ConfigureAwait(true);
@@ -618,7 +622,7 @@ public partial class MenuGamepadTest : Node
                      })
             {
                 // Left/right on match length adjusts the value instead of following a neighbor.
-                if ((MenuNavigation.Key(next.Control) == "match_length" || next.Control is HSlider or HsvColorSlider) && button is JoyButton.DpadLeft or JoyButton.DpadRight) { continue; }
+                if ((MenuNavigation.Key(next.Control) is "match_length" or "mint_pace" || next.Control is HSlider or HsvColorSlider) && button is JoyButton.DpadLeft or JoyButton.DpadRight) { continue; }
                 var control = next.Control.GetNodeOrNull<Control>(neighbor);
                 if (control != null) { queue.Enqueue((control, next.Path.Append(button).ToList())); }
             }

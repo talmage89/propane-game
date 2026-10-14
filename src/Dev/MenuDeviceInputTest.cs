@@ -52,6 +52,17 @@ public partial class MenuDeviceInputTest : Node
             await Activate("Create lobby").ConfigureAwait(true);
             await Wait(() => Menus.Current == Menus.Screen.Lobby, "solo lobby").ConfigureAwait(true);
             var net = Main.GetNode<NetClient>("Net");
+            await Activate("mode_4", focusKey: true).ConfigureAwait(true);
+            await Wait(() => net.Lobby!.Mode.ModeId == Modes.ModeRegistry.KingId, "keyboard selected King").ConfigureAwait(true);
+            await FocusButton("mint_pace").ConfigureAwait(true);
+            Send(new InputEventKey { Keycode = Key.Left, PhysicalKeycode = Key.Left, Pressed = true });
+            Send(new InputEventKey { Keycode = Key.Left, PhysicalKeycode = Key.Left, Pressed = false });
+            await Wait(() => net.Lobby!.Mode.MintSeconds == 1.5f, "real keyboard mint adjustment").ConfigureAwait(true);
+            Send(new InputEventJoypadButton { ButtonIndex = JoyButton.DpadRight, Pressed = true });
+            Send(new InputEventJoypadButton { ButtonIndex = JoyButton.DpadRight, Pressed = false });
+            await Wait(() => net.Lobby!.Mode.MintSeconds == 2, "real gamepad mint adjustment").ConfigureAwait(true);
+            await Activate("mode_2", focusKey: true).ConfigureAwait(true);
+            await Wait(() => net.Lobby!.Mode.ModeId == Modes.ModeRegistry.TankBankId, "restore Tank Bank for reload proof").ConfigureAwait(true);
             var capacity = net.Lobby!.Capacity;
             await Activate("capacity_up", focusKey: true).ConfigureAwait(true);
             await Wait(() => net.Lobby!.Capacity == capacity + 1, "keyboard capacity increase").ConfigureAwait(true);

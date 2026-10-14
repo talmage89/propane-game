@@ -31,6 +31,12 @@ public sealed record ModeDefinition(
     Func<ulong?, IBotGoalPolicy>? CreateBot,
     IReadOnlyList<string> Tuners)
 {
+    /// <summary>
+    /// The rules read where bodies are: a runner feeds them <see cref="ActorsSampled"/> from the positions it already
+    /// has (a server, from its clients' player states; the Lab, from its own actors).
+    /// </summary>
+    public bool SamplesActors { get; init; }
+
     /// <summary>Copies the tuners the rules read from a live tuning instance; rules never see the resource.</summary>
     public ModeTuners CopyTuners(Tuning tuning)
     {
@@ -65,10 +71,14 @@ public static class ModeRegistry
         new ModeSupply((tuning, _) => SuburbPlans.SinglePlayer(tuning), LimitedAmmo: false, Pickups: false), RoundTimer.CountUp,
         () => new RingOutHud(), seed => new RingOutBot(seed), RingOutRules.Tuners);
 
-    /// <summary>Lab prototype: hold a moving zone to mint banked tanks, with Tank Bank's bank and spills.</summary>
-    public static readonly ModeDefinition King = new(KingId, "King of the Cul-de-sac", 1, () => new KingRules(), ModeWorldSource.Void,
-        new ModeSupply((tuning, _) => SuburbPlans.SinglePlayer(tuning), LimitedAmmo: false, Pickups: false), RoundTimer.Countdown,
-        () => new KingHud(), seed => new KingBot(seed), KingRules.Tuners);
+    /// <summary>
+    /// Hold a moving zone to mint banked tanks, with Tank Bank's bank and spills. A lobby can choose it; the Lab still
+    /// tries it against its bots. It plays a match's suburb, stocked for the players, with unlimited ammo and no cans.
+    /// </summary>
+    public static readonly ModeDefinition King = new(KingId, "King of the Cul-de-sac", 1, () => new KingRules(), ModeWorldSource.SuburbPlan,
+        new ModeSupply((tuning, players) => SuburbPlans.Match(tuning, players) with { AmmoSpots = 0 }, LimitedAmmo: false, Pickups: false),
+        RoundTimer.Countdown, () => new KingHud(), seed => new KingBot(seed), KingRules.Tuners)
+    { SamplesActors = true };
 
     public const byte ShortFuseId = 5;
 
@@ -92,18 +102,23 @@ public static class ModeRegistry
         () => new DissolveRunHud(), seed => new DissolveRunBot(seed), DissolveRunRules.Tuners);
 
     /// <summary>
-    /// Modes tried only in the Lab. They are not in <see cref="All"/>: no lobby, MatchStart or envelope schema names
-    /// them, so they change nothing a match shares.
+    /// Modes the Lab tries against its bots through its prototype runner. Ring Out and Short Fuse are only that: they
+    /// are not in <see cref="All"/>, so no lobby, MatchStart or envelope schema names them. King is also networked.
     /// </summary>
     public static IReadOnlyList<ModeDefinition> Prototypes { get; } = new[] { RingOut, King, ShortFuse, DissolveRun };
 
-    private static readonly List<ModeDefinition> registered = new() { Sandbox, TankBank };
+    /// <summary>The modes a lobby's creator can choose, the default first.</summary>
+    public static IReadOnlyList<ModeDefinition> Lobby { get; } = new[] { TankBank, King };
+
+    public static ModeDefinition? ForLobby(byte id) => Lobby.FirstOrDefault(mode => mode.Id == id);
+
+    private static readonly List<ModeDefinition> registered = new() { Sandbox, TankBank, King };
     public static IReadOnlyList<ModeDefinition> All => registered.AsReadOnly();
 
     public static ModeDefinition? Find(byte id, ushort schemaVersion) =>
         registered.FirstOrDefault(mode => mode.Id == id && mode.SchemaVersion == schemaVersion);
 
-    /// <summary>Test seam: assertion suites register synthetic modes beside the shipped two.</summary>
+    /// <summary>Test seam: assertion suites register synthetic modes beside the shipped ones.</summary>
     internal static void Register(ModeDefinition mode)
     {
         registered.RemoveAll(m => m.Id == mode.Id && m.SchemaVersion == mode.SchemaVersion);
