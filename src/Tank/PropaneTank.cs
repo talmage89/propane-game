@@ -29,6 +29,7 @@ public partial class PropaneTank : RigidBody3D
 
     private Transform3D? pilePose;
     private Transform3D? restPose;
+    private TankSimulation? simulation;
 
     public required Spawn ContentSpawn { get; init; }
     private VentJet? vent;
@@ -171,6 +172,8 @@ public partial class PropaneTank : RigidBody3D
         // In a match every copy of a tank flutters alike, so the copies drift apart less.
         flutterPhase = NetId != 0 ? NetId % 997 * 0.1f : World.Random.Randf() * 100f;
         SetProcess(false);
+        SetPhysicsProcess(false);
+        simulation = TankSimulation.Register(World, this);
         if (pilePose != null) { pilePose = GlobalTransform; }
     }
 
@@ -299,22 +302,13 @@ public partial class PropaneTank : RigidBody3D
     public override void _PhysicsProcess(double delta)
     {
         using var profile = EffectProfile.Measure(EffectProfile.System.TankPhysics);
+        Tick(delta);
+    }
+
+    internal void Tick(double delta)
+    {
         if (Gathering) { UpdateGatherShimmer(); }
-        if (State == TankState.Intact && !Gathering)
-        {
-            var idleTuning = World.Tuning;
-            if (!AtRest)
-            {
-                if (restPose != null) { Disturbance++; restPose = null; }
-            }
-            else if (restPose is not { } pose) { restPose = GlobalTransform; }
-            else if ((GlobalTransform * LocalCenter).DistanceTo(pose * LocalCenter) > idleTuning.GatherRestDistance ||
-                GlobalBasis.GetRotationQuaternion().AngleTo(pose.Basis.GetRotationQuaternion()) > Mathf.DegToRad(idleTuning.GatherRestAngle))
-            {
-                Disturbance++;
-                restPose = GlobalTransform;
-            }
-        }
+        ObserveRest();
         if (State != TankState.Venting)
         {
             return;
@@ -333,6 +327,31 @@ public partial class PropaneTank : RigidBody3D
         if (AngularVelocity.LengthSquared() > tuning.VentMaxSpin * tuning.VentMaxSpin)
         {
             AngularVelocity = AngularVelocity.LimitLength(tuning.VentMaxSpin);
+        }
+    }
+
+    internal bool NeedsTick => State == TankState.Venting || Gathering;
+
+    internal void ObserveRest()
+    {
+        if (State == TankState.Intact && !Gathering)
+        {
+            var idleTuning = World.Tuning;
+            if (!AtRest)
+            {
+                if (restPose != null) { Disturbance++; restPose = null; }
+            }
+            else
+            {
+                var current = GlobalTransform;
+                if (restPose is not { } pose) { restPose = current; }
+                else if ((current * LocalCenter).DistanceTo(pose * LocalCenter) > idleTuning.GatherRestDistance ||
+                    current.Basis.GetRotationQuaternion().AngleTo(pose.Basis.GetRotationQuaternion()) > Mathf.DegToRad(idleTuning.GatherRestAngle))
+                {
+                    Disturbance++;
+                    restPose = current;
+                }
+            }
         }
     }
 
@@ -377,7 +396,12 @@ public partial class PropaneTank : RigidBody3D
 
     private double Now => World.Clock.Now;
 
-    public override void _ExitTree() => CancelChainFuse();
+    public override void _ExitTree()
+    {
+        CancelChainFuse();
+        simulation?.Remove(this);
+        simulation = null;
+    }
 
     private void Puncture(Vector3 point, Vector3 normal, float swirl) =>
         PunctureLocal(ToLocal(point), (GlobalBasis.Inverse() * normal).Normalized(), swirl);

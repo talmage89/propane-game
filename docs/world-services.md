@@ -5,6 +5,12 @@ spawn service, tuning copy, random stream, events, blast receiver registry, simu
 magazine/decal/light accounting. Consumers receive a context or tuning explicitly before entering the tree.
 Immutable asset, shader, material, mesh, collision and catalog caches remain shared.
 
+`TankSimulation` lives under each world's effects root and batches tank physics callbacks. Tanks register on
+entry and unregister on exit. Intact tanks still observe rest/motion every physics tick, including scripted
+sleep/wake and relocation between gather scans; vents retain the same thrust and correction path.
+`GatherGroups` searches neighboring spatial cells, retaining exact radius connectivity, ordered membership and
+revision-keyed delay clocks. Neither service changes the puncture, fuse or gathering rules.
+
 Each simulation lives in a viewport with rendering disabled. The application viewport shares the selected
 `World3D` to present it; camera nodes stay under the facade and query their injected world's physics space. This
 presentation bridge preserves the facades. Actors carry camera-independent logical aim; explicit local views
