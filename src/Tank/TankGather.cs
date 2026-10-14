@@ -138,8 +138,11 @@ public partial class TankGather : Node3D
         return current.Any(g => g.Select(s => s.Id).SequenceEqual(ids));
     }
 
-    internal static bool Eligible(PropaneTank tank) => tank.State == PropaneTank.TankState.Intact && !tank.Invulnerable &&
-        !tank.Gathering && tank.Loose && tank.AtRest;
+    internal static bool Eligible(PropaneTank tank)
+    {
+        tank.ObserveRest();
+        return tank.State == PropaneTank.TankState.Intact && !tank.Invulnerable && !tank.Gathering && tank.Loose && tank.AtRest;
+    }
 
     private void OnDisturbed(PropaneTank tank)
     {

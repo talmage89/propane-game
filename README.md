@@ -163,6 +163,18 @@ Upright tiers span two collars below, using `PileUprightLayerHeight`; rows retai
 Rifle hits puncture, then detonate. A blast within `ChainRadius` acts as a shot: an intact neighbor punctures and
 keeps venting and moving; an already-venting neighbor detonates after its `ChainFuseMin`/`ChainFuseMax` fuse.
 
+Dense chains use **Explosion full effect budget** (16 overlapping full blasts); additional blasts keep their core
+flash and fireball. **Debris pieces per tank** selects 6 of the authored 25 fragments, and **Debris spawn per frame**
+limits body creation to 8 per frame. Spawned debris stays until the suburb retires. These dials affect presentation
+and fragment physics; punctures, chain fuses, blast pushes and banking happen immediately.
+
+Physics remains at 120 Hz with the usual twelve-step catch-up budget. An offline chain with at least 64 pending
+fuses temporarily limits catch-up to four steps, retaining the limit for 0.5 real seconds after pressure drops.
+The **Dense chain** tuners control the threshold, steps (0 disables it) and tail. Network worlds veto this limit;
+their owned bodies retain ordinary catch-up. Dense offline bursts can briefly slow simulation, but a
+low frame rate alone no longer activates a lower budget.
+[Tank scale trials](docs/tank-scaling.md) records the trade-offs, timing and compatibility.
+
 Loose intact tanks gather with nearby resting neighbors after 20 undisturbed seconds. The **Tank Gather** tuners
 control radius (3 m), minimum group size (2), delay, a three-stage lift/glide/settle and optional scan shimmer (set
 `GatherShimmer` to 0 to disable it). Connected neighbors gather at a clear center; isolated singles, venting tanks,
@@ -170,7 +182,10 @@ shielded drops and tanks still in their original or gathered pile stay put. Shot
 and player bumps reset the wait or interrupt a gliding tank. Cramped groups wait for a clear site and path.
 Rebuilt piles use `PileBuilder`'s upright cluster: every count fits, and removing one tank leaves no suspended tier.
 
-Match settings use the actual player count. Tank supply is `MpTankCount + MpTanksPerPlayer × players`, ammo cans are
+**Tank count multiplier** (World, 1–8) scales suburb tank supply and pile sizes; rebuild the suburb to apply it.
+It defaults to 1. The Lab's Huge stack offers 24–512 tanks, starting at 40.
+
+Match settings use the actual player count. Before the multiplier, tank supply is `MpTankCount + MpTanksPerPlayer × players`, ammo cans are
 `PickupCount + PickupsPerPlayer × players`, and map width is `MpMapSizeBase + MpMapSizePerPlayer × players`. Pile
 limits gain `floor(MpPileSizePerPlayer × players)`. `MpStartSpacing` is a hard minimum between clear road starts;
 invalid settings fail generation instead of placing players on top of one another. Lobby capacity is a separate
@@ -301,6 +316,10 @@ $GODOT --fixed-fps 60 --resolution 1280x720 res://scenes/dev/game_test.tscn -- -
 
 # Soak: punctures every tank, then detonates them all at once, and reports frame times. Run without --fixed-fps.
 $GODOT res://scenes/dev/soak.tscn
+
+# A dense pile with equal simulation-time measurement windows, including its primed chain.
+# Omit --measure-seconds to retain the 600-frame measurement; --measure-warmup adds simulated warm-up time.
+DISABLE_GAMESCOPE_WSI=1 $GODOT --disable-vsync --resolution 1920x1080 res://scenes/dev/lab_test.tscn -- --scenario=measure --count=160 --phase=chain --measure-warmup=3 --measure-seconds=4 --metrics="$PWD/build/chain.csv"
 
 # Tank close-ups (scenarios: full, vent, blast, look), the character and rifle rig, the world kit, map overviews.
 $GODOT --fixed-fps 60 res://scenes/dev/tank_range.tscn -- --capture-dir=/tmp/t --scenario=blast

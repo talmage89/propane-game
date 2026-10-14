@@ -1,0 +1,7 @@
+config,clients,profile,tanks,status,grids,body_pairs,unobserved_pair_grids,rest_peak,moving_peak,final_rest,final_moving,episodes,longest_episode,disagreements,audits_agree,engine_errors,load_before_1,load_before_5,load_before_15,load_after_1,load_after_5,load_after_15
+Debug,4,clean,144,PASS,2000,1137507,0,0.029,4.078,0.007,0.092,515,0.25,0,True,0,8.55,12.03,14.78,12.88,12.69,14.71
+Debug,4,faults,144,PASS,1999,1330570,0,0.189,12.549,0.014,0.196,805,0.95,0,True,0,12.88,12.69,14.71,8.42,11.49,14.05
+Debug,8,clean,208,PASS,1999,8465205,0,0.180,11.559,0.018,0.107,4362,1.45,0,True,0,8.42,11.49,14.05,19.17,15.42,15.21
+Debug,8,faults,208,PASS,1998,4896836,0,0.142,12.626,0.001,0.200,10499,0.65,0,True,0,19.17,15.42,15.21,13.86,15.05,15.11
+Debug,16,clean,336,FAIL,1996,74535834,0,0.047,8.109,0.000,0.731,20959,2.85,164,True,0,13.86,15.05,15.11,9.21,17.49,16.56
+Debug,16,faults,336,FAIL,1995,64381781,0,0.041,25.114,0.007,0.319,40713,13.00,121,True,0,9.21,17.49,16.56,8.61,16.80,16.73
