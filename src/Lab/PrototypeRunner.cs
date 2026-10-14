@@ -63,6 +63,8 @@ public partial class PrototypeRunner : Node
     public ModeClock Clock => new(Phase, round, offset + elapsed,
         IsPlaying ? (Mode.Timer == RoundTimer.Countdown ? offset + length : double.PositiveInfinity) : offset + elapsed);
     public bool Spectating(int actorId) => spectating.Contains(actorId);
+    /// <summary>The mode's own state for its HUD, bots and arena, from the rules this runner holds (King's zone).</summary>
+    public IModeView? View => (Rules as KingRules)?.State(Clock);
     public string BotStatus(int actorId) => brains.FirstOrDefault(b => b.Actor.ActorId == actorId).Brain?.Status ?? "";
     private WorldContext World => Lab.World;
     private bool Banking => Rules is KingRules;
@@ -316,7 +318,7 @@ public partial class PrototypeRunner : Node
 
     /// <summary>The HUD data for the local player, from the rules this runner holds.</summary>
     public ModeHud Present(IReadOnlyList<Vector3> objectives) => Hud.Present(new ModeHudInput(Lab.Player.ActorId, Phase, TimeLeft, scores,
-        objectives, true, Rules, Clock));
+        objectives, true, Rules, Clock, View));
 
     private sealed class BotWorld(PrototypeRunner runner, PlayerCharacter actor) : IBotWorld
     {
@@ -336,5 +338,6 @@ public partial class PrototypeRunner : Node
         public IEnumerable<PropaneTank> LiveTanks => runner.Lab.LiveTanks;
         public IModeRules? Rules => runner.Rules;
         public ModeClock Clock => runner.Clock;
+        public IModeView? View => runner.View;
     }
 }

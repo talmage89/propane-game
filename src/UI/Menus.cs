@@ -507,7 +507,7 @@ public partial class Menus : CanvasLayer
         }
         if (Net.IsCreator)
         {
-            var minutes = UiStyle.Button(FormatTime(lobby.MatchLength));
+            var minutes = UiStyle.Button(UiStyle.FormatTime(lobby.MatchLength));
             minutes.SetMeta("focus_key", "match_length");
             minutes.TooltipText = "Left / right to change match length";
             minutes.CustomMinimumSize = new Vector2(80, 40);
@@ -524,7 +524,7 @@ public partial class Menus : CanvasLayer
         }
         else
         {
-            var minutes = UiStyle.Title(FormatTime(lobby.MatchLength), 26);
+            var minutes = UiStyle.Title(UiStyle.FormatTime(lobby.MatchLength), 26);
             minutes.CustomMinimumSize = new Vector2(80, 0);
             length.AddChild(minutes);
         }
@@ -692,12 +692,6 @@ public partial class Menus : CanvasLayer
         label.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         label.CustomMinimumSize = new Vector2(480, 0);
         return label;
-    }
-
-    private static string FormatTime(float seconds)
-    {
-        var whole = Mathf.RoundToInt(seconds);
-        return $"{whole / 60}:{whole % 60:00}";
     }
 
     private static string DefaultName()

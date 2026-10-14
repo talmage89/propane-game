@@ -1,10 +1,15 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Propane.World;
+using Propane.World.Plan;
 
 namespace Propane.Modes;
 
-/// <summary>The zone moved to a new spot: a runner materializes a fresh pile there.</summary>
+/// <summary>
+/// The zone moved to a new spot: a runner materializes a fresh pile on clear ground beside it (zone 0, the round's
+/// first, sits on a pile already).
+/// </summary>
 public sealed record ZoneMoved(int Zone, ModeSpot Spot) : ModeCommand;
 
 /// <summary>
@@ -28,6 +33,16 @@ public sealed class KingRules : IModeRules
         KingZoneRadius, KingZoneHeight, KingMintSeconds, KingMoveSeconds, KingWarningSeconds, KingMoveMin, KingMoveMax,
     }).ToArray();
 
+    /// <summary>
+    /// The mint pace a lobby or the Lab's setup page may choose: seconds per tank, in steps. One definition for the
+    /// lobby's setting, its validation on the server and the Lab dial it maps to.
+    /// </summary>
+    public const double MintPaceMin = 0.5, MintPaceMax = 10, MintPaceStep = 0.5, MintPaceDefault = 2;
+
+    /// <summary>A mint pace on the lobby's steps: inside the range and a whole number of steps.</summary>
+    public static bool ValidMintPace(double seconds) => seconds is >= MintPaceMin and <= MintPaceMax &&
+        Math.Abs(seconds / MintPaceStep - Math.Round(seconds / MintPaceStep)) < 1e-6;
+
     private readonly TankBankRules bank = new();
     private readonly List<ModeSpot> spots = new();
     private readonly List<int> schedule = new(); // Spot index of each zone, in order.
@@ -38,7 +53,7 @@ public sealed class KingRules : IModeRules
     private ModeRandom random;
     private ulong seed;
     private double? roundStart;
-    private double nextMint;
+    private double nextMint; // Mode time of the holder's next tank.
 
     /// <summary>The bank, spills and audit, exactly as Tank Bank keeps them.</summary>
     public TankBankRules Bank => bank;
@@ -54,6 +69,23 @@ public sealed class KingRules : IModeRules
     public double Elapsed(ModeClock clock) => roundStart is { } start ? Math.Max(0, clock.Now - start) : 0;
     public double MoveSeconds => Math.Max(1, tuners.Float(KingMoveSeconds));
     public double Radius => tuners.Float(KingZoneRadius);
+    private double MintInterval => Math.Max(0.05, tuners.Float(KingMintSeconds));
+
+    /// <summary>A suburb's pile spots: each of the plan's piles at its tanks' mean position on the ground.</summary>
+    public static IReadOnlyList<ModeSpot> SpotsFrom(SuburbPlan plan) => plan.Tanks.GroupBy(t => t.Pile).OrderBy(g => g.Key)
+        .Select(g => new ModeSpot(g.Average(t => (double)t.Position.X), Suburb.GroundHeight, g.Average(t => (double)t.Position.Y))).ToArray();
+
+    /// <summary>
+    /// The zone as every peer should see it at this clock, or null before the round's first sample places it. This is
+    /// what a networked runner sends in its Zone snapshot.
+    /// </summary>
+    public KingState? State(ModeClock clock)
+    {
+        if (Zone < 0 || roundStart is not { } start) return null;
+        return new KingState(Zone, SpotOf(Zone), SpotOf(Zone + 1), Radius, Holder, Occupants, Holder != 0 ? nextMint - start : 0,
+            MintInterval, (Zone + 1) * MoveSeconds, tuners.Float(KingWarningSeconds),
+            minted.Where(m => m.Value > 0).OrderBy(m => m.Key).Select(m => new KingMinted(m.Key, m.Value)).ToArray(), Elapsed(clock));
+    }
 
     public void Initialize(ModeSetup setup)
     {
@@ -155,20 +187,20 @@ public sealed class KingRules : IModeRules
         var height = tuners.Float(KingZoneHeight);
         Occupants = sampled.Samples.Where(s => !s.Down && present.Contains(s.ActorId) && Math.Abs(s.Y - spot.Y) <= height &&
                 (s.X - spot.X) * (s.X - spot.X) + (s.Z - spot.Z) * (s.Z - spot.Z) <= radius * radius)
-            .Select(s => s.ActorId).Distinct().ToArray();
+            .Select(s => s.ActorId).Distinct().Order().ToArray();
         Contested = Occupants.Count > 1;
         var lone = Occupants.Count == 1 ? Occupants[0] : 0;
         if (lone != Holder)
         {
             Holder = lone;
-            nextMint = clock.Now + Math.Max(0.05, tuners.Float(KingMintSeconds));
+            nextMint = clock.Now + MintInterval;
         }
         // A holder mints on every interval held without a break; samples may be coarser than the interval.
         while (Holder != 0 && clock.Now >= nextMint)
         {
             minted[Holder] = MintedBy(Holder) + 1;
             commands.AddRange(bank.Handle(new TankMinted(Holder), clock));
-            nextMint += Math.Max(0.05, tuners.Float(KingMintSeconds));
+            nextMint += MintInterval;
         }
         return commands.ToArray();
     }
@@ -189,8 +221,8 @@ public sealed class KingRules : IModeRules
     private IReadOnlyList<ModeCommand> Leave(ActorLeft left, ModeClock clock)
     {
         present.Remove(left.ActorId);
-        if (Holder == left.ActorId) Release();
-        Occupants = Occupants.Where(id => id != left.ActorId).ToArray();
+        // A departing holder loses the zone at once; whoever stays inside holds or contests from the next sample.
+        if (Occupants.Contains(left.ActorId)) Release();
         return bank.Handle(left, clock);
     }
 

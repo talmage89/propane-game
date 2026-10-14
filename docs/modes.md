@@ -187,14 +187,19 @@ first. Standings score a place as `starters - place`. There is no bank: spills a
 **King of the Cul-de-sac** (`KingRules`). Tank Bank's rules, composed: the bank, tickets, gates and audit are
 `TankBankRules`, which gains one input, `TankMinted`, that Tank Bank never sends (its audit is unchanged; `Expected`
 adds the minted count, always zero there). The zone is a circle of `KingZoneRadius` (and `KingZoneHeight` above or
-below the spot) on one of the world's spots (`ModeWorld.Spots`: the Lab's pile spots, or a suburb's tank groups).
+below the spot) on one of the world's spots (`ModeWorld.Spots`: the void's pile ring, or a suburb plan's piles,
+`KingRules.SpotsFrom`).
 Zone `k` is in force from `k * KingMoveSeconds` of round time; each next spot is a seeded pick among spots
 `KingMoveMin`–`KingMoveMax` meters from the last (or the nearest miss when none is in range), so the schedule is a
 pure function of the clock, the spots and the seed. A move warns for `KingWarningSeconds`; timing dials change from the
 next round. Only upright, present actors occupy. A lone occupant mints one banked tank per `KingMintSeconds` held
 without a break; a contest, leaving, being thrown or a move restarts the count. `ZoneMoved` asks the runner to
-materialize a fresh pile there. The audit line reads `king audit initial= map= drops= minted= spills= banked=
-expected= ok=`.
+materialize a fresh pile there: `PileSite` finds the nearest clear, flat ground for the whole pile within
+`KingPileReach` of the spot with the world's physics, keeping `KingPileClearance` open around it and twice that from
+players. `State(clock)` is the zone as every peer sees it (`KingState`): the zone and next spot, radius, holder and
+occupants, the next mint, the move and its warning in round time, and each actor's mints. The HUD, `KingBot` and the
+shared `KingZone` presenter read only that, so they behave the same from the Lab's rules or a match's snapshot. The
+audit line reads `king audit initial= map= drops= minted= spills= banked= expected= ok=`.
 
 **Short Fuse** (`ShortFuseRules`). Last one standing in a suburb of tanks, with [health](#health). Each round starts
 everyone present on a new life at full health (`BeginRound`); a declared death puts the victim out to spectate, and
@@ -212,7 +217,8 @@ spills are refused. The audit adds `short fuse round= alive= over= match_over= r
 
 - `IModeHudPresenter.Present` and `IBotGoalPolicy` see only scores and the clock; the prototypes need the boundary and
   the zone. `ModeHudInput` and `IBotWorld` gained an optional `Rules` and `Clock`, supplied only where a peer runs
-  the rules itself (the Lab). A networked mode would carry that state in its snapshot payload instead.
+  the rules itself (the Lab), and an optional `View` (`IModeView`): the mode's own state, from the rules or decoded
+  from its snapshot payload. King reads only its `View`.
 - Untimed and count-up rounds had no way to say they were decided: `RoundOver` is that command. No server runner
   acts on it yet.
 - Tank Bank's goal selection still lives inside `BankingBot`; the prototype policies share `BotMotor`, a small layer

@@ -109,14 +109,26 @@ public partial class LabMenu : CanvasLayer
             }
             if (scenario.Id == "king")
             {
-                // The zone's mint pace: seconds a lone holder needs for each tank.
-                const float step = 0.5f, fastest = 0.5f, slowest = 10f;
+                // A hosted King lobby's two settings, on the lobby's own steps: the mint pace (seconds a lone holder
+                // needs for each tank) and the round's length.
+                const float step = (float)Modes.KingRules.MintPaceStep, fastest = (float)Modes.KingRules.MintPaceMin, slowest = (float)Modes.KingRules.MintPaceMax;
                 var row = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.Center };
                 layout.AddChild(row);
                 Button("−", () => { draft.KingMintSeconds = Mathf.Max(fastest, draft.KingMintSeconds - step); Rebuild("faster"); }, "faster", draft.KingMintSeconds <= fastest, row);
                 row.AddChild(UiStyle.Text($"A tank every {draft.KingMintSeconds:0.0} s", 22));
                 Button("+", () => { draft.KingMintSeconds = Mathf.Min(slowest, draft.KingMintSeconds + step); Rebuild("slower"); }, "slower", draft.KingMintSeconds >= slowest, row);
                 layout.AddChild(UiStyle.Text("Mint pace while you hold the zone alone · F1 tunes it during play too.", 16, UiStyle.SoftInk, HorizontalAlignment.Center));
+                var shortest = draft.MatchLengthMin;
+                var longest = Mathf.Max(shortest, draft.MatchLengthMax);
+                var lengthStep = Mathf.Max(draft.MatchLengthStep, 1f);
+                var round = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.Center };
+                layout.AddChild(round);
+                Button("−", () => { draft.KingRoundSeconds = Mathf.Clamp(draft.KingRoundSeconds - lengthStep, shortest, longest); Rebuild("shorter"); },
+                    "shorter", draft.KingRoundSeconds <= shortest, round);
+                round.AddChild(UiStyle.Text($"Rounds of {UiStyle.FormatTime(draft.KingRoundSeconds)}", 22));
+                Button("+", () => { draft.KingRoundSeconds = Mathf.Clamp(draft.KingRoundSeconds + lengthStep, shortest, longest); Rebuild("longer"); },
+                    "longer", draft.KingRoundSeconds >= longest, round);
+                layout.AddChild(UiStyle.Text("The same pace and round length a multiplayer lobby sets for King.", 16, UiStyle.SoftInk, HorizontalAlignment.Center));
             }
             if (scenario.Banking || scenario.Prototype)
             {
