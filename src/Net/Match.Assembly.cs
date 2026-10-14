@@ -137,7 +137,14 @@ public partial class Match
         Session.AddView(this, menu);
         if (OS.IsDebugBuild() && Setup.CreatorDebug && Setup.CreatorId == me)
         {
-            tuningPanel = new TuningPanel { Target = World.Tuning, Name = "Tuning", Note = "Changes apply to everyone in the match", UseDeclaredRanges = true };
+            tuningPanel = new TuningPanel
+            {
+                Target = World.Tuning,
+                Name = "Tuning",
+                Note = "Changes apply to everyone in the match",
+                UseDeclaredRanges = true,
+                LockedProperties = new[] { nameof(Tuning.TankCountMultiplier) }
+            };
             tuningPanel.ValueChanged += (name, value) => Send(new NetWriter(Msg.TuningSet, Setup.Id).String(name).Scalar(value));
             Session.AddView(this, tuningPanel);
         }

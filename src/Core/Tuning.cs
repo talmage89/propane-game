@@ -511,6 +511,9 @@ public partial class Tuning : Resource
     [Export(PropertyHint.Range, "0,90,1")] public float RifleTriggerIndex2Degrees { get; set; } = 20f;
     [Export(PropertyHint.Range, "0,90,1")] public float RifleTriggerIndex3Degrees { get; set; } = 45f;
 
+    public const int TankSupplyMinimum = 1;
+    public const int TankSupplyMaximum = 8;
+
     // ---------------------------------------------------------------- World
     [ExportGroup("World")]
     [Export(PropertyHint.Range, "1,80,1")] public int TankCount { get; set; } = 30;

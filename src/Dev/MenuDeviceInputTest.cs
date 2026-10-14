@@ -76,6 +76,14 @@ public partial class MenuDeviceInputTest : Node
             await Wait(() => Main.HasNode("Match") && Main.GetNode<Match>("Match").IsPlaying, "match playing").ConfigureAwait(true);
             var match = Main.GetNode<Match>("Match");
             EnableHeadlessInput(match.Player, match.GetNode<MatchMenu>("Menu"));
+            TapKey(Key.F1);
+            await Frames().ConfigureAwait(true);
+            var matchTuning = match.GetNode<TuningPanel>("Tuning");
+            Check(matchTuning.Visible && !matchTuning.FindChildren("*", "Label", owned: false).OfType<Label>()
+                .Any(label => label.Text == "Tank count multiplier"), "real match F1 opens with lobby supply locked");
+            TapKey(Key.F1);
+            await Frames().ConfigureAwait(true);
+            Check(!matchTuning.Visible, "real F1 closes match tuning");
             await Gameplay(match.Player, "match").ConfigureAwait(true);
             var ammo = match.Player.Ammo!;
             // Give reload its own precondition even when the fire regression fails on the baseline.
