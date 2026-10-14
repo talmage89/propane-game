@@ -15,19 +15,20 @@ public interface IBotBrain : IPlayerInputSource
     void Think(Match match, float dt);
 }
 
-/// <summary>Protocol 2 harness adapter for Tank Bank's bot goal policy (the runtime banking brain).</summary>
+/// <summary>Harness adapter for a match's bot goal policy, including King's snapshot-driven brain.</summary>
 public sealed class Bot : IBotBrain, System.IDisposable
 {
-    private readonly BankingBot brain = (BankingBot)ModeRegistry.TankBank.CreateBot!(null);
+    private readonly IBotGoalPolicy brain;
+    public Bot(ModeDefinition? mode = null) => brain = (mode ?? ModeRegistry.TankBank).CreateBot!(null);
     public float Skill { get => brain.Skill; set => brain.Skill = value; }
     public string Status => brain.Status;
-    public int StuckEvents => brain.StuckEvents;
-    public int Replans => brain.Replans;
-    public int Jumps => brain.Jumps;
-    public int BlacklistedTargets => brain.BlacklistedTargets;
+    public int StuckEvents => (brain as BankingBot)?.StuckEvents ?? 0;
+    public int Replans => (brain as BankingBot)?.Replans ?? 0;
+    public int Jumps => (brain as BankingBot)?.Jumps ?? 0;
+    public int BlacklistedTargets => (brain as BankingBot)?.BlacklistedTargets ?? 0;
     public PlayerIntent Read() => brain.Read();
     public void Think(Match match, float dt) => brain.Think(new MatchWorld(match), dt);
-    internal void Face(PlayerCharacter player, Vector3 point, float dt) => brain.Face(player, point, dt);
+    internal void Face(PlayerCharacter player, Vector3 point, float dt) => ((BankingBot)brain).Face(player, point, dt);
     public void Dispose() => brain.Dispose();
 
     private sealed class MatchWorld(Match match) : IBotWorld
@@ -44,5 +45,6 @@ public sealed class Bot : IBotBrain, System.IDisposable
         public IEnumerable<PlayerCharacter> RemoteBodies => match.RemoteBodies;
         public IReadOnlyList<AmmoPickup> Pickups => match.Pickups;
         public IEnumerable<PropaneTank> LiveTanks => match.LiveTanks;
+        public IModeView? View => match.ModeView;
     }
 }

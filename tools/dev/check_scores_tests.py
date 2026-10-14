@@ -23,6 +23,17 @@ class ScoreChecks(unittest.TestCase):
     audit = "match 1: bank audit initial=16 map=0 drops=1 spills=7 banked=10 expected=10 ok=True\n"
     final = "finished match 1; final scores 2=9 3=1\n"
 
+    def test_king_mints_are_conserved_and_agree_per_actor(self):
+        audit = "match 1: king audit initial=0 map=3 drops=0 minted=9 spills=2 banked=10 expected=10 ok=True\n"
+        minted = "match 1: king minted 2=8 3=1\nstandings match 1: 2=9 3=1\n"
+        bot = self.final + "finished king 1; minted 2=8 3=1\n"
+        self.run_check(audit + minted, bot, bot)
+        for server, client in ((audit, bot), (audit + minted, self.final),
+                               (audit + minted, bot.replace("2=8 3=1", "2=1 3=8")),
+                               (audit.replace("minted=9", "minted=8") + minted, bot)):
+            with self.subTest(server=server, client=client), self.assertRaises(ValueError):
+                self.run_check(server, client)
+
     def test_same_scores_in_different_order(self):
         self.run_check(self.audit, self.final, "finished match 1; final scores 3=1 2=9\n")
 

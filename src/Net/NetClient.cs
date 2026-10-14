@@ -6,8 +6,25 @@ using Propane.Core;
 
 namespace Propane.Net;
 
-/// <summary>A lobby as the lobby browser lists it.</summary>
-public sealed record LobbySummary(int Id, string CreatorName, int Players, LobbyServer.LobbyPhase Phase, int Capacity = 5);
+/// <summary>A lobby as the lobby browser lists it, with the mode it will play.</summary>
+public sealed record LobbySummary(int Id, string CreatorName, int Players, LobbyServer.LobbyPhase Phase, int Capacity = 5,
+    byte ModeId = Modes.ModeRegistry.TankBankId);
+
+/// <summary>
+/// The mode a lobby's creator chose and its settings: the mint pace a King lobby plays (kept while Tank Bank is
+/// chosen, so switching back remembers it). The lobby's match length is the round length of either.
+/// </summary>
+public sealed record ModeSettings(byte ModeId, float MintSeconds)
+{
+    public static readonly ModeSettings Default = new(Modes.ModeRegistry.TankBankId, (float)Modes.KingRules.MintPaceDefault);
+    public Modes.ModeDefinition Mode => Modes.ModeRegistry.ForLobby(ModeId) ?? throw new InvalidOperationException($"no lobby mode {ModeId}");
+
+    /// <summary>A mode a lobby may play, at a mint pace on the lobby's steps.</summary>
+    public bool Valid => Modes.ModeRegistry.ForLobby(ModeId) != null && Modes.KingRules.ValidMintPace(MintSeconds);
+
+    /// <summary>Puts these settings into a match's tuning: they are the server's dials for it.</summary>
+    public void Apply(Tuning tuning) => tuning.KingMintSeconds = MintSeconds;
+}
 
 /// <summary>A player in a lobby or match.</summary>
 public sealed record PlayerProfile(int Id, string Name, AppearanceRecord Appearance)
@@ -33,6 +50,8 @@ public sealed record PlayerProfile(int Id, string Name, AppearanceRecord Appeara
 public sealed record LobbyInfo(int Id, int CreatorId, float MatchLength, LobbyServer.LobbyPhase Phase, IReadOnlyList<PlayerProfile> Members, int Capacity = 5, uint RosterRevision = 1)
 {
     public IReadOnlyList<int> Peers { get; init; } = Members.Select(a => a.OwnerPeerId).Distinct().ToArray();
+    /// <summary>The mode its next match plays, and that mode's settings.</summary>
+    public ModeSettings Mode { get; init; } = ModeSettings.Default;
 }
 
 /// <summary>Everything a client needs to start a match.</summary>
@@ -303,6 +322,9 @@ public partial class NetClient : Node
     }
 
     public void SetMatchLength(float seconds) => Send(new NetWriter(Msg.SetMatchLength).Float(seconds));
+
+    /// <summary>Asks the server to set the lobby's mode and its settings (creator only, while waiting).</summary>
+    public void SetMode(ModeSettings settings) => Send(MessageCodec.Encode(new NetMessage(Msg.SetMode, 0, 0, settings), false));
 
     /// <summary>
     /// Asks the server to start the lobby's match (creator only), on this player's tuning: the values baked into a

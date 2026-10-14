@@ -300,7 +300,7 @@ public static class ServerTests
         public readonly int Id;
         public readonly MatchSetup Setup;
 
-        public Fixture(bool debug = true, bool playing = true, int bots = 0, Func<ParticipantRoster>? rosterFactory = null, ModeDefinition? mode = null)
+        public Fixture(bool debug = true, bool playing = true, int bots = 0, Func<ParticipantRoster>? rosterFactory = null, ModeDefinition? mode = null, ModeSettings? modeSettings = null, float length = 10)
         {
             Server = new LobbyServer(PacketTransports.CreateServer(), Clock) { StartScore = 4, LobbyMode = mode ?? ModeRegistry.TankBank };
             if (rosterFactory != null) Server.RosterFactory = rosterFactory;
@@ -319,7 +319,8 @@ public static class ServerTests
                 new AddActorMessage((uint)i + 1, ActorKind.Bot, $"Bot{i}", AppearanceRecord.FromPalette(i), ControllerConfig.Bot, Revision())), false));
             }
 
-            Receive(new NetWriter(Msg.SetMatchLength).Float(10));
+            if (modeSettings != null) Receive(MessageCodec.Encode(new NetMessage(Msg.SetMode, 0, 0, modeSettings), false));
+            Receive(new NetWriter(Msg.SetMatchLength).Float(length));
             Receive(new NetWriter(Msg.StartMatch).Snapshot(Tuning.Snapshot()));
             Setup = Packets.Select(p => p.Message.Payload).OfType<MatchSetup>().First();
             Id = Setup.Id;

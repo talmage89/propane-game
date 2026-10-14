@@ -30,6 +30,7 @@ public enum Msg : byte
     UpdateActor,
     RemoveActor,
     ModeEvent,
+    SetMode,
 
     // Server to client. Numbers stay fixed: retired messages leave gaps (40 was Score, 47 DropRefused).
     Welcome = 32,
@@ -75,7 +76,7 @@ public static class Protocol
     /// must bump at least the minor version (tools/release/check_version.sh enforces this). Hello, Welcome and
     /// Rejected never change shape (fields may only be appended), so any build can be told why it was turned away.
     /// </summary>
-    public const int Version = 2;
+    public const int Version = 3;
 
     public const int DefaultPort = 24680;
 

@@ -26,7 +26,7 @@ public static class ProtocolTests
             Packet(Msg.CreateLobby, new EmptyMessage()), Packet(Msg.JoinLobby, new IntMessage(1)), Packet(Msg.LeaveLobby, new EmptyMessage()),
             Packet(Msg.SetProfile, new ProfileMessage("Test", AppearanceRecord.FromPalette(1))), Packet(Msg.SetMatchLength, new FloatMessage(90)),
             Packet(Msg.StartMatch, snapshot), Packet(Msg.Loaded, new EmptyMessage()), Packet(Msg.ClaimPickup, new IntMessage(0)),
-            Packet(Msg.SetCapacity, new IntMessage(16)),
+            Packet(Msg.SetCapacity, new IntMessage(16)), Packet(Msg.SetMode, new ModeSettings(ModeRegistry.KingId, 0.5f)),
             Packet(Msg.AddActor, new AddActorMessage(1, ActorKind.Bot, "Bot", profile.Appearance, ControllerConfig.Bot, 3)),
             Packet(Msg.UpdateActor, new UpdateActorMessage(2, profile.Id, "New", profile.Appearance, ControllerConfig.Human, 4)),
             Packet(Msg.RemoveActor, new RemoveActorMessage(3, profile.Id, 5)),

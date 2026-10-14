@@ -1,6 +1,6 @@
 # Multiplayer
 
-How multiplayer works today: tank bank's rules, the networking model, hosting, bots and tests. It describes the
+How multiplayer works today: Tank Bank and King of the Cul-de-sac, the networking model, hosting, bots and tests. It describes the
 code; when the code changes, change this file with it. The game's lasting direction is in [design](../design/).
 
 ## Tank bank
@@ -31,7 +31,7 @@ the Lab duel; [modes.md](modes.md) describes the framework, the spill tickets an
 
 1. **Main menu:** single player (the sandbox), multiplayer or quit.
 2. **Multiplayer:** the player connects to a server, then creates a lobby or joins an existing one.
-3. **Lobby:** each player sets a name and color and may add bots. The creator sets the match length and starts the match.
+3. **Lobby:** each player sets a name and color and may add bots. The creator chooses Tank Bank (default) or King of the Cul-de-sac, its length and, for King, mint pace, then starts.
 4. **Match start:** the server sends the suburb's plan. Each client builds it, it materializes as in single player, and play begins when the timer starts.
 5. **Match:** runs for the lobby's match length.
 6. **End:** a results screen, then back to the lobby.
@@ -254,7 +254,7 @@ pushes or chain contacts; `scenes/dev/blast_query_tests.tscn` checks 1,100 bodie
 
 - **Main menu:** Single player, Multiplayer, Quit. Single player is the sandbox as before; its pause menu gains a Main menu button.
 - **Multiplayer:** (or start the game with `-- --connect=host[:port]`) type a name and the server's address (`host` or `host:port`; the port defaults to 24680, UDP). **Host on this computer** runs a server inside the game and joins it, for playing without a dedicated server; the lobby screens then show the addresses others can connect to.
-- **Lobbies:** create one or join one from the list (lobbies in a match can't be joined). In the lobby, everyone picks a name and any color and may add bots, and the creator sets the match length and presses Start. A release build needs two actors (players or bots) to start; a debug build may start alone, for testing.
+- **Lobbies:** create one or join one from the list (lobbies in a match can't be joined). In the lobby, everyone picks a name and any color and may add bots, and the creator sets mode, length and King mint pace, then presses Start. A release build needs two actors (players or bots) to start; a debug build may start alone, for testing.
 - **In a match:** the clock and the tanks you have banked are at the top, ammo at the bottom right. R reloads (an empty magazine also reloads on the next trigger pull). Walking over an ammo can takes it, unless the reserve is full. Esc or Start / Options opens the controls with Resume, Leave match and Quit; the match keeps running behind it. Leaving a match also leaves the lobby.
 - **After a match:** the results show for `ResultsTime`, then everyone is back in the lobby, ready for another.
 
@@ -624,7 +624,7 @@ changes require a minor release. No tuner, construction rule or world hash chang
 A bot is an ordinary roster actor of kind Bot, owned by the peer that added it. Its owner's game simulates it exactly
 like its own player: the same `PlayerCharacter`, owner-authoritative physics, actor envelope, action sequences, hit
 grace, spills and pickups. The only difference is its intent, which the mode's goal policy (`ModeDefinition.CreateBot`,
-`BankingBot` for Tank Bank) chooses each physics tick from that peer's view of the match, through the shared navigation
+`BankingBot` for Tank Bank, `KingBot` for King) chooses each physics tick from that peer's view of the match, through the shared navigation
 and aim (`src/Net/Match.Bots.cs`). A bot has no camera, audio listener, HUD, hit marker or score popup. Other peers
 receive its poses and actions like a human's and cannot tell them apart beyond the roster's kind. Each brain is seeded
 from the match and actor ids, so it never draws from the world's shared random stream.
@@ -672,3 +672,34 @@ run them.
 Hello, Welcome and Rejected are unchanged. `Protocol.Version` stays **2** under the unreleased-cycle ruling; the roster
 requests change shape, so the next release must be a minor release. No shared tuner, construction rule or world hash
 changed.
+
+## King online (Protocol 3)
+
+The lobby creator chooses **Tank Bank** or **King of the Cul-de-sac**, and everyone sees the choice. King adds
+**Mint pace**, 0.5–10 seconds per tank in 0.5 s steps (default 2 s), and uses the lobby length as its round length.
+Mouse −/+ controls and a keyboard/controller Left/Right value control change the pace. Switching to Tank Bank hides
+it and preserves its value for switching back. Only the creator can change either setting, only while waiting;
+unsupported modes and off-step/nonfinite paces fail decoding. Tank Bank keeps its rules, supply and ammo policy.
+
+King plays the existing suburb with unlimited ammo and no cans, like its Lab prototype. Its moving zone, lone holds,
+contests, minted banks, warnings, fresh piles and conservation are described in [modes.md](modes.md#the-envelope).
+The server samples accepted player poses; every peer's HUD, beam/ring and bots read its Zone snapshot. Lobby bots
+use KingBot automatically. The test clients select it with `net_bots.sh ... -- --mode=king [--mint-seconds=2]`.
+`--scenario=king` is a two-client scripted hold/contest/move/pile proof (allow at least 55 s); rendered clients capture
+hold, contest, warning, materializing/settled pile and results. `-n 3 -l 110 -k -- --mode=king --scenario=king-late --tune.PlayerSendRate=20 --delay-who=Bot3 --match-delay=70`
+delays one builder past a move to
+exercise buffered catch-up. The late client asserts the moved zone at readiness; run the score checker on all clients,
+and continuous tank comparisons on the undelayed clients (the late client intentionally lacks full-play coverage); the lobby's existing waiting-only admission and lack of in-match reconnect are unchanged.
+
+`check_scores.py` checks King conservation including minted tanks and compares every client's final bank and per-actor
+mint totals with the server. `menu_test --scenario=king` tests mode, pace and round-length controls with real mouse,
+keyboard and controller events, a guest observer, endpoints and focus preservation. The input scenario also exercises
+the new mode/pace controls before its ordinary gameplay proof.
+
+SetMode (16), LobbyList's mode id and LobbyState's mode/settings change message shapes; the mode envelope adds
+King schema 4/1. King's shared zone, pile and presentation dials are now exported tuning values, retaining their Lab
+controls. `Protocol.Version` is **3**, superseding the earlier unreleased Protocol 2 entries above; this requires a
+**minor release**. Hello, Welcome and Rejected retain their layouts. Ring Out, Short Fuse and Dissolve Run remain Lab-only.
+
+[King online verification](king-online.md) records the soaks, delayed builder, device controls, reviewed captures
+and known vent outlier.

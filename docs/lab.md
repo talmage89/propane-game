@@ -40,11 +40,13 @@ Lab dial in the tuning panel's Lab section, and layout dials apply on reset.
   stand where the ground went, and you are out; the feed credits whoever threw you within 6 s. You then watch from a
   ledge off one side, free to look around. The last one standing wins; the controls panel shows every place.
 - **King of the Cul-de-sac** (void or suburb). A beam marks a 12 m zone on a pile. Stand in it alone to mint a banked
-  tank every 2 s (the King setup page sets this pace, from 0.5 to 10 s); anyone else upright inside stops it (the beam
-  pulses red). Every 45 s the zone moves to another pile
-  15–25 m away after a 3 s warning (a pale beam marks the next spot) and a fresh pile materializes there. Banking,
-  hits and throws spill as in Tank Bank. The void lays out a ring of six pile spots around one in the middle; a suburb
-  uses its own tank groups. Most banked when the clock runs out wins.
+  tank every 2 s; anyone else upright inside stops it (the beam pulses red), and the holder's bar fills toward each
+  tank. Every 45 s the zone moves to another pile 15–25 m away after a 3 s warning (a pale beam marks the next spot)
+  and a fresh pile materializes on the nearest clear, flat ground beside it. Banking, hits and throws spill as in Tank
+  Bank. The void lays out a ring of eight pile spots around one in the middle; a suburb uses the plan's own piles.
+  Most banked when the clock runs out wins. The King setup page sets the two things a multiplayer lobby sets for King,
+  on the lobby's steps: the mint pace (0.5 to 10 s) and the round length (3:00 in the Lab; the lobby keeps its existing 2:30 default).
+  King is also playable online with humans and lobby bots; its HUD and zone visuals use the same state view.
 - **Short Fuse** (suburb only). Last one standing, with health: 100 each, bullets take 7, a blast 90 at its center
   down to 30 at the edge of its throw and nothing beyond, and 5 HP/s comes back after 5 s unhit. You get 0.75 s of
   protection once you are back on your feet after a throw. A thrown player is helpless, so a blast sets up the kill
@@ -79,7 +81,7 @@ scenario list; Main menu returns to the front end.
 
 Reset preserves the session's unsaved tuning but retires every actor, local view, timer, effect and physics
 resource before rebuilding. Re-entry uses the menu's settings and a fresh copy of the saved gameplay template.
-Lab layout and difficulty properties are local `Tuning` dials (no `Export`), copied with each session but excluded
+King's shared zone and pile dials are exported for online matches and retain their Lab controls. Other Lab layout and difficulty properties are local `Tuning` dials (no `Export`), copied with each session but excluded
 from match snapshots and saved `.tres` files. Layout changes take effect on reset; bot skill changes take effect
 on resume. No socket or server is created by the Lab.
 
@@ -128,7 +130,7 @@ layout dial to both slider ends and all at once through every scenario and envir
 environments, each of which must bank at least ten tanks, and full prototype rounds at the shipped dials (Ring Out on
 three seeds, King on three in the void and one in a suburb). Each prototype round must end legally: Ring Out with a
 winner, every starter placed in elimination order and the out spectating; King on its clock with the bank conserved,
-every mint counted and a materialized pile per zone move. `--full` also plays two Short Fuse matches at the shipped
+every mint counted and a materialized pile per zone move (in a suburb, one may find no clear ground within reach). `--full` also plays two Short Fuse matches at the shipped
 dials (`shortfuse-full`), reporting how often a bot finished a thrown player with a bullet. Each Short Fuse
 round must end legally: every death a starter's, once, credited to someone else or to nobody; the dead spectating;
 alive plus dead equal to the starters, and one alive at most unless the limit ended it; the winner alive. Each match

@@ -34,12 +34,19 @@ public sealed record ModeHud(
 }
 
 /// <summary>
+/// A mode's own state as one peer sees it, for its HUD presenter, bot policy and world presentation: produced by the
+/// rules where the peer runs them (the Lab), or decoded from the mode's snapshot payload on a networked peer, so a
+/// consumer reads the same thing either way. King of the Cul-de-sac's is <see cref="KingState"/>.
+/// </summary>
+public interface IModeView;
+
+/// <summary>
 /// What a presenter reads: mode state as the local peer knows it, plus the world facts it may point at. Where the
 /// peer runs the rules itself (the Lab), <paramref name="Rules"/> and <paramref name="Clock"/> let a presenter read
-/// mode-specific state such as a boundary or a zone.
+/// mode-specific state such as a boundary. <paramref name="View"/> is the mode's own state, on any peer.
 /// </summary>
 public sealed record ModeHudInput(int LocalActor, ModePhase Phase, float TimeLeft, IReadOnlyDictionary<int, int> Scores,
-    IReadOnlyList<Vector3> Objectives, bool ShowObjectives, IModeRules? Rules = null, ModeClock Clock = default);
+    IReadOnlyList<Vector3> Objectives, bool ShowObjectives, IModeRules? Rules = null, ModeClock Clock = default, IModeView? View = null);
 
 public interface IModeHudPresenter
 {

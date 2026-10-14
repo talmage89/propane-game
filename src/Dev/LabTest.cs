@@ -282,7 +282,8 @@ public partial class LabTest : Node
     /// <summary>
     /// Full prototype rounds with a bot on every actor (the player's too), headless, across seeds: each must end with
     /// a legal outcome. Ring Out: a winner, every starter placed in elimination order, the out spectating. King: the
-    /// clock ran out, the bank is conserved with every mint counted, and each zone move materialized a pile.
+    /// clock ran out, the bank is conserved with every mint counted, and each zone move materialized a pile (in a
+    /// suburb, unless no clear ground was within reach).
     /// --quick shortens the round's dials; --bots sets the Lab bots beside the player (default 2: three brains).
     /// </summary>
     private async Task Prototypes()
@@ -381,7 +382,10 @@ public partial class LabTest : Node
                     Assert(runner.Elapsed >= lab.World.Tuning.KingRoundSeconds - 0.01, "king ended before its clock");
                     Assert(bank.Conserved && bank.Minted == runner.Roster.Sum(a => king.MintedBy(a.ActorId)), $"king seed {seed}: bank not conserved");
                     Assert(runner.Roster.All(a => runner.Scores.GetValueOrDefault(a.ActorId) == bank.Bank(a.ActorId)), "scores disagree with the bank");
-                    Assert(moves == king.Zone && lab.King!.Materialized == moves, $"zone moves {moves}, zone {king.Zone}, piles {lab.King!.Materialized}");
+                    // Every move builds a fresh pile on clear ground; the open void always has some within reach.
+                    var arena = lab.King!;
+                    Assert(moves == king.Zone && arena.Materialized + arena.Unplaced == moves && (environment == LabEnvironment.Suburb || arena.Unplaced == 0),
+                        $"zone moves {moves}, zone {king.Zone}, piles {arena.Materialized}, unplaced {arena.Unplaced}");
                     minted += bank.Minted;
                     break;
                 }
