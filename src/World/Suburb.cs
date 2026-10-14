@@ -108,13 +108,10 @@ public partial class Suburb : Node3D
             suburb.AddChild(suburb.StaticRoot);
             suburb.AddChild(suburb.DynamicRoot);
             suburb.contentSpawn = world.ForContent(suburb.DynamicRoot);
-            suburb.BuildGround();
-            suburb.BuildRoads();
-            suburb.BuildPavings();
-            suburb.BuildHouses();
-            suburb.BuildFences();
-            suburb.BuildProps();
-            suburb.BuildTanks(networked);
+            foreach (var step in suburb.Steps(networked))
+            {
+                step();
+            }
             // Debris, scorch marks and bullet holes spawned mid-transition take the suburb's current reveal tag.
             suburb.DynamicRoot.ChildEnteredTree += node => suburb.TagForReveal(node);
             return suburb;
@@ -124,6 +121,126 @@ public partial class Suburb : Node3D
             // Until Build returns, this detached subtree is owned by the builder, not the world root.
             suburb.Free();
             throw;
+        }
+    }
+
+    /// <summary>Every piece of the build, in order: the ground, roads and paving, then each house, fence run, prop and tank.</summary>
+    private IEnumerable<Action> Steps(bool networked)
+    {
+        yield return BuildGround;
+        yield return BuildRoads;
+        yield return BuildPavings;
+        foreach (var lot in plan.Lots.Where(l => l.HouseModel >= 0))
+        {
+            yield return () => BuildHouse(lot);
+        }
+        foreach (var run in plan.Fences)
+        {
+            yield return () => BuildFence(run);
+        }
+        for (var index = 0; index < plan.Props.Count; index++)
+        {
+            var prop = index;
+            yield return () => BuildProp(prop);
+        }
+        for (var index = 0; index < plan.Tanks.Count; index++)
+        {
+            var tank = index;
+            yield return () => BuildTank(tank, networked);
+        }
+    }
+
+    /// <summary>
+    /// A suburb built a few pieces at a time inside a time budget, for a world that streams content while it plays.
+    /// The suburb enters <c>parent</c> at once, hidden, and fills in place, so no single step pays for a whole
+    /// neighborhood entering the tree; each piece takes the reveal tag as it lands, and the suburb shows once complete.
+    /// The pieces and their order are <see cref="Build"/>'s, so the result is the same suburb.
+    /// </summary>
+    public sealed class Staged
+    {
+        private readonly IEnumerator<Action> steps;
+
+        internal Staged(Suburb suburb, bool networked)
+        {
+            Suburb = suburb;
+            steps = suburb.Steps(networked).GetEnumerator();
+        }
+
+        public Suburb Suburb { get; }
+        public bool Done { get; private set; }
+        public int Pieces { get; private set; }
+
+        /// <summary>Builds pieces until <paramref name="milliseconds"/> have passed (at least one); true once complete.</summary>
+        public bool Advance(double milliseconds)
+        {
+            var timer = System.Diagnostics.Stopwatch.StartNew();
+            while (!Done && (Pieces == 0 || timer.Elapsed.TotalMilliseconds < milliseconds))
+            {
+                if (!steps.MoveNext())
+                {
+                    Done = true;
+                    steps.Dispose();
+                    Suburb.Visible = true;
+                    break;
+                }
+                var statics = Suburb.StaticRoot.GetChildCount();
+                steps.Current();
+                for (var i = statics; i < Suburb.StaticRoot.GetChildCount(); i++)
+                {
+                    Suburb.TagForReveal(Suburb.StaticRoot.GetChild(i));
+                }
+                Pieces++;
+            }
+            return Done;
+        }
+    }
+
+    /// <summary>Starts a <see cref="Staged"/> build at <paramref name="position"/> under <paramref name="parent"/>, tagged <paramref name="revealSide"/>.</summary>
+    public static Staged BuildStaged(WorldContext world, SuburbPlan plan, SuburbSettings settings, Node3D parent, Vector3 position, float revealSide)
+    {
+        world.EnsureAlive();
+        var suburb = new Suburb { Name = $"Suburb_{plan.Seed}", Position = position, Visible = false };
+        suburb.world = world;
+        suburb.plan = plan;
+        suburb.settings = settings;
+        suburb.revealSide = revealSide;
+        suburb.StaticRoot = new Node3D { Name = "Static" };
+        suburb.DynamicRoot = new Node3D { Name = "Dynamic" };
+        suburb.AddChild(suburb.StaticRoot);
+        suburb.AddChild(suburb.DynamicRoot);
+        suburb.contentSpawn = world.ForContent(suburb.DynamicRoot);
+        suburb.DynamicRoot.ChildEnteredTree += node => suburb.TagForReveal(node);
+        parent.AddChild(suburb);
+        return new Staged(suburb, networked: false);
+    }
+
+    /// <summary>
+    /// Loads and measures, once, every model and collision shape a generated suburb can use, so a streamed build pays
+    /// for none of them mid-play.
+    /// </summary>
+    public static void Warm(IEnumerable<string> looseProps)
+    {
+        foreach (var info in Catalog.Houses)
+        {
+            GameAssets.Instantiate(info.Path).Free();
+            Trimesh(info);
+        }
+        foreach (var key in looseProps)
+        {
+            var info = GameCatalog.Resolve(key);
+            GameAssets.Instantiate(info.Path).Free();
+            if (key != $"car:{Catalog.PickupModel}" && key != "prop:patio_umbrella" && !key.StartsWith("prop:street_lamp") && key != "prop:shed")
+            {
+                Hull(info, 1f);
+            }
+        }
+        foreach (var name in Catalog.TreeModels.Concat(Catalog.BushModels))
+        {
+            GameAssets.Instantiate(GameCatalog.Resolve($"nature:{name}").Path).Free();
+        }
+        foreach (var name in new[] { "fence_privacy", "fence_picket", "fence_post" })
+        {
+            GameAssets.Instantiate(Catalog.Prop(name).Path).Free();
         }
     }
 
@@ -392,82 +509,71 @@ public partial class Suburb : Node3D
 
     // ------------------------------------------------------------------ Houses
 
-    private void BuildHouses()
+    private void BuildHouse(Lot lot)
     {
-        var houses = Catalog.Houses;
-        foreach (var lot in plan.Lots)
-        {
-            if (lot.HouseModel < 0)
-            {
-                continue;
-            }
-            var info = houses[lot.HouseModel];
-            var model = GameAssets.Instantiate(info.Path);
-            model.Scale = Vector3.One * info.Scale;
-            WorldMaterials.Apply(model, Catalog.HousePalettes[lot.HousePalette]);
-            var body = new StaticBody3D { Name = "House", CollisionLayer = Layers.World, CollisionMask = 0 };
-            body.AddChild(model);
-            body.AddChild(new CollisionShape3D { Shape = Trimesh(info) });
-            StaticRoot.AddChild(body);
-            body.Position = ToWorld(lot.House.Center);
-            body.Rotation = new Vector3(0, SuburbGenerator.YawFacing(lot.TowardStreet), 0);
-        }
+        var info = Catalog.Houses[lot.HouseModel];
+        var model = GameAssets.Instantiate(info.Path);
+        model.Scale = Vector3.One * info.Scale;
+        WorldMaterials.Apply(model, Catalog.HousePalettes[lot.HousePalette]);
+        var body = new StaticBody3D { Name = "House", CollisionLayer = Layers.World, CollisionMask = 0 };
+        body.AddChild(model);
+        body.AddChild(new CollisionShape3D { Shape = Trimesh(info) });
+        StaticRoot.AddChild(body);
+        body.Position = ToWorld(lot.House.Center);
+        body.Rotation = new Vector3(0, SuburbGenerator.YawFacing(lot.TowardStreet), 0);
     }
 
     // ------------------------------------------------------------------ Fences
 
-    private void BuildFences()
+    private void BuildFence(FenceRun run)
     {
         var privacy = Catalog.Prop("fence_privacy");
         var picket = Catalog.Prop("fence_picket");
         var post = Catalog.Prop("fence_post");
-        foreach (var run in plan.Fences)
+        var length = run.A.DistanceTo(run.B);
+        // Explicit integer mixing: System.HashCode is salted per process, including on the same machine.
+        var hash = FenceHash(run, plan.Seed);
+        var isPicket = hash % 10 < 3;
+        var model = isPicket ? picket : privacy;
+        var height = isPicket ? PicketHeight : FenceHeight;
+        var tint = isPicket ? PicketTints[(hash / 10) % PicketTints.Length] : PrivacyTints[(hash / 10) % PrivacyTints.Length];
+        var count = Mathf.Max(1, Mathf.RoundToInt(length / FencePanelLength));
+        var panel = length / count;
+        var dir = (run.B - run.A).Normalized();
+        var yaw = -Mathf.Atan2(dir.Y, dir.X);
+        for (var i = 0; i < count; i++)
         {
-            var length = run.A.DistanceTo(run.B);
-            // Explicit integer mixing: System.HashCode is salted per process, including on the same machine.
-            var hash = FenceHash(run, plan.Seed);
-            var isPicket = hash % 10 < 3;
-            var model = isPicket ? picket : privacy;
-            var height = isPicket ? PicketHeight : FenceHeight;
-            var tint = isPicket ? PicketTints[(hash / 10) % PicketTints.Length] : PrivacyTints[(hash / 10) % PrivacyTints.Length];
-            var count = Mathf.Max(1, Mathf.RoundToInt(length / FencePanelLength));
-            var panel = length / count;
-            var dir = (run.B - run.A).Normalized();
-            var yaw = -Mathf.Atan2(dir.Y, dir.X);
-            for (var i = 0; i < count; i++)
+            var body = new Breakaway
             {
-                var body = new Breakaway
-                {
-                    Name = "FencePanel",
-                    Mass = (isPicket ? 14f : 28f) * panel / FencePanelLength,
-                    CollisionLayer = Layers.Props,
-                    CollisionMask = Layers.DynamicMask,
-                    PhysicsMaterialOverride = new PhysicsMaterial { Friction = 0.7f, Bounce = 0.1f },
-                };
-                body.AddChild(new CollisionShape3D
-                {
-                    Shape = new BoxShape3D { Size = new Vector3(panel, height, FenceThickness) },
-                    Position = new Vector3(panel / 2f, height / 2f, 0),
-                });
-                var mesh = GameAssets.Instantiate(model.Path);
-                mesh.Scale = new Vector3(panel / FencePanelLength, 1, 1);
-                WorldMaterials.Apply(mesh);
-                SetTint(mesh, tint);
-                body.AddChild(mesh);
-                if (i == count - 1)
-                {
-                    // Close the run with its own post at the far end.
-                    var end = GameAssets.Instantiate(post.Path);
-                    end.Position = new Vector3(panel - 0.05f, 0, 0);
-                    end.Scale = new Vector3(1, height / FenceHeight, 1);
-                    WorldMaterials.Apply(end);
-                    SetTint(end, tint);
-                    body.AddChild(end);
-                }
-                DynamicRoot.AddChild(body);
-                body.Position = ToWorld(run.A + dir * panel * i);
-                body.Rotation = new Vector3(0, yaw, 0);
+                Name = "FencePanel",
+                Mass = (isPicket ? 14f : 28f) * panel / FencePanelLength,
+                CollisionLayer = Layers.Props,
+                CollisionMask = Layers.DynamicMask,
+                PhysicsMaterialOverride = new PhysicsMaterial { Friction = 0.7f, Bounce = 0.1f },
+            };
+            body.AddChild(new CollisionShape3D
+            {
+                Shape = new BoxShape3D { Size = new Vector3(panel, height, FenceThickness) },
+                Position = new Vector3(panel / 2f, height / 2f, 0),
+            });
+            var mesh = GameAssets.Instantiate(model.Path);
+            mesh.Scale = new Vector3(panel / FencePanelLength, 1, 1);
+            WorldMaterials.Apply(mesh);
+            SetTint(mesh, tint);
+            body.AddChild(mesh);
+            if (i == count - 1)
+            {
+                // Close the run with its own post at the far end.
+                var end = GameAssets.Instantiate(post.Path);
+                end.Position = new Vector3(panel - 0.05f, 0, 0);
+                end.Scale = new Vector3(1, height / FenceHeight, 1);
+                WorldMaterials.Apply(end);
+                SetTint(end, tint);
+                body.AddChild(end);
             }
+            DynamicRoot.AddChild(body);
+            body.Position = ToWorld(run.A + dir * panel * i);
+            body.Rotation = new Vector3(0, yaw, 0);
         }
     }
 
@@ -495,68 +601,65 @@ public partial class Suburb : Node3D
 
     // ------------------------------------------------------------------ Props
 
-    private void BuildProps()
+    private void BuildProp(int index)
     {
-        for (var index = 0; index < plan.Props.Count; index++)
+        var prop = plan.Props[index];
+        var info = GameCatalog.Resolve(prop.Model);
+        var mesh = GameAssets.Instantiate(info.Path);
+        var scale = info.Scale * prop.Scale;
+        mesh.Scale = Vector3.One * scale;
+        WorldMaterials.Apply(mesh);
+        SetTint(mesh, prop.Tint);
+        // A corner-pivoted model hangs under a holder so the prop's origin is the center of its base.
+        Node3D model = mesh;
+        if (info.PivotOffset != Vector3.Zero)
         {
-            var prop = plan.Props[index];
-            var info = GameCatalog.Resolve(prop.Model);
-            var mesh = GameAssets.Instantiate(info.Path);
-            var scale = info.Scale * prop.Scale;
-            mesh.Scale = Vector3.One * scale;
-            WorldMaterials.Apply(mesh);
-            SetTint(mesh, prop.Tint);
-            // A corner-pivoted model hangs under a holder so the prop's origin is the center of its base.
-            Node3D model = mesh;
-            if (info.PivotOffset != Vector3.Zero)
-            {
-                model = new Node3D { Name = mesh.Name };
-                model.AddChild(mesh);
-                mesh.Position = info.PivotOffset * prop.Scale;
-            }
-            var position = ToWorld(prop.Position, prop.Elevation);
-            var rotation = new Vector3(0, prop.Yaw, 0);
+            model = new Node3D { Name = mesh.Name };
+            model.AddChild(mesh);
+            mesh.Position = info.PivotOffset * prop.Scale;
+        }
+        var position = ToWorld(prop.Position, prop.Elevation);
+        var rotation = new Vector3(0, prop.Yaw, 0);
 
-            switch (prop.Body)
+        switch (prop.Body)
+        {
+            case PropBody.Static:
             {
-                case PropBody.Static:
+                var shape = StaticShape(prop.Model, info, prop.Scale);
+                if (shape == null)
                 {
-                    var shape = StaticShape(prop.Model, info, prop.Scale);
-                    if (shape == null)
-                    {
-                        StaticRoot.AddChild(model);
-                        model.Position = position;
-                        model.Rotation = rotation;
-                        break;
-                    }
-                    var body = new StaticBody3D { CollisionLayer = Layers.World, CollisionMask = 0 };
-                    body.AddChild(model);
-                    body.AddChild(shape.Value.Shape);
-                    StaticRoot.AddChild(body);
-                    body.Position = position;
-                    body.Rotation = rotation;
+                    StaticRoot.AddChild(model);
+                    model.Position = position;
+                    model.Rotation = rotation;
                     break;
                 }
-                default:
+                var body = new StaticBody3D { CollisionLayer = Layers.World, CollisionMask = 0 };
+                body.AddChild(model);
+                body.AddChild(shape.Value.Shape);
+                StaticRoot.AddChild(body);
+                body.Position = position;
+                body.Rotation = rotation;
+                break;
+            }
+            default:
+            {
+                RigidBody3D body = prop.Body == PropBody.Breakaway ? new Breakaway() : new RigidBody3D();
+                body.Mass = prop.Mass;
+                body.CollisionLayer = Layers.Props;
+                body.CollisionMask = Layers.DynamicMask;
+                body.PhysicsMaterialOverride = new PhysicsMaterial { Friction = prop.Model.StartsWith("car:") ? 0.9f : 0.65f, Bounce = 0.15f };
+                body.CanSleep = true;
+                body.AddChild(model);
+                foreach (var shape in DynamicShapes(prop.Model, info, prop.Scale))
                 {
-                    RigidBody3D body = prop.Body == PropBody.Breakaway ? new Breakaway() : new RigidBody3D();
-                    body.Mass = prop.Mass;
-                    body.CollisionLayer = Layers.Props;
-                    body.CollisionMask = Layers.DynamicMask;
-                    body.PhysicsMaterialOverride = new PhysicsMaterial { Friction = prop.Model.StartsWith("car:") ? 0.9f : 0.65f, Bounce = 0.15f };
-                    body.CanSleep = true;
-                    body.AddChild(model);
-                    foreach (var shape in DynamicShapes(prop.Model, info, prop.Scale))
-                    {
-                        body.AddChild(shape);
-                    }
-                    DynamicRoot.AddChild(body);
-                    body.Position = position;
-                    body.Rotation = rotation;
-                    body.Sleeping = true;
-                    body.SetMeta(PlanIndexMeta, index);
-                    break;
+                    body.AddChild(shape);
                 }
+                DynamicRoot.AddChild(body);
+                body.Position = position;
+                body.Rotation = rotation;
+                body.Sleeping = true;
+                body.SetMeta(PlanIndexMeta, index);
+                break;
             }
         }
     }
@@ -696,24 +799,21 @@ public partial class Suburb : Node3D
 
     // ------------------------------------------------------------------ Tanks
 
-    private void BuildTanks(bool networked)
+    private void BuildTank(int index, bool networked)
     {
-        for (var index = 0; index < plan.Tanks.Count; index++)
+        var placement = plan.Tanks[index];
+        var tank = PropaneTank.Create(world, contentSpawn);
+        if (networked)
         {
-            var placement = plan.Tanks[index];
-            var tank = PropaneTank.Create(world, contentSpawn);
-            if (networked)
-            {
-                tank.NetId = Net.BodySync.MapTankId(index);
-            }
-            DynamicRoot.AddChild(tank);
-            tank.Position = ToWorld(placement.Position, placement.Elevation);
-            tank.Basis = new Basis(Vector3.Up, placement.Yaw) * Basis.FromEuler(placement.Rotation);
-            tank.Sleeping = true;
-            tank.MarkPile();
-            tank.Detonated += OnTankDetonated;
-            tanks.Add(tank);
+            tank.NetId = Net.BodySync.MapTankId(index);
         }
+        DynamicRoot.AddChild(tank);
+        tank.Position = ToWorld(placement.Position, placement.Elevation);
+        tank.Basis = new Basis(Vector3.Up, placement.Yaw) * Basis.FromEuler(placement.Rotation);
+        tank.Sleeping = true;
+        tank.MarkPile();
+        tank.Detonated += OnTankDetonated;
+        tanks.Add(tank);
     }
 
     private void OnTankDetonated(PropaneTank tank) => TankDestroyed?.Invoke(TanksRemaining);

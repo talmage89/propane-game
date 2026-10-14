@@ -32,3 +32,11 @@ done
 diff -u "$scratch/1.hash" "$scratch/2.hash"
 cat "$scratch/1.hash"
 echo 'Separate-process world builds agree for all four formations.'
+# Dissolve Run's segments: the same run seeds give the same segments in fresh processes (five runs of twelve).
+for process in 1 2; do
+  "$godot" --headless --path "$project" res://scenes/dev/generator_tests.tscn -- --hash-segments=5 >"$scratch/segments-$process.log" 2>&1
+  grep -E '^\[segments\] hash ' "$scratch/segments-$process.log" >"$scratch/segments-$process.hash"
+  test "$(wc -l < "$scratch/segments-$process.hash")" -eq 60
+done
+diff -u "$scratch/segments-1.hash" "$scratch/segments-2.hash"
+echo 'Separate-process segment plans agree for five runs of twelve segments.'

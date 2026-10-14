@@ -42,6 +42,9 @@ if [[ "${0##*/}" == godot && "$*" == *--hash-world-plans=* ]]; then
     printf '[world] hash %s fences 1 formation %s\\n' "$hash" "$formation"
   done
 fi
+if [[ "${0##*/}" == godot && "$*" == *--hash-segments=* ]]; then
+  for segment in $(seq 1 60); do printf '[segments] hash run 1 segment %s probe\\n' "$segment"; done
+fi
 """
     for name in ("dotnet", "godot", "python3"):
         path = scratch / name
@@ -81,7 +84,8 @@ fi
               "player_range.tscn -- --scenario=recoil --stance=hip --burst-start=0 --assert-grip --assert-motion",
               "player_range.tscn -- --scenario=bot-recoil --magazines=2",
               "generator_tests.tscn -- --seeds=20 --large-seeds=3 --formation-seeds=2"]
-    probes = checkers + scenes + ["--write-world-plans=", "--hash-world-plans=", "world-diff", "world-missing", "world-partial", "world-second"]
+    probes = checkers + scenes + ["--write-world-plans=", "--hash-world-plans=", "--hash-segments=", "world-diff", "world-missing", "world-partial",
+                                  "world-second"]
     for failure in ["none", "format", "build", *probes]:
         log.write_text("")
         counter.write_text("0\n")
@@ -91,7 +95,7 @@ fi
         commands = log.read_text().splitlines()
         require(bool(commands) and commands[0] == "dotnet format Propane.sln --verify-no-changes", "format must run first", result.stdout)
         if failure == "none":
-            require(result.returncode == 0 and len(commands) == 3 + len(checkers) + len(scenes) + 3,
+            require(result.returncode == 0 and len(commands) == 3 + len(checkers) + len(scenes) + 5,
                     "check did not run every expected tool call", result.stdout)
             require("-warnaserror" in commands[1] and "--no-incremental" in commands[1], "lint must rebuild with warnings as errors")
             require(commands[2].startswith("dotnet build "), "tests ran before lint")
@@ -103,7 +107,7 @@ fi
                            (scene not in ("gather_range.tscn", "shutdown_tests.tscn") or " -- " not in command)]
                 require(len(matches) == 1, f"check skipped/duplicated {scene}", result.stdout)
             require(sum("--write-world-plans=" in c for c in commands) == 1 and
-                    sum("--hash-world-plans=" in c for c in commands) == 2,
+                    sum("--hash-world-plans=" in c for c in commands) == 2 and sum("--hash-segments=" in c for c in commands) == 2,
                     "check skipped separate-process world builds", result.stdout)
         elif failure in ("format", "build"):
             require(result.returncode != 0 and len(commands) == (1 if failure == "format" else 2),
@@ -122,17 +126,17 @@ fi
             "--scenario=recoil --stance=air --assert-grip --assert-motion": "range",
             "player_range.tscn -- --scenario=bot-recoil --magazines=10": "range",
             "bot_navigation_course.tscn -- --seeds=100": "navigation",
-            "check_lab.py --full --only=soak-void,shortfuse-full": "lab-1",
+            "check_lab.py --full --only=soak-void,shortfuse-full,dissolve-pace": "lab-1",
             "check_lab.py --full --only=soak-suburb": "lab-2",
-            "check_lab.py --full --only=lifetime,rules,aimstall,duel,ringout,king,shortfuse,shortfuse-combo,dials": "lab-3",
-            "check_lab.py --full --only=ringout-full,king-full,king-suburb": "lab-4",
-            "check_generator_shards.py --full=--seeds=200 --large-seeds=100 --formation-seeds=6": "generator-coverage",
-            generator + "--first-seed=1 --seeds=50 --first-large-seed=1 --large-seeds=25 --first-formation-seed=1 --formation-seeds=2": "generator-1",
-            generator + "--first-seed=51 --seeds=50 --first-large-seed=26 --large-seeds=25 --first-formation-seed=3 --formation-seeds=2": "generator-2",
-            generator + "--first-seed=101 --seeds=50 --first-large-seed=51 --large-seeds=25 --first-formation-seed=5 --formation-seeds=1": "generator-3",
-            generator + "--first-seed=151 --seeds=50 --first-large-seed=76 --large-seeds=25 --first-formation-seed=6 --formation-seeds=1": "generator-4"}
-    lab = ["lifetime", "rules", "aimstall", "duel", "ringout", "king", "shortfuse", "shortfuse-combo", "dials", "soak-void",
-           "soak-suburb", "ringout-full", "king-full", "king-suburb", "shortfuse-full"]
+            "check_lab.py --full --only=lifetime,rules,aimstall,duel,ringout,king,shortfuse,shortfuse-combo,dissolve,dials": "lab-3",
+            "check_lab.py --full --only=ringout-full,king-full,king-suburb,dissolve-full": "lab-4",
+            "check_generator_shards.py --full=--seeds=200 --large-seeds=100 --formation-seeds=6 --segment-seeds=100": "generator-coverage",
+            generator + "--first-seed=1 --seeds=50 --first-large-seed=1 --large-seeds=25 --first-formation-seed=1 --formation-seeds=2 --first-segment-seed=1 --segment-seeds=25": "generator-1",
+            generator + "--first-seed=51 --seeds=50 --first-large-seed=26 --large-seeds=25 --first-formation-seed=3 --formation-seeds=2 --first-segment-seed=26 --segment-seeds=25": "generator-2",
+            generator + "--first-seed=101 --seeds=50 --first-large-seed=51 --large-seeds=25 --first-formation-seed=5 --formation-seeds=1 --first-segment-seed=51 --segment-seeds=25": "generator-3",
+            generator + "--first-seed=151 --seeds=50 --first-large-seed=76 --large-seeds=25 --first-formation-seed=6 --formation-seeds=1 --first-segment-seed=76 --segment-seeds=25": "generator-4"}
+    lab = ["lifetime", "rules", "aimstall", "duel", "ringout", "king", "shortfuse", "shortfuse-combo", "dissolve", "dials", "soak-void",
+           "soak-suburb", "ringout-full", "king-full", "king-suburb", "shortfuse-full", "dissolve-full", "dissolve-pace"]
     for jobs, failures in ((["-j4"], ["none", *deep]), ([], ["none", generator + "--first-seed=101"])):
         for failure in failures:
             log.write_text("")
@@ -146,7 +150,7 @@ fi
                 for probe in deep:
                     require(sum(probe in c for c in commands) == bots.get(probe, 1),
                             f"{mode} skipped or duplicated {probe}", output)
-                require(sum(generator in c for c in commands) == 4 + 1, f"{mode} runs other generator sweeps", output)
+                require(sum(generator in c and "--hash-segments=" not in c for c in commands) == 4 + 1, f"{mode} runs other generator sweeps", output)
                 sessions = [name for c in commands if "check_lab.py --full" in c for name in c.split("--only=")[1].split(",")]
                 require(sorted(sessions) == sorted(lab), f"{mode} Lab shards differ from every --full session", output)
                 first_bot = min(i for i, c in enumerate(commands) if any(probe in c for probe in bots))

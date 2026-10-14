@@ -19,6 +19,8 @@ public sealed record LabScenario(string Id, string Name, string Description, IRe
     public bool Banking => Definition.Id == ModeRegistry.TankBankId;
     /// <summary>A prototype mode: played against Lab bots through <see cref="PrototypeRunner"/>, listed in its own group.</summary>
     public bool Prototype => ModeRegistry.Prototypes.Contains(Definition);
+    /// <summary>Rifles carry limited ammo, so R / X reloads instead of resetting.</summary>
+    public bool Reloads => Definition.Supply.LimitedAmmo;
 }
 
 public static class LabScenarios
@@ -39,6 +41,8 @@ public static class LabScenarios
             new[] { LabEnvironment.Void, LabEnvironment.Suburb }, lab => lab.BuildKing(), Mode: ModeRegistry.King),
         new LabScenario("shortfuse", "Short Fuse", "Last one standing: bullets chip, blasts kill. First to three rounds.",
             new[] { LabEnvironment.Suburb }, lab => lab.BuildShortFuse(), Mode: ModeRegistry.ShortFuse),
+        new LabScenario("dissolve", "Dissolve Run", "Run down a street that builds ahead and dissolves behind. Blasts push the front back.",
+            new[] { LabEnvironment.Suburb }, lab => lab.BuildDissolve(), Mode: ModeRegistry.DissolveRun),
     });
 
     public static LabScenario Get(string id) => All.FirstOrDefault(scenario => scenario.Id == id)

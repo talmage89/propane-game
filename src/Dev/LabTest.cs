@@ -46,6 +46,7 @@ public partial class LabTest : Node
                 case "prototype": await Prototypes().ConfigureAwait(true); break;
                 case "shortfuse": await ShortFuseMatches().ConfigureAwait(true); break;
                 case "shortfuse-combo": await ShortFuseCombo().ConfigureAwait(true); break;
+                case "dissolve": await DissolveRun().ConfigureAwait(true); break;
                 default: await Lifetime().ConfigureAwait(true); break;
             }
             template.Dispose();
@@ -161,7 +162,8 @@ public partial class LabTest : Node
         var lab = Enter(scenario, environment);
         var tankCount = lab.LiveTanks.Count();
         Assert(tankCount > 0, "fixture has no tanks");
-        Assert(!lab.World.Networked && lab.Session.Actors.Count == (scenario.Banking ? 2 : scenario.Prototype ? template.LabPrototypeBots + 1 : 1),
+        Assert(!lab.World.Networked && lab.Session.Actors.Count == (scenario.Banking ? 2 :
+            scenario.Prototype && scenario.Definition != ModeRegistry.DissolveRun ? template.LabPrototypeBots + 1 : 1),
             "local actors/world");
         Assert(lab.Opponent?.View == null, "bot acquired a camera");
         if (scenario.Id == "stack") Assert(tankCount == template.LabStackCount && lab.LiveTanks.All(t => t.Transform.Basis.Y.Dot(Vector3.Up) > .99f), "upright stack count");

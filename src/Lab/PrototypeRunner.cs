@@ -40,6 +40,7 @@ public partial class PrototypeRunner : Node
     private (int Actor, ulong Frame) blastCause;
     private uint nextTicket;
     private uint nextBlast;
+    private uint nextChain;
     private uint round = 1;
     private double offset;
     private double elapsed;
@@ -67,6 +68,7 @@ public partial class PrototypeRunner : Node
     private WorldContext World => Lab.World;
     private bool Banking => Rules is KingRules;
     private bool Health => Rules is ShortFuseRules;
+    private bool Run => Rules is DissolveRunRules;
     private TankBankRules? Bank => (Rules as KingRules)?.Bank;
 
     public override void _Ready()
@@ -245,6 +247,13 @@ public partial class PrototypeRunner : Node
         void Punctured(PropaneTank changed) => directShots.Remove(changed);
         void Detonated(PropaneTank changed)
         {
+            if (Run)
+            {
+                RunDetonated(changed);
+                changed.Punctured -= Punctured;
+                changed.Detonated -= Detonated;
+                return;
+            }
             var scorer = changed.ChainCause != 0 ? (int)changed.ChainCause : directShots.GetValueOrDefault(changed);
             directShots.Remove(changed);
             changed.BlastRequest = (uint)scorer;
@@ -261,6 +270,20 @@ public partial class PrototypeRunner : Node
         {
             if (IsInstanceValid(tank)) { tank.Punctured -= Punctured; tank.Detonated -= Detonated; }
         });
+    }
+
+    /// <summary>
+    /// Dissolve Run: every tank is the runner's, and a chain is its first tank's id, carried by each blast it sets off
+    /// (a direct shot starts a new one). A tank the front has dissolved cannot go up for anyone.
+    /// </summary>
+    private void RunDetonated(PropaneTank tank)
+    {
+        directShots.Remove(tank);
+        if (Lab.Dissolve?.Dissolved(tank) == true) return;
+        var chain = tank.ChainCause != 0 ? tank.ChainCause : ++nextChain;
+        tank.BlastRequest = chain;
+        blastCause = (Lab.Player.ActorId, Engine.GetPhysicsFrames());
+        if (IsPlaying) Apply(Rules.Handle(new RunTankDetonated(Lab.Player.ActorId, chain), Clock));
     }
 
     /// <summary>
@@ -332,7 +355,7 @@ public partial class PrototypeRunner : Node
         // Spectators are out of play: nobody chases or shoots them.
         public IEnumerable<PlayerCharacter> RemoteBodies => runner.Lab.Session.Actors.Select(a => a.Character)
             .Where(a => a != actor && !runner.spectating.Contains(a.ActorId));
-        public IReadOnlyList<AmmoPickup> Pickups => Array.Empty<AmmoPickup>();
+        public IReadOnlyList<AmmoPickup> Pickups => runner.Lab.Dissolve?.Pickups ?? Array.Empty<AmmoPickup>();
         public IEnumerable<PropaneTank> LiveTanks => runner.Lab.LiveTanks;
         public IModeRules? Rules => runner.Rules;
         public ModeClock Clock => runner.Clock;
