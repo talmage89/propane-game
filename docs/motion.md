@@ -40,6 +40,11 @@ Hip fire raises the rifle from the carry over a few frames (the character's `Rea
 `RifleStanceBlendSpeed`): a fast, visible raise. The shot itself is never delayed; its tracer starts at the rendered
 muzzle.
 
+The visual aim direction and applied torso yaw both turn at `RifleAimTurnSpeed`. Near the body's rear direction,
+the signed aim angle wraps from +180 to -180 degrees: even a tiny aim change can switch the desired torso between
+its twist limits. Bounding the applied yaw prevents that switch from snapping the spine and head after a get-up.
+It does not limit logical aim or modify the authored clips and final IK poses.
+
 ## Butt strike
 
 `MeleeStrike` is an authored keyframe track keyed to the gameplay phases (`MeleeWindup`, `MeleeActive`,
@@ -67,3 +72,7 @@ ragdoll limbs and the root bone, and measures the pelvis in world space, because
 heading re-expresses the same pose. The get-up fade keeps each bone on one interpolation path, so a limb never flips
 where the shortest arc to the captured pose changes sides. It also keeps the logical
 recoil climb checks; aimed creep allows 8 cm of lateral muzzle sway (the walk clip's shoulders sway about 6.6 cm). Judge the stance from rendered clips ([animation review](animation-review.md)).
+
+`rifle_reach_tests` also crosses the aim behind a stationary body and checks every final bone against the same
+60-degree frame bound. This deterministically reproduces the intermittent ragdoll head snap; the physical get-up
+heading determines whether the ordinary ragdoll fixture crosses that wrap.
