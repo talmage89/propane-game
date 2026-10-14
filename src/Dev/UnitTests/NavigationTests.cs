@@ -98,6 +98,29 @@ internal static class NavigationTests
         });
         using var shape = new CapsuleShape3D { Radius = 0.32f, Height = 1.8f };
         using var tuning = Tuning.LoadBaked();
+        runner.Run("navigation/prototype walking recovery respects live hazards and dissolved ground without allocation", () =>
+        {
+            var hazards = new NavigationHazards();
+            hazards.Add(Vector3.Zero, 2);
+            hazards.Build();
+            TestRunner.Assert(!BotMotor.RecoveryAllowed(Vector3.Right * 2.1f, Vector3.Right * 1.9f, hazards, 0.1f, null),
+                "walking recovery entered tank clearance");
+            TestRunner.Assert(BotMotor.RecoveryAllowed(Vector3.Right, Vector3.Right * 1.1f, hazards, 0.1f, null),
+                "walking recovery prevented escape from existing danger");
+            hazards.Clear();
+            var area = new ChangingArea { Removed = true };
+            TestRunner.Assert(!BotMotor.RecoveryAllowed(Vector3.Left, Vector3.Right, hazards, 0.1f, area),
+                "walking recovery crossed a dissolved lot with supported endpoints");
+            TestRunner.Assert(!BotMotor.RecoveryAllowed(Vector3.Right * 0.8f, Vector3.Right * 0.7f, hazards, 0.1f, area),
+                "walking recovery stepped off the remaining ground");
+            var before = GC.GetAllocatedBytesForCurrentThread();
+            for (var i = 0; i < 100; i++)
+            {
+                TestRunner.Assert(BotMotor.RecoveryAllowed(Vector3.Right, Vector3.Right * 1.1f, hazards, 0.1f, area),
+                    "safe recovery changed after warm-up");
+            }
+            TestRunner.Assert(GC.GetAllocatedBytesForCurrentThread() == before, "walking recovery allocated");
+        });
         runner.Run("navigation/crowded King recovery regroups forward then returns without warm allocation", () =>
         {
             var player = new PlayerCharacter { World = runner.World, ActorId = 1, Position = Vector3.Right * 2 };

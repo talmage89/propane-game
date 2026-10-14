@@ -20,6 +20,9 @@ public sealed class BotMotor
     private float tapCooldown;
     private Vector3? goal;
     private bool sprint;
+    private Vector3 stallAnchor;
+    private float stalled;
+    private float direct;
     public PlayerIntent Intent;
     public float Skill { get; set; } = 1f;
     public string NavigationDiagnostics => navigator.Diagnostics;
@@ -49,6 +52,7 @@ public sealed class BotMotor
         navigator.Reset();
         Intent = new PlayerIntent();
         goal = null;
+        stalled = direct = 0;
     }
 
     public PlayerIntent Read()
@@ -112,6 +116,35 @@ public sealed class BotMotor
             capsuleOwner = player;
         }
         var services = world.Services;
+        if (player.GlobalPosition.DistanceTo(stallAnchor) > tuning.BotDirectProgressDistance)
+        {
+            stallAnchor = player.GlobalPosition;
+            stalled = 0;
+        }
+        else if (Flat(goal.Value - player.GlobalPosition).Length() > tuning.BotGoalRadius * 2)
+        {
+            stalled += dt;
+        }
+        if (!navigator.Jumping && tuning.BotDirectStallTime > 0 && stalled > tuning.BotDirectStallTime)
+        {
+            direct = tuning.BotDirectTime;
+            stalled = 0;
+            navigator.Reset();
+        }
+        if (direct > 0 && !navigator.Jumping && player.IsOnFloor())
+        {
+            direct -= dt;
+            var direction = Flat(goal.Value - player.GlobalPosition).Normalized();
+            var next = player.GlobalPosition + direction * (tuning.SprintSpeed * dt);
+            // The controller still resolves solid collisions. Walking recovery must respect live tank clearance
+            // and a mode's ground limits; it never bypasses the planner's ballistic takeoff checks.
+            if (RecoveryAllowed(player.GlobalPosition, next, services.Hazards, tuning.BotRouteSpacing, area))
+            {
+                Steer(player, direction, sprint);
+                return;
+            }
+            direct = 0;
+        }
         var grid = services.Navigation(BotServices.Capabilities(capsule, tuning));
         var move = navigator.Navigate(grid, services.Hazards, new NavigationState(player.GlobalPosition, player.Velocity, player.IsOnFloor()),
             goal.Value, tuning, dt, area);
@@ -131,6 +164,19 @@ public sealed class BotMotor
         Intent.JumpPressed = move.Jump;
     }
 
+
+    internal static bool RecoveryAllowed(Vector3 from, Vector3 to, NavigationHazards hazards, float spacing,
+        INavigationArea? area)
+    {
+        if (!hazards.SafeAlong(from, to, spacing, from)) return false;
+        if (area == null) return true;
+        var samples = System.Math.Max(1, (int)System.MathF.Ceiling(from.DistanceTo(to) / spacing));
+        for (var i = 0; i <= samples; i++)
+        {
+            if (!area.Allows(from.Lerp(to, (float)i / samples))) return false;
+        }
+        return true;
+    }
 
     private void Steer(PlayerCharacter player, Vector3 direction, bool run)
     {

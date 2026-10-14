@@ -16,6 +16,8 @@ public partial class Tuning
     public bool BotHuntWhenEmpty { get; set; } = true;
     // Periodic observations leave steering and aiming at the physics rate.
     public float BotSightInterval { get; set; } = 0.1f;
+    // King contests move through short sight gaps at melee range; caching visibility lost its banking strength.
+    public float BotKingSightInterval { get; set; } = 0f;
     public float BotPrizeInterval { get; set; } = 0.4f;
     public float BotWatchInterval { get; set; } = 0.2f;
     public float BotCoverInterval { get; set; } = 0.5f;
@@ -23,6 +25,10 @@ public partial class Tuning
     public int BotKingRegroupPlayers { get; set; } = 8;
     public float BotKingRegroupMin { get; set; } = 3f;
     public float BotKingRegroupMax { get; set; } = 30f;
+    // Prototype motors retain their original bounded walking recovery when a planner cannot make progress.
+    public float BotDirectStallTime { get; set; } = 1.2f;
+    public float BotDirectTime { get; set; } = 1f;
+    public float BotDirectProgressDistance { get; set; } = 0.5f;
     // Seconds that navigation answers near an explosion expire while thrown props settle.
     public float BotDisturbSettle { get; set; } = 3f;
     public float BotWaypointRadius { get; set; } = 0.45f;

@@ -42,6 +42,9 @@ misclassified normal 1.6 m/s creep at 120 Hz (1.33 cm/tick) as stuck and repeate
 On inadequate progress, the navigator replans with the failed direction excluded. Only after bounded retries does it report failure to the
 brain, which temporarily excludes the target (including ammo) and chooses another. Standing to shoot, ragdolls and
 inactive matches clear recovery state. An unavailable shooting position can still exclude a tank before travel.
+Prototype motors retain a bounded direct walking attempt after `BotDirectStallTime` without progress greater than
+`BotDirectProgressDistance`. It lasts `BotDirectTime`, respects live tank clearance and the mode's ground limit,
+and never interrupts a committed jump. The player controller still resolves solid collisions.
 
 `Tuning.Bot...` exposes route spacing/search budget, progress window/distance, retries, waypoint/goal radii,
 validation interval, jump clearance/cost, turning, sprint distance, hazard clearance, target retry time, and aim
@@ -68,7 +71,9 @@ the first physics tick; buffers for newly discovered heights or growing dynamic 
 
 Brains steer and aim every physics tick, but cache sight lines for `BotSightInterval`, watchers for
 `BotWatchInterval` and cover for `BotCoverInterval`. Target selection retains its periodic cadence and seeded
-random stream. When all tanks are banked, `BotHuntWhenEmpty` lets a trailing banker pursue a richer opponent
+random stream. King uses its separate `BotKingSightInterval` (zero by default): live visibility preserves combat
+through brief sight gaps around the zone while prize searches remain periodic. Observation staggering does not
+consume King's seeded goal-choice stream. When all tanks are banked, `BotHuntWhenEmpty` lets a trailing banker pursue a richer opponent
 beyond sight/rifle range, then react and fire after closing in; clearing the map cannot leave it idle indefinitely.
 Hot paths use indexed lists, reusable query nodes and deferred status formatting instead of LINQ,
 physics-result dictionaries and interpolated status strings. `Status` allocates only when a log or overlay reads it.

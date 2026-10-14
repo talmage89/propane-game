@@ -12,7 +12,7 @@ namespace Propane.Bots;
 /// tanks in sight from a safe distance to bank them; head for the next spot
 /// when the zone is about to move and it could not otherwise make it in time. It reads the zone from the mode's
 /// <see cref="KingState"/>: the Lab's rules, or the server's snapshot in a match.
-/// Sight lines are asked a few times a second, not every tick.
+/// Prize searches are periodic; combat visibility stays live by default for brief sight gaps near the zone.
 /// </summary>
 public sealed class KingBot : IBotGoalPolicy
 {
@@ -45,8 +45,9 @@ public sealed class KingBot : IBotGoalPolicy
     public KingBot(ulong? seed = null)
     {
         if (seed is { } value) rng.Seed = value;
-        // Bots that start together look around on different ticks.
-        sightTimer = rng.Randf();
+        // Stagger sight without consuming the goal policy's seeded random stream: stand choices must not change
+        // merely because observations moved to a periodic cadence.
+        sightTimer = (unchecked((seed ?? 0) * 2654435761UL) & 1023) / 1024f;
     }
 
     public void Dispose() => rng.Dispose();
@@ -136,10 +137,10 @@ public sealed class KingBot : IBotGoalPolicy
         }
 
         var inZone = BotMotor.Flat(here - spot).Length() <= radius * 0.85f;
-        if (!sightStarted) { sightTimer *= tuning.BotSightInterval; sightStarted = true; }
+        if (!sightStarted) { sightTimer *= tuning.BotKingSightInterval; sightStarted = true; }
         sightTimer -= dt;
         var look = sightTimer <= 0;
-        if (look) sightTimer = tuning.BotSightInterval;
+        if (look) sightTimer = tuning.BotKingSightInterval;
         var reach = BotMotor.MeleeReach(tuning);
         var close = NearestIntruder(world, spot, radius, here, reach + 0.4f);
         if (!Intruding(rival, spot, radius)) rival = null;
