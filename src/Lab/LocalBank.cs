@@ -112,8 +112,10 @@ public partial class LocalBank : Node
             brain.Skill = World.Tuning.LabBotSkill;
             brain.Think(view, (float)delta);
         }
-        foreach (var actor in Lab.Session.Actors.Select(a => a.Character))
+        var actors = Lab.Session.Actors;
+        for (var i = 0; i < actors.Count; i++)
         {
+            var actor = actors[i].Character;
             if (actor.IsRagdolled || actor.Ammo == null) continue;
             foreach (var pickup in pickups)
             {
@@ -251,9 +253,10 @@ public partial class LocalBank : Node
         public void Refresh()
         {
             others.Clear();
-            foreach (var entry in bank.Lab.Session.Actors)
+            var actors = bank.Lab.Session.Actors;
+            for (var i = 0; i < actors.Count; i++)
             {
-                var a = entry.Character;
+                var a = actors[i].Character;
                 if (a != actor) others.Add(a);
             }
         }

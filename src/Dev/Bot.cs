@@ -58,8 +58,9 @@ public sealed class Bot : IBotBrain, System.IDisposable
         public void Refresh()
         {
             others.Clear();
-            foreach (var entry in match.Session.Actors)
-                if (entry.Character != Player) others.Add(entry.Character);
+            var actors = match.Session.Actors;
+            for (var i = 0; i < actors.Count; i++)
+                if (actors[i].Character != Player) others.Add(actors[i].Character);
             Services.BeginTick(match.BotTanks);
         }
         public void Dispose() => Services.Dispose();

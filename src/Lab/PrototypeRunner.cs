@@ -370,9 +370,10 @@ public partial class PrototypeRunner : Node
         public void Refresh()
         {
             others.Clear();
-            foreach (var entry in runner.Lab.Session.Actors)
+            var actors = runner.Lab.Session.Actors;
+            for (var i = 0; i < actors.Count; i++)
             {
-                var a = entry.Character;
+                var a = actors[i].Character;
                 if (a != actor && !runner.spectating.Contains(a.ActorId)) others.Add(a);
             }
         }
