@@ -21,6 +21,7 @@ class WorldCheckTests(unittest.TestCase):
                 "  fi\n"
                 "done\n"
                 'for formation in Rows Square Triangular Cluster; do echo "[world] hash fixture fences 1 formation $formation"; done\n'
+                'for segment in $(seq 1 60); do echo "[segments] hash run 1 segment $segment fixture"; done\n'
             )
             fake.chmod(0o755)
             env = dict(os.environ, GODOT=str(fake), TMPDIR=tmp, FAILURE=failure)

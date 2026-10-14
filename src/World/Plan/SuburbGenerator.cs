@@ -61,6 +61,15 @@ public sealed record SuburbSettings
     /// <summary>Ammo pickup spots to choose, for a multiplayer match.</summary>
     public int AmmoSpots { get; init; }
 
+    /// <summary>
+    /// Above 0, a strip instead of a square map: one straight through road along X, this long, with lots on both sides
+    /// and <see cref="StripSeamGap"/> of lawn kept free at each end, so strips laid end to end join street to street.
+    /// <see cref="MapSize"/> is then the strip's width before cropping. 0 (every shipped suburb) leaves output unchanged.
+    /// </summary>
+    public float StripLength { get; init; }
+
+    public float StripSeamGap { get; init; } = 1.5f;
+
     public float RightOfWayHalfWidth => CarriagewayHalfWidth + VergeWidth + SidewalkWidth;
 }
 
@@ -99,6 +108,12 @@ public sealed class SuburbGenerator
     {
         var half = settings.MapSize / 2f;
         plan = new SuburbPlan { Seed = Seed, Bounds = new Rect2(-half, -half, settings.MapSize, settings.MapSize) };
+        if (Strip)
+        {
+            // Lots pack inside the seam gaps; the crop restores the strip's full length.
+            var length = settings.StripLength - settings.StripSeamGap * 2f;
+            plan.Bounds = new Rect2(-length / 2f, -half, length, settings.MapSize);
+        }
 
         LayOutRoads();
         foreach (var road in plan.Roads)
@@ -136,9 +151,16 @@ public sealed class SuburbGenerator
 
     // ------------------------------------------------------------------ Roads
 
+    private bool Strip => settings.StripLength > 0;
+
     private void LayOutRoads()
     {
         var half = settings.MapSize / 2f;
+        if (Strip)
+        {
+            plan.Roads.Add(new RoadSegment(new Vector2(-settings.StripLength / 2f, 0), new Vector2(settings.StripLength / 2f, 0)));
+            return;
+        }
         if (settings.PlayerSpawns > 0)
         {
             // A connected street grid grows with the match. Keep road frontage density as the slab grows,
@@ -338,6 +360,12 @@ public sealed class SuburbGenerator
         var max = new Vector2(corners.Max(c => c.X), corners.Max(c => c.Y)) + new Vector2(CropMargin, CropMargin);
         min = min.Max(plan.Bounds.Position);
         max = max.Min(plan.Bounds.End);
+        if (Strip)
+        {
+            // A strip keeps its whole length, end to end, so the next one joins it exactly.
+            min.X = -settings.StripLength / 2f;
+            max.X = settings.StripLength / 2f;
+        }
         var cropped = new Rect2(min, max - min);
         plan.Bounds = cropped;
 
@@ -828,7 +856,7 @@ public sealed class SuburbGenerator
     /// <summary>Unclaimed lawn (outside lots and roads) gets trees and bushes, like a little park.</summary>
     private void ScatterParkland()
     {
-        var attempts = (int)(settings.MapSize * settings.MapSize / 90f);
+        var attempts = (int)((Strip ? settings.StripLength : settings.MapSize) * settings.MapSize / 90f);
         for (var i = 0; i < attempts; i++)
         {
             var p = new Vector2(Range(plan.Bounds.Position.X + 2f, plan.Bounds.End.X - 2f), Range(plan.Bounds.Position.Y + 2f, plan.Bounds.End.Y - 2f));
