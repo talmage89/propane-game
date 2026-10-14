@@ -101,6 +101,19 @@ at 20), strings at 1024 UTF-8 bytes, and vector components at one million meters
 the match's tuners still determine gameplay. Hello, Welcome and Rejected allow trailing extensions so incompatible
 clients can still be told why they were rejected.
 
+**Tank supply.** The lobby settings carry an int32 multiplier after the mode id and mint pace in SetMode and
+LobbyState. Values outside 1–8, missing fields and trailing bytes are rejected, just as invalid mint steps are.
+The creator copies its tuning and applies the lobby choice before sending its snapshot; its saved offline
+multiplier stays unchanged. The server independently applies the choice before generation and before sending
+MatchStart's tuning snapshot. Every peer, including a late builder, uses that snapshot and the transmitted plan.
+Lobby settings lock in Loading and stay locked through the match. Offline F1 still exposes TankCountMultiplier;
+the match panel omits it (including from Defaults), and the server ignores live debug attempts to change it.
+
+`net_test` and `tools/dev/net_bots.sh` accept `--tank-supply=N` after `--`, with integer N from 1 to 8. Without it,
+the harness uses its local TankCountMultiplier tuner as the lobby choice; an explicit supply wins over
+`--tune.TankCountMultiplier`. Normal player-created lobbies always start at 1×. These lobby settings fields are
+part of unreleased Protocol 3 for 0.4.0; no further bump is made. Hello, Welcome and Rejected are unchanged.
+
 **The world.** The server generates the match's suburb and sends the whole plan (roughly 10–30 KB compressed at 2–32 players) rather than just its seed. The generator's trigonometry can differ in the last bit between an Apple Silicon Mac and an x86 Linux machine, and a single flipped comparison would give the players different suburbs. The plan includes every tank's position, elevation, rotation and pile identity; clients do not reroll formations. Houses and other static parts never need syncing.
 
 Construction choices are pure functions of that plan and the shared tuning. Fence style and color use explicit

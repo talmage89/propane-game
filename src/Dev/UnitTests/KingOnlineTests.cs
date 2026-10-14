@@ -108,9 +108,9 @@ public static class KingOnlineTests
                 TestRunner.Assert(f.Packets.Count == 0, "playing creator changed lobby mode");
             }
             foreach (var pace in new[] { 0f, 0.75f, 10.5f, float.NaN, float.PositiveInfinity })
-                TestRunner.Throws<InvalidDataException>(() => MessageCodec.Decode(new NetWriter(Msg.SetMode).Byte(ModeRegistry.KingId).Float(pace).ToArray(), false));
+                TestRunner.Throws<InvalidDataException>(() => MessageCodec.Decode(new NetWriter(Msg.SetMode).Byte(ModeRegistry.KingId).Float(pace).Int(1).ToArray(), false));
             foreach (var mode in new[] { ModeRegistry.SandboxId, ModeRegistry.RingOutId, ModeRegistry.ShortFuseId, ModeRegistry.DissolveRunId, (byte)99 })
-                TestRunner.Throws<InvalidDataException>(() => MessageCodec.Decode(new NetWriter(Msg.SetMode).Byte(mode).Float(2).ToArray(), false));
+                TestRunner.Throws<InvalidDataException>(() => MessageCodec.Decode(new NetWriter(Msg.SetMode).Byte(mode).Float(2).Int(1).ToArray(), false));
             using var server = new LobbyServer();
             var sent = new System.Collections.Generic.List<(int Peer, NetMessage Message)>();
             server.SendOverride = (peer, bytes, _) => sent.Add((peer, MessageCodec.Decode(bytes, true)));
@@ -123,12 +123,12 @@ public static class KingOnlineTests
             server.OnReceived(3, new NetWriter(Msg.JoinLobby).Int(1).ToArray());
             TestRunner.Assert(sent.Select(p => p.Message.Payload).OfType<LobbyInfo>().Last().Mode == ModeSettings.Default, "Tank Bank no longer default");
             sent.Clear();
-            var choose = new NetWriter(Msg.SetMode).Byte(ModeRegistry.KingId).Float(1.5f).ToArray();
+            var choose = new NetWriter(Msg.SetMode).Byte(ModeRegistry.KingId).Float(1.5f).Int(4).ToArray();
             server.OnReceived(3, choose);
             TestRunner.Assert(sent.Count == 0, "guest changed mode");
             server.OnReceived(2, choose);
             TestRunner.Assert(sent.Where(p => p.Message.Type == Msg.LobbyState).Count() == 2 &&
-                sent.All(p => p.Message.Payload is not LobbyInfo lobby || lobby.Mode == new ModeSettings(ModeRegistry.KingId, 1.5f)), "peers disagree on creator choice");
+                sent.All(p => p.Message.Payload is not LobbyInfo lobby || lobby.Mode == new ModeSettings(ModeRegistry.KingId, 1.5f, 4)), "peers disagree on creator choice");
             server.Free();
         });
         runner.Run("king online/server samples holds, contests, down bodies, stale poses and departures", () =>

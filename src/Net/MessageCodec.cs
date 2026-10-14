@@ -162,9 +162,9 @@ public static class MessageCodec
                 foreach (var peer in p.Peers) w.Int(peer);
                 w.Int(p.Members.Count);
                 foreach (var player in p.Members) { WriteProfile(w, player); }
-                w.Byte(p.Mode.ModeId).Float(p.Mode.MintSeconds);
+                w.Byte(p.Mode.ModeId).Float(p.Mode.MintSeconds).Int(p.Mode.TankSupply);
                 break;
-            case ModeSettings p: w.Byte(p.ModeId).Float(p.MintSeconds); break;
+            case ModeSettings p: w.Byte(p.ModeId).Float(p.MintSeconds).Int(p.TankSupply); break;
             case MatchSetup p:
                 w.Bytes(p.Plan).Int(p.HostId).Bool(p.CreatorDebug).Float(p.Length).Snapshot(p.Tuning).UInt(p.RosterRevision).Int(p.CreatorId).Int(p.Peers.Count);
                 foreach (var peer in p.Peers) w.Int(peer.PeerId).Bool(peer.DebugTuning);
@@ -250,11 +250,11 @@ public static class MessageCodec
         ReadArray(r, r.Int(), 64, () => new LobbySummary(Positive(r.Int()), r.String(), Range(r.Int(), 0, Protocol.MaxWireActors), Phase(r.Byte()),
             Range(r.Int(), 2, Protocol.TestedActorCeiling), LobbyMode(r.Byte()))));
 
-    /// <summary>A lobby's mode and settings: a mode lobbies play, at a mint pace on the lobby's steps.</summary>
+    /// <summary>A lobby's mode, mint pace on its steps, and bounded tank supply.</summary>
     private static ModeSettings ReadModeSettings(NetReader r)
     {
-        var settings = new ModeSettings(LobbyMode(r.Byte()), r.Float());
-        if (!settings.Valid) { throw new InvalidDataException($"mint pace off the lobby's steps: {settings.MintSeconds}"); }
+        var settings = new ModeSettings(LobbyMode(r.Byte()), r.Float(), r.Int());
+        if (!settings.Valid) { throw new InvalidDataException($"invalid lobby settings: mint pace {settings.MintSeconds}, tank supply {settings.TankSupply}"); }
         return settings;
     }
 
