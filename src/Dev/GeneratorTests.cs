@@ -38,6 +38,11 @@ public partial class GeneratorTests : Node
     private void RunTests()
     {
         DevArgs.Setup();
+        if (DevArgs.Get("hash-segments") is { } runs)
+        {
+            HashSegments(int.Parse(runs, System.Globalization.CultureInfo.InvariantCulture));
+            return;
+        }
         var count = (int)DevArgs.GetFloat("seeds", 120);
         var first = (int)DevArgs.GetFloat("first-seed", 1);
         listing = DevArgs.Get("list-seeds") != null;
@@ -261,6 +266,27 @@ public partial class GeneratorTests : Node
         if (attempts.Count == 0) return;
         GD.Print($"[tests] dissolve segments: runs {first}..{first + count - 1} x {segments} in {timer.ElapsedMilliseconds} ms; " +
                  $"{attempts.Count(a => a > 1)}/{attempts.Count} rerolled; tanks {tankTotals.Min()}..{tankTotals.Max()} per segment");
+    }
+
+    /// <summary>
+    /// For tools/dev/check_world.sh: one line per segment of runs 1..<paramref name="runs"/> (twelve segments each, from
+    /// the worker's catalog snapshot, generated last to first), which two fresh processes must print identically.
+    /// </summary>
+    private void HashSegments(int runs)
+    {
+        var settings = SegmentSettings.From(new Core.Tuning());
+        var catalog = new PlanCatalogSnapshot(new GameCatalog());
+        for (var run = 1; run <= runs; run++)
+        {
+            for (var index = 11; index >= 0; index--)
+            {
+                var segment = SegmentPlans.Generate(settings, catalog, run, index);
+                var hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Net.PlanCodec.Encode(segment.Plan)));
+                GD.Print($"[segments] hash run {run} segment {index} seed {segment.Seed} start {segment.Start} tanks {segment.Plan.Tanks.Count} " +
+                         $"ammo {string.Join(";", segment.Plan.AmmoSpots)} {hash}");
+            }
+        }
+        ShutdownGuard.Quit(GetTree(), 0);
     }
 
     /// <summary>A run's segments as one plan in run coordinates, starting from segment 0's spawn.</summary>

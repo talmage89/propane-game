@@ -118,7 +118,7 @@ public partial class DissolveArena : Node3D
     {
         var timer = Stopwatch.StartNew();
         Step();
-        LastStepMilliseconds = Math.Max(LastStepMilliseconds * 0.0, timer.Elapsed.TotalMilliseconds);
+        LastStepMilliseconds = timer.Elapsed.TotalMilliseconds;
     }
 
     private void Step()
@@ -275,7 +275,7 @@ public partial class DissolveArena : Node3D
         try
         {
             using var file = new ConfigFile();
-            return file.Load(BestFile) == Error.Ok ? (int)file.GetValue("best", BestKey, 0) : 0;
+            return FileAccess.FileExists(BestFile) && file.Load(BestFile) == Error.Ok ? (int)file.GetValue("best", BestKey, 0) : 0;
         }
         catch (Exception) { return 0; }
     }
@@ -288,7 +288,7 @@ public partial class DissolveArena : Node3D
         try
         {
             using var file = new ConfigFile();
-            file.Load(BestFile);
+            if (FileAccess.FileExists(BestFile)) file.Load(BestFile);
             file.SetValue("best", BestKey, BestScore);
             file.Save(BestFile);
         }

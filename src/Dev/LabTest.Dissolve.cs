@@ -44,7 +44,8 @@ public partial class LabTest
     {
         public PlayerIntent Read() => new()
         {
-            Move = new Vector2(Mathf.Clamp(-player.GlobalPosition.Z * 0.35f, -0.6f, 0.6f), walk), Sprint = sprint,
+            Move = new Vector2(Mathf.Clamp(-player.GlobalPosition.Z * 0.35f, -0.6f, 0.6f), walk),
+            Sprint = sprint,
         };
     }
 
@@ -55,8 +56,8 @@ public partial class LabTest
     /// whole tree's nodes and objects must not grow, and the score must add up. It reports frame times (wall, per
     /// rendered frame), segment build and retire times and memory, per --report-every seconds, and with --metrics writes
     /// one CSV row per second. --driver=pace runs the player straight down the street (--pace=walk|run|sprint) without the
-    /// bot, so frame times measure the stream and the world rather than bot navigation. --shots=4,12.5 adds --capture-dir screenshots at those run times; --overview watches from
-    /// a high camera behind the runner.
+    /// bot, so frame times measure the stream and the world rather than bot navigation. --shots=4,12.5 adds --capture-dir screenshots at those run times; --camera=overview|ahead|behind|side watches
+    /// from a camera that follows the runner, and --until=S stops a capture at that run time without the end checks.
     /// </summary>
     private async Task DissolveRun()
     {
@@ -93,7 +94,8 @@ public partial class LabTest
             var tuning = lab.World.Tuning;
             Assert(lab.Session.Actors.Count == 1 && lab.RunSeed == seed && lab.LiveTanks.Any(), "dissolve run: solo, seeded, stocked");
             Camera3D? overview = null;
-            if (DevArgs.Get("overview") != null)
+            var view = DevArgs.Get("camera") ?? (DevArgs.Get("overview") != null ? "overview" : null);
+            if (view != null)
             {
                 overview = new Camera3D { Name = "Overview", Fov = 55, Far = 2000, Current = true };
                 lab.AddChild(overview);
@@ -133,13 +135,17 @@ public partial class LabTest
                 tickStart.MaxGap = 0;
                 physicsSteps.Add(stepMax);
                 if (DevArgs.Get("trace-frames") != null && wall > 12 && runner.Elapsed > 3)
+                {
                     GD.Print($"[lab trace] {runner.Elapsed:F2}s frame {wall:F1} ms gc={GC.CollectionCount(0)}/{GC.CollectionCount(1)}/{GC.CollectionCount(2)} " +
-                        $"step_max={stepMax:F1} x={lab.Player.GlobalPosition.X:F1} y={lab.Player.GlobalPosition.Y:F2} front={((DissolveRunRules)runner.Rules).Front:F1} ragdoll={lab.Player.IsRagdolled}");
+                        $"step_max={stepMax:F1} x={lab.Player.GlobalPosition.X:F1} y={lab.Player.GlobalPosition.Y:F2} front={((DissolveRunRules)runner.Rules).Front:F1}");
+                }
                 if (wall > 50 && runner.Elapsed > 3)
+                {
+                    // A slow frame names what ran: a segment build or retirement (arena), the physics engine's step, or neither.
                     GD.Print($"[lab dissolve] seed {seed}: slow frame {wall:F0} ms at {runner.Elapsed:F2}s, building={arena.Source.Pending?.Index}, " +
-                        $"built={arena.Source.Built} retired={arena.Source.Retired} live_tanks={lab.LiveTanks.Count()} gc={GC.CollectionCount(0)}/{GC.CollectionCount(1)}/{GC.CollectionCount(2)} " +
-                        $"physics={Performance.GetMonitor(Performance.Monitor.TimePhysicsProcess) * 1000:F0} ms process={Performance.GetMonitor(Performance.Monitor.TimeProcess) * 1000:F0} ms " +
-                        $"active={Performance.GetMonitor(Performance.Monitor.Physics3DActiveObjects)} arena={arena.LastStepMilliseconds:F1} ms step={stepMax:F1} ms front={((DissolveRunRules)runner.Rules).Front:F1}");
+                        $"built={arena.Source.Built} retired={arena.Source.Retired} gc={GC.CollectionCount(0)}/{GC.CollectionCount(1)}/{GC.CollectionCount(2)} " +
+                        $"arena={arena.LastStepMilliseconds:F1} ms physics_step={stepMax:F1} ms");
+                }
                 var rules = (DissolveRunRules)runner.Rules;
                 if (!stopped && runner.Elapsed >= stopAt)
                 {
@@ -155,7 +161,28 @@ public partial class LabTest
                 if (overview != null)
                 {
                     var at = lab.Player.GlobalPosition;
-                    overview.LookAtFromPosition(new Vector3(at.X - 34, 30, at.Z + 26), new Vector3(at.X + 6, 0, 0), Vector3.Up);
+                    var back = arena.Back;
+                    switch (view)
+                    {
+                        case "ahead": // Over the runner's shoulder, high, onto the street materializing ahead.
+                            overview.LookAtFromPosition(new Vector3(at.X - 14, 16, at.Z + 10), new Vector3(arena.Horizon - 12, 0, 0), Vector3.Up);
+                            break;
+                        case "behind": // Ahead of the runner, looking back at it and the front.
+                            overview.LookAtFromPosition(new Vector3(at.X + 16, 9, at.Z + 14), new Vector3((at.X + back) / 2, 0, 0), Vector3.Up);
+                            break;
+                        case "side": // Broadside, the runner and the front both in frame.
+                            var middle = (at.X + back) / 2 + 4;
+                            overview.LookAtFromPosition(new Vector3(middle, 18, 30), new Vector3(middle, 0, 0), Vector3.Up);
+                            break;
+                        default:
+                            overview.LookAtFromPosition(new Vector3(at.X - 34, 30, at.Z + 26), new Vector3(at.X + 6, 0, 0), Vector3.Up);
+                            break;
+                    }
+                }
+                if (runner.Elapsed >= DevArgs.GetFloat("until", float.MaxValue))
+                {
+                    GD.Print($"[lab dissolve] seed {seed}: capture stopped at {runner.Elapsed:F1}s");
+                    break;
                 }
                 if (shot < shots.Length && runner.Elapsed >= shots[shot]) capture.Screenshot($"dissolve_{seed}_{shots[shot++]:000.0}s");
                 if (runner.Elapsed >= nextSample)
@@ -182,6 +209,11 @@ public partial class LabTest
                     Report(seed, runner.Elapsed, frames.Where(f => f.Time > runner.Elapsed - reportEvery).Select(f => f.Wall).ToArray(), census[^1], arena);
                 }
             }
+            if (runner.IsPlaying)
+            {
+                lab.Session.Dispose(); lab.Free();
+                continue;
+            }
             var final = (DissolveRunRules)runner.Rules;
             foreach (var line in final.Snapshot().Report) GD.Print($"[lab dissolve] seed {seed}: {line.Text}");
             Assert(caught >= 0 && final.Caught && final.Over && runner.Finished, $"dissolve seed {seed}: the run must end by the front catching the runner");
@@ -205,6 +237,8 @@ public partial class LabTest
                     $"the tree grew: {early.Max(c => c.Tree)}/{early.Max(c => c.Objects)} -> {late.Max(c => c.Tree)}/{late.Max(c => c.Objects)}");
             }
             Report(seed, runner.Elapsed, frames.Select(f => f.Wall).ToArray(), census[^1], arena, final: true);
+            var steps = physicsSteps.OrderBy(v => v).ToArray();
+            GD.Print($"[lab dissolve] seed {seed} physics engine step (worst per frame): p50={steps[steps.Length / 2]:F1} p99={steps[(int)(steps.Length * 0.99)]:F1} max={steps[^1]:F1} ms");
             GD.Print($"[lab dissolve] seed={seed} run={runner.Elapsed:F1}s caught_at={caught:F1}s meters={final.Meters} tanks={final.Tanks} " +
                 $"chains={chains.Count(c => c.Bonus > 0)} best_chain={final.BestChain} score={final.Score} built={source.Built} retired={source.Retired} " +
                 $"dissolved_tanks={arena.DissolvedTanks} wall={watch.Elapsed.TotalSeconds:F1}s");

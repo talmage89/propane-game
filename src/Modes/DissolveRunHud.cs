@@ -27,7 +27,7 @@ public sealed class DissolveRunHud : IModeHudPresenter
             new[]
             {
                 new HudCounter(rules.Score, "SCORE"),
-                new HudCounter(rules.Meters, "METERS"),
+                new HudCounter(rules.Meters, rules.Meters == 1 ? "METER" : "METERS"),
                 new HudCounter(rules.Tanks, rules.Tanks == 1 ? "TANK" : "TANKS"),
             },
             Columns,
