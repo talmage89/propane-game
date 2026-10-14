@@ -6,7 +6,7 @@ namespace Propane.Player;
 /// <summary>Opt-in actor attribution. Inclusive scopes are drained by the dev frame sampler.</summary>
 public static class ActorProfile
 {
-    public enum System { Physics, Movement, MoveAndSlide, Ragdoll, GetUp, Presentation, Locomotion, RiflePose, PoseBlend, HandFollow, Aim, AimQuery, Count }
+    public enum System { Physics, Movement, MoveAndSlide, Ragdoll, GetUp, Presentation, Locomotion, RiflePose, PoseBlend, HandFollow, AnimationTree, Aim, AimQuery, AimRay, Count }
     public static bool Enabled { get; set; }
     private static readonly double[] milliseconds = new double[(int)System.Count];
     private static readonly long[] bytes = new long[(int)System.Count];

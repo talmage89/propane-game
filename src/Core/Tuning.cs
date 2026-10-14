@@ -158,6 +158,16 @@ public partial class Tuning : Resource
         }
     }
 
+    // ---------------------------------------------------------------- Actor presentation
+    [ExportGroup("Actor Detail")]
+    [Export] public bool ActorPoseLod { get; set; } = true;
+    [Export(PropertyHint.Range, "0,200,1")] public float ActorPoseNearDistance { get; set; } = 30f;
+    [Export(PropertyHint.Range, "0,500,1")] public float ActorPoseFarDistance { get; set; } = 80f;
+    [Export(PropertyHint.Range, "0,20,0.5")] public float ActorPoseHysteresis { get; set; } = 3f;
+    [Export(PropertyHint.Range, "1,240,1")] public float ActorPoseRate { get; set; } = 30f;
+    [Export(PropertyHint.Range, "1,240,1")] public float ActorPoseFarRate { get; set; } = 15f;
+    [Export(PropertyHint.Range, "1,240,1")] public float ActorPoseHiddenRate { get; set; } = 10f;
+
     // ---------------------------------------------------------------- Melee
     [ExportGroup("Melee")]
     [Export(PropertyHint.Range, "0.05,1,0.01")] public float MeleeWindup { get; set; } = 0.24f;

@@ -12,6 +12,7 @@ public partial class PlayerCharacter
 
     private void UpdateAim()
     {
+        using var profile = ActorProfile.Measure(ActorProfile.System.AimRay);
         if (ResolvedState.Weapon == WeaponAction.Melee)
         {
             aimTarget = GlobalPosition + Vector3.Up * World.Tuning.MeleeContactHeight + meleeDirection * World.Tuning.ShotRange;

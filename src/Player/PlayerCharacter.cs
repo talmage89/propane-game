@@ -254,6 +254,8 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         aimTarget = GlobalPosition + Forward(facingYaw) * 20f;
         Rotation = Vector3.Zero;
         visual.Rotation = new Vector3(0, facingYaw, 0);
+        poseCadence = new ActorPoseCadence(ActorId > 0 ? (ulong)ActorId : GetInstanceId());
+        skeleton.SkeletonUpdated += RememberRiflePose;
         Initialized = true;
     }
 
@@ -261,6 +263,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
     {
         World.Unregister(this);
         World.Events.Explosion -= Aim.OnExplosion;
+        if (IsInstanceValid(skeleton)) skeleton.SkeletonUpdated -= RememberRiflePose;
         Runtime.Dispose();
         aimQuery.Dispose();
     }
@@ -278,6 +281,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
     public void Teleport(Vector3 position, float yaw)
     {
         ResetToActive();
+        ResetPoseCadence();
         resolver.Reset();
         ResolvedState = default;
         airTime = 0;
@@ -576,6 +580,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
 
     private void BeginRagdoll(Vector3 velocity, Vector3 spin)
     {
+        ResetPoseCadence();
         state = State.Ragdoll;
         // A blast can arrive between our ticks. Drop control/presentation immediately so neither snapshots nor
         // the returning rig inherit an aimed or sprinting pose from before the throw.

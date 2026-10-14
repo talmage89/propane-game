@@ -96,10 +96,27 @@ public sealed class CharacterAnimator
     private const float GetUpSpeed = 1.1f;
 
     /// <summary><paramref name="travel"/> is planar velocity in the body frame: x right, y forward (m/s).</summary>
-    public void UpdateLocomotion(Vector2 travel, float delta, PlayerGait resolvedGait)
+    public void UpdateLocomotion(Vector2 travel, float delta, PlayerGait resolvedGait, bool sample = true)
     {
         using var profile = ActorProfile.Measure(ActorProfile.System.Locomotion);
         Pose.Update(travel, resolvedGait, delta);
+        // Jump_Start contains an authored anticipation before its push. Start at the push on the accepted
+        // physics jump, then use that clip's extension/tuck as the velocity falls through rising/apex/falling.
+        var t = tuning;
+        if (takeoffs != Pose.Takeoffs)
+        {
+            takeoffs = Pose.Takeoffs;
+            jumpSample = t.TakeoffClipStart;
+        }
+        var airTime = Pose.Jump switch
+        {
+            JumpPose.Takeoff => t.TakeoffClipStart + Pose.TakeoffTime * t.TakeoffClipSpeed,
+            JumpPose.Rising => t.JumpRiseClipTime,
+            JumpPose.Apex => t.JumpApexClipTime,
+            _ => t.JumpFallClipTime,
+        };
+        jumpSample = Mathf.MoveToward(jumpSample, airTime, delta * t.JumpSampleBlendSpeed);
+        if (!sample) return;
         var phase = Pose.Phase;
         tree.Set(WalkSeek, Mathf.PosMod(phase + WalkContact, 1) * walkLength);
         tree.Set(BackSeek, phase);
@@ -118,25 +135,18 @@ public sealed class CharacterAnimator
         tree.Set(Gaits, Pose.Sprint);
         tree.Set(Moving, Pose.Moving);
         tree.Set(Air, Pose.Air);
-        // Jump_Start contains an authored anticipation before its push. Start at the push on the accepted
-        // physics jump, then use that clip's extension/tuck as the velocity falls through rising/apex/falling.
-        var t = tuning;
-        if (takeoffs != Pose.Takeoffs)
-        {
-            takeoffs = Pose.Takeoffs;
-            jumpSample = t.TakeoffClipStart;
-        }
-        var airTime = Pose.Jump switch
-        {
-            JumpPose.Takeoff => t.TakeoffClipStart + Pose.TakeoffTime * t.TakeoffClipSpeed,
-            JumpPose.Rising => t.JumpRiseClipTime,
-            JumpPose.Apex => t.JumpApexClipTime,
-            _ => t.JumpFallClipTime,
-        };
-        jumpSample = Mathf.MoveToward(jumpSample, airTime, delta * t.JumpSampleBlendSpeed);
         tree.Set(FallSeek, jumpSample);
         tree.Set(Land, Pose.Landing);
         tree.Set(LandSeek, t.LandingClipTime);
+    }
+
+    public void SetThrottled(bool throttled) => tree.CallbackModeProcess = throttled
+        ? AnimationMixer.AnimationCallbackModeProcess.Manual : AnimationMixer.AnimationCallbackModeProcess.Idle;
+
+    public void Sample(float delta)
+    {
+        using var profile = ActorProfile.Measure(ActorProfile.System.AnimationTree);
+        tree.Advance(delta);
     }
 
     public void PlayHit() => tree.Set(Hit, (int)AnimationNodeOneShot.OneShotRequest.Fire);
