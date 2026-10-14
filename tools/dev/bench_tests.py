@@ -1,0 +1,78 @@
+#!/usr/bin/env python3
+"""Fast real-command smoke, plus percentile/comparison and assembly restoration assertions."""
+import json
+from pathlib import Path
+import subprocess
+import tempfile
+import unittest
+from unittest.mock import patch
+
+import bench
+import bench_compare
+import source_run
+
+
+class BenchTests(unittest.TestCase):
+    def test_percentiles(self):
+        self.assertEqual(bench.percentile([10, 1, 5, 2], .5), 2)
+        self.assertEqual(bench.percentile([10, 1, 5, 2], .99), 10)
+
+    def test_release_restoration_on_failure(self):
+        with tempfile.TemporaryDirectory(dir=bench.ROOT / "build") as scratch:
+            root = Path(scratch)
+            debug = root / ".godot/mono/temp/bin/Debug"
+            release = debug.parent / "Release"
+            debug.mkdir(parents=True)
+            release.mkdir()
+            (debug / "assembly").write_text("Debug")
+            (release / "assembly").write_text("Release")
+            with patch.object(source_run, "ROOT", root), patch.object(source_run.subprocess, "run"):
+                with self.assertRaisesRegex(RuntimeError, "probe"):
+                    with source_run.assembly("Release"):
+                        self.assertEqual((debug / "assembly").read_text(), "Release")
+                        raise RuntimeError("probe")
+            self.assertEqual((debug / "assembly").read_text(), "Debug")
+            self.assertFalse((root / "build/source-run/lock").exists())
+
+    def test_real_smoke(self):
+        with tempfile.TemporaryDirectory(prefix="bench-smoke-", dir=bench.ROOT / "build") as scratch:
+            path = Path(scratch) / "smoke.json"
+            subprocess.run(["make", "--no-print-directory", "bench", "BOTS=2", "TANKS=1", "RENDERED=0",
+                            "SECONDS=.5", "WARMUP=.2", "REPEATS=1", "CONFIG=Debug", f"BENCH_ARGS=--output={path}"], cwd=bench.ROOT, check=True)
+            data = json.loads(path.read_text())
+            case = data["cases"][0]
+            run = case["runs"][0]
+            self.assertEqual(run["assembly_config"], "Debug")
+            self.assertFalse(run["assembly_optimized"])
+            self.assertEqual(run["bots"], 2)
+            self.assertGreater(run["tanks"], 0)
+            self.assertGreater(run["brain_tick_ms"], 0)
+            self.assertGreater(run["tank_tick_ms"], 0)
+            self.assertGreater(run["jolt_step_upper_ms"], 0)
+            self.assertGreater(run["rss_bytes"], 0)
+            self.assertEqual(run["physics_ticks"], run["sampled_physics_ticks"])
+            self.assertGreaterEqual(run["physics_ticks"], run["requested_physics_ticks"])
+            self.assertLess(run["physics_ticks"] - run["requested_physics_ticks"], 12)
+            self.assertEqual(set(run["stages"]), {"intact", "disturbed"})
+            compared = list(bench_compare.compare(path, path))
+            self.assertEqual(compared[0][1], compared[0][2])
+            subprocess.run(["python3", "-B", "tools/dev/bench_compare.py", str(path), str(path)], cwd=bench.ROOT,
+                           stdout=subprocess.DEVNULL, check=True)
+            merged = bench_compare.merge([path, path])
+            self.assertEqual(len(merged["cases"][0]["runs"]), 2)
+            self.assertEqual(merged["cases"][0]["median"], case["median"])
+            other = Path(scratch) / "other.json"
+            data["seconds"] += 1
+            other.write_text(json.dumps(data))
+            with self.assertRaisesRegex(ValueError, "seconds"):
+                list(bench_compare.compare(path, other))
+            data["seconds"] -= 1
+            data["cases"][0]["runs"][0]["world_hash"] = "wrong"
+            other.write_text(json.dumps(data))
+            with self.assertRaisesRegex(ValueError, "world_hash"):
+                list(bench_compare.compare(path, other))
+
+
+if __name__ == "__main__":
+    (bench.ROOT / "build").mkdir(exist_ok=True)
+    unittest.main()

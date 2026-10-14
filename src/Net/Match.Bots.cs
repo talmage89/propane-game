@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using Propane.Bots;
 using Propane.Core;
+using Propane.Fx;
 using Propane.Player;
 using Propane.Tank;
 
@@ -36,8 +37,8 @@ public partial class Match
 
     private readonly List<OwnedBot> bots = new();
 
-    /// <summary>Owned bot actors and their brains' cost on this peer: think calls, seconds and managed bytes allocated.</summary>
-    internal (int Bots, long Thinks, double Seconds, long Bytes) BotCost { get; private set; }
+    /// <summary>Owned bot actors and their brains' cost on this peer: think calls, seconds, managed bytes and inclusive navigation seconds. Navigation timing requires EffectProfile.Enabled.</summary>
+    internal (int Bots, long Thinks, double Seconds, long Bytes, double NavigationSeconds) BotCost { get; private set; }
 
     /// <summary>The goal policy driving an owned bot actor, if this peer owns one with that id.</summary>
     internal IBotGoalPolicy? BotBrain(int actorId)
@@ -61,7 +62,7 @@ public partial class Match
             bots.Add(new OwnedBot(this, owned.Character, brain));
         }
         RefreshBotPeers();
-        BotCost = (bots.Count, 0, 0, 0);
+        BotCost = (bots.Count, 0, 0, 0, 0);
         Session.OnStopping(() =>
         {
             foreach (var bot in bots) bot.Brain.Dispose();
@@ -86,9 +87,11 @@ public partial class Match
         if (bots.Count == 0) return;
         var started = Stopwatch.GetTimestamp();
         var allocated = System.GC.GetAllocatedBytesForCurrentThread();
+        var navigation = EffectProfile.Enabled ? EffectProfile.Peek(EffectProfile.System.BotNavigation) : 0;
         foreach (var bot in bots) bot.Brain.Think(bot, dt);
         var cost = BotCost;
         BotCost = (cost.Bots, cost.Thinks + bots.Count, cost.Seconds + Stopwatch.GetElapsedTime(started).TotalSeconds,
-            cost.Bytes + System.GC.GetAllocatedBytesForCurrentThread() - allocated);
+            cost.Bytes + System.GC.GetAllocatedBytesForCurrentThread() - allocated,
+            cost.NavigationSeconds + (EffectProfile.Enabled ? (EffectProfile.Peek(EffectProfile.System.BotNavigation) - navigation) / 1000 : 0));
     }
 }

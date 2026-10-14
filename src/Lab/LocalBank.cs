@@ -21,7 +21,7 @@ public partial class LocalBank : Node
     public required LabSession Lab { get; init; }
     private readonly ModeDefinition mode = ModeRegistry.TankBank;
     private readonly TankBankRules rules = new();
-    private readonly Dictionary<int, int> scores = new() { [1] = 0, [2] = 0 };
+    private readonly Dictionary<int, int> scores = new();
     public IReadOnlyDictionary<int, int> Earned => scores.Keys.ToDictionary(id => id, id => rules.StatsFor(id).Gained);
     private readonly Dictionary<PropaneTank, int> directShots = new();
     private readonly HashSet<PropaneTank> drops = new();
@@ -45,7 +45,8 @@ public partial class LocalBank : Node
     {
         TimeLeft = World.Tuning.LabDuelSeconds;
         InitialSupply = Lab.LiveTanks.Count();
-        rules.Initialize(new ModeSetup(new[] { new ModeActor(1, "You"), new ModeActor(2, "Bot") },
+        foreach (var actor in Lab.Session.Actors) scores[actor.Character.ActorId] = 0;
+        rules.Initialize(new ModeSetup(Lab.Session.Actors.Select(a => new ModeActor(a.Character.ActorId, a.Character == Lab.Player ? "You" : a.Character == Lab.Opponent ? "Bot" : a.Character.Name)).ToArray(),
             new ModeWorld(Lab.EnvironmentKind == LabEnvironment.Void ? ModeWorldSource.Void : ModeWorldSource.SuburbPlan, 1, InitialSupply),
             mode.CopyTuners(World.Tuning), 0));
         foreach (var tank in Lab.LiveTanks) Track(tank);
@@ -64,7 +65,7 @@ public partial class LocalBank : Node
             actor.Ragdolled += Thrown;
             Lab.Session.OnUnsubscribing(() => { actor.ShotImpacting -= Impact; actor.Ragdolled -= Thrown; });
         }
-        AttachBot(Lab.Opponent!);
+        foreach (var actor in Lab.Session.Actors.Where(a => a.Character != Lab.Player)) AttachBot(actor.Character);
         var positions = Lab.AmmoPositions ??
             new[] { new Vector3(World.Tuning.LabArenaRadius * 0.8f, 0.05f, 0), new Vector3(-World.Tuning.LabArenaRadius * 0.8f, 0.05f, 0) };
         foreach (var position in positions)

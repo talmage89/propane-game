@@ -21,6 +21,9 @@ public partial class LabSession : Node3D
     public Tuning Template { get; init; } = Tuning.SavedTemplate;
     public bool PauseOnFocusLoss { get; set; } = true;
     internal ulong? TestRandomSeed { get; init; }
+    // Dev scale fixture; ordinary Lab sessions retain their authored supply and one opponent.
+    internal SuburbSettings? TestSuburbSettings { get; init; }
+    internal int TestBankBots { get; init; } = 1;
     public bool CreateLocalView { get; init; } = true;
     public SessionContext Session { get; private set; } = null!;
     public WorldContext World => Session.World;
@@ -80,8 +83,8 @@ public partial class LabSession : Node3D
         }
         var seed = Match?.SuburbSeed ?? (settings.FixedSeed != 0 ? settings.FixedSeed : 23);
         source = EnvironmentKind == LabEnvironment.Void ? new VoidWorldSource() :
-            new SuburbWorldSource(Scenario.Banking ? Scenario.Definition.Supply.Suburb(settings, 2) with { MapSize = settings.LabSuburbSize } :
-                Scenario.Definition.Supply.Suburb(settings, Scenario.Prototype ? settings.LabPrototypeBots + 1 : 1), seed);
+            new SuburbWorldSource(TestSuburbSettings ?? (Scenario.Banking ? Scenario.Definition.Supply.Suburb(settings, 2) with { MapSize = settings.LabSuburbSize } :
+                Scenario.Definition.Supply.Suburb(settings, Scenario.Prototype ? settings.LabPrototypeBots + 1 : 1)), seed);
         SessionFactory.Build(this, settings, source, new Mode(this), session => { Session = session; if (TestRandomSeed is { } seed) World.Random.Seed = seed; }, present: CreateLocalView);
         resetQueued = false;
     }
@@ -423,24 +426,27 @@ public partial class LabSession : Node3D
             lab.environment.Follow = lab.Player;
             if (lab.Scenario.Banking)
             {
-                lab.Opponent = new PlayerCharacter
+                for (var i = 0; i < lab.TestBankBots; i++)
                 {
-                    World = session.World,
-                    Name = "BankingBot",
-                    ActorId = 2,
-                    OwnerPeerId = 1,
-                    Ammo = AmmoState.Starting(session.World.Tuning),
-                    BodyColor = new Color(0.26f, 0.58f, 0.8f)
-                };
-                session.AddActor(lab.Opponent);
-                var at = new Vector3(0, 0.05f, -session.World.Tuning.LabArenaRadius);
-                var yaw = Mathf.Pi;
-                if (lab.suburb != null)
-                {
-                    var spawn = lab.suburb.Plan.Spawns[1];
-                    at = Suburb.ToWorld(spawn.Position, 0.05f); yaw = spawn.Yaw + Mathf.Pi;
+                    lab.Opponent = new PlayerCharacter
+                    {
+                        World = session.World,
+                        Name = i == 0 ? "BankingBot" : $"BankingBot{i}",
+                        ActorId = i + 2,
+                        OwnerPeerId = 1,
+                        Ammo = AmmoState.Starting(session.World.Tuning),
+                        BodyColor = new Color(0.26f, 0.58f, 0.8f)
+                    };
+                    session.AddActor(lab.Opponent);
+                    var at = new Vector3(0, 0.05f, -session.World.Tuning.LabArenaRadius);
+                    var yaw = Mathf.Pi;
+                    if (lab.suburb != null)
+                    {
+                        var spawn = lab.suburb.Plan.Spawns[i + 1];
+                        at = Suburb.ToWorld(spawn.Position, 0.05f); yaw = spawn.Yaw + Mathf.Pi;
+                    }
+                    lab.Opponent.Teleport(at, yaw);
                 }
-                lab.Opponent.Teleport(at, yaw);
                 lab.Bank = new LocalBank { Lab = lab, Name = "LocalBank", ProcessPhysicsPriority = -10 };
                 session.World.Root.AddChild(lab.Bank);
             }
