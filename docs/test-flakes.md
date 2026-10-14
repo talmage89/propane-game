@@ -67,3 +67,37 @@ After the fix, the official editor passed 60 ragdoll repetitions (20 each with a
 copies under `build/`; `/proc` confirmed each requested worker count. Jolt uses that
 [worker pool](https://github.com/godotengine/godot/blob/4.7.2-stable/modules/jolt_physics/spaces/jolt_job_system.cpp#L149).
 The local Arch editor passed 20 repetitions and rendered player/side views. CI was read, not triggered.
+
+## Final verification
+
+| Command | Result |
+| --- | --- |
+| `make setup`, `make build` | Imported and built; final builds had zero warnings/errors. |
+| `make check` | Passed, including every fast suite and separate-process hashes; warning-free build. |
+| `python3 -B tools/dev/lint_tests.py` | Passed, including injected gate failures and parallel shard coverage. |
+| `make -j4 test-full` | Failed only at the Lab `dials` session's 600-second timeout. All other offline jobs passed: four generator shards covering 1,044 seeds, 700/700 navigation goals, deep piles/ranges, menu lifetime and prototype sessions. The final bot jobs were skipped. |
+| `godot-mono --headless --fixed-fps 60 --path . res://scenes/dev/lab_test.tscn -- --scenario=dials` | Passed alone: all 530 sessions, clean engine log, about 390 seconds under the same 600-second timeout. |
+| `make test-full-bots` | Passed separately: faulted 90-second rifle soak, two-match duel lane and loading-readiness stall; zero tank disagreements in each. |
+
+The full parallel invocation remains a failure; the isolated passes do not replace that result. Its tuning sweep
+needs separate performance/parallel-budget investigation. No timeout or gameplay value was changed for it.
+
+Rendered probes used `godot-mono --fixed-fps 60 --resolution 960x540 --path .` with these scene arguments:
+
+- `res://scenes/dev/player_range.tscn -- --scenario=ragdoll --assert-grip --assert-motion`, with and without
+  `--view=side`; captures under `build/flakes-ragdoll` and `build/flakes-ragdoll-side`. Reviewed `rag_08`, `rag_10`
+  and `rag_12`: physical tumble, rising with the rifle and the returning carry stance.
+- `res://scenes/dev/game_test.tscn -- --scenario=gather --tune.FixedSeed=23 --effects-seed=3 --gather-trace`;
+  captures under `build/flakes-gather-after-shots`. Reviewed `gather_04` and `gather_10`: cleared departure space
+  and a compact, upright gathered pile. The earlier `build/flakes-gather/gather_04` shows the nearby van.
+- `res://scenes/dev/rifle_reach_tests.tscn`: the final-pose regression also passed with the rendered backend.
+
+Captures used `--capture-dir` with an absolute path under this checkout's `build/` and `TMPDIR` there too.
+The 400 successful physics traces, plus three invalidated launches, are retained in
+`build/flakes-gather-after/traces.tar.gz`; its `results.jsonl` and `summary.json` record the results and timing range.
+Baseline failures are in `build/flakes-load/gather-parallel-091.log` and `build/flakes-seeds/gather-{003,037,045}.log`.
+Official affinity and worker-count results are under `build/flakes-baseline/affinity`, `build/flakes-motion-after`
+and `build/flakes-workers-logs`. Large download and scratch build copies were removed.
+
+These changes affect the dev fixture and local rifle presentation. Match messages, suburb construction, tanks
+and tuners are unchanged; `Protocol.Version` remains 3.
