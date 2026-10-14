@@ -44,6 +44,15 @@ public interface IBotWorld
     /// in a match; null when the mode has none or none has arrived yet.
     /// </summary>
     IModeView? View => null;
+    /// <summary>King's zone and clocks without constructing a mode snapshot for each thought.</summary>
+    KingBotView? King
+    {
+        get
+        {
+            if (Rules is KingRules rules) return KingBotView.Read(rules, Clock);
+            return View is KingState state ? KingBotView.Read(state, state.Elapsed) : null;
+        }
+    }
 }
 
 /// <summary>

@@ -56,7 +56,7 @@ public sealed class KingBot : IBotGoalPolicy
     {
         motor.Begin(dt);
         var player = world.Player;
-        if (!world.IsPlaying || world.View is not KingState state || player.IsRagdolled)
+        if (!world.IsPlaying || world.King is not KingBotView state || player.IsRagdolled)
         {
             motor.Reset();
             status.Set(player.IsRagdolled ? "down" : "waiting");
@@ -286,7 +286,7 @@ public sealed class KingBot : IBotGoalPolicy
     }
 
     /// <summary>A point inside the zone, beside its pile and clear of every tank, to hold it from.</summary>
-    private void PickStand(KingState state, IBotWorld world, Vector3 spot)
+    private void PickStand(KingBotView state, IBotWorld world, Vector3 spot)
     {
         for (var attempt = 0; attempt < 12; attempt++)
         {
@@ -326,4 +326,24 @@ public sealed class KingBot : IBotGoalPolicy
     }
 
     private static Vector3 ToVector(ModeSpot spot) => new((float)spot.X, (float)spot.Y, (float)spot.Z);
+}
+
+/// <summary>
+/// Only the zone facts a King brain needs, as a value: reading local rules or advancing a received snapshot's
+/// clocks must not construct a snapshot (and its minted roster) for every brain every physics tick.
+/// </summary>
+public readonly record struct KingBotView(int Zone, ModeSpot Spot, ModeSpot Next, double Radius, int Holder,
+    bool Warning, double UntilMove)
+{
+    public static KingBotView? Read(KingRules rules, ModeClock clock)
+    {
+        if (rules.Zone < 0) return null;
+        var elapsed = rules.Elapsed(clock);
+        return new KingBotView(rules.Zone, rules.SpotOf(rules.Zone), rules.SpotOf(rules.Zone + 1), rules.Radius,
+            rules.Holder, rules.Warning(elapsed), rules.UntilMove(elapsed));
+    }
+
+    public static KingBotView Read(KingState state, double elapsed) =>
+        new(state.Zone, state.Spot, state.Next, state.Radius, state.Holder,
+            elapsed >= state.MoveAt - state.WarningSeconds, System.Math.Max(0, state.MoveAt - elapsed));
 }

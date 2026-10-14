@@ -34,9 +34,13 @@ public partial class Match
         public IReadOnlyList<AmmoPickup> Pickups => match.pickups;
         public BotServices Services => services;
         public Modes.IModeView? View => match.ModeView;
+        public KingBotView? King => match.BotKing;
     }
 
     internal Dictionary<uint, PropaneTank>.ValueCollection BotTanks => tanks.Values;
+    /// <summary>Read the received zone at this peer's clock without allocating KingState.At for each brain.</summary>
+    internal KingBotView? BotKing => kingState != null
+        ? KingBotView.Read(kingState, System.Math.Max(0, Setup.Length - timeLeft)) : null;
     private readonly List<OwnedBot> bots = new();
     private BotServices? botServices;
     private int botTurn;

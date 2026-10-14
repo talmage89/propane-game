@@ -72,6 +72,8 @@ random stream. When all tanks are banked, `BotHuntWhenEmpty` lets a trailing ban
 beyond sight/rifle range, then react and fire after closing in; clearing the map cannot leave it idle indefinitely.
 Hot paths use indexed lists, reusable query nodes and deferred status formatting instead of LINQ,
 physics-result dictionaries and interpolated status strings. `Status` allocates only when a log or overlay reads it.
+King brains read a small value view of the rules or received zone at the owner's clock; they do not construct the
+HUD/wire snapshot or its minted roster for each thought.
 
 `Plan` is synchronous for tests/offline callers. The grid supports horizontal ground and ballistic jumps, rather
 than general stairs or roofs. Navigation caching and these local bot dials change no player physics, match

@@ -67,5 +67,6 @@ public sealed class Bot : IBotBrain, System.IDisposable
         public void Dispose() => Services.Dispose();
         public IReadOnlyList<AmmoPickup> Pickups => match.Pickups;
         public IModeView? View => match.ModeView;
+        public KingBotView? King => match.BotKing;
     }
 }

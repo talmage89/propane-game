@@ -97,6 +97,34 @@ internal static class NavigationTests
         });
         using var shape = new CapsuleShape3D { Radius = 0.32f, Height = 1.8f };
         using var tuning = Tuning.LoadBaked();
+        runner.Run("navigation/King bot views match snapshots without steady allocation", () =>
+        {
+            var rules = new KingRules();
+            rules.Initialize(new ModeSetup(new[] { new ModeActor(1, "Bot") },
+                new ModeWorld(ModeWorldSource.Void, Spots: new[] { new ModeSpot(0, 0, 0), new ModeSpot(20, 0, 0) }),
+                ModeRegistry.King.CopyTuners(tuning), 23));
+            var clock = new ModeClock(ModePhase.Round, 1, 100, 280);
+            TestRunner.Assert(KingBotView.Read(rules, clock) == null, "no zone may be guessed before it is sampled");
+            rules.Handle(new PhaseEntered(ModePhase.Round, new RoundInfo(1, 1, RoundTimer.Countdown, 100, 180)), clock);
+            foreach (var elapsed in new[] { 0d, 42d, 44d, 45d, 46d, 90d })
+            {
+                clock = clock with { Now = 100 + elapsed };
+                rules.Handle(new ActorsSampled(new[] { new ActorSample(1, 0, 0, 0) }), clock);
+                var snapshot = rules.State(clock)!;
+                var expected = new KingBotView(snapshot.Zone, snapshot.Spot, snapshot.Next, snapshot.Radius,
+                    snapshot.Holder, snapshot.Warning, snapshot.UntilMove);
+                TestRunner.Assert(KingBotView.Read(rules, clock) == expected &&
+                    KingBotView.Read(snapshot, elapsed) == expected, "rule and network clocks disagree at a warning or move");
+                var before = GC.GetAllocatedBytesForCurrentThread();
+                for (var i = 0; i < 1000; i++)
+                {
+                    TestRunner.Assert(KingBotView.Read(rules, clock) == expected && KingBotView.Read(snapshot, elapsed) == expected,
+                        "a warmed King view changed");
+                }
+
+                TestRunner.Assert(GC.GetAllocatedBytesForCurrentThread() == before, "warmed King observations allocate");
+            }
+        });
         runner.Run("navigation/large Short Fuse rosters use separated road starts across resets", () =>
         {
             var settings = ModeRegistry.ShortFuse.Supply.Suburb(tuning, 16);
