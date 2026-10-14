@@ -102,3 +102,9 @@ observer camera, and far ragdoll/get-up. It checks actual native modifier counts
 contacts and rifle contacts on frames that hold the previous skinned pose. Its reload uses the existing rule:
 reload suppresses aim and allows the ordinary movement gait. The unit suite checks distance hysteresis, live rate
 changes, time conservation, staggered clocks and zero clock allocations. Both run in `make test`.
+
+Before a throttled actor starts a ragdoll, its tree samples the current authored pose with its pending animation
+time. This restores the same initial collider geometry as a full-rate actor, without advancing locomotion clocks
+again or delaying the throw. `ragdoll_pose_tests` compares every first physical-bone transform against a full-rate
+control while the other actor renders at 1 Hz; the bounds are 1 mm and 0.1 degree. It fails before the refresh
+(29.4 cm) and runs in `make test`.

@@ -331,6 +331,8 @@ $GODOT --headless --fixed-fps 60 res://scenes/dev/player_range.tscn -- --scenari
 $GODOT --fixed-fps 60 res://scenes/dev/player_range.tscn -- --scenario=motion --view=side --assert-motion --assert-grip --capture-dir="$PWD/build/motion"
 # Camera-free actor detail: native near/far/hidden pose rates, held rifle contacts, owning view and far recovery.
 $GODOT --fixed-fps 60 res://scenes/dev/actor_detail_tests.tscn -- --capture-dir="$PWD/build/actor-detail"
+# A held distant pose cannot change the first physical-bone transforms when a ragdoll starts.
+$GODOT --headless --fixed-fps 60 res://scenes/dev/ragdoll_pose_tests.tscn
 # Remote grips stay on the rifle through snapshot relocation/turns, delayed shot echoes, reload, melee and get-up.
 $GODOT --headless --fixed-fps 60 res://scenes/dev/rifle_reach_tests.tscn
 # Full-auto magazine, persistent aim climb and the raised barrel's direction; aim, hip or creep.

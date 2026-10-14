@@ -48,6 +48,8 @@ public sealed class ActorPoseCadence
         return true;
     }
 
+    public float PendingTime => elapsed;
+
     public void Reset()
     {
         elapsed = remaining = previousInterval = 0;

@@ -116,7 +116,13 @@ public sealed class CharacterAnimator
             _ => t.JumpFallClipTime,
         };
         jumpSample = Mathf.MoveToward(jumpSample, airTime, delta * t.JumpSampleBlendSpeed);
-        if (!sample) return;
+        if (sample) ApplyPose();
+    }
+
+    /// <summary>Write the current clocks without advancing them, including just before a physical throw.</summary>
+    public void ApplyPose()
+    {
+        var t = tuning;
         var phase = Pose.Phase;
         tree.Set(WalkSeek, Mathf.PosMod(phase + WalkContact, 1) * walkLength);
         tree.Set(BackSeek, phase);

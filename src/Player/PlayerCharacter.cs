@@ -580,6 +580,13 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
 
     private void BeginRagdoll(Vector3 velocity, Vector3 spin)
     {
+        if (poseThrottled)
+        {
+            // PhysicalBonesStartSimulation reads the authored pose immediately. Refresh its current clocks
+            // before clearing presentation state, so a held distant pose cannot change initial colliders.
+            animator.ApplyPose();
+            animator.Sample(poseCadence.PendingTime);
+        }
         ResetPoseCadence();
         state = State.Ragdoll;
         // A blast can arrive between our ticks. Drop control/presentation immediately so neither snapshots nor
