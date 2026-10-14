@@ -13,6 +13,180 @@ public static class EffectResourceTests
 {
     public static void Register(TestRunner runner)
     {
+        runner.Run("effects/network fragment scatter ignores peer randomness and drain order", () =>
+        {
+            using var tuning = Tuning.LoadBaked();
+            using var first = new WorldContext(runner, tuning, networked: true);
+            using var second = new WorldContext(runner, tuning, networked: true);
+            first.Random.Seed = 11; second.Random.Seed = 97;
+            first.Tuning.DebrisSpawnPerFrame = 1;
+            second.Tuning.DebrisSpawnPerFrame = 25;
+            var pose = new Transform3D(Basis.Identity.Rotated(Vector3.Up, .7f), new Vector3(2, 3, 4));
+            foreach (var world in new[] { first, second })
+                DebrisQueue.Enqueue(world, world.Spawn, pose, Vector3.Right, pose * PropaneTank.LocalCenter, 0x10000012);
+            var a = first.EffectsRoot.GetChildren().OfType<DebrisQueue>().Single();
+            var b = second.EffectsRoot.GetChildren().OfType<DebrisQueue>().Single();
+            b._Process(0);
+            while (a.PendingCount > 0) a._Process(0);
+            var piecesA = first.ContentRoot.GetChildren().OfType<DebrisBody>().ToArray();
+            var piecesB = second.ContentRoot.GetChildren().OfType<DebrisBody>().ToArray();
+            Assert(piecesA.Length == tuning.DebrisPiecesPerTank && piecesA.Length == piecesB.Length, "peer fragment counts differ");
+            Assert(piecesA.Zip(piecesB).All(pair => pair.First.GlobalTransform == pair.Second.GlobalTransform &&
+                pair.First.LinearVelocity == pair.Second.LinearVelocity && pair.First.AngularVelocity == pair.Second.AngularVelocity),
+                "peer-local randomness or deferred drain changed network fragment motion");
+        });
+        runner.Run("effects/overlapping dense leases restore the prior catch-up value", () =>
+        {
+            var original = Engine.MaxPhysicsStepsPerFrame;
+            try
+            {
+                Engine.MaxPhysicsStepsPerFrame = 8;
+                using var tuning = Tuning.LoadBaked();
+                tuning.DenseChainFuseThreshold = 1;
+                using var first = new WorldContext(runner, tuning);
+                using var second = new WorldContext(runner, tuning);
+                second.Tuning.DenseChainPhysicsSteps = 2;
+                foreach (var world in new[] { first, second })
+                {
+                    var tank = PropaneTank.Create(world); world.Spawn.InWorld(tank);
+                    tank.FuseScheduleOverride = (_, _) => { };
+                    tank.PunctureRemote(Vector3.Up * .2f, Vector3.Right, 1);
+                    tank.ChainHit(Vector3.Zero, 0);
+                }
+                Assert(Engine.MaxPhysicsStepsPerFrame == 2, "overlapping leases did not select the smaller budget");
+                second.Invalidate();
+                Assert(Engine.MaxPhysicsStepsPerFrame == 4, "one world's retirement lost the other lease");
+                var simulation = first.EffectsRoot.GetChildren().OfType<TankSimulation>().Single();
+                first.Tuning.DenseChainPhysicsSteps = 0; simulation._Process(0);
+                Assert(Engine.MaxPhysicsStepsPerFrame == 8, "disabling the limiter lost the prior engine setting");
+                first.Tuning.DenseChainPhysicsSteps = 12; simulation._Process(0);
+                Assert(Engine.MaxPhysicsStepsPerFrame == 8, "dense lease raised the ordinary catch-up budget");
+                first.Invalidate();
+                Assert(Engine.MaxPhysicsStepsPerFrame == 8, "retirement did not restore the prior setting");
+            }
+            finally { Engine.MaxPhysicsStepsPerFrame = original; }
+        });
+        runner.Run("effects/dense catch-up is transient, offline and restores the engine budget", () =>
+        {
+            var original = Engine.MaxPhysicsStepsPerFrame;
+            try
+            {
+                Engine.MaxPhysicsStepsPerFrame = 12;
+                using var tuning = Tuning.LoadBaked();
+                tuning.DenseChainFuseThreshold = 2;
+                using var world = new WorldContext(runner, tuning);
+                PropaneTank Fuse(WorldContext owner)
+                {
+                    var tank = PropaneTank.Create(owner); owner.Spawn.InWorld(tank);
+                    tank.FuseScheduleOverride = (_, _) => { };
+                    tank.PunctureRemote(Vector3.Up * .2f, Vector3.Right, 1);
+                    return tank;
+                }
+                var first = Fuse(world);
+                var second = Fuse(world);
+                var simulation = world.EffectsRoot.GetChildren().OfType<TankSimulation>().Single();
+                var now = 0d;
+                simulation.CatchupClock = () => now;
+                first.ChainHit(Vector3.Zero, 0);
+                Assert(Engine.MaxPhysicsStepsPerFrame == 12, "ordinary chain changed the engine budget");
+                second.ChainHit(Vector3.Zero, 0);
+                Assert(Engine.MaxPhysicsStepsPerFrame == 4, "dense offline chain did not bound catch-up");
+                first.RestoreIntact();
+                simulation._Process(0);
+                Assert(Engine.MaxPhysicsStepsPerFrame == 4, "dense lease lost its short tail");
+                now = 1;
+                simulation._Process(0);
+                Assert(Engine.MaxPhysicsStepsPerFrame == 12, "dense lease changed game speed after expiry");
+                first.PunctureRemote(Vector3.Up * .2f, Vector3.Right, 1);
+                first.ChainHit(Vector3.Zero, 0);
+                Assert(Engine.MaxPhysicsStepsPerFrame == 4, "dense lease failed to rearm");
+                using (var network = new WorldContext(runner, tuning, networked: true))
+                {
+                    _ = Fuse(network);
+                    Assert(Engine.MaxPhysicsStepsPerFrame == 12, "offline lease slowed a concurrent network world");
+                    Assert(!network.EffectsRoot.GetChildren().OfType<TankSimulation>().Single().IsProcessing(),
+                        "network simulation retained offline render-frame bookkeeping");
+                }
+                Assert(Engine.MaxPhysicsStepsPerFrame == 4, "network retirement lost an offline lease");
+                world.ContentRoot.ProcessMode = Node.ProcessModeEnum.Disabled;
+                simulation._Process(0);
+                Assert(Engine.MaxPhysicsStepsPerFrame == 12, "disabled retiring source retained its dense lease");
+                world.ContentRoot.ProcessMode = Node.ProcessModeEnum.Inherit;
+                first.CancelChainFuse(); second.CancelChainFuse();
+                first.ChainHit(Vector3.Zero, 0); second.ChainHit(Vector3.Zero, 0);
+                world.SetPaused(true); simulation._Process(0);
+                Assert(Engine.MaxPhysicsStepsPerFrame == 12, "pause retained its dense lease");
+                world.SetPaused(false); simulation._Process(0);
+                Assert(Engine.MaxPhysicsStepsPerFrame == 4, "resume lost pending fuse pressure");
+                world.Invalidate();
+                Assert(Engine.MaxPhysicsStepsPerFrame == 12, "world invalidation leaked the engine budget");
+            }
+            finally { Engine.MaxPhysicsStepsPerFrame = original; }
+        });
+        runner.Run("effects/crowded blasts keep fireballs and restore full slots on retirement", () =>
+        {
+            using var tuning = Tuning.LoadBaked();
+            using var world = new WorldContext(runner, tuning);
+            using var other = new WorldContext(runner, tuning);
+            world.Tuning.ExplosionFullEffectBudget = 2;
+            var first = ExplosionEffect.Create(world, Vector3.Zero, 0);
+            var second = ExplosionEffect.Create(world, Vector3.Right, 0);
+            var compact = ExplosionEffect.Create(world, Vector3.Left, 0);
+            Assert(first.GetChildren().OfType<GpuParticles3D>().Count() == 5 &&
+                second.GetChildren().OfType<GpuParticles3D>().Count() == 5 &&
+                compact.GetChildren().OfType<GpuParticles3D>().Count() == 1 &&
+                !compact.GetChildren().OfType<OmniLight3D>().Any(), "full explosion budget or essential fireball was lost");
+            var independent = ExplosionEffect.Create(other, Vector3.Zero, 0);
+            Assert(independent.GetChildren().OfType<GpuParticles3D>().Count() == 5, "another world's blasts consumed full slots");
+            compact._Process(.2);
+            Assert(!compact.IsProcessing(), "compact flash retained managed work after fading");
+            world.Clock.Advance(2);
+            Assert(compact.IsQueuedForDeletion(), "compact fireball did not retire after its native particles");
+            first.Free();
+            var restored = ExplosionEffect.Create(world, Vector3.Zero, 0);
+            Assert(restored.GetChildren().OfType<GpuParticles3D>().Count() == 5, "retired full blast did not release its slot");
+        });
+        runner.Run("effects/debris queue bounds work and cancels retired content", () =>
+        {
+            using var tuning = Tuning.LoadBaked();
+            using var world = new WorldContext(runner, tuning);
+            using var other = new WorldContext(runner, tuning);
+            world.Tuning.DebrisPiecesPerTank = 6;
+            world.Tuning.DebrisSpawnPerFrame = 2;
+            var pieces = GameAssets.Debris.Count;
+            foreach (var count in Enumerable.Range(1, pieces))
+            {
+                var indices = Enumerable.Range(0, count).Select(i => DebrisQueue.PieceIndex(i, count, pieces)).ToArray();
+                Assert(indices.Distinct().Count() == count && indices.All(i => i >= 0 && i < pieces),
+                    "fragment selection repeated or escaped the authored pieces");
+            }
+            var randomState = world.Random.State;
+            DebrisQueue.Enqueue(world, world.Spawn, Transform3D.Identity, Vector3.Zero, PropaneTank.LocalCenter);
+            var queue = world.EffectsRoot.GetChildren().OfType<DebrisQueue>().Single();
+            Assert(queue.PendingCount == 6 && !world.ContentRoot.GetChildren().OfType<DebrisBody>().Any(),
+                "fragment registration was not deferred");
+            queue._Process(0);
+            Assert(queue.PendingCount == 4 && world.ContentRoot.GetChildren().OfType<DebrisBody>().Count() == 2,
+                "per-frame registration budget was ignored");
+            Assert(world.Random.State == randomState, "presentation work changed simulation randomness");
+            DebrisQueue.Enqueue(other, other.Spawn, Transform3D.Identity, Vector3.Zero, PropaneTank.LocalCenter);
+            var independent = other.EffectsRoot.GetChildren().OfType<DebrisQueue>().Single();
+            var outgoing = world.ContentRoot;
+            outgoing.ProcessMode = Node.ProcessModeEnum.Disabled;
+            queue._Process(0);
+            Assert(queue.PendingCount == 0 && outgoing.GetChildren().OfType<DebrisBody>().Count() == 2,
+                "disabled retiring source received deferred fragments");
+            outgoing.ProcessMode = Node.ProcessModeEnum.Inherit;
+            DebrisQueue.Enqueue(world, world.Spawn, Transform3D.Identity, Vector3.Zero, PropaneTank.LocalCenter);
+            var incoming = new Node3D(); world.Root.AddChild(incoming); world.SetContentRoot(incoming);
+            world.RetireContent(outgoing);
+            queue._Process(0);
+            Assert(queue.PendingCount == 0 && incoming.GetChildCount() == 0 && independent.PendingCount == other.Tuning.DebrisPiecesPerTank,
+                "retirement spawned stale fragments or crossed worlds");
+            DebrisQueue.Enqueue(world, world.Spawn, Transform3D.Identity, Vector3.Zero, PropaneTank.LocalCenter);
+            world.Invalidate();
+            Assert(queue.PendingCount == 0, "invalidation retained deferred fragment work");
+        });
         runner.Run("effects/shared resources survive live tuning and another world", () =>
         {
             using var tuning = Tuning.LoadBaked();

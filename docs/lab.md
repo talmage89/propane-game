@@ -7,7 +7,8 @@ the rest of Propane. Huge stack and Range use void; the banking duel and Free tu
 - **Huge stack** builds a square upright pyramid using the generator's `PileBuilder`. Choose its count before
   entering, or change **Lab stack count** in tuning and reset. First shots puncture; second shots and blasts use
   the ordinary chain rules. The stack starts intact, so the first blast punctures its intact neighbors.
-  The shipped range is 24–40 tanks, capped by crowded vent rendering on the measured hardware, not body capacity.
+  The shipped range is 24–512 tanks, starting at 40. Larger stacks are scale trials; persistent vents and chains
+  cost more than an intact sleeping stack.
 - **Range** alternates single tanks and small upright piles at marked distances from the orange firing line; each
   distance label grows with its distance, so the far lanes read from the line.
   Move along the line to line up with a lane; practice shots, punctures, melee and blast throws. Reset respawns

@@ -3,7 +3,9 @@ using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using Godot;
+using Propane.Core;
 using Propane.Net;
+using Propane.World;
 using Propane.World.Plan;
 
 namespace Propane.Dev.UnitTests;
@@ -25,6 +27,30 @@ public static class PlanTests
 
     public static void Register(TestRunner runner)
     {
+        runner.Run("plan/scaled tank supply survives tuning and plan round trips", () =>
+        {
+            using var tuning = Tuning.LoadBaked();
+            var single = SuburbPlans.SinglePlayer(tuning);
+            var ordinary = SuburbPlans.Match(tuning, 4);
+            foreach (var multiplier in new[] { 1, 2, 4, 8 })
+            {
+                tuning.TankCountMultiplier = multiplier;
+                using var snapshot = tuning.Snapshot();
+                using var peer = Tuning.FromSnapshot(snapshot);
+                TestRunner.Assert(SuburbPlans.SinglePlayer(peer).TankCount == single.TankCount * multiplier,
+                    "single-player supply multiplier lost");
+                TestRunner.Assert(SuburbPlans.Match(peer, 4).ClusterSizeMax == ordinary.ClusterSizeMax * multiplier,
+                    "pile sizes did not scale with supply");
+                foreach (var players in new[] { 4, 16 })
+                {
+                    var settings = SuburbPlans.Match(peer, players);
+                    var plan = SuburbPlans.Generate(settings, 23);
+                    var decoded = PlanCodec.Decode(PlanCodec.Encode(plan));
+                    TestRunner.Assert(decoded.Tanks.Count == (tuning.MpTankCount + tuning.MpTanksPerPlayer * players) * multiplier &&
+                        decoded.Tanks.SequenceEqual(plan.Tanks), "scaled supply or formations lost in plan delivery");
+                }
+            }
+        });
         runner.Run("plan/pile transforms and identity round trip", () =>
         {
             var plan = Fixture();

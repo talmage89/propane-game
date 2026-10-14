@@ -11,11 +11,12 @@ public partial class DebrisBody : RigidBody3D
 
     private static readonly StringName heatParameter = new("heat");
     private static readonly StringName sootParameter = new("soot");
+    private static readonly PhysicsMaterial material = new() { Friction = 0.7f, Bounce = 0.25f };
 
     private MeshInstance3D mesh = null!;
     private float age;
 
-    public static DebrisBody Create(WorldContext world, DebrisPiece piece)
+    public static DebrisBody Create(WorldContext world, DebrisPiece piece, float? soot = null)
     {
         var body = new DebrisBody
         {
@@ -26,7 +27,7 @@ public partial class DebrisBody : RigidBody3D
             ContinuousCd = piece.Mass < 0.6f,
             CenterOfMassMode = CenterOfMassModeEnum.Custom,
             CenterOfMass = piece.Centroid,
-            PhysicsMaterialOverride = new PhysicsMaterial { Friction = 0.7f, Bounce = 0.25f },
+            PhysicsMaterialOverride = material,
             AngularDamp = 0.8f,
         };
         body.AddChild(new CollisionShape3D { Shape = piece.Shape });
@@ -34,7 +35,7 @@ public partial class DebrisBody : RigidBody3D
         body.AddChild(body.mesh);
         GameAssets.ApplyTankMaterials(body.mesh);
         body.mesh.SetInstanceShaderParameter(heatParameter, 1f);
-        body.mesh.SetInstanceShaderParameter(sootParameter, world.Random.RandfRange(0.3f, 0.6f));
+        body.mesh.SetInstanceShaderParameter(sootParameter, soot ?? world.Random.RandfRange(0.3f, 0.6f));
         return body;
     }
 
