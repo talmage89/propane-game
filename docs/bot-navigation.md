@@ -54,7 +54,7 @@ shared movement tuning. `Skill` continues to interpolate aim/reaction; the Easy,
 benchmark.
 
 Runtime searches advance at most `BotSearchPerTick` nodes per bot and `BotSearchBudget` per route. All bots in
-a process share `BotQueriesPerTick` (64 native navigation queries) and `BotExpansionsPerTick` (160 expansions).
+a process share `BotQueriesPerTick` (128 native navigation queries) and `BotExpansionsPerTick` (160 expansions).
 An entire takeoff arc reserves its query allowance before starting; a query budget below that minimum is raised
 to permit one arc. Pending searches resume after the budget refills and suspend progress detection. Owners rotate
 the first brain each tick so every bot gets a turn at an unspent budget.

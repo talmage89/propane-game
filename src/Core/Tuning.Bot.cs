@@ -10,7 +10,7 @@ public partial class Tuning
     public int BotSearchBudget { get; set; } = 900;
     // Shared by every bot one process runs in a world, per physics tick: navigation physics queries and route
     // search expansions. Searches past them wait for the next tick, so many bots cost no more per tick than a few.
-    public int BotQueriesPerTick { get; set; } = 64;
+    public int BotQueriesPerTick { get; set; } = 128;
     public int BotExpansionsPerTick { get; set; } = 160;
     // Pursue a richer rival after the tank supply has been cleared, instead of waiting outside rifle range.
     public bool BotHuntWhenEmpty { get; set; } = true;
