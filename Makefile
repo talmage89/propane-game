@@ -134,19 +134,36 @@ GENERATOR_2 := --first-seed=51 --seeds=50 --first-large-seed=26 --large-seeds=25
 GENERATOR_3 := --first-seed=101 --seeds=50 --first-large-seed=51 --large-seeds=25 --first-formation-seed=5 --formation-seeds=1 --first-segment-seed=51 --segment-seeds=25
 GENERATOR_4 := --first-seed=151 --seeds=50 --first-large-seed=76 --large-seeds=25 --first-formation-seed=6 --formation-seeds=1 --first-segment-seed=76 --segment-seeds=25
 GENERATOR_SHARDS := test-full-generator-1 test-full-generator-2 test-full-generator-3 test-full-generator-4
-# The Lab sessions of check_lab.py --full, split by cost.
-LAB_1 := soak-void,shortfuse-full,dissolve-pace
-LAB_2 := soak-suburb
-LAB_3 := lifetime,rules,aimstall,duel,ringout,king,shortfuse,shortfuse-combo,dissolve,dials
-LAB_4 := ringout-full,king-full,king-suburb,dissolve-full
-LAB_SHARDS := test-full-lab-1 test-full-lab-2 test-full-lab-3 test-full-lab-4
-# Longest first, so make -j starts the jobs that would otherwise finish last early. The Lab soaks are unseeded bot
-# matches whose cost varies several-fold between runs, so they start before the steadier generator shards.
-FULL := test-full-lab-1 test-full-lab-2 test-full-lab-4 $(GENERATOR_SHARDS) test-full-navigation test-full-lab-3 test-full-piles \
-	test-full-range test-full-menu test-full-generator-coverage
-.PHONY: $(FULL) test-full-bots
+# Independent full Lab sessions; keep King's cross-round mint assertion in one process.
+LAB_soak-void := --only=soak-void
+LAB_soak-suburb := --only=soak-suburb
+LAB_king := --only=king-full
+LAB_king-suburb := --only=king-suburb
+LAB_fast := --only=rules,aimstall,duel,ringout,king,shortfuse,shortfuse-combo,dissolve
+LAB_pace := --only=dissolve-pace
+LAB_ringout-11 := --only=ringout-full --first-seed=11 --seeds=1
+LAB_ringout-12 := --only=ringout-full --first-seed=12 --seeds=1
+LAB_ringout-13 := --only=ringout-full --first-seed=13 --seeds=1
+LAB_shortfuse-11 := --only=shortfuse-full --first-seed=11 --seeds=1
+LAB_shortfuse-12 := --only=shortfuse-full --first-seed=12 --seeds=1
+LAB_dissolve-11 := --only=dissolve-full --first-seed=11 --seeds=1
+LAB_dissolve-12 := --only=dissolve-full --first-seed=12 --seeds=1
+LIFETIME_PARTS := 1 2 3 4
+$(foreach part,$(LIFETIME_PARTS),$(eval LAB_lifetime-$(part) := --only=lifetime --lifetime-shard=$(part) --lifetime-shards=$(words $(LIFETIME_PARTS))))
+DIAL_PARTS := 1 2 3 4 5 6 7 8
+$(foreach part,$(DIAL_PARTS),$(eval LAB_dials-$(part) := --only=dials --dial-shard=$(part) --dial-shards=$(words $(DIAL_PARTS))))
+LAB_JOBS := king king-suburb fast soak-void soak-suburb shortfuse-11 shortfuse-12 dissolve-11 dissolve-12 pace \
+	ringout-11 ringout-12 ringout-13 $(addprefix lifetime-,$(LIFETIME_PARTS)) $(addprefix dials-,$(DIAL_PARTS))
+LAB_SHARDS := $(addprefix test-full-lab-,$(LAB_JOBS))
+# Start long and variable-cost jobs early; enough bounded jobs keep four slots busy through the tail. The gate
+# overlaps deep probes, and menu lifetime still waits for behavior before using its settings and server port.
+FULL := test-full-lab-king test-behavior test-full-lab-soak-void test-full-lab-soak-suburb $(GENERATOR_SHARDS) \
+	test-full-lab-fast test-full-navigation test-full-lab-king-suburb test-full-piles test-core \
+	$(filter-out test-full-lab-king test-full-lab-king-suburb test-full-lab-fast test-full-lab-soak-void test-full-lab-soak-suburb,$(LAB_SHARDS)) \
+	test-full-range test-full-menu test-full-generator-coverage test-full-lab-coverage
+.PHONY: $(FULL) $(LAB_SHARDS) test-full-bots
 
-test-full: test $(FULL) ## Run the gate plus deep sweeps (make -j4 test-full runs them side by side)
+test-full: $(FULL) test ## Run the gate plus deep sweeps (make -j4 test-full runs them side by side)
 	@$(MAKE) --no-print-directory test-full-bots
 
 test-full-bots: build
@@ -155,7 +172,11 @@ test-full-bots: build
 	$(LABEL) bots tools/dev/net_bots.sh -n 2 -l 20 -o "$(CURDIR)/build/loading-readiness-gate" -- --scenario=body-stream --tank-check-ready-stall=Bot2
 
 $(LAB_SHARDS): test-full-lab-%: build
-	$(LABEL) lab-$* env GODOT="$(GODOT)" python3 -B tools/dev/check_lab.py --full --only=$(LAB_$*)
+	$(LABEL) lab-$* env GODOT="$(GODOT)" python3 -B tools/dev/check_lab.py --full $(LAB_$*)
+
+test-full-lab-coverage: build
+	$(LABEL) lab-coverage env GODOT="$(GODOT)" python3 -B tools/dev/check_lab_shards.py \
+		$(foreach job,$(LAB_JOBS),--shard='--full $(LAB_$(job))')
 
 test-full-piles: build
 	$(LABEL) piles "$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/upright_pile_tests.tscn -- --deep --awake
