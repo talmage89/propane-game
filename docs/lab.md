@@ -29,6 +29,13 @@ the rest of Propane. Huge stack and Range use void; the banking duel and Free tu
   toggles work with the mouse, keyboard or controller. **Defaults** restores code defaults; **Save** explicitly
   writes gameplay dials to the saved template. Unsaved edits never touch that template.
 
+Suburb setup pages (the banking duel, Free tuning, King and Short Fuse) offer **Tank supply** in every integer
+step from 1× to 8×. It scales both the suburb's starting tanks and pile sizes through `TankCountMultiplier`.
+Choose −/+ with the mouse, or focus either button and use Enter / A. The choice stays in the unsaved Lab draft
+across scenario changes and returning from play; launching copies it into the session without editing saved
+tuning. F1 still changes it offline, with a reset required to rebuild. The control appears only for a generated
+suburb: void fixtures and Dissolve Run's segment supply use their own counts.
+
 ## Prototype modes
 
 Below the starters, **Prototype modes · rules on trial** lists modes the owner is trying before setting their rules.
@@ -45,7 +52,7 @@ Lab dial in the tuning panel's Lab section, and layout dials apply on reset.
   tank. Every 45 s the zone moves to another pile 15–25 m away after a 3 s warning (a pale beam marks the next spot)
   and a fresh pile materializes on the nearest clear, flat ground beside it. Banking, hits and throws spill as in Tank
   Bank. The void lays out a ring of eight pile spots around one in the middle; a suburb uses the plan's own piles.
-  Most banked when the clock runs out wins. The King setup page sets the two things a multiplayer lobby sets for King,
+  Most banked when the clock runs out wins. The King setup page also sets the pace and length a multiplayer lobby sets for King,
   on the lobby's steps: the mint pace (0.5 to 10 s) and the round length (3:00 in the Lab; the lobby keeps its existing 2:30 default).
   King is also playable online with humans and lobby bots; its HUD and zone visuals use the same state view.
 - **Short Fuse** (suburb only). Last one standing, with health: 100 each, bullets take 7, a blast 90 at its center
