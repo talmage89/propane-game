@@ -91,11 +91,21 @@ public static class ModeRegistry
             LimitedAmmo: false, Pickups: false),
         RoundTimer.Countdown, () => new ShortFuseHud(), seed => new ShortFuseBot(seed), ShortFuseRules.Tuners);
 
+    public const byte DissolveRunId = 6;
+
+    /// <summary>
+    /// Lab prototype: a solo run down a street that builds itself ahead and dissolves behind. Its world is a segment
+    /// stream (<c>SegmentWorldSource</c>), not one plan; rifles carry limited ammo and the segments hold ammo cans.
+    /// </summary>
+    public static readonly ModeDefinition DissolveRun = new(DissolveRunId, "Dissolve Run", 1, () => new DissolveRunRules(), ModeWorldSource.SuburbPlan,
+        new ModeSupply((tuning, _) => SuburbPlans.SinglePlayer(tuning), LimitedAmmo: true, Pickups: true), RoundTimer.CountUp,
+        () => new DissolveRunHud(), seed => new DissolveRunBot(seed), DissolveRunRules.Tuners);
+
     /// <summary>
     /// Modes the Lab tries against its bots through its prototype runner. Ring Out and Short Fuse are only that: they
     /// are not in <see cref="All"/>, so no lobby, MatchStart or envelope schema names them. King is also networked.
     /// </summary>
-    public static IReadOnlyList<ModeDefinition> Prototypes { get; } = new[] { RingOut, King, ShortFuse };
+    public static IReadOnlyList<ModeDefinition> Prototypes { get; } = new[] { RingOut, King, ShortFuse, DissolveRun };
 
     /// <summary>The modes a lobby's creator can choose, the default first.</summary>
     public static IReadOnlyList<ModeDefinition> Lobby { get; } = new[] { TankBank, King };

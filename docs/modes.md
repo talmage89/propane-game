@@ -3,8 +3,9 @@
 How a game mode plugs into Propane: pure rules, a definition that selects everything mode-specific, a runner that
 supplies the clock and transport, and one fixed network envelope. Tank Bank is the first mode on this framework and
 plays exactly as before; its rules are in [multiplayer.md](multiplayer.md#tank-bank). Sandbox is the second. Ring Out,
-King of the Cul-de-sac and Short Fuse are Lab prototypes, the framework's first test with new rules
-([below](#lab-prototypes)); Short Fuse is the first to use the optional [health state](#health).
+King of the Cul-de-sac, Short Fuse and Dissolve Run are Lab prototypes, the framework's first test with new rules
+([below](#lab-prototypes)); Short Fuse is the first to use the optional [health state](#health), and Dissolve Run the
+first [segment world source](#segments).
 
 | Path | Contents |
 | --- | --- |
@@ -15,8 +16,9 @@ King of the Cul-de-sac and Short Fuse are Lab prototypes, the framework's first 
 | `src/Modes/ModeDefinition.cs` | `ModeDefinition`, supply policy and `ModeRegistry` (Sandbox and Tank Bank; the prototypes apart). |
 | `src/Modes/BodyEvents.cs` | Sampled positions, attributed throws, eliminations, `RoundOver` and a pure seeded generator. |
 | `src/Modes/Health.cs` | The optional health state: damage reports, validation, attribution, invulnerability, death, respawn. |
-| `src/Modes/RingOutRules.cs`, `KingRules.cs`, `ShortFuseRules.cs` | The prototypes' rules: Ring Out's slab plan, King's zone schedule, Short Fuse's rounds. |
-| `src/Modes/PrototypeHud.cs`, `ShortFuseHud.cs` | The prototypes' HUD presenters. |
+| `src/Modes/RingOutRules.cs`, `KingRules.cs`, `ShortFuseRules.cs`, `DissolveRunRules.cs` | The prototypes' rules: Ring Out's slab plan, King's zone schedule, Short Fuse's rounds, Dissolve Run's front and score. |
+| `src/Modes/PrototypeHud.cs`, `ShortFuseHud.cs`, `DissolveRunHud.cs` | The prototypes' HUD presenters. |
+| `src/World/SegmentPlans.cs`, `src/Session/SegmentWorldSource.cs` | Segment plans from a run seed and index; the segment world source and its feed. |
 | `src/Lab/PrototypeRunner.cs`, `LabMatch.cs` | The offline runner that drives a prototype's rules in the Lab, and a multi-round match it carries. |
 | `src/Net/ModeEnvelope.cs` | The envelope record, schema registry, Tank Bank codecs, the causal gate and command order. |
 | `src/Net/ModeRunner.cs` | One run's mode on the server, and Tank Bank's wire adapter. |
@@ -44,6 +46,7 @@ presenter, the bot goal policy, the tuners the rules copy and the envelope schem
 | Ring Out (3), Lab only | `RingOutRules` | the Lab's slab | unlimited ammo, no cans | count-up | standing, knock-offs, next dissolve, feed | `RingOutBot` |
 | King of the Cul-de-sac (4), Lab only | `KingRules` | the Lab's choice | unlimited ammo, no cans | countdown | bank, minted, clock, zone arrows | `KingBot` |
 | Short Fuse (5), Lab only | `ShortFuseRules` | a suburb per round | `SuburbPlans.Match` on a Lab-sized slab, unlimited ammo, no cans | countdown | wins, standing, kills, health bar, feed | `ShortFuseBot` |
+| Dissolve Run (6), Lab only | `DissolveRunRules` | a segment stream | strip segments of the single-player piles, limited ammo, cans | count-up | score, meters, tanks, front bar, chain banner, feed | `DissolveRunBot` |
 
 Multiplayer lobbies play Tank Bank; `MatchStart` appends the mode id and schema version, and a client that does not
 know the pair fails decoding by name. Lab scenarios name a mode: the banking duel plays Tank Bank and the other
@@ -213,6 +216,19 @@ alive. The kill feed reads `A shot B`, `A blew up B` (the chain's first detonato
 credited for someone else's blow, such as B's own blast), `B blew themself up` or `B went down`. There is no bank:
 spills are refused. The audit adds `short fuse round= alive= over= match_over= rounds=` to the health audit.
 
+**Dissolve Run** (`DissolveRunRules`). Solo, along world +X from the run's start (the world's first spot). The front
+starts `DissolveFrontStartGap` (25 m) behind the start; its speed ramps from `DissolveFrontSpeed` (1.5 m/s) toward
+`DissolveFrontMaxSpeed` (5 m/s, under `SprintSpeed`) as `max + (start - max)·e^(-t/τ)` with τ =
+`DissolveFrontRampSeconds` (180 s), integrated exactly between samples so the front does not depend on the step; and it
+never trails the furthest point reached by more than `DissolveFrontMaxGap` (60 m). Each tank detonated
+(`RunTankDetonated`, carrying its chain) pushes it back `DissolveFrontPush` (1.5 m), once per tank. A sample behind the
+front is caught (`RunCaught`): the runner falls for `DissolveFallSeconds` (2.5 s), then `RoundOver`. Score = meters (the
+furthest sample past the start) + `DissolveTankPoints` (10) per tank + n² per chain of n ≥ `DissolveChainMin` (2); a
+chain closes (`ChainClosed`) once none of its tanks has gone up for `DissolveChainWindow` (1 s), or at the catch. The
+runner supplies chains: a directly shot tank starts one, and its blasts carry its id (`BlastRequest`, then `ChainCause`)
+to every tank they set off; a tank the front has dissolved cannot go up. The audit line reads `dissolve run meters=
+tanks= chains= bonus= best_chain= pushes= score= caught= front=`. Its world is a [segment stream](#segments).
+
 **Where the framework did not fit.** Recorded rather than bent:
 
 - `IModeHudPresenter.Present` and `IBotGoalPolicy` see only scores and the clock; the prototypes need the boundary and
@@ -231,6 +247,13 @@ spills are refused. The audit adds `short fuse round= alive= over= match_over= r
   rebuilds by offset (`LabMatch.ClockOffset`) so that the carried rules never see time go back.
 - `ModeHud` had no bar; it gained an optional `HudBar` for health. `ModeHudInput` carries no spectate choice, so the
   presenter and the arena both read the rules' pure `SpectateTarget` to agree.
+- Dissolve Run is the first mode whose world is not one plan. `ModeDefinition.World` names only `SuburbPlan` or `Void`,
+  so its definition says `SuburbPlan` and the Lab chooses the segment source by mode; a networked version would add a
+  `Segments` world source. Chains had no identity: the Lab's `BlastRequest` carried the scorer, so the runner now gives a
+  Dissolve Run chain its own id instead (solo, every tank is the runner's). `ModeSupply.Suburb` builds one suburb for a
+  player count; segment settings come from their own dials (`SegmentSettings.From`).
+- A runner that moves on keeps tracking new tanks (`PrototypeRunner.Track`) as segments build, and the Lab forgets the
+  ones the front dissolves, so the tank lists stay bounded by the live segments.
 - Death needed two small `PlayerCharacter` hooks: `Collapse()` (go limp where you stand) and `Spectating` (orbit
   another body's camera focus). Neither changes a match.
 
@@ -287,8 +310,30 @@ damage, so a modified client could under-report it; that is the trade victim-sid
 These are shaped for, not built (Ring Out added the first out-state, in the Lab only):
 - **Teams.** Team ids plus predicates beside `ModeActor`, carried in a mode's snapshot payload. Appearance color has
   no team meaning.
-- **Segments.** A segment world source builds and retires content roots (`WorldContext.RetireContent`) and lets
-  `NextRound(RebuildWorld)` or a mid-round revision travel as a world revision in the envelope header.
+- **Segments.** Built for one player in the Lab ([below](#segments)); a server would send plans per segment and a
+  revision in the envelope header.
+
+## Segments
+
+A segment world source (`SegmentWorldSource`) builds and retires content roots under one run root: each segment is its
+own suburb, so retiring one through `WorldContext.RetireContent` frees its nodes, physics bodies and every effect it
+spawned. Segments are strips from the ordinary generator (`SuburbSettings.StripLength`: one straight through road along X
+with lots on both sides and `StripSeamGap` of lawn kept clear at each end, so strips laid end to end join street to
+street with no dead end; zero, as in every shipped suburb, leaves the generator's output unchanged). `SegmentPlans`
+generates segment `i` of a run from the run seed and `i` alone (SplitMix64 of both), placed at `(i - 0.5) * length`
+along X, with its tank count from the schedule (`DissolveTanksStart` 16, falling `DissolveTanksDrop` 0.5 per segment to
+`DissolveTanksMin` 4), piles of `DissolvePileMin`–`DissolvePileMax` (2–8), `DissolveAmmoCans` (2) cans, and on every
+`DissolveJackpotEvery`th (10th) segment a square pyramid of `DissolveJackpotTanks` (30) on the crown of the street; a
+layout that cannot hold them retries with derived seeds. The daily seed is the UTC date (`20261013`).
+
+Plans are `SuburbPlan` data, so the shape is ready for a server: an `ISegmentFeed` supplies plans by index (the Lab's
+`LocalSegmentFeed` generates them on a worker thread); a networked feed would receive each as `PlanCodec` bytes, the way
+a match's suburb travels, with a world revision per segment in the envelope header so commands for retired segments are
+dropped as for an old world. The policy (which segments to build and retire, and when) is the mode's: Dissolve Run's
+arena builds ahead of a window that materializes `DissolveAhead` (60 m) past the furthest point and retires behind the
+front. The window is drawn by the reveal shader's planar mode: geometry tagged `reveal_side = 2` exists only between two
+planes set by one global shader value (`reveal_window`: the run's direction, its back edge and its leading edge), so the
+window moves for free each frame. None of this is networked yet.
 
 ## Verification
 
@@ -302,7 +347,15 @@ falloff, attribution windows, chain credit, regeneration, the get-up grace, invu
 departures alive and dead, every refusal, when a death is declared, and a scripted four-player fight delivered in
 order and then on forty fault schedules (reports delayed within the window, dropped and resent, duplicated, reordered)
 with the same deaths, credit and health every time, and past the window refused as if lost; and Short Fuse's rounds,
-match, limit, departures, spectate targets, feed and HUD. `check_lab.py` plays whole prototype
+match, limit, departures, spectate targets, feed and HUD. `DissolveRunTests` cover the front's ramp (the same however
+it is stepped) and max gap, the catch and fall, pushes, chain bonuses and their minimum, a catch closing open chains, and
+the HUD. The generator suite sweeps segment runs (`--segment-seeds`, 10 in `make test`, 100 in `make test-full`): each
+segment the same when generated again, out of order and from the worker's catalog snapshot; full length, one through
+street, end to end with its neighbors, its scheduled tanks and jackpot, its cans, lots clear of the seams and a plan that
+survives `PlanCodec`; and a run's segments stitched into one plan with every tank reachable on foot from the start. `make
+test-world` (`tools/dev/check_world.sh`) also generates five runs of twelve segments in two fresh processes and requires
+the same plans, seeds and cans.
+`check_lab.py` plays whole prototype
 rounds with bots (see [lab.md](lab.md#verification)).
 
 The network adoption keeps `Protocol.Version` at 2 under the unreleased-cycle ruling; MatchStart and the mode

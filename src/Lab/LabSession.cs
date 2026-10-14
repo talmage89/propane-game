@@ -32,6 +32,7 @@ public partial class LabSession : Node3D
     public RingOutArena? RingOut { get; private set; }
     public KingArena? King { get; private set; }
     public ShortFuseArena? ShortFuse { get; private set; }
+    public DissolveArena? Dissolve { get; private set; }
     /// <summary>A multi-round prototype's match (Short Fuse), carried across the resets that build each round's suburb.</summary>
     public LabMatch? Match { get; private set; }
     /// <summary>Test seam: a prototype's runner drives the player's actor with the mode's brain too.</summary>
@@ -45,6 +46,8 @@ public partial class LabSession : Node3D
     private readonly List<PropaneTank> tanks = new();
     internal IEnumerable<Vector3>? AmmoPositions => suburb?.Plan.AmmoSpots.Select(p => Suburb.ToWorld(p, 0.05f));
     public IEnumerable<PropaneTank> LiveTanks => tanks.Where(t => IsInstanceValid(t) && t.State != PropaneTank.TankState.Exploded);
+    /// <summary>Dissolve Run's seed for this run.</summary>
+    public int RunSeed { get; private set; }
     private VoidEnvironment environment = null!;
     private Suburb? suburb;
     private ISessionWorldSource source = null!;
@@ -79,9 +82,21 @@ public partial class LabSession : Node3D
             Match ??= new LabMatch(settings.FixedSeed != 0 ? settings.FixedSeed : (int)(GD.Randi() % 100000) + 1);
         }
         var seed = Match?.SuburbSeed ?? (settings.FixedSeed != 0 ? settings.FixedSeed : 23);
-        source = EnvironmentKind == LabEnvironment.Void ? new VoidWorldSource() :
+        if (Scenario.Definition.Id == Modes.ModeRegistry.DissolveRunId)
+        {
+            // A fixed seed, today's (the same run for everyone that day), or a fresh one each run.
+            RunSeed = settings.FixedSeed != 0 ? settings.FixedSeed : settings.DissolveDaily != 0 ? SegmentPlans.DailySeed(DateTime.UtcNow)
+                : (int)(GD.Randi() % 1000000) + 1;
+            var segments = SegmentSettings.From(settings);
+            source = new SegmentWorldSource(segments, new LocalSegmentFeed(segments, RunSeed));
+        }
+        else
+        {
+            source = EnvironmentKind == LabEnvironment.Void ? new VoidWorldSource() :
             new SuburbWorldSource(Scenario.Banking ? Scenario.Definition.Supply.Suburb(settings, 2) with { MapSize = settings.LabSuburbSize } :
                 Scenario.Definition.Supply.Suburb(settings, Scenario.Prototype ? settings.LabPrototypeBots + 1 : 1), seed);
+        }
+
         SessionFactory.Build(this, settings, source, new Mode(this), session => { Session = session; if (TestRandomSeed is { } seed) World.Random.Seed = seed; }, present: CreateLocalView);
         resetQueued = false;
     }
@@ -117,6 +132,7 @@ public partial class LabSession : Node3D
         RingOut = null;
         King = null;
         ShortFuse = null;
+        Dissolve = null;
         matchHud = null;
         Assemble(tuning);
         ResetCount++;
@@ -147,7 +163,7 @@ public partial class LabSession : Node3D
             // Also in the controls panel, where it is the keyboard's way to go again once a duel's clock has ended.
             RequestReset();
         }
-        else if (!World.Paused && !Scenario.Banking && e.IsActionPressed(InputSetup.NewSuburb))
+        else if (!World.Paused && !Scenario.Reloads && e.IsActionPressed(InputSetup.NewSuburb))
         {
             RequestReset();
         }
@@ -308,6 +324,24 @@ public partial class LabSession : Node3D
         (start, startYaw) = ShortFuse.Spawn(0);
     }
 
+    internal void BuildDissolve()
+    {
+        var segments = (SegmentWorldSource)source;
+        Dissolve = new DissolveArena
+        {
+            Lab = this,
+            Source = segments,
+            RunSeed = RunSeed,
+            Daily = World.Tuning.FixedSeed == 0 && World.Tuning.DissolveDaily != 0,
+            Name = "Dissolve",
+        };
+        segments.Root.AddChild(Dissolve);
+        (start, startYaw) = (Dissolve.Start, Dissolve.StartYaw);
+    }
+
+    /// <summary>A tank that left play without detonating (dissolved behind the front).</summary>
+    internal void ForgetTank(PropaneTank tank) => tanks.Remove(tank);
+
     internal List<PropaneTank> AddPile(Vector3 at, int count)
     {
         var tuning = World.Tuning;
@@ -340,7 +374,7 @@ public partial class LabSession : Node3D
     /// <summary>A prototype's bots, its arena's start points and its runner.</summary>
     private void CreatePrototype(SessionContext session)
     {
-        var count = World.Tuning.LabPrototypeBots + 1;
+        var count = Dissolve != null ? 1 : World.Tuning.LabPrototypeBots + 1; // Dissolve Run is solo.
         for (var i = 1; i < count; i++)
         {
             var bot = new PlayerCharacter
@@ -361,7 +395,7 @@ public partial class LabSession : Node3D
         {
             Lab = this,
             Mode = Scenario.Definition,
-            Spots = King?.Spots ?? Array.Empty<Modes.ModeSpot>(),
+            Spots = King?.Spots ?? Dissolve?.Spots ?? Array.Empty<Modes.ModeSpot>(),
             Match = Match,
             Name = "PrototypeRunner",
             ProcessPhysicsPriority = -10,
@@ -370,6 +404,7 @@ public partial class LabSession : Node3D
         RingOut?.Bind(Prototype);
         King?.Bind(Prototype);
         ShortFuse?.Bind(Prototype);
+        Dissolve?.Bind(Prototype);
     }
 
     /// <summary>An orange disk on the floor, with a label unless <paramref name="text"/> is null.</summary>
@@ -402,7 +437,12 @@ public partial class LabSession : Node3D
     {
         public void CreateActors(SessionContext session)
         {
-            lab.environment = lab.source is VoidWorldSource empty ? empty.Environment : ((SuburbWorldSource)lab.source).Environment;
+            lab.environment = lab.source switch
+            {
+                VoidWorldSource empty => empty.Environment,
+                SegmentWorldSource segments => segments.Environment,
+                _ => ((SuburbWorldSource)lab.source).Environment,
+            };
             if (lab.source is SuburbWorldSource generated)
             {
                 lab.suburb = generated.Suburb;

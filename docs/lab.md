@@ -31,7 +31,7 @@ the rest of Propane. Huge stack and Range use void; the banking duel and Free tu
 ## Prototype modes
 
 Below the starters, **Prototype modes · rules on trial** lists modes the owner is trying before setting their rules.
-Each plays you against Lab bots (Lab prototype bots, 1–5, default 3; the duel's difficulty sets their skill) in an
+Each but Dissolve Run plays you against Lab bots (Lab prototype bots, 1–5, default 3; the duel's difficulty sets their skill) in an
 offline round, with the match HUD on top. Their rules are in [modes.md](modes.md#lab-prototypes); every number is a
 Lab dial in the tuning panel's Lab section, and layout dials apply on reset.
 
@@ -56,7 +56,21 @@ Lab dial in the tuning panel's Lab section, and layout dials apply on reset.
   healthiest survivor, or to nobody on a tie. The HUD shows round wins, how many stand, your kills, the round clock, a
   health bar, the round's kill feed and the result banner; the controls panel shows the match's result.
 
-All three have unlimited ammo and no ammo cans. Bots run on the Lab's main thread; more than three in one process may not
+- **Dissolve Run** (suburb only, solo). One endless street, built a 60 m segment at a time from the generator's parts.
+  The street materializes about 60 m ahead of the furthest point you have reached; behind the dissolve front, a glowing
+  sheet across the street, everything is gone: the ground, the tanks and the props. The front starts 25 m behind you at
+  1.5 m/s and speeds up toward 5 m/s (under sprint speed), but never trails you by more than 60 m. Every tank you
+  detonate pushes it back 1.5 m, once per tank in a chain. If it catches you, the ground goes and you fall; the run is
+  over. Score is meters run, plus 10 per tank, plus n² for each chain of n (two or more) once it has gone quiet for a
+  second. Segments hold piles in the yards and two ammo cans on the sidewalks; the first holds 16 tanks and each later one
+  half a tank fewer, down to 4, and every tenth adds a 30-tank pyramid in the middle of the street. Rifles carry limited
+  ammo (R / X reloads; Backspace starts a new run). The menu chooses the seed: a new one each run, or today's, the same
+  street for everyone that day. The HUD shows the score, meters and tanks, the run's clock, a bar for the front's gap
+  (hot under 8 m), the open chain and the latest scoring chains; the controls panel shows the result and the best run
+  (kept per seed choice in `user://dissolve_run.cfg`). Every number is a Dissolve dial in the tuning panel's Lab
+  section, the sheet's glow and height included; segment and layout dials apply on reset.
+
+Ring Out, King and Short Fuse have unlimited ammo and no ammo cans. Bots run on the Lab's main thread; more than three in one process may not
 hold 120 Hz physics on a small machine.
 
 R / X resets non-duel starters; R / X reloads in a duel. Backspace resets any starter, from the controls panel too,
@@ -77,14 +91,22 @@ The callback runs after the source builds content and before actors/views enter.
 each scenario names a registered mode ([modes.md](modes.md)): the duel plays Tank Bank, the prototypes play their own
 modes, and the other starters play Sandbox, taking supply and ammo policy from it. A prototype scenario names a mode
 from `ModeRegistry.Prototypes`; its setup builds an arena presenter (`RingOutArena`, `KingArena`, `ShortFuseArena`) and
-the session adds the bots and a `PrototypeRunner`. A Lab dial with a `Scenario` lays out only that scenario. A
+the session adds the bots and a `PrototypeRunner`. Dissolve Run's world is a `SegmentWorldSource` (below), and its
+arena (`DissolveArena`) owns the segment policy. A Lab dial with a `Scenario` lays out only that scenario. A
 multi-round prototype (Short Fuse) keeps a `LabMatch` on the session: each round is a reset that keeps the match's rules,
 round and mode clock and builds the next suburb from the match's seed stepped by round, while Backspace or Reset starts a
-new match. There are still no teams or streamed segments.
+new match. There are still no teams.
 
-`VoidWorldSource` and `SuburbWorldSource` implement the existing `ISessionWorldSource` seam. The factory needs no
-source-specific branches. A later streaming implementation can build and retire content roots with
-`WorldContext.RetireContent`; it owns segment policy rather than teaching the factory about segments.
+`VoidWorldSource`, `SuburbWorldSource` and `SegmentWorldSource` implement the existing `ISessionWorldSource` seam. The
+factory needs no source-specific branches. The segment source is the streaming one: each segment is its own suburb (its
+own content root, effects and physics bodies) under a run root, built from a `SegmentPlan` that an `ISegmentFeed`
+supplies by index, and retired whole through `WorldContext.RetireContent`. Its owner decides when: Dissolve Run's arena
+builds the next segment once the horizon comes within `DissolveBuildLead` (20 m) of the last one's end and retires one
+once the front is `DissolveRetireLag` (10 m) past its end. A build runs a few pieces per physics step inside 2.5 ms
+(`Suburb.BuildStaged`: the suburb enters the tree hidden and fills in place, with the same pieces in the same order as
+`Suburb.Build`), and retirement frees 16 nodes at a time inside 1.5 ms after the segment has left sight and physics at
+once. Plans come from a worker thread (`LocalSegmentFeed`, generating from a `PlanCatalogSnapshot` measured on the main
+thread), and every model and collision shape a suburb can use is loaded once when the session starts (`Suburb.Warm`).
 
 `LocalBank` is an offline Tank Bank runner: it feeds `TankBankRules` attributed detonations, spill tickets and its
 clock, and spawns the spilled tanks between reservation and commit. It adapts actor/tank events locally. `ShotImpacting` attributes a direct tank contact before lifecycle
@@ -114,14 +136,26 @@ alive plus dead equal to the starters, and one alive at most unless the limit en
 must have one winner with the wins, round wins and kills that add up, lives that advanced with every round, and no
 report the rules refused as late, early, duplicated or naming an unknown actor or blast (the Lab's reports arrive at
 once). All are wired into `make test` / `make test-full`.
+It also runs Dissolve Run for 45 s with the bot driving the player (`--scenario=dissolve --seconds=45`), then stops it:
+the front must catch it within the time it needs to cover the gap at its start speed, plus the fall, and the run must
+end with the player fallen below the slab, the score adding up (meters, tank points and chain bonuses, every tank in one
+chain and one push), segments built and retired, and the result paused on the controls panel. `--full` adds five-minute
+runs (`dissolve-full`: the bot on two seeds; `dissolve-pace`: a pacer that runs down the street without bot navigation,
+so its frame times measure the stream rather than the bot), which also require the live segments, their nodes and bodies
+and the whole tree's nodes to stay bounded (the last third of the run holding no more than the first third, give or take).
 `--only=soak-void,dials` runs only the named sessions (`lifetime`, `rules`, `aimstall`, `duel`, `ringout`, `king`,
-`shortfuse`, `shortfuse-combo`, and with `--full` `dials`, `soak-void`, `soak-suburb`, `ringout-full`, `king-full`, `king-suburb`,
-`shortfuse-full`); `make test-full` splits
+`shortfuse`, `shortfuse-combo`, `dissolve`, and with `--full` `dials`, `soak-void`, `soak-suburb`, `ringout-full`, `king-full`,
+`king-suburb`, `shortfuse-full`, `dissolve-full`, `dissolve-pace`); `make test-full` splits
 `--full` into four such jobs. A prototype round alone: `lab_test.tscn -- --scenario=prototype --mode=ringout|king
 [--environment=suburb] [--seeds=3] [--first-seed=1] [--bots=2] [--quick]`; `--shots=4,12.5` adds `--capture-dir`
 screenshots at those round times. Short Fuse matches alone: `lab_test.tscn -- --scenario=shortfuse [--seeds=2]
 [--first-seed=1] [--bots=2] [--quick] [--trace]`; `--capture-events` adds `--capture-dir` screenshots of the first
 blast-then-bullet kill, the kill feed, the player spectating, the first round-win banner and the match's end.
+A Dissolve Run alone: `lab_test.tscn -- --scenario=dissolve [--seconds=240] [--stop-at=240] [--seeds=1] [--first-seed=23]
+[--driver=pace --pace=walk|run|sprint] [--report-every=30] [--census-every=1] [--metrics=$PWD/build/run-{seed}.csv]
+[--trace] [--trace-frames]`; `--shots=4,12.5` adds `--capture-dir` screenshots at those run times and `--overview` watches
+from a high camera behind the runner. It prints frame times, segment build and retire step times, segment, node, body and
+tree counts, memory, managed allocation and GC pauses.
 `--scenario=aimstall` puts a shot-stopping prop in front of the bot and asserts it leaves the pile.
 
 `menu_test --scenario=input` injects real keyboard, mouse and controller events through Lab menus, movement/combat,
