@@ -10,6 +10,10 @@ import full_engine
 
 
 class FullEngineTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        (full_engine.ROOT / 'build').mkdir(exist_ok=True)
+
     def test_prepare_and_launch(self):
         with tempfile.TemporaryDirectory(dir=full_engine.ROOT / 'build') as directory:
             root = Path(directory)

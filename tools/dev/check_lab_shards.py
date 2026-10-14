@@ -3,9 +3,11 @@
 import argparse
 import collections
 import os
+from pathlib import Path
 import re
 import shlex
 import subprocess
+import tempfile
 
 import check_lab
 
@@ -14,11 +16,16 @@ def fixture_cases(scenario, options):
     case_kind = "dial" if scenario == "dials" else "lifetime"
     command = [os.environ.get('GODOT', 'godot-mono'), '--headless', '--path', str(check_lab.ROOT),
                'res://scenes/dev/lab_test.tscn', '--', f'--scenario={scenario}', *options, f'--list-{scenario}']
-    result = subprocess.run(command, capture_output=True, text=True, timeout=120)
-    text = result.stdout + result.stderr
+    with tempfile.TemporaryDirectory(dir=check_lab.ROOT / 'build') as directory:
+        log = Path(directory) / 'listing.log'
+        try:
+            code = check_lab.run_scene(command, log, 120)
+        except subprocess.TimeoutExpired:
+            raise ValueError(f'{scenario} listing timed out: {log.read_text()[-4000:]}') from None
+        text = log.read_text()
     cases = [line.removeprefix(f'[lab {case_kind}-case] ') for line in text.splitlines() if line.startswith(f'[lab {case_kind}-case] ')]
-    if result.returncode != 0 or f'[lab {scenario}] listed ' not in text or '[lab] PASS' not in text or not cases or re.search(r'^ERROR:|^WARNING:|\bFAIL\b', text, re.M):
-        raise ValueError(f'{scenario} listing failed ({result.returncode}): {text[-4000:]}')
+    if code != 0 or f'[lab {scenario}] listed ' not in text or '[lab] PASS' not in text or not cases or re.search(r'^ERROR:|^WARNING:|\bFAIL\b', text, re.M):
+        raise ValueError(f'{scenario} listing failed ({code}): {text[-4000:]}')
     return cases
 
 

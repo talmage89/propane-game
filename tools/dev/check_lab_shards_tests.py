@@ -2,6 +2,7 @@
 """Fail on missing/duplicate Lab fixtures and seed ranges that escape the original sessions."""
 import contextlib
 import io
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -14,6 +15,10 @@ import check_lab_shards as coverage
 
 
 class LabCoverageTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        (coverage.check_lab.ROOT / 'build').mkdir(exist_ok=True)
+
     def test_exact_partition_and_failures(self):
         full = [('dials', 'one'), ('dials', 'two'), ('soak', 'void')]
         coverage.check(full, [full[:1], full[1:]])
@@ -64,6 +69,24 @@ class LabCoverageTests(unittest.TestCase):
         for selection in ('--only=dials', '--full --only=missing', '--full --only=duel,duel'):
             with self.subTest(selection=selection), self.assertRaises(ValueError):
                 coverage.cases(selection)
+
+    def test_listing_timeout_reaps_the_wrapped_engine(self):
+        with tempfile.TemporaryDirectory(dir=coverage.check_lab.ROOT / 'build') as directory:
+            root = Path(directory)
+            marker = root / 'late-child'
+            child = ('import time; from pathlib import Path; print("child started", flush=True); '
+                     f'time.sleep(3); Path({str(marker)!r}).write_text("survived")')
+            wrapper = root / 'godot'
+            wrapper.write_text(f'#!{sys.executable}\nimport subprocess, sys\n'
+                               f'subprocess.run([sys.executable, "-c", {child!r}])\n')
+            wrapper.chmod(0o755)
+            runner = coverage.check_lab.run_scene
+            with patch.dict(os.environ, GODOT=str(wrapper)), \
+                    patch.object(coverage.check_lab, 'run_scene', side_effect=lambda command, log, budget: runner(command, log, 2)), \
+                    self.assertRaisesRegex(ValueError, 'listing timed out: child started'):
+                coverage.fixture_cases('dials', [])
+            time.sleep(1.5)
+            self.assertFalse(marker.exists(), 'listing engine survived its wrapper')
 
 
 if __name__ == '__main__':
