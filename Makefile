@@ -3,15 +3,6 @@
 GODOT ?= $(shell command -v godot-mono || command -v godot || echo /Applications/Godot_mono.app/Contents/MacOS/Godot)
 export GODOT
 
-CONFIG ?= Debug
-BOTS ?= 0,2,4,8,16
-TANKS ?= 1,2,4,8
-RENDERED ?= 0,1
-SECONDS ?= 10
-REPEATS ?= 3
-WARMUP ?= 2
-BENCH_ARGS ?=
-
 N ?= 4
 # Each checkout keeps its own Godot user data (override.cfg, written by setup). One whose folder name ends in a number
 # (the worktrees dev-0, dev-1...) also gets its own server port, 24680 plus that number, so worktrees don't collide.
@@ -34,9 +25,19 @@ setup: ## Import the assets and compile: a fresh clone, or after switching branc
 run: build ## Play from source
 	"$(GODOT)" --path .
 
+# Keep these generic defaults local to bench/play. SECONDS is also a Bash timer variable.
+play: CONFIG ?= Release
 play: ## Play optimized C# from source (CONFIG=Release default for this target; Debug also supported)
-	python3 -B tools/dev/source_run.py --config $(if $(filter command line environment,$(origin CONFIG)),$(CONFIG),Release)
+	python3 -B tools/dev/source_run.py --config $(CONFIG)
 
+bench: CONFIG ?= Debug
+bench: BOTS ?= 0,2,4,8,16
+bench: TANKS ?= 1,2,4,8
+bench: RENDERED ?= 0,1
+bench: SECONDS ?= 10
+bench: REPEATS ?= 3
+bench: WARMUP ?= 2
+bench: BENCH_ARGS ?=
 bench: ## Measure the bot/tank grid (BOTS, TANKS, CONFIG, RENDERED, SECONDS, REPEATS, WARMUP)
 	python3 -B tools/dev/bench.py --bots=$(BOTS) --tanks=$(TANKS) --config=$(CONFIG) --rendered=$(RENDERED) --seconds=$(SECONDS) --repeats=$(REPEATS) --warmup=$(WARMUP) $(BENCH_ARGS)
 
