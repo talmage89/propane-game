@@ -29,6 +29,7 @@ public sealed class BotServices : IDisposable
     private NavigationWorld? physics;
     private NavigationGrid? grid;
     private RayCast3D? sight;
+    private readonly Dictionary<PlayerCharacter, HashSet<Rid>> actorColliders = new(32);
     private float gridSpacing;
     private float gridMinimumJump;
     private float gridMargin;
@@ -102,6 +103,7 @@ public sealed class BotServices : IDisposable
     /// <summary>The lattice for this body, made (or remade, when tuning changed the body or the dials) on first use.</summary>
     public NavigationGrid Navigation(NavigationCapabilities capabilities)
     {
+        PrepareSight();
         var tuning = world.Tuning;
         if (grid == null || grid.Capabilities != capabilities || gridSpacing != tuning.BotRouteSpacing ||
             gridMinimumJump != tuning.BotJumpMinimumRange || gridMargin != tuning.BotJumpMargin ||
@@ -148,33 +150,58 @@ public sealed class BotServices : IDisposable
         throw new InvalidOperationException("an actor without a capsule cannot navigate");
     }
 
-    /// <summary>
-    /// The first thing a ray from one point to another hits on <paramref name="mask"/>, through one reused ray node,
-    /// so sight lines and ground probes allocate nothing. Rays starting inside a body ignore it, as physics rays do.
-    /// </summary>
-    public bool Ray(Vector3 from, Vector3 to, uint mask, out RayHit hit)
+    private void PrepareSight()
     {
-        RayLines++;
         if (sight == null || !GodotObject.IsInstanceValid(sight))
         {
             sight = new RayCast3D { Name = "BotSight", TopLevel = true, Enabled = false };
             world.Root.AddChild(sight);
         }
-        sight.CollisionMask = mask;
+    }
+
+    private bool CastRay(Vector3 from, Vector3 to, uint mask)
+    {
+        RayLines++;
+        PrepareSight();
+        sight!.CollisionMask = mask;
         sight.Position = from;
         sight.TargetPosition = to - from;
         sight.ForceRaycastUpdate();
-        if (!sight.IsColliding())
+        return sight.IsColliding();
+    }
+
+    /// <summary>First hit geometry and body RID, through a reused ray. Rays starting inside a body ignore it.</summary>
+    public bool Ray(Vector3 from, Vector3 to, uint mask, out RayHit hit)
+    {
+        if (!CastRay(from, to, mask))
         {
             hit = default;
             return false;
         }
-        hit = new RayHit(sight.GetCollisionPoint(), sight.GetCollisionNormal(), sight.GetCollider());
+        // A newly encountered native prop may need a managed wrapper when GetCollider is called. Brains only
+        // need geometry or identity: a RID is a value, including for bodies with no managed wrapper yet.
+        hit = new RayHit(sight!.GetCollisionPoint(), sight.GetCollisionNormal(), sight.GetColliderRid());
         return true;
     }
 
     /// <summary>Nothing on <paramref name="mask"/> lies between two points.</summary>
-    public bool Clear(Vector3 from, Vector3 to, uint mask) => !Ray(from, to, mask, out _);
+    public bool Clear(Vector3 from, Vector3 to, uint mask) => !CastRay(from, to, mask);
+
+    /// <summary>Indexes an actor's capsule and bone bodies during roster setup, before thoughts are measured.</summary>
+    public void PrepareActor(PlayerCharacter actor)
+    {
+        if (actorColliders.ContainsKey(actor)) return;
+        var colliders = new HashSet<Rid> { actor.GetRid() };
+        foreach (var child in actor.FindChildren("*", nameof(CollisionObject3D), true, false))
+        {
+            if (child is CollisionObject3D collider) colliders.Add(collider.GetRid());
+        }
+        actorColliders.Add(actor, colliders);
+    }
+
+    /// <summary>The same ownership as walking collider parents, without binding new managed node wrappers.</summary>
+    public bool ActorOwns(PlayerCharacter actor, Rid collider) =>
+        actorColliders.TryGetValue(actor, out var colliders) && colliders.Contains(collider);
 
     /// <summary>Rays cast for brains so far, for measurements.</summary>
     public long RayLines { get; private set; }
@@ -262,6 +289,7 @@ public sealed class BotServices : IDisposable
     {
         if (disposed) return;
         disposed = true;
+        actorColliders.Clear();
         world.Events.Explosion -= Disturb;
         physics?.Dispose();
         physics = null;
@@ -271,5 +299,5 @@ public sealed class BotServices : IDisposable
     }
 }
 
-/// <summary>Where a ray hit, the surface's normal there and what it hit.</summary>
-public readonly record struct RayHit(Vector3 Point, Vector3 Normal, GodotObject? Collider);
+/// <summary>Where a ray hit, its surface normal and collider RID, without a managed collider wrapper.</summary>
+public readonly record struct RayHit(Vector3 Point, Vector3 Normal, Rid Collider);

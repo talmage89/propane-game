@@ -51,6 +51,7 @@ public partial class LocalBank : Node
     public override void _Ready()
     {
         services = new BotServices(World, Lab.BotBounds);
+        foreach (var actor in Lab.Session.Actors) services.PrepareActor(actor.Character);
         TimeLeft = World.Tuning.LabDuelSeconds;
         InitialSupply = Lab.LiveTanks.Count();
         var roster = Lab.Session.Actors.Select(a => new ModeActor(a.Character.ActorId, a.Character.ActorId == 1 ? "You" : a.Character.ActorId == 2 ? "Bot" : a.Character.Name)).ToArray();

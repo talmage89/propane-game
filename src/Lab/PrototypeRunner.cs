@@ -79,6 +79,7 @@ public partial class PrototypeRunner : Node
     public override void _Ready()
     {
         services = new BotServices(World, Lab.BotBounds);
+        foreach (var actor in Lab.Session.Actors) services.PrepareActor(actor.Character);
         var tuning = World.Tuning;
         length = Mode.Id == ModeRegistry.KingId ? tuning.KingRoundSeconds : Mode.Id == ModeRegistry.ShortFuseId ? tuning.ShortFuseRoundSeconds : 0;
         roster = Lab.Session.Actors.Select(a => new ModeActor(a.Character.ActorId, a.Character.Name)).ToArray();

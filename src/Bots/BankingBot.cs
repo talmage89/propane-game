@@ -92,6 +92,8 @@ public sealed class BankingBot : IBotGoalPolicy
         capsule = BotServices.Capsule(world.Player);
         capsuleOwner = world.Player;
         world.Services.Navigation(BotServices.Capabilities(capsule, tuning));
+        world.Services.PrepareActor(world.Player);
+        for (var i = 0; i < world.RemoteBodies.Count; i++) world.Services.PrepareActor(world.RemoteBodies[i]);
         navigator.Prepare(tuning);
     }
 

@@ -103,6 +103,10 @@ public partial class Match
 
     private void RefreshBotPeers()
     {
+        if (botServices != null)
+        {
+            foreach (var actor in Session.Actors) botServices.PrepareActor(actor.Character);
+        }
         foreach (var bot in bots)
         {
             bot.Others.Clear();

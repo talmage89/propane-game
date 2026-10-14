@@ -33,6 +33,8 @@ public sealed class BotMotor
         capsule = BotServices.Capsule(world.Player);
         capsuleOwner = world.Player;
         world.Services.Navigation(BotServices.Capabilities(capsule, world.World.Tuning));
+        world.Services.PrepareActor(world.Player);
+        for (var i = 0; i < world.RemoteBodies.Count; i++) world.Services.PrepareActor(world.RemoteBodies[i]);
         navigator.Prepare(world.World.Tuning);
     }
 
@@ -203,8 +205,9 @@ public sealed class BotMotor
         var view = player.Aim;
         var forward = -view.EyeTransform.Basis.Z;
         var start = view.EyeOrigin + forward * 2.5f;
-        var collider = world.Services.Ray(start, start + forward * 80f, Layers.ShotMask, out var hit) ? hit.Collider : null;
-        return collider == target || target is PlayerCharacter body && PlayerCharacter.Owning(collider) == body;
+        if (!world.Services.Ray(start, start + forward * 80f, Layers.ShotMask, out var hit)) return false;
+        return target is CollisionObject3D collider && hit.Collider == collider.GetRid() ||
+            target is PlayerCharacter body && world.Services.ActorOwns(body, hit.Collider);
     }
 
     /// <summary>The nearest venting tank close enough to fear, if any.</summary>

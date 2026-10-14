@@ -98,6 +98,35 @@ internal static class NavigationTests
         });
         using var shape = new CapsuleShape3D { Radius = 0.32f, Height = 1.8f };
         using var tuning = Tuning.LoadBaked();
+        runner.Run("navigation/ray collider IDs preserve capsule and ragdoll ownership without warm allocation", () =>
+        {
+            var player = new PlayerCharacter { World = runner.World, ActorId = 1 };
+            var enemy = new PlayerCharacter { World = runner.World, ActorId = 2, Position = Vector3.Right * 10 };
+            runner.World.Root.AddChild(player);
+            runner.World.Root.AddChild(enemy);
+            using var services = new BotServices(runner.World);
+            try
+            {
+                services.PrepareActor(player);
+                services.PrepareActor(enemy);
+                TestRunner.Assert(services.ActorOwns(enemy, enemy.GetRid()) && !services.ActorOwns(player, enemy.GetRid()),
+                    "standing capsules disagree with actor ownership");
+                enemy.RemoteRagdoll(enemy.GlobalPosition, Vector3.Zero, Vector3.Zero);
+                var bodies = enemy.FindChildren("*", nameof(CollisionObject3D), true, false).OfType<CollisionObject3D>().ToArray();
+                TestRunner.Assert(bodies.Length > 1, "ragdoll collider fixture was not built");
+                foreach (var body in bodies)
+                {
+                    TestRunner.Assert(PlayerCharacter.Owning(body) == enemy && services.ActorOwns(enemy, body.GetRid()) &&
+                        !services.ActorOwns(player, body.GetRid()), "bone RID ownership differs from walking parents");
+                }
+                var collider = bodies[0].GetRid();
+                var before = GC.GetAllocatedBytesForCurrentThread();
+                for (var i = 0; i < 100; i++) TestRunner.Assert(services.ActorOwns(enemy, collider), "warmed ownership changed");
+                var bytes = GC.GetAllocatedBytesForCurrentThread() - before;
+                TestRunner.Assert(bytes == 0, $"warmed collider lookup allocated {bytes} bytes");
+            }
+            finally { player.Free(); enemy.Free(); }
+        });
         runner.Run("navigation/ground plane sharing follows the local accuracy tuner", () =>
         {
             var caps = new NavigationCapabilities(shape.Radius, shape.Height, tuning.RunSpeed, tuning.SprintSpeed,

@@ -82,6 +82,9 @@ consume King's seeded goal-choice stream. When all tanks are banked, `BotHuntWhe
 beyond sight/rifle range, then react and fire after closing in; clearing the map cannot leave it idle indefinitely.
 Hot paths use indexed lists, reusable query nodes and deferred status formatting instead of LINQ,
 physics-result dictionaries and interpolated status strings. `Status` allocates only when a log or overlay reads it.
+Sight probes are created during setup. Visibility checks only read whether the ray collided; geometric answers
+and crosshair checks use value RIDs instead of binding managed collider wrappers. Actor capsule and bone RIDs are
+indexed during roster setup, preserving standing and ragdoll ownership without walking native node parents each tick.
 King brains read a small value view of the rules or received zone at the owner's clock; they do not construct the
 HUD/wire snapshot or its minted roster for each thought.
 With at least `BotKingRegroupPlayers` actors, a King bot knocked down in the crowd regroups outside the zone for
