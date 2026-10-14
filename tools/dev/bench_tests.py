@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Fast real-command smoke, plus percentile/comparison and assembly restoration assertions."""
 import json
+import os
 from pathlib import Path
 import subprocess
 import tempfile
@@ -16,6 +17,13 @@ class BenchTests(unittest.TestCase):
     def test_percentiles(self):
         self.assertEqual(bench.percentile([10, 1, 5, 2], .5), 2)
         self.assertEqual(bench.percentile([10, 1, 5, 2], .99), 10)
+
+    def test_vsync_fallback_is_rejected(self):
+        bench.validate_log("[bench] PASS")
+        with self.assertRaisesRegex(ValueError, "vsync"):
+            bench.validate_log("WARNING: Falling back to V-Sync mode Enabled.\n[bench] PASS")
+        with self.assertRaisesRegex(ValueError, "failed"):
+            bench.validate_log("ERROR: scene failure\n[bench] PASS")
 
     def test_release_restoration_on_failure(self):
         with tempfile.TemporaryDirectory(dir=bench.ROOT / "build") as scratch:
@@ -33,6 +41,22 @@ class BenchTests(unittest.TestCase):
                         raise RuntimeError("probe")
             self.assertEqual((debug / "assembly").read_text(), "Debug")
             self.assertFalse((root / "build/source-run/lock").exists())
+
+    def test_missing_release_restores_debug(self):
+        previous_temp = os.environ.get("TMPDIR")
+        with tempfile.TemporaryDirectory(dir=bench.ROOT / "build") as scratch:
+            root = Path(scratch)
+            debug = root / ".godot/mono/temp/bin/Debug"
+            debug.mkdir(parents=True)
+            (debug / "assembly").write_text("Debug")
+            with patch.object(source_run, "ROOT", root):
+                with self.assertRaises(FileNotFoundError):
+                    with source_run.assembly("Release", build=False):
+                        self.fail("missing Release output was accepted")
+            self.assertEqual((debug / "assembly").read_text(), "Debug")
+            self.assertFalse((root / "build/source-run/lock").exists())
+
+        self.assertEqual(os.environ.get("TMPDIR"), previous_temp)
 
     def test_real_smoke(self):
         with tempfile.TemporaryDirectory(prefix="bench-smoke-", dir=bench.ROOT / "build") as scratch:

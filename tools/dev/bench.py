@@ -14,7 +14,7 @@ import subprocess
 
 from source_run import ROOT, assembly, godot, interrupted
 
-SCHEMA = 1
+SCHEMA = 2
 METRICS = ("fps", "wall_p50_ms", "wall_p95_ms", "wall_p99_ms", "wall_max_ms", "process_ms", "physics_ms",
            "process_peak_monitor_ms", "physics_peak_monitor_ms", "brain_tick_ms", "brain_bot_tick_ms", "navigation_tick_ms", "navigation_share_pct", "navigation_queries_tick_ms", "navigation_queries_per_tick",
            "jolt_step_upper_ms", "gpu_ms", "tank_tick_ms", "vent_frame_ms", "gc_count", "gc_pause_ms", "rss_mib")
@@ -96,6 +96,13 @@ def median_runs(runs):
     return {key: statistics.median(r[key] for r in runs) for key in METRICS}
 
 
+def validate_log(log):
+    if "[bench] PASS" not in log or "ERROR:" in log or "FAIL" in log:
+        raise ValueError("benchmark scene failed")
+    if "Falling back to V-Sync mode Enabled" in log:
+        raise ValueError("vsync could not be disabled; capped measurements are invalid")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--bots", type=lambda s: grid(s, (0, 2, 4, 8, 16)), default=[0, 2, 4, 8, 16])
@@ -119,12 +126,13 @@ def main():
     output.parent.mkdir(parents=True, exist_ok=True)
     raw = output.parent / (output.stem + "-raw")
     raw.mkdir()  # Refuse to overwrite raw evidence.
-    env = dict(os.environ, TMPDIR=str(raw))
+    # Keep the shim's invisible compositor, but bypass the Vulkan layer that exposes only FIFO on NVIDIA.
+    env = dict(os.environ, TMPDIR=str(raw), DISABLE_GAMESCOPE_WSI="1")
     revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
     dirty = bool(subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT, text=True).strip())
     documents = {config: dict(schema=SCHEMA, revision=revision, dirty=dirty, config=config, seed=23,
                               seconds=args.seconds, warmup=args.warmup, repeats=args.repeats,
-                              resolution="1280x720", platform=platform.platform(), paired_configs=configs, cases=[])
+                              resolution="1280x720", presentation="vsync-disabled-gamescope-wsi-disabled", platform=platform.platform(), paired_configs=configs, cases=[])
                  for config in configs}
     outputs = {config: output if len(configs) == 1 else output.with_stem(output.stem + "-" + config) for config in configs}
     print("cfg     view bots tank×   FPS   wall p50/p95/p99/max ms      proc phys brain/tick nav% query Jolt≤ GPU tank vent GC pause RSS", flush=True)
@@ -154,8 +162,10 @@ def main():
                             subprocess.run(command, cwd=ROOT, env=env, stdout=log, stderr=subprocess.STDOUT,
                                            timeout=max(120, (args.seconds + args.warmup) * 60), check=True)
                         log = (directory / "run.log").read_text()
-                        if "[bench] PASS" not in log or "ERROR:" in log or "FAIL" in log:
-                            raise RuntimeError(f"benchmark failed; see {directory / 'run.log'}")
+                        try:
+                            validate_log(log)
+                        except ValueError as error:
+                            raise RuntimeError(f"{error}; see {directory / 'run.log'}") from error
                         result = load_case(directory, bots, config)
                         result.update(uptime=load, uptime_end=subprocess.check_output(["uptime"], text=True).strip(),
                                       started_utc=started, evidence=str(directory.relative_to(output.parent)))

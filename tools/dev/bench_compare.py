@@ -27,7 +27,7 @@ def read(path):
 def compare(a, b):
     old, acases = read(a)
     new, bcases = read(b)
-    for key in ("seed", "seconds", "warmup", "resolution"):
+    for key in ("seed", "seconds", "warmup", "resolution", "presentation"):
         if old[key] != new[key]:
             raise ValueError(f"workload mismatch: {key}")
     if acases.keys() != bcases.keys():
@@ -48,7 +48,7 @@ def merge(paths):
         data, incoming = read(path)
         if combined is None:
             combined = copy.deepcopy(data)
-        for key in ("revision", "config", "seed", "seconds", "warmup", "resolution"):
+        for key in ("revision", "config", "seed", "seconds", "warmup", "resolution", "presentation"):
             if combined[key] != data[key]:
                 raise ValueError(f"cannot merge different {key}")
         for key, case in incoming.items():

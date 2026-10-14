@@ -20,14 +20,15 @@ def assembly(config, build=True):
         raise ValueError("configuration must be Debug or Release")
     scratch = ROOT / "build" / "source-run"
     scratch.mkdir(parents=True, exist_ok=True)
-    os.environ["TMPDIR"] = str(scratch)
     # A mkdir lock works on Linux/macOS without additional tools, and detects an interrupted swap.
     lock = scratch / "lock"
     lock.mkdir()
     debug = ROOT / ".godot/mono/temp/bin/Debug"
     backup = scratch / "Debug.backup"
     swapped = False
+    previous_temp = os.environ.get("TMPDIR")
     try:
+        os.environ["TMPDIR"] = str(scratch)
         if build:
             subprocess.run(["dotnet", "build", "Propane.csproj", "-c", config, "-nologo", "-v", "quiet"], cwd=ROOT, check=True)
         if config == "Release":
@@ -39,11 +40,18 @@ def assembly(config, build=True):
             shutil.copytree(debug.parent / "Release", debug)
         yield
     finally:
-        if swapped:
-            shutil.rmtree(debug)
-            if backup.exists():
-                backup.rename(debug)
-        lock.rmdir()
+        try:
+            if swapped:
+                if debug.exists():
+                    shutil.rmtree(debug)
+                if backup.exists():
+                    backup.rename(debug)
+        finally:
+            if previous_temp is None:
+                os.environ.pop("TMPDIR", None)
+            else:
+                os.environ["TMPDIR"] = previous_temp
+            lock.rmdir()
 
 
 def interrupted(signum, _frame):

@@ -96,7 +96,13 @@ For a visual check, use `make bench BENCH_ARGS=--capture` or add `--capture` to 
 `BENCH_ARGS` also forwards `--output=build/bench/<name>.json` to choose a unique artifact name. The first rendered repetition of each case writes
 `scale-final.png` after measurement, so screenshot readback/PNG encoding does not contaminate timings. Use
 `--capture-dir=$PWD/build/...` when running the scene directly. Rendered runs use the normal `godot-mono` shim
-and remain invisible on the desktop.
+and remain invisible on the desktop. The runner sets `DISABLE_GAMESCOPE_WSI=1` for its child processes: the
+shim still runs gamescope's headless compositor, but its optional Vulkan presentation layer no longer forces
+Godot's NVIDIA swapchain back to vsync. The runner rejects logs containing that fallback. This is a per-run
+environment override; it edits no system/shim configuration. JSON records this presentation policy, and schema 2
+rejects earlier prototype runs that could be capped. The layer's
+[manifest](https://github.com/ValveSoftware/gamescope/blob/master/layer/VkLayer_FROG_gamescope_wsi.json.in)
+defines the environment switch.
 
 ## Playing optimized C# locally
 
