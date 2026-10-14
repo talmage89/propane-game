@@ -282,7 +282,7 @@ public sealed class BotNavigator
         Vector3 from, Vector3 to, Tuning tuning)
     {
         if (!Avoids(from, to, avoided, tuning.BotRouteSpacing * 0.75f) || !hazards.SafeAlong(from, to, grid.Capabilities.Radius, from) ||
-            area != null && !area.Allows(to)) { return NavigationAnswer.No; }
+            !AreaAllowsAlong(area, from, to, grid.Capabilities.Radius)) { return NavigationAnswer.No; }
         return grid.WalkSegment(layer, from, to);
     }
 
@@ -296,6 +296,16 @@ public sealed class BotNavigator
 
     /// <summary>Hazards along a jump are tested this often (meters): no sample may fall inside one.</summary>
     private const float JumpHazardStep = 0.25f;
+
+    /// <summary>Live mode boundaries override cached ground along the entire walk, including shortcuts.</summary>
+    private static bool AreaAllowsAlong(INavigationArea? area, Vector3 from, Vector3 to, float step)
+    {
+        if (area == null) return true;
+        var samples = Math.Max(1, (int)MathF.Ceiling(Flat(to - from).Length() / step));
+        for (var i = 1; i <= samples; i++)
+            if (!area.Allows(from.Lerp(to, (float)i / samples))) return false;
+        return true;
+    }
 
     private static bool Avoids(Vector3 from, Vector3 to, List<Vector3> avoided, float radius)
     {
@@ -494,7 +504,8 @@ public sealed class BotNavigator
             else
             {
                 link = grid.Walk(layer, cell, direction);
-                if (link == NavigationAnswer.Yes && !hazards.SafeAlong(from, to, grid.Capabilities.Radius, start)) { return true; }
+                if (link == NavigationAnswer.Yes && (!hazards.SafeAlong(from, to, grid.Capabilities.Radius, start) ||
+                    !AreaAllowsAlong(area, from, to, grid.Capabilities.Radius))) { return true; }
             }
             if (link != NavigationAnswer.Yes) { return link != NavigationAnswer.Pending; }
             nodes[key] = new Node { Cost = cost, Parent = parent, Jump = jump };
@@ -516,7 +527,7 @@ public sealed class BotNavigator
         private NavigationAnswer Walk(NavigationGrid grid, NavigationHazards hazards, INavigationArea? area, Vector3 from, Vector3 to, Tuning tuning)
         {
             if (!Avoids(from, to, avoided, tuning.BotRouteSpacing * 0.75f) || !hazards.SafeAlong(from, to, grid.Capabilities.Radius, start) ||
-                area != null && !area.Allows(to)) { return NavigationAnswer.No; }
+                !AreaAllowsAlong(area, from, to, grid.Capabilities.Radius)) { return NavigationAnswer.No; }
             return grid.WalkSegment(layer, from, to);
         }
 

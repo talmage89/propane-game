@@ -48,6 +48,12 @@ internal static class NavigationTests
         public bool Flight(Vector3 from, Vector3 direction) => course.Flight(from, direction);
     }
 
+    private sealed class ChangingArea : INavigationArea
+    {
+        public bool Removed { get; set; }
+        public bool Allows(Vector3 feet) => !Removed || Math.Abs(feet.X) >= 0.75f || Math.Abs(feet.Z) >= 0.75f;
+    }
+
     private sealed class BankingWorld(WorldContext world, PlayerCharacter player, PlayerCharacter enemy) : IBotWorld, IDisposable
     {
         public WorldContext World => world;
@@ -307,6 +313,27 @@ internal static class NavigationTests
                     "far hazards must preserve local answers");
             }
             TestRunner.Assert(GC.GetAllocatedBytesForCurrentThread() == before, "moving hazards allocate by world span");
+        });
+        runner.Run("mode boundaries reject cached walks across removed ground", () =>
+        {
+            var grid = Grid(new CourseWorld(), caps, tuning);
+            var hazards = new NavigationHazards();
+            var area = new ChangingArea();
+            var start = new Vector3(0, 0, -4);
+            var goal = new Vector3(0, 0, 4);
+            var nav = new BotNavigator();
+            nav.Navigate(grid, hazards, new NavigationState(start, Vector3.Zero, true), goal, tuning, 1f / 120, area);
+            TestRunner.Assert(nav.Route.Count == 1, "fixture must cache the direct walk before the ground disappears");
+            area.Removed = true;
+            nav.Navigate(grid, hazards, new NavigationState(start, Vector3.Zero, true), goal, tuning, tuning.BotReplanInterval + 0.01f, area);
+            TestRunner.Assert(nav.Route.Count == 0, "live boundary must invalidate the cached shortcut");
+            var route = BotNavigator.Plan(grid, hazards, start, goal, tuning, area: area);
+            TestRunner.Assert(route.Count > 1, "route must detour around the removed lot");
+            foreach (var leg in route)
+            {
+                for (var i = 0; i <= 100; i++)
+                    TestRunner.Assert(area.Allows(leg.From.Lerp(leg.To, i / 100f)), "a route with safe endpoints crossed removed ground");
+            }
         });
         runner.Run("warm cached navigation allocates no managed bytes", () =>
         {
