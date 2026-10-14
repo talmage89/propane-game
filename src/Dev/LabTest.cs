@@ -387,8 +387,13 @@ public partial class LabTest : Node
                     var winners = starters.Where(a => ring.Place(a) == 1).ToArray();
                     Assert(ring.Over && ring.PlacementsComplete && winners.Length >= 1, $"ring out seed {seed}: no winner or incomplete placements");
                     Assert(starters.All(a => ring.Place(a) is >= 1 and var p && p <= starters.Length), "placements out of range");
-                    Assert(ring.Eliminations.Count == starters.Length - winners.Length &&
-                        ring.Eliminations.All(e => runner.Spectating(e.ActorId) && !winners.Contains(e.ActorId)), "eliminations and spectators disagree");
+                    // The last actors can fall in the same step and share first place (as the rule tests cover).
+                    // Those winners spectate too; only surviving winners have no elimination.
+                    var eliminated = ring.Eliminations.Select(e => e.ActorId).ToHashSet();
+                    Assert(eliminated.Count == ring.Eliminations.Count && eliminated.All(starters.Contains) &&
+                        starters.All(a => runner.Spectating(a) == eliminated.Contains(a)) &&
+                        ring.Eliminations.All(e => e.Place == ring.Place(e.ActorId)) &&
+                        starters.Where(a => !eliminated.Contains(a)).All(winners.Contains), "eliminations and spectators disagree");
                     // Elimination order is placement order: anyone out later never places worse.
                     Assert(ring.Eliminations.Zip(ring.Eliminations.Skip(1)).All(p => p.Second.Place <= p.First.Place), "placements out of elimination order");
                     Assert(ring.Eliminations.Sum(e => e.CreditedTo != 0 ? 1 : 0) == starters.Sum(ring.Credits), "credit totals");
