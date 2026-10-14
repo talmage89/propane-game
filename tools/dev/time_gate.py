@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Time a make target and every external step, including Godot entry into the test scene.
 
-Usage: python3 tools/dev/time_gate.py --output=/tmp/wptest-speed/test -- make test
+Usage: python3 tools/dev/time_gate.py --output=build/gate-timing/test -- make test
+For per-job timing, set make's LABEL to
+"python3 -B tools/dev/time_gate.py --probe label $PWD/tools/dev/label.sh".
 Godot startup ends at DevArgs.MarkReady; work includes scene execution and shutdown.
 Import/editor runs have no scene marker and report only their total duration.
 """
@@ -11,6 +13,7 @@ import os
 import pathlib
 import shlex
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -19,16 +22,33 @@ import time
 
 def probe(name, executable, arguments):
     start = time.monotonic()
+    started = time.time()
     ready = None
     process = subprocess.Popen([executable, *arguments], stdout=subprocess.PIPE,
                                stderr=subprocess.STDOUT, text=True)
-    for line in process.stdout:
-        if "[gate-timing] ready" in line and ready is None:
-            ready = time.monotonic() - start
-        print(line, end="", flush=True)
-    code = process.wait()
+    # Launchers intentionally stop a background server by signaling GODOT. Preserve that behavior through the
+    # profiler; killing only this Python wrapper would leave the engine alive after its match.
+    def forward(number, _frame):
+        try:
+            process.send_signal(number)
+        except ProcessLookupError:
+            pass
+
+    previous = {}
+    for signum in (signal.SIGTERM, signal.SIGINT):
+        previous[signum] = signal.signal(signum, forward)
+    try:
+        for line in process.stdout:
+            if "[gate-timing] ready" in line and ready is None:
+                ready = time.monotonic() - start
+            print(line, end="", flush=True)
+        code = process.wait()
+    finally:
+        process.stdout.close()
+        for signum, handler in previous.items():
+            signal.signal(signum, handler)
     total = time.monotonic() - start
-    row = dict(command=[name, *arguments], total=total, startup=ready,
+    row = dict(command=[name, *arguments], started=started, finished=time.time(), total=total, startup=ready,
                work_and_exit=None if ready is None else total - ready, code=code)
     # One append per record also works when make runs partitions in parallel.
     descriptor = os.open(os.environ["PROPANE_TIMING_LOG"], os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
@@ -67,9 +87,11 @@ def main():
                            GODOT=str(pathlib.Path(directory) / "godot"),
                            PROPANE_TIMING_LOG=str(log), PROPANE_GATE_TIMING="1")
         start = time.monotonic()
+        started = time.time()
+        load = os.getloadavg()
         code = subprocess.call(command, env=environment)
         elapsed = time.monotonic() - start
-    (output / "total.json").write_text(json.dumps(dict(command=command, total=elapsed, code=code)) + "\n")
+    (output / "total.json").write_text(json.dumps(dict(command=command, started=started, finished=time.time(), load=load, total=elapsed, code=code)) + "\n")
     print(f"\nGate timing: {elapsed:.3f}s, exit {code}; steps: {log}")
     for row in map(json.loads, log.read_text().splitlines()):
         phases = "" if row["startup"] is None else f'; startup {row["startup"]:.3f}s, work/exit {row["work_and_exit"]:.3f}s'

@@ -82,10 +82,23 @@ public partial class LabTest : Node
         using var snapshot = template.Snapshot();
         Assert(!snapshot.ContainsKey(nameof(Tuning.LabStackCount)) && !snapshot.ContainsKey(nameof(Tuning.LabBotSkill)),
             "Lab dials entered a shared tuning snapshot");
+        var shard = int.Parse(DevArgs.Get("lifetime-shard") ?? "1", CultureInfo.InvariantCulture);
+        var shards = int.Parse(DevArgs.Get("lifetime-shards") ?? "1", CultureInfo.InvariantCulture);
+        Assert(shards > 0 && shard >= 1 && shard <= shards, "invalid lifetime shard");
+        var listing = DevArgs.Get("list-lifetime") != null;
+        var candidates = 0;
+        var selected = 0;
         foreach (var scenario in LabScenarios.All)
         {
             foreach (var environment in scenario.Environments)
             {
+                if (candidates++ % shards != shard - 1) continue;
+                selected++;
+                if (listing)
+                {
+                    GD.Print($"[lab lifetime-case] {scenario.Id}/{environment}");
+                    continue;
+                }
                 await Cycle(scenario, environment).ConfigureAwait(true);
                 await Collect().ConfigureAwait(true);
                 await Cycle(scenario, environment).ConfigureAwait(true);
@@ -100,6 +113,8 @@ public partial class LabTest : Node
                 GD.Print($"[lab lifetime] {scenario.Id}/{environment}: {(int)DevArgs.GetFloat("cycles", 10)} entry/reset/exit cycles stable {baseline}");
             }
         }
+        Assert(selected > 0, "lifetime shard selected no pairs");
+        if (listing) GD.Print($"[lab lifetime] listed {selected} of {candidates} pairs");
     }
 
     /// <summary>
@@ -122,6 +137,11 @@ public partial class LabTest : Node
         }
         cases.Add(("all minimums", dials.Select(entry => (entry.Property, entry.Dial.Min)).ToArray()));
         cases.Add(("all maximums", dials.Select(entry => (entry.Property, entry.Dial.Max)).ToArray()));
+        var shard = int.Parse(DevArgs.Get("dial-shard") ?? "1", CultureInfo.InvariantCulture);
+        var shards = int.Parse(DevArgs.Get("dial-shards") ?? "1", CultureInfo.InvariantCulture);
+        Assert(shards > 0 && shard >= 1 && shard <= shards, "invalid dial shard");
+        var listing = DevArgs.Get("list-dials") != null;
+        var candidates = 0;
         var sessions = 0;
         foreach (var (name, settings) in cases)
         {
@@ -131,6 +151,15 @@ public partial class LabTest : Node
             {
                 foreach (var environment in scenario.Environments)
                 {
+                    var index = candidates++;
+                    if (index % shards != shard - 1) continue;
+                    sessions++;
+                    if (listing)
+                    {
+                        GD.Print($"[lab dial-case] {scenario.Id}/{environment}/" + string.Join(",", settings.Select(s =>
+                            $"{s.Property.Name}={s.Value.ToString("R", CultureInfo.InvariantCulture)}")));
+                        continue;
+                    }
                     using var tuning = template.Copy();
                     foreach (var (property, value) in settings)
                         property.SetValue(tuning, Convert.ChangeType(value, property.PropertyType, System.Globalization.CultureInfo.InvariantCulture));
@@ -151,11 +180,16 @@ public partial class LabTest : Node
                     await Frames(10).ConfigureAwait(true);
                     Assert(lab.Player.IsOnFloor() && lab.LiveTanks.Any(), $"{label} did not survive a reset");
                     lab.Session.Dispose(); lab.Free();
-                    sessions++;
                 }
             }
         }
-        GD.Print($"[lab dials] {sessions} sessions at both slider ends and all-at-once, each built and reset");
+        Assert(sessions > 0, "dial shard selected no sessions");
+        if (listing)
+        {
+            GD.Print($"[lab dials] listed {sessions} of {candidates} sessions");
+            return;
+        }
+        GD.Print($"[lab dials] shard {shard}/{shards}: {sessions} of {candidates} sessions at both slider ends and all-at-once, each built and reset");
     }
 
     private async Task Cycle(LabScenario scenario, LabEnvironment environment)

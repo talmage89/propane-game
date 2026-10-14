@@ -1,5 +1,241 @@
 # Test gate timing
 
+## Test speed 2 (October 14, 2026)
+
+| Alternating run | Wall seconds | Minutes | Initial load (1 / 5 / 15 min) | Result |
+| --- | ---: | ---: | --- | --- |
+| before-2 | 2030.07 | 33.83 | 11.70 / 13.64 / 13.88 | Pass |
+| after-1 | 2054.52 | 34.24 | 7.31 / 8.98 / 12.45 | Pass |
+| before-3 | 1989.95 | 33.17 | 18.21 / 21.61 / 26.89 | Pass |
+| after-2 | 1660.48 | 27.67 | 2.71 / 7.21 / 16.43 | Pass |
+| before-4 | 1732.72 | 28.88 | 8.24 / 12.68 / 20.24 | Pass |
+| after-3 | 1231.58 | 20.53 | 7.20 / 10.21 / 13.03 | Pass |
+
+The median fell from **1,989.95 to 1,660.48 seconds (33.17 to 27.67 minutes), 16.6% shorter**.
+The mean fell from 1,917.58 to 1,648.86 seconds, 14.0%. Before range: 28.88–33.83 minutes;
+after range: 20.53–34.24 minutes. **The under-15-minute target was not reached.** After 1 encountered
+particularly heavy contention (observed load about 57); after 3 reached about 24.
+These observations are not a continuously sampled peak-load record. Unseeded soaks also vary with play.
+The paired improvements were −1.2%, 16.6% and 28.9%; the first candidate was slower, so one favorable
+run would overstate the gain. No remote CI run was performed.
+
+### Per-job wall time
+
+One complete run of each variant follows. The fast partition figures span all its commands;
+range and bots sum their consecutive launches. Separate probe/startup records remain in the raw logs.
+
+| Job | Before 2 (s) | After 2 (s) |
+| --- | ---: | ---: |
+| test-core | 123.5 | 203.2 |
+| test-behavior | 524.8 | 769.5 |
+| test-generator | 105.6 | 157.3 |
+| test-world | 17.7 | 47.2 |
+| engine | — | 46.6 |
+| lab-1 | 445.0 | — |
+| lab-2 | 92.1 | — |
+| lab-3 | 880.3 | — |
+| lab-4 | 1059.9 | — |
+| generator-1 | 384.9 | 452.4 |
+| generator-2 | 391.5 | 449.4 |
+| generator-3 | 367.5 | 333.2 |
+| generator-4 | 384.3 | 366.5 |
+| navigation | 294.5 | 133.1 |
+| piles | 165.0 | 202.1 |
+| range | 29.9 | 13.1 |
+| menu | 29.0 | 17.7 |
+| generator-coverage | 15.3 | 10.0 |
+| lab-coverage | — | 10.0 |
+| bots | 245.1 | 236.7 |
+| lab-soak-void | — | 221.2 |
+| lab-soak-suburb | — | 182.3 |
+| lab-king | — | 530.8 |
+| lab-fast | — | 105.9 |
+| lab-king-suburb | — | 168.7 |
+| lab-shortfuse-11 | — | 139.4 |
+| lab-pace | — | 42.3 |
+| lab-ringout-11 | — | 12.7 |
+| lab-shortfuse-12 | — | 111.4 |
+| lab-dissolve-11 | — | 117.3 |
+| lab-dissolve-12 | — | 97.5 |
+| lab-ringout-13 | — | 23.1 |
+| lab-ringout-12 | — | 30.2 |
+| lab-lifetime-1 | — | 31.0 |
+| lab-lifetime-4 | — | 17.0 |
+| lab-lifetime-2 | — | 31.8 |
+| lab-lifetime-3 | — | 31.3 |
+| lab-dials-1 | — | 68.5 |
+| lab-dials-3 | — | 69.6 |
+| lab-dials-2 | — | 81.8 |
+| lab-dials-4 | — | 78.5 |
+| lab-dials-5 | — | 58.7 |
+| lab-dials-6 | — | 65.8 |
+| lab-dials-7 | — | 57.7 |
+| lab-dials-8 | — | 65.5 |
+
+
+Before 2's late Lab 3 ran from 902.8 to 1,783.1 seconds; the bot tail ran from 1,784.6 to 2,030.0.
+After 2's offline jobs finished at 1,422.2 seconds; its bot tail ran from 1,423.6 to 1,660.5.
+After 1's slowest dial shard was 210.8 seconds; all candidate dial shards were well below their 600-second limit.
+The original before 2 dial sweep took 550.8 seconds against its 600-second limit.
+
+
+Baseline `d067ef6`; branch `wp/test-speed2`. Four other agents share the 12-thread machine.
+The completed before/after runs alternate. Imported assets remain warm, every run records `uptime`, and
+`time_gate.py` records wall-clock start/finish timestamps, total duration, return code and initial load.
+Per-job timing uses the label wrapper; nested Python/Godot rows are not added to their enclosing label rows.
+The three real-time bot matches still run consecutively after every offline prerequisite completes.
+
+The original scheduler already allowed `test` and deep jobs to overlap. Its fast partitions were queued first,
+then four large Lab jobs. In the first completed baseline, Lab 4 took 1,060 seconds and Lab 3 took 880 seconds;
+the latter started late and ended with a 551-second unsharded dial sweep, only 49 seconds below its timeout.
+Reordering alone cannot reduce the total work. The new scheduler queues long/variable sessions early and
+splits independent work into 25 Lab jobs: four lifetime shards, eight dial shards, and individual full
+Ring Out, Short Fuse and Dissolve seeds. King retains its three-seed aggregate mint assertion in one process.
+
+`test-full-lab-coverage` uses the real C# harness's listings and the checker's actual session options.
+It proves that all 564 cases (530 dial fixtures, 11 lifecycle pairs and the remaining session/seed cases)
+occur exactly once. Each lifetime pair retains two warm-up cycles and all ten measured cycles. Every dial
+still builds, advances 20 frames, resets, advances ten frames and asserts floor contact and tank supply.
+Generator shards and their coverage check remain unchanged: 1,044 seeds across all sweeps.
+No assertion, simulation duration, tank value, scoring rule, seed or client spacing was relaxed.
+
+Deep probes compile optimized **Debug**, retaining `DEBUG`, `TOOLS`, the Debug Godot API and every assertion.
+Their private runtime project under `build/test-full-engine/project` borrows the imported resources, has
+separate output and intermediate directories, and copies this checkout's user-data override. A scene-entry
+guard rejects an unoptimized or non-Debug assembly. Explicit `IntermediateOutputPath` is necessary:
+Godot's SDK otherwise keeps the original intermediate directory even when `BaseIntermediateOutputPath`
+is overridden, then copies the cached normal DLL into the alternate output. This mistake was detected
+by the runtime guard and corrected before the measured after gate completed. The normal DLL checksum
+remained unchanged after the corrected private build. `test`, `check`, CI, benchmark smoke and the final
+bot matches continue using normal Debug.
+
+A diagnostic generator sample (`--seeds=5 --large-seeds=2 --formation-seeds=1`) spent 44.0 seconds generating
+plans and 4.0 seconds checking reachability before optimization; afterward, 33.4 and 1.8 seconds. All its
+assertions passed. The run-based flood-fill prototype was discarded: plan generation dominated the sample,
+so its small potential saving did not justify replacing the checker. No production generator code changed.
+
+Two other proposals were measured and rejected. Godot's fixed-FPS loop [returns before the idle wait](https://github.com/godotengine/godot/blob/4.7.2-stable/main/main.cpp#L4789),
+so clearing the headless idle delay cannot speed these probes. Reducing the Godot worker pool from eleven
+workers to two slowed the quick King probe: single runs 8.8/10.5 seconds versus 11.3/10.6, and four-process
+batches 18.6/19.0 versus 24.9/20.5. All passed; the worker setting is unchanged.
+
+The bot launcher now waits for the server's actual `listening on UDP` log rather than sleeping 1.5 seconds;
+it fails before launching clients if startup exits or does not become ready within 30 seconds. Its 0.4-second
+client spacing and every match/soak argument remain unchanged. The timing wrapper forwards termination
+signals to its engine, so launcher cleanup cannot leave a timed server alive. Lab timeouts kill the complete
+process group, including a timing wrapper and its engine. The fast gate keeps its 600-second limit; full
+sessions get 1,800 seconds, and dial sweeps `max(600, ceil(2400 / shards))` seconds. Eight dial shards therefore
+have a 600-second floor, with ample headroom compared with measured shard times.
+
+The first unmodified baseline attempt failed at the known ragdoll head snap (77.51 degrees in one frame),
+after 961.36 seconds. It skipped the bot tail and is excluded from completed wall-time comparisons.
+No player code or assertion bound was changed to hide it.
+
+Raw evidence is in `build/test-speed2-proof/`: each run has `uptime.txt`, `run.log`, `steps.jsonl` and `total.json`;
+later runs also record source hashes. Diagnostic builds, profiling and worker trials are in
+`build/test-speed2-draft/`. Source snapshots used for the alternating runs are not committed.
+
+The timing command for each source variant was:
+
+```sh
+mkdir -p build/test-speed2-tmp
+TMPDIR="$PWD/build/test-speed2-tmp" python3 -B tools/dev/time_gate.py \
+  --output="build/test-speed2-proof/<run>" -- make -j4 test-full \
+  LABEL="python3 -B tools/dev/time_gate.py --probe label $PWD/tools/dev/label.sh"
+```
+
+Baseline runs restored the tracked bytes at `d067ef6`; candidate runs restored a frozen snapshot of the changes.
+The profiler itself was held constant in a scratch copy for those swaps. The snapshots and later source hashes
+prevented an alternating run from accidentally using the other variant. Compilation is included; no build or
+other probe from this worktree ran beside a measured gate. Other worktrees continued running throughout.
+The normal gate already overlapped the deep targets on the baseline, so adding that overlap was unnecessary.
+
+For before 2, measured offline job spans total 5,310.8 seconds over a 1,784.6-second offline phase:
+74.4% occupancy of four make slots. After 2 totals 5,651.2 job-seconds over 1,423.6 seconds: 99.2% occupancy.
+These are occupied make slots, not CPU utilization. Holding those measured job durations constant gives a
+1,649.5-second bound including the after bot tail, already above 15 minutes; durations themselves vary with
+load and scheduling. The baseline's long last shard wastes slots, while the candidate keeps the queue busy.
+This proves the scheduling waste was removed; it does not prove a load-independent runtime or the target.
+
+
+### Verification and remaining limits
+
+The alternating timings use the frozen candidate containing the scheduling, partitioning and optimized-build
+changes. A final review then made coverage listings use the same process-group timeout cleanup as real sessions;
+its sixth fixture proves a wrapped listing's child cannot survive timeout. A separate final gate verifies that
+hardening and is excluded from the three paired timing samples. No session, seed, frame or assertion changed.
+
+The final-source confirmation at `b285f73` passed in **1,405.16 seconds (23.42 minutes)**, initial load
+21.27 / 22.75 / 21.64. All offline jobs passed, followed by all three bot matches with zero tank disagreements
+and matching server score audits. It also emitted the nonfatal Jolt job-pool warning during the unchanged fast
+probes; the final direct check was free of that warning. Compiler builds remained at zero warnings/errors.
+This fourth candidate gate proves the final cleanup and is not included in the paired timing statistics.
+The final `python3 -B tools/dev/lint_tests.py` also passed against the hardened sources.
+
+A dedicated launcher verification also passed, writing `build/test-speed2-net`: two blocked-lane duel matches,
+120 ms lag, 30 ms jitter and 3% loss; 1,197 comparison grids, 39,143 body pairs, zero tank disagreements and
+both server score audits agreeing. Its command (with `TMPDIR` under this checkout's `build/`) was:
+
+```sh
+GODOT=godot-mono tools/dev/net_bots.sh -o "$PWD/build/test-speed2-net" -n 2 -w 0 -l 20 \
+  -s '--start-score=8 --match-seed=23' -- --scenario=duel --matches=2 --duel-blocked \
+  --tune.DropScatter=0 --tune.DropToss=0 --net-lag=120 --net-jitter=30 --net-loss=3
+```
+
+The final direct `TMPDIR="$PWD/build/test-speed2-tmp" make check` passed: formatter clean, warning-as-error
+and incremental builds both at zero compiler warnings/errors, every fast scene and both fresh-process hash
+comparisons passed. Its only engine warning was the malformed-Score fixture's expected diagnostic. An earlier
+passing check also emitted a nonfatal Jolt job-pool exhaustion warning under load; it did not recur in the final
+check. A profiled final-check attempt received SIGTERM during the core scene, with no assertion failure and no
+completed timing record; it is retained as interrupted, not a pass. The signal's source was not established.
+No physics setting or assertion threshold was changed to suppress either warning or the ragdoll failure.
+
+`make build` and `make test-full-engine` compiled with zero warnings/errors. `python3 -B tools/dev/lint_tests.py`
+passed every injected gate failure, plain/parallel deep wiring, bot-tail isolation, cache/install failures and
+CI partition equivalence. The focused fixtures also passed: `check_lab_shards_tests.py` (six),
+`full_engine_tests.py` (one), `time_gate_tests.py` (two) and `net_bots_tests.py` (six).
+The normal assembly with `--full-engine-optimized` exited 1 before running a deep probe, proving the guard's
+failure path. The actual coverage targets passed in all three candidate gates.
+
+After `make build` and `make test-full-engine`, rendered verification used:
+
+```sh
+export TMPDIR="$PWD/build/test-speed2-tmp"
+godot-mono --fixed-fps 60 --resolution 960x540 --disable-vsync --path . \
+  res://scenes/dev/menu_test.tscn -- --scenario=input --port=24681 --windowed \
+  --capture-dir="$PWD/build/test-speed2-input"
+tools/dev/full_engine.py --fixed-fps 60 --resolution 960x540 --disable-vsync --path . \
+  res://scenes/dev/menu_test.tscn -- --scenario=input --port=24681 --windowed \
+  --capture-dir="$PWD/build/test-speed2-input-optimized"
+tools/dev/full_engine.py --fixed-fps 60 --resolution 960x540 --disable-vsync --path . \
+  res://scenes/dev/lab_test.tscn -- --scenario=frames --capture-dir="$PWD/build/test-speed2-lab"
+```
+
+Both input runs passed all 163 assertions, using real device events through `Input.ParseInputEvent`.
+Reviewed all 19 captures from each: before/after camera turns, airborne jumps, firing/recoil views and remapped
+pause panels in single-player, Lab, multiplayer and single-player after exiting the Lab. The optimized match
+uses a different unseeded suburb, as expected. Reviewed all 49 Lab frames: main/scenario/options menus, each
+available environment, keyboard/gamepad control panels and Free Tuning panels. The readable tuning panel and
+player view are intact. These rendered runs prove resource loading and device delivery through the private
+project; they are not frame-time measurements. Gamescope/Xwayland printed its wrapper startup/shutdown diagnostics.
+
+`python3 -B build/test-speed2-proof/compare_builds.py` launched `unit_tests.tscn --write-world-plans=<build-dir>`,
+then `--hash-world-plans=<build-dir>` through normal and optimized Debug, followed by
+`generator_tests.tscn --hash-segments=5` through each. Loud assertions required all four world hashes and all
+60 segment hashes to match exactly; both comparisons passed. `git diff --check` and the code commits' whitespace
+checks passed. All scratch and `TMPDIR` remained under this worktree's `build/`.
+
+No production generator, bot, navigation, tank, effect or player implementation changed. Further large savings
+would need less work per probe, especially plan construction; the rejected flood-fill/worker experiments above
+do not justify expanding this branch. The private project must be prepared after source changes and must never
+be opened/imported in the editor: its resource symlinks borrow the normal checkout's assets. The guard catches
+wrong build configuration; it cannot substitute for rebuilding changed sources. Bot startup still has a bounded
+30-second deadline, and the soaks' unseeded variation and contention remain visible.
+
+Messages, suburb construction, tanks and tuners are unchanged; `Protocol.Version` remains 3.
+
+## Earlier timing work
+
 Measured on the shared Linux development machine on October 11, 2026. Times are wall seconds, warm imports,
 one sample per command; other agents also used the machine. Baseline: `7777296`. While this work ran, `dev`
 advanced through `616b08b` and `13ae84f` to `c4a6f51`. Final verification includes two new movement probes,

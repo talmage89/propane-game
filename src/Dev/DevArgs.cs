@@ -1,5 +1,9 @@
+using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.Reflection;
 using Godot;
+using Propane.Core;
 
 namespace Propane.Dev;
 
@@ -35,10 +39,29 @@ public static class DevArgs
     /// <summary>Common setup for dev scenes: applies any <c>--tune.Name=value</c> overrides to the live tuning.</summary>
     public static void Setup() => ApplyTuningOverrides();
 
-    /// <summary>Optional scene-entry marker for tools/dev/time_gate.py; absent during ordinary runs.</summary>
+    /// <summary>Verify the deep build contract and optionally mark scene entry for tools/dev/time_gate.py.</summary>
     public static void MarkReady()
     {
+        if (Get("full-engine-optimized") != null)
+        {
+            VerifyOptimizedDebug();
+            GD.Print("[full-engine] optimized Debug with DEBUG checks");
+        }
         if (System.Environment.GetEnvironmentVariable("PROPANE_GATE_TIMING") == "1") GD.Print("[gate-timing] ready");
+    }
+
+    private static void VerifyOptimizedDebug()
+    {
+#if DEBUG
+        var assembly = typeof(DevArgs).Assembly;
+        if (assembly.GetCustomAttribute<AssemblyConfigurationAttribute>()?.Configuration == "Debug" &&
+            assembly.GetCustomAttribute<DebuggableAttribute>()?.IsJITOptimizerDisabled == false)
+        {
+            return;
+        }
+#endif
+        ShutdownGuard.Quit((SceneTree)Engine.GetMainLoop(), 1);
+        throw new InvalidOperationException("deep probe did not load optimized Debug with DEBUG defined");
     }
 
     /// <summary>
