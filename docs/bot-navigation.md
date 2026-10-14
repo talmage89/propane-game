@@ -68,7 +68,9 @@ a cached ground plane share its answers. An explosion invalidates nearby answers
 and answers obtained while props settle expire after `BotDisturbSettle`; inadequate progress invalidates local
 answers too. Straight route shortcuts and takeoffs stay live. This handles loose fences and cars without sweeping
 the physics world for every node on every search. Search buffers and known-map answer storage are reserved before
-the first physics tick; buffers for newly discovered heights or growing dynamic populations can still grow.
+the first physics tick, including `BotLayerReserve` ground-layer objects and dictionaries so standing on debris
+does not immediately allocate another layer. Heights still come from grounded actors, rather than guessing the
+road height at setup. Additional heights, exhausted chunk storage or growing dynamic populations can still grow buffers.
 Changing body capabilities or grid accuracy tuning replaces the shared grid; bots discard its old searches and
 routes, finishing an already launched jump before planning again.
 

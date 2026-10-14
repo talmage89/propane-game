@@ -8,6 +8,8 @@ public partial class Tuning
     public float BotRouteSpacing { get; set; } = 1.5f;
     // Feet within this height of a cached ground plane share its answers.
     public float BotLayerTolerance { get; set; } = 0.35f;
+    // Reserve metadata for occasional standing heights on cars and debris before brains start thinking.
+    public int BotLayerReserve { get; set; } = 8;
     public int BotSearchPerTick { get; set; } = 24;
     public int BotSearchBudget { get; set; } = 900;
     // Shared by every bot one process runs in a world, per physics tick: navigation physics queries and route

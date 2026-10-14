@@ -228,6 +228,25 @@ internal static class NavigationTests
         });
         var caps = new NavigationCapabilities(shape.Radius, shape.Height, tuning.RunSpeed,
             tuning.SprintSpeed, tuning.JumpVelocity, tuning.PlayerGravity, tuning.Acceleration, tuning.AirControl);
+        runner.Run("navigation/reserved standing heights choose actual planes without hot allocation", () =>
+        {
+            var grid = Grid(new CourseWorld(), caps, tuning);
+            grid.ReserveLayers(tuning.BotLayerReserve);
+            grid.Reserve(new Rect2(-20, -20, 40, 40));
+            var before = GC.GetAllocatedBytesForCurrentThread();
+            for (var i = 0; i < tuning.BotLayerReserve; i++)
+            {
+                var height = 0.133f + i * 0.8f;
+                var layer = grid.LayerAt(height);
+                TestRunner.Assert(layer.Y == height, "reserved metadata guessed a ground height");
+                TestRunner.Assert(ReferenceEquals(layer, grid.LayerAt(height)), "a reused height consumed another reserve");
+                TestRunner.Assert(grid.Standable(layer, Vector2I.Zero) == NavigationAnswer.Yes,
+                    "reserved height could not store its first collision answers");
+            }
+            var bytes = GC.GetAllocatedBytesForCurrentThread() - before;
+            TestRunner.Assert(bytes == 0, $"reserved height discovery allocated {bytes} bytes");
+            TestRunner.Throws<ArgumentOutOfRangeException>(() => grid.ReserveLayers(-1));
+        });
         runner.Run("navigation uses actor jump and gait capabilities", () =>
         {
             TestRunner.Assert(caps.JumpHeight > 1.7f, "baked player jump clears privacy fences");

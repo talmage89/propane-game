@@ -33,6 +33,7 @@ public sealed class BotServices : IDisposable
     private float gridMinimumJump;
     private float gridMargin;
     private float gridLayerTolerance;
+    private int gridLayerReserve;
     private bool disposed;
 
     public BotServices(WorldContext world, Rect2? bounds = null)
@@ -104,18 +105,20 @@ public sealed class BotServices : IDisposable
         var tuning = world.Tuning;
         if (grid == null || grid.Capabilities != capabilities || gridSpacing != tuning.BotRouteSpacing ||
             gridMinimumJump != tuning.BotJumpMinimumRange || gridMargin != tuning.BotJumpMargin ||
-            gridLayerTolerance != tuning.BotLayerTolerance)
+            gridLayerTolerance != tuning.BotLayerTolerance || gridLayerReserve != tuning.BotLayerReserve)
         {
             retiredQueries += physics?.Queries ?? 0;
             physics?.Dispose();
             physics = new NavigationWorld(world.Root, capabilities, tuning.BotJumpMargin);
             grid = new NavigationGrid(physics, capabilities, tuning.BotRouteSpacing, tuning.BotJumpMinimumRange,
                 tuning.BotLayerTolerance);
+            grid.ReserveLayers(tuning.BotLayerReserve);
             if (bounds is { } known) grid.Reserve(known.Grow(capabilities.JumpRange * 2));
             gridSpacing = tuning.BotRouteSpacing;
             gridMinimumJump = tuning.BotJumpMinimumRange;
             gridMargin = tuning.BotJumpMargin;
             gridLayerTolerance = tuning.BotLayerTolerance;
+            gridLayerReserve = tuning.BotLayerReserve;
             grid.BeginTick(world.Clock.Now);
         }
         grid.QueryBudget = Math.Max(physics!.FlightQueries + 2, tuning.BotQueriesPerTick);

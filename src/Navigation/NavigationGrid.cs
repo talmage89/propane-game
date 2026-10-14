@@ -40,6 +40,7 @@ public sealed class NavigationGrid
     private readonly float support;
     private readonly int[] jumpCells = new int[2];
     private readonly List<Layer> layers = new();
+    private readonly Stack<Layer> spareLayers = new();
     private readonly Stack<Cell[]> spareChunks = new();
     private int reservedChunks;
     private readonly List<(Vector3 Center, float Radius, double Until)> settling = new();
@@ -115,7 +116,8 @@ public sealed class NavigationGrid
     public sealed class Layer
     {
         internal Layer(float y, int capacity) { Y = y; Chunks = new(capacity); }
-        public float Y { get; }
+        public float Y { get; private set; }
+        internal void SetHeight(float y) => Y = y;
         internal readonly Dictionary<long, Cell[]> Chunks;
         internal long LastKey = long.MinValue;
         internal Cell[]? LastChunk;
@@ -142,9 +144,19 @@ public sealed class NavigationGrid
         {
             if (Math.Abs(layer.Y - y) <= layerTolerance) return layer;
         }
-        var made = new Layer(y, reservedChunks);
+        if (!spareLayers.TryPop(out var made)) { made = new Layer(y, reservedChunks); }
+        else { made.SetHeight(y); }
         layers.Add(made);
         return made;
+    }
+
+    /// <summary>Reserves metadata without choosing ground heights; heights still come from grounded actors.</summary>
+    public void ReserveLayers(int count)
+    {
+        if (count < 0) throw new ArgumentOutOfRangeException(nameof(count));
+        layers.EnsureCapacity(count);
+        spareLayers.EnsureCapacity(count);
+        while (layers.Count + spareLayers.Count < count) spareLayers.Push(new Layer(0, reservedChunks));
     }
 
     /// <summary>Allocates answer storage for a known map before planning; querying remains lazy and budgeted.</summary>
@@ -157,8 +169,12 @@ public sealed class NavigationGrid
         // height must come from a grounded actor, never the slab (roads can stand above it).
         if (count > 1024) return;
         reservedChunks = count;
-        spareChunks.EnsureCapacity(count);
-        for (var i = spareChunks.Count; i < count; i++) spareChunks.Push(new Cell[ChunkSize * ChunkSize]);
+        foreach (var layer in layers) layer.Chunks.EnsureCapacity(count);
+        foreach (var layer in spareLayers) layer.Chunks.EnsureCapacity(count);
+        // One map's answer storage plus one first chunk for each additional standing height.
+        var chunks = count + Math.Max(0, layers.Count + spareLayers.Count - 1);
+        spareChunks.EnsureCapacity(chunks);
+        for (var i = spareChunks.Count; i < chunks; i++) spareChunks.Push(new Cell[ChunkSize * ChunkSize]);
     }
 
     public Vector3 Point(Layer layer, Vector2I cell) => new(cell.X * Spacing, layer.Y, cell.Y * Spacing);
