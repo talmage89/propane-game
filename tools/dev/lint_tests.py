@@ -30,6 +30,11 @@ printf '%s %s\\n' "${0##*/}" "$*" >> "$COMMAND_LOG"
 if [[ "${0##*/}" == dotnet && "$1" == format && "$PROBE_FAIL" == format ]]; then exit 1; fi
 if [[ "${0##*/}" == dotnet && "$*" == *-warnaserror* && "$PROBE_FAIL" == build ]]; then exit 1; fi
 if [[ "$PROBE_FAIL" != none && "$PROBE_FAIL" != format && "$PROBE_FAIL" != build && "$*" == *"$PROBE_FAIL"* ]]; then exit 1; fi
+if [[ "${0##*/}" == godot && " $* " == *" --server "* ]]; then
+  for argument in "$@"; do
+    if [[ "$argument" == --port=* ]]; then printf 'listening on UDP %s (test)\\n' "${argument#*=}"; fi
+  done
+fi
 if [[ "${0##*/}" == godot && "$*" == *--hash-world-plans=* ]]; then
   if [[ "$PROBE_FAIL" == world-missing ]]; then exit 0; fi
   count=0

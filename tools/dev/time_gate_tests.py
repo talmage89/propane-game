@@ -3,6 +3,7 @@
 import json
 import os
 import pathlib
+import signal
 import subprocess
 import sys
 import tempfile
@@ -12,6 +13,21 @@ PROFILER = pathlib.Path(__file__).with_name("time_gate.py").resolve()
 
 
 class GateTimingTests(unittest.TestCase):
+    def test_server_stop_reaches_the_wrapped_engine(self):
+        with tempfile.TemporaryDirectory(prefix="wptest-server-stop-") as directory:
+            root = pathlib.Path(directory)
+            log = root / "steps.jsonl"
+            child = 'import time; print("server ready", flush=True); time.sleep(30)'
+            command = [sys.executable, str(PROFILER), "--probe", "godot", sys.executable, "-c", child]
+            with subprocess.Popen(command, env={**os.environ, "PROPANE_TIMING_LOG": str(log)},
+                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True) as process:
+                self.assertEqual(process.stdout.readline().strip(), "server ready")
+                process.terminate()
+                process.communicate(timeout=5)
+                self.assertNotEqual(process.returncode, 0)
+            row = json.loads(log.read_text())
+            self.assertEqual(row["code"], -signal.SIGTERM)
+
     def test_parallel_steps_and_failures(self):
         with tempfile.TemporaryDirectory(prefix="wptest-timing-") as directory:
             root = pathlib.Path(directory)
@@ -29,6 +45,10 @@ class GateTimingTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             rows = [json.loads(line) for line in (output / "steps.jsonl").read_text().splitlines()]
             self.assertCountEqual([row["command"][0] for row in rows], ["godot", "dotnet", "python3"])
+            self.assertTrue(all(row["finished"] >= row["started"] for row in rows))
+            total = json.loads((output / "total.json").read_text())
+            self.assertGreaterEqual(total["finished"], total["started"])
+            self.assertEqual(len(total["load"]), 3)
             scene = next(row for row in rows if row["command"][0] == "godot")
             self.assertIsNotNone(scene["startup"])
             self.assertGreaterEqual(scene["work_and_exit"], 0)

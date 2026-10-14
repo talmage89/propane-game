@@ -16,6 +16,9 @@ class LauncherChecks(unittest.TestCase):
 import os
 import sys
 if "--server" in sys.argv:
+    if os.environ["NAS_FAULT"] == "startup":
+        sys.exit(7)
+    print("listening on UDP " + next(arg.split("=", 1)[1] for arg in sys.argv if arg.startswith("--port=")) + " (test)", flush=True)
     print("match 1: bank audit initial=0 map=1 drops=0 spills=0 banked=1 expected=1 ok=True")
 else:
     assert "--tank-check" in sys.argv
@@ -44,6 +47,12 @@ else:
                        str(Path(__file__).with_name("net_bots.sh")), "-g", str(fake), "-n", "2", "-l", "4",
                        "-o", str(root / "logs"), *flags]
             return subprocess.run(command, env={**os.environ, "NAS_FAULT": fault}, capture_output=True, text=True)
+
+    def test_failed_server_stops_before_clients_launch(self):
+        result = self.run_launcher("startup")
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("server did not become ready", result.stderr)
+        self.assertNotIn("bots finished", result.stdout)
 
     def test_pass_and_both_independent_failures(self):
         for fault, status, output in (("none", 0, "PASS tanks"), ("tank", 1, "FAIL tanks"),
