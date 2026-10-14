@@ -39,21 +39,28 @@ public partial class LabTest
         }
     }
 
-    /// <summary>Runs straight down the street's crown at a set pace, steering back to it: no aim, no navigation.</summary>
-    private sealed class Pacer(PlayerCharacter player, bool sprint, float walk) : IPlayerInputSource
+    /// <summary>
+    /// Runs down the street at a set pace without aim or navigation: along its crown, or a lane to either side when tanks
+    /// stand on the crown ahead (the jackpot pyramid).
+    /// </summary>
+    private sealed class Pacer(PlayerCharacter player, Func<IEnumerable<Tank.PropaneTank>> tanks, bool sprint, float walk) : IPlayerInputSource
     {
-        public PlayerIntent Read() => new()
+        private static readonly float[] Lanes = { 0f, 1.4f, -1.4f };
+
+        public PlayerIntent Read()
         {
-            Move = new Vector2(Mathf.Clamp(-player.GlobalPosition.Z * 0.35f, -0.6f, 0.6f), walk),
-            Sprint = sprint,
-        };
+            var at = player.GlobalPosition;
+            var ahead = tanks().Select(t => t.GlobalPosition).Where(p => p.X > at.X - 1f && p.X < at.X + 12f).ToArray();
+            var lane = Lanes.First(z => Array.TrueForAll(ahead, p => Mathf.Abs(p.Z - z) > 1.3f) || z == Lanes[^1]);
+            return new PlayerIntent { Move = new Vector2(Mathf.Clamp((lane - at.Z) * 0.35f, -0.6f, 0.6f), walk), Sprint = sprint };
+        }
     }
 
     /// <summary>
     /// A scripted Dissolve Run, headless: the bot drives the player down the street for --seconds (default 240), then
     /// stops (--stop-at) and must be caught by the front within the time the front needs to cover the gap. Throughout,
     /// segments must build ahead and retire behind, the live segments and their nodes and bodies must stay bounded, the
-    /// whole tree's nodes and objects must not grow, and the score must add up. It reports frame times (wall, per
+    /// whole tree's nodes must not grow, and the score must add up. It reports frame times (wall, per
     /// rendered frame), segment build and retire times and memory, per --report-every seconds, and with --metrics writes
     /// one CSV row per second. --driver=pace runs the player straight down the street (--pace=walk|run|sprint) without the
     /// bot, so frame times measure the stream and the world rather than bot navigation. --shots=4,12.5 adds --capture-dir screenshots at those run times; --camera=overview|ahead|behind|side watches
@@ -87,7 +94,7 @@ public partial class LabTest
             if (!lab.DrivePlayer)
             {
                 var pace = DevArgs.Get("pace") ?? "run";
-                lab.Player.InputOverride = new Pacer(lab.Player, pace == "sprint", pace == "walk" ? 0.5f : 1f);
+                lab.Player.InputOverride = new Pacer(lab.Player, () => lab.LiveTanks, pace == "sprint", pace == "walk" ? 0.5f : 1f);
             }
             var runner = lab.Prototype!;
             var arena = lab.Dissolve!;
@@ -233,8 +240,9 @@ public partial class LabTest
                 var late = census.Skip(census.Count - third).ToArray();
                 Assert(late.Max(c => c.Nodes) <= early.Max(c => c.Nodes) * 1.5 + 500 && late.Max(c => c.Bodies) <= early.Max(c => c.Bodies) * 1.5 + 50,
                     $"segment nodes/bodies grew: {early.Max(c => c.Nodes)}/{early.Max(c => c.Bodies)} -> {late.Max(c => c.Nodes)}/{late.Max(c => c.Bodies)}");
-                Assert(late.Max(c => c.Tree) <= early.Max(c => c.Tree) * 1.5 + 500 && late.Max(c => c.Objects) <= early.Max(c => c.Objects) * 1.5 + 2000,
-                    $"the tree grew: {early.Max(c => c.Tree)}/{early.Max(c => c.Objects)} -> {late.Max(c => c.Tree)}/{late.Max(c => c.Objects)}");
+                // Godot's object count is reported, not asserted: it rises until the .NET GC releases wrappers, then drops.
+                Assert(late.Max(c => c.Tree) <= early.Max(c => c.Tree) * 1.5 + 500,
+                    $"the tree grew: {early.Max(c => c.Tree)} -> {late.Max(c => c.Tree)} nodes");
             }
             Report(seed, runner.Elapsed, frames.Select(f => f.Wall).ToArray(), census[^1], arena, final: true);
             var steps = physicsSteps.OrderBy(v => v).ToArray();

@@ -140,7 +140,7 @@ end with the player fallen below the slab, the score adding up (meters, tank poi
 chain and one push), segments built and retired, and the result paused on the controls panel. `--full` adds five-minute
 runs (`dissolve-full`: the bot on two seeds; `dissolve-pace`: a pacer that runs down the street without bot navigation,
 so its frame times measure the stream rather than the bot), which also require the live segments, their nodes and bodies
-and the whole tree to stay bounded (the last third of the run holding no more than the first third, give or take).
+and the whole tree's nodes to stay bounded (the last third of the run holding no more than the first third, give or take).
 `--only=soak-void,dials` runs only the named sessions (`lifetime`, `rules`, `aimstall`, `duel`, `ringout`, `king`,
 `shortfuse`, `shortfuse-combo`, `dissolve`, and with `--full` `dials`, `soak-void`, `soak-suburb`, `ringout-full`, `king-full`,
 `king-suburb`, `shortfuse-full`, `dissolve-full`, `dissolve-pace`); `make test-full` splits
