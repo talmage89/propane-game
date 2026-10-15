@@ -58,6 +58,8 @@ public partial class Tuning
     public float BotLaunchSpeedTolerance { get; set; } = 0.1f;
     public float BotJumpMinimumRange { get; set; } = 0.8f;
     public float BotFlightTimeoutFactor { get; set; } = 1.5f;
+    public float BotFleeDistance { get; set; } = 10f;
+    public int BotFleeDirections { get; set; } = 8;
     public float BotVentClearance { get; set; } = 1f;
     public float BotJumpCost { get; set; } = 0.25f;
     public float BotCoverDetourCost { get; set; } = 3f;

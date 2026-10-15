@@ -42,6 +42,7 @@ public sealed class BankingBot : IBotGoalPolicy
     private PlayerCharacter? capsuleOwner;
     private Vector3? navigationGoal;
     private Vector3 fleeGoal;
+    private int fleeAttempt;
     public int StuckEvents => navigator.StuckEvents;
     public int Replans => navigator.Replans;
     public int Jumps => navigator.Jumps;
@@ -140,13 +141,11 @@ public sealed class BankingBot : IBotGoalPolicy
             fleeing = null;
         }
         var danger = fleeing ?? match.Services.NearestVenting(here, tuning.RagdollRadius + 1f);
-        if (danger != fleeing || Flat(fleeGoal - here).Length() < tuning.BotGoalRadius * 2)
+        if (danger != null && (danger != fleeing || Flat(fleeGoal - here).Length() < tuning.BotGoalRadius * 2))
         {
-            // One destination per escape: a goal that moves with the bot restarts its route search every step.
-            var away = here - (danger?.GlobalPosition ?? here);
-            away.Y = 0;
-            away = away.LengthSquared() > 0.01f ? away.Normalized() : Vector3.Forward;
-            fleeGoal = here + away * 10f;
+            // Keep the destination fixed while searching/traveling, but do not retry a failed escape forever.
+            fleeAttempt = 0;
+            fleeGoal = BotMotor.EscapeGoal(here, danger.GlobalPosition, tuning, fleeAttempt);
         }
         fleeing = danger;
         if (danger != null)
@@ -830,6 +829,10 @@ public sealed class BankingBot : IBotGoalPolicy
             navigationGoal.Value, tuning, dt);
         if (move.Failed)
         {
+            if (fleeing != null && GodotObject.IsInstanceValid(fleeing))
+            {
+                fleeGoal = BotMotor.EscapeGoal(player.GlobalPosition, fleeing.GlobalPosition, tuning, ++fleeAttempt);
+            }
             if (target != null) { Blacklist(target, tuning.BotTargetRetryTime); }
             target = null;
             vantage = cover = null;

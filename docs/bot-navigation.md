@@ -59,7 +59,8 @@ when every way out passes nearer one tank; it never enters a circle it started o
 would deepen a clearance, it tries `BotIslandDirections` short sidesteps, nearest the goal direction first, requiring
 supported ground and a clear capsule sweep through the same shared query budget. Repeating only the direct escape
 could pin a fleeing bot between overlapping tank clearances indefinitely. Brains choose fixed goals for
-escapes (a venting tank) and vantage points outside every hazard, so a goal does not drift with the bot or lie where no
+escapes (a venting tank), alternate escape directions after bounded route failure (`BotFleeDirections` and
+`BotFleeDistance`), and vantage points outside every hazard, so a goal does not drift with the bot or lie where no
 route can end.
 
 `Tuning.Bot...` exposes route spacing/search budget, progress window/distance, retries, waypoint/goal radii,

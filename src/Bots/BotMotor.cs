@@ -191,6 +191,17 @@ public sealed class BotMotor
         if (!player.IsOnFloor()) Intent.Aim = false;
     }
 
+    /// <summary>A fixed escape destination; retries alternate around the away direction after a route fails.</summary>
+    internal static Vector3 EscapeGoal(Vector3 here, Vector3 danger, Tuning tuning, int attempt)
+    {
+        var away = Flat(here - danger);
+        away = away.LengthSquared() > 0.01f ? away.Normalized() : Vector3.Forward;
+        var directions = System.Math.Max(1, tuning.BotFleeDirections);
+        attempt %= directions;
+        var angle = ((attempt + 1) / 2) * (attempt % 2 == 0 ? -1 : 1) * Mathf.Tau / directions;
+        return here + away.Rotated(Vector3.Up, angle) * tuning.BotFleeDistance;
+    }
+
     public static Vector3 Flat(Vector3 v) => new(v.X, 0, v.Z);
 
     /// <summary>Where to aim at a body: its pelvis when down, its chest when up.</summary>
