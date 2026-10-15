@@ -660,9 +660,11 @@ from the match and actor ids, so it never draws from the world's shared random s
 Skill blends the existing Easy/Hard endpoints (`BotAimError...`, `BotReaction...`) and scales aim turning
 (`BotAimTurnSharpness` times 0.35–1). Aim error is the wobble around a fought player's aim point once the aim has
 settled; reaction is the delay before firing at a new opponent. Normal is the Lab duel's default skill (0.6), and
-Easy and Hard are the Lab's existing Easy and Hard. The goals, navigation and physics are identical at every
-difficulty. The dials are local C# properties like the other `Bot...` dials: they are copied into each world but never
-enter the match snapshot, so the owner's profile values decide its own bots and nothing else changes.
+Easy and Hard are the Lab's existing Easy and Hard. Easy and Normal keep objective-first goals; Hard compares
+expected point gains and leader spills in Tank Bank and King ([bot policies](bot-navigation.md#hard-points-policy)).
+Navigation and physics are identical at every difficulty. The dials are local C# properties like the other `Bot...`
+dials: they are copied into each world but never enter the match snapshot, so the owner's profile values decide
+its own bots and nothing else changes.
 
 **Validation.** `AddActor`, `UpdateActor` and `RemoveActor` gain a trailing UInt32: the roster revision the request was
 made against. In a waiting lobby the server refuses, without changing anything, a request on any other revision ("The
