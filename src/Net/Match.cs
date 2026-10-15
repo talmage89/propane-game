@@ -980,7 +980,8 @@ public partial class Match : Node3D
                 phase = Phase.Playing;
                 timeLeft = ((FloatMessage)message.Payload).Value;
                 foreach (var actor in Session.OwnedActors) actor.Character.InputLocked = false;
-                matchHud.ShowCountdown("GO");
+                // The lobby world greets arrivals with its own banner instead.
+                if (!IsLobby) matchHud.ShowCountdown("GO");
                 break;
             case Msg.Clock:
                 if (phase == Phase.Playing) { timeLeft = ((FloatMessage)message.Payload).Value; }
