@@ -89,7 +89,9 @@ public static class LobbyWorldTests
         new ModeWorld(ModeWorldSource.Void, 1, 0, LobbyLayout.Spots(spots, 10)),
         new ModeTuners(new Dictionary<string, double>
         {
-            [LobbyRules.LobbyRefillDelay] = delay, [LobbyRules.LobbyTankLimit] = limit, [LobbyRules.LobbyPileCount] = pile,
+            [LobbyRules.LobbyRefillDelay] = delay,
+            [LobbyRules.LobbyTankLimit] = limit,
+            [LobbyRules.LobbyPileCount] = pile,
         }), 1);
 
     private static ModeClock At(double now) => new(ModePhase.Round, 1, now, double.PositiveInfinity);
@@ -412,7 +414,7 @@ public static class LobbyWorldTests
 
                 // A bot of this peer arrives with its brain; another peer's new actor arrives as a remote copy.
                 var bot = new PlayerProfile(40, "Arrival", AppearanceRecord.FromPalette(3))
-                    { OwnerPeerId = 2, Kind = ActorKind.Bot, ControllerConfig = ControllerConfig.ForBot(2), AllocationSlot = 30 };
+                { OwnerPeerId = 2, Kind = ActorKind.Bot, ControllerConfig = ControllerConfig.ForBot(2), AllocationSlot = 30 };
                 var guestBot = bot with { Id = 41, Name = "Visitor", OwnerPeerId = 3, AllocationSlot = 31 };
                 client.Handle(MessageCodec.Encode(new NetMessage(Msg.LobbyState, 0, 0,
                     lobby with { Members = lobby.Members.Append(bot).Append(guestBot).ToArray(), RosterRevision = lobby.RosterRevision + 1 }), true));
@@ -429,13 +431,16 @@ public static class LobbyWorldTests
                     "a removed bot leaves with its brain; a changed color follows");
                 client.Handle(MessageCodec.Encode(new NetMessage(Msg.LobbyState, 0, 0, lobby with
                 {
-                    Members = lobby.Members.Append(recolored).ToArray(), RosterRevision = lobby.RosterRevision + 3,
-                    Phase = LobbyServer.LobbyPhase.Staging, StartsIn = 3,
+                    Members = lobby.Members.Append(recolored).ToArray(),
+                    RosterRevision = lobby.RosterRevision + 3,
+                    Phase = LobbyServer.LobbyPhase.Staging,
+                    StartsIn = 3,
                 }), true));
                 TestRunner.Assert(world.Player.InputLocked && client.StageLeft is > 2.9 and <= 3, "the stage holds this player still and counts down");
                 client.Handle(MessageCodec.Encode(new NetMessage(Msg.LobbyState, 0, 0, lobby with
                 {
-                    Members = lobby.Members.Append(recolored).ToArray(), RosterRevision = lobby.RosterRevision + 4,
+                    Members = lobby.Members.Append(recolored).ToArray(),
+                    RosterRevision = lobby.RosterRevision + 4,
                 }), true));
                 TestRunner.Assert(!world.Player.InputLocked && client.StageLeft == 0, "a canceled stage frees them");
             }
