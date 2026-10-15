@@ -14,7 +14,7 @@ public partial class Tuning
     /// <summary>Tanks in each lobby pile.</summary>
     [Export(PropertyHint.Range, "1,30,1")] public int LobbyPileCount { get; set; } = 10;
     /// <summary>Radius (meters) of the ring the piles stand on.</summary>
-    [Export(PropertyHint.Range, "6,60,1")] public float LobbyPileRing { get; set; } = 17f;
+    [Export(PropertyHint.Range, "6,60,1")] public float LobbyPileRing { get; set; } = 13f;
     /// <summary>Radius (meters) of the ring players arrive on, each at a spot of their own.</summary>
     [Export(PropertyHint.Range, "2,40,0.5")] public float LobbySpawnRing { get; set; } = 6f;
     /// <summary>Seconds after a pile's last intact tank is gone before a fresh pile materializes there.</summary>

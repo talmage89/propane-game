@@ -94,7 +94,9 @@ public partial class Match
     /// <summary>The roster as it is now, once the world is ready (it may have changed since the server sent the start).</summary>
     private void ReadyLobby()
     {
-        if (IsLobby) OnLobbyChanged();
+        if (!IsLobby) return;
+        if (lobbyFloor != null) lobbyFloor.Facing = player.FacingYaw;
+        OnLobbyChanged();
     }
 
     private void OnLobbyChanged()
@@ -174,10 +176,13 @@ public partial class Match
     private void AttachLobbyBot(PlayerCharacter actor, PlayerProfile profile)
     {
         if (mode.CreateBot is not { } create) return;
+        botServices ??= new BotServices(World, plan.Bounds);
         var brain = create((ulong)(uint)Setup.Id << 32 | (uint)profile.Id);
         brain.Skill = BotProfile.For(profile.ControllerConfig.Difficulty, World.Tuning).Skill;
         actor.InputOverride = brain;
-        bots.Add(new OwnedBot(this, actor, brain));
+        var view = new OwnedBot(this, actor, brain, botServices);
+        brain.Prepare(view);
+        bots.Add(view);
     }
 
     /// <summary>The arrival's view of the world marks the piles standing in it as piles, as a built plan's are.</summary>

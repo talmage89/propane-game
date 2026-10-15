@@ -10,8 +10,8 @@ namespace Propane.Fx;
 /// <summary>
 /// The lobby world's markings on the void's floor, which keep its few meters readable the way the Lab's markers do:
 /// an orange pad where each pile stands and comes back, a faint ring joining them, and the lobby's name written on the
-/// floor in the middle, where everyone arrives facing it. Refilled piles build themselves out of a scan ring here, as
-/// King's fresh piles do.
+/// floor in the middle, where everyone arrives facing it (each peer turns it toward its own player's arrival, so it
+/// reads the right way up for everyone). Refilled piles build themselves out of a scan ring here, as King's fresh piles do.
 /// </summary>
 public partial class LobbyFloor : Node3D
 {
@@ -20,6 +20,8 @@ public partial class LobbyFloor : Node3D
     public required IReadOnlyList<ModeSpot> Spots { get; init; }
     /// <summary>Written on the floor in the middle (the lobby's name).</summary>
     public string Title { get; set; } = "";
+    /// <summary>The yaw the title reads from: this peer's player as it arrived.</summary>
+    public float Facing { get; set; }
 
     private readonly List<(PropaneTank Tank, Vector3 Center, float Age)> materializing = new();
     private Label3D title = null!;
@@ -30,14 +32,15 @@ public partial class LobbyFloor : Node3D
     public override void _Ready()
     {
         var tuning = World.Tuning;
-        var pad = new StandardMaterial3D { AlbedoColor = UiStyle.Accent, Roughness = 1 };
+        var pad = new StandardMaterial3D { AlbedoColor = UiStyle.Accent.Lerp(Colors.White, 0.3f), Roughness = 1 };
         var line = new StandardMaterial3D
         {
             AlbedoColor = new Color(UiStyle.Ink, 0.12f),
             Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
             ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
         };
-        var reach = Mathf.Max(1f, tuning.LobbyPileReach * 0.45f);
+        // A pad just wider than its pile: where the tanks come back, not a zone.
+        var reach = Mathf.Clamp(tuning.LobbyPileReach * 0.25f, 0.8f, 2f);
         foreach (var spot in Spots)
         {
             AddChild(new MeshInstance3D
@@ -89,6 +92,7 @@ public partial class LobbyFloor : Node3D
     public override void _Process(double delta)
     {
         title.Text = Title.ToUpperInvariant();
+        title.Basis = new Basis(Vector3.Up, Facing) * new Basis(Vector3.Right, -Mathf.Pi / 2);
         var seconds = Mathf.Max(0.05f, World.Tuning.LobbyMaterializeSeconds);
         for (var i = materializing.Count - 1; i >= 0; i--)
         {
