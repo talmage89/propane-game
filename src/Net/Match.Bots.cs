@@ -15,7 +15,7 @@ public partial class Match
     /// physics and messages. Only its intent differs, which the mode's goal policy chooses from this peer's view of
     /// the match. It has no camera, audio listener or HUD.
     /// </summary>
-    private sealed class OwnedBot(Match match, PlayerCharacter actor, IBotGoalPolicy brain) : IBotWorld
+    private sealed class OwnedBot(Match match, PlayerCharacter actor, IBotGoalPolicy brain, BotServices services) : IBotWorld
     {
         public readonly List<PlayerCharacter> Others = new();
         public PlayerCharacter Actor => actor;
@@ -30,16 +30,41 @@ public partial class Match
         public double LastHitTime => actor.Runtime.LastHitTime;
         public int LastHitBy => actor.Runtime.LastHitBy;
         // Everyone else in the match, this peer's other actors included; refreshed when the roster shrinks.
-        public IEnumerable<PlayerCharacter> RemoteBodies => Others;
+        public IReadOnlyList<PlayerCharacter> RemoteBodies => Others;
         public IReadOnlyList<AmmoPickup> Pickups => match.pickups;
-        public IEnumerable<PropaneTank> LiveTanks => match.LiveTanks;
+        public BotServices Services => services;
         public Modes.IModeView? View => match.ModeView;
+        public KingBotView? King => match.BotKing;
     }
 
+    internal Dictionary<uint, PropaneTank>.ValueCollection BotTanks => tanks.Values;
+    /// <summary>Read the received zone at this peer's clock without allocating KingState.At for each brain.</summary>
+    internal KingBotView? BotKing => kingState != null
+        ? KingBotView.Read(kingState, System.Math.Max(0, Setup.Length - timeLeft)) : null;
     private readonly List<OwnedBot> bots = new();
+    private BotServices? botServices;
+    private int botTurn;
 
-    /// <summary>Owned bot actors and their brains' cost on this peer: think calls, seconds, managed bytes and inclusive navigation seconds. Navigation timing requires EffectProfile.Enabled.</summary>
-    internal (int Bots, long Thinks, double Seconds, long Bytes, double NavigationSeconds) BotCost { get; private set; }
+    /// <summary>
+    /// Owned bot actors and their brains' cost on this peer: think calls, physics ticks with bots, seconds (in all and
+    /// in the worst tick), managed bytes allocated, and the navigation physics queries and sight rays they made.
+    /// </summary>
+    internal (int Bots, long Thinks, long Ticks, double Seconds, double Worst, long Bytes, long Queries, long Rays, double NavigationSeconds) BotCost { get; private set; }
+
+    internal (long Ticks, double Seconds, double Worst, long Bytes, long AllocatingTicks, long PeakBytes) WarmBotCost { get; private set; }
+    private long playingBotTicks;
+    private readonly long[] botTickHistogram = new long[1001]; // 0.01 ms bins; last holds >=10 ms.
+    internal double BotTickPercentile(double fraction)
+    {
+        var wanted = (long)System.Math.Ceiling(WarmBotCost.Ticks * fraction);
+        long count = 0;
+        for (var i = 0; i < botTickHistogram.Length; i++)
+        {
+            count += botTickHistogram[i];
+            if (count >= wanted) return i / 100d;
+        }
+        return 0;
+    }
 
     /// <summary>The goal policy driving an owned bot actor, if this peer owns one with that id.</summary>
     internal IBotGoalPolicy? BotBrain(int actorId)
@@ -54,25 +79,34 @@ public partial class Match
         if (mode.CreateBot is not { } create) return;
         foreach (var owned in Session.OwnedActors)
         {
+            if (profiles[owned.Character.ActorId].Kind == ActorKind.Bot) botServices ??= new BotServices(World, plan.Bounds);
             var profile = profiles[owned.Character.ActorId];
             if (profile.Kind != ActorKind.Bot) continue;
             // Seeded per match and actor, so a bot never draws from the world's shared random stream.
             var brain = create((ulong)(uint)Setup.Id << 32 | (uint)profile.Id);
             brain.Skill = BotProfile.For(profile.ControllerConfig.Difficulty, World.Tuning).Skill;
             owned.Character.InputOverride = brain;
-            bots.Add(new OwnedBot(this, owned.Character, brain));
+            var view = new OwnedBot(this, owned.Character, brain, botServices!);
+            brain.Prepare(view);
+            bots.Add(view);
         }
         RefreshBotPeers();
-        BotCost = (bots.Count, 0, 0, 0, 0);
+        BotCost = (bots.Count, 0, 0, 0, 0, 0, 0, 0, 0);
         Session.OnStopping(() =>
         {
             foreach (var bot in bots) bot.Brain.Dispose();
             bots.Clear();
+            botServices?.Dispose();
+            botServices = null;
         });
     }
 
     private void RefreshBotPeers()
     {
+        if (botServices != null)
+        {
+            foreach (var actor in Session.Actors) botServices.PrepareActor(actor.Character);
+        }
         foreach (var bot in bots)
         {
             bot.Others.Clear();
@@ -85,14 +119,33 @@ public partial class Match
 
     private void ThinkBots(float dt)
     {
-        if (bots.Count == 0) return;
+        if (bots.Count == 0 || botServices == null) return;
         var started = Stopwatch.GetTimestamp();
         var allocated = System.GC.GetAllocatedBytesForCurrentThread();
         var navigation = EffectProfile.Enabled ? EffectProfile.Peek(EffectProfile.System.BotNavigation) : 0;
-        foreach (var bot in bots) bot.Brain.Think(bot, dt);
+        var queries = botServices.NavigationQueries;
+        var rays = botServices.RayLines;
+        botServices.BeginTick(tanks.Values);
+        // Who thinks first takes turns, so no bot always meets a budget the others have spent.
+        botTurn = (botTurn + 1) % bots.Count;
+        for (var i = 0; i < bots.Count; i++)
+        {
+            var bot = bots[(botTurn + i) % bots.Count];
+            bot.Brain.Think(bot, dt);
+        }
+        var seconds = Stopwatch.GetElapsedTime(started).TotalSeconds;
+        var bytes = System.GC.GetAllocatedBytesForCurrentThread() - allocated;
+        if (IsPlaying && ++playingBotTicks > 1200) // Exclude ten simulated seconds of cache/buffer warm-up.
+        {
+            var warm = WarmBotCost;
+            WarmBotCost = (warm.Ticks + 1, warm.Seconds + seconds, System.Math.Max(warm.Worst, seconds), warm.Bytes + bytes,
+                warm.AllocatingTicks + (bytes > 0 ? 1 : 0), System.Math.Max(warm.PeakBytes, bytes));
+            botTickHistogram[System.Math.Min(botTickHistogram.Length - 1, (int)(seconds * 100000))]++;
+        }
         var cost = BotCost;
-        BotCost = (cost.Bots, cost.Thinks + bots.Count, cost.Seconds + Stopwatch.GetElapsedTime(started).TotalSeconds,
-            cost.Bytes + System.GC.GetAllocatedBytesForCurrentThread() - allocated,
+        BotCost = (cost.Bots, cost.Thinks + bots.Count, cost.Ticks + 1, cost.Seconds + seconds, System.Math.Max(cost.Worst, seconds),
+            cost.Bytes + bytes, cost.Queries + botServices.NavigationQueries - queries,
+            cost.Rays + botServices.RayLines - rays,
             cost.NavigationSeconds + (EffectProfile.Enabled ? (EffectProfile.Peek(EffectProfile.System.BotNavigation) - navigation) / 1000 : 0));
     }
 }

@@ -197,7 +197,7 @@ public partial class LabTest : Node
         var lab = Enter(scenario, environment);
         var tankCount = lab.LiveTanks.Count();
         Assert(tankCount > 0, "fixture has no tanks");
-        Assert(!lab.World.Networked && lab.Session.Actors.Count == (scenario.Banking ? 2 :
+        Assert(!lab.World.Networked && lab.Session.Actors.Count == (scenario.Banking ? template.LabBankBots + 1 :
             scenario.Prototype && scenario.Definition != ModeRegistry.DissolveRun ? template.LabPrototypeBots + 1 : 1),
             "local actors/world");
         Assert(lab.Opponent?.View == null, "bot acquired a camera");
@@ -286,23 +286,46 @@ public partial class LabTest : Node
     private async Task Duel(bool soak = false)
     {
         if (DevArgs.Get("duel-seconds") != null) template.LabDuelSeconds = DevArgs.GetFloat("duel-seconds", 180);
+        template.LabBankBots = (int)DevArgs.GetFloat("bots", 1);
+        DevArgs.ApplyTuningOverrides(template);
         var lab = Enter(LabScenarios.Get("duel"), DevArgs.Get("environment") == "suburb" ? LabEnvironment.Suburb : LabEnvironment.Void);
+        Assert(lab.Session.Actors.Count == template.LabBankBots + 1, "banking roster ignored the bot count");
+        Assert(lab.Session.Actors.Select(a => a.Character.GlobalPosition).Distinct().Count() == lab.Session.Actors.Count, "banking actors share a start");
+        Assert(lab.Session.Actors.Where(a => a.Character != lab.Player).All(a => a.Character.View == null && a.Character.InputOverride is IBotGoalPolicy),
+            "banking bots need owned brains without local views");
         if (soak) lab.Bank!.AttachBot(lab.Player);
         else lab.Player.InputOverride = new ScriptedPlayer(lab);
         // The scripted player taps visible tanks through the actor intent/aim path; neither bank is granted.
         var seconds = (int)DevArgs.GetFloat("seconds", soak ? 180 : 45);
+        var shots = (DevArgs.Get("shots") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries)
+            .Select(v => double.Parse(v, CultureInfo.InvariantCulture)).ToArray();
+        var shot = 0;
         var frame = 0;
         while (lab.Bank!.IsPlaying && lab.World.Clock.Now < seconds)
         {
             Assert(frame++ < seconds * 120, "duel simulation stalled");
+            if (shot < shots.Length && lab.World.Clock.Now >= shots[shot]) capture.Screenshot($"duel_{shots[shot++]:000}s");
             await Frames(1).ConfigureAwait(true);
         }
         var bank = lab.Bank!;
-        GD.Print($"[lab duel] seconds={seconds} simulation={lab.World.Clock.Now:F3} banked={bank.BankedTotal} spilled={bank.SpilledTotal} hits={bank.Hits} you={bank.Scores[1]} bot={bank.Scores[2]} earned_you={bank.Earned[1]} earned_bot={bank.Earned[2]} live={lab.LiveTanks.Count()}");
-        Assert(bank.BankedTotal > 0 && bank.Earned[2] > 0, "banking bot earned no bank");
+        var botEarned = bank.Earned.Where(s => s.Key != lab.Player.ActorId).Sum(s => s.Value);
+        GD.Print($"[lab duel] seconds={seconds} simulation={lab.World.Clock.Now:F3} banked={bank.BankedTotal} spilled={bank.SpilledTotal} hits={bank.Hits} you={bank.Scores[1]} bot={bank.Scores[2]} earned_you={bank.Earned[1]} earned_bot={bank.Earned[2]} live={lab.LiveTanks.Count()} earned_bots={botEarned}");
+        // In a larger roster the first rival can finish empty while the other bots bank.
+        Assert(bank.BankedTotal > 0 && botEarned > 0, "banking bots earned no bank");
         // A bot that freezes for most of the round (the suburb once banked one tank in 180 s) must not pass.
-        if (soak) Assert(bank.Earned[1] + bank.Earned[2] >= 10, $"two banking bots earned only {bank.Earned[1] + bank.Earned[2]} tanks");
+        var earned = bank.Earned.Values.Sum();
+        if (soak) Assert(earned >= 10, $"banking bots earned only {earned} tanks");
         Assert(bank.Scores.Values.Sum() + lab.LiveTanks.Count() == bank.InitialSupply, "bank conservation");
+        if (!bank.IsPlaying)
+        {
+            await Frames(2).ConfigureAwait(true);
+            var best = bank.Scores.Where(s => s.Key != lab.Player.ActorId).OrderByDescending(s => s.Value).First();
+            var mine = bank.Scores[lab.Player.ActorId];
+            var name = template.LabBankBots == 1 ? "BOT" : $"BOT {best.Key - 1}";
+            var expected = mine > best.Value ? "YOU WIN" : mine == best.Value ? "TIED" : $"{name} WINS";
+            Assert(lab.Overlay.ResultTitle == expected, "banking result ignored the strongest bot");
+            Assert(lab.Overlay.StatusText.Contains($"  {best.Value}    ·", StringComparison.Ordinal), "banking HUD omitted the best opponent's score");
+        }
         Assert(lab.Opponent!.View == null && !lab.World.Networked, "duel needs camera/network");
         capture.Screenshot(soak ? "duel_soak_end" : "duel_bot_bank");
         if (!bank.IsPlaying)
@@ -540,7 +563,7 @@ public partial class LabTest : Node
                 if (DevArgs.Get("trace") != null && frame % 300 == 0 && lab.Prototype is { } traced)
                 {
                     GD.Print($"[lab trace] {traced.Elapsed:F1}s " + string.Join(" | ", lab.Session.Actors.Select(a =>
-                        $"{a.Character.ActorId} {((ShortFuseRules)traced.Rules).Health.Health(a.Character.ActorId, traced.Clock.Now):0} {traced.BotStatus(a.Character.ActorId)}")));
+                        $"{a.Character.ActorId} {((ShortFuseRules)traced.Rules).Health.Health(a.Character.ActorId, traced.Clock.Now):0} {traced.BotStatus(a.Character.ActorId)} pos={a.Character.GlobalPosition} nav={traced.BotNavigation(a.Character.ActorId)}")));
                 }
                 await Frames(1).ConfigureAwait(true);
             }

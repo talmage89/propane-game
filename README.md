@@ -61,6 +61,8 @@ the window to recapture it after switching away.
 `make bench` measures a fixed suburb across 0/2/4/8/16 in-process bots and 1×/2×/4×/8× tank supply,
 headless and rendered, with three repetitions and JSON comparisons. `make bench CONFIG=Debug,Release` alternates
 the two C# builds per case. [Workload, columns and comparison procedure](docs/measuring-scale.md).
+[Bot scale results](docs/bot-scale.md) compare the shared navigation implementation with the previous brains,
+including rendered sixteen-bot runs, match outcomes and remaining allocation/network limits.
 
 ## Lab
 
@@ -70,6 +72,7 @@ King of the Cul-de-sac and Short Fuse (last one standing, with health) are new m
 Dissolve Run is a solo run down an endless street that builds ahead and dissolves behind, so their rules can be judged
 before anything ships. Each starter can reset and has a
 controller-accessible controls menu. Unsaved tuning changes stay in that Lab session. [Lab controls and verification](docs/lab.md).
+Banking, Ring Out, King of the Cul-de-sac and Short Fuse Lab sessions support up to fifteen NPCs.
 
 ## Multiplayer
 

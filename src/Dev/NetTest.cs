@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using Godot;
+using Propane.Bots;
 using Propane.Core;
 using Propane.Modes;
 using Propane.Net;
@@ -29,6 +30,9 @@ public partial class NetTest : Node
     private IBotBrain bot = null!;
     private NetClient net = null!;
     private Match? match;
+    private long matchAllocated;
+    private TimeSpan matchGcPause;
+    private readonly int[] matchCollections = new int[3];
     private CaptureDirector director = null!;
     private string role = "host";
     private int players = 2;
@@ -159,6 +163,9 @@ public partial class NetTest : Node
                 Log("tank-check loading stall 9s");
                 System.Threading.Thread.Sleep(TimeSpan.FromSeconds(9));
             }
+            matchAllocated = GC.GetTotalAllocatedBytes();
+            matchGcPause = GC.GetTotalPauseDuration();
+            for (var generation = 0; generation < matchCollections.Length; generation++) matchCollections[generation] = GC.CollectionCount(generation);
             (bot as IDisposable)?.Dispose();
             // The transmitted definition chooses the policy. The original simple benchmark remains Tank Bank only.
             bot = setup.ModeId == ModeRegistry.TankBankId && DevArgs.Get("brain") == "simple" ? new SimpleBot()
@@ -191,6 +198,18 @@ public partial class NetTest : Node
                 if (match.BotCost is { Bots: > 0 } cost)
                 {
                     Log(FormattableString.Invariant($"lobby bots {cost.Bots}: {cost.Thinks} thinks, mean {cost.Seconds * 1000 / Math.Max(cost.Thinks, 1):0.000} ms, {cost.Bytes / Math.Max(cost.Thinks, 1)} B allocated per think"));
+                    var warm = match.WarmBotCost;
+                    Log(FormattableString.Invariant($"bot ticks {cost.Ticks}: mean_ms={cost.Seconds * 1000 / Math.Max(cost.Ticks, 1):F3} worst_ms={cost.Worst * 1000:F3} queries={cost.Queries} rays={cost.Rays}"));
+                    Log(FormattableString.Invariant($"bot warm ticks {warm.Ticks}: mean_ms={warm.Seconds * 1000 / Math.Max(warm.Ticks, 1):F3} p50_ms={match.BotTickPercentile(0.5):F2} p95_ms={match.BotTickPercentile(0.95):F2} p99_ms={match.BotTickPercentile(0.99):F2} worst_ms={warm.Worst * 1000:F3} bytes={warm.Bytes} allocating_ticks={warm.AllocatingTicks} peak_bytes={warm.PeakBytes}"));
+                    foreach (var actor in match.Session.OwnedActors)
+                    {
+                        if (match.BotBrain(actor.Character.ActorId) is BankingBot bank)
+                            Log($"bot navigation {actor.Character.ActorId}: stuck={bank.StuckEvents} blacklist={bank.BlacklistedTargets} replans={bank.Replans} jumps={bank.Jumps}");
+                    }
+                }
+                if (DevArgs.Get("frame-metrics") != null)
+                {
+                    Log(FormattableString.Invariant($"match gc: allocated_bytes={GC.GetTotalAllocatedBytes() - matchAllocated} pause_ms={(GC.GetTotalPauseDuration() - matchGcPause).TotalMilliseconds:F3} collections={GC.CollectionCount(0) - matchCollections[0]}/{GC.CollectionCount(1) - matchCollections[1]}/{GC.CollectionCount(2) - matchCollections[2]}"));
                 }
                 Digest();
                 if (!tankCheckFinal) { LogTankCheck(final: true); }
@@ -436,10 +455,11 @@ public partial class NetTest : Node
         {
             Watch(match, dt);
         }
-        else if (DevArgs.Get("look-at-bots") != null && match.RemoteBodies.Where(b => match.Setup.Players.Any(p => p.Player.Id == b.ActorId &&
+        else if (DevArgs.Get("look-at-bots") != null && match.Session.Actors.Select(a => a.Character).Where(b => b != match.Player && match.Setup.Players.Any(p => p.Player.Id == b.ActorId &&
                      p.Player.Kind == ActorKind.Bot)).OrderBy(b => b.GlobalPosition.DistanceTo(match.Player.GlobalPosition)).FirstOrDefault() is { } watched)
         {
-            // --look-at-bots: a still observer facing the nearest remote bot, to film how others see lobby bots.
+            // --look-at-bots: a still observer facing the nearest bot, including actors this peer owns.
+            match.Player.Spectating = watched;
             AimAt(match.Player, watched.GlobalPosition + Vector3.Up * 1.2f);
         }
         else if (DevArgs.Get("human") != "idle") // --human=idle: a still player, so frame costs measure lobby bots alone.
