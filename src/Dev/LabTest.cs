@@ -463,7 +463,8 @@ public partial class LabTest : Node
             foreach (var line in state.Report) GD.Print($"[lab prototype] {id} seed {seed}: {line.Text}");
             var brains = runner.Thinks / System.Math.Max(1, runner.Elapsed * 120);
             GD.Print($"[lab prototype] {id} seed={seed} environment={environment} round={runner.Elapsed:F1}s wall={wall:F1}s frames={frame} " +
-                $"brains={brains:F1} think_ms_per_tick={runner.ThinkSeconds * 1000 / System.Math.Max(1, runner.Elapsed * 120):F3}");
+                $"brains={brains:F1} think_ms_per_tick={runner.ThinkSeconds * 1000 / System.Math.Max(1, runner.Elapsed * 120):F3} " +
+                $"thinks={runner.Thinks} think_us_per_call={runner.ThinkSeconds * 1e6 / System.Math.Max(1, runner.Thinks):F2}");
             switch (runner.Rules)
             {
                 case RingOutRules ring:

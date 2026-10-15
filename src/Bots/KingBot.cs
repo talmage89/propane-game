@@ -21,7 +21,8 @@ public sealed class KingBot : IBotGoalPolicy
     private readonly RandomNumberGenerator rng = new();
     private readonly BotMotor motor = new();
     private readonly BotStatus status = new();
-    private readonly List<PropaneTank> candidates = new(256);
+    private readonly List<(PropaneTank Tank, float Distance)> candidates = new(256);
+    private readonly List<Vector3> prizeBodies = new(32);
     private int standZone = -1;
     private Vector3 standOffset;
     private float standCheck;
@@ -551,14 +552,19 @@ public sealed class KingBot : IBotGoalPolicy
         candidates.Clear();
         var tanks = world.LiveTanks;
         var bodies = world.RemoteBodies;
+        // These transforms cannot change during this synchronous search. Read each native position once,
+        // rather than once per tank/body pair and again for every candidate-ranking comparison.
+        prizeBodies.Clear();
+        for (var i = 0; i < bodies.Count; i++) prizeBodies.Add(bodies[i].GlobalPosition);
         for (var i = 0; i < tanks.Count; i++)
         {
             var t = tanks[i];
-            var d = t.GlobalPosition.DistanceTo(here);
+            var position = t.GlobalPosition;
+            var d = position.DistanceTo(here);
             if (t.Invulnerable || d <= safe || d >= 25f) continue;
             var crowded = false;
-            for (var j = 0; j < bodies.Count && !crowded; j++) crowded = bodies[j].GlobalPosition.DistanceTo(t.GlobalPosition) <= 1f;
-            if (!crowded) candidates.Add(t);
+            for (var j = 0; j < prizeBodies.Count && !crowded; j++) crowded = prizeBodies[j].DistanceTo(position) <= 1f;
+            if (!crowded) candidates.Add((t, d));
         }
         prize = null;
         while (prize == null && candidates.Count > 0)
@@ -566,9 +572,9 @@ public sealed class KingBot : IBotGoalPolicy
             var nearest = 0;
             for (var i = 1; i < candidates.Count; i++)
             {
-                if (candidates[i].GlobalPosition.DistanceTo(here) < candidates[nearest].GlobalPosition.DistanceTo(here)) nearest = i;
+                if (candidates[i].Distance < candidates[nearest].Distance) nearest = i;
             }
-            var t = candidates[nearest];
+            var t = candidates[nearest].Tank;
             candidates.RemoveAt(nearest);
             if (BotMotor.CanSee(world, player, t.GlobalTransform * PropaneTank.LocalCenter)) prize = t;
         }

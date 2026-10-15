@@ -302,6 +302,45 @@ internal static class NavigationTests
             }
             finally { player.Free(); enemy.Free(); }
         });
+        runner.Run("navigation/King prize searches refresh positions and preserve nearest clear choice", () =>
+        {
+            var player = new PlayerCharacter { World = runner.World, ActorId = 1, Position = Vector3.Right * 2 };
+            var enemy = new PlayerCharacter { World = runner.World, ActorId = 2, Position = Vector3.Right * 15 };
+            var near = PropaneTank.Create(runner.World);
+            var far = PropaneTank.Create(runner.World);
+            near.Position = Vector3.Right * 15;
+            far.Position = Vector3.Forward * 18;
+            near.Freeze = far.Freeze = true;
+            runner.World.Root.AddChild(player);
+            runner.World.Root.AddChild(enemy);
+            runner.World.ContentRoot.AddChild(near);
+            runner.World.ContentRoot.AddChild(far);
+            using var observations = new BankingWorld(runner.World, player, enemy)
+            {
+                View = new KingState(0, new ModeSpot(0, 0, 0), new ModeSpot(20, 0, 0), 6, 1, new[] { 1 },
+                    2, 2, 45, 3, Array.Empty<KingMinted>(), 0),
+            };
+            ((Dictionary<int, int>)observations.Scores)[2] = 0;
+            using var brain = new KingBot(23);
+            try
+            {
+                observations.Services.BeginTick(new List<PropaneTank> { near, far });
+                brain.Prepare(observations);
+                for (var i = 0; i < 120; i++) brain.Think(observations, 1f / 120);
+                var direction = (far.GlobalTransform * PropaneTank.LocalCenter - player.Aim.EyeOrigin).Normalized();
+                TestRunner.Assert((-player.Aim.EyeTransform.Basis.Z).Dot(direction) > 0.99f,
+                    "a body beside the nearest prize must leave the farther clear tank selected");
+                enemy.Teleport(Vector3.Right * 100, 0);
+                for (var i = 0; i < 120; i++) brain.Think(observations, 1f / 120);
+                direction = (near.GlobalTransform * PropaneTank.LocalCenter - player.Aim.EyeOrigin).Normalized();
+                TestRunner.Assert((-player.Aim.EyeTransform.Basis.Z).Dot(direction) > 0.99f,
+                    "the next prize search must refresh body positions and choose the newly clear nearest tank");
+                var before = GC.GetAllocatedBytesForCurrentThread();
+                for (var i = 0; i < 120; i++) brain.Think(observations, 1f / 120);
+                TestRunner.Assert(GC.GetAllocatedBytesForCurrentThread() == before, "warmed prize searches allocate");
+            }
+            finally { player.Free(); enemy.Free(); near.Free(); far.Free(); }
+        });
         runner.Run("navigation/King bot views match snapshots without steady allocation", () =>
         {
             var rules = new KingRules();
