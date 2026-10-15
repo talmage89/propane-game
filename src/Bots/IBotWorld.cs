@@ -68,6 +68,8 @@ public interface IBotGoalPolicy : IPlayerInputSource, System.IDisposable
     string StatusKind => Status;
     string NavigationDiagnostics => "";
     float Skill { get; set; }
+    /// <summary>Hard opts into score-swing decisions in modes that provide them; other policies ignore it.</summary>
+    bool PointsDriven { get => false; set { } }
     /// <summary>Reserves the brain and navigation buffers before the first physics tick.</summary>
     void Prepare(IBotWorld world) { }
     void Think(IBotWorld world, float dt);

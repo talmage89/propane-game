@@ -113,6 +113,33 @@ a tank in sight, and walks the zone's edge `BotKingRegroupStep` meters at a time
 than general stairs or roofs. Navigation caching and these local bot dials change no player physics, match
 messages, shared tuners or world construction.
 
+## Hard points policy
+
+Easy and Normal retain objective-first target scores. Hard enables `IBotGoalPolicy.PointsDriven` in Tank Bank and
+King. `BotPoints` estimates score swing per second: nearby chain neighbors bank points; bullets/melee or a blast
+beside a banked rival spill points; leaders' losses matter more than trailing rivals'. Spills get only fractional
+recovery credit because another player may bank them. Estimates include travel time, one versus two tank shots,
+drop shields, the available bank and return-fire exposure. Hard bankers compare those rates and protect a lead; a trailing Hard banker keeps seeking points even late. Ammo, escape, safe firing positions and immediate melee remain tactical constraints.
+
+King compares visible banking/spilling opportunities with reaching or holding the zone. Its mint estimate discounts
+contests, travel, risking its bank in a crowd and a relocation before it can mint, and credits stopping a rival holder's income. It can bank safe
+tanks outside the zone rather than joining an unprofitable crowd, or shoot a banked leader while holding its own
+zone. A banked bot circles outside an unprofitable crowd until a better opportunity opens. If nothing in sight pays better, it resumes the zone policy. The existing regroup behavior remains.
+
+`BotPointsHysteresis` boosts the current choice at each periodic decision; `BotPointsInterval` controls King's
+comparisons (bankers retain their target cadence). Every estimate weight/range/time is a local `Tuning.BotPoints...`
+property; `BotHardChasesPoints=false` provides an objective-policy A/B without changing difficulty's aim. These are
+estimates, not a promise of kills or bank recovery, and use no extra navigation searches. The shared tuner schema,
+world generation, scoring and messages are unchanged. A King prize whose rifle shot stays blocked for
+`BotStuckAimTime` is excluded for `BotTargetRetryTime`, so a good observation ray cannot pin a bot indefinitely.
+
+`tools/dev/check_bot_points.py` compares four Hard and four Normal actors in the same full Lab matches, alternates
+which four spawn slots are Hard, and requires a higher aggregate mean final bank for Hard in each scoring mode.
+`--policy-only` gives Hard Normal's aim to isolate target policy. Logs include earned and retained banks; retained
+banks decide the comparison. King conservation is checked every round, and the sweep requires some zone minting
+in aggregate (a single crowded round may mint nothing). This deeper strength sweep is separate from `make test`; headless unit assertions
+cover leader preference, spill caps, return-fire/travel costs, zone opportunities and runtime difficulty wiring.
+
 ## Regression course
 
 `scenes/dev/bot_navigation_course.tscn` runs seven courses per seed: closed fence, diagonal approach/bin, direct

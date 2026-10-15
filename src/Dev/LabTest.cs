@@ -10,6 +10,7 @@ using Propane.Core;
 using Propane.Fx;
 using Propane.Lab;
 using Propane.Modes;
+using Propane.Net;
 using Propane.Player;
 using Propane.Tank;
 using Propane.UI;
@@ -300,6 +301,18 @@ public partial class LabTest : Node
             Assert(worst <= DevArgs.GetFloat("max-idle-worst", 1), FormattableString.Invariant($"{label}: a bot idles {worst * 100:0.0}% of play"));
     }
 
+    private static void ReportPoints(LabSession lab, string mode, int seed, IReadOnlyDictionary<int, int> scores,
+        IReadOnlyDictionary<int, int> earned)
+    {
+        if (DevArgs.Get("compare-points") == null) return;
+        var hard = lab.Session.Actors.Where(a => a.Character.InputOverride is IBotGoalPolicy { PointsDriven: true }).Select(a => a.Character.ActorId).ToArray();
+        var normal = lab.Session.Actors.Where(a => a.Character.InputOverride is IBotGoalPolicy { PointsDriven: false }).Select(a => a.Character.ActorId).ToArray();
+        Assert(hard.Length > 0 && normal.Length > 0, "points comparison requires both policies");
+        GD.Print($"[lab points] mode={mode} seed={seed} hard={hard.Length} normal={normal.Length} " +
+            $"hard_score={hard.Sum(a => scores.GetValueOrDefault(a))} normal_score={normal.Sum(a => scores.GetValueOrDefault(a))} " +
+            $"hard_earned={hard.Sum(a => earned.GetValueOrDefault(a))} normal_earned={normal.Sum(a => earned.GetValueOrDefault(a))}");
+    }
+
     private async Task Duel(bool soak = false)
     {
         if (DevArgs.Get("duel-seconds") != null) template.LabDuelSeconds = DevArgs.GetFloat("duel-seconds", 180);
@@ -327,6 +340,7 @@ public partial class LabTest : Node
         }
         var bank = lab.Bank!;
         CheckIdle("duel", bank.Activity);
+        ReportPoints(lab, "bank", template.FixedSeed, bank.Scores, bank.Earned);
         var botEarned = bank.Earned.Where(s => s.Key != lab.Player.ActorId).Sum(s => s.Value);
         GD.Print($"[lab duel] seconds={seconds} simulation={lab.World.Clock.Now:F3} banked={bank.BankedTotal} spilled={bank.SpilledTotal} hits={bank.Hits} you={bank.Scores[1]} bot={bank.Scores[2]} earned_you={bank.Earned[1]} earned_bot={bank.Earned[2]} live={lab.LiveTanks.Count()} earned_bots={botEarned}");
         // In a larger roster the first rival can finish empty while the other bots bank.
@@ -456,6 +470,7 @@ public partial class LabTest : Node
                 case KingRules king:
                 {
                     var bank = king.Bank;
+                    ReportPoints(lab, "king", seed, runner.Scores, runner.Roster.ToDictionary(a => a.ActorId, a => bank.StatsFor(a.ActorId).Gained));
                     Assert(runner.Elapsed >= lab.World.Tuning.KingRoundSeconds - 0.01, "king ended before its clock");
                     Assert(bank.Conserved && bank.Minted == runner.Roster.Sum(a => king.MintedBy(a.ActorId)), $"king seed {seed}: bank not conserved");
                     Assert(runner.Roster.All(a => runner.Scores.GetValueOrDefault(a.ActorId) == bank.Bank(a.ActorId)), "scores disagree with the bank");
@@ -474,7 +489,7 @@ public partial class LabTest : Node
             await Collect().ConfigureAwait(true);
         }
         // Bot play, not legality: across full rounds somebody must hold the zone long enough to mint.
-        if (id == "king" && DevArgs.Get("quick") == null && until == float.MaxValue)
+        if (id == "king" && DevArgs.Get("quick") == null && DevArgs.Get("compare-points") == null && until == float.MaxValue)
             Assert(minted > 0, $"king: nobody minted across {seeds} rounds");
     }
 
@@ -848,8 +863,42 @@ public partial class LabTest : Node
             $"fixture must stall the bot on its aim first ({lab.Bank.BotStatus})");
         await Frames(6 * 60).ConfigureAwait(true);
         Assert(lab.Bank.BotBlacklisted >= 2, $"bot never gave up a pile with no clear shot ({lab.Bank.BotStatus})");
+        // Exercise Hard King's points path against the same shot-only obstruction. The zone expires before a
+        // trip could mint, making the blocked prize its best estimate until the actual rifle path disproves it.
+        lab.Bank.SetPhysicsProcess(false);
+        using var king = new KingBot(1) { PointsDriven = true };
+        using var view = new BlockedKingWorld(lab);
+        lab.Opponent.InputOverride = king;
+        king.Prepare(view);
+        for (var frame = 0; frame < 9 * 60; frame++)
+        {
+            view.Services.BeginTick(lab.BotTanks);
+            king.Think(view, 1f / 60);
+            if (frame == 3 * 60) Assert(king.Status.StartsWith("points: banking", StringComparison.Ordinal), "King did not choose the blocked prize");
+            await Frames(1).ConfigureAwait(true);
+        }
+        Assert(king.BlockedPointTargets >= 2, $"Hard King never abandoned the blocked prizes ({king.Status})");
+        lab.Opponent.InputOverride = null;
         lab.Session.Dispose(); lab.Free();
-        GD.Print("[lab aimstall] PASS the bot left a pile whose shots an obstruction stopped");
+        GD.Print("[lab aimstall] PASS bankers and Hard King left prizes whose shots an obstruction stopped");
+    }
+
+    private sealed class BlockedKingWorld(LabSession lab) : IBotWorld, IDisposable
+    {
+        public WorldContext World => lab.World;
+        public PlayerCharacter Player => lab.Opponent!;
+        public bool IsPlaying => true;
+        public float TimeLeft => 60;
+        public int MyScore => 0;
+        public IReadOnlyDictionary<int, int> Scores { get; } = new Dictionary<int, int>();
+        public double Now => lab.World.Clock.Now;
+        public double LastHitTime => double.NegativeInfinity;
+        public int LastHitBy => 0;
+        public IReadOnlyList<PlayerCharacter> RemoteBodies => Array.Empty<PlayerCharacter>();
+        public IReadOnlyList<AmmoPickup> Pickups => Array.Empty<AmmoPickup>();
+        public BotServices Services { get; } = new(lab.World);
+        public KingBotView? King => new KingBotView(0, new ModeSpot(100, 0, 0), new ModeSpot(200, 0, 0), 6, 0, false, 0.1);
+        public void Dispose() => Services.Dispose();
     }
 
     private static async Task FireAt(PlayerCharacter actor, Func<Vector3> point)

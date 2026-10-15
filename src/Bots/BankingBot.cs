@@ -60,6 +60,7 @@ public sealed class BankingBot : IBotGoalPolicy
     private float strafeSide = 1f;
     private float clock;
     private readonly BotAim aimControl = new();
+    private readonly BotPoints points = new();
     // Sight lines asked a few times a second and remembered in between.
     private Node3D? sighted;
     private bool sightedVisible;
@@ -78,6 +79,7 @@ public sealed class BankingBot : IBotGoalPolicy
 
     /// <summary>0..1: how quickly it turns onto a target and how tightly it holds aim. 1 is the hardest.</summary>
     public float Skill { get; set; } = 1f;
+    public bool PointsDriven { get; set; }
 
     public BankingBot(ulong? seed = null)
     {
@@ -223,8 +225,9 @@ public sealed class BankingBot : IBotGoalPolicy
             var chosen = Choose(match, ammo);
             // Keep a valid demolition goal stable while its route is being followed. Piles contain many
             // nearly equivalent tanks; distance-based retargeting otherwise discards the runway every 0.35 s.
-            if (chosen is PropaneTank && target is PropaneTank current && IsValid(current) &&
-                !blacklist.ContainsKey(current.GetInstanceId())) { chosen = target; }
+            if (chosen is PropaneTank nextTank && target is PropaneTank current && IsValid(current) &&
+                !blacklist.ContainsKey(current.GetInstanceId()) && (!PointsDriven ||
+                    nextTank.GlobalPosition.DistanceTo(current.GlobalPosition) <= tuning.ChainRadius)) { chosen = target; }
             if (chosen != target)
             {
                 blocked = 0;
@@ -268,11 +271,12 @@ public sealed class BankingBot : IBotGoalPolicy
     // ------------------------------------------------------------------ Choosing
 
     /// <summary>Holding a bank worth keeping: leading with a few, or holding several late in the match.</summary>
-    private static bool Protecting(IBotWorld match)
+    private bool Protecting(IBotWorld match)
     {
         var mine = match.MyScore;
         if (mine < 4) return false;
-        if (match.TimeLeft < 40f) return true;
+        // A trailing Hard bot must keep gaining/denying points even late; a leader still protects its bank.
+        if (!PointsDriven && match.TimeLeft < 40f) return true;
         var bodies = match.RemoteBodies;
         for (var i = 0; i < bodies.Count; i++)
         {
@@ -401,7 +405,8 @@ public sealed class BankingBot : IBotGoalPolicy
         }
 
         Node3D? best = null;
-        var bestScore = float.MinValue;
+        var bestScore = PointsDriven ? 0 : float.MinValue;
+        if (PointsDriven) points.Begin(match);
         // Players worth shooting: in sight, in range, with tanks to spill.
         var bodies = match.RemoteBodies;
         var cleared = tuning.BotHuntWhenEmpty && match.Services.Tanks.Count == 0;
@@ -414,13 +419,15 @@ public sealed class BankingBot : IBotGoalPolicy
             // against whoever just shot this bot.
             var avenging = enemy.ActorId == match.LastHitBy && match.Now - match.LastHitTime < 3;
             var hunting = cleared && banked > match.MyScore;
-            var worth = protecting ? banked > match.MyScore : banked >= 3 || banked >= 1 && distance < 18f || avenging && banked > 0;
+            var worth = PointsDriven ? banked > 0 && !enemy.IsRagdolled : protecting ? banked > match.MyScore : banked >= 3 || banked >= 1 && distance < 18f || avenging && banked > 0;
             if (blacklist.ContainsKey(enemy.GetInstanceId()) || !worth && !hunting || distance > PlayerRange && !hunting)
             {
                 continue;
             }
             // Worth it against anyone holding more; against smaller banks only when this bot has little to lose.
-            var score = 60f + banked * 6f - distance - (match.MyScore > banked + 2 ? 45f : 0f);
+            var score = PointsDriven ? points.Fight(match, enemy, distance) :
+                60f + banked * 6f - distance - (match.MyScore > banked + 2 ? 45f : 0f);
+            if (PointsDriven && enemy == target) score *= 1 + tuning.BotPointsHysteresis;
             if (score > bestScore && (hunting || CanSee(match, player, Aim(enemy))))
             {
                 bestScore = score;
@@ -435,6 +442,14 @@ public sealed class BankingBot : IBotGoalPolicy
             var tank = tanks[i];
             var at = tank.GlobalPosition;
             var distance = at.DistanceTo(here);
+            if (PointsDriven)
+            {
+                if (blacklist.ContainsKey(tank.GetInstanceId()) || protecting && Near(bodies, at, 25f, upright: false)) continue;
+                var rate = points.Tank(match, tank, services.PileCount(i), distance);
+                if (tank == target) rate *= 1 + tuning.BotPointsHysteresis;
+                if (rate > bestScore) { bestScore = rate; best = tank; }
+                continue;
+            }
             if (tank.Invulnerable && distance >= 30f || blacklist.ContainsKey(tank.GetInstanceId()))
             {
                 continue;

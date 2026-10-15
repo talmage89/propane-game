@@ -96,6 +96,7 @@ public partial class Match
             // Seeded per match and actor, so a bot never draws from the world's shared random stream.
             var brain = create((ulong)(uint)Setup.Id << 32 | (uint)profile.Id);
             brain.Skill = BotProfile.For(profile.ControllerConfig.Difficulty, World.Tuning).Skill;
+            brain.PointsDriven = profile.ControllerConfig.Difficulty == (byte)BotDifficulty.Hard && World.Tuning.BotHardChasesPoints;
             owned.Character.InputOverride = brain;
             var view = new OwnedBot(this, owned.Character, brain, botServices!);
             brain.Prepare(view);

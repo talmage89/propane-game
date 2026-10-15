@@ -125,11 +125,19 @@ public partial class PrototypeRunner : Node
     internal void AttachBot(PlayerCharacter actor)
     {
         var brain = Mode.CreateBot!(World.Random.Randi());
-        brain.Skill = World.Tuning.LabBotSkill;
+        ConfigureBrain(brain, brains.Count);
         actor.InputOverride = brain;
         var view = new BotWorld(this, actor);
         brain.Prepare(view);
         brains.Add((brain, actor, view));
+    }
+
+    private void ConfigureBrain(IBotGoalPolicy brain, int index)
+    {
+        var selected = index >= World.Tuning.LabHardOffset && index < World.Tuning.LabHardOffset + World.Tuning.LabHardBots;
+        var hard = selected || BotProfile.Nearest(World.Tuning.LabBotSkill, World.Tuning) == BotDifficulty.Hard;
+        brain.Skill = selected ? World.Tuning.BotHardSkill : World.Tuning.LabBotSkill;
+        brain.PointsDriven = hard && World.Tuning.BotHardChasesPoints;
     }
 
     public override void _PhysicsProcess(double delta)
@@ -143,7 +151,7 @@ public partial class PrototypeRunner : Node
         {
             var (brain, _, view) = brains[(botTurn + i) % brains.Count];
             view.Refresh();
-            brain.Skill = World.Tuning.LabBotSkill;
+            ConfigureBrain(brain, (botTurn + i) % brains.Count);
             brain.Think(view, (float)delta);
             Thinks++;
         }

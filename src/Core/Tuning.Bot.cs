@@ -75,5 +75,25 @@ public partial class Tuning
     // Easy, Normal and Hard pick the brain's skill, which blends the aim error, reaction and aim turning endpoints above.
     public float BotEasySkill { get; set; } = 0.2f;
     public float BotNormalSkill { get; set; } = 0.6f;
+    // Hard's local score-swing estimates. Capture discounts spilled tanks we may not recover; denial favors leaders.
+    public bool BotHardChasesPoints { get; set; } = true;
+    public float BotPointsCapture { get; set; } = 0.25f;
+    public float BotPointsDeny { get; set; } = 0.8f;
+    public float BotPointsLeader { get; set; } = 1f;
+    public float BotPointsAhead { get; set; } = 0.7f;
+    public float BotPointsBehind { get; set; } = 0.15f;
+    public float BotPointsRisk { get; set; } = 0.35f;
+    public int BotPointsPileCap { get; set; } = 5;
+    public float BotPointsShotRange { get; set; } = 22f;
+    public float BotPointsShotSeconds { get; set; } = 1.5f;
+    public float BotPointsFightSeconds { get; set; } = 3f;
+    public float BotPointsHitsPerSecond { get; set; } = 1f;
+    public float BotPointsHysteresis { get; set; } = 0.3f;
+    public float BotPointsInterval { get; set; } = 0.4f;
+    public float BotPointsProtectDistance { get; set; } = 16f;
+    public float BotPointsZone { get; set; } = 2f;
+    // First N attached Lab actors use Hard; the rest retain LabBotSkill (also allows policy-only A/B trials).
+    public int LabHardBots { get; set; } = 0;
+    public int LabHardOffset { get; set; } = 0;
     public float BotHardSkill { get; set; } = 1f;
 }

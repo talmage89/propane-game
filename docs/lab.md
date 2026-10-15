@@ -16,7 +16,7 @@ the rest of Propane. Huge stack and Range use void; the banking duel and Free tu
 - **Duel vs a banking bot** defaults to two owned actors in one offline world. **Lab bank bots** allows 1–15 bots; layout changes apply on reset. The bot has no camera and uses the
   existing banking brain. Easy, Normal and Hard are the lobby bots' difficulty profiles: they set the
   `LabBotSkill` dial to that profile's skill (0.2, 0.6 or 1), which free tuning can still set between them; the menu
-  shows the nearest profile. They change its skill, not tank/player physics. The default is three
+  shows the nearest profile. Hard also enables the points policy in Tank Bank and King; tank/player physics stay the same. The default is three
   minutes; bank most to win. Bullets spill with hit grace, melee/blasts spill on the victim's ordinary ragdoll
   event, drops have the match's shield, ammo cans replenish, and delayed chains credit their initiating shooter.
   The void arena is marked by a ring of floor disks, half a step off both start points; the markings are reference
@@ -234,3 +234,9 @@ load records, rendered suburb matches, visual comparisons and reproducible basel
 
 The measurement registry callback deliberately permits 24–1,024 tanks while retaining the actual Lab fixture
 builder. It can profile beyond the product ceiling without relaxing the shipped menus or tuning validation.
+
+For a mixed Hard/Normal strength trial, `python3 -B tools/dev/check_bot_points.py` runs both scoring modes across
+five seeds and both assignments of four Hard spawn slots. `--policy-only` equalizes aim; `--environment=void`
+selects the arena. Its local `LabHardBots`/`LabHardOffset` overrides choose a consecutive range of attached brains
+(the player attaches last in bot-driven runs); remaining actors keep `LabBotSkill`. `--compare-points` on the Lab
+harness prints both groups' final and earned banks. Duel/soak `--trace` includes positions and navigation state.

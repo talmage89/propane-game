@@ -8,7 +8,7 @@ public enum BotDifficulty : byte { Easy, Normal, Hard }
 
 /// <summary>
 /// A named difficulty profile of the local bot dials. Skill blends the Easy/Hard endpoints of aim error, reaction
-/// and aim turning; the brain's goals, navigation and the actor's physics are the same at every difficulty.
+/// and aim turning. Hard also compares expected score swings; navigation and actor physics stay shared.
 /// </summary>
 public readonly record struct BotProfile(BotDifficulty Difficulty, float Skill)
 {

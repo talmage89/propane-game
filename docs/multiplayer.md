@@ -3,6 +3,9 @@
 How multiplayer works today: Tank Bank and King of the Cul-de-sac, the networking model, hosting, bots and tests. It describes the
 code; when the code changes, change this file with it. The game's lasting direction is in [design](../design/).
 
+Hard bots in Tank Bank and King compare banking and spilling leaders' points with the available zone income;
+Easy and Normal retain their objective-first choices. See [bot policies](bot-navigation.md#hard-points-policy).
+
 ## Tank bank
 
 A free-for-all in one suburb. **Every tank a player detonates is credited to that player as one point, which they
