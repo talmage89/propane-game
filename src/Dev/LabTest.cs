@@ -432,9 +432,12 @@ public partial class LabTest : Node
             var limit = (id == "king" ? lab.World.Tuning.KingRoundSeconds : lab.World.Tuning.RingOutRoundLimit) + 5;
             var watch = System.Diagnostics.Stopwatch.StartNew();
             var shot = 0;
-            for (var frame = 0; runner.IsPlaying && runner.Elapsed < until; frame++)
+            var frame = 0;
+            for (; runner.IsPlaying && runner.Elapsed < until; frame++)
             {
-                Assert(frame < limit * 60, $"{id} seed {seed}: the round never ended");
+                // Hitstop slows simulation while process frames keep arriving. Bound the rules' own clock;
+                // check_lab's process timeout also catches a stalled clock without weakening the outcome checks.
+                Assert(runner.Elapsed < limit, $"{id} seed {seed}: the round never ended at {runner.Elapsed:F1}s");
                 if (DevArgs.Get("trace") != null && frame % 120 == 0)
                 {
                     GD.Print($"[lab trace] {runner.Elapsed:F1}s " + string.Join(" | ", lab.Session.Actors.Select(a =>
@@ -455,7 +458,7 @@ public partial class LabTest : Node
             var state = runner.Rules.Snapshot();
             foreach (var line in state.Report) GD.Print($"[lab prototype] {id} seed {seed}: {line.Text}");
             var brains = runner.Thinks / System.Math.Max(1, runner.Elapsed * 120);
-            GD.Print($"[lab prototype] {id} seed={seed} environment={environment} round={runner.Elapsed:F1}s wall={wall:F1}s " +
+            GD.Print($"[lab prototype] {id} seed={seed} environment={environment} round={runner.Elapsed:F1}s wall={wall:F1}s frames={frame} " +
                 $"brains={brains:F1} think_ms_per_tick={runner.ThinkSeconds * 1000 / System.Math.Max(1, runner.Elapsed * 120):F3}");
             switch (runner.Rules)
             {

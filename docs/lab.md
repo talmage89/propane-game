@@ -244,3 +244,7 @@ five seeds and both assignments of four Hard spawn slots. `--policy-only` equali
 selects the arena. Its local `LabHardBots`/`LabHardOffset` overrides choose a consecutive range of attached brains
 (the player attaches last in bot-driven runs); remaining actors keep `LabBotSkill`. `--compare-points` on the Lab
 harness prints both groups' final and earned banks. Duel/soak `--trace` includes positions and navigation state.
+
+Prototype outcome probes bound the round's simulation clock, since explosion hitstop slows that clock while
+process frames keep arriving. Their summary includes process-frame count; `check_lab.py` also enforces a wall
+timeout so a stopped simulation still fails. Scoring, conservation and legal-outcome assertions remain active.
