@@ -6,8 +6,8 @@ using Propane.Player;
 
 namespace Propane.UI;
 
-/// <summary>A score floating over another player: where, what and in which color.</summary>
-public readonly record struct ScoreTag(Vector2 Screen, int Score, Color Color, float Scale);
+/// <summary>A score (or, where there are none, a name) floating over another player: where, what and in which color.</summary>
+public readonly record struct ScoreTag(Vector2 Screen, int Score, Color Color, float Scale, string? Label = null);
 
 /// <summary>
 /// The match HUD, over the single-player one (crosshair and tank arrows). It renders the mode's plain HUD data
@@ -333,8 +333,8 @@ public partial class MatchHud : CanvasLayer
             foreach (var tag in Tags)
             {
                 var font = UiStyle.BoldFont;
-                var size = Mathf.RoundToInt(34 * tag.Scale);
-                var text = tag.Score.ToString();
+                var size = Mathf.RoundToInt((tag.Label != null ? 24 : 34) * tag.Scale);
+                var text = tag.Label ?? tag.Score.ToString();
                 var width = font.GetStringSize(text, HorizontalAlignment.Left, -1, size).X;
                 var at = tag.Screen - new Vector2(width / 2f, 0);
                 DrawStringOutline(font, at, text, HorizontalAlignment.Left, -1, size, Mathf.Max(4, size / 5), new Color(AppearanceContrast.ScoreOutline(tag.Color, World.Tuning), 0.85f));

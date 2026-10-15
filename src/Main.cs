@@ -11,15 +11,17 @@ using Propane.World;
 namespace Propane;
 
 /// <summary>
-/// The root of the game. Shows the menus over a backdrop, and runs single player (<see cref="Game"/>) or a
-/// multiplayer match (<see cref="Match"/>) or the Lab under them. Started with <c>-- --server</c> (and usually
-/// <c>--headless</c>), it runs only the multiplayer server instead.
+/// The root of the game. Shows the menus over a backdrop, and runs single player (<see cref="Game"/>), a multiplayer
+/// lobby world or match (both a <see cref="Match"/>) or the Lab under them. Joining a lobby enters its world; the
+/// lobby menu is its panel, and the stage screen carries a start from the world into the match. Started with
+/// <c>-- --server</c> (and usually <c>--headless</c>), it runs only the multiplayer server instead.
 /// </summary>
 public partial class Main : Node
 {
     public Tuning SavedTuning { get; init; } = Tuning.SavedTemplate;
     private NetClient net = null!;
     private Menus menus = null!;
+    private StageScreen stage = null!;
     private Node3D? backdrop;
     private Game? game;
     private Match? match;
@@ -27,6 +29,8 @@ public partial class Main : Node
     private LabSession? lab;
     private LobbyServer? hostedServer;
     private int matchGeneration;
+    /// <summary>The last scene built was a match, so the next lobby world is a return.</summary>
+    private bool afterMatch;
 
     public override void _Ready()
     {
@@ -47,13 +51,18 @@ public partial class Main : Node
         AddChild(net);
         net.MatchStarting += OnMatchStarting;
         net.StatusChanged += OnStatusChanged;
+        net.LobbyChanged += OnLobbyChanged;
         var updates = new UpdateCheck { Name = "UpdateCheck" };
         AddChild(updates);
         menus = new Menus { Name = "Menus", Net = net, Updates = updates };
         menus.SinglePlayerRequested += StartSinglePlayer;
         menus.LabRequested += ShowLab;
         menus.HostRequested += Host;
+        menus.PanelClosed += ClosePanel;
         AddChild(menus);
+        stage = new StageScreen { Name = "Stage", Net = net };
+        stage.CancelRequested += net.CancelStart;
+        AddChild(stage);
         ShowMenus(Menus.Screen.Main);
         // --connect=host[:port] goes straight to that server's lobbies.
         if (DevArgs.Get("connect") is { } server)
@@ -230,7 +239,7 @@ public partial class Main : Node
     {
         if (hostedServer == null)
         {
-            hostedServer = new LobbyServer { Name = "HostedServer", Port = port };
+            hostedServer = new LobbyServer { Name = "HostedServer", Port = port, Worlds = net.LobbyWorlds };
             AddChild(hostedServer);
             if (!hostedServer.Start().Success)
             {
@@ -248,9 +257,18 @@ public partial class Main : Node
 
     private async void OnMatchStarting(MatchSetup setup)
     {
+        if (setup.ModeId == Modes.ModeRegistry.LobbyWorldId)
+        {
+            EnterLobbyWorld(setup);
+            return;
+        }
+        // A staged start keeps its lineup on screen while the match builds; otherwise the plain loading screen.
+        var staged = stage.Visible;
+        ClosePanel();
         EndMatch();
         var generation = ++matchGeneration;
-        ShowMenus(Menus.Screen.Loading);
+        if (staged) { stage.ShowLoading(); }
+        else { ShowMenus(Menus.Screen.Loading); }
         // Let the loading screen draw before the suburb is built, which takes a moment.
         await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
         await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
@@ -260,14 +278,93 @@ public partial class Main : Node
         }
         HideBackdrop();
         menus.Show(Menus.Screen.None);
-        match = new Match { Name = "Match", Net = net, Setup = setup };
-        match.Finished += () => ReturnToLobby(null);
+        var built = match = new Match { Name = "Match", Net = net, Setup = setup };
+        afterMatch = true;
+        match.Finished += () =>
+        {
+            // A newer scene (the lobby world that follows) may already have replaced this one.
+            if (match == built) ReturnToLobby(null);
+        };
         match.LeaveRequested += () =>
         {
             net.LeaveLobby();
             ReturnToLobby(null);
         };
         AddChild(match);
+        stage.Close();
+    }
+
+    /// <summary>The lobby's world: entered on joining, and again after every match. The lobby menu is its panel.</summary>
+    private async void EnterLobbyWorld(MatchSetup setup)
+    {
+        var returning = afterMatch;
+        ClosePanel();
+        EndMatch();
+        stage.Close();
+        var generation = ++matchGeneration;
+        ShowMenus(Menus.Screen.Loading, returning ? "Back to the lobby..." : $"Entering {(net.Lobby is { } lobby ? LobbyText.Creator(lobby) : "the")}'s lobby...");
+        await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        if (generation != matchGeneration || net.State != NetClient.Status.Connected || net.ActiveMatchId != setup.Id || net.Lobby == null)
+        {
+            return;
+        }
+        HideBackdrop();
+        menus.Show(Menus.Screen.None);
+        afterMatch = false;
+        match = new Match { Name = "LobbyWorld", Net = net, Setup = setup, Returning = returning };
+        match.LeaveRequested += net.LeaveLobby;
+        match.PanelRequested += OpenPanel;
+        AddChild(match);
+        if (net.Lobby?.Phase == LobbyServer.LobbyPhase.Staging) { stage.ShowCountdown(); }
+    }
+
+    /// <summary>The lobby menu, docked beside the world: names, colors, bots and (for the creator) the match settings.</summary>
+    private void OpenPanel()
+    {
+        if (match is not { IsLobby: true } world || net.Lobby is not { Phase: LobbyServer.LobbyPhase.Waiting }) return;
+        menus.Show(Menus.Screen.Lobby, docked: true);
+        world.PanelOpen = true;
+    }
+
+    private void ClosePanel()
+    {
+        if (menus.Docked && menus.Current == Menus.Screen.Lobby) { menus.Show(Menus.Screen.None); }
+        if (match is { IsLobby: true } world) { world.PanelOpen = false; }
+    }
+
+    /// <summary>
+    /// The lobby as the server describes it: a start staging (the stage counts down over the world) or taken back,
+    /// or this player out of it (the world goes, back to the lobby list).
+    /// </summary>
+    private void OnLobbyChanged()
+    {
+        if (net.Lobby is not { } lobby)
+        {
+            stage.Close();
+            if (match is { IsLobby: true })
+            {
+                matchGeneration++;
+                EndMatch();
+                ShowMenus(net.State == NetClient.Status.Connected ? Menus.Screen.Browser : Menus.Screen.Connect);
+            }
+            return;
+        }
+        if (lobby.Phase == LobbyServer.LobbyPhase.Staging && match is { IsLobby: true })
+        {
+            ClosePanel();
+            stage.ShowCountdown();
+        }
+        else if (lobby.Phase == LobbyServer.LobbyPhase.Waiting && stage.Visible)
+        {
+            // The creator took the start back (or left): back to roaming.
+            stage.Close();
+        }
+        if (lobby is { Phase: LobbyServer.LobbyPhase.Waiting, WorldId: 0 } && match == null && menus.Current == Menus.Screen.Loading)
+        {
+            // This server runs no lobby worlds: the lobby menu, as before.
+            ShowMenus(Menus.Screen.Lobby);
+        }
     }
 
     private void EndMatch()
@@ -284,7 +381,15 @@ public partial class Main : Node
     private void ReturnToLobby(string? note)
     {
         matchGeneration++;
+        ClosePanel();
         EndMatch();
+        stage.Close();
+        if (net.State == NetClient.Status.Connected && net.LobbyWorlds && net.Lobby is { WorldId: not 0 } or { Phase: not LobbyServer.LobbyPhase.Waiting })
+        {
+            // The lobby's next world is on its way (or already building: it would have replaced this scene).
+            ShowMenus(Menus.Screen.Loading, note ?? "Back to the lobby...");
+            return;
+        }
         var screen = net.State != NetClient.Status.Connected ? Menus.Screen.Connect : net.Lobby != null ? Menus.Screen.Lobby : Menus.Screen.Browser;
         ShowMenus(screen, note);
     }

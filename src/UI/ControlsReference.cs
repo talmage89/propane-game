@@ -7,6 +7,8 @@ public partial class ControlsReference : VBoxContainer
 {
     private bool gamepad;
     public bool Match { get; init; }
+    /// <summary>In the lobby world: adds the lobby panel's key.</summary>
+    public bool Lobby { get; init; }
     public bool Compact { get; init; }
     public string? ResetAction { get; init; }
 
@@ -38,6 +40,10 @@ public partial class ControlsReference : VBoxContainer
                  })
         {
             AddRow(gamepad ? pad : keyboard, action);
+        }
+        if (Lobby)
+        {
+            AddRow(gamepad ? "View / Create" : "Tab", "Lobby panel: names, colors, bots, settings");
         }
         if (!gamepad)
         {

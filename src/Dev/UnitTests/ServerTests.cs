@@ -302,7 +302,8 @@ public static class ServerTests
 
         public Fixture(bool debug = true, bool playing = true, int bots = 0, Func<ParticipantRoster>? rosterFactory = null, ModeDefinition? mode = null, ModeSettings? modeSettings = null, float length = 10, int creatorTankSupply = 1)
         {
-            Server = new LobbyServer(PacketTransports.CreateServer(), Clock) { StartScore = 4, LobbyMode = mode ?? ModeRegistry.TankBank };
+            // These fixtures count a lobby's own packets; the lobby world has its own suite.
+            Server = new LobbyServer(PacketTransports.CreateServer(), Clock) { StartScore = 4, LobbyMode = mode ?? ModeRegistry.TankBank, Worlds = false };
             if (rosterFactory != null) Server.RosterFactory = rosterFactory;
             Server.SendOverride = (peer, bytes, _) => Packets.Add((peer, MessageCodec.Decode(bytes, true)));
             for (var peer = 2; peer <= 3; peer++)

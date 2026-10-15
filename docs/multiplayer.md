@@ -38,10 +38,11 @@ the Lab duel; [modes.md](modes.md) describes the framework, the spill tickets an
 
 1. **Main menu:** single player (the sandbox), multiplayer or quit.
 2. **Multiplayer:** the player connects to a server, then creates a lobby or joins an existing one.
-3. **Lobby:** each player sets a name and color and may add bots. The creator chooses Tank Bank (default) or King of the Cul-de-sac, its length, **Tank supply** (every integer from 1× to 8×, default 1×) and, for King, mint pace, then starts. Everyone sees supply; only the waiting creator can change it.
-4. **Match start:** the server sends the suburb's plan. Each client builds it, it materializes as in single player, and play begins when the timer starts.
-5. **Match:** runs for the lobby's match length.
-6. **End:** a results screen, then back to the lobby.
+3. **Lobby:** joining puts the player in the lobby's [world](#lobby-world-a12-unreleased-protocol-3), a void where everyone who joined roams, shoots and throws tanks while waiting. Its panel (Tab, or View on a controller) holds the lobby: each player sets a name and color and may add bots. The creator chooses Tank Bank (default) or King of the Cul-de-sac, its length, **Tank supply** (every integer from 1× to 8×, default 1×) and, for King, mint pace, then starts. Everyone sees supply; only the waiting creator can change it.
+4. **Stage:** the stage screen shows the coming mode, its settings and everyone's card over the washed-out world and counts down `LobbyStageTime` (5 s); the creator can take the start back. Then the world goes.
+5. **Match start:** the server sends the suburb's plan. Each client builds it, it materializes as in single player, and play begins when the timer starts.
+6. **Match:** runs for the lobby's match length.
+7. **End:** a results screen, then everyone is back in a fresh lobby world, membership kept.
 
 The server waits up to 20 seconds for loading acknowledgments before counting down anyway. The client's connection
 buffers every current-match event until the match scene has initialized its bodies and HUD, then replays them in
@@ -274,9 +275,9 @@ pushes or chain contacts; `scenes/dev/blast_query_tests.tscn` checks 1,100 bodie
 
 - **Main menu:** Single player, Multiplayer, Quit. Single player is the sandbox as before; its pause menu gains a Main menu button.
 - **Multiplayer:** (or start the game with `-- --connect=host[:port]`) type a name and the server's address (`host` or `host:port`; the port defaults to 24680, UDP). **Host on this computer** runs a server inside the game and joins it, for playing without a dedicated server; the lobby screens then show the addresses others can connect to.
-- **Lobbies:** create one or join one from the list (lobbies in a match can't be joined). In the lobby, everyone picks a name and any color and may add bots, and the creator sets mode, length and King mint pace, then presses Start. A release build needs two actors (players or bots) to start; a debug build may start alone, for testing.
+- **Lobbies:** create one or join one from the list (lobbies in a match can't be joined). Joining puts you in the lobby world; Tab (View on a controller) opens the lobby panel beside it, and Esc, B or Close puts it away. In the panel, everyone picks a name and any color and may add bots, and the creator sets mode, length and King mint pace, then presses Start. A release build needs two actors (players or bots) to start; a debug build may start alone, for testing.
 - **In a match:** the clock and the tanks you have banked are at the top, ammo at the bottom right. R reloads (an empty magazine also reloads on the next trigger pull). Walking over an ammo can takes it, unless the reserve is full. Esc or Start / Options opens the controls with Resume, Leave match and Quit; the match keeps running behind it. Leaving a match also leaves the lobby.
-- **After a match:** the results show for `ResultsTime`, then everyone is back in the lobby, ready for another.
+- **After a match:** the results show for `ResultsTime`, then everyone is back in the lobby world, ready for another.
 
 ## Playing against bots
 
@@ -338,6 +339,7 @@ The server is the game itself started with `-- --server` (and `--headless`). It 
 | --- | --- |
 | `src/Main.cs` | The root scene: menus over a backdrop, single player, the match, or server mode. |
 | `src/Net/LobbyServer.cs` | The server: lobbies, match flow and clock, relaying, first-claim ties, pickups. |
+| `src/Net/LobbyServer.World.cs`, `LobbyWire.cs`, `Match.Lobby.cs`, `src/Modes/LobbyRules.cs` | The lobby world: the server's run, its pile stock, a peer's world, and its pure rules. |
 | `src/Net/ModeRunner.cs`, `ModeEnvelope.cs`, `src/Modes` | The mode runner, the fixed mode envelope and pure mode rules ([modes.md](modes.md)). |
 | `src/Net/NetClient.cs`, `NetTransport.cs`, `Protocol.cs` | The client connection, the ENet adapter, the message types. |
 | `src/Net/IPacketTransport.cs`, `ProtocolPeerMap.cs`, `PacketTransports.cs`, `FaultPacketTransport.cs` | Message transport contract, Protocol 2 identity bridge/backend selection, deterministic network faults. |
@@ -350,6 +352,7 @@ The server is the game itself started with `-- --server` (and `--headless`). It 
 | `src/Net/PlanCodec.cs` | Packs a suburb plan for sending. |
 | `src/Net/AmmoPickup.cs` | The ammo can and its build-up reveal. |
 | `src/UI/Menus.cs`, `MatchHud.cs`, `MatchMenu.cs`, `ResultsScreen.cs` | Front end, match HUD, pause menu, results. |
+| `src/UI/StageScreen.cs`, `LobbyCard.cs`, `src/Fx/LobbyFloor.cs` | The lobby world's stage screen, its lobby card and its floor (pads, ring, title). |
 
 ### Transport contract
 
@@ -751,3 +754,61 @@ These trailing lobby settings fields are part of unreleased Protocol 3 for 0.4.0
 Hello, Welcome and Rejected are unchanged.
 
 [Lobby tank supply verification](lobby-tanks.md) records the gates, reviewed captures, native matrix and stock-soak variability.
+
+## Lobby world (A12, unreleased Protocol 3)
+
+A waiting lobby is a place, not a menu: everyone who joined roams a shared void world, shooting and throwing tanks while
+they wait. It is the destination a Steam invite will open later.
+
+**The world.** It plays the **Lobby** mode (id 7, schema 1; [modes.md](modes.md)) on a hand-built void plan: no ground
+lots or cars, `LobbyPiles` piles of `LobbyPileCount` tanks on marked pads round a `LobbyPileRing` ring, and arrival
+spots round a `LobbySpawnRing` ring by allocation slot. Nothing scores and nothing spills; rifles never run dry
+(`LobbyInfiniteAmmo`; bots carry a magazine whose reserve stays full, since they play by it). A pile whose last
+intact tank has left its spot (`LobbyPileReach`) refills after `LobbyRefillDelay`, materializing over
+`LobbyMaterializeSeconds` on clear ground (`LobbyPileClearance`), unless its tanks, with those already on their way,
+would take the world past `LobbyTankLimit`. The server's own dials build the world, with the lobby's choices applied.
+The lobby's title stands on the floor, turned to each arrival; the lobby card at the top left names the lobby and its
+settings, and name tags float over everyone.
+
+**The server.** `LobbyServer.World.cs` runs each world as a run like a match, with its own id from the match id
+sequence, its own ledger and its own relays; the creator is its body authority (a successor takes over, as for a
+match). Unlike a match, its membership follows the lobby's roster live. Each arrival, at creation, on joining or on
+returning from a match, gets its own world start: MatchStart (the void plan), an Authority snapshot of every live body
+(request 0) and MatchGo, so a joiner sees the world as it is. Every peer reconciles its actors with each LobbyState:
+arrivals are added, departures removed, renames and colors follow; a peer gives the bots it owns their brains as they
+arrive. Messages name their run: `RunFor` takes only the lobby's current match or current world, so after a start the
+closed world's traffic is stale and dropped, and in the Waiting phase only the world's own relays run.
+
+**Start.** The creator's start (from the panel) puts the lobby in the **Staging** phase for `LobbyStageTime` (5 s by
+default, capped at 10 s) from the creator's snapshot; 0 starts at once. The stage screen washes the world out behind
+the coming mode, its settings and every member's card and counts down; the creator can take it back with its button,
+Esc or B (**CancelStart**). While staging, settings, the roster and joining are locked and everyone stands still; the
+creator leaving or disconnecting cancels it. Then the world closes and the match loads as before, the stage keeping
+its lineup on screen while the suburb builds. After the results, the server opens a fresh world and everyone returns
+to it, membership kept.
+
+**The panel.** The lobby menu, docked at the right over the world: Tab or View opens it and Esc, B, View again or
+Close puts it away; it holds names, colors, bots, mode, length, tank supply and King's mint pace, with the same
+authority as before. Esc in the world opens its pause menu, whose Leave lobby returns to the lobby list.
+
+**Wire.** LobbyState gains trailing **StartsIn** (Float32, 0–10, nonzero only while staging) and **WorldId** (Int32,
+nonzero only while waiting or staging); LobbyPhase gains Staging (5). The client message **CancelStart** (17) is empty.
+The world's stock and refills use LobbyWire on the mode envelope, reusing King's pile messages. This is part of
+unreleased Protocol 3 for 0.4.0: no further bump, and Hello, Welcome and Rejected are unchanged.
+
+**Dev flags.** `--classic-lobby` keeps the old lobby menu over the backdrop until the owner has reviewed the world's
+look: a client started with it ignores its lobby's world, and a server started with it runs none. `net_test` stays out
+of worlds (and starts without a stage) unless `--lobby-roam=S` puts it in them: each client's bot roams S seconds
+before every match and after the last returns it.
+
+**Tests.** `LobbyWorldTests` covers the rules and layout, joining while roaming, leaving and rejoining, bots, settings
+authority, staging, cancel and start, stale world traffic, the return after results, the creator's departure,
+disconnects during the countdown and loading, refills and a client's world. `menu_test --scenario=lobby` plays it
+through the front end by keyboard, controller and mouse, with a second client, a bot, a canceled and a real start, a
+match and the return; rendered with `--capture-dir`, it captures the review shots. The other menu scenarios run with
+`--classic-lobby`. Network runs:
+
+```sh
+tools/dev/net_bots.sh -n 2 -l 20 -t clean -o "$PWD/build/lobby-net-2c" -- --lobby-roam=10 --matches=2 --lobby-bots=1
+tools/dev/net_bots.sh -n 4 -l 25 -o "$PWD/build/lobby-net-4f" -- --lobby-roam=10 --matches=2 --lobby-bots=1 --net-lag=120 --net-jitter=30 --net-loss=3
+```

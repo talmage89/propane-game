@@ -85,5 +85,6 @@ public partial class Match
             built.Add(tank);
         }
         if (built.Count > 0) kingZone?.Materialize(built, PileSite.Center(spawned.Tanks.Select(t => t.Transform).ToArray()));
+        if (built.Count > 0 && IsLobby) MaterializeLobbyPile(built, spawned);
     }
 }

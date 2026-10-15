@@ -78,8 +78,10 @@ Banking, Ring Out, King of the Cul-de-sac and Short Fuse Lab sessions support up
 ## Multiplayer
 
 Choose Multiplayer, type your name and the server's address (`host` or `host:port`, UDP port 24680 by default), then
-create a lobby or join one. Everyone picks a name and any color in the lobby (duplicates are allowed), and whoever
-created it sets capacity, mode, length, tank supply and King mint pace and starts. Tank supply scales the suburb's tanks and pile sizes and locks at match start; everyone sees the choice. **Host on this computer** runs a server inside your game instead; the
+create a lobby or join one. A lobby is a shared void world where everyone roams, shoots and throws tanks while
+waiting; Tab (View on a controller) opens its panel. Everyone picks a name and any color there (duplicates are allowed),
+and whoever created it sets capacity, mode, length, tank supply and King mint pace and starts: a short stage shows the
+lineup and counts down, and after the match everyone is back in the lobby world. Tank supply scales the suburb's tanks and pile sizes and locks at match start; everyone sees the choice. **Host on this computer** runs a server inside your game instead; the
 lobby then shows the addresses friends can use. Versions with the same major and minor number play together
 (0.2.0 with 0.2.5); the server turns away others and says which version it needs.
 

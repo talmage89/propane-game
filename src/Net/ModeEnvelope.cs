@@ -92,6 +92,17 @@ public static class ModeSchemas
         public const ushort Zone = 2;                                    // Snapshot: the zone, whenever it changes.
     }
 
+    /// <summary>
+    /// The lobby world's kinds: only King's fresh-pile exchange, under King's ids and payloads, so a peer places and
+    /// builds a lobby refill exactly as it does a King pile. Its Zone field is the runner's request id.
+    /// </summary>
+    public static class LobbyKinds
+    {
+        public const ushort PilePlaced = KingKinds.PilePlaced;   // Event: the world authority's placement of a refill.
+        public const ushort PileWanted = KingKinds.PileWanted;   // Command: to the world authority only.
+        public const ushort PileSpawned = KingKinds.PileSpawned; // Command: a registered pile, to everyone.
+    }
+
     private const int BodyBytes = 64;
     private const int TransformBytes = 28;
     private const int SpotBytes = 12;
@@ -126,6 +137,14 @@ public static class ModeSchemas
             new ModeKind(KingKinds.Banks, "Banks", ModeDirection.Snapshot, ModeReporter.Server, 1 + Protocol.MaxWireActors * 9, ReadBanks, WriteBanks),
             new ModeKind(KingKinds.Zone, "Zone", ModeDirection.Snapshot, ModeReporter.Server,
                 2 + 2 * SpotBytes + 4 + 4 + 1 + Protocol.MaxWireActors * 4 + 16 + 1 + Protocol.MaxWireActors * 8 + 4, ReadZone, WriteZone),
+        }),
+        new ModeSchema(ModeRegistry.LobbyWorldId, 1, new[]
+        {
+            new ModeKind(LobbyKinds.PilePlaced, "PilePlaced", ModeDirection.Event, ModeReporter.WorldAuthority, 3 + MaxSpill * TransformBytes,
+                ReadPilePlaced, WritePilePlaced),
+            new ModeKind(LobbyKinds.PileWanted, "PileWanted", ModeDirection.Command, ModeReporter.Server, 2 + SpotBytes + 1 + 8, ReadPileWanted, WritePileWanted),
+            new ModeKind(LobbyKinds.PileSpawned, "PileSpawned", ModeDirection.Command, ModeReporter.Server, 7 + MaxSpill * BodyBytes,
+                ReadPileSpawned, WritePileSpawned),
         }),
     };
 

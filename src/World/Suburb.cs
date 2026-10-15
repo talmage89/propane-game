@@ -92,9 +92,10 @@ public partial class Suburb : Node3D
 
     /// <summary>
     /// Builds the suburb. In a match (<paramref name="networked"/>), each tank takes its network id from its index in
-    /// the plan before it enters the tree.
+    /// the plan before it enters the tree. Without <paramref name="ground"/> there is no slab: the plan's content
+    /// stands on the void's own floor (the lobby world).
     /// </summary>
-    public static Suburb Build(WorldContext world, SuburbPlan plan, SuburbSettings settings, bool networked = false)
+    public static Suburb Build(WorldContext world, SuburbPlan plan, SuburbSettings settings, bool networked = false, bool ground = true)
     {
         world.EnsureAlive();
         var suburb = new Suburb { Name = $"Suburb_{plan.Seed}" };
@@ -108,7 +109,7 @@ public partial class Suburb : Node3D
             suburb.AddChild(suburb.StaticRoot);
             suburb.AddChild(suburb.DynamicRoot);
             suburb.contentSpawn = world.ForContent(suburb.DynamicRoot);
-            foreach (var step in suburb.Steps(networked))
+            foreach (var step in suburb.Steps(networked).Skip(ground ? 0 : 1))
             {
                 step();
             }

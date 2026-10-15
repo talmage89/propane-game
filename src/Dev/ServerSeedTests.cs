@@ -1,6 +1,7 @@
 using System;
 using Godot;
 using Propane.Core;
+using Propane.Modes;
 using Propane.Net;
 using static Propane.Dev.UnitTests.TestRunner;
 
@@ -16,7 +17,8 @@ public partial class ServerSeedTests : Node
         {
             Assert(int.TryParse(DevArgs.Get("match-seed"), out var expected), "native seed fixture needs --match-seed");
             AddChild(new Main { Name = "Main" });
-            var client = new NetClient { Name = "Client", Template = Tuning.LoadBaked() };
+            var template = Tuning.LoadBaked();
+            var client = new NetClient { Name = "Client", Template = template };
             AddChild(client);
             client.Connect("127.0.0.1", (int)DevArgs.GetFloat("port", Protocol.DefaultPort), "Seed", 0);
             for (var step = 0; step < 120 && client.State != NetClient.Status.Connected; step++)
@@ -31,9 +33,11 @@ public partial class ServerSeedTests : Node
             }
             Assert(client.Lobby != null, "native seed fixture did not create a lobby");
             MatchSetup? setup = null;
-            client.MatchStarting += value => setup = value;
+            // The lobby world arrives as a setup too; the match follows its stage screen.
+            client.MatchStarting += value => { if (value.ModeId != ModeRegistry.LobbyWorldId) setup = value; };
             client.StartMatch();
-            for (var step = 0; step < 120 && setup == null; step++)
+            var limit = 120 + Mathf.CeilToInt(template.LobbyStageTime * Engine.PhysicsTicksPerSecond);
+            for (var step = 0; step < limit && setup == null; step++)
             {
                 await ToSignal(GetTree(), SceneTree.SignalName.PhysicsFrame);
             }

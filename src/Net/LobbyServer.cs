@@ -24,6 +24,8 @@ public partial class LobbyServer : Node
         Countdown,
         Playing,
         Results,
+        /// <summary>The creator started: the stage counts down in the lobby world before the match loads.</summary>
+        Staging,
     }
 
     /// <summary>Longest the server waits for every player to build the suburb before starting the countdown anyway.</summary>
@@ -60,6 +62,11 @@ public partial class LobbyServer : Node
         public ModeSettings Settings = ModeSettings.Default;
         /// <summary>The mode its next match plays: the creator's choice, or a test's synthetic mode.</summary>
         public ModeDefinition Mode = ModeRegistry.TankBank;
+        /// <summary>The world its members roam while it waits (and while the stage counts down); null otherwise.</summary>
+        public MatchRun? World;
+        /// <summary>While staging: the creator's start snapshot, and when the match begins.</summary>
+        public Godot.Collections.Dictionary? Staged;
+        public double StageEnds;
     }
 
     private sealed class MatchRun
@@ -88,6 +95,8 @@ public partial class LobbyServer : Node
         /// <summary>Each actor's latest reported position, for a mode whose rules read where bodies are.</summary>
         public readonly Dictionary<int, ActorSample> Samples = new();
         public double NextSample;
+        /// <summary>A lobby world's next stock report to its rules.</summary>
+        public double NextStock;
     }
 
     private readonly IPacketTransport transport;
@@ -227,15 +236,17 @@ public partial class LobbyServer : Node
         {
             var message = MessageCodec.Decode(data, fromServer: false);
             if (!client.Welcomed && message.Type != Msg.Hello) { return; }
-            if (Protocol.IsMatch(message.Type) && client.Lobby?.Match?.Id != message.MatchId) { return; }
+            // Match traffic belongs to the lobby's current match or its current world; anything else is stale.
+            var run = Protocol.IsMatch(message.Type) ? RunFor(client, message.MatchId) : null;
+            if (Protocol.IsMatch(message.Type) && run == null) { return; }
             if (Protocol.IsRelay(message.Type))
             {
-                Relay(client, message, incoming);
+                Relay(client, run!, message, incoming);
                 return;
             }
             if (message.Type == Msg.ModeEvent)
             {
-                ModeEvent(client, message);
+                ModeEvent(client, run!, message);
                 return;
             }
             switch (message.Type)
@@ -279,16 +290,14 @@ public partial class LobbyServer : Node
                     break;
                 case Msg.AddActor or Msg.UpdateActor or Msg.RemoveActor: ChangeActor(client, message.Payload); break;
                 case Msg.StartMatch: StartMatch(client, (Godot.Collections.Dictionary)message.Payload); break;
+                case Msg.CancelStart: CancelStart(client); break;
                 case Msg.Loaded:
-                    if (client.Lobby?.Match is { } match)
-                    {
-                        match.Loaded.Add(client.Id);
-                        if (client.Connection != null) { transport.SetLoading(client.Connection, false); }
-                    }
+                    run!.Loaded.Add(client.Id);
+                    if (client.Connection != null) { transport.SetLoading(client.Connection, false); }
                     break;
                 case Msg.ClaimPickup:
-                    if (client.Lobby?.Match is { } pickupMatch && AcceptActor(client, pickupMatch, message))
-                        ClaimPickup(client, message.ActorId, ((IntMessage)message.Payload).Value); break;
+                    if (AcceptActor(client, run!, message)) ClaimPickup(client, run!, message.ActorId, ((IntMessage)message.Payload).Value);
+                    break;
                 case Msg.Ping:
                     Send(client.Id, new NetWriter(Msg.Pong).Double(((TimeMessage)message.Payload).Value).Double(clock.Seconds), traffic: TrafficClass.UnreliablePlayerPoses);
                     break;
@@ -341,7 +350,9 @@ public partial class LobbyServer : Node
         };
         lobbies[lobby.Id] = lobby;
         Log($"{client.Name} created lobby {lobby.Id}");
-        AddMember(lobby, client);
+        // With a world, its creator's first lobby state already names it.
+        AddMember(lobby, client, announce: !Worlds);
+        OpenWorld(lobby);
     }
 
     private void JoinLobby(Client client, int lobbyId)
@@ -354,7 +365,8 @@ public partial class LobbyServer : Node
         }
         if (lobby.Phase != LobbyPhase.Waiting)
         {
-            Notice(client, "That lobby is in a match. Join when it ends.");
+            Notice(client, lobby.Phase == LobbyPhase.Staging ? "That lobby is starting a match. Join when it ends."
+                : "That lobby is in a match. Join when it ends.");
             return;
         }
         if (lobby.Roster.Present.Count >= lobby.Capacity)
@@ -378,11 +390,12 @@ public partial class LobbyServer : Node
         AddMember(lobby, client);
     }
 
-    private void AddMember(Lobby lobby, Client client)
+    private void AddMember(Lobby lobby, Client client, bool announce = true)
     {
         lobby.Roster.Add(client.Id, ActorKind.Human, client.Name, client.Appearance, ControllerConfig.Human);
         lobby.Members.Add(client.Id);
         client.Lobby = lobby;
+        if (!announce) return;
         SendLobbyState(lobby);
         BroadcastLobbyList();
     }
@@ -399,36 +412,22 @@ public partial class LobbyServer : Node
             RetireExhaustedLobby(lobby);
             return;
         }
-        if (lobby.Match is { } match && match.Players.Remove(client.Id))
+        if (lobby.World is { } world) { Depart(world, client.Id); }
+        if (lobby.Match is { } match && Depart(match, client.Id) && match.Players.Count == 0)
         {
-            if (match.HostId == client.Id && match.Players.Count > 0)
-            {
-                match.HostId = match.Actors.Values.Where(a => a.Present && a.OwnerPeerId != client.Id && a.Kind == ActorKind.Human)
-                    .Select(a => a.OwnerPeerId).FirstOrDefault();
-                if (match.HostId == 0) match.HostId = match.Players[0];
-            }
-            foreach (var actor in match.Actors.Values.Where(a => a.OwnerPeerId == client.Id).ToArray())
-            {
-                match.Actors[actor.Id] = actor with { Present = false };
-                match.Samples.Remove(actor.Id);
-                match.Mode.Apply(match.Host, new ActorLeft(actor.Id), clock.Seconds);
-            }
-            var transfers = match.Players.Count > 0 ? match.Tanks.Transfer(client.Id, match.HostId) : Array.Empty<BodyAuthority>();
-            foreach (var id in match.Players)
-            {
-                Send(id, MessageCodec.Encode(new NetMessage(Msg.Authority, match.Id, 0,
-                    new AuthorityMessage(match.HostId, 0, ClaimRefusal.None, transfers)), fromServer: true));
-                Send(id, new NetWriter(Msg.PlayerLeft, match.Id).Int(client.Id).Int(match.HostId), traffic: TrafficClass.ReliableOrdered);
-            }
-            if (match.Players.Count == 0)
-            {
-                lobby.Match = null;
-                lobby.Phase = LobbyPhase.Waiting;
-            }
+            lobby.Match = null;
+            lobby.Phase = LobbyPhase.Waiting;
+        }
+        if (lobby.Phase == LobbyPhase.Staging && lobby.CreatorId == client.Id)
+        {
+            // Only the creator's start was staged; whoever inherits the lobby starts again if they want to. The lobby
+            // state below announces it, once the lobby has its next creator.
+            CancelStage(lobby, "the creator left", announce: false);
         }
         if (lobby.Members.Count == 0)
         {
             lobbies.Remove(lobby.Id);
+            lobby.World = null;
             Log($"lobby {lobby.Id} closed");
         }
         else
@@ -437,13 +436,43 @@ public partial class LobbyServer : Node
             {
                 lobby.CreatorId = lobby.Members[0];
             }
-            SendLobbyState(lobby);
+            if (!OpenWorld(lobby)) SendLobbyState(lobby);
         }
         if (clients.ContainsKey(client.Id))
         {
             SendLobbyList(client);
         }
         BroadcastLobbyList();
+    }
+
+    /// <summary>
+    /// A peer left a run (a match or a lobby world): its actors depart, keeping their banks in the standings, its
+    /// bodies pass to the world authority (a successor if it was that peer), and everyone left is told. False when the
+    /// peer was not playing in it.
+    /// </summary>
+    private bool Depart(MatchRun match, int peer)
+    {
+        if (!match.Players.Remove(peer)) return false;
+        if (match.HostId == peer && match.Players.Count > 0)
+        {
+            match.HostId = match.Actors.Values.Where(a => a.Present && a.OwnerPeerId != peer && a.Kind == ActorKind.Human)
+                .Select(a => a.OwnerPeerId).FirstOrDefault();
+            if (match.HostId == 0) match.HostId = match.Players[0];
+        }
+        foreach (var actor in match.Actors.Values.Where(a => a.OwnerPeerId == peer && a.Present).ToArray())
+        {
+            match.Actors[actor.Id] = actor with { Present = false };
+            match.Samples.Remove(actor.Id);
+            match.Mode.Apply(match.Host, new ActorLeft(actor.Id), clock.Seconds);
+        }
+        var transfers = match.Players.Count > 0 ? match.Tanks.Transfer(peer, match.HostId) : Array.Empty<BodyAuthority>();
+        foreach (var id in match.Players)
+        {
+            Send(id, MessageCodec.Encode(new NetMessage(Msg.Authority, match.Id, 0,
+                new AuthorityMessage(match.HostId, 0, ClaimRefusal.None, transfers)), fromServer: true));
+            Send(id, new NetWriter(Msg.PlayerLeft, match.Id).Int(peer).Int(match.HostId), traffic: TrafficClass.ReliableOrdered);
+        }
+        return true;
     }
 
     private void SetProfile(Client client, string name, AppearanceRecord appearance)
@@ -464,11 +493,17 @@ public partial class LobbyServer : Node
     {
         var actors = lobby.Roster.Present.Select(PlayerProfile.From).ToArray();
         var state = new LobbyInfo(lobby.Id, lobby.CreatorId, lobby.MatchLength, lobby.Phase, actors, lobby.Capacity, lobby.Roster.Revision)
-        { Peers = lobby.Members.ToArray(), Mode = lobby.Settings };
+        {
+            Peers = lobby.Members.ToArray(),
+            Mode = lobby.Settings,
+            StartsIn = lobby.Phase == LobbyPhase.Staging ? (float)Math.Clamp(lobby.StageEnds - clock.Seconds, 0, MaxStage) : 0,
+            WorldId = lobby.World?.Id ?? 0,
+        };
         var bytes = MessageCodec.Encode(new NetMessage(Msg.LobbyState, 0, 0, state), true);
         var roster = MessageCodec.Encode(new NetMessage(Msg.RosterState, 0, 0,
             new RosterStateMessage(lobby.Id, lobby.Roster.Revision, actors)), true);
         foreach (var peer in lobby.Members) { Send(peer, bytes); Send(peer, roster); }
+        SyncWorld(lobby);
     }
 
     private void ChangeActor(Client client, object payload)
@@ -574,13 +609,55 @@ public partial class LobbyServer : Node
 
     private void StartMatch(Client client, Godot.Collections.Dictionary snapshot)
     {
-        if (client.Lobby is not { Phase: LobbyPhase.Waiting } lobby || lobby.CreatorId != client.Id)
+        if (client.Lobby is not { Phase: LobbyPhase.Waiting } lobby || lobby.CreatorId != client.Id || !CanStart(lobby, client))
         {
             return;
         }
+        // A lobby with a world stages the start: everyone sees the lineup count down while still roaming.
+        using var staged = Tuning.FromSnapshot(snapshot);
+        if (lobby.World != null && staged.LobbyStageTime > 0)
+        {
+            lobby.Phase = LobbyPhase.Staging;
+            lobby.Staged = snapshot;
+            lobby.StageEnds = clock.Seconds + Math.Min(staged.LobbyStageTime, MaxStage);
+            Log($"lobby {lobby.Id}: starting in {staged.LobbyStageTime:0.#} s");
+            SendLobbyState(lobby);
+            BroadcastLobbyList();
+            return;
+        }
+        BeginMatch(lobby, client, snapshot);
+    }
+
+    /// <summary>The creator still has an actor and the roster fits: otherwise it says why.</summary>
+    private bool CanStart(Lobby lobby, Client client)
+    {
         var actors = lobby.Roster.Present;
         if (actors.Count == 0 || actors.Count > lobby.Capacity || !actors.Any(a => a.OwnerPeerId == client.Id))
-        { Notice(client, "The creator needs an actor to start."); return; }
+        { Notice(client, "The creator needs an actor to start."); return false; }
+        return true;
+    }
+
+    /// <summary>The creator takes the start back while the stage counts down.</summary>
+    private void CancelStart(Client client)
+    {
+        if (client.Lobby is { Phase: LobbyPhase.Staging } lobby && lobby.CreatorId == client.Id) CancelStage(lobby, "the creator canceled");
+    }
+
+    private void CancelStage(Lobby lobby, string why, bool announce = true)
+    {
+        lobby.Phase = LobbyPhase.Waiting;
+        lobby.Staged = null;
+        Log($"lobby {lobby.Id}: start canceled, {why}");
+        if (!announce) return;
+        SendLobbyState(lobby);
+        BroadcastLobbyList();
+    }
+
+    /// <summary>The match itself: the lobby world (if any) retires, then the suburb is generated and sent as always.</summary>
+    private void BeginMatch(Lobby lobby, Client client, Godot.Collections.Dictionary snapshot)
+    {
+        CloseWorld(lobby);
+        var actors = lobby.Roster.Present;
         // Everyone plays on the creator's tuning: the baked values in a release build, the live ones in debug. The
         // lobby's mode settings are the server's own dials for this match (tank supply and King's mint pace).
         var tuning = Tuning.FromSnapshot(snapshot);
@@ -654,6 +731,17 @@ public partial class LobbyServer : Node
 
     private void Tick(Lobby lobby, double now)
     {
+        if (lobby.World is { } world) { TickWorld(world, now); }
+        if (lobby.Phase == LobbyPhase.Staging && now >= lobby.StageEnds)
+        {
+            var creator = clients.GetValueOrDefault(lobby.CreatorId);
+            var snapshot = lobby.Staged!;
+            lobby.Phase = LobbyPhase.Waiting;
+            lobby.Staged = null;
+            if (creator == null || !CanStart(lobby, creator)) { CancelStage(lobby, "the lineup changed"); }
+            else { BeginMatch(lobby, creator, snapshot); }
+            return;
+        }
         if (lobby.Match is not { } match)
         {
             return;
@@ -754,7 +842,8 @@ public partial class LobbyServer : Node
                 }
                 lobby.Phase = LobbyPhase.Waiting;
                 lobby.Match = null;
-                SendLobbyState(lobby);
+                // Everyone still here goes back to roaming, in a new world.
+                if (!OpenWorld(lobby)) SendLobbyState(lobby);
                 BroadcastLobbyList();
                 break;
             case ModePhase.Loading:
@@ -771,6 +860,7 @@ public partial class LobbyServer : Node
         const string reason = "This lobby needs to close. Reconnect to create a new lobby.";
         lobbies.Remove(lobby.Id);
         lobby.Match = null;
+        lobby.World = null;
         var members = clients.Values.Where(c => c.Lobby == lobby).ToArray();
         foreach (var client in members) client.Lobby = null;
         lobby.Members.Clear();
@@ -803,9 +893,9 @@ public partial class LobbyServer : Node
         return new ActorSample(actorId, at.X, at.Y, at.Z, down);
     }
 
-    private void ClaimPickup(Client client, int actorId, int index)
+    private void ClaimPickup(Client client, MatchRun match, int actorId, int index)
     {
-        if (client.Lobby is not { Match: { } match } || !match.Mode.Permits(ModeGate.Pickup, clock.Seconds) ||
+        if (!match.Mode.Permits(ModeGate.Pickup, clock.Seconds) ||
             index < 0 || index >= match.PickupUp.Length || !match.PickupUp[index])
         {
             return;
@@ -821,10 +911,11 @@ public partial class LobbyServer : Node
     /// Resolves authority requests into ordered canonical grants/refusals, and forwards other match messages with
     /// the sender inserted. Accepted explosions and drops also change the bank.
     /// </summary>
-    private void Relay(Client client, NetMessage message, TrafficClass? incoming)
+    private void Relay(Client client, MatchRun match, NetMessage message, TrafficClass? incoming)
     {
-        if (client.Lobby is not { Match: { } match } lobby || !match.Players.Contains(client.Id)) { return; }
-        if (lobby.Phase is not (LobbyPhase.Countdown or LobbyPhase.Playing or LobbyPhase.Results) &&
+        if (client.Lobby is not { } lobby || !match.Players.Contains(client.Id)) { return; }
+        // A lobby world relays all the while it lives (waiting and staging); a match only once it is under way.
+        if (match != lobby.World && lobby.Phase is not (LobbyPhase.Countdown or LobbyPhase.Playing or LobbyPhase.Results) &&
             !(lobby.Phase == LobbyPhase.Loading && message.Type is Msg.BodyStates or Msg.BodyRest) &&
             message.Type is not (Msg.Claim or Msg.Puncture or Msg.Explode)) { return; }
         if (Protocol.IsActorMessage(message.Type) && !AcceptActor(client, match, message)) return;
@@ -924,9 +1015,9 @@ public partial class LobbyServer : Node
     /// A mode event: the envelope codec already checked its schema, kind, direction and bounds. The reporter must own
     /// the actor with its current life and a newer action sequence; causal dependencies wait in the run's gate.
     /// </summary>
-    private void ModeEvent(Client client, NetMessage message)
+    private void ModeEvent(Client client, MatchRun match, NetMessage message)
     {
-        if (client.Lobby is not { Match: { } match } || !match.Players.Contains(client.Id)) return;
+        if (!match.Players.Contains(client.Id)) return;
         var envelope = (ModeEnvelope)message.Payload;
         if (envelope.ModeId != match.Mode.Definition.Id || envelope.SchemaVersion != match.Mode.Definition.SchemaVersion)
             throw new InvalidDataException($"mode event for schema {envelope.ModeId}/{envelope.SchemaVersion} in a {match.Mode.Definition.Name} run");
@@ -961,6 +1052,8 @@ public partial class LobbyServer : Node
         public int WorldAuthority => match.HostId;
         public Tuning Tuning => match.Tuning;
         public void Log(string text) => LobbyServer.Log($"match {match.Id}: {text}");
+        public BodyAuthority? Body(uint id) => match.Tanks.Get(id);
+        public int LiveTanks => match.Tanks.LiveTanks;
     }
 
     private static bool ValidTarget(MatchRun match, int actor, uint life) =>

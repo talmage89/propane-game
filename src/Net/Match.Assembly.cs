@@ -33,6 +33,7 @@ public partial class Match
         {
             match.BuildViews();
             match.AttachBots();
+            match.AttachLobby();
         }
         public void RegisterReplication(SessionContext session)
         {
@@ -48,6 +49,7 @@ public partial class Match
         public void Ready(SessionContext session)
         {
             match.loadingFrames = 2;
+            match.ReadyLobby();
         }
     }
 
@@ -58,9 +60,11 @@ public partial class Match
         effects = World.EffectsRoot;
         plan = PlanCodec.Decode(Setup.Plan);
         var settings = Setup.Mode.Supply.Suburb(World.Tuning, Setup.Players.Count);
-        suburb = Suburb.Build(World, plan, settings, networked: true);
+        // A void world (the lobby's) has no slab: its plan's content stands on the construct's own floor.
+        suburb = Suburb.Build(World, plan, settings, networked: true, ground: Setup.Mode.World != Modes.ModeWorldSource.Void);
         World.Root.AddChild(suburb);
         World.SetContentRoot(suburb.DynamicRoot);
+        if (IsLobby) BuildLobbyContent();
 
         gather = new TankGather
         {
@@ -87,35 +91,44 @@ public partial class Match
     {
         foreach (var (profile, slot) in Setup.Players)
         {
-            profiles[profile.Id] = profile;
-            scores[profile.Id] = 0;
             leaderboardRoster.Add(new LeaderboardEntry(profile.Id, profile.Name, profile.Appearance.Color));
             var spawn = plan.Spawns.Count > 0 ? plan.Spawns[slot % plan.Spawns.Count] : new SpawnPoint(plan.Spawn, plan.SpawnYaw);
-            var position = Suburb.ToWorld(spawn.Position, 0.05f);
-            var owned = profile.OwnerPeerId == me;
-            var character = new PlayerCharacter
-            {
-                World = World,
-                Name = $"Actor_{profile.Id}",
-                IsRemote = !owned,
-                ActorId = profile.Id,
-                OwnerPeerId = profile.OwnerPeerId,
-                LifeId = profile.LifeId,
-                BodyColor = profile.Appearance.Color,
-                Ammo = owned && mode.Supply.LimitedAmmo ? AmmoState.Starting(World.Tuning) : null,
-                InputLocked = owned,
-            };
-            Session.AddActor(character);
-            character.Runtime.SpawnSlot = slot;
-            character.Runtime.AllocationSlot = profile.AllocationSlot;
-            character.Teleport(position, spawn.Yaw + Mathf.Pi);
-            if (!owned) character.Runtime.IntentSource = new ReplicatedIntent(World.Tuning);
+            AddActor(profile, slot, Suburb.ToWorld(spawn.Position, 0.05f), spawn.Yaw + Mathf.Pi);
         }
         if (!Session.OwnedActors.Any())
         {
             throw new InvalidOperationException("this player is not in the match");
         }
     }
+
+    /// <summary>One actor of the frozen roster (or, in the lobby world, one that joined it): owned here or a remote copy.</summary>
+    private PlayerCharacter AddActor(PlayerProfile profile, int slot, Vector3 position, float yaw)
+    {
+        profiles[profile.Id] = profile;
+        scores[profile.Id] = 0;
+        var owned = profile.OwnerPeerId == me;
+        var character = new PlayerCharacter
+        {
+            World = World,
+            Name = $"Actor_{profile.Id}",
+            IsRemote = !owned,
+            ActorId = profile.Id,
+            OwnerPeerId = profile.OwnerPeerId,
+            LifeId = profile.LifeId,
+            BodyColor = profile.Appearance.Color,
+            Ammo = owned && LimitedAmmo ? AmmoState.Starting(World.Tuning) : null,
+            InputLocked = owned && phase != Phase.Playing,
+        };
+        Session.AddActor(character);
+        character.Runtime.SpawnSlot = slot;
+        character.Runtime.AllocationSlot = profile.AllocationSlot;
+        character.Teleport(position, yaw);
+        if (!owned) character.Runtime.IntentSource = new ReplicatedIntent(World.Tuning);
+        return character;
+    }
+
+    /// <summary>Rifles carry limited ammunition: the mode's policy, which the lobby world's tuner can switch on.</summary>
+    private bool LimitedAmmo => mode.Supply.LimitedAmmo || IsLobby && !World.Tuning.LobbyInfiniteAmmo;
 
     private void BuildViews()
     {
@@ -132,7 +145,7 @@ public partial class Match
         BuildKingZone();
         results = new ResultsScreen { Name = "Results" };
         Session.AddView(this, results);
-        menu = new MatchMenu { Name = "Menu" };
+        menu = new MatchMenu { Name = "Menu", Lobby = IsLobby };
         menu.ResumeRequested += CloseMenu;
         menu.LeaveRequested += () => World.Defer(() => LeaveRequested?.Invoke(), whilePaused: true);
         Session.AddView(this, menu);
@@ -172,29 +185,31 @@ public partial class Match
             }
         }
 
-        foreach (var owned in Session.OwnedActors)
-        {
-            var actor = owned.Character;
-            void Fired(ShotReport shot) => OnFired(actor, shot);
-            void Ragdolled(Vector3 at, Vector3 velocity, Vector3 spin) => OnRagdolled(actor, at, velocity, spin);
-            void GotUp(Vector3 root, float yaw) => Send(ActorWriter(Msg.GetUp, actor).Vec3(root).Float(yaw));
-            void MeleeStarted(uint swing, Vector3 direction) => SendActor(actor, Msg.MeleeStart, new MeleeStartMessage(swing, direction), predict: true);
-            void MeleeHit(MeleeHit hit) => OnMeleeHit(actor, hit);
-            void Pushed(RigidBody3D body) => Claim(new[] { body });
-            actor.Fired += Fired;
-            actor.Ragdolled += Ragdolled;
-            actor.GotUp += GotUp;
-            actor.MeleeStarted += MeleeStarted;
-            actor.MeleeHit += MeleeHit;
-            actor.PushedBody += Pushed;
-            Session.OnUnsubscribing(() =>
-            {
-                actor.Fired -= Fired; actor.Ragdolled -= Ragdolled; actor.GotUp -= GotUp;
-                actor.MeleeStarted -= MeleeStarted; actor.MeleeHit -= MeleeHit; actor.PushedBody -= Pushed;
-            });
-        }
+        foreach (var owned in Session.OwnedActors) SubscribeOwned(owned.Character);
         World.Events.LocalBlast += OnLocalBlast;
         Session.OnUnsubscribing(() => World.Events.LocalBlast -= OnLocalBlast);
+    }
+
+    /// <summary>What an actor this peer owns does goes out to everyone: shots, throws, get-ups, strikes and pushes.</summary>
+    private void SubscribeOwned(PlayerCharacter actor)
+    {
+        void Fired(ShotReport shot) => OnFired(actor, shot);
+        void Ragdolled(Vector3 at, Vector3 velocity, Vector3 spin) => OnRagdolled(actor, at, velocity, spin);
+        void GotUp(Vector3 root, float yaw) => Send(ActorWriter(Msg.GetUp, actor).Vec3(root).Float(yaw));
+        void MeleeStarted(uint swing, Vector3 direction) => SendActor(actor, Msg.MeleeStart, new MeleeStartMessage(swing, direction), predict: true);
+        void MeleeHit(MeleeHit hit) => OnMeleeHit(actor, hit);
+        void Pushed(RigidBody3D body) => Claim(new[] { body });
+        actor.Fired += Fired;
+        actor.Ragdolled += Ragdolled;
+        actor.GotUp += GotUp;
+        actor.MeleeStarted += MeleeStarted;
+        actor.MeleeHit += MeleeHit;
+        actor.PushedBody += Pushed;
+        Session.OnUnsubscribing(() =>
+        {
+            actor.Fired -= Fired; actor.Ragdolled -= Ragdolled; actor.GotUp -= GotUp;
+            actor.MeleeStarted -= MeleeStarted; actor.MeleeHit -= MeleeHit; actor.PushedBody -= Pushed;
+        });
     }
 
     private void PreparePresentation()
@@ -206,7 +221,7 @@ public partial class Match
         Warmup.Run(World, World.Root, new Vector3(0, -400f, 0));
 
         CaptureMouse(true);
-        ShowNotice("Waiting for everyone to arrive", 30f);
+        if (!IsLobby) ShowNotice("Waiting for everyone to arrive", 30f);
         // Prepare loading presentation before the handoff, so buffered Countdown/Go/End remain authoritative.
         // The Ready stage schedules Loaded after replay and the first complete frame.
         GD.Print($"[match] seed {plan.Seed}: {plan.Lots.Count} lots, {plan.Tanks.Count} tanks, {pickups.Count} pickups, {Setup.Players.Count} players, host {Setup.HostId}, me {me}");

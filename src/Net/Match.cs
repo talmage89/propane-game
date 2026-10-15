@@ -249,6 +249,7 @@ public partial class Match : Node3D
             (remote.IntentSource as ReplicatedIntent)?.Apply(remote.Character, now);
         }
         bodies.Correct(now);
+        if (IsLobby) RefillLobbyRifles();
         ThinkBots(dt);
 
         foreach (var owned in Session.OwnedActors)
@@ -269,7 +270,8 @@ public partial class Match : Node3D
         var camera = player.View.CameraRig.Camera;
         var viewportHeight = GetViewport().GetVisibleRect().Size.Y;
         var radius = Mathf.Tan(Mathf.DegToRad(player.SpreadDegrees)) / Mathf.Tan(Mathf.DegToRad(camera.Fov / 2f)) * viewportHeight / 2f;
-        var menuOpen = menu.Visible || tuningPanel?.Visible == true;
+        // The lobby world's stage screen stands in for the HUD: no tags, notices or crosshair through its lineup.
+        var menuOpen = menu.Visible || tuningPanel?.Visible == true || lobbyStaged;
         hud.SetCrosshair(radius, !player.IsRagdolled && Input.MouseMode == Input.MouseModeEnum.Captured && phase != Phase.Ended, player.AimAmount);
 
         groupRefresh -= dt;
@@ -330,7 +332,10 @@ public partial class Match : Node3D
                 continue;
             }
             var scale = tuning.ScoreTagScale * Mathf.Lerp(1.15f, 0.6f, Mathf.Clamp(distance / Mathf.Max(tuning.ScoreTagRange, 1f), 0, 1));
-            tags.Add(new ScoreTag(camera.UnprojectPosition(at), scores.GetValueOrDefault(remote.Character.ActorId), profiles[remote.Character.ActorId].Appearance.Color, scale));
+            var profile = profiles[remote.Character.ActorId];
+            // The lobby world has no scores: everyone's name floats over them instead.
+            tags.Add(new ScoreTag(camera.UnprojectPosition(at), scores.GetValueOrDefault(remote.Character.ActorId), profile.Appearance.Color, scale,
+                IsLobby ? profile.Name : null));
         }
         return tags;
     }
@@ -340,6 +345,7 @@ public partial class Match : Node3D
     public override void _UnhandledInput(InputEvent @event)
     {
         if (World is not { IsAlive: true }) { return; }
+        if (LobbyInput(@event)) { return; }
         if (@event.IsActionPressed(InputSetup.Pause))
         {
             if (tuningPanel?.Visible == true)
@@ -974,7 +980,8 @@ public partial class Match : Node3D
                 phase = Phase.Playing;
                 timeLeft = ((FloatMessage)message.Payload).Value;
                 foreach (var actor in Session.OwnedActors) actor.Character.InputLocked = false;
-                matchHud.ShowCountdown("GO");
+                // The lobby world greets arrivals with its own banner instead.
+                if (!IsLobby) matchHud.ShowCountdown("GO");
                 break;
             case Msg.Clock:
                 if (phase == Phase.Playing) { timeLeft = ((FloatMessage)message.Payload).Value; }
@@ -1009,7 +1016,7 @@ public partial class Match : Node3D
                 var left = (PlayerLeftMessage)message.Payload;
                 foreach (var departing in Session.Actors.Where(a => a.Character.OwnerPeerId == left.Player).ToArray())
                 {
-                    ShowNotice($"{profiles[departing.Character.ActorId].Name} left the match", 3f);
+                    ShowNotice($"{profiles[departing.Character.ActorId].Name} left the {(IsLobby ? "lobby" : "match")}", 3f);
                     Session.RemoveActor(departing);
                 }
                 RefreshBotPeers();

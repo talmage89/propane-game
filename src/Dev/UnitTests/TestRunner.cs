@@ -52,8 +52,10 @@ public partial class TestRunner : Node
                 CoreTests.Complete(this);
                 return;
             }
+            // --suite=Name runs only the suites whose names contain it, while iterating on one of them.
+            var only = DevArgs.Get("suite");
             var suites = typeof(TestRunner).Assembly.GetTypes()
-                .Where(type => type.IsDefined(typeof(UnitSuiteAttribute), false))
+                .Where(type => type.IsDefined(typeof(UnitSuiteAttribute), false) && (only == null || type.Name.Contains(only, StringComparison.Ordinal)))
                 .OrderBy(type => type.GetCustomAttribute<UnitSuiteAttribute>()!.Order)
                 .ThenBy(type => type.FullName, StringComparer.Ordinal)
                 .ToArray();

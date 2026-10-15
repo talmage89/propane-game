@@ -32,6 +32,7 @@ public partial class NetTest : Node
     private double kingLoneSeconds, kingSampleSeconds;
     private NetClient net = null!;
     private Match? match;
+    private Action? finishMatch;
     private long matchAllocated;
     private TimeSpan matchGcPause;
     private readonly int[] matchCollections = new int[3];
@@ -82,7 +83,12 @@ public partial class NetTest : Node
             server.Start();
         }
         InputSetup.Register();
-        net = new NetClient { Name = "Net" };
+        // Match soaks keep their timing: these clients stay out of the lobby world and start without a stage unless a
+        // lobby run asks for both (--lobby-roam).
+        roam = DevArgs.Get("lobby-roam") != null;
+        roamSeconds = DevArgs.GetFloat("lobby-roam", 10);
+        if (!roam) Tuning.SavedTemplate.LobbyStageTime = 0;
+        net = new NetClient { Name = "Net", LobbyWorlds = roam };
         AddChild(net);
         director = new CaptureDirector { Name = "Director", QuitAfter = DevArgs.GetFloat("quit", 400f) };
         AddChild(director);
@@ -144,6 +150,11 @@ public partial class NetTest : Node
         };
         net.MatchStarting += async setup =>
         {
+            if (setup.ModeId == ModeRegistry.LobbyWorldId)
+            {
+                EnterLobbyWorld(setup);
+                return;
+            }
             appearanceMenus?.Show(UI.Menus.Screen.None);
             if (DevArgs.Get("scenario") == "appearance") { CheckAppearances(setup.Players.Select(p => p.Player)); }
             var delay = DevArgs.Get("delay-who") is not { } delayed || delayed == net.PlayerName ? DevArgs.GetFloat("match-delay", 0) : 0;
@@ -154,6 +165,7 @@ public partial class NetTest : Node
                 await ToSignal(GetTree().CreateTimer(delay), SceneTreeTimer.SignalName.Timeout);
                 if (net.ActiveMatchId != setup.Id || net.State != NetClient.Status.Connected) { return; }
             }
+            EndLobbyWorld();
             if (match != null)
             {
                 RemoveChild(match);
@@ -180,8 +192,9 @@ public partial class NetTest : Node
                 CreateLocalView = DisplayServer.GetName() != "headless",
                 BeforeInboxAttach = DevArgs.Get("scenario") == "capacity" ? () => PrepareCapacity(setup) : null
             };
-            match.Finished += () =>
+            finishMatch = () =>
             {
+                if (match == null) return;
                 if (DevArgs.Get("scenario") is "duel" or "pickup" or "drop-refusal" or "puncture-race" or "appearance" or "gather" or "melee" or "body-stream" or "vent-contact" or "king" or "king-late")
                 {
                     ScenarioAssert(scenarioPassed, "scenario ended before all assertions passed");
@@ -233,11 +246,13 @@ public partial class NetTest : Node
                 started = matches >= matchesWanted;
                 // Lobby Waiting may have arrived before this client's results timer finished.
                 TryStartMatch();
-                if (matches >= matchesWanted)
+                // A roaming run quits once it has roamed the world it returns to.
+                if (matches >= matchesWanted && !roam)
                 {
                     GetTree().CreateTimer(1.0).Timeout += () => ShutdownGuard.Quit(GetTree());
                 }
             };
+            match.Finished += finishMatch;
             kingStage = -1; kingCamera = null; kingCaptured.Clear();
             kingHeld = kingContested = kingWarned = kingMoved = kingPiled = false;
             raceTick = raceSamples = 0;
@@ -361,7 +376,11 @@ public partial class NetTest : Node
         GetTree().CreateTimer(DevArgs.Get("host-server") != null ? 0.3 : 0.05).Timeout += () => net.Connect(address, port, name, appearance);
     }
 
-    public override void _ExitTree() => (bot as IDisposable)?.Dispose();
+    public override void _ExitTree()
+    {
+        (bot as IDisposable)?.Dispose();
+        worldBot?.Dispose();
+    }
 
     /// <summary>Each owned bot's idle share and statuses, then the mean and worst share (see <see cref="BotActivity"/>).</summary>
     private void LogBotActivity(Match match)
@@ -406,7 +425,7 @@ public partial class NetTest : Node
     {
         if (role == "host" && net.IsCreator && !started && matches < matchesWanted &&
             net.Lobby is { Phase: LobbyServer.LobbyPhase.Waiting } lobby && lobby.Peers.Count >= players &&
-            lobby.Members.Count >= players + lobbyBotsTotal)
+            lobby.Members.Count >= players + lobbyBotsTotal && Roamed)
         {
             started = true;
             net.SetMode(new ModeSettings(DevArgs.Get("mode") == "king" ? ModeRegistry.KingId : ModeRegistry.TankBankId,
@@ -419,6 +438,7 @@ public partial class NetTest : Node
 
     public override void _PhysicsProcess(double delta)
     {
+        ProcessLobbyWorld((float)delta);
         if (match == null || !IsInstanceValid(match))
         {
             return;
