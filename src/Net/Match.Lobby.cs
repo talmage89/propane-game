@@ -185,6 +185,21 @@ public partial class Match
         bots.Add(view);
     }
 
+    /// <summary>
+    /// Bots shoot, reload and fetch by their magazine, so where rifles never run dry each bot this peer runs carries one
+    /// whose reserve stays full. People carry none.
+    /// </summary>
+    private void RefillLobbyRifles()
+    {
+        if (LimitedAmmo) return;
+        foreach (var owned in Session.OwnedActors)
+        {
+            if (profiles[owned.Character.ActorId].Kind != ActorKind.Bot) continue;
+            var ammo = owned.Character.Ammo ??= AmmoState.Starting(World.Tuning);
+            ammo.Reserve = World.Tuning.MaxReserve;
+        }
+    }
+
     /// <summary>The arrival's view of the world marks the piles standing in it as piles, as a built plan's are.</summary>
     private void MarkStock(AuthorityMessage result)
     {

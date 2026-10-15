@@ -7,6 +7,7 @@
 #   King: -- --mode=king [--mint-seconds=2]; -n 3 -l 110 -k with --scenario=king-late --tune.PlayerSendRate=20 --delay-who=Bot3 --match-delay=70 tests a late builder; check scores separately.
 # Extra bot args (after --) go to every bot, e.g. --net-lag=120 --net-jitter=30 --net-loss=5 --capture-dir=... --shot-every=5
 #   --lobby-bots=2 (or 2,1 per bot) gives each client lobby bots it runs itself; --leave-at=30 --leave-who=Bot2 makes one leave
+#   --lobby-roam=S puts every bot in the lobby world: it roams S s before each match and after the last (with --matches=N)
 set -euo pipefail
 
 bots=2
@@ -50,9 +51,14 @@ out="${out:-$project/build/net}"
 mkdir -p "$out"
 rm -f "$out"/*.log
 # Each match adds its length plus loading, countdown and results; --matches=N plays N on one connection.
+# --lobby-roam=S adds S seconds of roaming the lobby world before each match and after the last, plus each stage.
 matches=1
-for arg in "$@"; do [[ "$arg" == --matches=* ]] && matches="${arg#*=}"; done
-budget=$((matches * (length + 40) + 35))
+roam=0
+for arg in "$@"; do
+  [[ "$arg" == --matches=* ]] && matches="${arg#*=}"
+  [[ "$arg" == --lobby-roam=* ]] && roam="${arg#*=}" && roam="${roam%%.*}"
+done
+budget=$((matches * (length + 40) + 35 + (matches + 1) * (roam + 10)))
 
 address=127.0.0.1
 if [[ -n "$remote" ]]; then

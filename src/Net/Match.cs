@@ -249,6 +249,7 @@ public partial class Match : Node3D
             (remote.IntentSource as ReplicatedIntent)?.Apply(remote.Character, now);
         }
         bodies.Correct(now);
+        if (IsLobby) RefillLobbyRifles();
         ThinkBots(dt);
 
         foreach (var owned in Session.OwnedActors)
