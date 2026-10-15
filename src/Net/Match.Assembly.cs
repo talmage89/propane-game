@@ -91,6 +91,7 @@ public partial class Match
     {
         foreach (var (profile, slot) in Setup.Players)
         {
+            leaderboardRoster.Add(new LeaderboardEntry(profile.Id, profile.Name, profile.Appearance.Color));
             var spawn = plan.Spawns.Count > 0 ? plan.Spawns[slot % plan.Spawns.Count] : new SpawnPoint(plan.Spawn, plan.SpawnYaw);
             AddActor(profile, slot, Suburb.ToWorld(spawn.Position, 0.05f), spawn.Yaw + Mathf.Pi);
         }

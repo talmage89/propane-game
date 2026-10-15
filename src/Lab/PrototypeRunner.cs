@@ -68,6 +68,10 @@ public partial class PrototypeRunner : Node
     public bool Spectating(int actorId) => spectating.Contains(actorId);
     /// <summary>The mode's own state for its HUD, bots and arena, from the rules this runner holds (King's zone).</summary>
     public IModeView? View => (Rules as KingRules)?.State(Clock);
+    private readonly Dictionary<int, BotActivity> activity = new();
+    /// <summary>Whether a bot actor makes progress (<see cref="BotActivity"/>), kept across rounds.</summary>
+    public BotActivity ActivityOf(int actorId) => activity.TryGetValue(actorId, out var known) ? known : activity[actorId] = new BotActivity();
+    public IReadOnlyDictionary<int, BotActivity> Activity => activity;
     public string BotStatus(int actorId) => brains.FirstOrDefault(b => b.Actor.ActorId == actorId).Brain?.Status ?? "";
     internal string BotNavigation(int actorId) => brains.FirstOrDefault(b => b.Actor.ActorId == actorId).Brain?.NavigationDiagnostics ?? "";
     private WorldContext World => Lab.World;
@@ -144,6 +148,8 @@ public partial class PrototypeRunner : Node
             Thinks++;
         }
         ThinkSeconds += System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalSeconds;
+        var zone = Rules is KingRules king ? KingBotView.Read(king, Clock) : null;
+        foreach (var (brain, actor, _) in brains) ActivityOf(actor.ActorId).Sample(IsPlaying, actor, brain, zone, (float)delta);
         Apply(Rules.Handle(new TunersChanged(Mode.CopyTuners(World.Tuning)), Clock)); // Session tuning is live.
         var samples = Lab.Session.Actors.Select(a => a.Character).Where(a => !spectating.Contains(a.ActorId)).Select(Sample).ToArray();
         Apply(Rules.Handle(new ActorsSampled(samples), Clock));

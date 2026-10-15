@@ -156,8 +156,12 @@ chain and one push), segments built and retired, and the result paused on the co
 runs (`dissolve-full`: the bot on two seeds; `dissolve-pace`: a pacer that runs down the street without bot navigation,
 so its frame times measure the stream rather than the bot), which also require the live segments, their nodes and bodies
 and the whole tree's nodes to stay bounded (the last third of the run holding no more than the first third, give or take).
+Two idle checks keep crowds of bots playing: `idle-bank` (a 40-second suburb soak with eight bots) and `idle-king` (a
+45-second suburb King round with sixteen bots). Every Lab bot run prints `[lab idle]` lines: each bot's idle share (see
+[bot navigation](bot-navigation.md#idle-bots)), its longest idle run and its commonest statuses; `--max-idle=F` and
+`--max-idle-worst=F` fail the run when the bots' mean or worst share exceeds them (the checks allow 12%/30% and 15%/40%).
 `--only=soak-void,dials` runs only the named sessions (`lifetime`, `rules`, `aimstall`, `duel`, `ringout`, `king`,
-`shortfuse`, `shortfuse-combo`, `dissolve`, and with `--full` `dials`, `soak-void`, `soak-suburb`, `ringout-full`, `king-full`,
+`shortfuse`, `shortfuse-combo`, `dissolve`, `idle-bank`, `idle-king`, and with `--full` `dials`, `soak-void`, `soak-suburb`, `ringout-full`, `king-full`,
 `king-suburb`, `shortfuse-full`, `dissolve-full`, `dissolve-pace`); `make test-full` splits
 `--full` into 25 jobs: separate sessions, individual Ring Out/Short Fuse/Dissolve seeds, four lifetime shards and eight dial shards.
 King keeps its three rounds together because its mint assertion spans the rounds. `--dial-shard=1 --dial-shards=8`

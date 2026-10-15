@@ -24,6 +24,7 @@ public sealed class DissolveRunBot : IBotGoalPolicy
 
     private readonly BotStatus status = new();
     public string Status => status.ToString();
+    public string StatusKind => status.Format;
     public string NavigationDiagnostics => motor.NavigationDiagnostics;
     public float Skill { get => motor.Skill; set => motor.Skill = value; }
 

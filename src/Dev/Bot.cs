@@ -21,6 +21,7 @@ public sealed class Bot : IBotBrain, System.IDisposable
     public Bot(ModeDefinition? mode = null) => brain = (mode ?? ModeRegistry.TankBank).CreateBot!(null);
     public float Skill { get => brain.Skill; set => brain.Skill = value; }
     public string Status => brain.Status;
+    public IBotGoalPolicy Policy => brain;
     public int StuckEvents => (brain as BankingBot)?.StuckEvents ?? 0;
     public int Replans => (brain as BankingBot)?.Replans ?? 0;
     public int Jumps => (brain as BankingBot)?.Jumps ?? 0;

@@ -30,6 +30,7 @@ public static class PlayerSettings
         path = settingsPath;
         file?.Dispose();
         file = null;
+        showLeaderboard = null;
     }
 
     public static string Name
@@ -68,6 +69,19 @@ public static class PlayerSettings
     {
         get => File.GetValue("net", "server", "").AsString();
         set => Set("net", "server", value);
+    }
+
+    private static bool? showLeaderboard;
+
+    /// <summary>Whether the match HUD shows the leaderboard; the match menu toggles it. Read every frame, so cached.</summary>
+    public static bool ShowLeaderboard
+    {
+        get => showLeaderboard ??= File.GetValue("hud", "leaderboard", true).AsBool();
+        set
+        {
+            showLeaderboard = value;
+            Set("hud", "leaderboard", value);
+        }
     }
 
     private static void Set(string section, string key, Variant value)

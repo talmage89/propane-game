@@ -59,7 +59,16 @@ public sealed class NavigationGrid
     /// <summary>Answers kept so far, including forgotten ones; with <see cref="Queries"/>, how much the cache saves.</summary>
     public long Answers { get; private set; }
     public INavigationWorld World => world;
-    private bool CanQuery(int count = 1) => world.Queries - tickStart + count <= QueryBudget;
+    private bool CanQuery(int count = 1)
+    {
+        if (world.Queries - tickStart + count <= QueryBudget) return true;
+        queryLimited = true;
+        return false;
+    }
+
+    private bool queryLimited, expansionLimited;
+    /// <summary>Ticks begun, and those in which a search or check waited on the query or expansion budget.</summary>
+    public (long Ticks, long QueryLimited, long ExpansionLimited) Saturation { get; private set; }
 
     public NavigationGrid(INavigationWorld world, NavigationCapabilities capabilities, float spacing, float minimumJumpRange,
         float layerTolerance)
@@ -84,6 +93,9 @@ public sealed class NavigationGrid
     /// <summary>Starts a physics tick: refills the budgets and lets settled disturbances go.</summary>
     public void BeginTick(double time)
     {
+        var saturation = Saturation;
+        Saturation = (saturation.Ticks + 1, saturation.QueryLimited + (queryLimited ? 1 : 0), saturation.ExpansionLimited + (expansionLimited ? 1 : 0));
+        queryLimited = expansionLimited = false;
         now = time;
         Refill();
         for (var i = settling.Count - 1; i >= 0; i--)
@@ -102,7 +114,11 @@ public sealed class NavigationGrid
     /// <summary>Takes one search expansion from this tick's budget.</summary>
     public bool TryExpand()
     {
-        if (ExpansionsThisTick >= ExpansionBudget) return false;
+        if (ExpansionsThisTick >= ExpansionBudget)
+        {
+            expansionLimited = true;
+            return false;
+        }
         ExpansionsThisTick++;
         return true;
     }

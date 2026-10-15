@@ -26,6 +26,9 @@ public sealed class BotStatus
         text = null;
     }
 
+    /// <summary>The format last set: a stable key for what the bot is doing, without its values.</summary>
+    public string Format => format;
+
     public override string ToString() => text ??= string.Format(CultureInfo.InvariantCulture, format, id, x, y, z, word);
 
     /// <summary>A tank state's name without boxing the enum.</summary>

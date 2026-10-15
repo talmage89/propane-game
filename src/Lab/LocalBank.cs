@@ -44,6 +44,9 @@ public partial class LocalBank : Node
     public TankBankRules Rules => rules;
     public int Hits { get; private set; }
     public int InitialSupply { get; private set; }
+    private readonly Dictionary<int, BotActivity> activity = new();
+    /// <summary>Whether each bot actor makes progress (<see cref="BotActivity"/>), by actor id.</summary>
+    public IReadOnlyDictionary<int, BotActivity> Activity => activity;
     public string BotStatus => brains[0].Brain.Status;
     public int BotBlacklisted => (brains[0].Brain as BankingBot)?.BlacklistedTargets ?? 0;
     private WorldContext World => Lab.World;
@@ -140,6 +143,11 @@ public partial class LocalBank : Node
                 if (bytes > 0) allocatingTicks++;
                 tickHistogram[Math.Min(tickHistogram.Length - 1, (int)(seconds * 100000))]++;
             }
+        }
+        foreach (var (brain, actor, _) in brains)
+        {
+            if (!activity.TryGetValue(actor.ActorId, out var known)) activity[actor.ActorId] = known = new BotActivity();
+            known.Sample(IsPlaying, actor, brain, null, (float)delta);
         }
         var actors = Lab.Session.Actors;
         for (var i = 0; i < actors.Count; i++)

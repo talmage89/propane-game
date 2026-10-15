@@ -64,6 +64,8 @@ public interface IBotGoalPolicy : IPlayerInputSource, System.IDisposable
 {
     /// <summary>What the bot is doing, for logs. Formatted when read, so a tick costs no string.</summary>
     string Status { get; }
+    /// <summary>The status without its values (its format), for counting what bots do.</summary>
+    string StatusKind => Status;
     string NavigationDiagnostics => "";
     float Skill { get; set; }
     /// <summary>Reserves the brain and navigation buffers before the first physics tick.</summary>

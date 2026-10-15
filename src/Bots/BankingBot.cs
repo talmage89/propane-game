@@ -41,6 +41,7 @@ public sealed class BankingBot : IBotGoalPolicy
     private CapsuleShape3D? capsule;
     private PlayerCharacter? capsuleOwner;
     private Vector3? navigationGoal;
+    private Vector3 fleeGoal;
     public int StuckEvents => navigator.StuckEvents;
     public int Replans => navigator.Replans;
     public int Jumps => navigator.Jumps;
@@ -72,6 +73,7 @@ public sealed class BankingBot : IBotGoalPolicy
 
     /// <summary>What the bot is doing, for logs.</summary>
     public string Status => status.ToString();
+    public string StatusKind => status.Format;
     public string NavigationDiagnostics => navigator.Diagnostics;
 
     /// <summary>0..1: how quickly it turns onto a target and how tightly it holds aim. 1 is the hardest.</summary>
@@ -136,14 +138,19 @@ public sealed class BankingBot : IBotGoalPolicy
             fleeing = null;
         }
         var danger = fleeing ?? match.Services.NearestVenting(here, tuning.RagdollRadius + 1f);
+        if (danger != fleeing || Flat(fleeGoal - here).Length() < tuning.BotGoalRadius * 2)
+        {
+            // One destination per escape: a goal that moves with the bot restarts its route search every step.
+            var away = here - (danger?.GlobalPosition ?? here);
+            away.Y = 0;
+            away = away.LengthSquared() > 0.01f ? away.Normalized() : Vector3.Forward;
+            fleeGoal = here + away * 10f;
+        }
         fleeing = danger;
         if (danger != null)
         {
-            var away = here - danger.GlobalPosition;
-            away.Y = 0;
-            away = away.LengthSquared() > 0.01f ? away.Normalized() : Vector3.Forward;
-            Face(player, here + away * 10f + Vector3.Up * 1.4f, dt);
-            MoveToward(player, away * 10f);
+            Face(player, fleeGoal + Vector3.Up * 1.4f, dt);
+            MoveToward(player, fleeGoal - here);
             intent.Sprint = true;
             status.Set("fleeing venting tank {1:0.0} m away", first: danger.GlobalPosition.DistanceTo(here));
             Navigate(match, dt);
@@ -691,7 +698,8 @@ public sealed class BankingBot : IBotGoalPolicy
                 continue;
             }
             var spot = ground.Point;
-            if (!services.Clear(spot + Vector3.Up * 1.6f, target, Layers.World | Layers.Props))
+            // Routes keep out of tank clearances and vent throws: a spot inside one can never be reached.
+            if (!services.Hazards.Safe(spot) || !services.Clear(spot + Vector3.Up * 1.6f, target, Layers.World | Layers.Props))
             {
                 continue;
             }

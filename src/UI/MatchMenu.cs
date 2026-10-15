@@ -4,8 +4,8 @@ using Propane.Core;
 namespace Propane.UI;
 
 /// <summary>
-/// Esc or Start/Options in a match (or the lobby world): the controls, and resume, leave or quit. The world keeps
-/// running behind it.
+/// Esc or Start/Options in a match (or the lobby world): the controls, resume, leave or quit, and the leaderboard
+/// toggle. The world keeps running behind it.
 /// </summary>
 public partial class MatchMenu : CanvasLayer
 {
@@ -66,6 +66,18 @@ public partial class MatchMenu : CanvasLayer
         buttons.AddChild(leave);
         buttons.AddChild(quit);
         layout.AddChild(buttons);
+        // The player's own choice, kept in their settings for every match.
+        var leaderboard = UiStyle.Button(LeaderboardText());
+        leaderboard.Pressed += () =>
+        {
+            PlayerSettings.ShowLeaderboard = !PlayerSettings.ShowLeaderboard;
+            leaderboard.Text = LeaderboardText();
+        };
+        var options = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.Center };
+        options.AddChild(leaderboard);
+        layout.AddChild(options);
         AddChild(new MenuNavigation { Screen = this, Root = layout, Back = () => ResumeRequested?.Invoke() });
     }
+
+    private static string LeaderboardText() => PlayerSettings.ShowLeaderboard ? "Leaderboard: shown" : "Leaderboard: hidden";
 }

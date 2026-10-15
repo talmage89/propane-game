@@ -330,11 +330,27 @@ internal static class NavigationTests
             nav.Reset();
             world = Grid(new CourseWorld { Impossible = true }, caps, tuning);
             var failed = false;
+            var (gain, island) = (tuning.BotPartialRouteGain, tuning.BotIslandExpansions);
+            tuning.BotPartialRouteGain = 0;
+            tuning.BotIslandExpansions = -1;
             for (var tick = 0; tick < 120 && !failed; tick++)
             {
                 failed = nav.Navigate(world, new NavigationHazards(), state, new Vector3(0, 0, -12), tuning, 1f / 60).Failed;
             }
+            (tuning.BotPartialRouteGain, tuning.BotIslandExpansions) = (gain, island);
             TestRunner.Assert(failed, "unreachable goals fail after bounded retries");
+            // Off ground it has no lattice for, it first steps toward the goal, and still gives up in bounded time.
+            nav.Reset();
+            world = Grid(new CourseWorld { Impossible = true }, caps, tuning);
+            failed = false;
+            var walked = false;
+            for (var tick = 0; tick < 900 && !failed; tick++)
+            {
+                var intent = nav.Navigate(world, new NavigationHazards(), state, new Vector3(0, 0, -12), tuning, 1f / 60);
+                walked |= intent.Direction.Z < -0.5f;
+                failed = intent.Failed;
+            }
+            TestRunner.Assert(walked && failed, "an unreachable goal is walked toward, then abandoned in bounded time");
         });
         runner.Run("navigation abandons cached routes when its shared grid is replaced", () =>
         {
@@ -489,6 +505,14 @@ internal static class NavigationTests
             hazards.Add(Vector3.Zero, 4);
             TestRunner.Assert(hazards.SafeAlong(Vector3.Right, Vector3.Right * 6, 0.3f, Vector3.Right), "walk out of danger");
             TestRunner.Assert(!hazards.Safe(Vector3.Zero, Vector3.Right), "never walk farther into danger");
+            // Between three overlapping circles every way out passes nearer one center: leaving them in all is enough.
+            hazards.Clear();
+            for (var i = 0; i < 3; i++) hazards.Add(new Vector3(1, 0, 0).Rotated(Vector3.Up, i * Mathf.Tau / 3), 2);
+            var outward = new Vector3(1, 0, 0).Rotated(Vector3.Up, Mathf.Tau / 6);
+            TestRunner.Assert(hazards.SafeAlong(Vector3.Zero, outward * 4, 0.3f, Vector3.Zero), "walk out from between overlapping circles");
+            TestRunner.Assert(!hazards.Safe(Vector3.Zero, outward), "never walk deeper between overlapping circles");
+            TestRunner.Assert(!hazards.Safe(outward * 2.5f + new Vector3(3, 0, 0), Vector3.Zero) || hazards.Safe(outward * 2.5f + new Vector3(3, 0, 0)),
+                "escaping never enters a circle the start is outside");
         });
         runner.Run("hazard indexing stays local when one tank flies far along an axis", () =>
         {

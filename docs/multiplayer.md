@@ -21,9 +21,13 @@ clock runs out wins.
 - Ammo is limited; ammo cans around the suburb come back after being taken.
 - Each player's score floats above them in their color, in line of sight. A shooter sees a hit marker, a scorer a
   "+N", and a victim an arrow toward the shot.
+- A live leaderboard in the top-left corner shows the top five (rank, color, name, bank), ties sharing a rank in
+  roster order as on the results screen. The player's own row is highlighted, and shows below a divider with its true
+  rank when they are outside the five. Rows slide to a new rank; a climb flashes and a gain pops "+N". Each player can
+  hide it from the match menu (kept in their settings).
 - No health: nobody dies.
 
-The counts and times are tuners (the Match, Tank bank, Multiplayer suburb, Ammo, HUD and Network groups of
+The counts and times are tuners (the Match, Tank bank, Multiplayer suburb, Ammo, HUD, Match HUD and Network groups of
 `src/Core/Tuning.cs`). The rules themselves are `TankBankRules`, pure logic run by the server's mode runner and by
 the Lab duel; [modes.md](modes.md) describes the framework, the spill tickets and the mode envelope.
 
