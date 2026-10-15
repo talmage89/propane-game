@@ -108,6 +108,12 @@ public static class LeaderboardTests
             TestRunner.Assert(!board.HasDetached && board.Rows[1] is { Local: true, Rank: 2 } && board.Motion(8)!.Flash == 1, $"local joins {Order(board)}");
             for (var frame = 0; frame < 60; frame++) board.Advance(1 / 60f, 0.35f, 0.9f);
             TestRunner.Assert(board.Motion(8)!.Slot == 1, "local row slides up into place");
+
+            // After a reset (the board was hidden), the standings appear in place again.
+            board.Reset();
+            board.Update(roster, scores, local: 8, count: 5);
+            TestRunner.Assert(board.Motions.Count == 5 && board.Motions.All(m => m.Alpha == 1 && m.Flash == 0 && m.PopAge > 1) && board.Motion(8)!.Slot == 1,
+                "reset board shows in place");
         });
     }
 }

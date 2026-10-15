@@ -80,6 +80,16 @@ public sealed class Leaderboard
 
     public LeaderboardMotion? Motion(int id) => byId.GetValueOrDefault(id);
 
+    /// <summary>Forgets every row, so the next standings appear in place (after the board was hidden).</summary>
+    public void Reset()
+    {
+        rows.Clear();
+        motions.Clear();
+        byId.Clear();
+        TopCount = 0;
+        started = false;
+    }
+
     /// <summary>
     /// Ranks <paramref name="entries"/> (in roster order) by <paramref name="points"/>, keeps the top
     /// <paramref name="count"/> and the local player's row, and records rank and score changes since the last call.
