@@ -15,6 +15,7 @@ results. The lead should remeasure on a quiet machine.
 Measured on Linux with Godot 4.7.2 .NET/Jolt, physics still at 120 Hz. This report distinguishes the large
 reduction in recurring brain work from the requested absolute wall-time and allocation bounds, which the
 longer runs do not establish.
+The subsequent [King crowd verification](king-crowd.md) covers the perimeter policy and its new shared bot dials.
 
 ## Source and method
 

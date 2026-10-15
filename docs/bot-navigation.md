@@ -133,7 +133,9 @@ Crowd observation reads the shared actor list once per `BotKingCrowdInterval` (0
 per-tick allocations. Steering, aiming and close melee retain their existing cadence. Siege statuses distinguish
 these tactical retreats from knockdown regrouping in activity logs. These seven new dials are exported in **Bots**
 and travel in the creator's tuning snapshot; they require the upcoming minor release. Existing local dials,
-King's rules, shared state and messages are unchanged.
+King's rules, shared state and messages are unchanged. Prize searches cache native positions and ranking distances
+within each search; crosshair hit tests skip only the existing trigger cooldown. Hard's blocked-shot observation
+still runs every tick. [Crowd verification](king-crowd.md) records the paired outcomes and performance limits.
 
 ## Hard points policy
 
