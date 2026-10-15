@@ -442,7 +442,7 @@ public partial class NetTest : Node
             ShutdownGuard.Quit(GetTree());
             return;
         }
-        if (match.IsPlaying && match.ModeView is KingState crowdState)
+        if (match.IsPlaying && match.BotKing is KingBotView crowdState)
         {
             kingSampleSeconds += dt;
             if (crowdState.Holder != 0) kingLoneSeconds += dt;
