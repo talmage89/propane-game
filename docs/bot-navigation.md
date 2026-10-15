@@ -45,7 +45,9 @@ inactive matches clear recovery state. An unavailable shooting position can stil
 Prototype motors retain a bounded direct walking attempt after `BotDirectStallTime` without progress greater than
 `BotDirectProgressDistance`. It lasts `BotDirectTime`, respects live tank clearance and the mode's ground limit,
 and never interrupts a committed jump or a running route search (restarting a search spread over ticks meant a far
-one never finished). The player controller still resolves solid collisions.
+one never finished). The navigator also keeps advancing its progress/retry state during direct recovery: resetting
+it every 1.2 seconds prevented its 1.25-second stall detector from ever expiring against a persistent obstruction.
+A planned jump cancels direct recovery; the player controller still resolves solid collisions.
 
 A search that cannot reach its goal, because it is walled off, inside a clearance or beyond `BotSearchBudget`, still
 yields a partial route to the explored point nearest the goal when that point is at least `BotPartialRouteGain` meters

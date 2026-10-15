@@ -132,8 +132,21 @@ public sealed class BotMotor
         {
             direct = tuning.BotDirectTime;
             stalled = 0;
-            navigator.Reset();
         }
+        // Keep progress/retry state alive during direct recovery. Resetting it at 1.2 s prevented the navigator's
+        // 1.25 s stall window from ever expiring, so a blocked motor could retry the same wall forever.
+        var grid = services.Navigation(BotServices.Capabilities(capsule, tuning));
+        var move = navigator.Navigate(grid, services.Hazards, new NavigationState(player.GlobalPosition, player.Velocity, player.IsOnFloor()),
+            goal.Value, tuning, dt, area);
+        if (move.Failed)
+        {
+            Failed = true;
+            direct = stalled = 0;
+            navigator.Reset();
+            Intent.Move = Vector2.Zero;
+            return;
+        }
+        if (navigator.Jumping) direct = 0;
         if (direct > 0 && !navigator.Jumping && player.IsOnFloor())
         {
             direct -= dt;
@@ -147,16 +160,6 @@ public sealed class BotMotor
                 return;
             }
             direct = 0;
-        }
-        var grid = services.Navigation(BotServices.Capabilities(capsule, tuning));
-        var move = navigator.Navigate(grid, services.Hazards, new NavigationState(player.GlobalPosition, player.Velocity, player.IsOnFloor()),
-            goal.Value, tuning, dt, area);
-        if (move.Failed)
-        {
-            Failed = true;
-            navigator.Reset();
-            Intent.Move = Vector2.Zero;
-            return;
         }
         if (navigator.Jumping || move.Sprint && sprint)
         {

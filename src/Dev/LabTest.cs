@@ -889,9 +889,30 @@ public partial class LabTest : Node
         }
         Assert(!king.Status.StartsWith("points: banking", StringComparison.Ordinal) && tanks.All(t => t.State == PropaneTank.TankState.Intact),
             $"Hard King kept choosing prizes behind shot-only debris ({king.Status})");
+        // A valid route with no actual movement must eventually fail, even while the prototype motor tries its
+        // direct walking recovery. Lock the actor (gravity/collision remain live) to hold that condition exactly.
+        lab.Opponent.InputOverride = new IdleInput();
+        lab.Opponent.InputLocked = true;
+        await Frames(60).ConfigureAwait(true); // Let the previous zone run lose its momentum before measuring a stall.
+        var motor = new BotMotor();
+        motor.Prepare(view);
+        var anchor = lab.Opponent.GlobalPosition;
+        var goal = anchor + Vector3.Right * 10;
+        var recoveryFailed = false;
+        for (var frame = 0; frame < 6 * 60 && !recoveryFailed; frame++)
+        {
+            view.Services.BeginTick(lab.BotTanks);
+            motor.Begin(1f / 60);
+            motor.MoveTo(goal);
+            motor.Navigate(view, 1f / 60);
+            recoveryFailed = motor.Failed;
+            await Frames(1).ConfigureAwait(true);
+        }
+        Assert(recoveryFailed && BotMotor.Flat(lab.Opponent.GlobalPosition - anchor).Length() < lab.World.Tuning.BotProgressDistance,
+            $"direct walking recovery failed={recoveryFailed} travel={BotMotor.Flat(lab.Opponent.GlobalPosition - anchor).Length():F3}: {motor.NavigationDiagnostics}");
         lab.Opponent.InputOverride = null;
         lab.Session.Dispose(); lab.Free();
-        GD.Print("[lab aimstall] PASS bankers and Hard King left prizes whose shots an obstruction stopped");
+        GD.Print("[lab aimstall] PASS bankers and Hard King leave blocked shots; walking recovery preserves bounded route failure");
     }
 
     private sealed class BlockedKingWorld(LabSession lab) : IBotWorld, IDisposable
