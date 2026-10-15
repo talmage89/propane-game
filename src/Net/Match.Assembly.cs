@@ -89,6 +89,7 @@ public partial class Match
         {
             profiles[profile.Id] = profile;
             scores[profile.Id] = 0;
+            leaderboardRoster.Add(new LeaderboardEntry(profile.Id, profile.Name, profile.Appearance.Color));
             var spawn = plan.Spawns.Count > 0 ? plan.Spawns[slot % plan.Spawns.Count] : new SpawnPoint(plan.Spawn, plan.SpawnYaw);
             var position = Suburb.ToWorld(spawn.Position, 0.05f);
             var owned = profile.OwnerPeerId == me;

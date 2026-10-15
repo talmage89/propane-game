@@ -1,14 +1,20 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Godot;
 using Propane.Core;
+using Propane.Modes;
 using Propane.Net;
+using Propane.Player;
 using Propane.UI;
 
 namespace Propane.Dev;
 
-/// <summary>Render the production lobby/results presenters at 2, 8 or 16 entries without starting a match.</summary>
+/// <summary>
+/// Render the production lobby/results presenters and the match HUD's leaderboard at 2, 8 or 16 entries without
+/// starting a match. <c>--mode=king</c> shows King's lobby and HUD.
+/// </summary>
 public partial class CapacityUiTests : Node
 {
     public override async void _Ready()
@@ -58,6 +64,8 @@ public partial class CapacityUiTests : Node
             TestRunnerCount(results, count);
             capture.Screenshot($"results_{count}");
             await Frames(12).ConfigureAwait(true);
+            results.Visible = false;
+            await TestLeaderboard(profiles, capture).ConfigureAwait(true);
             GD.Print($"[capacity UI] PASS {count} lobby/results entries at window {GetWindow().Size}, logical viewport {GetViewport().GetVisibleRect().Size}");
             ShutdownGuard.Quit(GetTree());
         }
@@ -103,6 +111,71 @@ public partial class CapacityUiTests : Node
         UnitTests.TestRunner.Assert(presses == 3, "mouse confirmation did not reach the scaled lobby button exactly once");
         GD.Print("[capacity UI] PASS real keyboard, mouse and gamepad delivery");
     }
+    /// <summary>The match HUD's leaderboard over the real HUD: local inside and outside the top rows, and a climb mid-slide.</summary>
+    private async Task TestLeaderboard(PlayerProfile[] profiles, CaptureDirector capture)
+    {
+        PlayerSettings.UseFile("user://capacity_ui_settings.cfg");
+        PlayerSettings.ShowLeaderboard = true;
+        using var world = new WorldContext(this, Tuning.SavedTemplate);
+        var hud = new MatchHud { World = world };
+        AddChild(hud);
+        var count = profiles.Length;
+        var king = DevArgs.Get("mode") == "king";
+        IModeHudPresenter presenter = king ? new KingHud() : new TankBankHud();
+        var roster = profiles.Select(p => new LeaderboardEntry(p.Id, p.Name, p.Appearance.Color)).ToList();
+        // Descending banks with third and fourth tied.
+        var scores = profiles.Select((p, i) => (p.Id, Score: 2 * (count - i) + (i == 3 ? 2 : 0))).ToDictionary(p => p.Id, p => p.Score);
+        var panel = hud.FindChildren("Leaderboard", "", owned: false).OfType<LeaderboardPanel>().Single();
+        var rows = Math.Min(count, world.Tuning.LeaderboardRows);
+        var label = king ? $"king_{count}" : $"{count}";
+        hud.SetAmmo(new AmmoState { Tuning = world.Tuning, Magazine = 12, Reserve = 30 });
+
+        async Task Show(int local, int frames)
+        {
+            for (var frame = 0; frame < frames; frame++)
+            {
+                hud.Show(presenter.Present(new ModeHudInput(local, ModePhase.Round, 95, scores, Array.Empty<Vector3>(), false)));
+                hud.SetStandings(roster, scores, local, live: true);
+                await Frames(1).ConfigureAwait(true);
+            }
+        }
+        void Check(int local, bool detached)
+        {
+            var board = panel.Board;
+            UnitTests.TestRunner.Assert(panel.Visible && board.TopCount == rows && board.HasDetached == detached &&
+                board.Rows.Count(r => r.Local) == 1 && board.Rows.Single(r => r.Local).Entry.Id == local, $"leaderboard rows {board.Rows.Count} local {local}");
+            var bounds = panel.Bounds;
+            var size = GetViewport().GetVisibleRect().Size;
+            // Inside the screen and clear of the top-center clock and bank (320 wide) and the crosshair.
+            UnitTests.TestRunner.Assert(bounds.Position.X >= 0 && bounds.Position.Y >= 0 && bounds.End.Y < size.Y / 2 - 60 &&
+                bounds.End.X + 60 < size.X / 2 - 160, $"leaderboard overlaps the HUD: {bounds}, viewport {size}");
+        }
+
+        var inside = profiles[Math.Min(2, count - 1)].Id;
+        await Show(inside, 30).ConfigureAwait(true);
+        Check(inside, detached: false);
+        capture.Screenshot($"leaderboard_{label}_inside");
+        if (count > rows)
+        {
+            var outside = profiles[count - 2].Id;
+            await Show(outside, 30).ConfigureAwait(true);
+            Check(outside, detached: true);
+            capture.Screenshot($"leaderboard_{label}_outside");
+            // The fifth climbs to first: mid-slide, with its flash and "+N".
+            scores[profiles[rows - 1].Id] += 2 * count;
+            await Show(outside, 6).ConfigureAwait(true);
+            capture.Screenshot($"leaderboard_{label}_climb");
+            await Show(outside, 30).ConfigureAwait(true);
+            UnitTests.TestRunner.Assert(panel.Board.Rows[0].Entry.Id == profiles[rows - 1].Id && panel.Board.Motion(profiles[rows - 1].Id)!.Slot < 0.01f,
+                "climber did not settle first");
+        }
+        PlayerSettings.ShowLeaderboard = false;
+        await Show(inside, 30).ConfigureAwait(true);
+        UnitTests.TestRunner.Assert(!panel.Visible, "the player's setting did not hide the leaderboard");
+        hud.Free();
+        GD.Print($"[capacity UI] PASS leaderboard at {count} players");
+    }
+
     private static void Send(InputEvent input)
     {
         Input.ParseInputEvent(input);
