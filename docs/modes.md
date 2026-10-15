@@ -198,7 +198,10 @@ screen, with fewer than two players, at `LeaderboardRows` 0, and when the player
 mode; tanks, players and pickups from the world); the shared navigation (`BotNavigator`) and aiming (`BotAim`) turn
 them into intent. Tank Bank's policy is the existing banking brain, created through its definition by the Lab, the
 network bot harness and each peer's match for the lobby bots it owns (`Match.Bots.cs`, A8). Its goal selection still lives inside `BankingBot`; separating it further is follow-up
-work that would need its own bot-behavior proof.
+work that would need its own bot-behavior proof. Hard uses the local `BotPoints` estimates in both Tank Bank and
+King: expected bank gains and leader spills per second compete with King's mint/denial rate. Easy and Normal keep
+their objective policy. Travel, contest, shield delay, return-fire risk and choice hysteresis are local tuners;
+[bot navigation](bot-navigation.md#hard-points-policy) describes the choices and strength comparison.
 
 ## Lab prototypes
 

@@ -154,10 +154,26 @@ public sealed class BotNavigator
         if (island > 0)
         {
             island -= dt;
-            var off = Flat(goal - state.Position).Normalized();
-            if (hazards.SafeAlong(state.Position, state.Position + off * grid.Spacing, grid.Capabilities.Radius, state.Position) &&
-                AreaAllowsAlong(area, state.Position, state.Position + off * grid.Spacing, grid.Capabilities.Radius))
+            var escapeToward = Flat(goal - state.Position).Normalized();
+            var escapeLayer = grid.LayerAt(state.Position.Y);
+            // Off-lattice starts can be trapped between tank circles even though there is walkable space beside
+            // them. Repeating the straight direction just repeats the same failed search. Try a short supported
+            // sidestep, nearest the goal direction first, through the shared query budget and live clearances.
+            var directions = Math.Max(1, tuning.BotIslandDirections);
+            for (var i = 0; i < directions; i++)
             {
+                var angle = ((i + 1) / 2) * (i % 2 == 0 ? -1 : 1) * Mathf.Tau / directions;
+                var off = escapeToward.Rotated(Vector3.Up, angle);
+                var next = state.Position + off * grid.Spacing;
+                if (!hazards.SafeAlong(state.Position, next, grid.Capabilities.Radius, state.Position) ||
+                    !AreaAllowsAlong(area, state.Position, next, grid.Capabilities.Radius))
+                {
+                    continue;
+                }
+                // Preserve the bounded direct step off debris/roofs; sideways escapes require supported ground.
+                var walk = i == 0 ? NavigationAnswer.Yes : grid.WalkSegment(escapeLayer, state.Position, next);
+                if (walk == NavigationAnswer.Pending) return new NavigationIntent(Vector3.Zero, false, false, false, false);
+                if (walk != NavigationAnswer.Yes) continue;
                 direction = off;
                 return new NavigationIntent(off, false, false, false, false);
             }

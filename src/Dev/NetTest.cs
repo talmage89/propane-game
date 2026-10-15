@@ -302,6 +302,12 @@ public partial class NetTest : Node
                 };
             }
             match.Player.InputOverride = bot;
+            if (bot is Bot clientBot)
+            {
+                clientBot.Policy.PointsDriven =
+                BotProfile.Nearest(clientBot.Skill, match.World.Tuning) == BotDifficulty.Hard && match.World.Tuning.BotHardChasesPoints;
+            }
+
             playerActivity = new BotActivity();
             if (DisplayServer.GetName() == "headless")
             {

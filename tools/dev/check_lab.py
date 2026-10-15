@@ -41,7 +41,7 @@ def sessions(full):
                  # A bot runs down Dissolve Run's street, then stops and must be caught; segments build and retire.
                  ('dissolve', 'dissolve', ['--seconds=45']),
                  # Crowds of bots keep moving: few seconds of play may pass without travel, a shot or a zone held.
-                 ('idle-bank', 'soak', ['--environment=suburb', '--bots=8', '--seconds=40', '--max-idle=0.12', '--max-idle-worst=0.4']),
+                 ('idle-bank', 'soak', ['--environment=suburb', '--bots=8', '--seconds=40', '--max-idle=0.12', '--max-idle-worst=0.3']),
                  ('idle-king', 'prototype', ['--mode=king', '--environment=suburb', '--bots=15', '--quick', '--seeds=1', '--first-seed=11',
                                              '--tune.KingRoundSeconds=45', '--max-idle=0.15', '--max-idle-worst=0.4'])]
     if full:

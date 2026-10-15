@@ -44,6 +44,7 @@ public partial class Tuning
     public int BotPartialSearchExpansions { get; set; } = 240;
     // A failed search that expanded no more than this many points started on an island the lattice has no way off
     // (a car roof, debris): the bot steps straight toward its goal for BotDirectTime.
+    public int BotIslandDirections { get; set; } = 16;
     public int BotIslandExpansions { get; set; } = 24;
     // Keep walking the previous route while the search for a moved goal runs, instead of standing still.
     public bool BotReplanWhileMoving { get; set; } = true;
@@ -57,6 +58,8 @@ public partial class Tuning
     public float BotLaunchSpeedTolerance { get; set; } = 0.1f;
     public float BotJumpMinimumRange { get; set; } = 0.8f;
     public float BotFlightTimeoutFactor { get; set; } = 1.5f;
+    public float BotFleeDistance { get; set; } = 10f;
+    public int BotFleeDirections { get; set; } = 8;
     public float BotVentClearance { get; set; } = 1f;
     public float BotJumpCost { get; set; } = 0.25f;
     public float BotCoverDetourCost { get; set; } = 3f;
@@ -74,5 +77,25 @@ public partial class Tuning
     // Easy, Normal and Hard pick the brain's skill, which blends the aim error, reaction and aim turning endpoints above.
     public float BotEasySkill { get; set; } = 0.2f;
     public float BotNormalSkill { get; set; } = 0.6f;
+    // Hard's local score-swing estimates. Capture discounts spilled tanks we may not recover; denial favors leaders.
+    public bool BotHardChasesPoints { get; set; } = true;
+    public float BotPointsCapture { get; set; } = 0.25f;
+    public float BotPointsDeny { get; set; } = 0.8f;
+    public float BotPointsLeader { get; set; } = 1f;
+    public float BotPointsAhead { get; set; } = 0.7f;
+    public float BotPointsBehind { get; set; } = 0.15f;
+    public float BotPointsRisk { get; set; } = 0.35f;
+    public int BotPointsPileCap { get; set; } = 5;
+    public float BotPointsShotRange { get; set; } = 22f;
+    public float BotPointsShotSeconds { get; set; } = 1.5f;
+    public float BotPointsFightSeconds { get; set; } = 3f;
+    public float BotPointsHitsPerSecond { get; set; } = 1f;
+    public float BotPointsHysteresis { get; set; } = 0.3f;
+    public float BotPointsInterval { get; set; } = 0.4f;
+    public float BotPointsProtectDistance { get; set; } = 16f;
+    public float BotPointsZone { get; set; } = 2f;
+    // First N attached Lab actors use Hard; the rest retain LabBotSkill (also allows policy-only A/B trials).
+    public int LabHardBots { get; set; } = 0;
+    public int LabHardOffset { get; set; } = 0;
     public float BotHardSkill { get; set; } = 1f;
 }
