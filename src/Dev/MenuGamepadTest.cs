@@ -46,6 +46,10 @@ public partial class MenuGamepadTest : Node
             {
                 await Bots().ConfigureAwait(true);
             }
+            else if (DevArgs.Get("scenario") == "lobby")
+            {
+                await LobbyWorldScenario().ConfigureAwait(true);
+            }
             else
             {
                 await Run().ConfigureAwait(true);
@@ -570,9 +574,9 @@ public partial class MenuGamepadTest : Node
         for (var i = 0; i < count; i++) { await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
     }
 
-    private async Task Wait(Func<bool> predicate, string outcome)
+    private async Task Wait(Func<bool> predicate, string outcome, double seconds = 15)
     {
-        var deadline = Time.GetTicksMsec() + 15000;
+        var deadline = Time.GetTicksMsec() + (ulong)(seconds * 1000);
         while (!predicate())
         {
             if (Time.GetTicksMsec() >= deadline) { throw new TimeoutException(outcome); }

@@ -31,6 +31,7 @@ public enum Msg : byte
     RemoveActor,
     ModeEvent,
     SetMode,
+    CancelStart,
 
     // Server to client. Numbers stay fixed: retired messages leave gaps (40 was Score, 47 DropRefused).
     Welcome = 32,

@@ -10,7 +10,8 @@ namespace Propane.UI;
 
 /// <summary>
 /// The front end: the main menu, the multiplayer connect screen, the lobby browser and the lobby itself. One panel
-/// whose contents are rebuilt for each screen, over the menu backdrop.
+/// whose contents are rebuilt for each screen, over the menu backdrop. In a lobby world the lobby screen is its panel:
+/// docked at the side, over the world, and closed with Esc, B, View / Create or its Close button.
 /// </summary>
 public partial class Menus : CanvasLayer
 {
@@ -24,6 +25,7 @@ public partial class Menus : CanvasLayer
         Loading,
     }
 
+    private CenterContainer center = null!;
     private PanelContainer panel = null!;
     private VBoxContainer layout = null!;
     private Label version = null!;
@@ -46,6 +48,12 @@ public partial class Menus : CanvasLayer
 
     public Screen Current { get; private set; } = Screen.None;
 
+    /// <summary>The lobby screen is showing as the lobby world's panel, beside the world rather than over the backdrop.</summary>
+    public bool Docked { get; private set; }
+
+    /// <summary>The docked lobby panel asked to close, back to the world.</summary>
+    public event Action? PanelClosed;
+
     /// <summary>When this game is hosting, where others can reach it (shown in the lobby screens).</summary>
     public string HostingNote { get; set; } = "";
 
@@ -61,7 +69,7 @@ public partial class Menus : CanvasLayer
     public override void _Ready()
     {
         Layer = 40;
-        var center = new CenterContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
+        center = new CenterContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
         center.SetAnchorsPreset(Control.LayoutPreset.FullRect);
         AddChild(center);
         panel = new PanelContainer();
@@ -98,14 +106,40 @@ public partial class Menus : CanvasLayer
         };
     }
 
-    /// <summary>Shows a screen (or hides the menus with <see cref="Screen.None"/>).</summary>
-    public void Show(Screen screen, string? note = null)
+    /// <summary>
+    /// Shows a screen (or hides the menus with <see cref="Screen.None"/>). <paramref name="docked"/> shows the lobby
+    /// screen as the lobby world's panel.
+    /// </summary>
+    public void Show(Screen screen, string? note = null, bool docked = false)
     {
         message = note ?? "";
-        if (screen != Screen.Lobby) { picker?.Close(); botEditor?.Close(); }
+        if (screen != Screen.Lobby || docked != Docked) { picker?.Close(); botEditor?.Close(); }
         Current = screen;
         Visible = screen != Screen.None;
+        Dock(docked && screen == Screen.Lobby);
         Rebuild();
+    }
+
+    /// <summary>The panel sits centered over the backdrop, or at the right over a lobby world, leaving the world in view.</summary>
+    private void Dock(bool docked)
+    {
+        if (docked == Docked && center.AnchorLeft == (docked ? 1 : 0)) return;
+        Docked = docked;
+        center.SetAnchorsPreset(docked ? Control.LayoutPreset.RightWide : Control.LayoutPreset.FullRect);
+        center.OffsetLeft = docked ? -820 : 0;
+        center.OffsetRight = docked ? -24 : 0;
+        panel.AddThemeStyleboxOverride("panel", UiStyle.Panel(docked ? 0.9f : 0.94f));
+    }
+
+    public override void _Input(InputEvent e)
+    {
+        // Esc, or View / Create again, closes the docked panel (B does through its navigation), unless a dialog is open.
+        if (!Visible || !Docked || Current != Screen.Lobby || picker != null || botEditor != null) return;
+        if (e.IsActionPressed(InputSetup.Pause) || e is InputEventJoypadButton && e.IsActionPressed(InputSetup.LobbyPanel))
+        {
+            GetViewport().SetInputAsHandled();
+            PanelClosed?.Invoke();
+        }
     }
 
     private void Refresh(Screen screen)
@@ -137,7 +171,9 @@ public partial class Menus : CanvasLayer
     {
         if (Current == Screen.Browser && Net.Lobby != null)
         {
-            Show(Screen.Lobby);
+            // A lobby world's start follows at once; the game enters it from this screen.
+            if (Net.LobbyWorlds && Net.Lobby.WorldId != 0) Show(Screen.Loading, $"Entering {LobbyText.Creator(Net.Lobby)}'s lobby...");
+            else Show(Screen.Lobby);
         }
         else if (Current == Screen.Lobby && Net.Lobby == null)
         {
@@ -586,6 +622,14 @@ public partial class Menus : CanvasLayer
         var leave = UiStyle.Button("Leave lobby");
         leave.Pressed += Net.LeaveLobby;
         buttons.AddChild(leave);
+        if (Docked)
+        {
+            var close = UiStyle.Button("Close");
+            close.SetMeta("focus_key", "close_panel");
+            close.TooltipText = "Back to the lobby world (Esc)";
+            close.Pressed += () => PanelClosed?.Invoke();
+            buttons.AddChild(close);
+        }
         layout.AddChild(buttons);
         AddMessage();
     }
@@ -753,6 +797,11 @@ public partial class Menus : CanvasLayer
 
     private void GoBack()
     {
+        if (Docked && Current == Screen.Lobby)
+        {
+            PanelClosed?.Invoke();
+            return;
+        }
         var text = Current switch
         {
             Screen.Connect => "Back",

@@ -59,7 +59,7 @@ public static class MessageCodec
         if (data.Length == 0 || data.Length > Protocol.MaxPacketBytes) { throw new InvalidDataException("bad packet size"); }
         var type = (Msg)data[0];
         var relay = Protocol.IsRelay(type);
-        if (!(fromServer ? type is >= Msg.Welcome and <= Msg.ModeSnapshot || relay : type is >= Msg.Hello and <= Msg.SetMode || relay))
+        if (!(fromServer ? type is >= Msg.Welcome and <= Msg.ModeSnapshot || relay : type is >= Msg.Hello and <= Msg.CancelStart || relay))
         {
             throw new InvalidDataException($"unknown or wrong-direction message {(byte)type}");
         }
@@ -73,7 +73,7 @@ public static class MessageCodec
         object payload = type switch
         {
             Msg.Hello => ReadHello(r),
-            Msg.CreateLobby or Msg.LeaveLobby or Msg.Loaded => new EmptyMessage(),
+            Msg.CreateLobby or Msg.LeaveLobby or Msg.Loaded or Msg.CancelStart => new EmptyMessage(),
             Msg.JoinLobby => new IntMessage(Positive(r.Int())),
             Msg.SetProfile => new ProfileMessage(r.String(), r.Appearance()),
             Msg.SetCapacity => new IntMessage(Range(r.Int(), 2, Protocol.TestedActorCeiling)),
@@ -162,7 +162,7 @@ public static class MessageCodec
                 foreach (var peer in p.Peers) w.Int(peer);
                 w.Int(p.Members.Count);
                 foreach (var player in p.Members) { WriteProfile(w, player); }
-                w.Byte(p.Mode.ModeId).Float(p.Mode.MintSeconds).Int(p.Mode.TankSupply);
+                w.Byte(p.Mode.ModeId).Float(p.Mode.MintSeconds).Int(p.Mode.TankSupply).Float(p.StartsIn).Int(p.WorldId);
                 break;
             case ModeSettings p: w.Byte(p.ModeId).Float(p.MintSeconds).Int(p.TankSupply); break;
             case MatchSetup p:
@@ -268,7 +268,12 @@ public static class MessageCodec
         var members = ReadProfiles(r);
         Unique(members.Select(p => p.Id).ToArray());
         if (!peers.Contains(creator) || members.Any(p => !peers.Contains(p.OwnerPeerId))) { throw new InvalidDataException("creator missing from lobby"); }
-        return new LobbyInfo(id, creator, length, phase, members, capacity, revision) { Peers = peers, Mode = ReadModeSettings(r) };
+        var mode = ReadModeSettings(r);
+        var startsIn = Range(r.Float(), 0, LobbyServer.MaxStage);
+        if (startsIn > 0 && phase != LobbyServer.LobbyPhase.Staging) { throw new InvalidDataException("a start countdown outside staging"); }
+        var world = Nonnegative(r.Int());
+        if (world != 0 && phase is not (LobbyServer.LobbyPhase.Waiting or LobbyServer.LobbyPhase.Staging)) { throw new InvalidDataException("a lobby world during a match"); }
+        return new LobbyInfo(id, creator, length, phase, members, capacity, revision) { Peers = peers, Mode = mode, StartsIn = startsIn, WorldId = world };
     }
 
     private static MatchSetup ReadSetup(NetReader r, int matchId)
@@ -427,7 +432,7 @@ public static class MessageCodec
         return value is -1 or 1 ? value : throw new InvalidDataException("swirl must be a sign");
     }
     private static int ColorIndex(int n) => Range(n, 0, Protocol.PlayerColors.Length - 1);
-    private static LobbyServer.LobbyPhase Phase(byte n) => (LobbyServer.LobbyPhase)Range(n, 0, (int)LobbyServer.LobbyPhase.Results);
+    private static LobbyServer.LobbyPhase Phase(byte n) => (LobbyServer.LobbyPhase)Range(n, 0, (int)LobbyServer.LobbyPhase.Staging);
     private static int Range(int n, int min, int max) => n >= min && n <= max ? n : throw new InvalidDataException($"integer out of range: {n}");
     private static float Range(float n, float min, float max) => n >= min && n <= max ? n : throw new InvalidDataException($"float out of range: {n}");
     private static double Time(double n) => n is >= 0 and <= 1e12 ? n : throw new InvalidDataException("bad timestamp");

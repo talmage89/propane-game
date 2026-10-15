@@ -101,6 +101,17 @@ public static class ModeRegistry
         new ModeSupply((tuning, _) => SuburbPlans.SinglePlayer(tuning), LimitedAmmo: true, Pickups: true), RoundTimer.CountUp,
         () => new DissolveRunHud(), seed => new DissolveRunBot(seed), DissolveRunRules.Tuners);
 
+    public const byte LobbyWorldId = 7;
+
+    /// <summary>
+    /// The lobby world: everyone in a waiting lobby roams the void together, shooting and throwing tanks for nothing.
+    /// No score and no end; its piles refill and rifles never run dry (both tuners). A server runs it while the lobby
+    /// waits; it is not a lobby choice. Lobby bots roam it with Tank Bank's brain.
+    /// </summary>
+    public static readonly ModeDefinition LobbyWorld = new(LobbyWorldId, "Lobby", 1, () => new LobbyRules(), ModeWorldSource.Void,
+        new ModeSupply((tuning, _) => SuburbPlans.SinglePlayer(tuning), LimitedAmmo: false, Pickups: false), RoundTimer.None,
+        () => new LobbyHud(), seed => new BankingBot(seed), LobbyRules.Tuners);
+
     /// <summary>
     /// Modes the Lab tries against its bots through its prototype runner. Ring Out and Short Fuse are only that: they
     /// are not in <see cref="All"/>, so no lobby, MatchStart or envelope schema names them. King is also networked.
@@ -112,7 +123,7 @@ public static class ModeRegistry
 
     public static ModeDefinition? ForLobby(byte id) => Lobby.FirstOrDefault(mode => mode.Id == id);
 
-    private static readonly List<ModeDefinition> registered = new() { Sandbox, TankBank, King };
+    private static readonly List<ModeDefinition> registered = new() { Sandbox, TankBank, King, LobbyWorld };
     public static IReadOnlyList<ModeDefinition> All => registered.AsReadOnly();
 
     public static ModeDefinition? Find(byte id, ushort schemaVersion) =>

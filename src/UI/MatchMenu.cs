@@ -3,9 +3,15 @@ using Propane.Core;
 
 namespace Propane.UI;
 
-/// <summary>Esc or Start/Options in a match: the controls, and resume, leave or quit. The match keeps running behind it.</summary>
+/// <summary>
+/// Esc or Start/Options in a match (or the lobby world): the controls, and resume, leave or quit. The world keeps
+/// running behind it.
+/// </summary>
 public partial class MatchMenu : CanvasLayer
 {
+    /// <summary>The lobby world's menu: it leaves the lobby, and points at the lobby panel instead of the rules.</summary>
+    public bool Lobby { get; init; }
+
     public event System.Action? ResumeRequested;
 
     public event System.Action? LeaveRequested;
@@ -39,11 +45,12 @@ public partial class MatchMenu : CanvasLayer
         var title = UiStyle.Text("PROPANE", 46, UiStyle.Ink, HorizontalAlignment.Center);
         title.AddThemeFontOverride("font", UiStyle.BoldFont);
         layout.AddChild(title);
-        layout.AddChild(UiStyle.Text("The match is still on", 18, UiStyle.SoftInk, HorizontalAlignment.Center));
+        layout.AddChild(UiStyle.Text(Lobby ? "You are in the lobby" : "The match is still on", 18, UiStyle.SoftInk, HorizontalAlignment.Center));
         layout.AddChild(new HSeparator());
-        layout.AddChild(new ControlsReference { Match = true });
+        layout.AddChild(new ControlsReference { Match = true, Lobby = Lobby });
         layout.AddChild(new HSeparator());
-        var rules = UiStyle.Text("Every tank you blow up is banked. A bullet hit spills one behind you; getting thrown spills five.", 16,
+        var rules = UiStyle.Text(Lobby ? "Nothing counts here: tanks come back and the rifle never runs dry. The lobby panel has names, colors, bots and the match settings."
+                : "Every tank you blow up is banked. A bullet hit spills one behind you; getting thrown spills five.", 16,
             UiStyle.SoftInk, HorizontalAlignment.Center);
         rules.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         layout.AddChild(rules);
@@ -51,7 +58,7 @@ public partial class MatchMenu : CanvasLayer
         buttons.AddThemeConstantOverride("separation", 10);
         var resume = UiStyle.Button("Resume");
         resume.Pressed += () => ResumeRequested?.Invoke();
-        var leave = UiStyle.Button("Leave match");
+        var leave = UiStyle.Button(Lobby ? "Leave lobby" : "Leave match");
         leave.Pressed += () => LeaveRequested?.Invoke();
         var quit = UiStyle.Button("Quit");
         quit.Pressed += () => ShutdownGuard.Quit(GetTree());

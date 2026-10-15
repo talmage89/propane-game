@@ -57,6 +57,10 @@ public sealed record LobbyInfo(int Id, int CreatorId, float MatchLength, LobbySe
     public IReadOnlyList<int> Peers { get; init; } = Members.Select(a => a.OwnerPeerId).Distinct().ToArray();
     /// <summary>The mode its next match plays, and that mode's settings.</summary>
     public ModeSettings Mode { get; init; } = ModeSettings.Default;
+    /// <summary>While staging: seconds until the match begins, as the server sent it.</summary>
+    public float StartsIn { get; init; }
+    /// <summary>The run id of the world its members roam while it waits, or 0 when it has none (in a match, or classic).</summary>
+    public int WorldId { get; init; }
 }
 
 /// <summary>Everything a client needs to start a match.</summary>
@@ -128,6 +132,18 @@ public partial class NetClient : Node
     public event Action<ActorRequestResultMessage>? ActorRequestCompleted;
 
     public bool IsCreator => Lobby != null && Lobby.CreatorId == MyId;
+
+    /// <summary>
+    /// Whether this game enters its lobby's world. Off (the classic lobby menu), world starts are acknowledged and
+    /// ignored: this player's character stands still at its arrival point for the others.
+    /// </summary>
+    public bool LobbyWorlds { get; set; } = LobbyWorldDefault.Enabled;
+
+    /// <summary>While the lobby stages a start: when (on this game's clock) the match begins.</summary>
+    public double StageEnds { get; private set; }
+
+    /// <summary>Seconds left on the stage's countdown, or zero when the lobby is not staging.</summary>
+    public double StageLeft => Lobby is { Phase: LobbyServer.LobbyPhase.Staging } ? Math.Max(0, StageEnds - clock.Seconds) : 0;
 
     /// <summary>Round trip to the server in milliseconds, measured with pings.</summary>
     public double PingMs { get; private set; }
@@ -337,6 +353,9 @@ public partial class NetClient : Node
     /// </summary>
     public Tuning Template { get; init; } = Tuning.SavedTemplate;
 
+    /// <summary>Takes back a staged start (creator only, while the stage counts down).</summary>
+    public void CancelStart() => Send(new NetWriter(Msg.CancelStart));
+
     public void StartMatch()
     {
         using var tuning = OS.IsDebugBuild() ? Template.Copy() : Tuning.LoadBaked();
@@ -374,6 +393,7 @@ public partial class NetClient : Node
                     var me = lobby.Members.FirstOrDefault(m => m.OwnerPeerId == MyId && m.Kind == ActorKind.Human);
                     if (me != null) { Appearance = me.Appearance; PlayerName = me.Name; }
                     Lobby = lobby.Peers.Contains(MyId) ? lobby : null;
+                    if (lobby.Phase == LobbyServer.LobbyPhase.Staging) { StageEnds = clock.Seconds + lobby.StartsIn; }
                     if (Lobby != null) { Roster = lobby.Members; RosterRevision = lobby.RosterRevision; }
                     if (Lobby == null) { inbox.Clear(); }
                     LobbyChanged?.Invoke();
@@ -391,6 +411,13 @@ public partial class NetClient : Node
                 case MatchSetup setup:
                     if (State != Status.Connected || Lobby == null || setup.Id <= lastMatchId || !setup.Players.Any(p => p.Player.OwnerPeerId == MyId)) { return; }
                     lastMatchId = setup.Id;
+                    if (setup.ModeId == Modes.ModeRegistry.LobbyWorldId && !LobbyWorlds)
+                    {
+                        // The classic menu stays put; nothing of this world is buffered, and its loading grace ends now.
+                        inbox.Clear();
+                        Send(new NetWriter(Msg.Loaded, setup.Id));
+                        return;
+                    }
                     inbox.Begin(setup.Id);
                     if (server != null) { transport.SetLoading(server, true); }
                     MatchStarting?.Invoke(setup);

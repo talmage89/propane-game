@@ -323,7 +323,10 @@ public partial class Match : Node3D
                 continue;
             }
             var scale = tuning.ScoreTagScale * Mathf.Lerp(1.15f, 0.6f, Mathf.Clamp(distance / Mathf.Max(tuning.ScoreTagRange, 1f), 0, 1));
-            tags.Add(new ScoreTag(camera.UnprojectPosition(at), scores.GetValueOrDefault(remote.Character.ActorId), profiles[remote.Character.ActorId].Appearance.Color, scale));
+            var profile = profiles[remote.Character.ActorId];
+            // The lobby world has no scores: everyone's name floats over them instead.
+            tags.Add(new ScoreTag(camera.UnprojectPosition(at), scores.GetValueOrDefault(remote.Character.ActorId), profile.Appearance.Color, scale,
+                IsLobby ? profile.Name : null));
         }
         return tags;
     }
@@ -333,6 +336,7 @@ public partial class Match : Node3D
     public override void _UnhandledInput(InputEvent @event)
     {
         if (World is not { IsAlive: true }) { return; }
+        if (LobbyInput(@event)) { return; }
         if (@event.IsActionPressed(InputSetup.Pause))
         {
             if (tuningPanel?.Visible == true)
@@ -1002,7 +1006,7 @@ public partial class Match : Node3D
                 var left = (PlayerLeftMessage)message.Payload;
                 foreach (var departing in Session.Actors.Where(a => a.Character.OwnerPeerId == left.Player).ToArray())
                 {
-                    ShowNotice($"{profiles[departing.Character.ActorId].Name} left the match", 3f);
+                    ShowNotice($"{profiles[departing.Character.ActorId].Name} left the {(IsLobby ? "lobby" : "match")}", 3f);
                     Session.RemoveActor(departing);
                 }
                 RefreshBotPeers();

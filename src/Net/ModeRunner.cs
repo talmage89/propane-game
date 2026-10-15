@@ -28,6 +28,10 @@ public interface IModeHost
     Core.Tuning Tuning { get; }
     /// <summary>Logs a line about this match, prefixed with its id.</summary>
     void Log(string text);
+    /// <summary>A body as the ledger last knew it (its owner's latest report), or null when it never existed.</summary>
+    BodyAuthority? Body(uint id) => null;
+    /// <summary>Tanks the ledger knows that have not exploded.</summary>
+    int LiveTanks => 0;
 }
 
 /// <summary>
@@ -55,6 +59,7 @@ public static class ModeWires
     {
         [ModeRegistry.TankBankId] = () => new TankBankWire(),
         [ModeRegistry.KingId] = () => new KingWire(),
+        [ModeRegistry.LobbyWorldId] = () => new LobbyWire(),
     };
 
     public static IModeWire For(ModeDefinition mode) => registered.TryGetValue(mode.Id, out var create) ? create() : new Silent();

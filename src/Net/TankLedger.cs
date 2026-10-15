@@ -43,6 +43,12 @@ public sealed class TankLedger
 
     public BodyAuthority? Get(uint id) => bodies.GetValueOrDefault(id);
 
+    /// <summary>Every body that has not exploded, as last reported: what a peer arriving in a running world must build.</summary>
+    public IReadOnlyList<BodyAuthority> Live() => bodies.Values.Where(b => b.State != State.Exploded).OrderBy(b => b.Body.Id).ToArray();
+
+    /// <summary>Tanks that have not exploded, venting strays included.</summary>
+    public int LiveTanks => bodies.Values.Count(b => b.State != State.Exploded && b.Body.Id < BodySync.CarBase);
+
     /// <summary>This peer's explosion request was accepted: a causal dependency mode events may name.</summary>
     public bool Exploded(int peer, uint request) => explosions.ContainsKey((peer, request));
 

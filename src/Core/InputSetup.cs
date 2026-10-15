@@ -24,6 +24,8 @@ public static class InputSetup
     public const string Pause = "pause";
     public const string ToggleTuning = "toggle_tuning";
     public const string ToggleFullscreen = "toggle_fullscreen";
+    /// <summary>The lobby world's panel (the lobby menu, over the world).</summary>
+    public const string LobbyPanel = "lobby_panel";
 
     public static void Register()
     {
@@ -36,6 +38,7 @@ public static class InputSetup
         Bind(NewSuburb, Key(Godot.Key.R), Button(JoyButton.X));
         Bind(Reload, Key(Godot.Key.R), Button(JoyButton.X));
         Bind(Pause, Key(Godot.Key.Escape), LogicalKey(Godot.Key.Escape), Button(JoyButton.Start));
+        Bind(LobbyPanel, Key(Godot.Key.Tab), LogicalKey(Godot.Key.Tab), Button(JoyButton.Back));
         // Function keys need fn on a Mac (and F11 is Show Desktop there), so each has a plain alternative.
         Bind(ToggleTuning, Key(Godot.Key.F1), LogicalKey(Godot.Key.F1), Key(Godot.Key.Quoteleft), LogicalKey(Godot.Key.Quoteleft));
         Bind(ToggleFullscreen, Key(Godot.Key.F11), LogicalKey(Godot.Key.F11),
