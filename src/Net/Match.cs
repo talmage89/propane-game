@@ -58,6 +58,8 @@ public partial class Match : Node3D
 
     private readonly Dictionary<int, PlayerProfile> profiles = new();
     private readonly Dictionary<int, int> scores = new();
+    /// <summary>The leaderboard's roster, in match order (ties rank in it, as in the results).</summary>
+    private readonly List<LeaderboardEntry> leaderboardRoster = new();
     private ModeDefinition mode = null!;
     private IModeHudPresenter hudPresenter = null!;
     private readonly ModeCommandOrder commandOrder = new();
@@ -285,6 +287,11 @@ public partial class Match : Node3D
         matchHud.SetAmmo(player.Ammo);
         matchHud.SetView(camera, player.GlobalPosition);
         matchHud.SetTags(ScoreTags(camera));
+        for (var i = 0; i < leaderboardRoster.Count; i++)
+        {
+            if (leaderboardRoster[i].Present && Actor(leaderboardRoster[i].Id) == null) leaderboardRoster[i] = leaderboardRoster[i] with { Present = false };
+        }
+        matchHud.SetStandings(leaderboardRoster, scores, player.ActorId, phase is Phase.Countdown or Phase.Playing);
     }
 
     private ModePhase ModePhase => phase switch

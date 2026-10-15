@@ -636,6 +636,15 @@ public partial class Tuning : Resource
     [Export(PropertyHint.Range, "0.02,2,0.01")] public float HitMarkerTime { get; set; } = 0.25f;
     [Export(PropertyHint.Range, "0.1,5,0.05")] public float ScorePopupTime { get; set; } = 1.4f;
     [Export(PropertyHint.Range, "0.1,5,0.05")] public float HitDirectionTime { get; set; } = 1.2f;
+    /// <summary>Top rows on the match leaderboard (the local player's own row shows below them when outside); 0 hides it.</summary>
+    [Export(PropertyHint.Range, "0,16,1")] public int LeaderboardRows { get; set; } = 5;
+    /// <summary>The leaderboard's offset from the top-left corner, in 1080p pixels (the HUD scales with the window).</summary>
+    [Export(PropertyHint.Range, "0,400,1")] public float LeaderboardMarginX { get; set; } = 24f;
+    [Export(PropertyHint.Range, "0,400,1")] public float LeaderboardMarginY { get; set; } = 24f;
+    /// <summary>Seconds a leaderboard row takes to slide to a new rank.</summary>
+    [Export(PropertyHint.Range, "0.05,2,0.05")] public float LeaderboardSlideTime { get; set; } = 0.35f;
+    /// <summary>Seconds a row's highlight lasts after it climbs a rank (and its tint after its score drops).</summary>
+    [Export(PropertyHint.Range, "0.1,3,0.05")] public float LeaderboardFlashTime { get; set; } = 0.9f;
 
     // ---------------------------------------------------------------- Multiplayer: appearance
     [ExportGroup("Appearance")]

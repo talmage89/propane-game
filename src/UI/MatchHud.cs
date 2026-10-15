@@ -13,7 +13,8 @@ public readonly record struct ScoreTag(Vector2 Screen, int Score, Color Color, f
 /// The match HUD, over the single-player one (crosshair and tank arrows). It renders the mode's plain HUD data
 /// (<see cref="ModeHud"/>: the clock, the primary counter and its caption, further counters, a banner and an
 /// out-state, a feed of recent events and a health bar) and the local view's feedback: "+N" as you score, ammo, a hit marker when your shot hits a player,
-/// arrows toward whoever shot you, every other visible player's score over their head, and the countdown.
+/// arrows toward whoever shot you, every other visible player's score over their head, the countdown and the live
+/// leaderboard (<see cref="LeaderboardPanel"/>).
 /// </summary>
 public partial class MatchHud : CanvasLayer
 {
@@ -37,6 +38,8 @@ public partial class MatchHud : CanvasLayer
     private Label notice = null!;
     private Label feed = null!;
     private Overlay overlay = null!;
+    private LeaderboardPanel leaderboard = null!;
+    private string scoreColumn = "";
     private float scorePop;
     private float popupAge = 99f;
     private int popupAmount;
@@ -135,6 +138,9 @@ public partial class MatchHud : CanvasLayer
         feed.VerticalAlignment = VerticalAlignment.Top;
         root.AddChild(feed);
 
+        leaderboard = new LeaderboardPanel { World = World, Name = "Leaderboard", MouseFilter = Control.MouseFilterEnum.Ignore };
+        root.AddChild(leaderboard);
+
         overlay = new Overlay { World = World, MouseFilter = Control.MouseFilterEnum.Ignore };
         overlay.SetAnchorsPreset(Control.LayoutPreset.FullRect);
         root.AddChild(overlay);
@@ -185,6 +191,7 @@ public partial class MatchHud : CanvasLayer
         {
             counters.Text = string.Join("   ", System.Linq.Enumerable.Select(System.Linq.Enumerable.Skip(hud.Counters, 1), c => $"{c.Value} {c.Caption}"));
         }
+        scoreColumn = hud.Columns.Count > 0 ? hud.Columns[0] : "";
         banner.Text = hud.Banner;
         outState.Text = hud.OutState;
         feed.Text = hud.Feed is { Count: > 0 } lines ? string.Join("\n", lines) : "";
@@ -250,6 +257,16 @@ public partial class MatchHud : CanvasLayer
     }
 
     public void SetNotice(string text) => notice.Text = text;
+
+    /// <summary>
+    /// The live leaderboard: shown while <paramref name="live"/>, for a mode whose HUD has a score column, with two or
+    /// more players, unless the player turned it off in the match menu.
+    /// </summary>
+    public void SetStandings(IReadOnlyList<LeaderboardEntry> roster, IReadOnlyDictionary<int, int> scores, int local, bool live)
+    {
+        var shown = live && scoreColumn.Length > 0 && roster.Count > 1 && PlayerSettings.ShowLeaderboard;
+        leaderboard.Set(roster, scores, local, shown ? World.Tuning.LeaderboardRows : 0, scoreColumn);
+    }
 
     public void ShowHitMarker() => overlay.HitMarker = World.Tuning.HitMarkerTime;
 
