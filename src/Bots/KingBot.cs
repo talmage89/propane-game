@@ -257,6 +257,7 @@ public sealed class KingBot : IBotGoalPolicy
     private bool BreakCrowd(IBotWorld world, KingBotView state, PlayerCharacter player, Vector3 spot, float radius,
         Core.Tuning tuning, float dt, bool look)
     {
+        if (world.RemoteBodies.Count + 1 < tuning.BotKingCrowdPlayers || tuning.BotKingRaidMax <= 0) return false;
         var here = player.GlobalPosition;
         crowdTimer -= dt;
         if (crowdTimer <= 0)
@@ -294,8 +295,7 @@ public sealed class KingBot : IBotGoalPolicy
         contestedTime = inZone && state.Holder != player.ActorId && crowdRivals > 0 ? contestedTime + dt : 0;
         var edge = radius + tuning.BotTankClearance * 2;
         var waitAtEdge = !inZone && !raidCommitted && crowdRivals > 0 && BotMotor.Flat(here - spot).LengthSquared() <= edge * edge;
-        if (world.RemoteBodies.Count + 1 >= tuning.BotKingCrowdPlayers && tuning.BotKingRaidMax > 0 &&
-            (waitAtEdge || contestedTime > 0 && contestedTime >= contestPatience))
+        if (waitAtEdge || contestedTime > 0 && contestedTime >= contestPatience)
         {
             raidTime = rng.RandfRange(tuning.BotKingRaidMin, Mathf.Max(tuning.BotKingRaidMin, tuning.BotKingRaidMax)) *
                 (1 + Mathf.Max(0, world.RemoteBodies.Count + 1 - tuning.BotKingCrowdPlayers) * tuning.BotKingCrowdScale);

@@ -122,8 +122,9 @@ At four or more actors (`BotKingCrowdPlayers`), a bot reaching an occupied zone 
 A bot already inside gives a sustained contest an independently seeded
 `BotKingContestMin`–`BotKingContestMax` seconds (1–3). If it cannot win, it retreats and fights from the perimeter,
 using the same circling, safe banking and banked-rival pressure as knockdown recovery. After
-`BotKingRaidMin`–`BotKingRaidMax` seconds (6–14), it raids again. Each actor above the threshold multiplies that
-wait by an additional `BotKingCrowdScale` (0.15), spreading larger rosters over longer independent intervals.
+`BotKingRaidMin`–`BotKingRaidMax` seconds (6–14), it raids again. The wait is multiplied by
+`1 + extraActors * BotKingCrowdScale` (0.15 per actor above the threshold), spreading larger rosters over longer
+independent intervals. Small rosters and `BotKingRaidMax=0` skip crowd observation and its random draws.
 The nearest upright challenger can pounce early on an empty zone; distance ties use actor id. A lone holder stays.
 Hard still takes a better points opportunity first. Set `BotKingRaidMax=0` to disable proactive retreats for A/B
 measurement; the existing knockdown recovery remains.
