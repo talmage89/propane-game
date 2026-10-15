@@ -428,6 +428,7 @@ public partial class LabTest : Node
             }
             Assert(lab.Session.Actors.Count == template.LabPrototypeBots + 1 && lab.LiveTanks.Any(), $"{id} roster or fixture");
             var moves = 0;
+            double loneSeconds = 0, sampleTime = 0;
             runner.Decided += command => { if (command is ZoneMoved { Zone: > 0 }) moves++; };
             var limit = (id == "king" ? lab.World.Tuning.KingRoundSeconds : lab.World.Tuning.RingOutRoundLimit) + 5;
             var watch = System.Diagnostics.Stopwatch.StartNew();
@@ -444,6 +445,9 @@ public partial class LabTest : Node
                         $"{a.Character.ActorId} {a.Character.GlobalPosition.X:F1},{a.Character.GlobalPosition.Y:F1},{a.Character.GlobalPosition.Z:F1} {runner.BotStatus(a.Character.ActorId)}")));
                 }
 
+                var elapsed = runner.Elapsed;
+                if (runner.Rules is KingRules { Holder: not 0 }) loneSeconds += elapsed - sampleTime;
+                sampleTime = elapsed;
                 if (shot < shots.Length && runner.Elapsed >= shots[shot]) capture.Screenshot($"{id}_{environment}_{seed}_{shots[shot++]:000}s".ToLowerInvariant());
                 await Frames(1).ConfigureAwait(true);
             }
@@ -487,6 +491,7 @@ public partial class LabTest : Node
                     Assert(moves == king.Zone && arena.Materialized + arena.Unplaced == moves && (environment == LabEnvironment.Suburb || arena.Unplaced == 0),
                         $"zone moves {moves}, zone {king.Zone}, piles {arena.Materialized}, unplaced {arena.Unplaced}");
                     minted += bank.Minted;
+                    GD.Print(FormattableString.Invariant($"[king crowd] seed={seed} actors={runner.Roster.Count} seconds={runner.Elapsed:F2} minted={bank.Minted} per_minute={bank.Minted * 60 / runner.Elapsed:F2} lone_share={loneSeconds / runner.Elapsed:F4} minters={runner.Roster.Count(a => king.MintedBy(a.ActorId) > 0)}"));
                     break;
                 }
             }
