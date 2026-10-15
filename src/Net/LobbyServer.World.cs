@@ -158,8 +158,12 @@ public partial class LobbyServer
     }
 }
 
-/// <summary>Whether this process plays lobbies in a lobby world (a dev flag until the owner reviews it).</summary>
+/// <summary>
+/// Whether this process plays lobbies in a lobby world: the default. <c>--classic-lobby</c> keeps the lobby menu over
+/// the backdrop instead (a client then ignores its lobby's world; a server started with it runs none), until the owner
+/// has reviewed the world's look.
+/// </summary>
 public static class LobbyWorldDefault
 {
-    public static bool Enabled => Dev.DevArgs.Get("lobby-world") != null;
+    public static bool Enabled => Dev.DevArgs.Get("classic-lobby") == null;
 }

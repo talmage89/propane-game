@@ -80,7 +80,11 @@ public partial class NetTest : Node
             server.Start();
         }
         InputSetup.Register();
-        net = new NetClient { Name = "Net" };
+        // Match soaks keep their timing: these clients stay out of the lobby world and start without a stage unless a
+        // lobby run asks for both (--lobby-roam).
+        var roam = DevArgs.Get("lobby-roam") != null;
+        if (!roam) Tuning.SavedTemplate.LobbyStageTime = 0;
+        net = new NetClient { Name = "Net", LobbyWorlds = roam };
         AddChild(net);
         director = new CaptureDirector { Name = "Director", QuitAfter = DevArgs.GetFloat("quit", 400f) };
         AddChild(director);

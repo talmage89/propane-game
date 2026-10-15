@@ -126,7 +126,7 @@ public static class AppearanceTests
         {
             var appearance = new AppearanceRecord(12, 34, 56);
             var clock = new ManualClock();
-            var server = new LobbyServer(PacketTransports.CreateServer(), clock);
+            var server = new LobbyServer(PacketTransports.CreateServer(), clock) { Worlds = false };
             try
             {
                 var packets = new System.Collections.Generic.List<NetMessage>();
