@@ -16,7 +16,7 @@ the rest of Propane. Huge stack and Range use void; the banking duel and Free tu
 - **Duel vs a banking bot** defaults to two owned actors in one offline world. **Lab bank bots** allows 1–15 bots; layout changes apply on reset. The bot has no camera and uses the
   existing banking brain. Easy, Normal and Hard are the lobby bots' difficulty profiles: they set the
   `LabBotSkill` dial to that profile's skill (0.2, 0.6 or 1), which free tuning can still set between them; the menu
-  shows the nearest profile. They change its skill, not tank/player physics. The default is three
+  shows the nearest profile. Hard also enables the points policy in Tank Bank and King; tank/player physics stay the same. The default is three
   minutes; bank most to win. Bullets spill with hit grace, melee/blasts spill on the victim's ordinary ragdoll
   event, drops have the match's shield, ammo cans replenish, and delayed chains credit their initiating shooter.
   The void arena is marked by a ring of floor disks, half a step off both start points; the markings are reference
@@ -156,6 +156,10 @@ chain and one push), segments built and retired, and the result paused on the co
 runs (`dissolve-full`: the bot on two seeds; `dissolve-pace`: a pacer that runs down the street without bot navigation,
 so its frame times measure the stream rather than the bot), which also require the live segments, their nodes and bodies
 and the whole tree's nodes to stay bounded (the last third of the run holding no more than the first third, give or take).
+The dial sweep locks actor input while gravity settles before and after each reset. Its floor/fixture assertions
+check layout and retirement; active bot combat (including Hard's immediate banking) is covered by the duel,
+prototype rounds and points sweep. A valid early blast or hitstop must not masquerade as a failed reset.
+
 Two idle checks keep crowds of bots playing: `idle-bank` (a 40-second suburb soak with eight bots) and `idle-king` (a
 45-second suburb King round with sixteen bots). Every Lab bot run prints `[lab idle]` lines: each bot's idle share (see
 [bot navigation](bot-navigation.md#idle-bots)), its longest idle run and its commonest statuses; `--max-idle=F` and
@@ -234,3 +238,13 @@ load records, rendered suburb matches, visual comparisons and reproducible basel
 
 The measurement registry callback deliberately permits 24–1,024 tanks while retaining the actual Lab fixture
 builder. It can profile beyond the product ceiling without relaxing the shipped menus or tuning validation.
+
+For a mixed Hard/Normal strength trial, `python3 -B tools/dev/check_bot_points.py` runs both scoring modes across
+five seeds and both assignments of four Hard spawn slots. `--policy-only` equalizes aim; `--environment=void`
+selects the arena. Its local `LabHardBots`/`LabHardOffset` overrides choose a consecutive range of attached brains
+(the player attaches last in bot-driven runs); remaining actors keep `LabBotSkill`. `--compare-points` on the Lab
+harness prints both groups' final and earned banks. Duel/soak `--trace` includes positions and navigation state.
+
+Prototype outcome probes bound the round's simulation clock, since explosion hitstop slows that clock while
+process frames keep arriving. Their summary includes process-frame count; `check_lab.py` also enforces a wall
+timeout so a stopped simulation still fails. Scoring, conservation and legal-outcome assertions remain active.

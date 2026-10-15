@@ -10,6 +10,7 @@ using Propane.Core;
 using Propane.Fx;
 using Propane.Lab;
 using Propane.Modes;
+using Propane.Net;
 using Propane.Player;
 using Propane.Tank;
 using Propane.UI;
@@ -175,10 +176,15 @@ public partial class LabTest : Node
                     AddChild(lab);
                     var label = $"{scenario.Id}/{environment} with {name}";
                     Assert(lab.Initialized && lab.LiveTanks.Any(), $"{label} built no fixture");
+                    // This checks layout/retirement, not combat: Hard can detonate a pile before the actors have
+                    // settled, triggering hitstop or a throw during the fixed grounding window. Keep gravity and
+                    // collisions live, but hold every actor's input on both sides of the reset.
+                    foreach (var actor in lab.Session.Actors) actor.Character.InputLocked = true;
                     await Frames(20).ConfigureAwait(true);
                     lab.Reset();
+                    foreach (var actor in lab.Session.Actors) actor.Character.InputLocked = true;
                     await Frames(10).ConfigureAwait(true);
-                    Assert(lab.Player.IsOnFloor() && lab.LiveTanks.Any(), $"{label} did not survive a reset");
+                    Assert(lab.Player.IsOnFloor() && lab.LiveTanks.Any(), $"{label} did not survive a reset: floor={lab.Player.IsOnFloor()} down={lab.Player.IsRagdolled} position={lab.Player.GlobalPosition} tanks={lab.LiveTanks.Count()} policy={lab.Prototype?.BotStatus(1)}");
                     lab.Session.Dispose(); lab.Free();
                 }
             }
@@ -300,6 +306,18 @@ public partial class LabTest : Node
             Assert(worst <= DevArgs.GetFloat("max-idle-worst", 1), FormattableString.Invariant($"{label}: a bot idles {worst * 100:0.0}% of play"));
     }
 
+    private static void ReportPoints(LabSession lab, string mode, int seed, IReadOnlyDictionary<int, int> scores,
+        IReadOnlyDictionary<int, int> earned)
+    {
+        if (DevArgs.Get("compare-points") == null) return;
+        var hard = lab.Session.Actors.Where(a => a.Character.InputOverride is IBotGoalPolicy { PointsDriven: true }).Select(a => a.Character.ActorId).ToArray();
+        var normal = lab.Session.Actors.Where(a => a.Character.InputOverride is IBotGoalPolicy { PointsDriven: false }).Select(a => a.Character.ActorId).ToArray();
+        Assert(hard.Length > 0 && normal.Length > 0, "points comparison requires both policies");
+        GD.Print($"[lab points] mode={mode} seed={seed} hard={hard.Length} normal={normal.Length} " +
+            $"hard_score={hard.Sum(a => scores.GetValueOrDefault(a))} normal_score={normal.Sum(a => scores.GetValueOrDefault(a))} " +
+            $"hard_earned={hard.Sum(a => earned.GetValueOrDefault(a))} normal_earned={normal.Sum(a => earned.GetValueOrDefault(a))}");
+    }
+
     private async Task Duel(bool soak = false)
     {
         if (DevArgs.Get("duel-seconds") != null) template.LabDuelSeconds = DevArgs.GetFloat("duel-seconds", 180);
@@ -321,11 +339,13 @@ public partial class LabTest : Node
         while (lab.Bank!.IsPlaying && lab.World.Clock.Now < seconds)
         {
             Assert(frame++ < seconds * 120, "duel simulation stalled");
+            if (DevArgs.Get("trace") != null && frame % 120 == 0) GD.Print($"[lab trace] {lab.World.Clock.Now:F1}s {lab.Bank.BotTrace}");
             if (shot < shots.Length && lab.World.Clock.Now >= shots[shot]) capture.Screenshot($"duel_{shots[shot++]:000}s");
             await Frames(1).ConfigureAwait(true);
         }
         var bank = lab.Bank!;
         CheckIdle("duel", bank.Activity);
+        ReportPoints(lab, "bank", template.FixedSeed, bank.Scores, bank.Earned);
         var botEarned = bank.Earned.Where(s => s.Key != lab.Player.ActorId).Sum(s => s.Value);
         GD.Print($"[lab duel] seconds={seconds} simulation={lab.World.Clock.Now:F3} banked={bank.BankedTotal} spilled={bank.SpilledTotal} hits={bank.Hits} you={bank.Scores[1]} bot={bank.Scores[2]} earned_you={bank.Earned[1]} earned_bot={bank.Earned[2]} live={lab.LiveTanks.Count()} earned_bots={botEarned}");
         // In a larger roster the first rival can finish empty while the other bots bank.
@@ -412,9 +432,12 @@ public partial class LabTest : Node
             var limit = (id == "king" ? lab.World.Tuning.KingRoundSeconds : lab.World.Tuning.RingOutRoundLimit) + 5;
             var watch = System.Diagnostics.Stopwatch.StartNew();
             var shot = 0;
-            for (var frame = 0; runner.IsPlaying && runner.Elapsed < until; frame++)
+            var frame = 0;
+            for (; runner.IsPlaying && runner.Elapsed < until; frame++)
             {
-                Assert(frame < limit * 60, $"{id} seed {seed}: the round never ended");
+                // Hitstop slows simulation while process frames keep arriving. Bound the rules' own clock;
+                // check_lab's process timeout also catches a stalled clock without weakening the outcome checks.
+                Assert(runner.Elapsed < limit, $"{id} seed {seed}: the round never ended at {runner.Elapsed:F1}s");
                 if (DevArgs.Get("trace") != null && frame % 120 == 0)
                 {
                     GD.Print($"[lab trace] {runner.Elapsed:F1}s " + string.Join(" | ", lab.Session.Actors.Select(a =>
@@ -435,7 +458,7 @@ public partial class LabTest : Node
             var state = runner.Rules.Snapshot();
             foreach (var line in state.Report) GD.Print($"[lab prototype] {id} seed {seed}: {line.Text}");
             var brains = runner.Thinks / System.Math.Max(1, runner.Elapsed * 120);
-            GD.Print($"[lab prototype] {id} seed={seed} environment={environment} round={runner.Elapsed:F1}s wall={wall:F1}s " +
+            GD.Print($"[lab prototype] {id} seed={seed} environment={environment} round={runner.Elapsed:F1}s wall={wall:F1}s frames={frame} " +
                 $"brains={brains:F1} think_ms_per_tick={runner.ThinkSeconds * 1000 / System.Math.Max(1, runner.Elapsed * 120):F3}");
             switch (runner.Rules)
             {
@@ -455,6 +478,7 @@ public partial class LabTest : Node
                 case KingRules king:
                 {
                     var bank = king.Bank;
+                    ReportPoints(lab, "king", seed, runner.Scores, runner.Roster.ToDictionary(a => a.ActorId, a => bank.StatsFor(a.ActorId).Gained));
                     Assert(runner.Elapsed >= lab.World.Tuning.KingRoundSeconds - 0.01, "king ended before its clock");
                     Assert(bank.Conserved && bank.Minted == runner.Roster.Sum(a => king.MintedBy(a.ActorId)), $"king seed {seed}: bank not conserved");
                     Assert(runner.Roster.All(a => runner.Scores.GetValueOrDefault(a.ActorId) == bank.Bank(a.ActorId)), "scores disagree with the bank");
@@ -473,7 +497,7 @@ public partial class LabTest : Node
             await Collect().ConfigureAwait(true);
         }
         // Bot play, not legality: across full rounds somebody must hold the zone long enough to mint.
-        if (id == "king" && DevArgs.Get("quick") == null && until == float.MaxValue)
+        if (id == "king" && DevArgs.Get("quick") == null && DevArgs.Get("compare-points") == null && until == float.MaxValue)
             Assert(minted > 0, $"king: nobody minted across {seeds} rounds");
     }
 
@@ -847,8 +871,69 @@ public partial class LabTest : Node
             $"fixture must stall the bot on its aim first ({lab.Bank.BotStatus})");
         await Frames(6 * 60).ConfigureAwait(true);
         Assert(lab.Bank.BotBlacklisted >= 2, $"bot never gave up a pile with no clear shot ({lab.Bank.BotStatus})");
+        // Hard King's points estimate must validate the rifle path, including shot-only debris. Start with a
+        // clear prize, then put the blocker back after selection: the periodic choice must abandon it too.
+        lab.Bank.SetPhysicsProcess(false);
+        using var king = new KingBot(1) { PointsDriven = true };
+        using var view = new BlockedKingWorld(lab);
+        lab.Opponent.InputOverride = king;
+        wall.CollisionLayer = 0;
+        await Frames(1).ConfigureAwait(true);
+        king.Prepare(view);
+        view.Services.BeginTick(lab.BotTanks);
+        king.Think(view, 1f / 60);
+        Assert(king.Status.StartsWith("points: banking", StringComparison.Ordinal), "King did not choose the clear prize");
+        wall.CollisionLayer = Layers.Debris;
+        for (var frame = 0; frame < 3 * 60; frame++)
+        {
+            view.Services.BeginTick(lab.BotTanks);
+            king.Think(view, 1f / 60);
+            await Frames(1).ConfigureAwait(true);
+        }
+        Assert(!king.Status.StartsWith("points: banking", StringComparison.Ordinal) && tanks.All(t => t.State == PropaneTank.TankState.Intact),
+            $"Hard King kept choosing prizes behind shot-only debris ({king.Status})");
+        // A valid route with no actual movement must eventually fail, even while the prototype motor tries its
+        // direct walking recovery. Lock the actor (gravity/collision remain live) to hold that condition exactly.
+        lab.Opponent.InputOverride = new IdleInput();
+        lab.Opponent.InputLocked = true;
+        await Frames(60).ConfigureAwait(true); // Let the previous zone run lose its momentum before measuring a stall.
+        var motor = new BotMotor();
+        motor.Prepare(view);
+        var anchor = lab.Opponent.GlobalPosition;
+        var goal = anchor + Vector3.Right * 10;
+        var recoveryFailed = false;
+        for (var frame = 0; frame < 6 * 60 && !recoveryFailed; frame++)
+        {
+            view.Services.BeginTick(lab.BotTanks);
+            motor.Begin(1f / 60);
+            motor.MoveTo(goal);
+            motor.Navigate(view, 1f / 60);
+            recoveryFailed = motor.Failed;
+            await Frames(1).ConfigureAwait(true);
+        }
+        Assert(recoveryFailed && BotMotor.Flat(lab.Opponent.GlobalPosition - anchor).Length() < lab.World.Tuning.BotProgressDistance,
+            $"direct walking recovery failed={recoveryFailed} travel={BotMotor.Flat(lab.Opponent.GlobalPosition - anchor).Length():F3}: {motor.NavigationDiagnostics}");
+        lab.Opponent.InputOverride = null;
         lab.Session.Dispose(); lab.Free();
-        GD.Print("[lab aimstall] PASS the bot left a pile whose shots an obstruction stopped");
+        GD.Print("[lab aimstall] PASS bankers and Hard King leave blocked shots; walking recovery preserves bounded route failure");
+    }
+
+    private sealed class BlockedKingWorld(LabSession lab) : IBotWorld, IDisposable
+    {
+        public WorldContext World => lab.World;
+        public PlayerCharacter Player => lab.Opponent!;
+        public bool IsPlaying => true;
+        public float TimeLeft => 60;
+        public int MyScore => 0;
+        public IReadOnlyDictionary<int, int> Scores { get; } = new Dictionary<int, int>();
+        public double Now => lab.World.Clock.Now;
+        public double LastHitTime => double.NegativeInfinity;
+        public int LastHitBy => 0;
+        public IReadOnlyList<PlayerCharacter> RemoteBodies => Array.Empty<PlayerCharacter>();
+        public IReadOnlyList<AmmoPickup> Pickups => Array.Empty<AmmoPickup>();
+        public BotServices Services { get; } = new(lab.World);
+        public KingBotView? King => new KingBotView(0, new ModeSpot(100, 0, 0), new ModeSpot(200, 0, 0), 6, 0, false, 0.1);
+        public void Dispose() => Services.Dispose();
     }
 
     private static async Task FireAt(PlayerCharacter actor, Func<Vector3> point)

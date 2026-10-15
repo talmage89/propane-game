@@ -45,7 +45,9 @@ inactive matches clear recovery state. An unavailable shooting position can stil
 Prototype motors retain a bounded direct walking attempt after `BotDirectStallTime` without progress greater than
 `BotDirectProgressDistance`. It lasts `BotDirectTime`, respects live tank clearance and the mode's ground limit,
 and never interrupts a committed jump or a running route search (restarting a search spread over ticks meant a far
-one never finished). The player controller still resolves solid collisions.
+one never finished). The navigator also keeps advancing its progress/retry state during direct recovery: resetting
+it every 1.2 seconds prevented its 1.25-second stall detector from ever expiring against a persistent obstruction.
+A planned jump cancels direct recovery; the player controller still resolves solid collisions.
 
 A search that cannot reach its goal, because it is walled off, inside a clearance or beyond `BotSearchBudget`, still
 yields a partial route to the explored point nearest the goal when that point is at least `BotPartialRouteGain` meters
@@ -55,8 +57,12 @@ moves, the bot keeps following its previous route (never a jump) while the new s
 search that fails after at most `BotIslandExpansions` expansions started on ground the lattice has no way off (a car
 roof, debris): once per goal the bot steps straight toward it for `BotDirectTime`, within the hazards. A bot already
 inside overlapping clearance circles may walk anywhere that lies no deeper in them in total, so it can leave a pile even
-when every way out passes nearer one tank; it never enters a circle it started outside. Brains choose fixed goals for
-escapes (a venting tank) and vantage points outside every hazard, so a goal does not drift with the bot or lie where no
+when every way out passes nearer one tank; it never enters a circle it started outside. If the direct island escape
+would deepen a clearance, it tries `BotIslandDirections` short sidesteps, nearest the goal direction first, requiring
+supported ground and a clear capsule sweep through the same shared query budget. Repeating only the direct escape
+could pin a fleeing bot between overlapping tank clearances indefinitely. Brains choose fixed goals for
+escapes (a venting tank), alternate escape directions after bounded route failure (`BotFleeDirections` and
+`BotFleeDistance`), and vantage points outside every hazard, so a goal does not drift with the bot or lie where no
 route can end.
 
 `Tuning.Bot...` exposes route spacing/search budget, progress window/distance, retries, waypoint/goal radii,
@@ -109,6 +115,39 @@ a tank in sight, and walks the zone's edge `BotKingRegroupStep` meters at a time
 `Plan` is synchronous for tests/offline callers. The grid supports horizontal ground and ballistic jumps, rather
 than general stairs or roofs. Navigation caching and these local bot dials change no player physics, match
 messages, shared tuners or world construction.
+
+## Hard points policy
+
+Easy and Normal retain objective-first target scores. Hard enables `IBotGoalPolicy.PointsDriven` in Tank Bank and
+King. `BotPoints` estimates score swing per second: nearby chain neighbors bank points; bullets/melee or a blast
+beside a banked rival spill points; leaders' losses matter more than trailing rivals'. Spills get only fractional
+recovery credit because another player may bank them. Estimates include travel time, one versus two tank shots, drop
+shields, the available bank and return-fire exposure. Hard bankers compare those rates and protect a lead; a
+trailing Hard banker keeps seeking points even late. Ammo, escape, safe firing positions and immediate melee remain
+tactical constraints.
+
+King compares visible banking/spilling opportunities with reaching or holding the zone. Its mint estimate discounts
+contests, travel, risking its bank in a crowd and a relocation before it can mint, and credits stopping a rival
+holder's income. It can bank safe tanks outside the zone rather than joining an unprofitable crowd, or shoot a
+banked leader while holding its own zone. A banked bot circles outside an unprofitable crowd until a better
+opportunity opens. If nothing in sight pays better, it resumes the zone policy. The existing regroup behavior
+remains.
+
+`BotPointsHysteresis` boosts the current choice at each periodic decision; `BotPointsInterval` controls King's
+comparisons (bankers retain their target cadence). Every estimate weight/range/time is a local `Tuning.BotPoints...`
+property; `BotHardChasesPoints=false` provides an objective-policy A/B without changing difficulty's aim. These are
+estimates, not a promise of kills or bank recovery, and use no extra navigation searches. The shared tuner schema,
+world generation, scoring and messages are unchanged. King validates prizes against the full rifle collision mask,
+including debris, tanks and players, before choosing them. A prize whose rifle shot later stays blocked for
+`BotStuckAimTime` is excluded for `BotTargetRetryTime`, so a good observation ray cannot pin a bot indefinitely.
+
+`tools/dev/check_bot_points.py` compares four Hard and four Normal actors in the same full Lab matches, alternates
+which four spawn slots are Hard, and requires a higher aggregate mean final bank for Hard in each scoring mode.
+`--policy-only` gives Hard Normal's aim to isolate target policy. Logs include earned and retained banks; retained
+banks decide the comparison. King conservation is checked every round, and the sweep requires some zone minting in
+aggregate (a single crowded round may mint nothing). This deeper strength sweep is separate from `make test`;
+headless unit assertions cover leader preference, spill caps, return-fire/travel costs, zone opportunities and
+runtime difficulty wiring.
 
 ## Regression course
 

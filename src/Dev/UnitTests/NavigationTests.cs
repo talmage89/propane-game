@@ -127,6 +127,64 @@ internal static class NavigationTests
             }
             finally { player.Free(); enemy.Free(); }
         });
+        runner.Run("navigation/island escape sidesteps overlapping tank clearances", () =>
+        {
+            var caps = new NavigationCapabilities(shape.Radius, shape.Height, tuning.RunSpeed, tuning.SprintSpeed,
+                tuning.JumpVelocity, tuning.PlayerGravity, tuning.Acceleration, tuning.AirControl);
+            var grid = Grid(new CourseWorld(), caps, tuning);
+            var hazards = new NavigationHazards();
+            // The nearest lattice point and the direct goal direction lie deeper inside this tank's clearance.
+            var start = new Vector3(0.6f, 0, 0.6f);
+            hazards.Add(Vector3.Zero, 1.2f);
+            var goal = new Vector3(-8, 0, -8);
+            var navigator = new BotNavigator();
+            var escaped = false;
+            for (var tick = 0; tick < 240; tick++)
+            {
+                grid.BeginTick(tick / 120d);
+                var move = navigator.Navigate(grid, hazards, new NavigationState(start, Vector3.Zero, true), goal, tuning, 1f / 120);
+                if (move.Direction == Vector3.Zero) continue;
+                TestRunner.Assert(hazards.SafeAlong(start, start + move.Direction * grid.Spacing, caps.Radius, start),
+                    "escape moved deeper into the tank clearance");
+                TestRunner.Assert(move.Direction.Dot((goal - start).Normalized()) < 0.5f,
+                    "escape repeated the blocked direct direction");
+                escaped = true;
+                break;
+            }
+            TestRunner.Assert(escaped, "off-grid bot never tried a safe sidestep");
+        });
+        runner.Run("navigation/failed flee routes try a different fixed destination", () =>
+        {
+            using var escapeTuning = Tuning.LoadBaked();
+            escapeTuning.BotSearchBudget = 160;
+            escapeTuning.BotPartialRouteGain = 0;
+            var caps = new NavigationCapabilities(shape.Radius, shape.Height, tuning.RunSpeed, tuning.SprintSpeed,
+                0, tuning.PlayerGravity, tuning.Acceleration, tuning.AirControl);
+            var grid = Grid(new CourseWorld { Fence = true }, caps, escapeTuning);
+            var hazards = new NavigationHazards();
+            var danger = new Vector3(0, 0, -8);
+            hazards.Add(danger, 7);
+            var start = new Vector3(0, 0, -3);
+            var here = start;
+            var navigator = new BotNavigator();
+            var attempt = 0;
+            var goal = BotMotor.EscapeGoal(here, danger, escapeTuning, attempt);
+            for (var tick = 0; tick < 1800 && here.DistanceTo(danger) < 9; tick++)
+            {
+                grid.BeginTick(tick / 120d);
+                var move = navigator.Navigate(grid, hazards, new NavigationState(here, Vector3.Zero, true), goal, escapeTuning, 1f / 120);
+                if (move.Failed)
+                {
+                    navigator.Reset();
+                    goal = BotMotor.EscapeGoal(here, danger, escapeTuning, ++attempt);
+                }
+                var next = here + move.Direction * caps.Speed / 120;
+                TestRunner.Assert(hazards.SafeAlong(here, next, caps.Radius, here), "escape entered deeper danger");
+                if (grid.World.Sweep(here, next)) here = next;
+            }
+            TestRunner.Assert(attempt > 0 && here.DistanceTo(danger) >= 9 && here.DistanceTo(start) > 3,
+                "bot kept trying to flee through the closed fence instead of escaping along it");
+        });
         runner.Run("navigation/ground plane sharing follows the local accuracy tuner", () =>
         {
             var caps = new NavigationCapabilities(shape.Radius, shape.Height, tuning.RunSpeed, tuning.SprintSpeed,

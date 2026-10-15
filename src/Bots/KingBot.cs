@@ -12,6 +12,7 @@ namespace Propane.Bots;
 /// tanks in sight from a safe distance to bank them; head for the next spot
 /// when the zone is about to move and it could not otherwise make it in time. It reads the zone from the mode's
 /// <see cref="KingState"/>: the Lab's rules, or the server's snapshot in a match.
+/// Hard compares nearby banks/spills with zone income and the cost of risking its bank in a crowd.
 /// Prize searches are periodic; combat visibility stays live by default for brief sight gaps near the zone.
 /// </summary>
 public sealed class KingBot : IBotGoalPolicy
@@ -38,6 +39,16 @@ public sealed class KingBot : IBotGoalPolicy
     private float regroupTime;
     private Vector3 regroupGoal;
     private float regroupTurn = 1;
+    private readonly BotPoints points = new();
+    private float pointsTimer;
+    private Node3D? pointsTarget;
+    private bool protectingPoints;
+    private int protectZone = -1;
+    private readonly Dictionary<ulong, double> pointsBlocked = new(1024);
+    private readonly List<ulong> pointsExpired = new(1024);
+    private PropaneTank? pointsShot;
+    private float pointsShotWait;
+    public bool PointsDriven { get; set; }
 
     public string Status => status.ToString();
     public string StatusKind => status.Format;
@@ -67,12 +78,17 @@ public sealed class KingBot : IBotGoalPolicy
             motor.Reset();
             wasDown = false;
             regroupTime = 0;
+            pointsTarget = pointsShot = null;
+            protectingPoints = false;
+            pointsTimer = pointsShotWait = 0;
             status.Set("waiting");
             return;
         }
         if (player.IsRagdolled)
         {
             wasDown = true;
+            pointsTimer = pointsShotWait = 0;
+            protectingPoints = false;
             motor.Reset();
             status.Set("down");
             return;
@@ -140,6 +156,13 @@ public sealed class KingBot : IBotGoalPolicy
             regroupTime -= dt;
             Regroup(world, player, spot, radius, tuning, dt, look);
             motor.Navigate(world, dt);
+            return;
+        }
+
+        if (PointsDriven && ChoosePoints(world, state, spot, player, tuning, dt))
+        {
+            motor.Navigate(world, dt);
+            if (motor.Failed) { pointsTarget = null; pointsTimer = 0; }
             return;
         }
 
@@ -212,6 +235,113 @@ public sealed class KingBot : IBotGoalPolicy
         }
         motor.Navigate(world, dt);
         if (motor.Failed) PickStand(state, world, spot);
+    }
+
+    /// <summary>Hard compares banking and spilling in sight against the zone's time-limited mint/denial rate.</summary>
+    private bool ChoosePoints(IBotWorld world, KingBotView state, Vector3 spot, PlayerCharacter player, Core.Tuning tuning, float dt)
+    {
+        pointsTimer -= dt;
+        if (pointsTarget != null && (!GodotObject.IsInstanceValid(pointsTarget) ||
+            pointsTarget is PropaneTank { State: PropaneTank.TankState.Exploded } or PlayerCharacter { IsRagdolled: true }))
+        {
+            pointsTimer = 0;
+        }
+
+        var here = player.GlobalPosition;
+        if (pointsTimer <= 0)
+        {
+            pointsTimer = tuning.BotPointsInterval;
+            points.Begin(world);
+            var zoneRate = points.Zone(world, state, spot);
+            var protect = zoneRate < 0 && world.MyScore > 0;
+            var best = Mathf.Max(0, zoneRate);
+            if (pointsTarget == null) best *= 1 + tuning.BotPointsHysteresis;
+            pointsExpired.Clear();
+            foreach (var (id, until) in pointsBlocked) if (until <= world.Now) pointsExpired.Add(id);
+            foreach (var id in pointsExpired) pointsBlocked.Remove(id);
+            Node3D? chosen = null;
+            var bodies = world.RemoteBodies;
+            for (var i = 0; i < bodies.Count; i++)
+            {
+                var enemy = bodies[i];
+                var distance = enemy.GlobalPosition.DistanceTo(here);
+                if (distance > tuning.BotPointsShotRange) continue;
+                var rate = points.Fight(world, enemy, distance);
+                if (enemy == pointsTarget) rate *= 1 + tuning.BotPointsHysteresis;
+                if (rate > best && BotMotor.CanSee(world, player, BotMotor.AimPoint(enemy))) { best = rate; chosen = enemy; }
+            }
+            var tanks = world.LiveTanks;
+            for (var i = 0; i < tanks.Count; i++)
+            {
+                var tank = tanks[i];
+                var distance = tank.GlobalPosition.DistanceTo(here);
+                // Bank from here, without crossing a pile or navigating to a changing tank. The zone policy still
+                // takes us across the map when no immediate point opportunity pays better.
+                if (pointsBlocked.ContainsKey(tank.GetInstanceId()) || tank.Invulnerable || distance < tuning.RagdollRadius + world.Services.PileSpread(i) + tuning.BotVentClearance ||
+                    distance > tuning.BotPointsShotRange)
+                {
+                    continue;
+                }
+
+                var rate = points.Tank(world, tank, world.Services.PileCount(i), distance);
+                if (tank == pointsTarget) rate *= 1 + tuning.BotPointsHysteresis;
+                if (rate > best && world.Services.Ray(player.Aim.EyeOrigin, tank.GlobalTransform * PropaneTank.LocalCenter,
+                    Core.Layers.ShotMask, out var hit) && hit.Collider == tank.GetRid()) { best = rate; chosen = tank; }
+            }
+            if (chosen != pointsTarget) { fightTime = pointsShotWait = 0; pointsShot = null; }
+            pointsTarget = chosen;
+            protect &= chosen == null;
+            if (protect && (!protectingPoints || protectZone != state.Zone))
+            {
+                var away = BotMotor.Flat(here - spot).Normalized();
+                if (away == Vector3.Zero) away = Vector3.Right;
+                regroupGoal = spot + away * ((float)state.Radius + tuning.BotPointsProtectDistance + tuning.BotTankClearance * 2);
+                protectZone = state.Zone;
+            }
+            protectingPoints = protect;
+        }
+        if (protectingPoints)
+        {
+            Regroup(world, player, spot, (float)state.Radius + tuning.BotPointsProtectDistance, tuning, dt, look: true);
+            status.Set("points: protecting the bank outside the zone");
+            return true;
+        }
+        switch (pointsTarget)
+        {
+            case PlayerCharacter enemy:
+                if (enemy.IsRagdolled || world.Scores.GetValueOrDefault(enemy.ActorId) <= 0) { pointsTimer = 0; return false; }
+                Shoot(player, enemy, tuning, dt);
+                motor.Melee(player, enemy.GlobalPosition + Vector3.Up * tuning.MeleeContactHeight);
+                // Keep minting when already inside. Outside, close on the valuable bank while firing.
+                if (BotMotor.Flat(here - spot).Length() > state.Radius)
+                {
+                    var gap = BotMotor.Flat(enemy.GlobalPosition - here);
+                    if (gap.Length() > BotMotor.MeleeReach(tuning)) motor.MoveTo(enemy.GlobalPosition - gap.Normalized() * BotMotor.MeleeReach(tuning));
+                }
+                status.Set("points: spilling {0}", enemy.ActorId);
+                return true;
+            case PropaneTank tank:
+                if (tank.Invulnerable) { pointsTimer = 0; return false; }
+                motor.Face(player, tank.GlobalTransform * PropaneTank.LocalCenter, dt);
+                motor.Intent.Aim = true;
+                if (pointsShot != tank) { pointsShot = tank; pointsShotWait = 0; }
+                var onTarget = BotMotor.OnTarget(world, player, tank);
+                pointsShotWait = onTarget ? 0 : pointsShotWait + dt;
+                if (onTarget) motor.Tap();
+                if (pointsShotWait >= tuning.BotStuckAimTime)
+                {
+                    // A clear observation ray can still have no rifle shot (a player, tank or loose fence).
+                    // Repeatedly choosing that high-rate prize must not pin Hard outside the zone forever.
+                    pointsBlocked[tank.GetInstanceId()] = world.Now + tuning.BotTargetRetryTime;
+                    pointsTarget = pointsShot = null;
+                    pointsShotWait = pointsTimer = 0;
+                    return false;
+                }
+                status.Set("points: banking a {4} tank", word: BotStatus.Name(tank.State));
+                return true;
+            default:
+                return false;
+        }
     }
 
     /// <summary>Out of the zone for a while after a knockdown: fight or bank from its edge, moving around it.</summary>
