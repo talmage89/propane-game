@@ -13,7 +13,7 @@ and Dissolve Run the first [segment world source](#segments).
 | `src/Modes/TankBankRules.cs` | Tank Bank's bank, spill tickets, gates, standings, statistics and audit; victim-owner helpers. |
 | `src/Modes/ModePhases.cs` | The pure phase machine the server's runner drives. |
 | `src/Modes/ModeHud.cs` | Plain HUD data and the Tank Bank and Sandbox presenters. |
-| `src/Modes/ModeDefinition.cs` | `ModeDefinition`, supply policy and `ModeRegistry` (Sandbox, Tank Bank and King; the other prototypes apart). |
+| `src/Modes/ModeDefinition.cs` | `ModeDefinition`, supply policy and `ModeRegistry` (Sandbox, Tank Bank, King and Lobby; the other prototypes apart). |
 | `src/Modes/BodyEvents.cs` | Sampled positions, attributed throws, eliminations, `RoundOver` and a pure seeded generator. |
 | `src/Modes/Health.cs` | The optional health state: damage reports, validation, attribution, invulnerability, death, respawn. |
 | `src/Modes/RingOutRules.cs`, `KingRules.cs`, `ShortFuseRules.cs`, `DissolveRunRules.cs` | The prototypes' rules: Ring Out's slab plan, King's zone schedule, Short Fuse's rounds, Dissolve Run's front and score. |
@@ -47,11 +47,13 @@ presenter, the bot goal policy, the tuners the rules copy and the envelope schem
 | King of the Cul-de-sac (4) | `KingRules` | suburb plan (Lab: void or suburb) | unlimited ammo, no cans | countdown | bank, minted, clock, zone arrows | `KingBot` |
 | Short Fuse (5), Lab only | `ShortFuseRules` | a suburb per round | `SuburbPlans.Match` on a Lab-sized slab, unlimited ammo, no cans | countdown | wins, standing, kills, health bar, feed | `ShortFuseBot` |
 | Dissolve Run (6), Lab only | `DissolveRunRules` | a segment stream | strip segments of the single-player piles, limited ammo, cans | count-up | score, meters, tanks, front bar, chain banner, feed | `DissolveRunBot` |
+| Lobby (7), the lobby world | `LobbyRules`: no score, no spills, emptied piles refill | a hand-built void ring of piles | unlimited ammo (`LobbyInfiniteAmmo`), no cans | none | none (lobby card) | `BankingBot`, with a bottomless magazine |
 
 Multiplayer lobbies default to Tank Bank; the creator can choose King and its mint pace (0.5–10 s in 0.5 s steps,
 default 2 s). The lobby's length is the round length. `MatchStart` appends the mode id and schema version, and a client
 that does not know the pair fails decoding by name. Lab scenarios name a mode: the banking duel plays Tank Bank and the other
-starters play Sandbox. A Lab scenario's environment choice replaces the mode's world source, so a prototype can try
+starters play Sandbox. A waiting lobby's [world](multiplayer.md#lobby-world-a12-unreleased-protocol-3) plays Lobby,
+which no one chooses. A Lab scenario's environment choice replaces the mode's world source, so a prototype can try
 a mode in either the void or a suburb.
 
 ## Tank Bank's rules
@@ -108,7 +110,7 @@ Three fixed outer messages carry everything mode-specific: `ModeEvent` (client t
 | RunId | Int32 | The match id, as on every match message. |
 | RoundId | UInt32 | The round the message belongs to (nonzero). |
 | WorldRevision | UInt32 | The world it was sent against (nonzero). |
-| ModeId | UInt8 | Sandbox 1, Tank Bank 2, King 4. |
+| ModeId | UInt8 | Sandbox 1, Tank Bank 2, King 4, Lobby 7. |
 | SchemaVersion | UInt16 | The mode's payload schema. |
 | ActorId, LifeId | Int32, UInt32 | An event's reporter, or a command's subject (both zero when it has none). |
 | EventId | UInt32 | An event's actor action sequence, or a command's monotonic id (nonzero). |

@@ -748,3 +748,61 @@ These trailing lobby settings fields are part of unreleased Protocol 3 for 0.4.0
 Hello, Welcome and Rejected are unchanged.
 
 [Lobby tank supply verification](lobby-tanks.md) records the gates, reviewed captures, native matrix and stock-soak variability.
+
+## Lobby world (A12, unreleased Protocol 3)
+
+A waiting lobby is a place, not a menu: everyone who joined roams a shared void world, shooting and throwing tanks while
+they wait. It is the destination a Steam invite will open later.
+
+**The world.** It plays the **Lobby** mode (id 7, schema 1; [modes.md](modes.md)) on a hand-built void plan: no ground
+lots or cars, `LobbyPiles` piles of `LobbyPileCount` tanks on marked pads round a `LobbyPileRing` ring, and arrival
+spots round a `LobbySpawnRing` ring by allocation slot. Nothing scores and nothing spills; rifles never run dry
+(`LobbyInfiniteAmmo`; bots carry a magazine whose reserve stays full, since they play by it). A pile whose last
+intact tank has left its spot (`LobbyPileReach`) refills after `LobbyRefillDelay`, materializing over
+`LobbyMaterializeSeconds` on clear ground (`LobbyPileClearance`), unless its tanks, with those already on their way,
+would take the world past `LobbyTankLimit`. The server's own dials build the world, with the lobby's choices applied.
+The lobby's title stands on the floor, turned to each arrival; the lobby card at the top left names the lobby and its
+settings, and name tags float over everyone.
+
+**The server.** `LobbyServer.World.cs` runs each world as a run like a match, with its own id from the match id
+sequence, its own ledger and its own relays; the creator is its body authority (a successor takes over, as for a
+match). Unlike a match, its membership follows the lobby's roster live. Each arrival, at creation, on joining or on
+returning from a match, gets its own world start: MatchStart (the void plan), an Authority snapshot of every live body
+(request 0) and MatchGo, so a joiner sees the world as it is. Every peer reconciles its actors with each LobbyState:
+arrivals are added, departures removed, renames and colors follow; a peer gives the bots it owns their brains as they
+arrive. Messages name their run: `RunFor` takes only the lobby's current match or current world, so after a start the
+closed world's traffic is stale and dropped, and in the Waiting phase only the world's own relays run.
+
+**Start.** The creator's start (from the panel) puts the lobby in the **Staging** phase for `LobbyStageTime` (5 s by
+default, capped at 10 s) from the creator's snapshot; 0 starts at once. The stage screen washes the world out behind
+the coming mode, its settings and every member's card and counts down; the creator can take it back with its button,
+Esc or B (**CancelStart**). While staging, settings, the roster and joining are locked and everyone stands still; the
+creator leaving or disconnecting cancels it. Then the world closes and the match loads as before, the stage keeping
+its lineup on screen while the suburb builds. After the results, the server opens a fresh world and everyone returns
+to it, membership kept.
+
+**The panel.** The lobby menu, docked at the right over the world: Tab or View opens it and Esc, B, View again or
+Close puts it away; it holds names, colors, bots, mode, length, tank supply and King's mint pace, with the same
+authority as before. Esc in the world opens its pause menu, whose Leave lobby returns to the lobby list.
+
+**Wire.** LobbyState gains trailing **StartsIn** (Float32, 0–10, nonzero only while staging) and **WorldId** (Int32,
+nonzero only while waiting or staging); LobbyPhase gains Staging (5). The client message **CancelStart** (17) is empty.
+The world's stock and refills use LobbyWire on the mode envelope, reusing King's pile messages. This is part of
+unreleased Protocol 3 for 0.4.0: no further bump, and Hello, Welcome and Rejected are unchanged.
+
+**Dev flags.** `--classic-lobby` keeps the old lobby menu over the backdrop until the owner has reviewed the world's
+look: a client started with it ignores its lobby's world, and a server started with it runs none. `net_test` stays out
+of worlds (and starts without a stage) unless `--lobby-roam=S` puts it in them: each client's bot roams S seconds
+before every match and after the last returns it.
+
+**Tests.** `LobbyWorldTests` covers the rules and layout, joining while roaming, leaving and rejoining, bots, settings
+authority, staging, cancel and start, stale world traffic, the return after results, the creator's departure,
+disconnects during the countdown and loading, refills and a client's world. `menu_test --scenario=lobby` plays it
+through the front end by keyboard, controller and mouse, with a second client, a bot, a canceled and a real start, a
+match and the return; rendered with `--capture-dir`, it captures the review shots. The other menu scenarios run with
+`--classic-lobby`. Network runs:
+
+```sh
+tools/dev/net_bots.sh -n 2 -l 20 -t clean -o "$PWD/build/lobby-net-2c" -- --lobby-roam=10 --matches=2 --lobby-bots=1
+tools/dev/net_bots.sh -n 4 -l 25 -o "$PWD/build/lobby-net-4f" -- --lobby-roam=10 --matches=2 --lobby-bots=1 --net-lag=120 --net-jitter=30 --net-loss=3
+```
