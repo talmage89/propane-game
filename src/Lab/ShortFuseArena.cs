@@ -32,7 +32,7 @@ public partial class ShortFuseArena : Node3D
     public void Layout(SuburbPlan plan, int count, uint round)
     {
         spawns.Clear();
-        var points = RimSpawns(plan, count, (ulong)plan.Seed);
+        var points = RimSpawns(plan, count, (ulong)plan.Seed, Lab.World.Tuning.MpStartSpacing);
         for (var i = 0; i < count; i++)
         {
             var p = points[(i + (int)round - 1) % points.Count];
@@ -50,7 +50,7 @@ public partial class ShortFuseArena : Node3D
     /// Start points on the roads nearest the slab's rim, clear of cars and tanks, spread as far apart as they can be:
     /// the first at a seeded angle on the outermost band, each next one farthest from those chosen. Pure over the plan.
     /// </summary>
-    public static IReadOnlyList<Vector2> RimSpawns(SuburbPlan plan, int count, ulong seed)
+    public static IReadOnlyList<Vector2> RimSpawns(SuburbPlan plan, int count, ulong seed, float spacing)
     {
         var center = plan.Bounds.GetCenter();
         var inner = plan.Bounds.Grow(-4f);
@@ -77,8 +77,12 @@ public partial class ShortFuseArena : Node3D
         var chosen = new List<Vector2> { band.OrderBy(p => p.DistanceTo(aim)).First() };
         while (chosen.Count < count)
         {
-            // Farthest from those chosen; past the band's own count, points repeat (a tiny suburb, many players).
+            // Prefer the rim, but a large roster may exhaust its well-separated starts. The other clear road
+            // points can still keep actors apart; widening the candidates changes no suburb geometry or supply.
             var open = band.Where(p => !chosen.Contains(p)).OrderByDescending(p => chosen.Min(c => c.DistanceTo(p))).ToList();
+            if (open.Count == 0 || chosen.Min(c => c.DistanceTo(open[0])) < spacing)
+                open = candidates.Where(p => !chosen.Contains(p)).OrderByDescending(p => chosen.Min(c => c.DistanceTo(p))).ToList();
+            // A tiny suburb can still run out of clear points; preserve the existing repeat fallback.
             chosen.Add(open.Count > 0 ? open[0] : chosen[chosen.Count % band.Count]);
         }
         return chosen;

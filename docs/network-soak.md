@@ -426,6 +426,10 @@ does for any `--leave-at` client.
 
 ## The creator's cost
 
+These A8 measurements predate shared navigation and the owner's bot-scale tradeoff. The
+[bot scale verification](bot-scale.md) records the later implementation, three-pair Debug/Release benchmarks,
+co-owned lobby-bot soaks and the remaining failed synchronization case.
+
 `--human=idle` keeps the creator's own player still, so the brains measured are the lobby bots'. One client hosts
 every bot on map seed 23 for a 90-second match; the frame columns cover play after the first 12 seconds and before
 the last 8, from `--frame-metrics`.

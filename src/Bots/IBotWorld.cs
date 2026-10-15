@@ -9,7 +9,8 @@ namespace Propane.Bots;
 
 /// <summary>
 /// Actor-specific observations. A brain needs no connection, camera or Match facade. Play state, time and scores
-/// come from the mode's state as this peer knows it; the rest are world facts.
+/// come from the mode's state as this peer knows it; the rest are world facts. Lists are indexed, never enumerated
+/// through their interface, so a brain's tick allocates nothing.
 /// </summary>
 public interface IBotWorld
 {
@@ -24,9 +25,13 @@ public interface IBotWorld
     double LastHitTime { get; }
     /// <summary>Actor id of the last shooter, independent of its owning peer.</summary>
     int LastHitBy { get; }
-    IEnumerable<PlayerCharacter> RemoteBodies { get; }
+    /// <summary>Every other actor in play.</summary>
+    IReadOnlyList<PlayerCharacter> RemoteBodies { get; }
     IReadOnlyList<AmmoPickup> Pickups { get; }
-    IEnumerable<PropaneTank> LiveTanks { get; }
+    /// <summary>What every bot of this peer in this world shares this tick: tanks, hazards, navigation.</summary>
+    BotServices Services { get; }
+    /// <summary>The tanks in play this tick.</summary>
+    IReadOnlyList<PropaneTank> LiveTanks => Services.Tanks;
     /// <summary>
     /// The mode's rules as this peer runs them, for policies that read mode-specific state (a boundary), or null
     /// where the peer does not run them. Only the Lab's prototype runner supplies them.
@@ -39,15 +44,29 @@ public interface IBotWorld
     /// in a match; null when the mode has none or none has arrived yet.
     /// </summary>
     IModeView? View => null;
+    /// <summary>King's zone and clocks without constructing a mode snapshot for each thought.</summary>
+    KingBotView? King
+    {
+        get
+        {
+            if (Rules is KingRules rules) return KingBotView.Read(rules, Clock);
+            return View is KingState state ? KingBotView.Read(state, state.Elapsed) : null;
+        }
+    }
 }
 
 /// <summary>
 /// A mode's bot goal policy: it picks goals from mode state and world facts, and the shared navigation
-/// (<see cref="Navigation.BotNavigator"/>) and aiming (<see cref="BotAim"/>) turn them into intent.
+/// (<see cref="Navigation.BotNavigator"/>) and aiming (<see cref="BotAim"/>) turn them into intent. Its owner calls
+/// <see cref="Think"/> every physics tick, after starting the tick on the world's <see cref="BotServices"/>.
 /// </summary>
 public interface IBotGoalPolicy : IPlayerInputSource, System.IDisposable
 {
+    /// <summary>What the bot is doing, for logs. Formatted when read, so a tick costs no string.</summary>
     string Status { get; }
+    string NavigationDiagnostics => "";
     float Skill { get; set; }
+    /// <summary>Reserves the brain and navigation buffers before the first physics tick.</summary>
+    void Prepare(IBotWorld world) { }
     void Think(IBotWorld world, float dt);
 }

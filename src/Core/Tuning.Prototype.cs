@@ -6,7 +6,7 @@ namespace Propane.Core;
 // the other prototypes and Lab-only layout dials remain local. Layout dials apply on reset.
 public partial class Tuning
 {
-    [LabDial(1, 5)] public int LabPrototypeBots { get; set; } = 3;
+    [LabDial(1, 15)] public int LabPrototypeBots { get; set; } = 3;
     [LabDial(0.5, 6, 0.5)] public float LabWarningPulseHz { get; set; } = 2f;
 
     // Ring Out: the slab, its dissolving rim, and when a fall counts.
