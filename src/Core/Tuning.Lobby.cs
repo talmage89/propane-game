@@ -23,7 +23,7 @@ public partial class Tuning
     [Export(PropertyHint.Range, "1,20,0.5")] public float LobbyPileReach { get; set; } = 4f;
     /// <summary>Open ground kept around a refilled pile; players stay twice this far from it.</summary>
     [Export(PropertyHint.Range, "0.2,3,0.1")] public float LobbyPileClearance { get; set; } = 1f;
-    /// <summary>No pile refills while this many tanks are already loose in the world (venting strays included).</summary>
+    /// <summary>No pile refills when its tanks would take the world past this many (venting strays included).</summary>
     [Export(PropertyHint.Range, "10,400,5")] public int LobbyTankLimit { get; set; } = 120;
     /// <summary>How long a refilled pile takes to materialize.</summary>
     [Export(PropertyHint.Range, "0.2,4,0.1")] public float LobbyMaterializeSeconds { get; set; } = 1.2f;

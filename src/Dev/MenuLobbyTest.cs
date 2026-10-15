@@ -9,10 +9,11 @@ namespace Propane.Dev;
 
 /// <summary>
 /// <c>menu_test --scenario=lobby</c>: the lobby world through the real front end. Hosting and creating a lobby enters
-/// its world; Tab opens the panel docked beside it and Esc closes it; a second client's player arrives and leaves; a
-/// bot added in the panel roams; the creator's start stages a countdown everyone sees, which can be taken back; the
-/// match loads and, after its results, everyone is back in a new world. Run rendered with <c>--capture-dir</c> for the
-/// review captures; it also runs headlessly.
+/// its world; Tab or View opens the panel docked beside it, and Esc, B or its Close button closes it, with its settings
+/// set by keyboard, controller and mouse; a second client's player arrives and leaves; a bot added in the panel roams;
+/// the creator's start stages a countdown everyone sees, which Esc or B takes back; the match loads and, after its
+/// results, everyone is back in a new world. Run rendered with <c>--capture-dir</c> for the review captures; it also
+/// runs headlessly.
 /// </summary>
 public partial class MenuGamepadTest
 {
@@ -53,6 +54,22 @@ public partial class MenuGamepadTest
         await Wait(() => Net.Lobby!.Mode.TankSupply == 2, "the creator changes tank supply from the panel").ConfigureAwait(true);
         await Tap(Key.Escape).ConfigureAwait(true);
         await Wait(() => Menus.Current == Menus.Screen.None && !world.PanelOpen, "Esc closes the panel").ConfigureAwait(true);
+        CheckMouse(Input.MouseModeEnum.Captured);
+
+        // The same by controller (View opens it, the D-pad sets, B closes) and by mouse (its buttons and Close).
+        await Press(JoyButton.Back).ConfigureAwait(true);
+        await Wait(() => Menus.Current == Menus.Screen.Lobby && Menus.Docked && world.PanelOpen, "View opens the docked panel").ConfigureAwait(true);
+        await Navigate("tank_supply").ConfigureAwait(true);
+        await Press(JoyButton.DpadRight).ConfigureAwait(true);
+        await Wait(() => Net.Lobby!.Mode.TankSupply == 3, "the D-pad changes tank supply").ConfigureAwait(true);
+        await Press(JoyButton.B).ConfigureAwait(true);
+        await Wait(() => Menus.Current == Menus.Screen.None && !world.PanelOpen, "B closes the panel").ConfigureAwait(true);
+        await Tap(Key.Tab).ConfigureAwait(true);
+        await Wait(() => Menus.Current == Menus.Screen.Lobby && Menus.Docked, "Tab reopens the panel").ConfigureAwait(true);
+        await KingClick("tank_less").ConfigureAwait(true);
+        await Wait(() => Net.Lobby!.Mode.TankSupply == 2, "a click changes tank supply").ConfigureAwait(true);
+        await KingClick("close_panel").ConfigureAwait(true);
+        await Wait(() => Menus.Current == Menus.Screen.None && !world.PanelOpen, "Close closes the panel").ConfigureAwait(true);
         CheckMouse(Input.MouseModeEnum.Captured);
 
         // A second player joins the world (a guest that builds nothing: its character stands where it arrives).
@@ -96,6 +113,13 @@ public partial class MenuGamepadTest
         await Tap(Key.Escape).ConfigureAwait(true);
         await Wait(() => Net.Lobby!.Phase == LobbyServer.LobbyPhase.Waiting && !Stage.Visible, "Esc takes the start back").ConfigureAwait(true);
         await Wait(() => world.Session.OwnedActors.All(a => !a.Character.InputLocked), "roaming resumes").ConfigureAwait(true);
+        await Press(JoyButton.Back).ConfigureAwait(true);
+        await Wait(() => Menus.Current == Menus.Screen.Lobby && Menus.Docked, "View opens the panel to start").ConfigureAwait(true);
+        await Navigate("Start match").ConfigureAwait(true);
+        await Press(JoyButton.A).ConfigureAwait(true);
+        await Wait(() => Net.Lobby!.Phase == LobbyServer.LobbyPhase.Staging && Stage.Visible, "A starts from the panel").ConfigureAwait(true);
+        await Press(JoyButton.B).ConfigureAwait(true);
+        await Wait(() => Net.Lobby!.Phase == LobbyServer.LobbyPhase.Waiting && !Stage.Visible, "B takes the start back").ConfigureAwait(true);
         await Tap(Key.Tab).ConfigureAwait(true);
         await Wait(() => Menus.Current == Menus.Screen.Lobby && Menus.Docked, "panel opens to start again").ConfigureAwait(true);
         await KeyFocus("Start match").ConfigureAwait(true);

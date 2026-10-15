@@ -35,10 +35,11 @@ the Lab duel; [modes.md](modes.md) describes the framework, the spill tickets an
 
 1. **Main menu:** single player (the sandbox), multiplayer or quit.
 2. **Multiplayer:** the player connects to a server, then creates a lobby or joins an existing one.
-3. **Lobby:** each player sets a name and color and may add bots. The creator chooses Tank Bank (default) or King of the Cul-de-sac, its length, **Tank supply** (every integer from 1× to 8×, default 1×) and, for King, mint pace, then starts. Everyone sees supply; only the waiting creator can change it.
-4. **Match start:** the server sends the suburb's plan. Each client builds it, it materializes as in single player, and play begins when the timer starts.
-5. **Match:** runs for the lobby's match length.
-6. **End:** a results screen, then back to the lobby.
+3. **Lobby:** joining puts the player in the lobby's [world](#lobby-world-a12-unreleased-protocol-3), a void where everyone who joined roams, shoots and throws tanks while waiting. Its panel (Tab, or View on a controller) holds the lobby: each player sets a name and color and may add bots. The creator chooses Tank Bank (default) or King of the Cul-de-sac, its length, **Tank supply** (every integer from 1× to 8×, default 1×) and, for King, mint pace, then starts. Everyone sees supply; only the waiting creator can change it.
+4. **Stage:** the stage screen shows the coming mode, its settings and everyone's card over the washed-out world and counts down `LobbyStageTime` (5 s); the creator can take the start back. Then the world goes.
+5. **Match start:** the server sends the suburb's plan. Each client builds it, it materializes as in single player, and play begins when the timer starts.
+6. **Match:** runs for the lobby's match length.
+7. **End:** a results screen, then everyone is back in a fresh lobby world, membership kept.
 
 The server waits up to 20 seconds for loading acknowledgments before counting down anyway. The client's connection
 buffers every current-match event until the match scene has initialized its bodies and HUD, then replays them in
@@ -271,9 +272,9 @@ pushes or chain contacts; `scenes/dev/blast_query_tests.tscn` checks 1,100 bodie
 
 - **Main menu:** Single player, Multiplayer, Quit. Single player is the sandbox as before; its pause menu gains a Main menu button.
 - **Multiplayer:** (or start the game with `-- --connect=host[:port]`) type a name and the server's address (`host` or `host:port`; the port defaults to 24680, UDP). **Host on this computer** runs a server inside the game and joins it, for playing without a dedicated server; the lobby screens then show the addresses others can connect to.
-- **Lobbies:** create one or join one from the list (lobbies in a match can't be joined). In the lobby, everyone picks a name and any color and may add bots, and the creator sets mode, length and King mint pace, then presses Start. A release build needs two actors (players or bots) to start; a debug build may start alone, for testing.
+- **Lobbies:** create one or join one from the list (lobbies in a match can't be joined). Joining puts you in the lobby world; Tab (View on a controller) opens the lobby panel beside it, and Esc, B or Close puts it away. In the panel, everyone picks a name and any color and may add bots, and the creator sets mode, length and King mint pace, then presses Start. A release build needs two actors (players or bots) to start; a debug build may start alone, for testing.
 - **In a match:** the clock and the tanks you have banked are at the top, ammo at the bottom right. R reloads (an empty magazine also reloads on the next trigger pull). Walking over an ammo can takes it, unless the reserve is full. Esc or Start / Options opens the controls with Resume, Leave match and Quit; the match keeps running behind it. Leaving a match also leaves the lobby.
-- **After a match:** the results show for `ResultsTime`, then everyone is back in the lobby, ready for another.
+- **After a match:** the results show for `ResultsTime`, then everyone is back in the lobby world, ready for another.
 
 ## Playing against bots
 
@@ -335,6 +336,7 @@ The server is the game itself started with `-- --server` (and `--headless`). It 
 | --- | --- |
 | `src/Main.cs` | The root scene: menus over a backdrop, single player, the match, or server mode. |
 | `src/Net/LobbyServer.cs` | The server: lobbies, match flow and clock, relaying, first-claim ties, pickups. |
+| `src/Net/LobbyServer.World.cs`, `LobbyWire.cs`, `Match.Lobby.cs`, `src/Modes/LobbyRules.cs` | The lobby world: the server's run, its pile stock, a peer's world, and its pure rules. |
 | `src/Net/ModeRunner.cs`, `ModeEnvelope.cs`, `src/Modes` | The mode runner, the fixed mode envelope and pure mode rules ([modes.md](modes.md)). |
 | `src/Net/NetClient.cs`, `NetTransport.cs`, `Protocol.cs` | The client connection, the ENet adapter, the message types. |
 | `src/Net/IPacketTransport.cs`, `ProtocolPeerMap.cs`, `PacketTransports.cs`, `FaultPacketTransport.cs` | Message transport contract, Protocol 2 identity bridge/backend selection, deterministic network faults. |
@@ -347,6 +349,7 @@ The server is the game itself started with `-- --server` (and `--headless`). It 
 | `src/Net/PlanCodec.cs` | Packs a suburb plan for sending. |
 | `src/Net/AmmoPickup.cs` | The ammo can and its build-up reveal. |
 | `src/UI/Menus.cs`, `MatchHud.cs`, `MatchMenu.cs`, `ResultsScreen.cs` | Front end, match HUD, pause menu, results. |
+| `src/UI/StageScreen.cs`, `LobbyCard.cs`, `src/Fx/LobbyFloor.cs` | The lobby world's stage screen, its lobby card and its floor (pads, ring, title). |
 
 ### Transport contract
 
