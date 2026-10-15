@@ -28,6 +28,7 @@ namespace Propane.Dev;
 public partial class NetTest : Node
 {
     private IBotBrain bot = null!;
+    private BotActivity playerActivity = new();
     private NetClient net = null!;
     private Match? match;
     private long matchAllocated;
@@ -210,6 +211,7 @@ public partial class NetTest : Node
                         Log(FormattableString.Invariant($"bot navigation budget: ticks={saturation.Ticks} query_limited={saturation.QueryLimited * 100.0 / saturation.Ticks:0.0}% expansion_limited={saturation.ExpansionLimited * 100.0 / saturation.Ticks:0.0}%"));
                     LogBotActivity(match);
                 }
+                if (playerActivity.Windows > 0) Log($"player bot activity: {playerActivity.Report()}");
                 if (DevArgs.Get("frame-metrics") != null)
                 {
                     Log(FormattableString.Invariant($"match gc: allocated_bytes={GC.GetTotalAllocatedBytes() - matchAllocated} pause_ms={(GC.GetTotalPauseDuration() - matchGcPause).TotalMilliseconds:F3} collections={GC.CollectionCount(0) - matchCollections[0]}/{GC.CollectionCount(1) - matchCollections[1]}/{GC.CollectionCount(2) - matchCollections[2]}"));
@@ -285,6 +287,7 @@ public partial class NetTest : Node
                 };
             }
             match.Player.InputOverride = bot;
+            playerActivity = new BotActivity();
             if (DisplayServer.GetName() == "headless")
             {
                 ScenarioAssert(match.Session.LocalViews.Count == 0 && match.FindChildren("*", "Camera3D", owned: false).Count == 0,
@@ -486,6 +489,7 @@ public partial class NetTest : Node
         else if (DevArgs.Get("human") != "idle") // --human=idle: a still player, so frame costs measure lobby bots alone.
         {
             bot.Think(match, dt);
+            if (bot is Bot policy) playerActivity.Sample(match.IsPlaying, match.Player, policy.Policy, match.BotKing, dt);
             if (DevArgs.Get("bot-log") != null && Mathf.PosMod(clock, 2f) < dt)
             {
                 Log($"bot: {bot.Status}" + (bot is Bot smart ? $"; stuck={smart.StuckEvents} blacklist={smart.BlacklistedTargets} replans={smart.Replans} jumps={smart.Jumps}" : ""));
