@@ -156,6 +156,10 @@ chain and one push), segments built and retired, and the result paused on the co
 runs (`dissolve-full`: the bot on two seeds; `dissolve-pace`: a pacer that runs down the street without bot navigation,
 so its frame times measure the stream rather than the bot), which also require the live segments, their nodes and bodies
 and the whole tree's nodes to stay bounded (the last third of the run holding no more than the first third, give or take).
+The dial sweep locks actor input while gravity settles before and after each reset. Its floor/fixture assertions
+check layout and retirement; active bot combat (including Hard's immediate banking) is covered by the duel,
+prototype rounds and points sweep. A valid early blast or hitstop must not masquerade as a failed reset.
+
 Two idle checks keep crowds of bots playing: `idle-bank` (a 40-second suburb soak with eight bots) and `idle-king` (a
 45-second suburb King round with sixteen bots). Every Lab bot run prints `[lab idle]` lines: each bot's idle share (see
 [bot navigation](bot-navigation.md#idle-bots)), its longest idle run and its commonest statuses; `--max-idle=F` and

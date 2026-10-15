@@ -176,10 +176,15 @@ public partial class LabTest : Node
                     AddChild(lab);
                     var label = $"{scenario.Id}/{environment} with {name}";
                     Assert(lab.Initialized && lab.LiveTanks.Any(), $"{label} built no fixture");
+                    // This checks layout/retirement, not combat: Hard can detonate a pile before the actors have
+                    // settled, triggering hitstop or a throw during the fixed grounding window. Keep gravity and
+                    // collisions live, but hold every actor's input on both sides of the reset.
+                    foreach (var actor in lab.Session.Actors) actor.Character.InputLocked = true;
                     await Frames(20).ConfigureAwait(true);
                     lab.Reset();
+                    foreach (var actor in lab.Session.Actors) actor.Character.InputLocked = true;
                     await Frames(10).ConfigureAwait(true);
-                    Assert(lab.Player.IsOnFloor() && lab.LiveTanks.Any(), $"{label} did not survive a reset");
+                    Assert(lab.Player.IsOnFloor() && lab.LiveTanks.Any(), $"{label} did not survive a reset: floor={lab.Player.IsOnFloor()} down={lab.Player.IsRagdolled} position={lab.Player.GlobalPosition} tanks={lab.LiveTanks.Count()} policy={lab.Prototype?.BotStatus(1)}");
                     lab.Session.Dispose(); lab.Free();
                 }
             }
