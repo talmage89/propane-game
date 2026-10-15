@@ -270,7 +270,8 @@ public partial class Match : Node3D
         var camera = player.View.CameraRig.Camera;
         var viewportHeight = GetViewport().GetVisibleRect().Size.Y;
         var radius = Mathf.Tan(Mathf.DegToRad(player.SpreadDegrees)) / Mathf.Tan(Mathf.DegToRad(camera.Fov / 2f)) * viewportHeight / 2f;
-        var menuOpen = menu.Visible || tuningPanel?.Visible == true;
+        // The lobby world's stage screen stands in for the HUD: no tags, notices or crosshair through its lineup.
+        var menuOpen = menu.Visible || tuningPanel?.Visible == true || lobbyStaged;
         hud.SetCrosshair(radius, !player.IsRagdolled && Input.MouseMode == Input.MouseModeEnum.Captured && phase != Phase.Ended, player.AimAmount);
 
         groupRefresh -= dt;

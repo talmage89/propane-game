@@ -127,7 +127,8 @@ public partial class StageScreen : CanvasLayer
         var target = moment == Moment.Loading ? 1f : 0.62f;
         wash.Color = new Color(0.96f, 0.96f, 0.97f, Mathf.Lerp(0, target, Mathf.Clamp(age / 0.35f, 0, 1)));
         band.Size = new Vector2(size.X * Mathf.Clamp(age / 0.5f, 0, 1), 6);
-        band.Position = new Vector2(0, size.Y * 0.5f - 300);
+        // The accent sweeps in just above the lineup's heading, however tall the lineup grows.
+        band.Position = new Vector2(0, layout.GetGlobalRect().Position.Y - 24);
         pop = Mathf.MoveToward(pop, 0, dt * 2.5f);
         count.Scale = Vector2.One * (1f + pop * pop * 0.35f);
         if (moment == Moment.Countdown)
