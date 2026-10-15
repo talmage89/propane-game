@@ -13,7 +13,7 @@ public partial class Tuning
     [Export(PropertyHint.Range, "0,30,0.5")] public float BotKingRaidMin { get; set; } = 6f;
     [Export(PropertyHint.Range, "0,30,0.5")] public float BotKingRaidMax { get; set; } = 14f;
     // Additional waiting per rival: large rosters should not all charge back at the same cadence.
-    [Export(PropertyHint.Range, "0,2,0.1")] public float BotKingCrowdScale { get; set; } = 0.15f;
+    [Export(PropertyHint.Range, "0,2,0.05")] public float BotKingCrowdScale { get; set; } = 0.15f;
 
     // Local brain dials deliberately have no Export attribute: ValueNames/Snapshot must remain unchanged for
     // patch compatibility. DevArgs --tune.Bot... and C# callers can tune them. The difficulty profiles below are
