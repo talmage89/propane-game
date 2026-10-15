@@ -44,7 +44,20 @@ brain, which temporarily excludes the target (including ammo) and chooses anothe
 inactive matches clear recovery state. An unavailable shooting position can still exclude a tank before travel.
 Prototype motors retain a bounded direct walking attempt after `BotDirectStallTime` without progress greater than
 `BotDirectProgressDistance`. It lasts `BotDirectTime`, respects live tank clearance and the mode's ground limit,
-and never interrupts a committed jump. The player controller still resolves solid collisions.
+and never interrupts a committed jump or a running route search (restarting a search spread over ticks meant a far
+one never finished). The player controller still resolves solid collisions.
+
+A search that cannot reach its goal, because it is walled off, inside a clearance or beyond `BotSearchBudget`, still
+yields a partial route to the explored point nearest the goal when that point is at least `BotPartialRouteGain` meters
+nearer than the start; after `BotPartialSearchExpansions` expansions a search that has such a point settles for it.
+Nearing the end of a partial route, the bot searches again from where it walks, and keeps walking meanwhile. When a goal
+moves, the bot keeps following its previous route (never a jump) while the new search runs (`BotReplanWhileMoving`). A
+search that fails after at most `BotIslandExpansions` expansions started on ground the lattice has no way off (a car
+roof, debris): once per goal the bot steps straight toward it for `BotDirectTime`, within the hazards. A bot already
+inside overlapping clearance circles may walk anywhere that lies no deeper in them in total, so it can leave a pile even
+when every way out passes nearer one tank; it never enters a circle it started outside. Brains choose fixed goals for
+escapes (a venting tank) and vantage points outside every hazard, so a goal does not drift with the bot or lie where no
+route can end.
 
 `Tuning.Bot...` exposes route spacing/search budget, progress window/distance, retries, waypoint/goal radii,
 validation interval, jump clearance/cost, turning, sprint distance, hazard clearance, target retry time, and aim
@@ -88,8 +101,10 @@ indexed during roster setup, preserving standing and ragdoll ownership without w
 King brains read a small value view of the rules or received zone at the owner's clock; they do not construct the
 HUD/wire snapshot or its minted roster for each thought.
 With at least `BotKingRegroupPlayers` actors, a King bot knocked down in the crowd regroups outside the zone for
-a seeded interval between `BotKingRegroupMin` and `BotKingRegroupMax`, then returns. Immediate synchronized
-reentry kept sixteen bots shoving indefinitely without a lone holder; minting and combat rules stay unchanged.
+a seeded interval between `BotKingRegroupMin` and `BotKingRegroupMax` (3–12 s), then returns. Immediate synchronized
+reentry kept sixteen bots shoving indefinitely without a lone holder; minting and combat rules stay unchanged. While
+it regroups it keeps playing from the edge: it shoots the nearest rival within 22 m that has a bank to spill, else banks
+a tank in sight, and walks the zone's edge `BotKingRegroupStep` meters at a time instead of standing at one point.
 
 `Plan` is synchronous for tests/offline callers. The grid supports horizontal ground and ballistic jumps, rather
 than general stairs or roofs. Navigation caching and these local bot dials change no player physics, match
@@ -142,3 +157,15 @@ Sampled whole-client physics times fell from a 2761 ms maximum before budgeting 
 13 and 10 ms. These are sparse samples under shared machine load, not isolated navigation benchmarks or a bound
 on frame time. The asserted per-tick expansion limit is the stronger evidence for bounded search work.
 Windows and macOS were not exercised here.
+
+## Idle bots
+
+`BotActivity` measures whether a bot plays. Play is cut into one-second windows; a window is idle when the bot stayed
+upright, ended it less than a meter from where it began, and neither fired, meleed nor stood in King's zone. It counts
+idle windows (and the blocked ones, in which the bot asked to move most of the time), the longest idle run and the time
+in each status (by its format, `IBotGoalPolicy.StatusKind`). Owners sample their bots after thinking, outside the
+measured brain cost. `net_test` logs `bot activity` per owned bot and a `bot idle:` summary at the end of a match, and
+`bot navigation budget:` (how many ticks waited on the shared query or expansion budget); the Lab prints `[lab idle]`
+and gates it ([lab.md](lab.md)). Measurements before and after the fixes above are in
+[bot-scale.md](bot-scale.md#idle-bots).
+

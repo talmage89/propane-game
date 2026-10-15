@@ -45,6 +45,13 @@ public sealed class BotNavigator
     private bool sawAir;
     private bool preparing;
     private bool runwayChosen;
+    // The route ends short of the goal, at the nearest point the search reached; search again from there.
+    private bool partialRoute;
+    // A search for a moved goal is running while the bot keeps following its previous route.
+    private bool replanning;
+    // Seconds left stepping straight toward the goal off a spot the lattice has no way out of (a car roof, debris).
+    private float island;
+    private bool islandTried;
     private int preparedBudget;
     private NavigationGrid? activeGrid;
 
@@ -59,8 +66,8 @@ public sealed class BotNavigator
         route.Clear();
         searching = false;
         avoided.Clear();
-        hasGoal = flying = sawAir = preparing = runwayChosen = false;
-        progressTime = validationTime = retryTime = 0;
+        hasGoal = flying = sawAir = preparing = runwayChosen = partialRoute = replanning = islandTried = false;
+        progressTime = validationTime = retryTime = island = 0;
         retries = 0;
         direction = Vector3.Zero;
     }
@@ -122,10 +129,13 @@ public sealed class BotNavigator
         }
         if (!hasGoal || Flat(goal - requestedGoal).Length() > tuning.BotRouteSpacing)
         {
+            // Keep walking the previous route (never a jump) while the new search runs, instead of standing still.
+            replanning = hasGoal && route.Count > 0 && !route[0].Jump && tuning.BotReplanWhileMoving;
+            if (!replanning) route.Clear();
             goal = requestedGoal;
             hasGoal = true;
-            route.Clear();
             searching = false;
+            partialRoute = islandTried = false;
             runwayChosen = false;
             avoided.Clear();
             retries = 0;
@@ -141,6 +151,18 @@ public sealed class BotNavigator
             return new NavigationIntent(Vector3.Zero, false, false, true, false);
         }
 
+        if (island > 0)
+        {
+            island -= dt;
+            var off = Flat(goal - state.Position).Normalized();
+            if (hazards.SafeAlong(state.Position, state.Position + off * grid.Spacing, grid.Capabilities.Radius, state.Position) &&
+                AreaAllowsAlong(area, state.Position, state.Position + off * grid.Spacing, grid.Capabilities.Radius))
+            {
+                direction = off;
+                return new NavigationIntent(off, false, false, false, false);
+            }
+            island = 0;
+        }
         var layer = grid.LayerAt(state.Position.Y);
         if (!searching) { progressTime += dt; }
         if (progressTime >= tuning.BotProgressWindow)
@@ -164,29 +186,54 @@ public sealed class BotNavigator
             return new NavigationIntent(Vector3.Zero, false, false, false, true);
         }
         retryTime -= dt;
-        if (route.Count == 0)
+        if (replanning && (route.Count == 0 || route[0].Jump)) { replanning = false; route.Clear(); }
+        if (route.Count == 0 || replanning)
         {
-            if (retryTime > 0) { return new NavigationIntent(Vector3.Zero, false, false, false, false); }
+            if (!replanning && retryTime > 0) { return new NavigationIntent(Vector3.Zero, false, false, false, false); }
             if (!searching)
             {
                 Replans++;
-                runwayChosen = false;
+                if (!replanning) runwayChosen = false;
                 searching = true;
-                search.Start(layer, state.Position, goal, avoided);
+                search.Start(layer, state.Position, goal, avoided, tuning.BotPartialRouteGain);
             }
             search.Advance(grid, hazards, area, tuning, tuning.BotSearchPerTick);
-            if (!search.Complete) { return new NavigationIntent(Vector3.Zero, false, false, false, false); }
-            searching = false;
-            route.AddRange(search.Result);
-            progressTime = 0;
-            progressPosition = state.Position;
-            validationTime = 0; // Recheck against the current world after a multi-tick search.
-            if (route.Count == 0)
+            if (search.Complete)
             {
-                retries++;
-                retryTime = tuning.BotReplanInterval;
-                return new NavigationIntent(Vector3.Zero, false, false, false, retries >= tuning.BotRouteRetries);
+                searching = replanning = false;
+                runwayChosen = false;
+                route.Clear();
+                route.AddRange(search.Result);
+                partialRoute = search.Partial;
+                progressTime = 0;
+                progressPosition = state.Position;
+                validationTime = 0; // Recheck against the current world after a multi-tick search.
+                if (route.Count == 0)
+                {
+                    retries++;
+                    retryTime = tuning.BotReplanInterval;
+                    if (!islandTried && search.Expansions <= tuning.BotIslandExpansions)
+                    {
+                        islandTried = true;
+                        island = tuning.BotDirectTime;
+                    }
+                    return new NavigationIntent(Vector3.Zero, false, false, false, retries >= tuning.BotRouteRetries);
+                }
             }
+            else if (!replanning) { return new NavigationIntent(Vector3.Zero, false, false, false, false); }
+        }
+
+        if (partialRoute && route.Count == 1 && !route[0].Jump && Flat(route[0].To - state.Position).Length() < tuning.BotWaypointRadius * 2)
+        {
+            // The end of a partial route: wait here for the search looking further (or start it).
+            route.Clear();
+            partialRoute = replanning = false;
+            return new NavigationIntent(Vector3.Zero, false, false, false, false);
+        }
+        if (partialRoute && !searching && Flat(route[^1].To - state.Position).Length() < tuning.BotRouteSpacing * 4)
+        {
+            // Nearing the end of a partial route: look further from here while still walking it.
+            replanning = true;
         }
 
         while (route.Count > 1 && !route[0].Jump && Flat(route[0].To - state.Position).Length() < tuning.BotWaypointRadius)
@@ -272,6 +319,9 @@ public sealed class BotNavigator
     }
 
     public bool Jumping => flying || route.Count > 0 && route[0].Jump;
+
+    /// <summary>A route search is running and there is no route to walk meanwhile.</summary>
+    public bool AwaitingRoute => searching && route.Count == 0;
 
     /// <summary>
     /// Skips walk-only corners when the body can reach further along the route in a straight line. Never skips a
@@ -372,9 +422,17 @@ public sealed class BotNavigator
         private int expansions;
         private int stage;
         private int seed;
+        private long best;
+        private float bestDistance;
+        private float partialGain;
 
         public string Diagnostics => $"stage{stage}/nodes{nodes.Count}/expansions{expansions}";
+        public int Expansions => expansions;
+        /// <summary>Partial routes are allowed and the nearest explored point is enough nearer the goal than the start.</summary>
+        private bool Gained => partialGain > 0 && best != Origin && bestDistance <= Flat(start - goal).Length() - partialGain;
         public bool Complete { get; private set; }
+        /// <summary>The result ends at the explored point nearest the goal, which the search could not reach.</summary>
+        public bool Partial { get; private set; }
         public List<NavigationStep> Result { get; } = new();
 
         private static long Key(Vector2I cell) => ((long)cell.X << 32) | (uint)cell.Y;
@@ -391,7 +449,11 @@ public sealed class BotNavigator
             avoided.EnsureCapacity(budget + 2);
         }
 
-        public void Start(NavigationGrid.Layer on, Vector3 from, Vector3 to, List<Vector3> avoid)
+        /// <summary>
+        /// Starts a search. With a positive <paramref name="partial"/>, a goal it cannot reach still yields a route to
+        /// the explored point nearest the goal, when that point is at least this much nearer than the start.
+        /// </summary>
+        public void Start(NavigationGrid.Layer on, Vector3 from, Vector3 to, List<Vector3> avoid, float partial = 0)
         {
             layer = on;
             start = from;
@@ -403,7 +465,10 @@ public sealed class BotNavigator
             nodes.Clear();
             Result.Clear();
             expansions = stage = seed = 0;
-            Complete = false;
+            Complete = Partial = false;
+            best = Origin;
+            bestDistance = Flat(from - goal).Length();
+            partialGain = partial;
         }
 
         public void Advance(NavigationGrid grid, NavigationHazards hazards, INavigationArea? area, Tuning tuning, int budget)
@@ -416,6 +481,12 @@ public sealed class BotNavigator
             var spacing = grid.Spacing;
             var radius = grid.Capabilities.Radius;
             var speed = grid.Capabilities.Speed;
+            if (Gained && tuning.BotPartialSearchExpansions > 0 && expansions >= tuning.BotPartialSearchExpansions)
+            {
+                // A far goal need not wait for the whole search: walk to the nearest point found so far, then look again.
+                Finish(grid, best, partial: true);
+                return;
+            }
             if (stage == 0)
             {
                 // Straight there, if nothing is in the way.
@@ -485,8 +556,15 @@ public sealed class BotNavigator
                 node.Closed = true;
                 nodes[key] = node;
                 expansions++;
+                var remaining = Flat(from - goal).Length();
+                if (remaining < bestDistance)
+                {
+                    bestDistance = remaining;
+                    best = key;
+                }
             }
             Complete = frontier.Count == 0 || expansions >= tuning.BotSearchBudget;
+            if (Complete && Gained) Finish(grid, best, partial: true);
         }
 
         /// <summary>Relaxes one link; false when an answer is pending on the budget.</summary>
@@ -543,9 +621,10 @@ public sealed class BotNavigator
             return grid.WalkSegment(layer, from, to);
         }
 
-        private void Finish(NavigationGrid grid, long key)
+        private void Finish(NavigationGrid grid, long key, bool partial = false)
         {
-            Result.Add(new NavigationStep(grid.Point(layer, Cell(key)), goal, false));
+            Partial = partial;
+            if (!partial) Result.Add(new NavigationStep(grid.Point(layer, Cell(key)), goal, false));
             while (true)
             {
                 var node = nodes[key];

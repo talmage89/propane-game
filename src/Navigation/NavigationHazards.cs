@@ -83,24 +83,42 @@ public sealed class NavigationHazards
     }
 
     /// <summary>
-    /// Outside every circle. With <paramref name="escapeFrom"/>, a point inside one is still safe if it is no closer
-    /// to that circle's center than <paramref name="escapeFrom"/> is: a bot already in danger must be able to walk out.
+    /// Outside every circle. With <paramref name="escapeFrom"/>, a point inside circles that also hold
+    /// <paramref name="escapeFrom"/> is still safe if it lies no deeper in them, in all, than <paramref name="escapeFrom"/>
+    /// does: a bot already in danger must be able to walk out, even from between overlapping circles where every way
+    /// out passes nearer one of their centers. A circle that does not hold <paramref name="escapeFrom"/> is never entered.
     /// </summary>
     public bool Safe(Vector3 point, Vector3? escapeFrom = null)
     {
+        var depth = 0f;
         for (var i = BucketAt(point.X, point.Z); i >= 0; i = entries[i].Next)
         {
             var h = hazards[entries[i].Hazard];
-            var dx = point.X - h.Center.X;
-            var dz = point.Z - h.Center.Z;
-            var d = dx * dx + dz * dz;
-            if (d >= h.Radius * h.Radius) continue;
-            if (escapeFrom is not { } escape) return false;
-            var ex = escape.X - h.Center.X;
-            var ez = escape.Z - h.Center.Z;
-            if (d + 0.001f < ex * ex + ez * ez) return false;
+            var d = Distance(point, h.Center);
+            if (d >= h.Radius) continue;
+            if (escapeFrom is not { } escape || Distance(escape, h.Center) >= h.Radius) return false;
+            depth += h.Radius - d;
         }
-        return true;
+        return depth == 0 || depth <= Depth(escapeFrom!.Value) + 0.001f;
+    }
+
+    /// <summary>How deep a point lies in all the circles that hold it.</summary>
+    private float Depth(Vector3 point)
+    {
+        var depth = 0f;
+        for (var i = BucketAt(point.X, point.Z); i >= 0; i = entries[i].Next)
+        {
+            var h = hazards[entries[i].Hazard];
+            depth += Math.Max(0, h.Radius - Distance(point, h.Center));
+        }
+        return depth;
+    }
+
+    private static float Distance(Vector3 a, Vector3 b)
+    {
+        var dx = a.X - b.X;
+        var dz = a.Z - b.Z;
+        return MathF.Sqrt(dx * dx + dz * dz);
     }
 
     /// <summary>Points every <paramref name="step"/> meters from one end to the other, ends included, are safe.</summary>

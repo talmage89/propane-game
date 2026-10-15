@@ -18,6 +18,7 @@ public partial class Match
     private sealed class OwnedBot(Match match, PlayerCharacter actor, IBotGoalPolicy brain, BotServices services) : IBotWorld
     {
         public readonly List<PlayerCharacter> Others = new();
+        public readonly BotActivity Activity = new();
         public PlayerCharacter Actor => actor;
         public IBotGoalPolicy Brain => brain;
         public WorldContext World => match.World;
@@ -70,6 +71,16 @@ public partial class Match
     internal IBotGoalPolicy? BotBrain(int actorId)
     {
         foreach (var bot in bots) { if (bot.Actor.ActorId == actorId) return bot.Brain; }
+        return null;
+    }
+
+    /// <summary>How often the owned bots' shared navigation budgets ran out (see <see cref="Navigation.NavigationGrid.Saturation"/>).</summary>
+    internal (long Ticks, long QueryLimited, long ExpansionLimited) BotNavigationSaturation => botServices?.Grid?.Saturation ?? default;
+
+    /// <summary>Whether an owned bot actor makes progress, if this peer owns one with that id.</summary>
+    internal BotActivity? BotActivityOf(int actorId)
+    {
+        foreach (var bot in bots) { if (bot.Actor.ActorId == actorId) return bot.Activity; }
         return null;
     }
 
@@ -135,6 +146,7 @@ public partial class Match
         }
         var seconds = Stopwatch.GetElapsedTime(started).TotalSeconds;
         var bytes = System.GC.GetAllocatedBytesForCurrentThread() - allocated;
+        SampleBotActivity(dt);
         if (IsPlaying && ++playingBotTicks > 1200) // Exclude ten simulated seconds of cache/buffer warm-up.
         {
             var warm = WarmBotCost;
@@ -147,5 +159,11 @@ public partial class Match
             cost.Bytes + bytes, cost.Queries + botServices.NavigationQueries - queries,
             cost.Rays + botServices.RayLines - rays,
             cost.NavigationSeconds + (EffectProfile.Enabled ? (EffectProfile.Peek(EffectProfile.System.BotNavigation) - navigation) / 1000 : 0));
+    }
+
+    private void SampleBotActivity(float dt)
+    {
+        var king = BotKing;
+        foreach (var bot in bots) bot.Activity.Sample(IsPlaying, bot.Actor, bot.Brain, king, dt);
     }
 }

@@ -206,6 +206,9 @@ public partial class NetTest : Node
                         if (match.BotBrain(actor.Character.ActorId) is BankingBot bank)
                             Log($"bot navigation {actor.Character.ActorId}: stuck={bank.StuckEvents} blacklist={bank.BlacklistedTargets} replans={bank.Replans} jumps={bank.Jumps}");
                     }
+                    if (match.BotNavigationSaturation is { Ticks: > 0 } saturation)
+                        Log(FormattableString.Invariant($"bot navigation budget: ticks={saturation.Ticks} query_limited={saturation.QueryLimited * 100.0 / saturation.Ticks:0.0}% expansion_limited={saturation.ExpansionLimited * 100.0 / saturation.Ticks:0.0}%"));
+                    LogBotActivity(match);
                 }
                 if (DevArgs.Get("frame-metrics") != null)
                 {
@@ -345,6 +348,24 @@ public partial class NetTest : Node
     }
 
     public override void _ExitTree() => (bot as IDisposable)?.Dispose();
+
+    /// <summary>Each owned bot's idle share and statuses, then the mean and worst share (see <see cref="BotActivity"/>).</summary>
+    private void LogBotActivity(Match match)
+    {
+        double sum = 0, worst = 0;
+        var count = 0;
+        var longest = 0;
+        foreach (var actor in match.Session.OwnedActors)
+        {
+            if (match.BotActivityOf(actor.Character.ActorId) is not { } activity) continue;
+            Log(FormattableString.Invariant($"bot activity {actor.Character.ActorId} skill={match.BotBrain(actor.Character.ActorId)!.Skill:0.0}: {activity.Report()}"));
+            sum += activity.IdleShare;
+            worst = Math.Max(worst, activity.IdleShare);
+            longest = Math.Max(longest, activity.LongestIdle);
+            count++;
+        }
+        if (count > 0) Log(FormattableString.Invariant($"bot idle: bots={count} mean={sum * 100 / count:0.0}% worst={worst * 100:0.0}% longest={longest} s"));
+    }
 
     private void ParseLobbyBots()
     {

@@ -28,13 +28,25 @@ public partial class Tuning
     // Crowded King zones need recovery space: a knocked-down bot briefly regroups outside before returning.
     public int BotKingRegroupPlayers { get; set; } = 8;
     public float BotKingRegroupMin { get; set; } = 3f;
-    public float BotKingRegroupMax { get; set; } = 30f;
+    public float BotKingRegroupMax { get; set; } = 12f;
+    // Meters a regrouping bot moves along the zone's edge before choosing its next point.
+    public float BotKingRegroupStep { get; set; } = 6f;
     // Prototype motors retain their original bounded walking recovery when a planner cannot make progress.
     public float BotDirectStallTime { get; set; } = 1.2f;
     public float BotDirectTime { get; set; } = 1f;
     public float BotDirectProgressDistance { get; set; } = 0.5f;
     // Seconds that navigation answers near an explosion expire while thrown props settle.
     public float BotDisturbSettle { get; set; } = 3f;
+    // A goal the search cannot reach still yields a route to the nearest explored point, when that is at least this
+    // many meters nearer than the start (0: off); the bot searches again from its end.
+    public float BotPartialRouteGain { get; set; } = 3f;
+    // After this many expansions, a search that has found a point that much nearer settles for it (0: never early).
+    public int BotPartialSearchExpansions { get; set; } = 240;
+    // A failed search that expanded no more than this many points started on an island the lattice has no way off
+    // (a car roof, debris): the bot steps straight toward its goal for BotDirectTime.
+    public int BotIslandExpansions { get; set; } = 24;
+    // Keep walking the previous route while the search for a moved goal runs, instead of standing still.
+    public bool BotReplanWhileMoving { get; set; } = true;
     public float BotWaypointRadius { get; set; } = 0.45f;
     public float BotGoalRadius { get; set; } = 0.6f;
     public float BotReplanInterval { get; set; } = 0.4f;

@@ -22,7 +22,7 @@ def argument_parser():
     parser.add_argument('--first-seed', type=int, help='first seed within ringout-full, shortfuse-full or dissolve-full')
     parser.add_argument('--seeds', type=int, help='number of consecutive seeds within that session')
     parser.add_argument('--only', help='comma-separated sessions to run, so make -j can split the list: '
-                        'lifetime, rules, aimstall, duel, ringout, king, shortfuse, shortfuse-combo, dissolve, and with --full dials, soak-void, '
+                        'lifetime, rules, aimstall, duel, ringout, king, shortfuse, shortfuse-combo, dissolve, idle-bank, idle-king, and with --full dials, soak-void, '
                         'soak-suburb, ringout-full, king-full, king-suburb, shortfuse-full, dissolve-full, dissolve-pace')
     return parser
 
@@ -39,7 +39,11 @@ def sessions(full):
                  # The scripted round: a player shot dead spectates, then a blast-then-bullet kill decides it.
                  ('shortfuse-combo', 'shortfuse-combo', []),
                  # A bot runs down Dissolve Run's street, then stops and must be caught; segments build and retire.
-                 ('dissolve', 'dissolve', ['--seconds=45'])]
+                 ('dissolve', 'dissolve', ['--seconds=45']),
+                 # Crowds of bots keep moving: few seconds of play may pass without travel, a shot or a zone held.
+                 ('idle-bank', 'soak', ['--environment=suburb', '--bots=8', '--seconds=40', '--max-idle=0.12', '--max-idle-worst=0.3']),
+                 ('idle-king', 'prototype', ['--mode=king', '--environment=suburb', '--bots=15', '--quick', '--seeds=1', '--first-seed=11',
+                                             '--tune.KingRoundSeconds=45', '--max-idle=0.15', '--max-idle-worst=0.4'])]
     if full:
         scenarios += [('dials', 'dials', []), ('soak-void', 'soak', ['--environment=void']),
                       ('soak-suburb', 'soak', ['--environment=suburb']),

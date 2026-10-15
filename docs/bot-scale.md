@@ -312,3 +312,26 @@ tanks, puncture/vent/chain/detonation, scoring, drops, blast effects, network pa
 and suburb construction are unchanged by this package. `Protocol.Version` remains 3, inherited from hosted
 King on `dev`; no protocol bump is added here. Short Fuse widens only its local crowded-roster start
 assignment using existing minimum spacing; its generated plan and game rules stay intact.
+
+## Idle bots
+
+A playtest found most lobby bots standing still. `BotActivity` ([bot navigation](bot-navigation.md#idle-bots)) measures
+the share of one-second windows of play in which a bot neither moved a meter, fired, meleed nor held King's zone. Lobby
+matches (`net_bots.sh -n 1 -l 60 -k -s --match-seed=S -- --lobby-bots=K`, Normal unless noted) on `01cc0c6` and with
+the fixes, under other agents' load; mean / worst bot:
+
+| Mode, bots, seed | `01cc0c6` | Fixed |
+| --- | ---: | ---: |
+| Tank Bank 8, s21 | 8.5% / 19% | 9.7% / 17% |
+| Tank Bank 15, s21 | 34% / 64% | 19% / 29% |
+| Tank Bank 15, s22 | 47% / 88% | 6.9% / 25% |
+| King 8 Hard, s21 | 35% / 63% | 7.1% / 12% |
+| King 8, s22 | 41% / 63% | 7.8% / 12% |
+| King 15, s21 | 55% / 93% | 11% / 14% |
+
+The Lab gates (`check_lab.py --only=idle-bank,idle-king`) measure 18.5% / 44% and 39% / 66% on `01cc0c6` and
+6% / 13% and 6% / 25% fixed. Before scale-bots (`fe50c1b`) unseeded lobby runs idled about as much in Tank Bank
+(20/25/31% at 4/8/15 bots) and less in King (19/18/27%): King's crowd regroup stood bots outside the zone for up to
+30 s, and stall recovery restarted multi-tick searches until far ones never finished. The older causes were goals no
+route could reach (vantage points inside clearances, tanks beyond the search budget, bots between overlapping
+clearances or on car roofs) and goals that moved with the bot.

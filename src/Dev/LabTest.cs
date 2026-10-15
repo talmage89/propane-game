@@ -283,6 +283,23 @@ public partial class LabTest : Node
         }
     }
 
+    /// <summary>
+    /// Logs each bot's idle share (<see cref="BotActivity"/>); <c>--max-idle=F</c> and <c>--max-idle-worst=F</c> fail the
+    /// run when the bots' mean or worst share exceeds them.
+    /// </summary>
+    private void CheckIdle(string label, IReadOnlyDictionary<int, BotActivity> activity)
+    {
+        if (activity.Count == 0) return;
+        foreach (var (actor, bot) in activity.OrderBy(pair => pair.Key)) GD.Print($"[lab idle] {label} bot {actor}: {bot.Report()}");
+        var mean = activity.Values.Average(bot => bot.IdleShare);
+        var worst = activity.Values.Max(bot => bot.IdleShare);
+        GD.Print(FormattableString.Invariant($"[lab idle] {label}: bots={activity.Count} mean={mean * 100:0.0}% worst={worst * 100:0.0}% longest={activity.Values.Max(bot => bot.LongestIdle)} s"));
+        if (DevArgs.Get("max-idle") != null)
+            Assert(mean <= DevArgs.GetFloat("max-idle", 1), FormattableString.Invariant($"{label}: bots idle {mean * 100:0.0}% of play on average"));
+        if (DevArgs.Get("max-idle-worst") != null)
+            Assert(worst <= DevArgs.GetFloat("max-idle-worst", 1), FormattableString.Invariant($"{label}: a bot idles {worst * 100:0.0}% of play"));
+    }
+
     private async Task Duel(bool soak = false)
     {
         if (DevArgs.Get("duel-seconds") != null) template.LabDuelSeconds = DevArgs.GetFloat("duel-seconds", 180);
@@ -308,6 +325,7 @@ public partial class LabTest : Node
             await Frames(1).ConfigureAwait(true);
         }
         var bank = lab.Bank!;
+        CheckIdle("duel", bank.Activity);
         var botEarned = bank.Earned.Where(s => s.Key != lab.Player.ActorId).Sum(s => s.Value);
         GD.Print($"[lab duel] seconds={seconds} simulation={lab.World.Clock.Now:F3} banked={bank.BankedTotal} spilled={bank.SpilledTotal} hits={bank.Hits} you={bank.Scores[1]} bot={bank.Scores[2]} earned_you={bank.Earned[1]} earned_bot={bank.Earned[2]} live={lab.LiveTanks.Count()} earned_bots={botEarned}");
         // In a larger roster the first rival can finish empty while the other bots bank.
@@ -413,6 +431,7 @@ public partial class LabTest : Node
                 lab.Session.Dispose(); lab.Free();
                 continue;
             }
+            CheckIdle($"{id} seed {seed}", runner.Activity);
             var state = runner.Rules.Snapshot();
             foreach (var line in state.Report) GD.Print($"[lab prototype] {id} seed {seed}: {line.Text}");
             var brains = runner.Thinks / System.Math.Max(1, runner.Elapsed * 120);
