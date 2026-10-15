@@ -503,7 +503,7 @@ public partial class LabTest : Node
         }
         // Bot play, not legality: across full rounds somebody must hold the zone long enough to mint.
         if (id == "king" && DevArgs.Get("quick") == null && DevArgs.Get("compare-points") == null && until == float.MaxValue)
-            Assert(minted > 0, $"king: nobody minted across {seeds} rounds");
+            Assert(minted >= DevArgs.GetFloat("min-king-mints", 1), $"king: insufficient mints ({minted}) across {seeds} rounds");
     }
 
     /// <summary>

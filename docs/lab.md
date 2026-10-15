@@ -173,9 +173,16 @@ selects one eighth of the actual dial/scenario/environment cases; `--list-dials`
 worlds. Lifetime has the same listing and shard arguments (`--list-lifetime`, `--lifetime-shard`, `--lifetime-shards`); each selected pair keeps its two warm-ups and all ten checked cycles. `make test-full-lab-coverage` proves that the shards cover every full session, setting and dial fixture
 exactly once. The fast checker retains its 600-second session timeout. Full sessions have 1,800 seconds, while dial
 sweeps have `max(600, 2400 / shards)` seconds; a timeout kills the engine and any timing wrapper together.
+
 King outcome runs print `[king crowd]`: audited mints, mints per minute, the sampled fraction of simulation time
 with a lone holder, and the number of actors that minted. `net_test` logs `king crowd` with the client-observed
 lone-holder share and minter count beside its final per-actor mints; compare those mints with the server audit.
+`python3 -B tools/dev/check_king_crowd.py` runs 90-second rounds in void and suburb at 4/8/16 actors and all three
+skills, checks audits and writes `build/king-crowd/summary.csv`. `--network --faults` runs 90-second King soaks with
+four clients clean and faulted, and two clients plus six or fourteen lobby bots clean, at 1×/4× supply. All cases
+use fixed world/brain seeds; network faults default to seed 2. Use distinct `--output` directories for comparisons.
+`--minimum-mints=0 --minimum-minters=0` permits dry baseline measurements; the Lab's standalone outcome check
+still requires a mint unless explicitly given `--min-king-mints=0`. Tank, score and conservation checks remain active.
 
 A prototype round alone: `lab_test.tscn -- --scenario=prototype --mode=ringout|king
 [--environment=suburb] [--seeds=3] [--first-seed=1] [--bots=2] [--quick]`; `--shots=4,12.5` adds `--capture-dir`
