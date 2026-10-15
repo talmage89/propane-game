@@ -48,6 +48,7 @@ public partial class LocalBank : Node
     /// <summary>Whether each bot actor makes progress (<see cref="BotActivity"/>), by actor id.</summary>
     public IReadOnlyDictionary<int, BotActivity> Activity => activity;
     public string BotStatus => brains[0].Brain.Status;
+    internal string BotTrace => string.Join(" | ", brains.Select(b => $"{b.Actor.ActorId} {b.Actor.GlobalPosition} {b.Brain.Status} {b.Brain.NavigationDiagnostics}"));
     public int BotBlacklisted => (brains[0].Brain as BankingBot)?.BlacklistedTargets ?? 0;
     private WorldContext World => Lab.World;
 

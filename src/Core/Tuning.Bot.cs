@@ -44,6 +44,7 @@ public partial class Tuning
     public int BotPartialSearchExpansions { get; set; } = 240;
     // A failed search that expanded no more than this many points started on an island the lattice has no way off
     // (a car roof, debris): the bot steps straight toward its goal for BotDirectTime.
+    public int BotIslandDirections { get; set; } = 16;
     public int BotIslandExpansions { get; set; } = 24;
     // Keep walking the previous route while the search for a moved goal runs, instead of standing still.
     public bool BotReplanWhileMoving { get; set; } = true;

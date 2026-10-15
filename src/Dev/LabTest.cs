@@ -321,6 +321,7 @@ public partial class LabTest : Node
         while (lab.Bank!.IsPlaying && lab.World.Clock.Now < seconds)
         {
             Assert(frame++ < seconds * 120, "duel simulation stalled");
+            if (DevArgs.Get("trace") != null && frame % 120 == 0) GD.Print($"[lab trace] {lab.World.Clock.Now:F1}s {lab.Bank.BotTrace}");
             if (shot < shots.Length && lab.World.Clock.Now >= shots[shot]) capture.Screenshot($"duel_{shots[shot++]:000}s");
             await Frames(1).ConfigureAwait(true);
         }

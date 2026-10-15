@@ -55,7 +55,10 @@ moves, the bot keeps following its previous route (never a jump) while the new s
 search that fails after at most `BotIslandExpansions` expansions started on ground the lattice has no way off (a car
 roof, debris): once per goal the bot steps straight toward it for `BotDirectTime`, within the hazards. A bot already
 inside overlapping clearance circles may walk anywhere that lies no deeper in them in total, so it can leave a pile even
-when every way out passes nearer one tank; it never enters a circle it started outside. Brains choose fixed goals for
+when every way out passes nearer one tank; it never enters a circle it started outside. If the direct island escape
+would deepen a clearance, it tries `BotIslandDirections` short sidesteps, nearest the goal direction first, requiring
+supported ground and a clear capsule sweep through the same shared query budget. Repeating only the direct escape
+could pin a fleeing bot between overlapping tank clearances indefinitely. Brains choose fixed goals for
 escapes (a venting tank) and vantage points outside every hazard, so a goal does not drift with the bot or lie where no
 route can end.
 
