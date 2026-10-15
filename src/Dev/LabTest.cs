@@ -863,21 +863,27 @@ public partial class LabTest : Node
             $"fixture must stall the bot on its aim first ({lab.Bank.BotStatus})");
         await Frames(6 * 60).ConfigureAwait(true);
         Assert(lab.Bank.BotBlacklisted >= 2, $"bot never gave up a pile with no clear shot ({lab.Bank.BotStatus})");
-        // Exercise Hard King's points path against the same shot-only obstruction. The zone expires before a
-        // trip could mint, making the blocked prize its best estimate until the actual rifle path disproves it.
+        // Hard King's points estimate must validate the rifle path, including shot-only debris. Start with a
+        // clear prize, then put the blocker back after selection: the periodic choice must abandon it too.
         lab.Bank.SetPhysicsProcess(false);
         using var king = new KingBot(1) { PointsDriven = true };
         using var view = new BlockedKingWorld(lab);
         lab.Opponent.InputOverride = king;
+        wall.CollisionLayer = 0;
+        await Frames(1).ConfigureAwait(true);
         king.Prepare(view);
-        for (var frame = 0; frame < 9 * 60; frame++)
+        view.Services.BeginTick(lab.BotTanks);
+        king.Think(view, 1f / 60);
+        Assert(king.Status.StartsWith("points: banking", StringComparison.Ordinal), "King did not choose the clear prize");
+        wall.CollisionLayer = Layers.Debris;
+        for (var frame = 0; frame < 3 * 60; frame++)
         {
             view.Services.BeginTick(lab.BotTanks);
             king.Think(view, 1f / 60);
-            if (frame == 3 * 60) Assert(king.Status.StartsWith("points: banking", StringComparison.Ordinal), "King did not choose the blocked prize");
             await Frames(1).ConfigureAwait(true);
         }
-        Assert(king.BlockedPointTargets >= 2, $"Hard King never abandoned the blocked prizes ({king.Status})");
+        Assert(!king.Status.StartsWith("points: banking", StringComparison.Ordinal) && tanks.All(t => t.State == PropaneTank.TankState.Intact),
+            $"Hard King kept choosing prizes behind shot-only debris ({king.Status})");
         lab.Opponent.InputOverride = null;
         lab.Session.Dispose(); lab.Free();
         GD.Print("[lab aimstall] PASS bankers and Hard King left prizes whose shots an obstruction stopped");

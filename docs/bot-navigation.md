@@ -130,7 +130,8 @@ zone. A banked bot circles outside an unprofitable crowd until a better opportun
 comparisons (bankers retain their target cadence). Every estimate weight/range/time is a local `Tuning.BotPoints...`
 property; `BotHardChasesPoints=false` provides an objective-policy A/B without changing difficulty's aim. These are
 estimates, not a promise of kills or bank recovery, and use no extra navigation searches. The shared tuner schema,
-world generation, scoring and messages are unchanged. A King prize whose rifle shot stays blocked for
+world generation, scoring and messages are unchanged. King validates prizes against the full rifle collision mask,
+including debris, tanks and players, before choosing them. A prize whose rifle shot later stays blocked for
 `BotStuckAimTime` is excluded for `BotTargetRetryTime`, so a good observation ray cannot pin a bot indefinitely.
 
 `tools/dev/check_bot_points.py` compares four Hard and four Normal actors in the same full Lab matches, alternates

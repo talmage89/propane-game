@@ -49,7 +49,6 @@ public sealed class KingBot : IBotGoalPolicy
     private PropaneTank? pointsShot;
     private float pointsShotWait;
     public bool PointsDriven { get; set; }
-    internal int BlockedPointTargets => pointsBlocked.Count;
 
     public string Status => status.ToString();
     public string StatusKind => status.Format;
@@ -286,7 +285,8 @@ public sealed class KingBot : IBotGoalPolicy
 
                 var rate = points.Tank(world, tank, world.Services.PileCount(i), distance);
                 if (tank == pointsTarget) rate *= 1 + tuning.BotPointsHysteresis;
-                if (rate > best && BotMotor.CanSee(world, player, tank.GlobalTransform * PropaneTank.LocalCenter)) { best = rate; chosen = tank; }
+                if (rate > best && world.Services.Ray(player.Aim.EyeOrigin, tank.GlobalTransform * PropaneTank.LocalCenter,
+                    Core.Layers.ShotMask, out var hit) && hit.Collider == tank.GetRid()) { best = rate; chosen = tank; }
             }
             if (chosen != pointsTarget) { fightTime = pointsShotWait = 0; pointsShot = null; }
             pointsTarget = chosen;
