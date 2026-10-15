@@ -182,6 +182,14 @@ optional bar (a mode's health, drawn at the bottom center; null for every other 
 and `ResultsScreen` only render it; the "TANKS BANKED" caption and the results column now live in `TankBankHud`.
 Local views still add the crosshair, ammo, hit markers, hit arrows, score tags, score popups and the countdown.
 
+A match also shows the live leaderboard (`MatchHud.SetStandings`, drawn by `LeaderboardPanel`) for any mode whose HUD
+has a score column, from the scores and roster every peer already has, so it needs no messages. `Leaderboard` is its
+pure model: score order with ties in roster order (as `Snapshot()` ranks the results), ranks shared on ties, the top
+`LeaderboardRows` plus the local row below a divider when outside them, and the slide, flash, "+N" and drop tint
+timed by `LeaderboardSlideTime`, `LeaderboardFlashTime` and `ScorePopupTime`. It hides while loading and on the results
+screen, with fewer than two players, at `LeaderboardRows` 0, and when the player turns it off in the match menu
+(`PlayerSettings.ShowLeaderboard`). The Lab's prototypes do not show it: the Lab overlay holds that corner.
+
 ## Bots
 
 `IBotGoalPolicy` picks goals from mode state and world facts (`IBotWorld`: play state, time left and scores from the
