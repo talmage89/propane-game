@@ -420,8 +420,9 @@ public partial class LobbyServer : Node
         }
         if (lobby.Phase == LobbyPhase.Staging && lobby.CreatorId == client.Id)
         {
-            // Only the creator's start was staged; whoever inherits the lobby starts again if they want to.
-            CancelStage(lobby, "the creator left");
+            // Only the creator's start was staged; whoever inherits the lobby starts again if they want to. The lobby
+            // state below announces it, once the lobby has its next creator.
+            CancelStage(lobby, "the creator left", announce: false);
         }
         if (lobby.Members.Count == 0)
         {
@@ -642,11 +643,12 @@ public partial class LobbyServer : Node
         if (client.Lobby is { Phase: LobbyPhase.Staging } lobby && lobby.CreatorId == client.Id) CancelStage(lobby, "the creator canceled");
     }
 
-    private void CancelStage(Lobby lobby, string why)
+    private void CancelStage(Lobby lobby, string why, bool announce = true)
     {
         lobby.Phase = LobbyPhase.Waiting;
         lobby.Staged = null;
         Log($"lobby {lobby.Id}: start canceled, {why}");
+        if (!announce) return;
         SendLobbyState(lobby);
         BroadcastLobbyList();
     }
