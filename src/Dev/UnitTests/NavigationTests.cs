@@ -302,6 +302,30 @@ internal static class NavigationTests
             }
             finally { player.Free(); enemy.Free(); }
         });
+        runner.Run("navigation/skipping tap-cooldown hit tests preserves every trigger press", () =>
+        {
+            var reference = new BotMotor();
+            var guarded = new BotMotor();
+            var steps = new[] { 0f, 1f / 120, 1f / 60, 0.1f, 0.2f };
+            var probes = 0;
+            var presses = 0;
+            for (var tick = 0; tick < 240; tick++)
+            {
+                reference.Begin(steps[tick % steps.Length]);
+                guarded.Begin(steps[tick % steps.Length]);
+                var hit = tick % 3 != 0;
+                if (hit) reference.Tap();
+                if (guarded.CanTap)
+                {
+                    probes++;
+                    if (hit) guarded.Tap();
+                }
+                var expected = reference.Read().FirePressed;
+                if (expected) presses++;
+                TestRunner.Assert(guarded.Read().FirePressed == expected, "skipping a hit test changed a trigger press");
+            }
+            TestRunner.Assert(presses > 0 && probes < 240, "the comparison must fire and skip cooldown probes");
+        });
         runner.Run("navigation/King prize searches refresh positions and preserve nearest clear choice", () =>
         {
             var player = new PlayerCharacter { World = runner.World, ActorId = 1, Position = Vector3.Right * 2 };

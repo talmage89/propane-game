@@ -27,6 +27,8 @@ public sealed class BotMotor
     public float Skill { get; set; } = 1f;
     public string NavigationDiagnostics => navigator.Diagnostics;
     public bool Failed { get; private set; }
+    /// <summary>A crosshair hit test can produce a tap only after the existing trigger cooldown.</summary>
+    internal bool CanTap => tapCooldown <= 0;
 
     public void Prepare(IBotWorld world)
     {

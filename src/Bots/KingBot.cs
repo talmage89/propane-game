@@ -208,7 +208,7 @@ public sealed class KingBot : IBotGoalPolicy
             var center = venting.GlobalTransform * PropaneTank.LocalCenter;
             motor.Face(player, center, dt);
             motor.Intent.Aim = true;
-            if (BotMotor.OnTarget(world, player, venting)) motor.Tap();
+            if (motor.CanTap && BotMotor.OnTarget(world, player, venting)) motor.Tap();
             status.Set("clearing a venting tank from the zone");
         }
         else if (!inZone)
@@ -239,7 +239,7 @@ public sealed class KingBot : IBotGoalPolicy
                 var center = target.GlobalTransform * PropaneTank.LocalCenter;
                 motor.Face(player, center, dt);
                 motor.Intent.Aim = true;
-                if (BotMotor.OnTarget(world, player, target)) motor.Tap();
+                if (motor.CanTap && BotMotor.OnTarget(world, player, target)) motor.Tap();
                 status.Set("holding, shooting a {4} tank", word: BotStatus.Name(target.State));
             }
             else
@@ -451,7 +451,7 @@ public sealed class KingBot : IBotGoalPolicy
             var center = target.GlobalTransform * PropaneTank.LocalCenter;
             motor.Face(player, center, dt);
             motor.Intent.Aim = true;
-            if (BotMotor.OnTarget(world, player, target)) motor.Tap();
+            if (motor.CanTap && BotMotor.OnTarget(world, player, target)) motor.Tap();
             motor.MoveTo(regroupGoal);
             status.Set(siege ? "siege: shooting a {4} tank" : "regrouping, shooting a {4} tank", word: BotStatus.Name(target.State));
         }
