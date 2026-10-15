@@ -265,6 +265,43 @@ internal static class NavigationTests
             }
             finally { player.Free(); enemy.Free(); }
         });
+        runner.Run("navigation/King breaks sustained contests and pounces on an empty zone", () =>
+        {
+            var player = new PlayerCharacter { World = runner.World, ActorId = 1, Position = Vector3.Right * 2 };
+            var enemy = new PlayerCharacter { World = runner.World, ActorId = 2, Position = Vector3.Right * 4 };
+            runner.World.Root.AddChild(player);
+            runner.World.Root.AddChild(enemy);
+            using var crowd = new BankingWorld(runner.World, player, enemy)
+            {
+                View = new KingState(0, new ModeSpot(0, 0, 0), new ModeSpot(20, 0, 0), 6, 0, new[] { 1, 2 },
+                    2, 2, 45, 3, Array.Empty<KingMinted>(), 0),
+                RemoteBodies = Enumerable.Repeat(enemy, 3).ToArray(),
+            };
+            using var brain = new KingBot(23);
+            try
+            {
+                using var small = new BankingWorld(runner.World, player, enemy) { View = crowd.View };
+                using var duel = new KingBot(23);
+                duel.Prepare(small);
+                for (var i = 0; i < 400; i++) duel.Think(small, 1f / 120);
+                TestRunner.Assert(!duel.Status.StartsWith("siege:", StringComparison.Ordinal), "small matches must keep contesting");
+                brain.Prepare(crowd);
+                for (var i = 0; i < 400; i++) brain.Think(crowd, 1f / 120);
+                TestRunner.Assert(brain.Status.StartsWith("siege:", StringComparison.Ordinal), "a sustained contest must break off before the next raid");
+                var before = GC.GetAllocatedBytesForCurrentThread();
+                for (var i = 0; i < 100; i++) brain.Think(crowd, 1f / 120);
+                TestRunner.Assert(GC.GetAllocatedBytesForCurrentThread() == before, "warmed siege thoughts allocate");
+                player.Teleport(Vector3.Right * 10, 0);
+                enemy.Teleport(Vector3.Right * 8, 0);
+                for (var i = 0; i < 60; i++) brain.Think(crowd, 1f / 120);
+                TestRunner.Assert(brain.Status.StartsWith("siege:", StringComparison.Ordinal), "a nearer challenger must not pull every bot into an empty zone");
+                enemy.Teleport(Vector3.Right * 100, 0);
+                for (var i = 0; i < 60; i++) brain.Think(crowd, 1f / 120);
+                TestRunner.Assert(!brain.Status.StartsWith("siege:", StringComparison.Ordinal), "the nearest challenger must pounce when the zone empties");
+                TestRunner.Assert(brain.Status.StartsWith("heading for zone", StringComparison.Ordinal), "pouncing must resume the zone approach");
+            }
+            finally { player.Free(); enemy.Free(); }
+        });
         runner.Run("navigation/King bot views match snapshots without steady allocation", () =>
         {
             var rules = new KingRules();
@@ -661,15 +698,30 @@ internal static class NavigationTests
                 player.Free(); enemy.Free();
             }
         });
-        runner.Run("bot tuners preserve the match snapshot schema", () =>
+        runner.Run("local bot tuners stay local and King crowd tuners round-trip", () =>
         {
             var before = tuning.Snapshot();
             tuning.BotJumpMargin *= 2;
             tuning.BotAimErrorHard *= 2;
             var after = tuning.Snapshot();
-            TestRunner.Assert(before.Count == after.Count && !Tuning.ValueNames(tuning).Any(n => n.StartsWith("Bot", StringComparison.Ordinal)), "bot dials stay local");
+            var shared = new[] { "BotKingCrowdPlayers", "BotKingCrowdInterval", "BotKingContestMin", "BotKingContestMax",
+                "BotKingRaidMin", "BotKingRaidMax", "BotKingCrowdScale" };
+            TestRunner.Assert(before.Count == after.Count && Tuning.ValueNames(tuning)
+                .Where(n => n.StartsWith("Bot", StringComparison.Ordinal)).Order().SequenceEqual(shared.Order()), "only crowd bot dials are shared");
             foreach (var (key, value) in before) { TestRunner.Assert(after[key].Equals(value), "no shared tuning value changed"); }
             Tuning.ValidateSnapshot(after, complete: true);
+            tuning.BotKingContestMin += 0.5f;
+            tuning.BotKingContestMax += 0.5f;
+            tuning.BotKingRaidMin += 0.5f;
+            tuning.BotKingRaidMax += 0.5f;
+            tuning.BotKingCrowdPlayers++;
+            tuning.BotKingCrowdInterval += 0.1f;
+            tuning.BotKingCrowdScale += 0.1f;
+            using var restored = Tuning.FromSnapshot(tuning.Snapshot());
+            TestRunner.Assert(restored.BotKingContestMin == tuning.BotKingContestMin &&
+                restored.BotKingContestMax == tuning.BotKingContestMax && restored.BotKingRaidMin == tuning.BotKingRaidMin &&
+                restored.BotKingRaidMax == tuning.BotKingRaidMax && restored.BotKingCrowdInterval == tuning.BotKingCrowdInterval &&
+                restored.BotKingCrowdScale == tuning.BotKingCrowdScale && restored.BotKingCrowdPlayers == tuning.BotKingCrowdPlayers, "shared crowd dials were lost");
         });
     }
 }

@@ -67,8 +67,8 @@ route can end.
 
 `Tuning.Bot...` exposes route spacing/search budget, progress window/distance, retries, waypoint/goal radii,
 validation interval, jump clearance/cost, turning, sprint distance, hazard clearance, target retry time, and aim
-turning/error/reaction endpoints. They are local C# properties rather than exported scalar match tuners: adding
-exported scalars would change the complete snapshot schema and require a minor release. Dev overrides use
+turning/error/reaction endpoints. The existing navigation, aiming and points dials are local C# properties rather
+than exported scalar match tuners: adding exported scalars would change the complete snapshot schema and require a minor release. Dev overrides use
 `--tune.BotProgressWindow=...`, for example. The smart brain retains the local tuning object when a match installs
 shared movement tuning. `Skill` continues to interpolate aim/reaction; the Easy, Normal and Hard profiles
 (`BotEasySkill`, `BotNormalSkill`, `BotHardSkill`) pick it for lobby and Lab bots, as
@@ -115,6 +115,24 @@ a tank in sight, and walks the zone's edge `BotKingRegroupStep` meters at a time
 `Plan` is synchronous for tests/offline callers. The grid supports horizontal ground and ballistic jumps, rather
 than general stairs or roofs. Navigation caching and these local bot dials change no player physics, match
 messages, shared tuners or world construction.
+
+## King crowd tactics
+
+At four or more actors (`BotKingCrowdPlayers`), a bot reaching an occupied zone waits at its edge before a raid.
+A bot already inside gives a sustained contest an independently seeded
+`BotKingContestMin`–`BotKingContestMax` seconds (1–3). If it cannot win, it retreats and fights from the perimeter,
+using the same circling, safe banking and banked-rival pressure as knockdown recovery. After
+`BotKingRaidMin`–`BotKingRaidMax` seconds (6–14), it raids again. Each actor above the threshold multiplies that
+wait by an additional `BotKingCrowdScale` (0.15), spreading larger rosters over longer independent intervals.
+The nearest upright challenger can pounce early on an empty zone; distance ties use actor id. A lone holder stays.
+Hard still takes a better points opportunity first. Set `BotKingRaidMax=0` to disable proactive retreats for A/B
+measurement; the existing knockdown recovery remains.
+
+Crowd observation reads the shared actor list once per `BotKingCrowdInterval` (0.4 s), with no physics queries or
+per-tick allocations. Steering, aiming and close melee retain their existing cadence. Siege statuses distinguish
+these tactical retreats from knockdown regrouping in activity logs. These seven new dials are exported in **Bots**
+and travel in the creator's tuning snapshot; they require the upcoming minor release. Existing local dials,
+King's rules, shared state and messages are unchanged.
 
 ## Hard points policy
 

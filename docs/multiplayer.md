@@ -662,9 +662,10 @@ Skill blends the existing Easy/Hard endpoints (`BotAimError...`, `BotReaction...
 settled; reaction is the delay before firing at a new opponent. Normal is the Lab duel's default skill (0.6), and
 Easy and Hard are the Lab's existing Easy and Hard. Easy and Normal keep objective-first goals; Hard compares
 expected point gains and leader spills in Tank Bank and King ([bot policies](bot-navigation.md#hard-points-policy)).
-Navigation and physics are identical at every difficulty. The dials are local C# properties like the other `Bot...`
-dials: they are copied into each world but never enter the match snapshot, so the owner's profile values decide
-its own bots and nothing else changes.
+Navigation and physics are identical at every difficulty. The difficulty dials are local C# properties like the
+existing navigation and points dials: they are copied into each world but never enter the match snapshot, so the owner's profile values decide
+its own bots and nothing else changes. King's new crowd tactics use shared dials in the **Bots** group
+([crowd tactics](bot-navigation.md#king-crowd-tactics)); difficulty still controls aim and Hard's points choices.
 
 **Validation.** `AddActor`, `UpdateActor` and `RemoveActor` gain a trailing UInt32: the roster revision the request was
 made against. In a waiting lobby the server refuses, without changing anything, a request on any other revision ("The

@@ -7,8 +7,8 @@ using Propane.Tank;
 namespace Propane.Bots;
 
 /// <summary>
-/// King of the Cul-de-sac's goal policy, kept simple for the prototype: get into the zone and hold it; shove anyone
-/// else inside out with melee, and shoot intruders it can see (a hit spills their bank); with nobody to fight, shoot
+/// King of the Cul-de-sac's goal policy: hold alone, shove or shoot intruders, and break off prolonged contests
+/// to fight from the perimeter before independently timed raids. With nobody to fight, shoot
 /// tanks in sight from a safe distance to bank them; head for the next spot
 /// when the zone is about to move and it could not otherwise make it in time. It reads the zone from the mode's
 /// <see cref="KingState"/>: the Lab's rules, or the server's snapshot in a match.
@@ -39,6 +39,13 @@ public sealed class KingBot : IBotGoalPolicy
     private float regroupTime;
     private Vector3 regroupGoal;
     private float regroupTurn = 1;
+    private float crowdTimer;
+    private int crowdRivals;
+    private bool firstToZone;
+    private float contestedTime;
+    private float contestPatience;
+    private float raidTime;
+    private bool raidCommitted;
     private readonly BotPoints points = new();
     private float pointsTimer;
     private Node3D? pointsTarget;
@@ -77,7 +84,9 @@ public sealed class KingBot : IBotGoalPolicy
         {
             motor.Reset();
             wasDown = false;
-            regroupTime = 0;
+            regroupTime = raidTime = contestedTime = contestPatience = 0;
+            crowdTimer = 0;
+            raidCommitted = false;
             pointsTarget = pointsShot = null;
             protectingPoints = false;
             pointsTimer = pointsShotWait = 0;
@@ -122,6 +131,8 @@ public sealed class KingBot : IBotGoalPolicy
         {
             // A spot sits on its pile, which nobody can stand in: hold the zone from beside it.
             standZone = zone;
+            contestedTime = contestPatience = raidTime = crowdTimer = 0;
+            raidCommitted = false;
             PickStand(state, world, spot);
         }
         standCheck -= dt;
@@ -166,6 +177,11 @@ public sealed class KingBot : IBotGoalPolicy
             return;
         }
 
+        if (BreakCrowd(world, state, player, spot, radius, tuning, dt, look))
+        {
+            motor.Navigate(world, dt);
+            return;
+        }
         var inZone = BotMotor.Flat(here - spot).Length() <= radius * 0.85f;
         var reach = BotMotor.MeleeReach(tuning);
         var close = NearestIntruder(world, spot, radius, here, reach + 0.4f);
@@ -235,6 +251,65 @@ public sealed class KingBot : IBotGoalPolicy
         }
         motor.Navigate(world, dt);
         if (motor.Failed) PickStand(state, world, spot);
+    }
+
+    /// <summary>Stop buying a permanent contest: fight from the perimeter, then make independently timed raids.</summary>
+    private bool BreakCrowd(IBotWorld world, KingBotView state, PlayerCharacter player, Vector3 spot, float radius,
+        Core.Tuning tuning, float dt, bool look)
+    {
+        var here = player.GlobalPosition;
+        crowdTimer -= dt;
+        if (crowdTimer <= 0)
+        {
+            crowdTimer = tuning.BotKingCrowdInterval;
+            crowdRivals = 0;
+            firstToZone = true;
+            var distance = BotMotor.Flat(here - spot).LengthSquared();
+            var bodies = world.RemoteBodies;
+            for (var i = 0; i < bodies.Count; i++)
+            {
+                var body = bodies[i];
+                if (body.IsRagdolled) continue;
+                var otherDistance = BotMotor.Flat(body.GlobalPosition - spot).LengthSquared();
+                if (otherDistance <= radius * radius && Mathf.Abs(body.GlobalPosition.Y - spot.Y) <= tuning.KingZoneHeight) crowdRivals++;
+                if (otherDistance < distance || otherDistance == distance && body.ActorId < player.ActorId) firstToZone = false;
+            }
+        }
+        var inZone = BotMotor.Flat(here - spot).LengthSquared() <= radius * radius;
+        if (contestPatience <= 0)
+            contestPatience = rng.RandfRange(tuning.BotKingContestMin, Mathf.Max(tuning.BotKingContestMin, tuning.BotKingContestMax));
+        // A prolonged shove in the middle buys no income. Break off on an independent clock, fight/bank from
+        // outside, then raid again. The first challenger to an empty zone pounces instead of waiting for a timer.
+        if (raidTime > 0)
+        {
+            raidTime -= dt;
+            if (crowdRivals == 0 && firstToZone) raidTime = 0;
+            if (raidTime > 0)
+            {
+                Regroup(world, player, spot, radius, tuning, dt, look, siege: true);
+                return true;
+            }
+            raidCommitted = true;
+        }
+        contestedTime = inZone && state.Holder != player.ActorId && crowdRivals > 0 ? contestedTime + dt : 0;
+        var edge = radius + tuning.BotTankClearance * 2;
+        var waitAtEdge = !inZone && !raidCommitted && crowdRivals > 0 && BotMotor.Flat(here - spot).LengthSquared() <= edge * edge;
+        if (world.RemoteBodies.Count + 1 >= tuning.BotKingCrowdPlayers && tuning.BotKingRaidMax > 0 &&
+            (waitAtEdge || contestedTime > 0 && contestedTime >= contestPatience))
+        {
+            raidTime = rng.RandfRange(tuning.BotKingRaidMin, Mathf.Max(tuning.BotKingRaidMin, tuning.BotKingRaidMax)) *
+                (1 + Mathf.Max(0, world.RemoteBodies.Count + 1 - tuning.BotKingCrowdPlayers) * tuning.BotKingCrowdScale);
+            contestedTime = contestPatience = 0;
+            raidCommitted = false;
+            var away = BotMotor.Flat(here - spot).Normalized();
+            if (away == Vector3.Zero) away = Vector3.Right.Rotated(Vector3.Up, rng.RandfRange(0, Mathf.Tau));
+            regroupGoal = spot + away * (radius + tuning.BotTankClearance * 2);
+            regroupTurn = rng.Randf() < 0.5f ? -1 : 1;
+            Regroup(world, player, spot, radius, tuning, dt, look, siege: true);
+            return true;
+        }
+
+        return false;
     }
 
     /// <summary>Hard compares banking and spilling in sight against the zone's time-limited mint/denial rate.</summary>
@@ -345,7 +420,7 @@ public sealed class KingBot : IBotGoalPolicy
     }
 
     /// <summary>Out of the zone for a while after a knockdown: fight or bank from its edge, moving around it.</summary>
-    private void Regroup(IBotWorld world, PlayerCharacter player, Vector3 spot, float radius, Core.Tuning tuning, float dt, bool look)
+    private void Regroup(IBotWorld world, PlayerCharacter player, Vector3 spot, float radius, Core.Tuning tuning, float dt, bool look, bool siege = false)
     {
         var here = player.GlobalPosition;
         var ring = radius + tuning.BotTankClearance * 2;
@@ -368,7 +443,7 @@ public sealed class KingBot : IBotGoalPolicy
         {
             Shoot(player, watch!, tuning, dt);
             motor.MoveTo(regroupGoal);
-            status.Set("regrouping, shooting {0}", watch!.ActorId);
+            status.Set(siege ? "siege: shooting {0}" : "regrouping, shooting {0}", watch!.ActorId);
         }
         else if (Prize(world, player, tuning, dt) is { } target)
         {
@@ -377,14 +452,14 @@ public sealed class KingBot : IBotGoalPolicy
             motor.Intent.Aim = true;
             if (BotMotor.OnTarget(world, player, target)) motor.Tap();
             motor.MoveTo(regroupGoal);
-            status.Set("regrouping, shooting a {4} tank", word: BotStatus.Name(target.State));
+            status.Set(siege ? "siege: shooting a {4} tank" : "regrouping, shooting a {4} tank", word: BotStatus.Name(target.State));
         }
         else
         {
             fightTime = 0;
             motor.Face(player, regroupGoal + Vector3.Up * 1.4f, dt);
             motor.MoveTo(regroupGoal, run: true);
-            status.Set("regrouping outside the zone");
+            status.Set(siege ? "siege: circling outside the zone" : "regrouping outside the zone");
         }
     }
 
