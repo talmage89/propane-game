@@ -27,12 +27,8 @@ public partial class NetTest
     private void EnterLobbyWorld(MatchSetup setup)
     {
         EndLobbyWorld();
-        if (match != null)
-        {
-            RemoveChild(match);
-            match.QueueFree();
-            match = null;
-        }
+        // The server opens the world after its results; this client's own results may still be showing.
+        if (match != null) finishMatch?.Invoke();
         world = new Match { Name = "LobbyWorld", Net = net, Setup = setup, Returning = worldsEntered > 0, CreateLocalView = DisplayServer.GetName() != "headless" };
         AddChild(world);
         worldsEntered++;

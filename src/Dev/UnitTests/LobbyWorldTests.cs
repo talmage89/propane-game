@@ -85,9 +85,12 @@ public static class LobbyWorldTests
         public void Dispose() { Server.Free(); Start.Dispose(); }
     }
 
-    private static ModeSetup Setup(int spots, double delay = 5, int limit = 100) => new(Array.Empty<ModeActor>(),
+    private static ModeSetup Setup(int spots, double delay = 5, int limit = 100, int pile = 10) => new(Array.Empty<ModeActor>(),
         new ModeWorld(ModeWorldSource.Void, 1, 0, LobbyLayout.Spots(spots, 10)),
-        new ModeTuners(new Dictionary<string, double> { [LobbyRules.LobbyRefillDelay] = delay, [LobbyRules.LobbyTankLimit] = limit }), 1);
+        new ModeTuners(new Dictionary<string, double>
+        {
+            [LobbyRules.LobbyRefillDelay] = delay, [LobbyRules.LobbyTankLimit] = limit, [LobbyRules.LobbyPileCount] = pile,
+        }), 1);
 
     private static ModeClock At(double now) => new(ModePhase.Round, 1, now, double.PositiveInfinity);
 
@@ -112,9 +115,14 @@ public static class LobbyWorldTests
             TestRunner.Assert(rules.Handle(new PilesStocked(new[] { 1, 4, 4 }, 9), At(60)).Count == 0, "a standing tank keeps a spot stocked");
 
             var crowded = new LobbyRules();
-            crowded.Initialize(Setup(2, delay: 0, limit: 20));
-            TestRunner.Assert(crowded.Handle(new PilesStocked(new[] { 0, 0 }, 20), At(1)).Count == 0, "no refill while the world holds its limit");
-            TestRunner.Assert(crowded.Handle(new PilesStocked(new[] { 0, 0 }, 19), At(2)).OfType<RefillPile>().Count() == 2, "refills resume below it");
+            crowded.Initialize(Setup(2, delay: 0, limit: 40));
+            TestRunner.Assert(crowded.Handle(new PilesStocked(new[] { 0, 0 }, 40), At(1)).Count == 0, "no refill while the world holds its limit");
+            TestRunner.Assert(crowded.Handle(new PilesStocked(new[] { 0, 0 }, 21), At(2)).OfType<RefillPile>().Single().Spot == 0,
+                "refills resume below it, as many whole piles as fit");
+            TestRunner.Assert(crowded.Handle(new PilesStocked(new[] { 0, 0 }, 21), At(3)).Count == 0, "a pile on its way counts against the limit");
+            crowded.Handle(new PileFilled(0), At(4));
+            TestRunner.Assert(crowded.Handle(new PilesStocked(new[] { 10, 0 }, 30), At(5)).OfType<RefillPile>().Single().Spot == 1,
+                "the next fits once the first stands");
             TestRunner.Assert(crowded.Handle(new SpillRequested(new SpillTicket(2, 1, 1), SpillReason.Hit, 1), At(3)).Single() is SpillCanceled,
                 "nothing spills in the lobby");
             TestRunner.Assert(crowded.Permits(ModeGate.World, At(4)) && !crowded.Permits(ModeGate.Pickup, At(4)), "the world is open; there are no cans");

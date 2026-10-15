@@ -48,14 +48,16 @@ public static class LobbyLayout
 /// <summary>
 /// The lobby world: no score, no spills and no end. Everything that changes the world is open while it runs. It keeps
 /// each pile spot stocked: at the start every spot is stocked at once, and when none of a spot's own tanks stands
-/// intact on it any longer, a fresh pile is asked for after <c>LobbyRefillDelay</c>, unless the world already holds
+/// intact on it any longer, a fresh pile is asked for after <c>LobbyRefillDelay</c>, unless its
+/// <c>LobbyPileCount</c> tanks, with those of the piles already on their way, would take the world past
 /// <c>LobbyTankLimit</c> live tanks (so venting strays cannot pile up without bound). Pure: the runner reports the stock.
 /// </summary>
 public sealed class LobbyRules : IModeRules
 {
     public const string LobbyRefillDelay = nameof(LobbyRefillDelay);
     public const string LobbyTankLimit = nameof(LobbyTankLimit);
-    public static readonly IReadOnlyList<string> Tuners = new[] { LobbyRefillDelay, LobbyTankLimit };
+    public const string LobbyPileCount = nameof(LobbyPileCount);
+    public static readonly IReadOnlyList<string> Tuners = new[] { LobbyRefillDelay, LobbyTankLimit, LobbyPileCount };
 
     private readonly List<ModeActor> roster = new();
     private readonly List<ModeSpot> spots = new();
@@ -119,14 +121,17 @@ public sealed class LobbyRules : IModeRules
     {
         var refills = new List<ModeCommand>();
         var delay = tuners.Float(LobbyRefillDelay);
-        var room = tuners.Int(LobbyTankLimit) > stocked.LiveTanks;
+        // Every refill brings a whole pile, and piles on their way are not live yet: they count against the limit too.
+        var pile = Math.Max(1, tuners.Int(LobbyPileCount));
+        var room = tuners.Int(LobbyTankLimit) - stocked.LiveTanks - pending.Count(p => p) * pile;
         for (var i = 0; i < spots.Count && i < stocked.Intact.Count; i++)
         {
             if (stocked.Intact[i] > 0) { emptySince[i] = null; continue; }
             if (pending[i]) continue;
             emptySince[i] ??= now;
-            if (!room || now - emptySince[i] < delay) continue;
+            if (room < pile || now - emptySince[i] < delay) continue;
             pending[i] = true;
+            room -= pile;
             refills.Add(new RefillPile(i));
         }
         return refills.ToArray();

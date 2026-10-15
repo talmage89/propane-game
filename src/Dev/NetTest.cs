@@ -31,6 +31,7 @@ public partial class NetTest : Node
     private BotActivity playerActivity = new();
     private NetClient net = null!;
     private Match? match;
+    private Action? finishMatch;
     private long matchAllocated;
     private TimeSpan matchGcPause;
     private readonly int[] matchCollections = new int[3];
@@ -190,8 +191,9 @@ public partial class NetTest : Node
                 CreateLocalView = DisplayServer.GetName() != "headless",
                 BeforeInboxAttach = DevArgs.Get("scenario") == "capacity" ? () => PrepareCapacity(setup) : null
             };
-            match.Finished += () =>
+            finishMatch = () =>
             {
+                if (match == null) return;
                 if (DevArgs.Get("scenario") is "duel" or "pickup" or "drop-refusal" or "puncture-race" or "appearance" or "gather" or "melee" or "body-stream" or "vent-contact" or "king" or "king-late")
                 {
                     ScenarioAssert(scenarioPassed, "scenario ended before all assertions passed");
@@ -246,6 +248,7 @@ public partial class NetTest : Node
                     GetTree().CreateTimer(1.0).Timeout += () => ShutdownGuard.Quit(GetTree());
                 }
             };
+            match.Finished += finishMatch;
             kingStage = -1; kingCamera = null; kingCaptured.Clear();
             kingHeld = kingContested = kingWarned = kingMoved = kingPiled = false;
             raceTick = raceSamples = 0;
