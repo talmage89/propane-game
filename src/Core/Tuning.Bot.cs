@@ -1,7 +1,20 @@
+using Godot;
+
 namespace Propane.Core;
 
 public partial class Tuning
 {
+    // Crowd tactics are shared bot tuners for the next minor release. Existing local dials stay local.
+    [ExportGroup("Bots")]
+    [Export(PropertyHint.Range, "4,16,1")] public int BotKingCrowdPlayers { get; set; } = 4;
+    [Export(PropertyHint.Range, "0.1,2,0.1")] public float BotKingCrowdInterval { get; set; } = 0.4f;
+    [Export(PropertyHint.Range, "0,10,0.1")] public float BotKingContestMin { get; set; } = 1f;
+    [Export(PropertyHint.Range, "0,10,0.1")] public float BotKingContestMax { get; set; } = 3f;
+    [Export(PropertyHint.Range, "0,30,0.5")] public float BotKingRaidMin { get; set; } = 6f;
+    [Export(PropertyHint.Range, "0,30,0.5")] public float BotKingRaidMax { get; set; } = 14f;
+    // Additional waiting per rival: large rosters should not all charge back at the same cadence.
+    [Export(PropertyHint.Range, "0,2,0.05")] public float BotKingCrowdScale { get; set; } = 0.15f;
+
     // Local brain dials deliberately have no Export attribute: ValueNames/Snapshot must remain unchanged for
     // patch compatibility. DevArgs --tune.Bot... and C# callers can tune them. The difficulty profiles below are
     // local too: a bot's difficulty changes its brain on its creator's game, never the match's physics or schema.

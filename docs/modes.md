@@ -243,6 +243,13 @@ occupants, the next mint, the move and its warning in round time, and each actor
 shared `KingZone` presenter read only that, so they behave the same from the Lab's rules or a match's snapshot. The
 audit line reads `king audit initial= map= drops= minted= spills= banked= expected= ok=`.
 
+`KingBot` holds, shoves and shoots intruders, and banks safe tanks in sight. With at least `BotKingCrowdPlayers`
+actors (4), it waits at the edge of an occupied zone before raiding and breaks off a sustained contest after a seeded 1–3 seconds and fights from the perimeter before
+raiding again after 6–14 seconds, scaled by roster size. These independent clocks spread out reentry; the nearest
+challenger pounces early when the zone empties. It keeps circling and shooting while outside, retaining the
+knockdown regroup policy and Hard's points comparisons. The new crowd dials are in the shared **Bots** tuner group;
+existing bot dials and all mode rules stay unchanged. [Bot navigation](bot-navigation.md) describes the policy.
+
 **Short Fuse** (`ShortFuseRules`). Last one standing in a suburb of tanks, with [health](#health). Each round starts
 everyone present on a new life at full health (`BeginRound`); a declared death puts the victim out to spectate, and
 when one starter is left alive (or none: two going down together) the rules send `RoundWon` and `RoundOver`. A round

@@ -63,6 +63,7 @@ headless and rendered, with three repetitions and JSON comparisons. `make bench 
 the two C# builds per case. [Workload, columns and comparison procedure](docs/measuring-scale.md).
 [Bot scale results](docs/bot-scale.md) compare the shared navigation implementation with the previous brains,
 including rendered sixteen-bot runs, match outcomes and remaining allocation/network limits.
+[King crowd verification](docs/king-crowd.md) compares holds, mints and thinking cost at 4/8/16 actors.
 
 ## Lab
 

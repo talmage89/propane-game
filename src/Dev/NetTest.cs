@@ -29,6 +29,7 @@ public partial class NetTest : Node
 {
     private IBotBrain bot = null!;
     private BotActivity playerActivity = new();
+    private double kingLoneSeconds, kingSampleSeconds;
     private NetClient net = null!;
     private Match? match;
     private long matchAllocated;
@@ -220,7 +221,10 @@ public partial class NetTest : Node
                 if (!tankCheckFinal) { LogTankCheck(final: true); }
                 LogTankCheck(completion: true);
                 if (match.ModeView is KingState king)
+                {
+                    Log(FormattableString.Invariant($"king crowd: seconds={kingSampleSeconds:F2} lone_share={kingLoneSeconds / Math.Max(kingSampleSeconds, 0.001):F4} minters={king.Minted.Count(m => m.Count > 0)}"));
                     Log($"finished king {match.Setup.Id}; minted " + string.Join(" ", match.Setup.Players.OrderBy(p => p.Player.Id).Select(p => $"{p.Player.Id}={king.MintedBy(p.Player.Id)}")));
+                }
                 Log($"finished match {match.Setup.Id}; final scores {ScoreLine()}");
                 RemoveChild(match);
                 match.QueueFree();
@@ -294,6 +298,7 @@ public partial class NetTest : Node
             }
 
             playerActivity = new BotActivity();
+            kingLoneSeconds = kingSampleSeconds = 0;
             if (DisplayServer.GetName() == "headless")
             {
                 ScenarioAssert(match.Session.LocalViews.Count == 0 && match.FindChildren("*", "Camera3D", owned: false).Count == 0,
@@ -436,6 +441,11 @@ public partial class NetTest : Node
             Log("leaving the match on purpose");
             ShutdownGuard.Quit(GetTree());
             return;
+        }
+        if (match.IsPlaying && match.BotKing is KingBotView crowdState)
+        {
+            kingSampleSeconds += dt;
+            if (crowdState.Holder != 0) kingLoneSeconds += dt;
         }
         if (DevArgs.Get("scenario") == "king")
         {
