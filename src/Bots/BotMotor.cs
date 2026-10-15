@@ -123,8 +123,9 @@ public sealed class BotMotor
             stallAnchor = player.GlobalPosition;
             stalled = 0;
         }
-        else if (Flat(goal.Value - player.GlobalPosition).Length() > tuning.BotGoalRadius * 2)
+        else if (!navigator.AwaitingRoute && Flat(goal.Value - player.GlobalPosition).Length() > tuning.BotGoalRadius * 2)
         {
+            // A search spread over ticks is not a stall: interrupting it would restart it, and a long one never ends.
             stalled += dt;
         }
         if (!navigator.Jumping && tuning.BotDirectStallTime > 0 && stalled > tuning.BotDirectStallTime)

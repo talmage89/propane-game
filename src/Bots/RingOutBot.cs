@@ -33,6 +33,7 @@ public sealed class RingOutBot : IBotGoalPolicy, INavigationArea
     private double elapsed;
 
     public string Status => status.ToString();
+    public string StatusKind => status.Format;
     public string NavigationDiagnostics => motor.NavigationDiagnostics;
     public float Skill { get => motor.Skill; set => motor.Skill = value; }
 

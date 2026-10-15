@@ -141,7 +141,7 @@ LAB_soak-void := --only=soak-void
 LAB_soak-suburb := --only=soak-suburb
 LAB_king := --only=king-full
 LAB_king-suburb := --only=king-suburb
-LAB_fast := --only=rules,aimstall,duel,ringout,king,shortfuse,shortfuse-combo,dissolve
+LAB_fast := --only=rules,aimstall,duel,ringout,king,shortfuse,shortfuse-combo,dissolve,idle-bank,idle-king
 LAB_pace := --only=dissolve-pace
 LAB_ringout-11 := --only=ringout-full --first-seed=11 --seeds=1
 LAB_ringout-12 := --only=ringout-full --first-seed=12 --seeds=1

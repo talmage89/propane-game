@@ -37,8 +37,10 @@ public sealed class KingBot : IBotGoalPolicy
     private bool wasDown;
     private float regroupTime;
     private Vector3 regroupGoal;
+    private float regroupTurn = 1;
 
     public string Status => status.ToString();
+    public string StatusKind => status.Format;
     public string NavigationDiagnostics => motor.NavigationDiagnostics;
     public float Skill { get => motor.Skill; set => motor.Skill = value; }
 
@@ -89,6 +91,7 @@ public sealed class KingBot : IBotGoalPolicy
                 var away = BotMotor.Flat(here - spot).Normalized();
                 if (away == Vector3.Zero) away = Vector3.Right.Rotated(Vector3.Up, rng.RandfRange(0, Mathf.Tau));
                 regroupGoal = spot + away * ((float)state.Radius + tuning.BotTankClearance * 2);
+                regroupTurn = rng.Randf() < 0.5f ? -1 : 1;
                 motor.Reset();
             }
         }
@@ -124,23 +127,23 @@ public sealed class KingBot : IBotGoalPolicy
             return;
         }
 
+        if (!sightStarted) { sightTimer *= tuning.BotKingSightInterval; sightStarted = true; }
+        sightTimer -= dt;
+        var look = sightTimer <= 0;
+        if (look) sightTimer = tuning.BotKingSightInterval;
+
         if (regroupTime > 0)
         {
             // Charging straight back after every knockdown keeps a large roster permanently contested. Recover
-            // outside for independently seeded intervals, then resume the same competitive zone policy.
+            // outside for independently seeded intervals, then resume the same competitive zone policy. Meanwhile
+            // keep playing from the edge: shoot a rival with a bank to spill, or bank a tank in sight, and circle.
             regroupTime -= dt;
-            motor.Face(player, regroupGoal + Vector3.Up * 1.4f, dt);
-            motor.MoveTo(regroupGoal, run: true);
-            status.Set("regrouping outside the zone");
+            Regroup(world, player, spot, radius, tuning, dt, look);
             motor.Navigate(world, dt);
             return;
         }
 
         var inZone = BotMotor.Flat(here - spot).Length() <= radius * 0.85f;
-        if (!sightStarted) { sightTimer *= tuning.BotKingSightInterval; sightStarted = true; }
-        sightTimer -= dt;
-        var look = sightTimer <= 0;
-        if (look) sightTimer = tuning.BotKingSightInterval;
         var reach = BotMotor.MeleeReach(tuning);
         var close = NearestIntruder(world, spot, radius, here, reach + 0.4f);
         if (!Intruding(rival, spot, radius)) rival = null;
@@ -209,6 +212,50 @@ public sealed class KingBot : IBotGoalPolicy
         }
         motor.Navigate(world, dt);
         if (motor.Failed) PickStand(state, world, spot);
+    }
+
+    /// <summary>Out of the zone for a while after a knockdown: fight or bank from its edge, moving around it.</summary>
+    private void Regroup(IBotWorld world, PlayerCharacter player, Vector3 spot, float radius, Core.Tuning tuning, float dt, bool look)
+    {
+        var here = player.GlobalPosition;
+        var ring = radius + tuning.BotTankClearance * 2;
+        if (BotMotor.Flat(regroupGoal - here).Length() < tuning.BotKingRegroupStep * 0.5f)
+        {
+            // Arrived: the next point along the zone's edge, so the bot keeps moving while it waits.
+            var away = BotMotor.Flat(regroupGoal - spot);
+            if (away.LengthSquared() < 0.01f) away = Vector3.Right;
+            var turn = tuning.BotKingRegroupStep / Mathf.Max(ring, 1f) * regroupTurn;
+            regroupGoal = spot + away.Normalized().Rotated(Vector3.Up, turn) * ring;
+        }
+        var watch = Nearest(world, here);
+        var threat = watch != null && watch.GlobalPosition.DistanceTo(here) < 22f && world.Scores.GetValueOrDefault(watch.ActorId) > 0;
+        if (watch != watched || look)
+        {
+            watched = watch;
+            watchedVisible = threat && BotMotor.CanSee(world, player, BotMotor.AimPoint(watch!));
+        }
+        if (threat && watchedVisible)
+        {
+            Shoot(player, watch!, tuning, dt);
+            motor.MoveTo(regroupGoal);
+            status.Set("regrouping, shooting {0}", watch!.ActorId);
+        }
+        else if (Prize(world, player, tuning, dt) is { } target)
+        {
+            var center = target.GlobalTransform * PropaneTank.LocalCenter;
+            motor.Face(player, center, dt);
+            motor.Intent.Aim = true;
+            if (BotMotor.OnTarget(world, player, target)) motor.Tap();
+            motor.MoveTo(regroupGoal);
+            status.Set("regrouping, shooting a {4} tank", word: BotStatus.Name(target.State));
+        }
+        else
+        {
+            fightTime = 0;
+            motor.Face(player, regroupGoal + Vector3.Up * 1.4f, dt);
+            motor.MoveTo(regroupGoal, run: true);
+            status.Set("regrouping outside the zone");
+        }
     }
 
     private static bool Intruding(PlayerCharacter? body, Vector3 spot, float radius) =>
