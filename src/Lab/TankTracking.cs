@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using Godot;
 using Propane.Tank;
 
 namespace Propane.Lab;
@@ -70,11 +69,9 @@ internal sealed class TankTracking(Action<PropaneTank> forgotten) : IDisposable
         public void Detach()
         {
             if (Tank == null) return;
-            if (GodotObject.IsInstanceValid(Tank))
-            {
-                Tank.Punctured -= punctured;
-                Tank.Detonated -= detonated;
-            }
+            // These are managed events: a freed native body can still have a reachable wrapper and callbacks.
+            Tank.Punctured -= punctured;
+            Tank.Detonated -= detonated;
             Tank = null;
             punctured = detonated = null;
             Previous = Next = null;

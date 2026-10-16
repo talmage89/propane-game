@@ -91,6 +91,18 @@ public static class TankTrackingTests
             }
             finally { tank.Free(); }
         });
+
+        runner.Run("tank tracking/forget detaches managed callbacks from a freed native body's wrapper", () =>
+        {
+            using var owner = new TankTracking(_ => { });
+            var tank = PropaneTank.Create(runner.World);
+            var state = Capture(owner, tank);
+            tank.Free();
+            owner.Forget(tank);
+            GC.Collect(); GC.WaitForPendingFinalizers(); GC.Collect();
+            Assert(!state.IsAlive && owner.Count == 0, "a freed wrapper retained captured callback state after detachment");
+            GC.KeepAlive(tank);
+        });
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]

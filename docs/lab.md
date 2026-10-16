@@ -131,7 +131,8 @@ peer and retain separate banks. The factory and session retain ordered teardown 
 Both runners own a `TankTracking` collection, with one session unsubscribe drain. Each registration detaches its
 puncture/detonation handlers and releases captured state on detonation or content retirement. Remaining registrations
 drain in reverse registration order after world invalidation and before runner services stop. Attribution stays in the
-runners. Dissolve Run explicitly forgets tracking before starting native segment retirement; visual dissolution alone
+runners. These are managed events, so detachment also clears callbacks on wrappers whose native bodies were freed
+first. Dissolve Run explicitly forgets tracking before starting native segment retirement; visual dissolution alone
 keeps the registration until retirement. Shooter/drop references retire with their tank. This bounds subscription roots,
 not every streaming data structure: forgotten-index history, timing lists, navigation chunks and the global reveal window
 remain separate work.
