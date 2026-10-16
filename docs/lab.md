@@ -262,3 +262,7 @@ harness prints both groups' final and earned banks. Duel/soak `--trace` includes
 Prototype outcome probes bound the round's simulation clock, since explosion hitstop slows that clock while
 process frames keep arriving. Their summary includes process-frame count; `check_lab.py` also enforces a wall
 timeout so a stopped simulation still fails. Scoring, conservation and legal-outcome assertions remain active.
+
+`check_bot_points.py --easy` compares Normal and Easy together in Tank Bank at four/eight actors, swapping their
+spawn groups across seeds. Both use objective policies and their actual skill dials; it gates retained banks rather
+than inferring difficulty from separate all-Easy and all-Normal matches.
