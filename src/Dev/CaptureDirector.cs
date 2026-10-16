@@ -1,7 +1,13 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.ComponentModel;
+using System.Diagnostics;
+using System.IO;
+using System.Threading;
 using Godot;
 using Propane.Core;
+using Thread = System.Threading.Thread;
 
 namespace Propane.Dev;
 
@@ -11,24 +17,27 @@ namespace Propane.Dev;
 /// Use <c>--fixed-fps 60</c> so timing is deterministic regardless of render speed.
 /// <c>--record=/some/file.mp4</c> films the window in real time (30 fps, or <c>--record-fps</c>) through ffmpeg,
 /// which must be on PATH; unlike Godot's movie maker it keeps a networked game in step with the others.
+/// A capture that cannot be delivered fails the run (exit status 1) instead of being skipped: an ffmpeg that is missing,
+/// stalls, dies, exits nonzero or writes no file, and a screenshot that cannot be saved. No recorder wait lasts longer
+/// than <c>--record-timeout</c> seconds (default 30), after which the encoder is killed.
 /// </summary>
 public partial class CaptureDirector : Node
 {
     private readonly List<(float Time, Action Action)> timeline = new();
     private float elapsed;
     private int next;
-    private System.Diagnostics.Process? recorder;
+    private FrameEncoder? encoder;
     private Vector2I recordSize;
     private double recordFps;
+    private TimeSpan recordTimeout;
     private ulong recordStart;
     private long framesWritten;
     private long framesSent;
     private int recordPending;
     private int screenshotPending;
-    private readonly List<(string Path, int Width, int Height, byte[] Data)> screenshots = new();
+    private readonly List<(string Dir, string Name, int Width, int Height, byte[] Data)> screenshots = new();
     private bool recordUnavailable;
-    private System.Threading.Thread? recordWriter;
-    private readonly System.Collections.Concurrent.BlockingCollection<(byte[] Data, int Repeat)> recordQueue = new(3);
+    private bool recordFailureReported;
 
     public bool CollectFrameMetrics { get; init; } = true;
 
@@ -45,6 +54,7 @@ public partial class CaptureDirector : Node
         timeline.Sort((a, b) => a.Time.CompareTo(b.Time));
         ProcessMode = ProcessModeEnum.Always;
         recordFps = DevArgs.GetFloat("record-fps", 30f);
+        recordTimeout = TimeSpan.FromSeconds(Math.Max(DevArgs.GetFloat("record-timeout", 30f), 0.1f));
     }
 
     public override void _ExitTree()
@@ -56,12 +66,11 @@ public partial class CaptureDirector : Node
                 RenderingServer.ForceDraw();
         }
         FlushScreenshots();
-        if (recorder == null)
+        if (encoder == null)
         {
             return;
         }
-        recordQueue.CompleteAdding();
-        recordWriter?.Join();
+        encoder.Complete(recordTimeout);
         // Drain managed GPU readback callbacks while .NET is still alive. Otherwise RenderingDevice.finalize
         // invokes them during engine shutdown, after Godot has torn down its C# bindings.
         var device = RenderingServer.GetRenderingDevice();
@@ -69,9 +78,11 @@ public partial class CaptureDirector : Node
         {
             RenderingServer.ForceDraw();
         }
-        recorder.WaitForExit();
-        GD.Print($"[record] {framesWritten / recordFps:0.0} s, {framesSent} distinct frames of {framesWritten}, ffmpeg exit {recorder.ExitCode}");
-        recorder = null;
+        var exitCode = encoder.Finish(recordTimeout);
+        GD.Print($"[record] {framesWritten / recordFps:0.0} s, {framesSent} distinct frames of {framesWritten}, ffmpeg exit {exitCode?.ToString() ?? "killed"}");
+        ReportRecordFailure();
+        encoder.Dispose();
+        encoder = null;
     }
 
     public override void _Process(double delta)
@@ -90,6 +101,27 @@ public partial class CaptureDirector : Node
         }
     }
 
+    /// <summary>Fails the run: logs why and asks for an orderly exit with status 1.</summary>
+    private void Fail(string message)
+    {
+        GD.PushError(message);
+        if (IsInsideTree())
+        {
+            ShutdownGuard.Quit(GetTree(), 1);
+        }
+    }
+
+    /// <summary>Reports the recorder's first failure once, whether it surfaced while filming or while shutting down.</summary>
+    private void ReportRecordFailure()
+    {
+        recordUnavailable = true;
+        if (encoder?.Failure is { } failure && !recordFailureReported)
+        {
+            recordFailureReported = true;
+            Fail($"[record] FAIL {failure}");
+        }
+    }
+
     /// <summary>
     /// Hands the frame to the writer thread as often as the wall clock calls for. When the encoder falls behind, frames
     /// are skipped and the next one is repeated in their place, so the video keeps real time without stalling the game.
@@ -101,40 +133,33 @@ public partial class CaptureDirector : Node
         {
             return;
         }
+        if (encoder?.Failure != null)
+        {
+            ReportRecordFailure();
+            return;
+        }
         var now = Time.GetTicksUsec();
-        if (recorder == null)
+        if (encoder == null)
         {
             // The rendered texture, which can be larger than the viewport's logical size.
             var format = RenderingServer.GetRenderingDevice().TextureGetFormat(RenderingServer.TextureGetRdTexture(GetViewport().GetTexture().GetRid()));
             recordSize = new Vector2I((int)format.Width, (int)format.Height);
             try
             {
-                recorder = System.Diagnostics.Process.Start(RecorderStartInfo(path, recordSize, recordFps))!;
+                encoder = new FrameEncoder(RecorderStartInfo(path, recordSize, recordFps), path);
             }
-            catch (System.ComponentModel.Win32Exception e)
+            catch (Exception e) when (e is Win32Exception or InvalidOperationException or IOException)
             {
                 recordUnavailable = true;
-                GD.PushWarning($"[record] Could not start ffmpeg; put it on PATH to record: {e.Message}");
+                recordFailureReported = true;
+                Fail($"[record] FAIL could not start ffmpeg (put it on PATH to record): {e.Message}");
                 return;
             }
             recordStart = now;
-            recordWriter = new System.Threading.Thread(() =>
-            {
-                var stream = recorder.StandardInput.BaseStream;
-                foreach (var (data, repeat) in recordQueue.GetConsumingEnumerable())
-                {
-                    for (var k = 0; k < repeat; k++)
-                    {
-                        stream.Write(data, 0, data.Length);
-                    }
-                }
-                stream.Close();
-            });
-            recordWriter.Start();
             GD.Print($"[record] {recordSize.X}x{recordSize.Y} at {recordFps} fps to {path}");
         }
         var due = (long)((now - recordStart) / 1e6 * recordFps) + 1;
-        if (due <= framesWritten || recordPending >= recordQueue.BoundedCapacity)
+        if (due <= framesWritten || recordPending >= FrameEncoder.Capacity)
         {
             return;
         }
@@ -147,18 +172,17 @@ public partial class CaptureDirector : Node
         {
             recordPending--;
             // A resized window no longer matches the stream; its frames are left out.
-            if (!recordQueue.IsAddingCompleted && data.Length == recordSize.X * recordSize.Y * 4)
+            if (encoder != null && data.Length == recordSize.X * recordSize.Y * 4 && encoder.Offer(data, repeat, recordTimeout))
             {
-                recordQueue.Add((data, repeat));
                 framesSent++;
             }
         }));
     }
 
     /// <summary>Pass literal arguments on every OS, including Windows paths with spaces or a trailing backslash.</summary>
-    internal static System.Diagnostics.ProcessStartInfo RecorderStartInfo(string path, Vector2I size, double fps)
+    internal static ProcessStartInfo RecorderStartInfo(string path, Vector2I size, double fps)
     {
-        var start = new System.Diagnostics.ProcessStartInfo
+        var start = new ProcessStartInfo
         {
             FileName = "ffmpeg",
             RedirectStandardInput = true,
@@ -184,7 +208,12 @@ public partial class CaptureDirector : Node
     {
         var dir = DevArgs.Get("capture-dir");
         if (dir == null || DisplayServer.GetName() == "headless") return;
-        DirAccess.MakeDirRecursiveAbsolute(dir);
+        var made = DirAccess.MakeDirRecursiveAbsolute(dir);
+        if (made != Error.Ok)
+        {
+            Fail($"[capture] FAIL could not create {dir}: {made}");
+            return;
+        }
         var device = RenderingServer.GetRenderingDevice();
         var texture = RenderingServer.TextureGetRdTexture(GetViewport().GetTexture().GetRid());
         var format = device.TextureGetFormat(texture);
@@ -196,16 +225,15 @@ public partial class CaptureDirector : Node
             try
             {
                 if (data.Length != width * height * 4) throw new InvalidOperationException("unexpected screenshot texture format");
-                screenshots.Add(($"{dir}/{name}.png", width, height, data));
+                screenshots.Add((dir, name, width, height, data));
             }
-            catch (Exception error) { GD.PushError($"[capture] FAIL {error.Message}"); ShutdownGuard.Quit(GetTree(), 1); }
+            catch (Exception error) { Fail($"[capture] FAIL {error.Message}"); }
             finally { screenshotPending--; }
         }));
         if (status != Error.Ok)
         {
             screenshotPending--;
-            GD.PushError($"[capture] FAIL readback request: {status}");
-            ShutdownGuard.Quit(GetTree(), 1);
+            Fail($"[capture] FAIL readback request: {status}");
         }
     }
 
@@ -214,14 +242,13 @@ public partial class CaptureDirector : Node
         foreach (var shot in screenshots)
         {
             using var image = Image.CreateFromData(shot.Width, shot.Height, false, Image.Format.Rgba8, shot.Data);
-            if (image.SavePng(shot.Path) != Error.Ok)
+            if (SaveScreenshot(image, shot.Dir, shot.Name) is { } failure)
             {
-                GD.PushError($"[capture] FAIL could not save {shot.Path}");
-                if (GetTree() is { } tree) ShutdownGuard.Quit(tree, 1);
+                Fail($"[capture] FAIL {failure}");
             }
             else
             {
-                GD.Print($"[capture] {shot.Path}");
+                GD.Print($"[capture] {shot.Dir}/{shot.Name}.png");
             }
         }
         screenshots.Clear();
@@ -234,10 +261,176 @@ public partial class CaptureDirector : Node
         {
             return;
         }
-        DirAccess.MakeDirRecursiveAbsolute(dir);
         using var image = GetViewport().GetTexture().GetImage();
+        if (image == null)
+        {
+            Fail($"[capture] FAIL no image to save for {dir}/{name}.png");
+            return;
+        }
+        if (SaveScreenshot(image, dir, name) is { } failure)
+        {
+            Fail($"[capture] FAIL {failure}");
+            return;
+        }
+        GD.Print($"[capture] {dir}/{name}.png");
+    }
+
+    /// <summary>Saves <paramref name="dir"/>/<paramref name="name"/>.png, creating the directory; returns why it could not, or null.</summary>
+    internal static string? SaveScreenshot(Image image, string dir, string name)
+    {
+        var made = DirAccess.MakeDirRecursiveAbsolute(dir);
+        if (made != Error.Ok)
+        {
+            return $"could not create {dir}: {made}";
+        }
         var path = $"{dir}/{name}.png";
-        image.SavePng(path);
-        GD.Print($"[capture] {path}");
+        var saved = image.SavePng(path);
+        return saved == Error.Ok ? null : $"could not save {path}: {saved}";
+    }
+}
+
+/// <summary>
+/// Streams raw frames to an encoder process (ffmpeg) from a worker thread. It never throws into the game and never
+/// waits without a bound: the first failure (a broken pipe, an encoder that stalls, dies, exits nonzero or leaves no
+/// file) is kept in <see cref="Failure"/> for the caller to report, and an encoder that stops responding is killed.
+/// The worker calls no Godot API.
+/// </summary>
+internal sealed class FrameEncoder : IDisposable
+{
+    /// <summary>Frames that may wait for the worker. Bounded so a slow encoder cannot make memory grow.</summary>
+    public const int Capacity = 3;
+
+    private readonly Process process;
+    private readonly string outputPath;
+    private readonly BlockingCollection<(byte[] Data, int Repeat)> queue = new(Capacity);
+    private readonly Thread writer;
+    private string? failure;
+
+    public FrameEncoder(ProcessStartInfo start, string outputPath)
+    {
+        this.outputPath = outputPath;
+        process = Process.Start(start) ?? throw new InvalidOperationException("the encoder did not start");
+        writer = new Thread(WriteFrames) { Name = "CaptureEncoder", IsBackground = true };
+        writer.Start();
+    }
+
+    /// <summary>Why recording failed, or null. The first failure wins; thread-safe.</summary>
+    public string? Failure => Volatile.Read(ref failure);
+
+    private void Fail(string message) => Interlocked.CompareExchange(ref failure, message, null);
+
+    private void WriteFrames()
+    {
+        try
+        {
+            var stream = process.StandardInput.BaseStream;
+            foreach (var (data, repeat) in queue.GetConsumingEnumerable())
+            {
+                if (Failure != null)
+                {
+                    // Keep draining so the game thread never blocks on a dead encoder.
+                    continue;
+                }
+                try
+                {
+                    for (var k = 0; k < repeat; k++)
+                    {
+                        stream.Write(data, 0, data.Length);
+                    }
+                }
+                catch (IOException e)
+                {
+                    Fail($"the encoder stopped reading frames: {e.Message}");
+                }
+            }
+            stream.Close();
+        }
+        catch (Exception e) when (e is IOException or ObjectDisposedException or InvalidOperationException)
+        {
+            Fail($"the encoder's input failed: {e.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Queues a frame (repeated <paramref name="repeat"/> times in the stream). Returns false when the frame was not
+    /// queued because recording already failed or ended, or because the encoder took none for <paramref name="stall"/>.
+    /// </summary>
+    public bool Offer(byte[] data, int repeat, TimeSpan stall)
+    {
+        if (Failure != null || queue.IsAddingCompleted)
+        {
+            return false;
+        }
+        if (process.HasExited)
+        {
+            Fail($"the encoder exited early with code {process.ExitCode}");
+            return false;
+        }
+        if (queue.TryAdd((data, repeat), stall))
+        {
+            return true;
+        }
+        Fail($"the encoder accepted no frame for {stall.TotalSeconds:0.#} s");
+        return false;
+    }
+
+    /// <summary>Stops accepting frames and waits up to <paramref name="timeout"/> for the queued ones to be written.</summary>
+    public void Complete(TimeSpan timeout)
+    {
+        queue.CompleteAdding();
+        if (writer.Join(timeout))
+        {
+            return;
+        }
+        Fail($"the encoder did not take its last frames within {timeout.TotalSeconds:0.#} s");
+        Kill();
+        // Killing the encoder breaks the pipe, which frees a writer blocked in a write.
+        writer.Join(TimeSpan.FromSeconds(5));
+    }
+
+    /// <summary>
+    /// Waits up to <paramref name="timeout"/> for the encoder to finish the file, then checks its status and output.
+    /// Returns its exit code, or null when it had to be killed.
+    /// </summary>
+    public int? Finish(TimeSpan timeout)
+    {
+        if (!process.WaitForExit((int)timeout.TotalMilliseconds))
+        {
+            Fail($"the encoder did not finish within {timeout.TotalSeconds:0.#} s");
+            Kill();
+            return null;
+        }
+        if (process.ExitCode != 0)
+        {
+            Fail($"the encoder exited with code {process.ExitCode}");
+        }
+        else if (!File.Exists(outputPath) || new FileInfo(outputPath).Length == 0)
+        {
+            Fail($"the encoder wrote no file at {outputPath}");
+        }
+        return process.ExitCode;
+    }
+
+    private void Kill()
+    {
+        try
+        {
+            process.Kill(true);
+            process.WaitForExit(5000);
+        }
+        catch (Exception e) when (e is InvalidOperationException or Win32Exception or NotSupportedException)
+        {
+            // Already gone.
+        }
+    }
+
+    public void Dispose()
+    {
+        if (!process.HasExited)
+        {
+            Kill();
+        }
+        process.Dispose();
+        queue.Dispose();
     }
 }

@@ -245,7 +245,9 @@ The [animation review harness](docs/animation-review.md) compares controller-dri
 Each scene in `scenes/dev` is a scripted test. Arguments after `--` are read by `src/Dev/DevArgs.cs`;
 `--capture-dir=<dir>` saves screenshots, `--record=<file.mp4>` films the window in real time (needs ffmpeg on `PATH`,
 including `ffmpeg.exe` on Windows; a game in a match stays in step, unlike Godot's `--write-movie`), and
-`--tune.<Name>=<value>` overrides any tuning value. `game_test` and `player_range` also accept
+`--tune.<Name>=<value>` overrides any tuning value. A capture that cannot be delivered (a screenshot that cannot be saved,
+an ffmpeg that is missing, stalls, dies, exits nonzero or writes no file) fails the run with exit status 1, and no recorder
+wait outlasts `--record-timeout=<seconds>` (default 30). `game_test` and `player_range` also accept
 `--effects-seed=<integer>` to seed their world random stream before constructing content for paired captures. For example,
 `tools/dev/net_bots.sh -n 4 -l 90 -w 1 -- --record=/tmp/bots.mp4` films a match from the first bot.
 
