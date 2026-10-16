@@ -197,7 +197,7 @@ public partial class LobbyServer : Node
         if (now >= nextDiagnostics)
         {
             nextDiagnostics = now + (LaunchArgs.Current.Has("net-throttle-trace") ? .25 : 10);
-            if (LaunchArgs.Current.Has("capacity-metrics")) Log(Dev.CapacityMetrics.Server(clients.Keys.Select(id => peerIds.Connection(id)).Where(c => c != null).Select(c => transport.Diagnostics(c!))));
+            if (LaunchArgs.Current.Has("capacity-metrics")) Log(CapacityMetrics.Server(clients.Keys.Select(id => peerIds.Connection(id)).Where(c => c != null).Select(c => transport.Diagnostics(c!))));
             foreach (var id in clients.Keys)
             {
                 if (peerIds.Connection(id) is not { } connection) { continue; }

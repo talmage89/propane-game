@@ -3,9 +3,8 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using Godot;
-using Propane.Net;
 
-namespace Propane.Dev;
+namespace Propane.Net;
 
 /// <summary>Engine frame cost, resident process memory and transport/inbox pressure for repeatable capacity runs.</summary>
 public static class CapacityMetrics
