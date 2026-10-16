@@ -71,6 +71,7 @@ public partial class LabTest : Node
             Template = template,
             PauseOnFocusLoss = false,
             TestRandomSeed = (ulong)DevArgs.GetFloat("effects-seed", 23),
+            TestSeedPhysicsRandom = DevArgs.Get("replay-random") != null,
             Name = "Lab"
         };
         AddChild(lab);
@@ -318,6 +319,20 @@ public partial class LabTest : Node
             $"hard_earned={hard.Sum(a => earned.GetValueOrDefault(a))} normal_earned={normal.Sum(a => earned.GetValueOrDefault(a))}");
     }
 
+    private static void ReportSkills(LabSession lab, int seed, IReadOnlyDictionary<int, int> scores)
+    {
+        if (DevArgs.Get("compare-skills") == null) return;
+        var bots = lab.Session.Actors.Select(a => a.Character).ToArray();
+        int[] Group(BotDifficulty difficulty) => bots.Where(a => a.InputOverride is IBotGoalPolicy brain &&
+            !brain.PointsDriven && BotProfile.Nearest(brain.Skill, lab.World.Tuning) == difficulty).Select(a => a.ActorId).ToArray();
+        var normal = Group(BotDifficulty.Normal);
+        var easy = Group(BotDifficulty.Easy);
+        Assert(normal.Length > 0 && easy.Length > 0 && normal.Length + easy.Length == bots.Length,
+            "skill comparison requires Normal and Easy objective-policy bots on every actor");
+        GD.Print($"[lab skills] seed={seed} normal={normal.Length} easy={easy.Length} " +
+            $"normal_score={normal.Sum(a => scores.GetValueOrDefault(a))} easy_score={easy.Sum(a => scores.GetValueOrDefault(a))}");
+    }
+
     private async Task Duel(bool soak = false)
     {
         if (DevArgs.Get("duel-seconds") != null) template.LabDuelSeconds = DevArgs.GetFloat("duel-seconds", 180);
@@ -346,6 +361,7 @@ public partial class LabTest : Node
         var bank = lab.Bank!;
         CheckIdle("duel", bank.Activity);
         ReportPoints(lab, "bank", template.FixedSeed, bank.Scores, bank.Earned);
+        ReportSkills(lab, template.FixedSeed, bank.Scores);
         var botEarned = bank.Earned.Where(s => s.Key != lab.Player.ActorId).Sum(s => s.Value);
         GD.Print($"[lab duel] seconds={seconds} simulation={lab.World.Clock.Now:F3} banked={bank.BankedTotal} spilled={bank.SpilledTotal} hits={bank.Hits} you={bank.Scores[1]} bot={bank.Scores[2]} earned_you={bank.Earned[1]} earned_bot={bank.Earned[2]} live={lab.LiveTanks.Count()} earned_bots={botEarned}");
         // In a larger roster the first rival can finish empty while the other bots bank.
@@ -413,6 +429,7 @@ public partial class LabTest : Node
                 Template = template,
                 PauseOnFocusLoss = false,
                 TestRandomSeed = (ulong)seed,
+                TestSeedPhysicsRandom = DevArgs.Get("replay-random") != null,
                 DrivePlayer = DevArgs.Get("watch") == null,
                 Name = "Lab"
             };

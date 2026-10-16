@@ -607,7 +607,8 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         rig.Weight = 0f;
         animator.SetHoldWeight(0f);
         capsule.Disabled = true;
-        ragdoll.Begin(velocity, spin);
+        using var rng = World.CreatePhysicsRandom();
+        ragdoll.Begin(velocity, spin, rng);
         if (!IsRemote)
         {
             Ragdolled?.Invoke(GlobalPosition, velocity, spin);

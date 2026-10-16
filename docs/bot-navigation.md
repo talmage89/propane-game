@@ -220,6 +220,16 @@ Windows and macOS were not exercised here.
 
 ## Idle bots
 
+Easy bankers that have no useful banking target wander roughly toward the nearest upright rival, even one with an empty bank.
+Ammo, tanks and profitable fights take priority. A short step of `BotEasyRoamRadius`, within `BotEasyRoamSpreadDegrees`
+of the hint's direction, stays fixed for `BotEasyRoamSeconds` or until reached. It avoids routing straight across the map to a rival.
+An unreachable scouting point is replaced without blacklisting the rival. Ordinary melee and profitable rifle fights
+keep Easy's existing aim and reaction, and navigation retains its shared query/expansion budgets. These dials and
+`BotEasySeekRivals` are local; Normal and Hard retain their goal policies.
+
+Melee searches read each upright opponent's root position once per pass and reuse it for distance and reach tests.
+Sight, aim and ragdoll-bone observations keep their existing paths.
+
 `BotActivity` measures whether a bot plays. Play is cut into one-second windows; a window is idle when the bot stayed
 upright, ended it less than a meter from where it began, and neither fired, meleed nor stood in King's zone. It counts
 idle windows (and the blocked ones, in which the bot asked to move most of the time), the longest idle run and the time

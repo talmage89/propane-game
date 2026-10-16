@@ -63,7 +63,7 @@ internal static class NavigationTests
         public bool IsPlaying => true;
         public float TimeLeft => 180;
         public int MyScore => 0;
-        public IReadOnlyDictionary<int, int> Scores { get; } = new Dictionary<int, int> { [1] = 0, [2] = 8 };
+        public IReadOnlyDictionary<int, int> Scores { get; init; } = new Dictionary<int, int> { [1] = 0, [2] = 8 };
         public double Now => 0;
         public double LastHitTime => double.NegativeInfinity;
         public int LastHitBy => 0;
@@ -758,6 +758,71 @@ internal static class NavigationTests
             finally
             {
                 runner.World.Tuning.BotHuntWhenEmpty = old;
+                player.Free(); enemy.Free();
+            }
+        });
+        runner.Run("Easy seeks an empty rival only when it has no banking objective", () =>
+        {
+            var player = new PlayerCharacter { World = runner.World, ActorId = 1, Ammo = AmmoState.Starting(tuning) };
+            var enemy = new PlayerCharacter { World = runner.World, ActorId = 2, Position = Vector3.Right * 100 };
+            runner.World.Root.AddChild(player);
+            runner.World.Root.AddChild(enemy);
+            var scores = new Dictionary<int, int> { [1] = 0, [2] = 0 };
+            using var observations = new BankingWorld(runner.World, player, enemy)
+            {
+                Scores = scores
+            };
+            using var brain = new BankingBot(23) { Skill = runner.World.Tuning.BotEasySkill };
+            var old = runner.World.Tuning.BotEasySeekRivals;
+            try
+            {
+                brain.Prepare(observations);
+                var tanks = new List<PropaneTank>();
+                void Think()
+                {
+                    for (var i = 0; i < 100; i++)
+                    {
+                        observations.Services.BeginTick(tanks);
+                        brain.Think(observations, 1f / 120);
+                    }
+                }
+                Think();
+                TestRunner.Assert(brain.Status.StartsWith("looking for rivals near 2", StringComparison.Ordinal), "Easy waits for a bank instead of seeking a rival");
+                TestRunner.Assert(!brain.Read().FireHeld, "Easy fires beyond its ordinary rifle range");
+                var scouting = brain.ScoutingGoal ?? throw new InvalidOperationException("Easy has no scouting waypoint");
+                var step = scouting - player.GlobalPosition;
+                TestRunner.Assert(Mathf.Abs(step.Length() - tuning.BotEasyRoamRadius) < 0.001f &&
+                    step.Dot(enemy.GlobalPosition - player.GlobalPosition) >= 0, "Easy routes to a distant rival instead of a short step toward it");
+                Think();
+                TestRunner.Assert(brain.ScoutingGoal == scouting, "Easy's scouting waypoint changes with each target observation");
+                var before = GC.GetAllocatedBytesForCurrentThread();
+                for (var i = 0; i < 600; i++) brain.Think(observations, 1f / 120);
+                var bytes = GC.GetAllocatedBytesForCurrentThread() - before;
+                TestRunner.Assert(bytes == 0, $"Easy fallback allocates {bytes} bytes");
+                enemy.GlobalPosition = Vector3.Right * 20;
+                Think();
+                TestRunner.Assert(brain.Status.StartsWith("looking for rivals near 2", StringComparison.Ordinal) && !brain.Read().Aim,
+                    "Easy should scout near an empty rival instead of running rifle combat");
+                scores[2] = 8;
+                Think();
+                TestRunner.Assert(brain.Status.StartsWith("fighting 2", StringComparison.Ordinal),
+                    $"a profitable fight must leave scouting: {brain.Status}");
+                scores[2] = 0;
+                brain.Skill = runner.World.Tuning.BotNormalSkill;
+                Think();
+                TestRunner.Assert(brain.Status == "no target", "Easy fallback changed Normal's goals");
+                brain.Skill = runner.World.Tuning.BotEasySkill;
+                brain.PointsDriven = true;
+                Think();
+                TestRunner.Assert(brain.Status == "no target", "Easy fallback bypassed the points policy");
+                brain.PointsDriven = false;
+                runner.World.Tuning.BotEasySeekRivals = false;
+                Think();
+                TestRunner.Assert(brain.Status == "no target", "Easy fallback ignores its local dial");
+            }
+            finally
+            {
+                runner.World.Tuning.BotEasySeekRivals = old;
                 player.Free(); enemy.Free();
             }
         });

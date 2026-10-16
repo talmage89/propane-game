@@ -75,10 +75,14 @@ def summarize(rows, bots):
     return result
 
 
-def load_case(directory, bots, config):
+def load_case(directory, bots, config, skill, replay_random=False):
     summary = json.loads((directory / "summary.json").read_text())
     if summary["assembly_config"] != config or summary["assembly_optimized"] != (config == "Release"):
         raise ValueError("wrong loaded assembly configuration")
+    if not math.isclose(summary["bot_skill"], skill, abs_tol=1e-6):
+        raise ValueError("wrong loaded bot skill")
+    if summary.get("replay_random", False) != replay_random:
+        raise ValueError("wrong loaded replay mode")
     if summary["headless_idle_usec"] or summary["max_fps"] or summary["frame_delay_ms"]:
         raise ValueError("engine frame pacing was not disabled")
     files = list(directory.glob("frames-*.csv"))
@@ -123,8 +127,12 @@ def main():
     parser.add_argument("--output", type=Path)
     parser.add_argument("--capture", action="store_true")
     parser.add_argument("--camera", choices=("overview", "near", "far"), default="overview")
+    parser.add_argument("--bot-skill", type=float, default=0.6, help="0..1 aim skill; Easy is 0.2, Normal defaults to 0.6")
+    parser.add_argument("--replay-random", action="store_true", help="seed physical events, disable hitstop and fix simulation FPS at 60 for cost comparisons")
     parser.add_argument("--omit", choices=("none", "actors", "shadows", "effects", "debris"), default="none")
     args = parser.parse_args()
+    if not math.isfinite(args.bot_skill) or not 0 <= args.bot_skill <= 1:
+        parser.error("bot-skill must be between zero and one")
     configs = args.config.split(",")
     if len(set(configs)) != len(configs) or any(c not in ("Debug", "Release") for c in configs):
         parser.error("config must be Debug, Release or Debug,Release")
@@ -141,7 +149,7 @@ def main():
     revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
     dirty = bool(subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT, text=True).strip())
     documents = {config: dict(schema=SCHEMA, revision=revision, dirty=dirty, config=config, seed=23,
-                              seconds=args.seconds, warmup=args.warmup, repeats=args.repeats,
+                              seconds=args.seconds, warmup=args.warmup, repeats=args.repeats, bot_skill=args.bot_skill, replay_random=args.replay_random,
                               resolution="1280x720", presentation="no-idle-wait-vsync-disabled-gamescope-wsi-disabled", omitted_render_feature=args.omit, camera_mode=args.camera, platform=platform.platform(), paired_configs=configs, cases=[])
                  for config in configs}
     outputs = {config: output if len(configs) == 1 else output.with_stem(output.stem + "-" + config) for config in configs}
@@ -163,9 +171,13 @@ def main():
                         command = [godot(), "--path", str(ROOT), "--disable-vsync", "--max-fps", "0", "--frame-delay", "0", "--resolution", "1280x720"]
                         if not rendered:
                             command.append("--headless")
+                        if args.replay_random:
+                            command += ["--fixed-fps", "60"]
                         command += ["res://scenes/dev/scale_bench.tscn", "--", f"--bots={bots}", f"--tanks={tanks}",
-                                    f"--config={config}", f"--seconds={args.seconds}", f"--warmup={args.warmup}",
+                                    f"--config={config}", f"--seconds={args.seconds}", f"--warmup={args.warmup}", f"--bot-skill={args.bot_skill}",
                                     f"--frame-metrics={directory}", f"--omit={args.omit}", f"--camera={args.camera}"]
+                        if args.replay_random:
+                            command.append("--replay-random")
                         if args.capture and rendered and repeat == 0:
                             command.append(f"--capture-dir={directory}")
                         with assembly(config, build=False), (directory / "run.log").open("w") as log:
@@ -176,7 +188,7 @@ def main():
                             validate_log(log)
                         except ValueError as error:
                             raise RuntimeError(f"{error}; see {directory / 'run.log'}") from error
-                        result = load_case(directory, bots, config)
+                        result = load_case(directory, bots, config, args.bot_skill, args.replay_random)
                         result.update(uptime=load, uptime_end=subprocess.check_output(["uptime"], text=True).strip(),
                                       started_utc=started, evidence=str(directory.relative_to(output.parent)))
                         runs[config].append(result)

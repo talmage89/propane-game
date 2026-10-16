@@ -160,10 +160,13 @@ The dial sweep locks actor input while gravity settles before and after each res
 check layout and retirement; active bot combat (including Hard's immediate banking) is covered by the duel,
 prototype rounds and points sweep. A valid early blast or hitstop must not masquerade as a failed reset.
 
-Two idle checks keep crowds of bots playing: `idle-bank` (a 40-second suburb soak with eight bots) and `idle-king` (a
-45-second suburb King round with sixteen bots). Every Lab bot run prints `[lab idle]` lines: each bot's idle share (see
-[bot navigation](bot-navigation.md#idle-bots)), its longest idle run and its commonest statuses; `--max-idle=F` and
-`--max-idle-worst=F` fail the run when the bots' mean or worst share exceeds them (the checks allow 12%/30% and 15%/40%).
+Two idle checks keep crowds of bots playing: `idle-bank` (a 40-second suburb soak with eight NPCs and the driven
+player) and `idle-king` (a 45-second suburb King round with sixteen driven actors). Their fixtures seed the per-event
+blast, ragdoll and debris generators (`--replay-random`) and disable wall-clock hitstop. Every other Lab run retains
+ordinary entropy and hitstop. [Idle check verification](idle-checks.md) records the cause and repeated load trials.
+Every Lab bot run prints `[lab idle]` lines: each bot's idle share (see [bot navigation](bot-navigation.md#idle-bots)),
+longest idle run and commonest statuses. `--max-idle=F` and `--max-idle-worst=F` assert that run's mean and worst shares;
+the checks retain their original limits of 12%/30% and 15%/40%.
 `--only=soak-void,dials` runs only the named sessions (`lifetime`, `rules`, `aimstall`, `duel`, `ringout`, `king`,
 `shortfuse`, `shortfuse-combo`, `dissolve`, `idle-bank`, `idle-king`, and with `--full` `dials`, `soak-void`, `soak-suburb`, `ringout-full`, `king-full`,
 `king-suburb`, `shortfuse-full`, `dissolve-full`, `dissolve-pace`); `make test-full` splits
@@ -259,3 +262,9 @@ harness prints both groups' final and earned banks. Duel/soak `--trace` includes
 Prototype outcome probes bound the round's simulation clock, since explosion hitstop slows that clock while
 process frames keep arriving. Their summary includes process-frame count; `check_lab.py` also enforces a wall
 timeout so a stopped simulation still fails. Scoring, conservation and legal-outcome assertions remain active.
+
+`check_bot_points.py --easy` compares Normal and Easy together in Tank Bank at four/eight actors, swapping their
+spawn groups across seeds. Both use objective policies and their actual skill dials; it gates retained banks rather
+than inferring difficulty from separate all-Easy and all-Normal matches.
+`--replay-random` seeds physical events from each world's seeded stream and disables wall-clock hitstop for either
+comparison. Without it, the checker retains ordinary gameplay entropy and hitstop.

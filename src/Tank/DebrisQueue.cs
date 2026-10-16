@@ -29,7 +29,7 @@ public partial class DebrisQueue : Node
             return node;
         });
         // Visual randomness must not depend on when the presentation queue drains.
-        using var rng = new RandomNumberGenerator();
+        using var rng = world.CreatePhysicsRandom();
         // Fragments collide and can intercept shots. Network peers must use the same physical scatter rather
         // than new local entropy; keep it independent of gameplay randomness and presentation drain order.
         if (netId != 0) rng.Seed = netId;

@@ -28,6 +28,7 @@ public partial class ScaleBench : Node3D
     private TimeSpan cpuStarted;
     private ulong measuredPhysicsStart;
     private bool finished, pendingStart;
+    private bool replayRandom;
     private int tankCount;
     private string worldHash = "";
     private string omit = "none";
@@ -60,6 +61,11 @@ public partial class ScaleBench : Node3D
             if (omit != "none") GetTree().NodeAdded += OmitFeature;
             using var tuning = Tuning.LoadBaked();
             tuning.FixedSeed = 23;
+            replayRandom = DevArgs.Get("replay-random") != null;
+            if (replayRandom) { tuning.HitstopDuration = 0; }
+            tuning.LabBotSkill = DevArgs.GetFloat("bot-skill", tuning.LabBotSkill);
+            if (!float.IsFinite(tuning.LabBotSkill) || tuning.LabBotSkill < 0 || tuning.LabBotSkill > 1)
+                throw new ArgumentException("bot skill must be between zero and one");
             // Single-player pile sizes and map stay constant across the grid. Always reserve the same starts/pickups.
             var settings = SuburbPlans.SinglePlayer(tuning) with
             {
@@ -77,6 +83,7 @@ public partial class ScaleBench : Node3D
                 EnvironmentKind = LabEnvironment.Suburb,
                 Template = tuning,
                 TestRandomSeed = 23,
+                TestSeedPhysicsRandom = replayRandom,
                 TestSuburbSettings = settings,
                 TestBankBots = bots,
                 CreateLocalView = false,
@@ -187,6 +194,8 @@ public partial class ScaleBench : Node3D
                 map_size = lab.World.Tuning.MpMapSizeBase + lab.World.Tuning.MpMapSizePerPlayer * 16,
                 seed = 23,
                 bots = lab.Session.Actors.Count - 1,
+                bot_skill = lab.World.Tuning.LabBotSkill,
+                replay_random = replayRandom,
                 tanks = tankCount,
                 live_tanks_end = lab.LiveTanks.Count(),
                 requested_physics_ticks = measured,

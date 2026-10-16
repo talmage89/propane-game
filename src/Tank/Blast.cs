@@ -22,7 +22,7 @@ public static class Blast
         var tuning = world.Tuning;
         var radius = tuning.BlastRadius;
         var space = world.Physics.DirectSpaceState;
-        var rng = new RandomNumberGenerator();
+        using var rng = world.CreatePhysicsRandom();
         // All sight lines share this blast's origin and mask; only the target changes.
         var sight = PhysicsRayQueryParameters3D.Create(center, center, Layers.BlastOccluders);
         var exclude = new Godot.Collections.Array<Rid>();

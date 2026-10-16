@@ -62,7 +62,7 @@ class BenchTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix="bench-smoke-", dir=bench.ROOT / "build") as scratch:
             path = Path(scratch) / "smoke.json"
             subprocess.run(["make", "--no-print-directory", "bench", "BOTS=2", "TANKS=1", "RENDERED=0",
-                            "SECONDS=.5", "WARMUP=.2", "REPEATS=1", "CONFIG=Debug", f"BENCH_ARGS=--output={path}"], cwd=bench.ROOT, check=True)
+                            "SECONDS=.5", "WARMUP=.2", "REPEATS=1", "CONFIG=Debug", f"BENCH_ARGS=--output={path} --bot-skill=0.2"], cwd=bench.ROOT, check=True)
             data = json.loads(path.read_text())
             case = data["cases"][0]
             run = case["runs"][0]
@@ -70,6 +70,10 @@ class BenchTests(unittest.TestCase):
             self.assertFalse(run["assembly_optimized"])
             self.assertEqual((run["headless_idle_usec"], run["max_fps"], run["frame_delay_ms"]), (0, 0, 0))
             self.assertEqual(run["bots"], 2)
+            self.assertAlmostEqual(run["bot_skill"], 0.2)
+            self.assertEqual(data["bot_skill"], 0.2)
+            self.assertFalse(run["replay_random"])
+            self.assertFalse(data["replay_random"])
             self.assertGreater(run["tanks"], 0)
             self.assertEqual(set(run["rendering"]), set(bench.RENDER_METRICS))
             self.assertEqual(run["rendering"]["visible_draw_calls"], 0)
@@ -94,6 +98,20 @@ class BenchTests(unittest.TestCase):
             self.assertEqual(len(merged["cases"][0]["runs"]), 2)
             self.assertEqual(merged["cases"][0]["median"], case["median"])
             other = Path(scratch) / "other.json"
+            data["replay_random"] = True
+            other.write_text(json.dumps(data))
+            with self.assertRaisesRegex(ValueError, "replay_random"):
+                list(bench_compare.compare(path, other))
+            with self.assertRaisesRegex(ValueError, "replay_random"):
+                bench_compare.merge([path, other])
+            data["replay_random"] = False
+            data["bot_skill"] = 0.6
+            other.write_text(json.dumps(data))
+            with self.assertRaisesRegex(ValueError, "bot_skill"):
+                list(bench_compare.compare(path, other))
+            with self.assertRaisesRegex(ValueError, "bot_skill"):
+                bench_compare.merge([path, other])
+            data["bot_skill"] = 0.2
             data["seconds"] += 1
             other.write_text(json.dumps(data))
             with self.assertRaisesRegex(ValueError, "seconds"):
@@ -117,6 +135,21 @@ class BenchTests(unittest.TestCase):
             other.write_text(json.dumps(data))
             with self.assertRaisesRegex(ValueError, "world_hash"):
                 list(bench_compare.compare(path, other))
+
+    def test_replay_smoke(self):
+        with tempfile.TemporaryDirectory(prefix="bench-replay-smoke-", dir=bench.ROOT / "build") as scratch:
+            path = Path(scratch) / "smoke.json"
+            subprocess.run(["make", "--no-print-directory", "bench", "BOTS=2", "TANKS=1", "RENDERED=0",
+                            "SECONDS=.5", "WARMUP=.2", "REPEATS=1", "CONFIG=Debug",
+                            f"BENCH_ARGS=--output={path} --bot-skill=0.2 --replay-random"], cwd=bench.ROOT, check=True)
+            data = json.loads(path.read_text())
+            run = data["cases"][0]["runs"][0]
+            self.assertTrue(run["replay_random"])
+            self.assertTrue(data["replay_random"])
+            self.assertEqual(run["frames"] * 2, run["physics_ticks"])
+            directory = path.parent / run["evidence"]
+            with self.assertRaisesRegex(ValueError, "replay mode"):
+                bench.load_case(directory, 2, "Debug", 0.2)
 
 
 if __name__ == "__main__":

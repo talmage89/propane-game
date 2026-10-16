@@ -72,6 +72,8 @@ public sealed class WorldContext : IDisposable
     public World3D Physics { get; }
     public Tuning Tuning { get; }
     public RandomNumberGenerator Random { get; } = new();
+    // Fresh per-event physics entropy by default; replay fixtures inject a seeded factory. Callers own the result.
+    internal Func<RandomNumberGenerator> CreatePhysicsRandom { get; set; } = static () => new();
     public bool Networked { get; }
     public bool IsAlive { get; private set; } = true;
     public bool Paused { get; private set; }
