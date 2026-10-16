@@ -399,10 +399,13 @@ public sealed class BodySync
     /// <summary>
     /// The states this player owes the others at this monotonic network time: moving tanks and cars at their
     /// real-time send rates, and a final resting state for each that has just stopped. Predicted creations
-    /// retain their required first state until the server has registered them.
+    /// retain their required first state until the server has registered them. Clears and fills caller-owned
+    /// buffers with entries in registration traversal order; poses are read later by the publisher.
     /// </summary>
-    public (List<Entry> Moving, List<Entry> Rested) Collect(double now, IReadOnlySet<uint>? pendingCreation = null)
+    public void Collect(double now, List<Entry> moving, List<Entry> rested, IReadOnlySet<uint>? pendingCreation = null)
     {
+        moving.Clear();
+        rested.Clear();
         var tuning = settings;
         // Receiver silence is measured on the network clock too. A slow simulation must not stretch
         // checkpoint intervals, and catch-up physics steps must not emit a burst of old poses.
@@ -424,8 +427,6 @@ public sealed class BodySync
             carTimer += interval;
             if (carTimer <= 0) { carTimer = interval; }
         }
-        var moving = new List<Entry>();
-        var rested = new List<Entry>();
         foreach (var entry in entries.Values)
         {
             if (!GodotObject.IsInstanceValid(entry.Body) || pendingCreation?.Contains(entry.Id) == true)
@@ -464,7 +465,6 @@ public sealed class BodySync
             }
             entry.WasAwake = awake;
         }
-        return (moving, rested);
     }
 
     /// <summary>Id of a map tank by its index in the plan.</summary>
