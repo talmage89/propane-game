@@ -48,7 +48,6 @@ public partial class Match : Node3D
 
     private const float RevealMaxRadius = 320f;
     private const float MaterializeShare = 0.58f;
-    private const int StatesPerMessage = Protocol.MaxBodyStates;
     private const float TagRefresh = 1f / 30f;
 
     private sealed record AuthorityRequest(Msg Type, uint Request, uint Cause, uint[] Ids, object Payload, int ActorId = 0, uint LifeId = 0)
@@ -84,6 +83,7 @@ public partial class Match : Node3D
     private SuburbPlan plan = null!;
     private PlayerCharacter player => Session.OwnedActors.FirstOrDefault(a => profiles[a.Character.ActorId].Kind == ActorKind.Human)?.Character ?? Session.OwnedActors.First().Character;
     private BodySync bodies = null!;
+    private BodyPublisher bodyPublisher = null!;
     private TankGather gather = null!;
     private readonly HashSet<uint> gatherRequests = new();
     private Hud hud = null!;
@@ -933,26 +933,7 @@ public partial class Match : Node3D
     {
         unconfirmedDrops.Clear();
         foreach (var owned in Session.OwnedActors) unconfirmedDrops.UnionWith(owned.DropPredictions.PendingIds);
-        var (moving, rested) = bodies.Collect(now, unconfirmedDrops);
-        foreach (var stream in moving.GroupBy(entry => entry.PublishReliably ? entry.CheckpointTraffic : TrafficClass.UnreliableBodyStates))
-        {
-            var entries = stream.ToList();
-            for (var start = 0; start < entries.Count; start += StatesPerMessage)
-            {
-                var batch = entries.Skip(start).Take(StatesPerMessage).ToList();
-                var w = new NetWriter(Msg.BodyStates, Setup.Id).Double(Net.BodySampleTime(now)).UShort((ushort)batch.Count);
-                foreach (var entry in batch)
-                {
-                    w.UInt(entry.Id).Transform(entry.Body.GlobalTransform).Vec3(entry.Body.LinearVelocity).Vec3(entry.Body.AngularVelocity)
-                        .UInt(entry.Epoch).UInt(checked(++entry.Sequence));
-                }
-                Send(w, stream.Key);
-            }
-        }
-        foreach (var entry in rested)
-        {
-            Send(new NetWriter(Msg.BodyRest, Setup.Id).UInt(entry.Id).Transform(entry.Body.GlobalTransform).Double(now).UInt(entry.Epoch).UInt(checked(++entry.Sequence)));
-        }
+        bodyPublisher.Publish(now, unconfirmedDrops);
     }
 
     // ------------------------------------------------------------------ Receiving
