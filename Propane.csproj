@@ -31,7 +31,12 @@
   <ItemGroup>
     <TuningPart Include="src/Core/Tuning.10.Bot.cs" />
     <TuningPart Include="src/Core/Tuning.cs" />
-    <TuningPart Include="src/Core/Tuning.20.Dials.cs" />
+    <TuningPart Include="src/Core/Tuning.20.Actor.cs" />
+    <TuningPart Include="src/Core/Tuning.30.Tank.cs" />
+    <TuningPart Include="src/Core/Tuning.40.Player.cs" />
+    <TuningPart Include="src/Core/Tuning.50.Rifle.cs" />
+    <TuningPart Include="src/Core/Tuning.60.World.cs" />
+    <TuningPart Include="src/Core/Tuning.70.Match.cs" />
     <TuningPart Include="src/Core/Tuning.80.Dissolve.cs" />
     <TuningPart Include="src/Core/Tuning.85.Lab.cs" />
     <TuningPart Include="src/Core/Tuning.90.Lobby.cs" />
