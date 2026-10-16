@@ -166,7 +166,13 @@ Five seeds and both spawn offsets give these retained-bank means per bot per rou
 | King, Hard / Normal | 3.100 / 1.200 | 3.100 / 1.200 |
 
 Both Easy comparisons pass, as do Hard/Normal in both modes (King minted 116). All twenty baseline/candidate
-Normal/Hard rounds have **identical points and complete per-bot idle reports**, including statuses, which also
-checks the shared position observations. The superseded near-rival policy failed the controlled four-actor check
+Normal/Hard rounds have **identical points and complete per-bot idle reports**, including statuses. The superseded
+near-rival policy failed the controlled four-actor check
 (Normal 3.350, Easy 4.500); local steps avoid that strength increase. Ordinary physics still varies outcomes, as the
 historical measurements above show; these results establish the ordering in the controlled sweep, not every match.
+
+The first short-step implementation shared root-position observations across a think batch. Eight controlled
+headless four-bot pairs still showed a 1.3% median cost increase (0.159877 → 0.161955 ms/tick). A simpler version
+reads each upright opponent's position once within a melee search, without the shared cache. Three-pair pilot
+medians fell at both four bots (0.160265 → 0.159661 ms) and eight (0.259889 → 0.256193 ms); the final grid uses that
+local observation reuse. No navigation budget or skill dial is reduced to lower cost.

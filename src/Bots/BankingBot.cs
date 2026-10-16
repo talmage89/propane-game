@@ -134,7 +134,7 @@ public sealed class BankingBot : IBotGoalPolicy
             navigator.Reset();
             return;
         }
-        var here = match.Services.ActorPosition(player);
+        var here = player.GlobalPosition;
         var ammo = player.Ammo;
 
         // 1. Get away from a venting tank that comes close: it may go up any moment, and it hits like a car.
@@ -302,7 +302,7 @@ public sealed class BankingBot : IBotGoalPolicy
             for (var i = 0; i < bodies.Count; i++)
             {
                 var e = bodies[i];
-                var distance = match.Services.ActorPosition(e).DistanceTo(here);
+                var distance = e.GlobalPosition.DistanceTo(here);
                 if (distance > tried && distance < nextDistance && !e.IsRagdolled && match.Scores.GetValueOrDefault(e.ActorId) <= match.MyScore)
                 {
                     next = e;
@@ -327,7 +327,7 @@ public sealed class BankingBot : IBotGoalPolicy
             {
                 var e = bodies[i];
                 if (e.IsRagdolled) continue;
-                var at = match.Services.ActorPosition(e);
+                var at = e.GlobalPosition;
                 var distance = at.DistanceSquaredTo(here);
                 if (distance > tried && distance < nextDistance && at.DistanceTo(here) <= reach)
                 {
