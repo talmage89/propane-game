@@ -28,18 +28,18 @@ internal sealed class MenuCommands
             report("Type the server's address.");
             return;
         }
-        var host = text;
+        var hostName = text;
         var port = Protocol.DefaultPort;
         var colon = text.LastIndexOf(':');
         if (colon > 0 && text.IndexOf(':') == colon && int.TryParse(text[(colon + 1)..], out var parsed))
         {
-            host = text[..colon];
+            hostName = text[..colon];
             port = parsed;
         }
         PlayerSettings.Server = text;
         MenuProfile.SaveName(name);
         clearMessage();
-        net.Connect(host, port, Protocol.CleanName(name), MenuProfile.DefaultAppearance());
+        net.Connect(hostName, port, Protocol.CleanName(name), MenuProfile.DefaultAppearance());
     }
 
     public void Host(int port, string name)
