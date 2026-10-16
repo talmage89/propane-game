@@ -247,4 +247,3 @@ Finish verification with `make check`, `python3 -B tools/dev/lint_tests.py` and 
 final head. Their logs are `build/wp-idle-flake/final-{check,lint-tests,test-full}.log`. Build and verification are
 Linux-only; these measurements do not establish replay equality across architectures or engine versions. The
 ordinary game, ordinary benchmark and default strength checks retain their original entropy/hitstop behavior.
-
