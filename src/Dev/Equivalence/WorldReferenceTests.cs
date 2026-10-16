@@ -13,6 +13,12 @@ namespace Propane.Dev.Equivalence;
 [UnitSuite(-1)]
 public static class WorldReferenceTests
 {
+    // Generation and construction use libm trigonometry (Mathf.Sin/Cos/Atan2), whose last bits differ between C
+    // libraries: the CI runner's glibc builds a prop yaw one ulp away from the reference machine's. Exact plans, segment
+    // hashes and construction hashes are compared by make test-equivalence on the reference platform; the ordinary
+    // suite keeps the platform-independent checks (inventory, codec round trips of the frozen plans, segment seeds).
+    private static bool PlatformExact => DevArgs.Get("platform-references") != null || DevArgs.Get("write-reference") != null;
+
     public static void Register(TestRunner runner)
     {
         runner.Run("reference/world release plans and their constructed geometry", () =>
@@ -39,6 +45,8 @@ public static class WorldReferenceTests
                 var formation = formations[i];
                 TestRunner.Assert(saved[i].GetProperty("formation").GetString() == formation.ToString(), "world formation inventory/order changed");
                 var bytes = Convert.FromBase64String(saved[i].GetProperty("plan").GetString()!);
+                ReferenceFile.Bytes(bytes, PlanCodec.Encode(PlanCodec.Decode(bytes)), $"world.{formation}.codec");
+                if (!PlatformExact) continue;
                 var generated = WorldBuildTests.Fixture(formation);
                 var encoded = PlanCodec.Encode(generated);
                 if (!bytes.SequenceEqual(encoded))
@@ -69,7 +77,20 @@ public static class WorldReferenceTests
                     hash = Convert.ToHexString(SHA256.HashData(PlanCodec.Encode(segment.Plan)))
                 };
             })).ToArray();
-            ReferenceFile.Check("segments", inventory);
+            if (PlatformExact)
+            {
+                ReferenceFile.Check("segments", inventory);
+                return;
+            }
+            var saved = ReferenceFile.Read("segments");
+            TestRunner.Assert(saved.GetArrayLength() == inventory.Length, "segment reference: incomplete inventory");
+            for (var i = 0; i < inventory.Length; i++)
+            {
+                var path = $"segments[{i}]";
+                ReferenceFile.Compare(saved[i].GetProperty("run"), ReferenceFile.Element(inventory[i].run), $"{path}.run");
+                ReferenceFile.Compare(saved[i].GetProperty("index"), ReferenceFile.Element(inventory[i].index), $"{path}.index");
+                ReferenceFile.Compare(saved[i].GetProperty("Seed"), ReferenceFile.Element(inventory[i].Seed), $"{path}.Seed");
+            }
         });
     }
 }
