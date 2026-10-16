@@ -29,7 +29,7 @@ public static class WorldBuildTests
         }
     }
 
-    private static SuburbSettings Settings(PileFormation formation) => SuburbPlans.Match(new Tuning(), 4) with
+    internal static SuburbSettings Settings(PileFormation formation) => SuburbPlans.Match(new Tuning(), 4) with
     {
         RowsWeight = formation == PileFormation.Rows ? 1 : 0,
         SquareWeight = formation == PileFormation.Square ? 1 : 0,
@@ -37,7 +37,7 @@ public static class WorldBuildTests
         TightWeight = formation == PileFormation.Cluster ? 1 : 0,
     };
 
-    private static SuburbPlan Fixture(PileFormation formation)
+    internal static SuburbPlan Fixture(PileFormation formation)
     {
         var plan = new SuburbGenerator(Settings(formation), new GameCatalog(), 23).Generate();
         TestRunner.Assert(plan.Fences.Count > 0, "fixture has no fences");
@@ -88,7 +88,7 @@ public static class WorldBuildTests
     private static void PrintHash(Node root, SuburbPlan plan) =>
         GD.Print($"[world] hash {BuildHash(root, plan, SuburbPlans.Match(new Tuning(), 4))} fences {plan.Fences.Count} tanks {plan.Tanks.Count} formation {plan.Tanks[0].Formation}");
 
-    private static string BuildHash(Node root, SuburbPlan plan, SuburbSettings settings)
+    internal static string BuildHash(Node root, SuburbPlan plan, SuburbSettings settings)
     {
         using var world = new WorldContext(root, Tuning.SavedTemplate, present: true);
         var suburb = Suburb.Build(world, plan, settings, networked: true);
