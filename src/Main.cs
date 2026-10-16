@@ -36,12 +36,12 @@ public partial class Main : Node
     {
         // Official release templates disallow command-line scene overrides. Keep the same smoke test available in
         // an untouched archive; its nested Main goes through the normal front end below.
-        if (DevArgs.Get("release-test") != null && GetParent() == GetTree().Root)
+        if (LaunchArgs.Current.Has("release-test") && GetParent() == GetTree().Root)
         {
             AddChild(new ReleaseTest());
             return;
         }
-        if (DevArgs.Get("server") != null)
+        if (LaunchArgs.Current.Has("server"))
         {
             RunServer();
             return;
@@ -65,12 +65,12 @@ public partial class Main : Node
         AddChild(stage);
         ShowMenus(Menus.Screen.Main);
         // --connect=host[:port] goes straight to that server's lobbies.
-        if (DevArgs.Get("connect") is { } server)
+        if (LaunchArgs.Current.Get("connect") is { } server)
         {
             menus.Show(Menus.Screen.Connect);
-            menus.ConnectTo(server, DevArgs.Get("name") ?? PlayerSettings.Name);
+            menus.ConnectTo(server, LaunchArgs.Current.Get("name") ?? PlayerSettings.Name);
         }
-        if (DisplayServer.WindowGetMode() == DisplayServer.WindowMode.Windowed && DevArgs.Get("windowed") == null)
+        if (DisplayServer.WindowGetMode() == DisplayServer.WindowMode.Windowed && !LaunchArgs.Current.Has("windowed"))
         {
             Callable.From(() => DisplayServer.WindowSetMode(DisplayServer.WindowMode.Maximized)).CallDeferred();
         }
@@ -92,13 +92,13 @@ public partial class Main : Node
         // A headless server has nothing to draw: tick often enough for snappy relays without spinning a core.
         Engine.MaxFps = 120;
         // Dev admission probes need their explicit tuners before the first client connects.
-        if (OS.IsDebugBuild()) { DevArgs.Setup(); }
-        var port = (int)DevArgs.GetFloat("port", Protocol.DefaultPort);
+        if (OS.IsDebugBuild()) { LaunchArgs.Current.ApplyTuningOverrides(); }
+        var port = (int)LaunchArgs.Current.GetFloat("port", Protocol.DefaultPort);
         var server = new LobbyServer
         {
             Name = "Server",
             Port = port,
-            StartScore = (int)DevArgs.GetFloat("start-score", 0),
+            StartScore = (int)LaunchArgs.Current.GetFloat("start-score", 0),
         };
         AddChild(server);
         if (!server.Start().Success)

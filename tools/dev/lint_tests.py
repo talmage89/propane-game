@@ -258,6 +258,29 @@ def check_core_wiring():
     print("PASS: core failure/shutdown routing and unit discovery retain every suite")
 
 
+def dev_boundary_offenders(sources):
+    """Paths whose text reaches the Propane.Dev namespace, other than Main's --release-test entry (which may use ReleaseTest)."""
+    reach = re.compile(r"\bPropane\.Dev\b|\bDev\.[A-Z]")
+    return sorted(path for path, text in sources.items() if not path.startswith("src/Dev/") and reach.search(text)
+                  and not (path == "src/Main.cs" and "DevArgs" not in text and "using Propane.Dev;" in text
+                           and not reach.search(text.replace("using Propane.Dev;", ""))))
+
+
+def check_runtime_dev_boundary():
+    # Shipped code reads launch options through LaunchArgs. Dev is compiled into release builds, so what outside it may
+    # depend on is the documented release smoke entry (docs/code-quality.md): Main creating ReleaseTest for --release-test.
+    sources = {path.relative_to(ROOT).as_posix(): path.read_text() for path in (ROOT / "src").rglob("*.cs")}
+    require(not dev_boundary_offenders(sources), "runtime code depends on src/Dev beyond the release smoke entry: " +
+            ", ".join(dev_boundary_offenders(sources)))
+    require("new ReleaseTest()" in sources["src/Main.cs"], "Main lost the documented release smoke entry")
+    require(dev_boundary_offenders({"src/Net/Probe.cs": "var seed = Dev.DevArgs.Get(\"a\");"}) == ["src/Net/Probe.cs"] and
+            dev_boundary_offenders({"src/Net/Probe.cs": "using Propane.Dev;"}) == ["src/Net/Probe.cs"] and
+            dev_boundary_offenders({"src/Main.cs": "using Propane.Dev;\nAddChild(new ReleaseTest());"}) == [] and
+            dev_boundary_offenders({"src/Main.cs": "using Propane.Dev;\nDevArgs.Get(\"a\");"}) == ["src/Main.cs"],
+            "the Dev boundary check accepts or rejects the wrong references")
+    print("PASS: runtime code depends on src/Dev only through the release smoke entry")
+
+
 def check_ci_partitions():
     makefile = (ROOT / "Makefile").read_text()
     workflow = (ROOT / ".github/workflows/ci.yml").read_text()
@@ -360,6 +383,7 @@ public static class Formatting
         check_scale_knobs(scratch)
         check_installer(scratch)
         check_core_wiring()
+        check_runtime_dev_boundary()
         check_ci_partitions()
 
 

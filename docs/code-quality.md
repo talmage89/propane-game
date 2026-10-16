@@ -60,6 +60,73 @@ classic/docked lobbies, host/guest, 2/8/16 participants, controller focus, King 
 dialogs. Its headless assertions preserve draft/caret/focus and overlay ownership across refreshes.
 The real-device and network menu scenes remain responsible for input delivery and roaming-world behavior.
 
+## Runtime launch options and the Dev boundary
+
+`LaunchArgs` (`src/Core`) parses the user arguments after `--` once per process and caches them as `LaunchArgs.Current`.
+`--key=value` is read as written and a bare `--key` is `"true"`; leading dashes are dropped, only the first `=` splits
+(an `=` in first place is part of the key), a later argument replaces an earlier one, and numbers use the current culture
+and fall back when absent or not numbers. `Has` means the argument was given with any value, so `--classic-lobby=false`
+still counts. `Dev.DevArgs` reads the same cache for the harnesses and keeps their `Setup`, `MarkReady` and optimized-Debug
+verification; nothing outside `src/Dev` reads `DevArgs`.
+
+The shipped game reads the options below and no others. The harness options (`--scenario`, `--capture-dir`, `--tune.*`
+and the rest) go through `DevArgs`; a Debug server applies `--tune.*` too, before it listens.
+
+| Option | Read by | Effect |
+| --- | --- | --- |
+| `--server`, `--port=N`, `--start-score=N` | `Main` | Run only the multiplayer server, on `N` (default `Protocol.DefaultPort`), starting scores at `N` (default 0). |
+| `--match-seed=N` | `LobbyServer` | Debug builds: the next match plan uses seed `N`. |
+| `--connect=host[:port]`, `--name=Name` | `Main` | Open the Connect screen on that server as that name. |
+| `--windowed` | `Main` | Do not maximize a windowed game. |
+| `--release-test` | `Main` | Run the release smoke test in place of the front end ([Release smoke](#release-smoke)). |
+| `--classic-lobby` | `LobbyWorldDefault` | Lobby menu over the backdrop instead of the lobby world. |
+| `--update-check`, `--update-url=URL` | `UpdateCheck` | Check for a newer release when run from the editor; ask `URL` instead of GitHub. |
+| `--fake-version=X.Y.Z`, `--fake-protocol=N` | `BuildInfo`, `NetClient` | Pretend to be another game version or protocol in the Hello and in version checks. |
+| `--net-lag`, `--net-jitter`, `--net-reliable-stall`, `--net-body-stall` (ms), `--net-loss` (%), `--net-seed=N` | `PacketTransports` | Wrap the transport in `FaultPacketTransport` when any fault is positive. |
+| `--net-throttle-trace`, `--capacity-metrics`, `--tank-authority-trace` | `LobbyServer` | Server diagnostics: per-peer transport lines every 0.25 s instead of every 10 s; a process and transport metrics line; tank authority publications. |
+
+The `LaunchArgsTests` unit suite checks the parser against the parser as it stood before it left `DevArgs`, and each
+option above that a headless unit can reach through its real consumer. The native `server_tuning_tests` and `server_seed_tests`
+scenes cover Main's server entry; the exported launches (ordinary start, `--server`, `--classic-lobby`, `--release-test`)
+cover the rest. Add a new runtime option to `LaunchArgs`'s consumers, this table and that suite together.
+
+### Release smoke
+
+`--release-test` is the one shipped entry point that lives in `src/Dev`. Official export templates disallow scene
+overrides, so an archive's own main scene hosts the test: `Main._Ready` adds `ReleaseTest` in place of the front end when
+the argument is given and `Main` is a child of the root. `ReleaseTest` then builds a nested `Main`, presses the real menu
+buttons and exits 0 on PASS and 1 on a missing button, empty suburb or stage timeout. With `--scenario=network
+--connect=host:port` it creates a lobby, waits for `--players` (default 2) and plays a `--length` match with a bot. Its
+transitive dependencies in `src/Dev`:
+
+| Class | File | Used for |
+| --- | --- | --- |
+| `ReleaseTest` | `ReleaseTest.cs` | The staged smoke run, its timeouts and exit codes. |
+| `CaptureDirector`, `FrameMetrics`, `FrameEncoder` | `CaptureDirector.cs`, `FrameMetrics.cs` | `--capture-dir` screenshots, `--record` with its fps and timeout, `--frame-metrics`. |
+| `Bot`, `IBotBrain` | `Bot.cs` | The bot that plays the network scenario's match for the first client. |
+| `DevArgs` | `DevArgs.cs` | The smoke's own options (`--scenario`, `--players`, `--length`, `--capture-dir`...), read through `LaunchArgs`. |
+
+Everything else it touches is ordinary game code (`Main`, `Menus`, `Game`, `Match`, `NetClient`, `PlayerSettings`).
+All of `src/Dev` stays compiled into Release builds; there is no exclusion or assembly split, and the dev scenes in
+`scenes/dev` are what the export presets leave out. Nothing else in `src/Dev` is reachable from a shipped entry point:
+`make test-infra` fails if code outside `src/Dev` names the Dev namespace, other than `Main` creating `ReleaseTest`.
+Moving the smoke or its dependencies out of `src/Dev` (for example to exclude `src/Dev` from Release) means moving this
+whole set together.
+
+Run these from an exported Linux build (`tools/release/build.sh` stages one in `build/package/linux`) to check the
+launch options and the smoke on the real binary. The clients exit 0 on success; a server runs until stopped:
+
+```sh
+./Propane.x86_64 --headless --quit-after 300                  # ordinary start: the front end builds and quits
+./Propane.x86_64 --headless -- --server --port=24683          # logs "listening on UDP 24683"
+./Propane.x86_64 -- --release-test --capture-dir=/tmp/release # main menu and single player
+# The network scenario presses the classic lobby's Start match, so it needs --classic-lobby on both sides (a lobby
+# world has no such button and the run fails with "start match button missing"), and a second player in the lobby:
+./Propane.x86_64 --headless -- --server --port=24683 --classic-lobby
+./Propane.x86_64 -- --release-test --scenario=network --connect=127.0.0.1:24683 --classic-lobby --capture-dir=/tmp/release
+tools/dev/add_bots.sh -n 1 -S 127.0.0.1:24683                 # once the smoke has created its lobby
+```
+
 ## Fast gate and deep sweeps
 
 `make test` is the union of four targets. Each builds first, so it also works independently:
