@@ -80,6 +80,7 @@ public sealed class BankingBot : IBotGoalPolicy
     public string Status => status.ToString();
     public string StatusKind => status.Format;
     public string NavigationDiagnostics => navigator.Diagnostics;
+    internal Vector3? ScoutingGoal => roamGoal;
 
     /// <summary>0..1: how quickly it turns onto a target and how tightly it holds aim. 1 is the hardest.</summary>
     public float Skill { get; set; } = 1f;
@@ -599,14 +600,14 @@ public sealed class BankingBot : IBotGoalPolicy
     {
         if (roamGoal == null || clock >= roamUntil || Flat(roamGoal.Value - here).Length() < tuning.BotGoalRadius * 2)
         {
-            var angle = rng.RandfRange(0, Mathf.Tau);
-            var near = enemy.GlobalPosition;
-            roamGoal = new Vector3(near.X + Mathf.Cos(angle) * tuning.BotEasyRoamRadius, here.Y,
-                near.Z + Mathf.Sin(angle) * tuning.BotEasyRoamRadius);
+            var toward = Flat(enemy.GlobalPosition - here);
+            var angle = Mathf.Atan2(toward.X, toward.Z) +
+                Mathf.DegToRad(rng.RandfRange(-tuning.BotEasyRoamSpreadDegrees, tuning.BotEasyRoamSpreadDegrees));
+            roamGoal = here + new Vector3(Mathf.Sin(angle), 0, Mathf.Cos(angle)) * tuning.BotEasyRoamRadius;
             roamUntil = clock + tuning.BotEasyRoamSeconds;
         }
-        // A weak player looks around where others were seen, rather than charging straight into melee or
-        // running rifle combat against an empty bank. A held destination also avoids per-tick combat replans.
+        // A weak player scouts a short leg roughly toward company, rather than routing across the map to
+        // an exact rival position. A held destination also avoids per-tick combat replans.
         RunTo(player, roamGoal.Value, dt);
         status.Set("looking for rivals near {0}, {1:0.0} m to walk", enemy.ActorId, Flat(roamGoal.Value - here).Length());
     }

@@ -220,9 +220,9 @@ Windows and macOS were not exercised here.
 
 ## Idle bots
 
-Easy bankers that have no useful banking target wander near the nearest upright rival, even one with an empty bank.
-Ammo, tanks and profitable fights take priority. A destination within `BotEasyRoamRadius` of the rival stays fixed
-for `BotEasyRoamSeconds` or until reached; this keeps scouting cheap and avoids charging every empty rival into melee.
+Easy bankers that have no useful banking target wander roughly toward the nearest upright rival, even one with an empty bank.
+Ammo, tanks and profitable fights take priority. A short step of `BotEasyRoamRadius`, within `BotEasyRoamSpreadDegrees`
+of the hint's direction, stays fixed for `BotEasyRoamSeconds` or until reached. It avoids routing straight across the map to a rival.
 An unreachable scouting point is replaced without blacklisting the rival. Ordinary melee and profitable rifle fights
 keep Easy's existing aim and reaction, and navigation retains its shared query/expansion budgets. These dials and
 `BotEasySeekRivals` are local; Normal and Hard retain their goal policies.

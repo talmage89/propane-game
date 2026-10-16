@@ -27,8 +27,9 @@ Unit assertions exercise all three physical callers, check the ordinary factory 
 alone and prove one world's injected factory does not affect another world. The original idle limits still reject
 the old 64–93% stranded bots.
 
-Easy's Tank Bank fallback uses an upright rival as a hint and wanders to a fixed point near its last observed
-position. `BotEasyRoamRadius` (12 m) and `BotEasyRoamSeconds` (4 s) are local dials, alongside `BotEasySeekRivals`.
+Easy's Tank Bank fallback uses an upright rival as a hint and wanders a short leg roughly toward it, rather than
+routing to its precise location. `BotEasyRoamRadius` (12 m), `BotEasyRoamSpreadDegrees` (90 degrees) and
+`BotEasyRoamSeconds` (4 s) are local dials, alongside `BotEasySeekRivals`.
 An unreachable scouting point is replaced without ruling out its anchor rival. Ammo, tanks and profitable fights
 still take priority, and ordinary melee applies at reach. Aim, reaction, navigation budgets, Normal/Hard goals,
 scoring, shared tuning and messages are unchanged.
@@ -103,6 +104,10 @@ current world, replay controls and other navigation services. Both unchanged fix
 13.7%, worst 33.3%, longest 7 s; King mean 36.4%, worst 65.9%, longest 27 s. This exercises the original failure
 pattern against the replay settings rather than merely comparing the numerical limits to an old report.
 
+The following two subsections record the **superseded near-rival scouting iteration** (`e987bab`), which routed
+toward a point near the rival. Controlled strength verification subsequently rejected that design at four actors;
+the final policy takes short local steps instead. These historical measurements remain to show that rejection.
+
 ### Lobby idle and retained banks
 
 The requested 90-second clean lobby soaks use seeds 21–23, one primary Hard bot with `--melee-start`, and three
@@ -138,9 +143,28 @@ rounds, with actual Easy/Normal profiles and objective policies. These are mean 
 | 4 | 5.150 → 5.000 | 3.700 → 3.850 | Normal remains ahead |
 | 8 | 1.825 → 1.975 | 2.700 → 2.400 | Normal loses both baseline and candidate checks |
 
-The ordinary Hard/Normal checker passed the baseline (Bank 2.275/1.375; King 3.125/1.325), but failed the final
-suburb Bank check (1.500/2.900; King 2.850/1.075). Two earlier candidate iterations also failed suburb Bank ordering.
-The final documented arena policy probe (`--environment=void --policy-only`) passed: Bank 0.600/0.500 and King
+The ordinary Hard/Normal checker passed the baseline (Bank 2.275/1.375; King 3.125/1.325), but failed the near-rival
+candidate suburb Bank check (1.500/2.900; King 2.850/1.075). Two earlier candidate iterations also failed suburb Bank ordering.
+The near-rival candidate's documented arena policy probe (`--environment=void --policy-only`) passed: Bank 0.600/0.500 and King
 9.625/1.850; King minted 88. These runs retain physical entropy and wall-clock hitstop. They do not certify a stable
 suburb difficulty ordering. Easy's aim/reaction/query limits and Normal/Hard goal policies were not retuned to force
 a result, and none of these outcome gates was weakened.
+
+### Controlled short-step comparisons
+
+`check_bot_points.py --replay-random` uses the same world-local physical-event seeding and zero hitstop as the idle
+fixtures. The baseline source receives only that replay plumbing and reporting; its production brains are unchanged.
+Five seeds and both spawn offsets give these retained-bank means per bot per round:
+
+| Comparison | Baseline | Short-step candidate |
+| --- | --- | --- |
+| 4 actors, Normal / Easy | 4.300 / 3.600 | 4.400 / 3.950 |
+| 8 actors, Normal / Easy | 2.050 / 1.600 | 2.225 / 1.825 |
+| Bank, Hard / Normal | 2.300 / 1.525 | 2.300 / 1.525 |
+| King, Hard / Normal | 3.100 / 1.200 | 3.100 / 1.200 |
+
+Both Easy comparisons pass, as do Hard/Normal in both modes (King minted 116). All twenty baseline/candidate
+Normal/Hard rounds have **identical points and complete per-bot idle reports**, including statuses, which also
+checks the shared position observations. The superseded near-rival policy failed the controlled four-actor check
+(Normal 3.350, Easy 4.500); local steps avoid that strength increase. Ordinary physics still varies outcomes, as the
+historical measurements above show; these results establish the ordering in the controlled sweep, not every match.

@@ -810,6 +810,12 @@ internal static class NavigationTests
                 Think();
                 TestRunner.Assert(brain.Status.StartsWith("looking for rivals near 2", StringComparison.Ordinal), "Easy waits for a bank instead of seeking a rival");
                 TestRunner.Assert(!brain.Read().FireHeld, "Easy fires beyond its ordinary rifle range");
+                var scouting = brain.ScoutingGoal ?? throw new InvalidOperationException("Easy has no scouting waypoint");
+                var step = scouting - player.GlobalPosition;
+                TestRunner.Assert(Mathf.Abs(step.Length() - tuning.BotEasyRoamRadius) < 0.001f &&
+                    step.Dot(enemy.GlobalPosition - player.GlobalPosition) >= 0, "Easy routes to a distant rival instead of a short step toward it");
+                Think();
+                TestRunner.Assert(brain.ScoutingGoal == scouting, "Easy's scouting waypoint changes with each target observation");
                 var before = GC.GetAllocatedBytesForCurrentThread();
                 for (var i = 0; i < 600; i++) brain.Think(observations, 1f / 120);
                 var bytes = GC.GetAllocatedBytesForCurrentThread() - before;
