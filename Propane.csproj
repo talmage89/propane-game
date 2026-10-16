@@ -17,4 +17,30 @@
     <!-- build/ holds release output, logs and scratch copies of the project; never compile them. -->
     <DefaultItemExcludes>$(DefaultItemExcludes);build/**</DefaultItemExcludes>
   </PropertyGroup>
+
+  <!-- Tuning is one Resource declared across the partial files below, and the order of its properties is observable:
+       it is the order of the F1 panel and inspector groups, of the Lab dials, of the snapshot keys and so of the
+       bytes of a match's tuner snapshot. Two things set it, and neither may be left to chance:
+       - Godot's generator lists the Godot-visible properties by file path (compared as a string, so by the build
+         machine's culture), then by line. A part's name is therefore Tuning.NN.Name.cs, with two digits that make the
+         order the same under every comparison. Tuning.cs holds the machinery and no dials.
+       - The compiler orders the declarations by the order of its source files, which sets reflection order. Globbing
+         leaves that to the file system, so these items compile exactly these files in exactly this order: that of the
+         names, bar Tuning.cs, which stays second, where its two static properties have always sat in reflection order.
+         A part left out of this list fails the build; TuningPartsTests checks the list against the names. -->
+  <ItemGroup>
+    <TuningPart Include="src/Core/Tuning.10.Bot.cs" />
+    <TuningPart Include="src/Core/Tuning.cs" />
+    <TuningPart Include="src/Core/Tuning.20.Dials.cs" />
+    <TuningPart Include="src/Core/Tuning.80.Dissolve.cs" />
+    <TuningPart Include="src/Core/Tuning.85.Lab.cs" />
+    <TuningPart Include="src/Core/Tuning.90.Lobby.cs" />
+    <TuningPart Include="src/Core/Tuning.95.Prototype.cs" />
+    <Compile Remove="@(TuningPart)" />
+    <Compile Include="@(TuningPart)" />
+    <TuningStray Include="src/Core/Tuning*.cs" Exclude="@(TuningPart)" />
+  </ItemGroup>
+  <Target Name="CheckTuningParts" BeforeTargets="BeforeCompile" Condition="'@(TuningStray)' != ''">
+    <Error Text="Tuning parts missing from the ordered TuningPart list in Propane.csproj: @(TuningStray, ', ')" />
+  </Target>
 </Project>

@@ -19,7 +19,7 @@ ROOT = Path(__file__).resolve().parents[2]
 RELEASE = ROOT / "tools" / "release"
 
 SHARED_PATHS = ["src/Net/Message.cs", "src/World/Suburb.cs", "src/Tank/Tank.cs", "src/Player/PlayerNet.cs",
-                "src/Core/Tuning.cs", "src/Core/Tuning.Lab.cs", "src/Core/Tuning.Prototype.cs", "src/Modes/KingRules.cs"]
+                "src/Core/Tuning.cs", "src/Core/Tuning.20.Dials.cs", "src/Core/Tuning.85.Lab.cs", "src/Modes/KingRules.cs"]
 UNSHARED_PATHS = ["src/Dev/Probe.cs", "src/Core/Other.cs", "src/Player/Player.cs", "README.md"]
 
 

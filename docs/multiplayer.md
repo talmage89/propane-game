@@ -34,7 +34,7 @@ clock runs out wins.
 - No health: nobody dies.
 
 The counts and times are tuners (the Match, Tank bank, Multiplayer suburb, Ammo, HUD, Match HUD and Network groups of
-`src/Core/Tuning.cs`). The rules themselves are `TankBankRules`, pure logic run by the server's mode runner and by
+`src/Core/Tuning.*.cs`). The rules themselves are `TankBankRules`, pure logic run by the server's mode runner and by
 the Lab duel; [modes.md](modes.md) describes the framework, the spill tickets and the mode envelope.
 
 ## Match flow
