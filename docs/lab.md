@@ -196,7 +196,14 @@ A Dissolve Run alone: `lab_test.tscn -- --scenario=dissolve [--seconds=240] [--s
 [--driver=pace --pace=walk|run|sprint] [--report-every=30] [--census-every=1] [--metrics=$PWD/build/run-{seed}.csv]
 [--trace] [--trace-frames]`; `--shots=4,12.5` adds `--capture-dir` screenshots at those run times and `--overview` watches
 from a high camera behind the runner. It prints frame times, segment build and retire step times, segment, node, body and
-tree counts, memory, managed allocation and GC pauses.
+tree counts, memory, managed allocation and GC pauses. `--tracking-metrics` also brackets all managed physics
+callbacks with first/last tick probes and reports tick count, callback mean/p95/p99 and allocation, plus whole-session
+allocation after assembly. Frame-wall timings include native physics and rendering; callback timings exclude them.
+`--tracking-proof` observes tanks through weak references, prints the tracking count alongside active content and
+historical supply, and collects freed wrappers while the session is still alive at the end checkpoint.
+`--assert-tracking` additionally requires matching counts and no retained freed wrappers (use with `--tracking-proof`).
+These diagnostics are opt-in; keep equivalence observers out of measurements and collection proofs because they retain
+tanks deliberately. The immediate parent can run the same instrumentation: its absent tracking count prints as -1.
 `--scenario=aimstall` puts a shot-stopping prop in front of the bot and asserts it leaves the pile.
 
 `menu_test --scenario=input` injects real keyboard, mouse and controller events through Lab menus, movement/combat,
