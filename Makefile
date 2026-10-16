@@ -81,6 +81,7 @@ test-behavior: build ## Run isolated physics, navigation, menu, grip and feet pr
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/body_correction_tests.tscn
 	GODOT="$(GODOT)" python3 -B tools/dev/check_lab.py
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/session_actors_tests.tscn
+	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/menu_composition_tests.tscn
 	for count in 2 8 16; do "$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/capacity_ui_tests.tscn -- --players=$$count || exit; done
 	python3 -B tools/dev/animation_review_tests.py
 	@mkdir -p build/animation-review-gate
