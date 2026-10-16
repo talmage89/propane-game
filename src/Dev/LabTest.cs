@@ -71,6 +71,7 @@ public partial class LabTest : Node
             Template = template,
             PauseOnFocusLoss = false,
             TestRandomSeed = (ulong)DevArgs.GetFloat("effects-seed", 23),
+            TestSeedPhysicsRandom = DevArgs.Get("replay-random") != null,
             Name = "Lab"
         };
         AddChild(lab);
@@ -413,6 +414,7 @@ public partial class LabTest : Node
                 Template = template,
                 PauseOnFocusLoss = false,
                 TestRandomSeed = (ulong)seed,
+                TestSeedPhysicsRandom = DevArgs.Get("replay-random") != null,
                 DrivePlayer = DevArgs.Get("watch") == null,
                 Name = "Lab"
             };

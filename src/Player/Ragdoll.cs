@@ -145,7 +145,7 @@ public partial class Ragdoll : PhysicalBoneSimulator3D
     }
 
     /// <summary>Starts simulating, every bone moving at <paramref name="velocity"/> plus a tumble.</summary>
-    public void Begin(Vector3 velocity, Vector3 spin)
+    public void Begin(Vector3 velocity, Vector3 spin, RandomNumberGenerator rng)
     {
         Active = true;
         Influence = 1f;
@@ -157,7 +157,6 @@ public partial class Ragdoll : PhysicalBoneSimulator3D
         pendingSpin = spin;
         pendingSteps = LaunchSteps;
         flail.Clear();
-        var rng = new RandomNumberGenerator();
         foreach (var body in bones)
         {
             var limb = body.Mass < 5f ? FlailSpeed : FlailSpeed * 0.2f;

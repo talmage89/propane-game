@@ -21,6 +21,7 @@ public partial class LabSession : Node3D
     public Tuning Template { get; init; } = Tuning.SavedTemplate;
     public bool PauseOnFocusLoss { get; set; } = true;
     internal ulong? TestRandomSeed { get; init; }
+    internal bool TestSeedPhysicsRandom { get; init; }
     // The scale fixture fixes supply/starts across cases and can request zero or sixteen bots.
     internal SuburbSettings? TestSuburbSettings { get; init; }
     internal int? TestBankBots { get; init; }
@@ -103,7 +104,12 @@ public partial class LabSession : Node3D
                 Scenario.Definition.Supply.Suburb(settings, Scenario.Prototype ? settings.LabPrototypeBots + 1 : 1)), seed);
         }
 
-        SessionFactory.Build(this, settings, source, new Mode(this), session => { Session = session; if (TestRandomSeed is { } seed) World.Random.Seed = seed; }, present: CreateLocalView);
+        SessionFactory.Build(this, settings, source, new Mode(this), session =>
+        {
+            Session = session;
+            if (TestRandomSeed is { } seed) World.Random.Seed = seed;
+            if (TestSeedPhysicsRandom) session.World.CreatePhysicsRandom = () => new RandomNumberGenerator { Seed = session.World.Random.Randi() };
+        }, present: CreateLocalView);
         resetQueued = false;
     }
 

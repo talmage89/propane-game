@@ -1,6 +1,7 @@
 using System;
 using Godot;
 using Propane.Core;
+using Propane.Player;
 using Propane.Tank;
 using static Propane.Dev.UnitTests.TestRunner;
 
@@ -11,6 +12,34 @@ public static class WorldClockTests
 {
     public static void Register(TestRunner runner)
     {
+        runner.Run("world/physical events use their own world's random factory", () =>
+        {
+            using var world = new WorldContext(runner, Tuning.SavedTemplate);
+            var state = world.Random.State;
+            using (var ordinary = world.CreatePhysicsRandom())
+                Assert(world.Random.State == state, "ordinary physics entropy consumed the world's shared random stream");
+            var calls = 0;
+            world.CreatePhysicsRandom = () =>
+            {
+                calls++;
+                return new RandomNumberGenerator { Seed = 23 };
+            };
+            Blast.Detonate(world, Vector3.One * 1000, null, chain: false);
+            Assert(calls == 1, "blast spin bypassed the world's factory");
+            DebrisQueue.Enqueue(world, world.Spawn, Transform3D.Identity, Vector3.Zero, Vector3.Zero);
+            Assert(calls == 2, "offline debris scatter bypassed the world's factory");
+            var player = new PlayerCharacter { World = world, ActorId = 1, Ammo = AmmoState.Starting(world.Tuning) };
+            world.Root.AddChild(player);
+            try
+            {
+                player.Collapse();
+                Assert(player.IsRagdolled && calls == 3, "ragdoll flail bypassed the world's factory");
+                using var other = new WorldContext(runner, Tuning.SavedTemplate);
+                using var random = other.CreatePhysicsRandom();
+                Assert(calls == 3, "a world's replay factory leaked into another world");
+            }
+            finally { player.Free(); }
+        });
         foreach (var speed in new[] { 0.1, 8.0 })
         {
             runner.Run($"world/clock timer at simulation speed {speed}", () =>
