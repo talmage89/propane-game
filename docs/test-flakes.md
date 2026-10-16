@@ -36,8 +36,11 @@ its passing jobs are not a full-gate pass.
 godot-mono --headless --path . --fixed-fps 60 res://scenes/dev/game_test.tscn -- \
   --scenario=gather --tune.FixedSeed=23 --gather-trace
 # Optional: --effects-seed=3 (still leaves blast spin randomized).
-make -j4 test-full-lab-2 test-full-lab-4 test-full-generator-1 test-full-generator-2
+make -j4 test-full-lab-king test-full-lab-soak-void test-full-generator-1 test-full-generator-2
 ```
+
+(When this was written, the Lab sweeps were numbered `test-full-lab-1` to `-4`. `make -n test-full` lists the named jobs
+that replaced them; the two above are the longest.)
 
 ## Motion: a discontinuity at the torso twist limits
 

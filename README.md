@@ -13,7 +13,8 @@ The lobby also offers **King of the Cul-de-sac**: hold a moving zone alone to mi
 creator-selected mint pace. Both modes offer **Tank supply**, 1×–8× in integer steps (default 1×).
 
 [design/VISION.md](design/VISION.md) is what the game is and must stay. [docs/multiplayer.md](docs/multiplayer.md) gives
-tank bank's full rules and how multiplayer is built.
+tank bank's full rules and how multiplayer is built. [docs/README.md](docs/README.md) says which documents are
+current contracts and which are dated evidence.
 
 ## Download and play
 

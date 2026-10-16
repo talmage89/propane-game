@@ -566,6 +566,9 @@ No messages, suburb construction, tank behavior or tuners changed relative to me
 
 ## Parallel deep sweeps
 
+*Historical.* This section and the timings below it measured the earlier scheduler, which ran `check_lab.py --full` as
+three Lab jobs. Test speed 2 (top of this file) split it into 25 named jobs; `make -n test-full` lists the current ones.
+
 Before this work, `make test-full` ran the gate and then every deep step one at a time. On `dev` at `a832c5d`, on the
 lead's 12-thread machine at load about 2, it took 2,317 seconds: generator sweep 902, `check_lab.py --full` 612,
 navigation 141, rifle soak 113, deep piles 77, duel lane 77, loading readiness 49, gate about 360. Each deep step is
@@ -577,7 +580,8 @@ runs them side by side with the gate's partitions. Nothing is dropped:
   sweep's 944 seeds, each once: 200 single-player, 200 two-player, 100 at each of 8/16/24/32 players and six per
   formation at each of the six sizes. A forced gap and overlap (shard 4 starting at seeds 152 and 75) failed it, naming
   the six missing, four shared and two extra seeds.
-- `check_lab.py --full` runs as three jobs of named sessions; `lint_tests.py` requires them to add up to every `--full`
+- `check_lab.py --full` ran as three jobs of named sessions when this section was written (it is 25 jobs since
+  [Test speed 2](#test-speed-2-october-14-2026)); `lint_tests.py` requires them to add up to every `--full`
   session. Navigation stays one process: it passes on its success rate over all 100 seeds.
 - The bot matches run last and alone. They run in real time. On this VM, beside three CPU-bound jobs, the rifle
   soak's clients fell to 1–2 frames a second and it failed tank agreement with two disagreements. Running the offline
@@ -589,6 +593,8 @@ runs them side by side with the gate's partitions. Nothing is dropped:
 `-j` is not the default: worktree agents share one machine, so each run picks its job count.
 
 ### Timings on a four-CPU cloud VM
+
+These timings are for the three-Lab-job scheduler described above, not the current 25 jobs.
 
 Indicative only: 4 CPUs, no GPU, rendering on the CPU. Each run was wrapped in `tools/dev/time_gate.py`. Load averages
 (1/5/15 minutes) were taken with `uptime` just before each run; a higher 5- or 15-minute figure is the previous run
