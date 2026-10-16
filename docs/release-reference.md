@@ -110,6 +110,10 @@ captures and interrupted/failed attempts.
 
 World hashes include construction, meshes and collision, but do not prove feel. These exact Linux/Jolt traces do not
 establish cross-platform or cross-CPU bit identity, so they are a local target, outside `make test` and CI.
+The same holds for world generation and construction, which use the C library's trigonometry: on the CI runner's
+glibc one prop yaw lands one ulp away. So the ordinary unit suite (and CI) checks only the platform-independent parts
+of the world references (formation inventory, codec round trips of the frozen plans, segment seeds); the exact plans,
+segment hashes and construction hashes run in `make test-equivalence` (its unit pass adds `--platform-references`).
 The original 45-second streamed Dissolve bot workload was tested separately and **excluded** from exact traces:
 repeated unmodified release runs produced different catch times, total ticks, transforms and scores. Incremental
 streaming depends on worker completion and 2.5 ms build slices, so completion steps are sensitive to wall time. Its failed comparisons remain evidence, not passes.

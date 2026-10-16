@@ -34,6 +34,8 @@ public partial class PrototypeRunner : Node
     private readonly Dictionary<int, int> scores = new();
     private readonly Dictionary<PropaneTank, int> directShots = new();
     private readonly HashSet<PropaneTank> drops = new();
+    private TankTracking tracking = null!;
+    internal int TrackingCount => tracking.Count;
     private readonly List<(IBotGoalPolicy Brain, PlayerCharacter Actor, BotWorld View)> brains = new();
     private BotServices services = null!;
     private int botTurn;
@@ -107,6 +109,8 @@ public partial class PrototypeRunner : Node
         {
             foreach (var actor in roster) scores[actor.ActorId] = fuse.Wins(actor.ActorId);
         }
+        tracking = new TankTracking(tank => { directShots.Remove(tank); drops.Remove(tank); });
+        Lab.Session.OnUnsubscribing(tracking.Dispose);
         foreach (var tank in Lab.LiveTanks) Track(tank);
         foreach (var actor in Lab.Session.Actors.Select(a => a.Character)) Watch(actor);
         foreach (var actor in Lab.Session.Actors.Select(a => a.Character))
@@ -280,8 +284,7 @@ public partial class PrototypeRunner : Node
             if (Run)
             {
                 RunDetonated(changed);
-                changed.Punctured -= Punctured;
-                changed.Detonated -= Detonated;
+                tracking.Forget(changed);
                 return;
             }
             var scorer = changed.ChainCause != 0 ? (int)changed.ChainCause : directShots.GetValueOrDefault(changed);
@@ -291,16 +294,13 @@ public partial class PrototypeRunner : Node
             if (IsPlaying && Health) Blast(changed, scorer);
             if (IsPlaying && Banking && scores.ContainsKey(scorer))
                 Apply(Rules.Handle(new TankDetonated(scorer, drops.Remove(changed) ? TankOrigin.Drop : TankOrigin.Map), Clock));
-            changed.Punctured -= Punctured;
-            changed.Detonated -= Detonated;
+            tracking.Forget(changed);
         }
-        tank.Punctured += Punctured;
-        tank.Detonated += Detonated;
-        Lab.Session.OnUnsubscribing(() =>
-        {
-            if (IsInstanceValid(tank)) { tank.Punctured -= Punctured; tank.Detonated -= Detonated; }
-        });
+        tracking.Track(tank, Punctured, Detonated);
     }
+
+    /// <summary>Content retirement releases subscriptions and attribution before native content starts retiring.</summary>
+    internal void ForgetTank(PropaneTank tank) => tracking.Forget(tank);
 
     /// <summary>
     /// Dissolve Run: every tank is the runner's, and a chain is its first tank's id, carried by each blast it sets off

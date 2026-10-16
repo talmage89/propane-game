@@ -126,7 +126,7 @@ def main():
     output = new_output_directory(args.output.resolve())
     print(f'Evidence directory: {output}', flush=True)
     if not args.skip_unit:
-        arguments = ['res://scenes/dev/unit_tests.tscn', '--', '--suite=ReferenceTests']
+        arguments = ['res://scenes/dev/unit_tests.tscn', '--', '--suite=ReferenceTests', '--platform-references']
         if args.refresh: arguments.append(f'--write-reference={destination}')
         command, elapsed = run(ROOT, arguments, output / 'unit.log')
         commands.append(command)

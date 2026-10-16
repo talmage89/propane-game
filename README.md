@@ -217,14 +217,14 @@ release to be minor (`Protocol.Version` is 3).
 | `src/Modes` | Pure mode rules (Sandbox, Tank Bank, King and Lab prototypes), mode definitions, phases and HUD presenters ([modes](docs/modes.md)). |
 | `src/Lab`, `src/Bots` | Shipped Lab scenarios, local bank adapter and camera-free banking brain. |
 | `src/Session` | Ordered session assembly, actors, local views and retirement. |
-| `src/Core` | Tuning, input map, physics and render layers, shared assets, events, spawn roots. |
+| `src/Core` | Tuning, launch arguments, input map, physics and render layers, shared assets, events, spawn roots. |
 | `src/World` | The void environment, the model catalog, and the suburb builder. `Plan/` holds the pure-data generator. |
 | `src/Tank` | Propane tanks, the vent jet, blasts, debris and breakaway fence panels. |
 | `src/Player` | Character controller, camera, animation, the rifle stance, ragdoll and get-up. |
 | `src/Fx` | Explosions, tracers, impacts, hitstop, particle helpers, and the shader warm-up. |
 | `src/UI` | HUD, menus (main, multiplayer, lobby, pause, match, results), match HUD, tuning panel. |
 | `src/Navigation` | Reusable bot routes, capsule sweeps, jump links and bounded recovery. |
-| `src/Dev`, `scenes/dev` | Test harnesses (below). |
+| `src/Dev`, `scenes/dev` | Test harnesses (below), and the `--release-test` smoke the exported game carries ([code quality](docs/code-quality.md#release-smoke)). |
 | `shaders` | World, tank, ground, void and effect shaders, plus the shared reveal transition. |
 | `tools/blender` | Scripts that build the assets in `assets/`. |
 | `tools/release`, `.github/workflows` | Export templates, the release build, quality checks, and release publishing. |
@@ -246,8 +246,9 @@ seeded Lab behavior before refactors. Unit references run in `make test`; `make 
 
 The [animation review harness](docs/animation-review.md) compares controller-driven motion and external CC0 clip candidates from both review views, with calibrated metrics and any-two-build media.
 
-Each scene in `scenes/dev` is a scripted test. Arguments after `--` are read by `src/Dev/DevArgs.cs`;
-`--capture-dir=<dir>` saves screenshots, `--record=<file.mp4>` films the window in real time (needs ffmpeg on `PATH`,
+Each scene in `scenes/dev` is a scripted test. Arguments after `--` are parsed once by `src/Core/LaunchArgs.cs`: the game
+reads its own [launch options](docs/code-quality.md#runtime-launch-options-and-the-dev-boundary) there, and the scenes
+read theirs through `src/Dev/DevArgs.cs`. `--capture-dir=<dir>` saves screenshots, `--record=<file.mp4>` films the window in real time (needs ffmpeg on `PATH`,
 including `ffmpeg.exe` on Windows; a game in a match stays in step, unlike Godot's `--write-movie`), and
 `--tune.<Name>=<value>` overrides any tuning value. A capture that cannot be delivered (a screenshot that cannot be saved,
 an ffmpeg that is missing, stalls, dies, exits nonzero or writes no file) fails the run with exit status 1, and no recorder

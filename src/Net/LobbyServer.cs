@@ -196,8 +196,8 @@ public partial class LobbyServer : Node
         AdvanceMatches(now);
         if (now >= nextDiagnostics)
         {
-            nextDiagnostics = now + (Dev.DevArgs.Get("net-throttle-trace") != null ? .25 : 10);
-            if (Dev.DevArgs.Get("capacity-metrics") != null) Log(Dev.CapacityMetrics.Server(clients.Keys.Select(id => peerIds.Connection(id)).Where(c => c != null).Select(c => transport.Diagnostics(c!))));
+            nextDiagnostics = now + (LaunchArgs.Current.Has("net-throttle-trace") ? .25 : 10);
+            if (LaunchArgs.Current.Has("capacity-metrics")) Log(CapacityMetrics.Server(clients.Keys.Select(id => peerIds.Connection(id)).Where(c => c != null).Select(c => transport.Diagnostics(c!))));
             foreach (var id in clients.Keys)
             {
                 if (peerIds.Connection(id) is not { } connection) { continue; }
@@ -680,7 +680,7 @@ public partial class LobbyServer : Node
         }
 
         var started = Time.GetTicksMsec();
-        var seed = OS.IsDebugBuild() && int.TryParse(Dev.DevArgs.Get("match-seed"), out var requestedSeed)
+        var seed = OS.IsDebugBuild() && int.TryParse(LaunchArgs.Current.Get("match-seed"), out var requestedSeed)
             ? requestedSeed : random.Next();
         var mode = lobby.Mode;
         var settings = mode.Supply.Suburb(tuning, actors.Count);
@@ -1075,7 +1075,7 @@ public partial class LobbyServer : Node
 
     private void PublishAuthority(MatchRun match, AuthorityMessage result)
     {
-        if (Dev.DevArgs.Get("tank-authority-trace") != null)
+        if (LaunchArgs.Current.Has("tank-authority-trace"))
         {
             var time = (double)System.Diagnostics.Stopwatch.GetTimestamp() / System.Diagnostics.Stopwatch.Frequency;
             var bodies = string.Join(" ", result.Bodies.Select(b => $"{b.Body.Id:x}:{b.Owner}:{b.Body.Epoch}:{b.Body.Sequence}:{b.State}:{b.Rest}"));

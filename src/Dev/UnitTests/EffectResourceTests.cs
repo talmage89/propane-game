@@ -221,11 +221,11 @@ public static class EffectResourceTests
                 "explosions did not share all five particle process resources");
             var debris = DebrisBody.Create(world, GameAssets.Debris[0]); world.Root.AddChild(debris);
             first._Process(1d / 60); explosion._Process(1d / 60); debris._Process(1d / 60);
-            var allocated = GC.GetAllocatedBytesForCurrentThread();
-            for (var frame = 0; frame < 5; frame++)
-            { first._Process(1d / 60); explosion._Process(1d / 60); debris._Process(1d / 60); }
-            Assert(GC.GetAllocatedBytesForCurrentThread() == allocated,
-                "steady vent/explosion/debris updates allocated shader parameter names");
+            TestRunner.AssertNoAllocation(() =>
+            {
+                for (var frame = 0; frame < 5; frame++)
+                { first._Process(1d / 60); explosion._Process(1d / 60); debris._Process(1d / 60); }
+            }, "steady vent/explosion/debris updates allocated shader parameter names");
             other.Tuning.FireballScale *= 2;
             var larger = ExplosionEffect.Create(other, Vector3.Zero, 0).GetChildren().OfType<GpuParticles3D>().First();
             Assert(((ParticleProcessMaterial)larger.ProcessMaterial).InitialVelocityMax ==
