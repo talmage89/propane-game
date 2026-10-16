@@ -196,6 +196,7 @@ public partial class PrototypeRunner : Node
                     break;
             }
             Decided?.Invoke(command);
+            Lab.TestObserveCommand?.Invoke(command);
         }
     }
 
@@ -272,6 +273,7 @@ public partial class PrototypeRunner : Node
     /// <summary>Credits detonations as the Lab duel does: a chain to its initiator, a lone tank to its last shooter.</summary>
     internal void Track(PropaneTank tank)
     {
+        Lab.TestObserveTank?.Invoke(tank);
         void Punctured(PropaneTank changed) => directShots.Remove(changed);
         void Detonated(PropaneTank changed)
         {

@@ -134,6 +134,12 @@ test-generator: build ## Check every generator assertion with bounded seed depth
 test-world: build ## Compare all formations built in two fresh processes
 	tools/dev/check_world.sh
 
+# Exact release references: wire/schema/world/publication run in the discovered unit suite; native Lab traces stay local.
+.PHONY: test-equivalence
+test-equivalence: build ## Compare seeded Lab traces and unit fixtures with the frozen release
+	python3 -B tools/dev/check_equivalence_tests.py
+	python3 -B tools/dev/check_equivalence.py
+
 # The deep sweeps are independent targets, so make -j4 test-full runs them side by side with the gate. label.sh prefixes
 # each line of a job's output with its name. The menu lifetime run shares test-behavior's port and settings file, so it
 # waits for it. The bot matches share this checkout's port and build/ names, and their server and clients run in real

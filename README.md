@@ -241,6 +241,9 @@ the engine tears down its C# bindings and native servers. Static caches remain a
 
 ## Dev harnesses
 
+[Release-reference checks](docs/release-reference.md) freeze wire/schema, world construction, body publication and
+seeded Lab behavior before refactors. Unit references run in `make test`; `make test-equivalence` adds local exact traces.
+
 The [animation review harness](docs/animation-review.md) compares controller-driven motion and external CC0 clip candidates from both review views, with calibrated metrics and any-two-build media.
 
 Each scene in `scenes/dev` is a scripted test. Arguments after `--` are read by `src/Dev/DevArgs.cs`;

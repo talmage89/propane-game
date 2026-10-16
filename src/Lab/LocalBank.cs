@@ -198,6 +198,7 @@ public partial class LocalBank : Node
 
     private void Track(PropaneTank tank)
     {
+        Lab.TestObserveTank?.Invoke(tank);
         void Punctured(PropaneTank changed) => directShots.Remove(changed);
         void Detonated(PropaneTank changed)
         {
@@ -237,7 +238,10 @@ public partial class LocalBank : Node
     private void Apply(IReadOnlyList<ModeCommand> commands)
     {
         foreach (var command in commands)
+        {
             if (command is ScoreChanged changed) scores[changed.ActorId] = changed.Score;
+            Lab.TestObserveCommand?.Invoke(command);
+        }
     }
 
     /// <summary>A spill ticket: the rules reserve the bank, the tanks appear, then the debit commits.</summary>

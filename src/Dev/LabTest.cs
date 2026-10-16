@@ -23,11 +23,27 @@ public partial class LabTest : Node
 {
     private CaptureDirector capture = null!;
     private Tuning template = null!;
+    private Equivalence.LabTrace? equivalence;
+
+    private void AddLab(LabSession lab)
+    {
+        if (DevArgs.Get("equivalence-trace") != null)
+        {
+            Assert(equivalence == null, "trace fixtures must use one Lab session");
+            equivalence = new Equivalence.LabTrace { Lab = lab, ProcessPhysicsPriority = int.MaxValue };
+            equivalence.OpenDetail();
+            lab.TestObserveCommand = equivalence.Command;
+            lab.TestObserveTank = equivalence.Track;
+        }
+        AddChild(lab);
+        if (equivalence != null) { AddChild(equivalence); equivalence.Begin(); }
+    }
     public override async void _Ready()
     {
         DevArgs.MarkReady();
         capture = new CaptureDirector { CollectFrameMetrics = DevArgs.Get("scenario") != "measure-play" }; AddChild(capture);
         template = Tuning.LoadBaked();
+        if (DevArgs.Get("equivalence-trace") != null) template.HitstopDuration = 0;
         template.FixedSeed = 23;
         template.LabStackCount = 32;
         if (DevArgs.Get("bot-skill") != null) template.LabBotSkill = DevArgs.GetFloat("bot-skill", template.LabBotSkill);
@@ -48,9 +64,11 @@ public partial class LabTest : Node
                 case "prototype": await Prototypes().ConfigureAwait(true); break;
                 case "shortfuse": await ShortFuseMatches().ConfigureAwait(true); break;
                 case "shortfuse-combo": await ShortFuseCombo().ConfigureAwait(true); break;
+                case "reference-retirement": await ReferenceRetirement().ConfigureAwait(true); break;
                 case "dissolve": await DissolveRun().ConfigureAwait(true); break;
                 default: await Lifetime().ConfigureAwait(true); break;
             }
+            equivalence?.Finish();
             template.Dispose();
             GD.Print("[lab] PASS");
             ShutdownGuard.Quit(GetTree());
@@ -74,7 +92,7 @@ public partial class LabTest : Node
             TestSeedPhysicsRandom = DevArgs.Get("replay-random") != null,
             Name = "Lab"
         };
-        AddChild(lab);
+        AddLab(lab);
         Assert(lab.Initialized, $"{scenario.Id}/{environment} initialization");
         return lab;
     }
@@ -174,7 +192,7 @@ public partial class LabTest : Node
                         TestRandomSeed = 23,
                         Name = "Lab"
                     };
-                    AddChild(lab);
+                    AddLab(lab);
                     var label = $"{scenario.Id}/{environment} with {name}";
                     Assert(lab.Initialized && lab.LiveTanks.Any(), $"{label} built no fixture");
                     // This checks layout/retirement, not combat: Hard can detonate a pile before the actors have
@@ -433,7 +451,7 @@ public partial class LabTest : Node
                 DrivePlayer = DevArgs.Get("watch") == null,
                 Name = "Lab"
             };
-            AddChild(lab);
+            AddLab(lab);
             var runner = lab.Prototype!;
             if (DevArgs.Get("overview") != null)
             {
@@ -560,7 +578,7 @@ public partial class LabTest : Node
                 DrivePlayer = DevArgs.Get("watch") == null,
                 Name = "Lab"
             };
-            AddChild(lab);
+            AddLab(lab);
             var match = lab.Match!;
             var tuning = lab.World.Tuning;
             var starters = lab.Session.Actors.Select(a => a.Character.ActorId).ToArray();
@@ -671,9 +689,10 @@ public partial class LabTest : Node
             Template = template,
             PauseOnFocusLoss = false,
             TestRandomSeed = 23,
+            TestSeedPhysicsRandom = DevArgs.Get("replay-random") != null,
             Name = "Lab"
         };
-        AddChild(lab);
+        AddLab(lab);
         var runner = lab.Prototype!;
         var rules = (ShortFuseRules)runner.Rules;
         var player = lab.Player;
@@ -1204,7 +1223,7 @@ public partial class LabTest : Node
             PauseOnFocusLoss = false,
             Name = "Lab"
         };
-        AddChild(lab);
+        AddLab(lab);
         Assert(lab.Initialized && lab.Session.Actors.Count == 5 && lab.Player.View != null, "play fixture needs four bots and the primary view");
         var count = lab.LiveTanks.Count();
         AddChild(new FrameMetrics { ProcessPriority = int.MaxValue, WarmupFrames = 0 });
