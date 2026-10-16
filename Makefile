@@ -67,6 +67,7 @@ test-core: build ## Run checker, platform, movement, unit and scripted mode-rule
 	python3 -B tools/dev/compare_vents_tests.py
 	python3 -B tools/dev/compare_tanks_tests.py
 	python3 -B tools/dev/net_bots_tests.py
+	python3 -B tools/dev/release_tests.py
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/core_tests.tscn
 	"$(GODOT)" --headless --path . res://scenes/dev/mode_test.tscn
 	"$(GODOT)" --headless --path . res://scenes/dev/shutdown_tests.tscn

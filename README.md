@@ -464,8 +464,13 @@ make release-patch   # or release-minor, release-major; tools/release/cut.sh X.Y
 
 `tools/release/cut.sh` takes the next version after the latest release tag and checks it with
 `tools/release/check_version.sh`: newer than every release, and a patch only when the protocol is unchanged. For a
-patch, it lists any changed files that players in a match share and asks before going on. Then it shows the changes,
-runs the tests, commits the new version on `dev`, and pushes `dev` and fast-forwards `main` to it in one push.
+patch, it lists any changed files that players in a match share (`src/Net`, `src/World`, `src/Tank`, the tuners and
+`src/Modes`) and asks before going on; the list is a review prompt, not a proof of compatibility. Then it shows the
+changes and runs the whole gate, `make check` (lint, every test partition and the gate self-tests) followed by a
+100-seed generator sweep, writing the output to `build/release-gate.log`. Only after that passes does it change anything:
+it commits the new version on `dev`, and pushes `dev` and fast-forwards `main` to it in one push. A refusal, a declined
+confirmation or a failing gate leaves the version, the branches and the remote as they were.
+`python3 -B tools/dev/release_tests.py` proves this against a scratch repository with a local remote and fake tools.
 
 That push runs `.github/workflows/release.yml` on a Linux runner: the same version check, the headless tests, all three
 exports, and a new GitHub release with the changes since the previous one. Releases are never replaced.
@@ -479,6 +484,9 @@ The same build runs locally:
 tools/release/install_templates.sh 4.7.2   # .NET templates for all three platforms; macOS is Apple Silicon only
 RCODESIGN=/path/to/rcodesign tools/release/build.sh   # writes build/dist/*.zip and *.tar.gz
 ```
+
+Packaging owns only `build/package` (exports, notices, logs, the folders that become the archives) and `build/dist`,
+and replaces both on every run; other output under `build/` is left alone.
 
 Godot's built-in ad-hoc signing writes entitlement data that current macOS rejects (the app is killed at launch),
 so the macOS preset exports unsigned and [rcodesign](https://github.com/indygreg/apple-platform-rs) signs the app ad hoc.

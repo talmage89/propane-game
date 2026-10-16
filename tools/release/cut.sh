@@ -1,15 +1,18 @@
 #!/usr/bin/env bash
-# Cuts a release from dev: picks the next version, checks it may be released, runs the tests, commits the version
-# bump on dev, then pushes dev and fast-forwards main to it in one push. The push to main starts the release workflow,
-# which builds both games and publishes the GitHub release.
+# Cuts a release from dev: picks the next version, checks it may be released, runs the whole gate (make check, then a
+# deeper generator sweep), commits the version bump on dev, then pushes dev and fast-forwards main to it in one push.
+# The push to main starts the release workflow, which builds both games and publishes the GitHub release.
+# Nothing changes until the gate has passed: a refusal, a declined confirmation or a failing gate leaves the version,
+# the branches and the remote as they were.
 # Usage: tools/release/cut.sh patch|minor|major|X.Y.Z [-y]
 #   -y  answer yes to the confirmations (every check still runs)
 # The Godot .NET editor comes from $GODOT, else godot-mono or godot on PATH, else the macOS app.
 set -euo pipefail
 
 # What players in one match share. A patch should leave these alone, since it must play with every other patch of
-# its minor version: messages, the suburb built from the server's plan (body ids follow it), tanks, and the tuners.
-shared_paths=(src/Net src/World src/Tank src/Player/PlayerNet.cs src/Core/Tuning.cs)
+# its minor version: messages, the suburb built from the server's plan (body ids follow it), tanks, the tuners (Tuning.cs
+# and its partials) and the mode rules. A change here is a reason to review, not proof that compatibility broke.
+shared_paths=(src/Net src/World src/Tank src/Player/PlayerNet.cs 'src/Core/Tuning*.cs' src/Modes)
 
 bump="${1:-}"
 yes=0
@@ -75,17 +78,22 @@ if [[ -z "$godot" ]]; then
   done
 fi
 [[ -n "$godot" ]] || die "set GODOT to the Godot .NET editor binary"
-log="$(mktemp)"
-trap 'rm -f "$log"' EXIT
-echo "Testing..."
-if ! { dotnet build Propane.sln -c Debug -nologo -v quiet &&
+# The established gate: lint, every test partition and the gate self-tests, exactly what CI runs. The generator sweep
+# is deeper than the gate's. make check built the assembly it uses.
+mkdir -p build
+log="$project/build/release-gate.log"
+echo "Testing (make check, then 100 generator seeds; the log is $log)..."
+if ! { GODOT="$godot" make check &&
   "$godot" --headless --path . res://scenes/dev/generator_tests.tscn -- --seeds=100; } >"$log" 2>&1; then
   tail -40 "$log" >&2
-  die "the tests failed"
+  die "the tests failed (full log: $log); nothing was changed or pushed"
 fi
 
 perl -pi -e "s/^config\\/version=\".*\"\$/config\\/version=\"$version\"/" project.godot
-git commit --quiet -m "Release v$version" project.godot
+if ! git commit --quiet -m "Release v$version" project.godot; then
+  git checkout --quiet -- project.godot
+  die "could not commit the version bump; project.godot is restored and nothing was pushed"
+fi
 if ! git push --quiet --atomic origin dev dev:main; then
   die "the push failed; the version bump is committed on dev. Push again with: git push --atomic origin dev dev:main"
 fi
