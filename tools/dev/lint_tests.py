@@ -73,7 +73,7 @@ fi
               "transport_physics_tests.tscn -- --server",
               "server_seed_tests.tscn -- --server --match-seed=23",
               "session_actors_tests.tscn", "upright_pile_tests.tscn", "melee_range.tscn", "rifle_reach_tests.tscn",
-              "capacity_ui_tests.tscn -- --players=2", "capacity_ui_tests.tscn -- --players=8", "capacity_ui_tests.tscn -- --players=16",
+              "menu_composition_tests.tscn", "capacity_ui_tests.tscn -- --players=2", "capacity_ui_tests.tscn -- --players=8", "capacity_ui_tests.tscn -- --players=16",
               "animation_review.tscn -- --cases=walk_000,jog_000,creep_000,creep_180,creep_090,sprint,aim_idle",
               "player_range.tscn -- --scenario=melee --assert-motion --assert-grip",
               "bot_navigation_course.tscn -- --seeds=5",
