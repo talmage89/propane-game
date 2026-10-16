@@ -224,6 +224,7 @@ public partial class DissolveArena : Node3D
     {
         foreach (var tank in segment.Tanks)
         {
+            runner?.ForgetTank(tank);
             dissolved.Remove(tank);
             Lab.ForgetTank(tank);
         }

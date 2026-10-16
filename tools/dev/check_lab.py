@@ -52,8 +52,8 @@ def sessions(full):
                       ('king-suburb', 'prototype', ['--mode=king', '--environment=suburb', '--seeds=1', '--first-seed=11']),
                       ('shortfuse-full', 'shortfuse', ['--seeds=2', '--first-seed=11']),
                       # Five-minute runs: the bot on two seeds, and a pacer without bot navigation for the stream's own frame times.
-                      ('dissolve-full', 'dissolve', ['--seconds=300', '--seeds=2', '--first-seed=11', '--census-every=2']),
-                      ('dissolve-pace', 'dissolve', ['--driver=pace', '--seconds=300', '--first-seed=11', '--census-every=2'])]
+                      ('dissolve-full', 'dissolve', ['--seconds=300', '--seeds=2', '--first-seed=11', '--census-every=2', '--tracking-proof', '--assert-tracking']),
+                      ('dissolve-pace', 'dissolve', ['--driver=pace', '--seconds=300', '--first-seed=11', '--census-every=2', '--tracking-proof', '--assert-tracking'])]
     return scenarios
 
 
