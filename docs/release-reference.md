@@ -105,6 +105,8 @@ tick, mean/p95/p99 collector-plus-publisher time, packet count and payload bytes
 `Match._PhysicsProcess` callback with the same controlled bodies and advancing clock (including corrections, actor
 publication and pickup checks). It does not advance Jolt or other scene nodes. Alternate parent/candidate runs;
 these controlled windows do not replace native match performance and convergence checks.
+P3's [verification record](body-publication-verification.md) retains the paired measurements, native commands,
+captures and interrupted/failed attempts.
 
 World hashes include construction, meshes and collision, but do not prove feel. These exact Linux/Jolt traces do not
 establish cross-platform or cross-CPU bit identity, so they are a local target, outside `make test` and CI.
