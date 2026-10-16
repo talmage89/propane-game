@@ -165,5 +165,5 @@ public partial class LobbyServer
 /// </summary>
 public static class LobbyWorldDefault
 {
-    public static bool Enabled => Dev.DevArgs.Get("classic-lobby") == null;
+    public static bool Enabled => !LaunchArgs.Current.Has("classic-lobby");
 }

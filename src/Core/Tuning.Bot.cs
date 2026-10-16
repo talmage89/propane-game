@@ -16,7 +16,7 @@ public partial class Tuning
     [Export(PropertyHint.Range, "0,2,0.05")] public float BotKingCrowdScale { get; set; } = 0.15f;
 
     // Local brain dials deliberately have no Export attribute: ValueNames/Snapshot must remain unchanged for
-    // patch compatibility. DevArgs --tune.Bot... and C# callers can tune them. The difficulty profiles below are
+    // patch compatibility. LaunchArgs --tune.Bot... and C# callers can tune them. The difficulty profiles below are
     // local too: a bot's difficulty changes its brain on its creator's game, never the match's physics or schema.
     public float BotRouteSpacing { get; set; } = 1.5f;
     // Feet within this height of a cached ground plane share its answers.

@@ -1,6 +1,6 @@
 using System;
 using Godot;
-using Propane.Dev;
+using Propane.Core;
 
 namespace Propane.Net;
 
@@ -59,7 +59,7 @@ public static class BuildInfo
     private static string? build;
 
     /// <summary>This game's version. <c>--fake-version=X.Y.Z</c> pretends to be another, for testing.</summary>
-    public static string GameVersion => DevArgs.Get("fake-version") ?? ProjectSettings.GetSetting("application/config/version").AsString();
+    public static string GameVersion => LaunchArgs.Current.Get("fake-version") ?? ProjectSettings.GetSetting("application/config/version").AsString();
 
     /// <summary>
     /// The commit an exported build was made from (written to <c>res://build_id.txt</c> by the release scripts), or

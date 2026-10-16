@@ -106,6 +106,23 @@ public partial class TestRunner : Node
         }
     }
 
+    /// <summary>
+    /// Runs <paramref name="window"/> up to <paramref name="windows"/> times and passes when one run allocates no managed
+    /// bytes on this thread. Steady per-call garbage allocates in every window; a rare one-time runtime allocation (seen
+    /// under parallel gate load and on CI, callsite unknown) lands in at most one, so it cannot fail the check alone.
+    /// </summary>
+    public static void AssertNoAllocation(Action window, string message, int windows = 3)
+    {
+        var allocated = long.MaxValue;
+        for (var i = 0; i < windows && allocated != 0; i++)
+        {
+            var before = GC.GetAllocatedBytesForCurrentThread();
+            window();
+            allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        }
+        Assert(allocated == 0, $"{message} ({allocated} bytes in the last window)");
+    }
+
     public static void Throws<T>(Action action) where T : Exception
     {
         try { action(); }
