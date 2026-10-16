@@ -105,6 +105,9 @@ lights and decals under that root, but excludes rifle muzzle flashes. Particle s
 hidden. Deferred mesh-layer edits and a node-added observer exist only in ablated runs; compare GPU time,
 not their CPU cost. JSON records the omitted feature and comparison/merge refuses unlike feature settings.
 
+`BENCH_ARGS=--bot-skill=0.2` measures Easy; the default is Normal (0.6). The scene validates and records
+the loaded skill, and comparison/merge rejects different skills. Older JSON without this field represents Normal.
+
 ## Comparing optimization branches
 
 Use identical commands and at least three repetitions. Do not compare different seeds, map hashes, resolutions,

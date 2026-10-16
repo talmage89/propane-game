@@ -27,6 +27,8 @@ def read(path):
 def compare(a, b):
     old, acases = read(a)
     new, bcases = read(b)
+    if old.get("bot_skill", 0.6) != new.get("bot_skill", 0.6):
+        raise ValueError("workload mismatch: bot_skill")
     for key in ("seed", "seconds", "warmup", "resolution", "presentation", "omitted_render_feature", "camera_mode"):
         if old.get(key, "overview" if key == "camera_mode" else "none") != new.get(key, "overview" if key == "camera_mode" else "none"):
             raise ValueError(f"workload mismatch: {key}")
@@ -48,6 +50,8 @@ def merge(paths):
         data, incoming = read(path)
         if combined is None:
             combined = copy.deepcopy(data)
+        if combined.get("bot_skill", 0.6) != data.get("bot_skill", 0.6):
+            raise ValueError("cannot merge different bot_skill")
         for key in ("revision", "config", "seed", "seconds", "warmup", "resolution", "presentation", "omitted_render_feature", "camera_mode"):
             if combined.get(key, "overview" if key == "camera_mode" else "none") != data.get(key, "overview" if key == "camera_mode" else "none"):
                 raise ValueError(f"cannot merge different {key}")
