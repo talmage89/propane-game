@@ -27,10 +27,11 @@ Unit assertions exercise all three physical callers, check the ordinary factory 
 alone and prove one world's injected factory does not affect another world. The original idle limits still reject
 the old 64–93% stranded bots.
 
-Easy's Tank Bank fallback chooses the nearest upright, nonblacklisted rival only after ordinary target selection
-finds no ammo, tank or profitable fight. It then uses the existing `Fight` path, with unchanged aim, reaction,
-magazine handling and navigation budgets. It does not alter Normal/Hard goals, scoring, shared tuning or messages.
-`BotEasySeekRivals` is a local dial, copied with other local brain dials and excluded from the tuning snapshot.
+Easy's Tank Bank fallback uses an upright rival as a hint and wanders to a fixed point near its last observed
+position. `BotEasyRoamRadius` (12 m) and `BotEasyRoamSeconds` (4 s) are local dials, alongside `BotEasySeekRivals`.
+An unreachable scouting point is replaced without ruling out its anchor rival. Ammo, tanks and profitable fights
+still take priority, and ordinary melee applies at reach. Aim, reaction, navigation budgets, Normal/Hard goals,
+scoring, shared tuning and messages are unchanged.
 
 ## Reproducing the measurements
 
@@ -83,3 +84,15 @@ The baseline used the original single seed and hitstop settings. Values are perc
 | full/loaded | idle-king | 3.7, 3.4, 4.4, 3.3, 4.3 | 6.8, 9.1, 13.6, 6.8, 13.6 | 4 s | 0/5 |
 
 A separate initial fast King invocation also failed at worst idle 43.2% (mean 7.4%, longest 18 s).
+
+Every after cell (fast/full × alone/loaded) passed all five runs with these same results:
+
+| Check | Mean idle | Worst bot | Longest idle | Repeated samples |
+| --- | ---: | ---: | ---: | ---: |
+| Bank | 2.3% | 5.1% | 2 s | 20/20 identical |
+| King | 5.4% | 27.3% | 11 s | 20/20 identical |
+
+The **complete per-bot reports, status breakdowns and summaries** match across all twenty invocations per mode,
+including between normal and optimized Debug. All forty checks passed with clean engine logs. The baseline spans
+2.8–10.0% mean / 5.1–41.0% worst in Bank and 3.1–9.9% mean / 6.8–36.4% worst in King; two baseline Bank checks failed.
+The separate initial King failure above is outside that forty-run baseline matrix.

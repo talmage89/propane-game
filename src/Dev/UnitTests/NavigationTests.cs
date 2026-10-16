@@ -821,7 +821,7 @@ internal static class NavigationTests
                 scores[2] = 8;
                 Think();
                 TestRunner.Assert(brain.Status.StartsWith("fighting 2", StringComparison.Ordinal),
-                    $"a profitable fight must leave the fallback approach: {brain.Status}");
+                    $"a profitable fight must leave scouting: {brain.Status}");
                 scores[2] = 0;
                 brain.Skill = runner.World.Tuning.BotNormalSkill;
                 Think();

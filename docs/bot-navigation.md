@@ -227,8 +227,8 @@ An unreachable scouting point is replaced without blacklisting the rival. Ordina
 keep Easy's existing aim and reaction, and navigation retains its shared query/expansion budgets. These dials and
 `BotEasySeekRivals` are local; Normal and Hard retain their goal policies.
 
-Banking brains share one root-position observation per actor per think batch. The owner thinks all bots before
-moving actors, so this removes repeated native position reads without changing when an observation is taken.
+Banking brains' melee and watcher searches share one root-position observation per actor per think batch. The owner
+thinks all bots before moving actors, so this removes repeated native position reads without changing an observation.
 Sight, aim and ragdoll-bone observations keep their existing paths.
 
 `BotActivity` measures whether a bot plays. Play is cut into one-second windows; a window is idle when the bot stayed
