@@ -139,6 +139,9 @@ remain separate work.
 
 ## Verification
 
+[Tracking lifetime verification and performance status](lab-tracking-verification.md) records P2’s parent comparisons,
+collection proofs, reviewed captures, retained failures and remaining measurement work.
+
 `python3 -B tools/dev/check_lab.py` is the fast gate: one lifecycle cycle per allowed pair, local rules, the bot's
 aim-stall probe and a 15-second scripted duel. It requires a success marker, exit 0 and no engine warnings/errors.
 The lifecycle run's first shard also runs `--scenario=tracking`: detonate/retire/reset/repeated-exit permutations,
