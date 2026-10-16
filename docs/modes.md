@@ -52,7 +52,7 @@ presenter, the bot goal policy, the tuners the rules copy and the envelope schem
 Multiplayer lobbies default to Tank Bank; the creator can choose King and its mint pace (0.5–10 s in 0.5 s steps,
 default 2 s). The lobby's length is the round length. `MatchStart` appends the mode id and schema version, and a client
 that does not know the pair fails decoding by name. Lab scenarios name a mode: the banking duel plays Tank Bank and the other
-starters play Sandbox. A waiting lobby's [world](multiplayer.md#lobby-world-a12-unreleased-protocol-3) plays Lobby,
+starters play Sandbox. A waiting lobby's [world](multiplayer.md#lobby-world-a12-protocol-3) plays Lobby,
 which no one chooses. A Lab scenario's environment choice replaces the mode's world source, so a prototype can try
 a mode in either the void or a suburb.
 
@@ -406,5 +406,5 @@ the same plans, seeds and cans.
 `check_lab.py` plays whole prototype
 rounds with bots (see [lab.md](lab.md#verification)).
 
-The network adoption keeps `Protocol.Version` at 2 under the unreleased-cycle ruling; MatchStart and the mode
-messages change shape, so the next release must be a minor release.
+The network adoption stayed within Protocol 2 (released in 0.3.0); MatchStart and the mode
+messages changed shape, which needed a minor release.

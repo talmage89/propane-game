@@ -3,6 +3,9 @@
 How multiplayer works today: Tank Bank and King of the Cul-de-sac, the networking model, hosting, bots and tests. It describes the
 code; when the code changes, change this file with it. The game's lasting direction is in [design](../design/).
 
+`Protocol.Version` is **3** (`src/Net/Protocol.cs`), shipped with 0.4.0; 0.3.0 shipped 2 and 0.2.0 shipped 1. A section
+labeled with an earlier protocol records which protocol its message changes joined, and shipped with that release.
+
 Hard bots in Tank Bank and King compare banking and spilling leaders' points with the available zone income;
 Easy and Normal retain their objective-first choices. See [bot policies](bot-navigation.md#hard-points-policy).
 
@@ -38,7 +41,7 @@ the Lab duel; [modes.md](modes.md) describes the framework, the spill tickets an
 
 1. **Main menu:** single player (the sandbox), multiplayer or quit.
 2. **Multiplayer:** the player connects to a server, then creates a lobby or joins an existing one.
-3. **Lobby:** joining puts the player in the lobby's [world](#lobby-world-a12-unreleased-protocol-3), a void where everyone who joined roams, shoots and throws tanks while waiting. Its panel (Tab, or View on a controller) holds the lobby: each player sets a name and color and may add bots. The creator chooses Tank Bank (default) or King of the Cul-de-sac, its length, **Tank supply** (every integer from 1× to 8×, default 1×) and, for King, mint pace, then starts. Everyone sees supply; only the waiting creator can change it.
+3. **Lobby:** joining puts the player in the lobby's [world](#lobby-world-a12-protocol-3), a void where everyone who joined roams, shoots and throws tanks while waiting. Its panel (Tab, or View on a controller) holds the lobby: each player sets a name and color and may add bots. The creator chooses Tank Bank (default) or King of the Cul-de-sac, its length, **Tank supply** (every integer from 1× to 8×, default 1×) and, for King, mint pace, then starts. Everyone sees supply; only the waiting creator can change it.
 4. **Stage:** the stage screen shows the coming mode, its settings and everyone's card over the washed-out world and counts down `LobbyStageTime` (5 s); the creator can take the start back. Then the world goes.
 5. **Match start:** the server sends the suburb's plan. Each client builds it, it materializes as in single player, and play begins when the timer starts.
 6. **Match:** runs for the lobby's match length.
@@ -238,7 +241,7 @@ A refused grant or changed member leaves the group alone; ownership/lifecycle ch
 Built square and triangular pyramids stand upright on ordinary collar/foot contacts and start asleep, just like
 other built tanks. Their tier rise is `PileUprightLayerHeight`; side-laid rows retain `PileLayerHeight`.
 [The upright pile proof](upright-piles.md) covers stability, player passes and disturbances. This shared construction
-change and tuner require a minor release; the unreleased `Protocol.Version` stays 2.
+change and tuner require a minor release; it shipped within Protocol 2 (0.3.0).
 
 Gathered piles use `PileBuilder`'s upright cluster with the existing pile spacing: it supports every count without
 upper tiers depending on a tank that might be interrupted. Site checks require flat floor support, an empty footprint
@@ -286,7 +289,7 @@ with the appearance picker) and Easy, Normal or Hard. Any lobby member can add b
 difficulty and, for its owner only, **Edit**, which reopens the dialog with **Remove bot**. Bots count toward the
 lobby's capacity, so Add bot is disabled when the lobby is full. The dialog works with the mouse, the keyboard (Tab,
 arrows, Enter, Esc cancels) and a controller (B cancels); a refused request keeps it open with the server's reason.
-The lobby section [below](#lobby-bots-a8-unreleased-protocol-2) describes the runtime and validation.
+The lobby section [below](#lobby-bots-a8-protocol-2) describes the runtime and validation.
 
 From a source checkout, `tools/dev/add_bots.sh -S host:port` still starts separate bot processes (4 by default) on that
 server; without `-S` they join a server on this computer. Create a lobby first: they join the first open lobby and play
@@ -363,7 +366,7 @@ channel numbers. ENet keeps control and disposable traffic on channel zero; reli
 body through channels one to three, so a checkpoint retry cannot block control. Ordering is per connection and
 reliable class, with no ordering across classes. On receive, the adapter uses native reliability/channel for checkpoints and the
 existing type byte to distinguish disposable body states. Epoch/sequence validation handles overtaking motion.
-No application packet layout, player id, tuner or gameplay rule changed. Protocol 2 remains unreleased.
+No application packet layout, player id, tuner or gameplay rule changed.
 
 Connection handles are opaque objects and are never reused. `ProtocolPeerMap` allocates server-issued peer ids
 independently of ENet's native ids; the client learns its peer id from Welcome. The server-owned roster assigns
@@ -455,7 +458,7 @@ Details settled while building, within the decisions above:
 | --- | --- |
 | `make test` | Plain C# assertion suites (every wire message, malformed payloads, server ledger and permissions, lifecycle buffering and ownership, transport faults/reconnect/lifetime, pure mode rules and the mode envelope), the scripted `mode_test` rules harness, score-checker regressions, movement, gamepad menu, device switching and platform checks, generator checks (20 seeds plus large layouts and forced formations), and separate-process built-world hashes. `make test-full` adds deeper layout, navigation and lifetime sweeps. Add suites under `src/Dev/UnitTests/` and mark them `[UnitSuite]` for discovery; any failure prints its name and exits nonzero. |
 | `godot --headless res://scenes/dev/generator_tests.tscn -- --seeds=100` | All four formations; 2, 8, 16, 24 and 32 players; exact supply counts, clear separated reachable starts, hull overlaps and supports, and exact `PlanCodec` round trips. |
-| `tools/dev/net_bots.sh -n 3 -l 60 -- --net-lag=120 --net-jitter=30 --net-loss=3` | A local server and bot players (`scenes/dev/net_test.tscn`) that run to tanks, shoot them and each other, and fetch ammo, under simulated lag and loss. `-w N` shows N of them in windows; `-S host:port -k` uses an existing server (audit it separately with its server log). Tank agreement and score checks run automatically; either failure fails the command. `-k` skips checks, `-t clean` uses tighter tank limits. |
+| `tools/dev/net_bots.sh -n 3 -l 60 -- --net-lag=120 --net-jitter=30 --net-loss=3` | A local server and bot players (`scenes/dev/net_test.tscn`) that run to tanks, shoot them and each other, and fetch ammo, under simulated lag and loss. `-w N` shows N of them in windows; `-S host:port -k` uses an existing server (audit it separately with its server log). `-o DIR` picks the log directory (default `build/net`); one that already holds `*.log` files is refused unless `-f` replaces them, and the server, every bot and their child processes are stopped when the script ends or is interrupted. Tank agreement and score checks run automatically; either failure fails the command. `-k` skips checks, `-t clean` uses tighter tank limits. |
 | `tools/dev/compare_tanks.py [--profile clean] out/bot*.log` | Same-machine shared monotonic samples interpolated to a 50 ms grid, all peer pairs, bounded lifecycle/moving/resting disagreement and settled final agreement. Missing samples, gaps or incomplete matches fail. `--details` prints disagreement intervals. Replaces the coarse countdown and tank-path comparers. See [calibration](network-soak.md) for limits and observed failures on dev. |
 | `tools/dev/check_scores.py out/server.log out/bot*.log` | Server conservation audit and identical per-player final scores on every bot; exits nonzero on a missing audit or disagreement. |
 | `python3 -B tools/dev/check_liveness.py --output=build/liveness [--silent=server]` | Stops a native client or server process during play without sending Leave; asserts detection within 10 s. Run after `make build`; separate-process logs stay in the chosen directory. `--project` and `--maximum` allow historical baseline measurements. |
@@ -492,18 +495,18 @@ Results, 2026-10-09: with three bots under 120 ms round trip, 30 ms jitter and 3
 
 Protocol 2 also changes **Hello** (trailing appearance record), **SetProfile**, **LobbyState**, **MatchStart** and
 **MatchEnd** (one appearance record in each profile/standing), and **Drop** (removes the redundant palette index).
-Appearance adds shared presentation tuners. It keeps the unreleased `Protocol.Version` at 2; the next release must
-be minor. Welcome and Rejected retain their existing layouts.
+Appearance adds shared presentation tuners. It stayed within Protocol 2, released as the minor release 0.3.0.
+Welcome and Rejected retain their existing layouts.
 
 Protocol 2 adds the reliable `Gather` relay, authority request IDs, grouped epoch grants, per-body publication
 sequences and canonical/refused lifecycle reconciliation, as well as match ids, scalar tuning, timestamps on final
 body rests, drop refusal replies and discrete player movement states, and appends the debug flag to Hello. These
-changes share one unreleased protocol bump; the next release must be a minor release. Every match-scoped request,
+changes share one protocol bump, to 2, released as the minor release 0.3.0. Every match-scoped request,
 event and relay carries its match id, and either side ignores a different id.
 The server ends each match with a bank audit: initial test scores + detonated map tanks + re-detonated drops - spills
 must equal total banked, including the banks of departed players retained in the final standings.
 
-## Melee (R6, unreleased Protocol 2)
+## Melee (R6, Protocol 2)
 
 F, either mouse thumb button, or right-stick click starts a grounded rifle-butt strike. The resolver owns the
 0.24 s windup, 0.16 s contact window and 0.4 s recovery, followed by a 0.65 s cooldown. It cancels sprint and reload,
@@ -529,8 +532,8 @@ five-tank drop. A zero-bank victim still falls; an already-down victim receives 
 Bullets remain able to hit ragdolls.
 
 PlayerState gains one byte of normalized melee progress, before gait/support/weapon. Remote poses consume that
-progress; interpolation cannot rewind across a new swing or release. Protocol.Version stays **2** as directed for
-this unreleased development protocol. These two messages, snapshot field and shared tuners require a **minor release**.
+progress; interpolation cannot rewind across a new swing or release. Protocol.Version stayed **2** (released in 0.3.0).
+These two messages, snapshot field and shared tuners require a **minor release**.
 
 The smart bot chooses a nearby visible opponent when it is not aiming at a tank. Its approach reach derives from
 melee range plus the lunge distance. It can stun an empty-bank opponent and uses the resolver's grounded/cooldown
@@ -571,7 +574,7 @@ remaining capacity limits and the verification matrix for this branch.
 
 comparison report, not a threshold assertion. Those transients converged; this package does not revise body sync.
 
-## Participants (A6, unreleased Protocol 2)
+## Participants (A6, Protocol 2)
 
 A connection handle stays inside the transport. The server issues a monotonic positive **PeerId**, independent of
 ENet's identifiers. A lobby owns a revisioned participant roster: **ActorId**, **OwnerPeerId**, Human/Bot kind,
@@ -625,12 +628,12 @@ Wire changes in this package:
 The server retains departed actors' banks for conservation and final standings, transfers surviving body ownership
 with new epochs, and may transfer lobby creator controls. Original debug-tuning capability does not transfer.
 The wire safety ceiling is 64 actors/peers, separate from capacity and the color presets. Hello, Welcome and Rejected
-retain their layouts. `Protocol.Version` remains **2** under the unreleased-cycle ruling; these changes require a
+retain their layouts. `Protocol.Version` remains **2** (released in 0.3.0); these changes require a
 minor release.
 
 The repeatable separate-client capacity gate and its measured evidence are in [network-soak.md](network-soak.md).
 
-## Modes (A7, unreleased Protocol 2)
+## Modes (A7, Protocol 2)
 
 Tank Bank now runs on the mode framework described in [modes.md](modes.md), with identical rules. Wire changes:
 
@@ -639,10 +642,10 @@ Tank Bank now runs on the mode framework described in [modes.md](modes.md), with
   their numbers (40, 71, 47) stay unused. Round start sends one bank snapshot instead of restating nonzero scores.
 - `MatchStart` appends the mode id (UInt8) and schema version (UInt16).
 
-Hello, Welcome and Rejected are unchanged. `Protocol.Version` stays **2** under the unreleased-cycle ruling; these
+Hello, Welcome and Rejected are unchanged. `Protocol.Version` stays **2** (released in 0.3.0); these
 changes require a minor release. No tuner, construction rule or world hash changed.
 
-## Lobby bots (A8, unreleased Protocol 2)
+## Lobby bots (A8, Protocol 2)
 
 A bot is an ordinary roster actor of kind Bot, owned by the peer that added it. Its owner's game simulates it exactly
 like its own player: the same `PlayerCharacter`, owner-authoritative physics, actor envelope, action sequences, hit
@@ -696,8 +699,8 @@ each client lobby bots before the host starts; `--leave-at=S --leave-who=BotI` m
 `net_bots.sh` then omits that client's log from the completion checks while the survivors and the server's audit still
 run them.
 
-Hello, Welcome and Rejected are unchanged. `Protocol.Version` stays **2** under the unreleased-cycle ruling; the roster
-requests change shape, so the next release must be a minor release. No shared tuner, construction rule or world hash
+Hello, Welcome and Rejected are unchanged. `Protocol.Version` stays **2** (released in 0.3.0); the roster
+requests change shape, so it had to be a minor release. No shared tuner, construction rule or world hash
 changed.
 
 ## King online (Protocol 3)
@@ -725,8 +728,8 @@ the new mode/pace controls before its ordinary gameplay proof.
 
 SetMode (16), LobbyList's mode id and LobbyState's mode/settings change message shapes; the mode envelope adds
 King schema 4/1. King's shared zone, pile and presentation dials are now exported tuning values, retaining their Lab
-controls. `Protocol.Version` is **3**, superseding the earlier unreleased Protocol 2 entries above; this requires a
-**minor release**. Hello, Welcome and Rejected retain their layouts. Ring Out, Short Fuse and Dissolve Run remain Lab-only.
+controls. `Protocol.Version` is **3**, superseding the Protocol 2 entries above (released in 0.3.0); this required a
+**minor release**, 0.4.0. Hello, Welcome and Rejected retain their layouts. Ring Out, Short Fuse and Dissolve Run remain Lab-only.
 
 [King online verification](king-online.md) records the soaks, delayed builder, device controls, reviewed captures
 and known vent outlier.
@@ -750,12 +753,12 @@ controller events, bounds, guest presentation, mode switching and draft retentio
 wire step, malformed choices, creator snapshot conflicts, server generation with lobby bots, phase locks, and a
 late client assembling the same tank identities and poses after buffered Go.
 
-These trailing lobby settings fields are part of unreleased Protocol 3 for 0.4.0. No further protocol bump is made;
+These trailing lobby settings fields are part of Protocol 3 (released in 0.4.0). No further protocol bump was made;
 Hello, Welcome and Rejected are unchanged.
 
 [Lobby tank supply verification](lobby-tanks.md) records the gates, reviewed captures, native matrix and stock-soak variability.
 
-## Lobby world (A12, unreleased Protocol 3)
+## Lobby world (A12, Protocol 3)
 
 A waiting lobby is a place, not a menu: everyone who joined roams a shared void world, shooting and throwing tanks while
 they wait. It is the destination a Steam invite will open later.
@@ -794,7 +797,7 @@ authority as before. Esc in the world opens its pause menu, whose Leave lobby re
 **Wire.** LobbyState gains trailing **StartsIn** (Float32, 0–10, nonzero only while staging) and **WorldId** (Int32,
 nonzero only while waiting or staging); LobbyPhase gains Staging (5). The client message **CancelStart** (17) is empty.
 The world's stock and refills use LobbyWire on the mode envelope, reusing King's pile messages. This is part of
-unreleased Protocol 3 for 0.4.0: no further bump, and Hello, Welcome and Rejected are unchanged.
+Protocol 3 (released in 0.4.0): no further bump, and Hello, Welcome and Rejected are unchanged.
 
 **Dev flags.** `--classic-lobby` keeps the old lobby menu over the backdrop until the owner has reviewed the world's
 look: a client started with it ignores its lobby's world, and a server started with it runs none. `net_test` stays out

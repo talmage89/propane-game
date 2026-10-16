@@ -59,7 +59,7 @@ def main():
                         time.sleep(30)
                     if args.network:
                         directory = args.output / name
-                        command = [str(args.project / 'tools/dev/net_bots.sh'), '-n', str(4 if actors == 4 else 2),
+                        command = [str(args.project / 'tools/dev/net_bots.sh'), '-f', '-n', str(4 if actors == 4 else 2),
                                    '-l', str(args.seconds), '-t', 'faults' if faulted else 'clean', '-o', str(directory),
                                    '-s', f'--match-seed={seed}', '--', '--mode=king', '--melee-start', '--bot-log',
                                    f'--bot-skill={skill}', f'--tank-supply={supply}', f'--net-seed={args.net_seed}']
