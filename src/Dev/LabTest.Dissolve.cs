@@ -10,6 +10,7 @@ using Godot;
 using Propane.Lab;
 using Propane.Modes;
 using Propane.Player;
+using Propane.Session;
 using static Propane.Dev.UnitTests.TestRunner;
 
 namespace Propane.Dev;
@@ -37,14 +38,45 @@ public partial class LabTest
         public double Started, Seconds;
         public long Allocated;
         public readonly long[] Histogram = new long[20001];
+        public readonly long[] WholeHistogram = new long[20001];
+        public double WholeSeconds;
+        public long WholeTicks;
+        private bool tailPending;
 
-        public double Percentile(double fraction)
+        public override void _Ready()
         {
-            var wanted = (long)Math.Ceiling(Ticks * fraction);
+            if (!Measure || Partner != null) return;
+            GetTree().PhysicsFrame += CloseTail;
+            GetTree().ProcessFrame += CloseTail;
+        }
+
+        public override void _ExitTree()
+        {
+            if (!Measure || Partner != null) return;
+            GetTree().PhysicsFrame -= CloseTail;
+            GetTree().ProcessFrame -= CloseTail;
+        }
+
+        // Like FrameMetrics' native-tail probe: close before rendering or the next tick's callbacks. This includes
+        // native physics, engine bookkeeping and query flush, but is not a timer for Jolt's internal solver jobs.
+        private void CloseTail()
+        {
+            if (!tailPending) return;
+            var milliseconds = Time.GetTicksUsec() / 1000.0 - Started;
+            WholeSeconds += milliseconds / 1000;
+            WholeHistogram[Math.Min(WholeHistogram.Length - 1, (int)(milliseconds * 100))]++;
+            WholeTicks++;
+            tailPending = false;
+        }
+
+        public double Percentile(double fraction, bool whole = false)
+        {
+            var histogram = whole ? WholeHistogram : Histogram;
+            var wanted = (long)Math.Ceiling((whole ? WholeTicks : Ticks) * fraction);
             long count = 0;
-            for (var i = 0; i < Histogram.Length; i++)
+            for (var i = 0; i < histogram.Length; i++)
             {
-                count += Histogram[i];
+                count += histogram[i];
                 if (count >= wanted) return i / 100d;
             }
             return 0;
@@ -62,6 +94,7 @@ public partial class LabTest
                     Bytes += GC.GetAllocatedBytesForCurrentThread() - Allocated;
                     Histogram[Math.Min(Histogram.Length - 1, (int)(milliseconds * 100))]++;
                     Ticks++;
+                    tailPending = true;
                 }
                 LastEnd = now;
                 return;
@@ -250,8 +283,6 @@ public partial class LabTest
                         var actualTracking = TrackingCount(runner);
                         if (DevArgs.Get("assert-tracking") != null)
                             Assert(actualTracking == expectedTracking, $"tracking count {actualTracking} differs from active content {expectedTracking}");
-                        if (runner.Elapsed >= nextReport)
-                            GD.Print($"[lab tracking] at={runner.Elapsed:F1}s active={actualTracking} content={expectedTracking} historical={wrappers.Count}");
                     }
                     Assert(segments <= 6, $"dissolve seed {seed}: {segments} segments alive");
                     if (DevArgs.Get("trace") != null)
@@ -260,6 +291,8 @@ public partial class LabTest
                 if (runner.Elapsed >= nextReport)
                 {
                     nextReport += reportEvery;
+                    if (DevArgs.Get("tracking-proof") != null)
+                        GD.Print($"[lab tracking] at={runner.Elapsed:F1}s active={TrackingCount(runner)} content={arena.Source.Segments.Sum(s => s.Tanks.Count(t => IsInstanceValid(t) && t.State != Tank.PropaneTank.TankState.Exploded))} historical={wrappers.Count}");
                     Report(seed, runner.Elapsed, frames.Where(f => f.Time > runner.Elapsed - reportEvery).Select(f => f.Wall).ToArray(), census[^1], arena);
                 }
             }
@@ -301,11 +334,11 @@ public partial class LabTest
                 $"dissolved_tanks={arena.DissolvedTanks} wall={watch.Elapsed.TotalSeconds:F1}s");
             if (DevArgs.Get("metrics") is { } path) File.WriteAllLines(path.Replace("{seed}", seed.ToString(CultureInfo.InvariantCulture)), rows);
             if (tickEnd.Measure)
-                GD.Print(FormattableString.Invariant($"[lab whole-session] ticks={tickEnd.Ticks} callback_mean_ms={tickEnd.Seconds * 1000 / Math.Max(1, tickEnd.Ticks):F4} callback_p95_ms={tickEnd.Percentile(0.95):F2} callback_p99_ms={tickEnd.Percentile(0.99):F2} callback_bytes={tickEnd.Bytes} total_bytes={GC.GetTotalAllocatedBytes() - allocatedAtStart}"));
+                GD.Print(FormattableString.Invariant($"[lab whole-session] ticks={tickEnd.Ticks} whole_mean_ms={tickEnd.WholeSeconds * 1000 / Math.Max(1, tickEnd.WholeTicks):F4} whole_p95_ms={tickEnd.Percentile(0.95, whole: true):F2} whole_p99_ms={tickEnd.Percentile(0.99, whole: true):F2} callback_mean_ms={tickEnd.Seconds * 1000 / Math.Max(1, tickEnd.Ticks):F4} callback_p95_ms={tickEnd.Percentile(0.95):F2} callback_p99_ms={tickEnd.Percentile(0.99):F2} callback_bytes={tickEnd.Bytes} total_bytes={GC.GetTotalAllocatedBytes() - allocatedAtStart}"));
             await Frames(20).ConfigureAwait(true);
             if (DevArgs.Get("tracking-proof") != null)
             {
-                var freed = FreedWrappers(wrappers);
+                var freed = RetiredWrappers(wrappers, arena.Source);
                 await Collect().ConfigureAwait(true);
                 var retained = freed.Count(w => w.TryGetTarget(out _));
                 GD.Print($"[lab tracking collection] historical={wrappers.Count} freed={freed.Count} retained={retained} session_alive={lab.Session.IsAlive}");
@@ -324,8 +357,15 @@ public partial class LabTest
         (int?)typeof(PrototypeRunner).GetProperty("TrackingCount", BindingFlags.Instance | BindingFlags.NonPublic)?.GetValue(runner) ?? -1;
 
     [MethodImpl(MethodImplOptions.NoInlining)]
-    private static List<WeakReference<Tank.PropaneTank>> FreedWrappers(List<WeakReference<Tank.PropaneTank>> wrappers) =>
-        wrappers.Where(w => !w.TryGetTarget(out var tank) || !IsInstanceValid(tank)).ToList();
+    private static List<WeakReference<Tank.PropaneTank>> RetiredWrappers(List<WeakReference<Tank.PropaneTank>> wrappers, SegmentWorldSource source)
+    {
+        // Segment tank arrays legitimately retain detonated shells until their content has finished retiring.
+        var owned = source.Segments.SelectMany(s => s.Tanks).ToHashSet();
+        var retiring = (Queue<RunSegment>)typeof(SegmentWorldSource)
+            .GetField("retiring", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(source)!;
+        foreach (var segment in retiring) owned.UnionWith(segment.Tanks);
+        return wrappers.Where(w => !w.TryGetTarget(out var tank) || (!IsInstanceValid(tank) && !owned.Contains(tank))).ToList();
+    }
 
     private static float SegmentPlansStart(LabSession lab) => lab.Dissolve!.Start.X;
 
