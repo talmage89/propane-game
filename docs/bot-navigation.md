@@ -220,6 +220,11 @@ Windows and macOS were not exercised here.
 
 ## Idle bots
 
+Easy bankers that have no useful banking target seek the nearest upright rival, even one with an empty bank.
+Ammo, tanks and profitable fights take priority. The fallback uses the existing fighting and route execution,
+including Easy's aim error and reaction time and the shared query/expansion budgets. `BotEasySeekRivals` is a local
+brain dial for comparisons; Normal and Hard retain their goal policies.
+
 `BotActivity` measures whether a bot plays. Play is cut into one-second windows; a window is idle when the bot stayed
 upright, ended it less than a meter from where it began, and neither fired, meleed nor stood in King's zone. It counts
 idle windows (and the blocked ones, in which the bot asked to move most of the time), the longest idle run and the time

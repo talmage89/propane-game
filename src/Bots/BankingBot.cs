@@ -13,7 +13,7 @@ namespace Propane.Bots;
 /// Tank Bank's bot goal policy. It plays the tank bank to win rather than to test:
 /// - it sets tanks off from outside their throw radius (wider for a pile, whose chain reaction reaches further);
 /// - it runs from venting tanks that come close;
-/// - it shoots players only when they have tanks to spill, and then sets off what they spilled;
+/// - it fights for tanks to spill, and then sets off what they spilled; Easy seeks rivals when no objective remains;
 /// - it prefers venting tanks (one shot from a point) and big piles, especially piles with another player near them;
 /// - it strafes in a fight, keeps its magazine topped up when nothing is happening, and fetches ammo when low.
 /// It chooses a few times a second and steers every tick; whether something is in sight is asked at most
@@ -482,6 +482,23 @@ public sealed class BankingBot : IBotGoalPolicy
             {
                 bestScore = score;
                 best = tank;
+            }
+        }
+        // Easy often exhausts its useful targets before it earns a bank worth defending. Walk toward the
+        // nearest upright rival rather than waiting for someone richer to become visible. This is a fallback:
+        // ammo, tanks and profitable fights still win, and the ordinary aim/reaction/navigation limits apply.
+        if (best == null && tuning.BotEasySeekRivals && !PointsDriven &&
+            BotProfile.Nearest(Skill, tuning) == BotDifficulty.Easy)
+        {
+            var nearest = float.MaxValue;
+            for (var i = 0; i < bodies.Count; i++)
+            {
+                var enemy = bodies[i];
+                if (enemy.IsRagdolled || blacklist.ContainsKey(enemy.GetInstanceId())) continue;
+                var distance = enemy.GlobalPosition.DistanceSquaredTo(here);
+                if (distance >= nearest) continue;
+                nearest = distance;
+                best = enemy;
             }
         }
         return best;
