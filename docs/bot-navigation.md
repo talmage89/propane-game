@@ -72,7 +72,7 @@ than exported scalar match tuners: adding exported scalars would change the comp
 `--tune.BotProgressWindow=...`, for example. The smart brain retains the local tuning object when a match installs
 shared movement tuning. `Skill` continues to interpolate aim/reaction; the Easy, Normal and Hard profiles
 (`BotEasySkill`, `BotNormalSkill`, `BotHardSkill`) pick it for lobby and Lab bots, as
-[multiplayer.md](multiplayer.md#lobby-bots-a8-unreleased-protocol-2) describes. The simple brain stays unchanged as the
+[multiplayer.md](multiplayer.md#lobby-bots-a8-protocol-2) describes. The simple brain stays unchanged as the
 benchmark.
 
 Runtime searches advance at most `BotSearchPerTick` nodes per bot and `BotSearchBudget` per route. All bots in

@@ -12,7 +12,7 @@ PORT ?= $(if $(SLOT),$(shell echo $$((24680 + $(SLOT)))),24680)
 SERVER ?= 127.0.0.1:$(PORT)
 
 .DEFAULT_GOAL := help
-.PHONY: help setup run play bench build lint check test test-core test-behavior test-generator test-world test-full test-capacity server bots bots-stop package deploy release-patch release-minor release-major
+.PHONY: help setup run play bench build lint check test test-infra test-core test-behavior test-generator test-world test-full test-capacity server bots bots-stop package deploy release-patch release-minor release-major
 
 help: ## List the tasks
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN { FS = ":.*## " } { printf "  make %-14s %s\n", $$1, $$2 }'
@@ -50,12 +50,19 @@ lint: ## Check C# formatting and script .uid pairs, and compile with warnings as
 	dotnet format Propane.sln --verify-no-changes
 	dotnet build Propane.sln -c Debug --no-restore --no-incremental -nologo -v quiet -warnaserror
 
-# A recipe keeps lint before test even when make runs with -j.
-check: lint ## Run lint, then the tests
+# A recipe keeps lint before test, and the gate self-tests last, even when make runs with -j.
+check: lint ## Run lint, then the tests, then the gate self-tests
 	@$(MAKE) --no-print-directory test
+	@$(MAKE) --no-print-directory test-infra
 
 # These same partitions run as separate CI jobs. Shared build runs once, even with make -j.
 test: test-core test-behavior test-generator test-world ## Run the fast headless gate (the same suites as CI)
+
+# Checks the gate itself rather than the game: that lint rejects the mistakes it claims to, that check and test-full run
+# every command in the order and with the failure propagation they promise, that the deep shards add up, and that CI
+# mirrors the local partitions. Needs dotnet, make, git and python3 only (CI runs it as its own job).
+test-infra: ## Check the gate itself: analyzer negatives, make ordering and failure propagation, deep-shard and CI wiring
+	python3 -B tools/dev/lint_tests.py
 
 test-core: build ## Run checker, platform, movement, unit and scripted mode-rule assertions
 	GODOT="$(GODOT)" python3 -B tools/dev/check_test_threads.py
@@ -67,6 +74,7 @@ test-core: build ## Run checker, platform, movement, unit and scripted mode-rule
 	python3 -B tools/dev/compare_vents_tests.py
 	python3 -B tools/dev/compare_tanks_tests.py
 	python3 -B tools/dev/net_bots_tests.py
+	python3 -B tools/dev/release_tests.py
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/core_tests.tscn
 	"$(GODOT)" --headless --path . res://scenes/dev/mode_test.tscn
 	"$(GODOT)" --headless --path . res://scenes/dev/shutdown_tests.tscn
@@ -81,6 +89,7 @@ test-behavior: build ## Run isolated physics, navigation, menu, grip and feet pr
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/body_correction_tests.tscn
 	GODOT="$(GODOT)" python3 -B tools/dev/check_lab.py
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/session_actors_tests.tscn
+	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/menu_composition_tests.tscn
 	for count in 2 8 16; do "$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/capacity_ui_tests.tscn -- --players=$$count || exit; done
 	python3 -B tools/dev/animation_review_tests.py
 	@mkdir -p build/animation-review-gate
@@ -186,9 +195,9 @@ test-full-engine: build
 $(DEEP): test-full-engine
 
 test-full-bots: build
-	$(LABEL) bots tools/dev/net_bots.sh -o "$(CURDIR)/build/rifle-soak-gate" -n 4 -w 0 -l 90 -s '--match-seed=25' -- --melee-start --net-seed=2 --net-lag=120 --net-jitter=30 --net-loss=3
-	$(LABEL) bots tools/dev/net_bots.sh -n 2 -w 0 -l 20 -s '--start-score=8 --match-seed=23' -o "$(CURDIR)/build/duel-lane-gate" -- --scenario=duel --matches=2 --duel-blocked --tune.DropScatter=0 --tune.DropToss=0 --net-lag=120 --net-jitter=30 --net-loss=3
-	$(LABEL) bots tools/dev/net_bots.sh -n 2 -l 20 -o "$(CURDIR)/build/loading-readiness-gate" -- --scenario=body-stream --tank-check-ready-stall=Bot2
+	$(LABEL) bots tools/dev/net_bots.sh -f -o "$(CURDIR)/build/rifle-soak-gate" -n 4 -w 0 -l 90 -s '--match-seed=25' -- --melee-start --net-seed=2 --net-lag=120 --net-jitter=30 --net-loss=3
+	$(LABEL) bots tools/dev/net_bots.sh -f -n 2 -w 0 -l 20 -s '--start-score=8 --match-seed=23' -o "$(CURDIR)/build/duel-lane-gate" -- --scenario=duel --matches=2 --duel-blocked --tune.DropScatter=0 --tune.DropToss=0 --net-lag=120 --net-jitter=30 --net-loss=3
+	$(LABEL) bots tools/dev/net_bots.sh -f -n 2 -l 20 -o "$(CURDIR)/build/loading-readiness-gate" -- --scenario=body-stream --tank-check-ready-stall=Bot2
 
 $(LAB_SHARDS): test-full-lab-%: build
 	$(LABEL) lab-$* env GODOT="$(FULL_GODOT)" python3 -B tools/dev/check_lab.py --full $(LAB_$*)

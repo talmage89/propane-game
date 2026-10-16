@@ -6,8 +6,8 @@ layout. Long expressions are not reflowed. Expression bodies and naming remain e
 build warnings. Run `dotnet format Propane.sln` to apply the baseline.
 
 `make lint` verifies formatting, then performs a full build with warnings as errors. A previous incremental build
-cannot hide warnings. `make check` runs lint before the headless regression tests, including with `make -j`. It stops on a
-lint failure. Both tasks appear in `make`'s help listing.
+cannot hide warnings. `make check` runs lint before the headless regression tests, including with `make -j`, and ends with
+`make test-infra`, the gate's own self-tests. It stops on a lint failure. All three tasks appear in `make`'s help listing.
 
 `Propane.csproj` pins analysis to .NET 10's default rules, with the recommended Reliability, Usage and Security
 sets. Nullability is enabled. CA1001 additionally checks ownership of disposable fields; CA2007 requires explicit
@@ -17,18 +17,22 @@ CA2000 (local disposal) and CA2213 (field disposal) are outside this baseline: t
 reference-counted lifetimes as ordinary CLR disposal. Excluding Godot-derived classes also hides CLR leaks inside
 those classes, so there are no such exclusions. These rules need an engine-aware ownership policy before they
 can be useful here. Disposable resources in new code still need an explicit lifetime.
-The CA2213 trial also flagged `CaptureDirector`'s Process and BlockingCollection; their disposal and shutdown lifetimes remain
-a separate audit item rather than being changed as part of the gate.
+The CA2213 trial also flagged `CaptureDirector`'s Process and BlockingCollection. They now live in its `FrameEncoder`,
+which owns their disposal; every recorder wait is bounded (`--record-timeout`, default 30 s) and a recorder or screenshot
+failure sets the exit status (`CaptureTests` fault-injects broken, stalled, lingering and file-less encoders).
 
-Seven class-specific CA1001 suppressions preserve current lifetimes, with the reason beside each declaration:
+Class-specific CA1001 suppressions preserve current lifetimes, with the reason beside each declaration:
 
 - `Bot` and `SimpleBot`: the random generator is Godot RefCounted.
 - `MeshKit`: SurfaceTool is Godot RefCounted.
 - `CharacterAnimator`: the model root owns and frees the AnimationTree node.
+- `LobbyDialogs`: the menu scene tree owns and frees the open dialog nodes.
 - `NetTransport`: Close releases the connection while the RefCounted peer stays reusable for reconnects.
 - `NetWriter` and `NetReader`: their streams contain managed byte arrays, without file or socket handles.
 
-`python3 tools/dev/lint_tests.py` proves the gate rejects nullable dereferences, disposable-field ownership,
+`make test-infra` (`python3 -B tools/dev/lint_tests.py`) runs last in `make check` and as its own CI job, `infra`. It
+needs dotnet, make, git and python3 but stubs Godot, so the job needs neither the editor nor imported assets. It proves the
+gate rejects nullable dereferences, disposable-field ownership,
 implicit async context, ValueTask misuse, and whitespace and style drift. It also checks corrected code passes.
 The fixtures compile in an isolated temporary project; they never run or modify game sources.
 `check_world_tests.py` proves failed children retain their logs and exit status, while successful runs remove scratch
@@ -43,6 +47,19 @@ accept command-line and environment overrides.
 The shutdown proof permits `AnimationReview.Quit` only with its guarded current-build branch and explicit
 historical-release branch; direct current-build `SceneTree.Quit` calls still fail.
 
+## Menu composition
+
+`Menus` keeps application routing, the main menu's application actions and its public facade. `ConnectScreen` and `LobbyBrowserScreen` build their
+forms; both lobby layouts use `LobbyScreen`, `LobbyRoster`, `LobbySettingsPanel` and `LobbyDialogs`.
+`MenuCommands` dispatches connection/lobby/profile commands, `MenuProfile` keeps identity defaults and persistence, and
+`MenuContent` supplies shared presentation helpers. `MenuRefreshState` owns the rebuild transaction: name/server
+drafts, name caret, stable focus and the removal guard; open dialogs retain focus until they close.
+
+The composition probe renders the production UI against decoded packets on a fixed backdrop. It covers
+classic/docked lobbies, host/guest, 2/8/16 participants, controller focus, King settings and appearance/bot
+dialogs. Its headless assertions preserve draft/caret/focus and overlay ownership across refreshes.
+The real-device and network menu scenes remain responsible for input delivery and roaming-world behavior.
+
 ## Fast gate and deep sweeps
 
 `make test` is the union of four targets. Each builds first, so it also works independently:
@@ -50,7 +67,7 @@ historical-release branch; direct current-build `SceneTree.Quit` calls still fai
 | Target | Assertions |
 | --- | --- |
 | `test-core` | Python timing/world-wrapper/score/vent/tank-agreement/launcher checkers, benchmark smoke, platform, movement, all unit suites, scripted mode rules (`mode_test`), normal shutdown and paused window-close witnesses |
-| `test-behavior` | Native server admission overrides and vent correction, session actors and animation metrics, scoped worlds, blast completeness, upright piles, gather/races/appearance/real-game gather, melee collision/poses, navigation, gamepad/devices/input/mouse menus, grip/recovery, feet/corrections/events, movement/motion continuity |
+| `test-behavior` | Native server admission overrides and vent correction, session actors and animation metrics, scoped worlds, blast completeness, upright piles, gather/races/appearance/real-game gather, melee collision/poses, navigation, menu composition/refresh and gamepad/devices/input/mouse/bots/King/lobby menus, grip/recovery, feet/corrections/events, movement/motion continuity |
 | `test-generator` | 20 single-player and 2-player seeds, three each at 8/16/24/32 players, two forced seeds for every formation at all six sizes |
 | `test-world` | All four saved formation plans built and hashed in two fresh processes |
 
@@ -184,7 +201,7 @@ and check its isolation and assertion failures both alone and consolidated. Keep
 
 Keep bounded regression seeds in the gate, and put deeper repetitions in `test-full` while retaining every
 assertion kind and required fixture in the gate. If adding a new partition, update `test` dependencies and the CI
-matrix together. Run `python3 tools/dev/lint_tests.py`, `make check` and the relevant deep sweep before submitting.
+matrix together. Run `make check` (which includes `make test-infra`) and the relevant deep sweep before submitting.
 
 Measure rather than guessing:
 

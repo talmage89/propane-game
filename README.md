@@ -13,7 +13,8 @@ The lobby also offers **King of the Cul-de-sac**: hold a moving zone alone to mi
 creator-selected mint pace. Both modes offer **Tank supply**, 1×–8× in integer steps (default 1×).
 
 [design/VISION.md](design/VISION.md) is what the game is and must stay. [docs/multiplayer.md](docs/multiplayer.md) gives
-tank bank's full rules and how multiplayer is built.
+tank bank's full rules and how multiplayer is built. [docs/README.md](docs/README.md) says which documents are
+current contracts and which are dated evidence.
 
 ## Download and play
 
@@ -43,7 +44,8 @@ Requires Godot 4.7.2 (.NET edition) and the .NET 10 SDK.
   [Measuring scale](docs/measuring-scale.md#playing-optimized-c-locally). `make` lists the other tasks (tests, a local
   server, bots, releases); they find Godot on `PATH` (`godot-mono` or `godot`) or in `/Applications`, or set `GODOT` to its binary.
 - Quality gate: `make lint` verifies C# formatting and rebuilds with warnings as errors. `make check` runs lint,
-  then `make test`. Run it before submitting a change. `tools/dev/check_world.sh` prints log tails and keeps its
+  then `make test`, then `make test-infra` (the gate's own self-tests, `tools/dev/lint_tests.py`: it needs no Godot,
+  and CI runs it as the `infra` job). Run it before submitting a change. `tools/dev/check_world.sh` prints log tails and keeps its
   scratch directory on failure. GitHub Actions runs the same checks on pushes to `dev`
   and every pull request. `make -j4 test-full` adds the deep sweeps as parallel jobs, each line prefixed with its job's
   name; plain `make test-full` runs the same jobs one at a time. Deep probes use an isolated optimized Debug
@@ -247,7 +249,9 @@ The [animation review harness](docs/animation-review.md) compares controller-dri
 Each scene in `scenes/dev` is a scripted test. Arguments after `--` are read by `src/Dev/DevArgs.cs`;
 `--capture-dir=<dir>` saves screenshots, `--record=<file.mp4>` films the window in real time (needs ffmpeg on `PATH`,
 including `ffmpeg.exe` on Windows; a game in a match stays in step, unlike Godot's `--write-movie`), and
-`--tune.<Name>=<value>` overrides any tuning value. `game_test` and `player_range` also accept
+`--tune.<Name>=<value>` overrides any tuning value. A capture that cannot be delivered (a screenshot that cannot be saved,
+an ffmpeg that is missing, stalls, dies, exits nonzero or writes no file) fails the run with exit status 1, and no recorder
+wait outlasts `--record-timeout=<seconds>` (default 30). `game_test` and `player_range` also accept
 `--effects-seed=<integer>` to seed their world random stream before constructing content for paired captures. For example,
 `tools/dev/net_bots.sh -n 4 -l 90 -w 1 -- --record=/tmp/bots.mp4` films a match from the first bot.
 
@@ -265,6 +269,9 @@ $GODOT --fixed-fps 60 res://scenes/dev/session_actors_tests.tscn -- --capture-di
 # Participant capacity: production lobby/results layouts and real keyboard/mouse/gamepad delivery.
 # Repeat with 2/8 entries and 1920x1080; make test covers all counts headlessly.
 $GODOT --resolution 1280x720 --fixed-fps 60 res://scenes/dev/capacity_ui_tests.tscn -- --players=16 --capture-dir="$PWD/build/capacity-ui"
+# Deterministic menu portraits: host/guest, classic/docked, 2/8/16 players, color/bot dialogs and focus.
+# Also checks draft/caret/focus preservation across decoded lobby packets; runs headlessly in make test.
+$GODOT --resolution 1600x900 --fixed-fps 60 res://scenes/dev/menu_composition_tests.tscn -- --capture-dir="$PWD/build/menu-composition"
 # Repeated sixteen-client acceptance and resource measurements: docs/network-soak.md.
 make test-capacity
 
@@ -414,7 +421,9 @@ $GODOT --fixed-fps 60 --resolution 1280x720 res://scenes/dev/menu_test.tscn -- -
 $GODOT --fixed-fps 60 --resolution 1280x720 res://scenes/dev/menu_test.tscn -- --scenario=bots --port=24681 --capture-dir="$PWD/build/bots"
 
 # Multiplayer: a local server and bot players under simulated lag and loss; asserts tank agreement and scores.
-# Logs go to build/net (-o picks another directory).
+# Logs go to build/net (-o picks another directory). A directory that still holds *.log files from an earlier run is
+# refused rather than emptied: pick a new -o, or pass -f to replace them. Ctrl-C or a failure stops the server, every bot
+# and anything they started.
 GODOT=$GODOT tools/dev/net_bots.sh -n 3 -l 60 -- --net-lag=120 --net-jitter=30 --net-loss=3
 # Add --tank-supply=4 to the bot arguments for 4× lobby supply in either mode.
 # Logged engine/protocol errors also fail the run. make test-full includes a 90-second faulted rifle soak.
@@ -467,8 +476,13 @@ make release-patch   # or release-minor, release-major; tools/release/cut.sh X.Y
 
 `tools/release/cut.sh` takes the next version after the latest release tag and checks it with
 `tools/release/check_version.sh`: newer than every release, and a patch only when the protocol is unchanged. For a
-patch, it lists any changed files that players in a match share and asks before going on. Then it shows the changes,
-runs the tests, commits the new version on `dev`, and pushes `dev` and fast-forwards `main` to it in one push.
+patch, it lists any changed files that players in a match share (`src/Net`, `src/World`, `src/Tank`, the tuners and
+`src/Modes`) and asks before going on; the list is a review prompt, not a proof of compatibility. Then it shows the
+changes and runs the whole gate, `make check` (lint, every test partition and the gate self-tests) followed by a
+100-seed generator sweep, writing the output to `build/release-gate.log`. Only after that passes does it change anything:
+it commits the new version on `dev`, and pushes `dev` and fast-forwards `main` to it in one push. A refusal, a declined
+confirmation or a failing gate leaves the version, the branches and the remote as they were.
+`python3 -B tools/dev/release_tests.py` proves this against a scratch repository with a local remote and fake tools.
 
 That push runs `.github/workflows/release.yml` on a Linux runner: the same version check, the headless tests, all three
 exports, and a new GitHub release with the changes since the previous one. Releases are never replaced.
@@ -482,6 +496,9 @@ The same build runs locally:
 tools/release/install_templates.sh 4.7.2   # .NET templates for all three platforms; macOS is Apple Silicon only
 RCODESIGN=/path/to/rcodesign tools/release/build.sh   # writes build/dist/*.zip and *.tar.gz
 ```
+
+Packaging owns only `build/package` (exports, notices, logs, the folders that become the archives) and `build/dist`,
+and replaces both on every run; other output under `build/` is left alone.
 
 Godot's built-in ad-hoc signing writes entitlement data that current macOS rejects (the app is killed at launch),
 so the macOS preset exports unsigned and [rcodesign](https://github.com/indygreg/apple-platform-rs) signs the app ad hoc.

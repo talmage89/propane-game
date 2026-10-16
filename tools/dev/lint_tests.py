@@ -60,8 +60,10 @@ fi
     counter = scratch / "world-count"
     environment = dict(os.environ, PATH=f"{scratch}:{os.environ['PATH']}", GODOT=str(scratch / "godot"),
                        COMMAND_LOG=str(log), WORLD_COUNT=str(counter), TMPDIR=str(scratch))
-    checkers = ["check_test_threads.py", "bench_tests.py", "check_world_tests.py", "time_gate_tests.py", "check_scores_tests.py", "check_capacity_tests.py", "compare_vents_tests.py", "compare_tanks_tests.py", "net_bots_tests.py",
-                "check_shader_capacity.py", "check_lab.py", "animation_review_tests.py", "animation_metrics.py build/animation-review-gate/metrics.csv --output build/animation-review-gate/results.json"]
+    checkers = ["check_test_threads.py", "bench_tests.py", "check_world_tests.py", "time_gate_tests.py", "check_scores_tests.py", "check_capacity_tests.py", "compare_vents_tests.py", "compare_tanks_tests.py", "net_bots_tests.py", "release_tests.py",
+                "check_shader_capacity.py", "check_lab.py", "animation_review_tests.py", "animation_metrics.py build/animation-review-gate/metrics.csv --output build/animation-review-gate/results.json",
+                # The gate self-tests, which this very script is; stubbed here, since python3 is.
+                "lint_tests.py"]
     scenes = ["shutdown_tests.tscn", "shutdown_tests.tscn -- --paused --window-close --repeat-quit", "core_tests.tscn", "mode_test.tscn", "blast_query_tests.tscn", "gather_range.tscn",
               "gather_range.tscn -- --scenario=grant-races",
               "gather_range.tscn -- --scenario=appearance",
@@ -71,7 +73,7 @@ fi
               "transport_physics_tests.tscn -- --server",
               "server_seed_tests.tscn -- --server --match-seed=23",
               "session_actors_tests.tscn", "upright_pile_tests.tscn", "melee_range.tscn", "rifle_reach_tests.tscn",
-              "capacity_ui_tests.tscn -- --players=2", "capacity_ui_tests.tscn -- --players=8", "capacity_ui_tests.tscn -- --players=16",
+              "menu_composition_tests.tscn", "capacity_ui_tests.tscn -- --players=2", "capacity_ui_tests.tscn -- --players=8", "capacity_ui_tests.tscn -- --players=16",
               "animation_review.tscn -- --cases=walk_000,jog_000,creep_000,creep_180,creep_090,sprint,aim_idle",
               "player_range.tscn -- --scenario=melee --assert-motion --assert-grip",
               "bot_navigation_course.tscn -- --seeds=5",
@@ -105,6 +107,7 @@ fi
                     "check did not run every expected tool call", result.stdout)
             require("-warnaserror" in commands[1] and "--no-incremental" in commands[1], "lint must rebuild with warnings as errors")
             require(commands[2].startswith("dotnet build "), "tests ran before lint")
+            require(commands[-1] == "python3 -B tools/dev/lint_tests.py", "the gate self-tests must run last, after every suite")
             for checker in checkers:
                 require(commands.count(f"python3 -B tools/dev/{checker}") == 1, f"check skipped/duplicated {checker}")
             for scene in scenes:
@@ -261,12 +264,20 @@ def check_ci_partitions():
     local = re.search(r"^test: (.+?) ##", makefile, re.MULTILINE).group(1).split()
     matrix = re.search(r"suite: \[([^\]]+)\]", workflow).group(1).split(",")
     require(sorted(local) == sorted("test-" + name.strip() for name in matrix), "CI partitions differ from local test")
-    require("run: make test-${{ matrix.suite }}" in workflow and "run: make lint" in workflow,
-            "CI skipped the local targets")
-    require("needs: [lint, imports, tests]" in workflow and "if: always()" in workflow and
-            'test "$LINT" = success && test "$IMPORTS" = success && test "$TESTS" = success' in workflow,
+    require("run: make test-${{ matrix.suite }}" in workflow and "run: make lint" in workflow and
+            "run: make test-infra" in workflow, "CI skipped the local targets")
+    require("needs: [lint, infra, imports, tests]" in workflow and "if: always()" in workflow and
+            'test "$LINT" = success && test "$INFRA" = success && test "$IMPORTS" = success && test "$TESTS" = success' in workflow,
             "stable CI check must require every job")
-    print("PASS: CI runs the local partitions and requires every result")
+    # What CI runs as its infra job is what make check runs last locally, from this very script.
+    code, output = run(ROOT, "make", "-n", "check")
+    commands = [line for line in output.splitlines() if line and not line.startswith("make")]
+    require(code == 0 and commands[-1] == "python3 -B tools/dev/lint_tests.py", "make check must end with the gate self-tests", output)
+    code, output = run(ROOT, "make", "-n", "test-infra")
+    # A recursive make (CI runs `make test-infra` itself) prints directory lines around the command.
+    commands = [line for line in output.splitlines() if line and not line.startswith("make")]
+    require(code == 0 and commands == ["python3 -B tools/dev/lint_tests.py"], "make test-infra must run lint_tests.py alone", output)
+    print("PASS: CI runs the local partitions and the gate self-tests, and requires every result")
 
 
 def check_installer(scratch):

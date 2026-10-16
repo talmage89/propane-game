@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Godot;
-using Propane.Bots;
 using Propane.Core;
 using Propane.Net;
 
@@ -29,16 +28,15 @@ public partial class Menus : CanvasLayer
     private PanelContainer panel = null!;
     private VBoxContainer layout = null!;
     private Label version = null!;
-    private Label? status;
     private string message = "";
     private bool connecting;
-    private LineEdit? nameField;
-    private bool rebuilding;
+    private readonly MenuRefreshState refresh = new();
+    private MenuCommands commands = null!;
+    private ConnectScreen connectScreen = null!;
+    private LobbyBrowserScreen browserScreen = null!;
+    private LobbyScreen lobbyScreen = null!;
+    private LobbyDialogs dialogs = null!;
     private MenuNavigation navigation = null!;
-    private Screen builtScreen;
-    private LineEdit? serverField;
-    private AppearancePicker? picker;
-    private BotEditor? botEditor;
 
     /// <summary>The connection the multiplayer screens use. Set before adding to the tree.</summary>
     public NetClient Net { get; set; } = null!;
@@ -78,14 +76,20 @@ public partial class Menus : CanvasLayer
         layout = new VBoxContainer { CustomMinimumSize = new Vector2(520, 0) };
         layout.AddThemeConstantOverride("separation", 12);
         panel.AddChild(layout);
+        var settings = new LobbySettingsPanel(Net);
         navigation = new MenuNavigation
         {
             Screen = this,
             Root = layout,
             Back = GoBack,
-            Adjusters = new Dictionary<string, Action<int>> { ["match_length"] = AdjustMatchLength, ["mint_pace"] = AdjustMintPace, ["tank_supply"] = AdjustTankSupply },
+            Adjusters = new Dictionary<string, Action<int>> { ["match_length"] = settings.AdjustMatchLength, ["mint_pace"] = settings.AdjustMintPace, ["tank_supply"] = settings.AdjustTankSupply },
         };
         AddChild(navigation);
+        commands = new MenuCommands(Net, text => { message = text; Rebuild(); }, () => message = "", port => HostRequested?.Invoke(port));
+        connectScreen = new ConnectScreen(Net, commands, refresh, name => commands.Host(HostPort, name), () => Show(Screen.Main));
+        browserScreen = new LobbyBrowserScreen(Net, commands, () => Show(Screen.Connect));
+        dialogs = new LobbyDialogs(this, Net, navigation, commands, refresh);
+        lobbyScreen = new LobbyScreen(Net, commands, refresh, dialogs, settings, () => PanelClosed?.Invoke());
 
         version = UiStyle.Text($"Propane {BuildInfo.GameVersion}" + (BuildInfo.Build != "dev" ? $" ({BuildInfo.Build})" : ""), 14, UiStyle.SoftInk);
         version.SetAnchorsPreset(Control.LayoutPreset.BottomLeft);
@@ -113,7 +117,7 @@ public partial class Menus : CanvasLayer
     public void Show(Screen screen, string? note = null, bool docked = false)
     {
         message = note ?? "";
-        if (screen != Screen.Lobby || docked != Docked) { picker?.Close(); botEditor?.Close(); }
+        if (screen != Screen.Lobby || docked != Docked) { dialogs.Close(); }
         Current = screen;
         Visible = screen != Screen.None;
         Dock(docked && screen == Screen.Lobby);
@@ -134,7 +138,7 @@ public partial class Menus : CanvasLayer
     public override void _Input(InputEvent e)
     {
         // Esc, or View / Create again, closes the docked panel (B does through its navigation), unless a dialog is open.
-        if (!Visible || !Docked || Current != Screen.Lobby || picker != null || botEditor != null) return;
+        if (!Visible || !Docked || Current != Screen.Lobby || dialogs.IsOpen) return;
         if (e.IsActionPressed(InputSetup.Pause) || e is InputEventJoypadButton && e.IsActionPressed(InputSetup.LobbyPanel))
         {
             GetViewport().SetInputAsHandled();
@@ -187,29 +191,11 @@ public partial class Menus : CanvasLayer
 
     private void Rebuild()
     {
-        // Network refreshes preserve the control identity, drafts and caret; screen changes start at the top.
-        var sameScreen = builtScreen == Current;
-        // A new lobby screen starts on the player's name, even when bot controls come first in the layout.
-        var focus = sameScreen ? navigation.FocusKey() : Current == Screen.Lobby ? "Name" : null;
-        var serverDraft = sameScreen && serverField != null ? serverField.Text : null;
-        builtScreen = Current;
-        string? typing = null;
-        var caret = 0;
-        if (sameScreen && nameField != null && IsInstanceValid(nameField))
-        {
-            typing = nameField.Text;
-            caret = nameField.CaretColumn;
-        }
-        rebuilding = true;
-        foreach (var child in layout.GetChildren())
-        {
-            layout.RemoveChild(child);
-            child.QueueFree();
-        }
-        rebuilding = false;
-        status = null;
-        nameField = null;
-        serverField = null;
+        refresh.Rebuild(Current, layout, navigation, BuildScreen, () => Visible && !dialogs.IsOpen);
+    }
+
+    private void BuildScreen()
+    {
         version.Visible = Current == Screen.Main;
         switch (Current)
         {
@@ -217,32 +203,18 @@ public partial class Menus : CanvasLayer
                 BuildMain();
                 break;
             case Screen.Connect:
-                BuildConnect();
+                connectScreen.Build(layout, connecting, message);
                 break;
             case Screen.Browser:
-                BuildBrowser();
+                browserScreen.Build(layout, HostingNote, message);
                 break;
             case Screen.Lobby:
-                BuildLobby();
+                lobbyScreen.Build(layout, Docked, HostingNote, message);
                 break;
             case Screen.Loading:
                 layout.AddChild(UiStyle.Title("PROPANE", 46));
                 layout.AddChild(UiStyle.Text(message.Length > 0 ? message : "Building the suburb...", 20, UiStyle.SoftInk, HorizontalAlignment.Center));
                 break;
-        }
-        if (typing != null && nameField != null)
-        {
-            nameField.Text = typing;
-            nameField.CaretColumn = caret;
-        }
-        if (serverDraft != null && serverField != null)
-        {
-            serverField.Text = serverDraft;
-        }
-        // An open overlay keeps focus; it reconfigures this screen when it closes.
-        if (Visible && picker == null && botEditor == null)
-        {
-            navigation.Configure(focus);
         }
     }
 
@@ -269,531 +241,15 @@ public partial class Menus : CanvasLayer
         {
             layout.AddChild(new HSeparator());
             layout.AddChild(UiStyle.Text($"Propane {latest} is out.", 16, UiStyle.SoftInk, HorizontalAlignment.Center));
-            AddDownload($"Download {latest}", latest);
+            MenuContent.AddDownload(layout, $"Download {latest}", latest);
         }
-        AddMessage();
-    }
-
-    // ------------------------------------------------------------------ Connect
-
-    private void BuildConnect()
-    {
-        layout.AddChild(UiStyle.Title("MULTIPLAYER", 40));
-        layout.AddChild(Wrap(UiStyle.Text("Tank bank: blow up tanks to bank them. Get shot and they spill out for anyone to take.", 16,
-            UiStyle.SoftInk, HorizontalAlignment.Center)));
-        layout.AddChild(new HSeparator());
-
-        layout.AddChild(UiStyle.Text("Your name", 16, UiStyle.SoftInk));
-        var name = nameField = UiStyle.Field(DefaultName(), "Name");
-        name.MaxLength = Protocol.MaxNameLength;
-        layout.AddChild(name);
-
-        layout.AddChild(UiStyle.Text("Server", 16, UiStyle.SoftInk));
-        var server = serverField = UiStyle.Field(PlayerSettings.Server, $"address or address:port (port {Protocol.DefaultPort} if left out)");
-        layout.AddChild(server);
-        server.TextSubmitted += _ => Connect(server.Text, name.Text);
-
-        var buttons = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.Center };
-        buttons.AddThemeConstantOverride("separation", 10);
-        var connect = UiStyle.Button(connecting ? "Connecting..." : "Connect");
-        connect.Disabled = connecting;
-        connect.Pressed += () => Connect(server.Text, name.Text);
-        var host = UiStyle.Button("Host on this computer");
-        host.Disabled = connecting;
-        host.Pressed += () =>
-        {
-            SaveName(name.Text);
-            HostRequested?.Invoke(HostPort);
-        };
-        var back = UiStyle.Button("Back");
-        back.Pressed += () =>
-        {
-            SaveName(name.Text);
-            Net.Disconnect();
-            Show(Screen.Main);
-        };
-        buttons.AddChild(connect);
-        buttons.AddChild(host);
-        buttons.AddChild(back);
-        layout.AddChild(buttons);
-        AddMessage();
-        // Turned away by a newer server: offer the download that plays there.
-        if (message.Length > 0 && Net.State == NetClient.Status.Offline && Net.RejectedBy is { } needed && BuildInfo.IsNewer(needed))
-        {
-            AddDownload($"Download Propane {BuildInfo.Series(needed)}", needed);
-        }
+        MenuContent.AddMessage(layout, message);
     }
 
     /// <summary>Connects as if typed on the connect screen.</summary>
-    public void ConnectTo(string address, string name) => Connect(address, name.Length > 0 ? name : DefaultName());
+    public void ConnectTo(string address, string name) => commands.Connect(address, name.Length > 0 ? name : MenuProfile.DefaultName());
 
-    private void Connect(string address, string name)
-    {
-        var text = address.Trim();
-        if (text.Length == 0)
-        {
-            message = "Type the server's address.";
-            Rebuild();
-            return;
-        }
-        var host = text;
-        var port = Protocol.DefaultPort;
-        var colon = text.LastIndexOf(':');
-        if (colon > 0 && text.IndexOf(':') == colon && int.TryParse(text[(colon + 1)..], out var parsed))
-        {
-            host = text[..colon];
-            port = parsed;
-        }
-        PlayerSettings.Server = text;
-        SaveName(name);
-        message = "";
-        Net.Connect(host, port, Protocol.CleanName(name), DefaultAppearance());
-    }
-
-    // ------------------------------------------------------------------ Lobby browser
-
-    private void BuildBrowser()
-    {
-        layout.AddChild(UiStyle.Title("LOBBIES", 40));
-        layout.AddChild(UiStyle.Text($"Playing as {Net.PlayerName}" + (Net.PingMs > 0 ? $"   ·   {Net.PingMs:0} ms to the server" : ""), 16, UiStyle.SoftInk,
-            HorizontalAlignment.Center));
-        AddHostingNote();
-        layout.AddChild(new HSeparator());
-        if (Net.Lobbies.Count == 0)
-        {
-            layout.AddChild(UiStyle.Text("No lobbies yet. Create one, then the others can join it.", 18, UiStyle.SoftInk, HorizontalAlignment.Center));
-        }
-        VBoxContainer? list = null;
-        if (Net.Lobbies.Count > 0)
-        {
-            // Keep long server lists inside the panel; focusing a Join button scrolls its row into view.
-            var scroll = new ScrollContainer
-            {
-                FollowFocus = true,
-                HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
-                CustomMinimumSize = new Vector2(0, Mathf.Min(Net.Lobbies.Count, 4) * 52),
-            };
-            layout.AddChild(scroll);
-            list = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
-            list.AddThemeConstantOverride("separation", 2);
-            scroll.AddChild(list);
-            scroll.GetVScrollBar().FocusMode = Control.FocusModeEnum.None;
-        }
-        foreach (var lobby in Net.Lobbies)
-        {
-            var row = new HBoxContainer();
-            row.AddThemeConstantOverride("separation", 10);
-            var description = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
-            description.AddThemeConstantOverride("separation", 0);
-            description.AddChild(UiStyle.Text($"{lobby.CreatorName}'s lobby", 20));
-            description.AddChild(UiStyle.Text(Modes.ModeRegistry.ForLobby(lobby.ModeId)!.Name, 15, UiStyle.SoftInk));
-            row.AddChild(description);
-            var inMatch = lobby.Phase != LobbyServer.LobbyPhase.Waiting;
-            row.AddChild(UiStyle.Text(inMatch ? "in a match" : $"{lobby.Players} / {lobby.Capacity}", 18, UiStyle.SoftInk));
-            var join = UiStyle.Button("Join");
-            join.Disabled = inMatch || lobby.Players >= lobby.Capacity;
-            var id = lobby.Id;
-            join.SetMeta("focus_key", $"lobby_{id}");
-            join.Pressed += () => Net.JoinLobby(id);
-            row.AddChild(join);
-            var inset = new MarginContainer();
-            foreach (var side in new[] { "left", "right", "top", "bottom" })
-            {
-                inset.AddThemeConstantOverride($"margin_{side}", 4);
-            }
-            inset.AddChild(row);
-            list!.AddChild(inset);
-        }
-        layout.AddChild(new HSeparator());
-        var buttons = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.Center };
-        buttons.AddThemeConstantOverride("separation", 10);
-        var create = UiStyle.Button("Create lobby");
-        create.Pressed += Net.CreateLobby;
-        var back = UiStyle.Button("Disconnect");
-        back.Pressed += () =>
-        {
-            Net.Disconnect();
-            Show(Screen.Connect);
-        };
-        buttons.AddChild(create);
-        buttons.AddChild(back);
-        layout.AddChild(buttons);
-        AddMessage();
-    }
-
-    // ------------------------------------------------------------------ Lobby
-
-    private void BuildLobby()
-    {
-        var lobby = Net.Lobby;
-        if (lobby == null)
-        {
-            return;
-        }
-        var tuning = Net.Template;
-        var creator = lobby.Members.FirstOrDefault(m => m.OwnerPeerId == lobby.CreatorId && m.Kind == ActorKind.Human);
-        layout.AddChild(UiStyle.Title($"{(creator?.Name ?? "?").ToUpperInvariant()}'S LOBBY", 34));
-        layout.AddChild(UiStyle.Text(lobby.Phase == LobbyServer.LobbyPhase.Waiting ? $"{lobby.Members.Count} of {lobby.Capacity} players" : "A match is on",
-            16, UiStyle.SoftInk, HorizontalAlignment.Center));
-        AddHostingNote();
-        layout.AddChild(new HSeparator());
-        var compact = lobby.Members.Count > 4;
-        layout.CustomMinimumSize = new Vector2(compact ? 720 : 520, 0);
-        layout.AddThemeConstantOverride("separation", compact ? 6 : 12);
-        var roster = new GridContainer { Columns = compact ? 2 : 1 };
-        roster.AddThemeConstantOverride("h_separation", 24);
-        roster.AddThemeConstantOverride("v_separation", 2);
-        layout.AddChild(roster);
-        foreach (var member in lobby.Members)
-        {
-            var row = new HBoxContainer();
-            row.AddThemeConstantOverride("separation", 12);
-            row.AddChild(UiStyle.ColorSample(member.Appearance.Color, 20, member.Id.ToString(System.Globalization.CultureInfo.InvariantCulture)));
-            var bot = member.Kind == ActorKind.Bot;
-            var difficulty = (BotDifficulty)Math.Min(member.ControllerConfig.Difficulty, (byte)BotDifficulty.Hard);
-            var label = UiStyle.Text(member.Name + (bot ? $"  ({difficulty} bot)" : member.OwnerPeerId == Net.MyId ? "  (you)" : ""), compact ? 18 : 20);
-            label.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
-            label.CustomMinimumSize = new Vector2(compact ? 200 : 260, 0);
-            label.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
-            row.AddChild(label);
-            if (member.OwnerPeerId == lobby.CreatorId && member.Kind == ActorKind.Human)
-            {
-                row.AddChild(UiStyle.Text(compact ? "creator" : "starts the match", 15, UiStyle.SoftInk));
-            }
-            if (bot && member.OwnerPeerId == Net.MyId)
-            {
-                // Only a bot's owner may change it; the server enforces the same rule.
-                var edit = UiStyle.Button("Edit");
-                // As short as a name row, so a full lobby of bots still fits on the screen.
-                edit.CustomMinimumSize = new Vector2(0, compact ? 26 : 30);
-                edit.AddThemeFontSizeOverride("font_size", 15);
-                edit.SetMeta("focus_key", $"bot_{member.Id}");
-                edit.Disabled = lobby.Phase != LobbyServer.LobbyPhase.Waiting;
-                var editing = member;
-                edit.Pressed += () => OpenBotEditor(editing);
-                row.AddChild(edit);
-            }
-            roster.AddChild(row);
-        }
-        var bots = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.Center };
-        bots.AddThemeConstantOverride("separation", 12);
-        var addBot = UiStyle.Button("Add bot");
-        addBot.SetMeta("focus_key", "add_bot");
-        addBot.Disabled = lobby.Phase != LobbyServer.LobbyPhase.Waiting || lobby.Members.Count >= lobby.Capacity;
-        addBot.TooltipText = "Bots play on this computer and leave with you";
-        addBot.Pressed += () => OpenBotEditor(null);
-        bots.AddChild(addBot);
-        layout.AddChild(bots);
-        layout.AddChild(new HSeparator());
-
-        // Name and color.
-        var profile = new HBoxContainer();
-        profile.AddThemeConstantOverride("separation", 10);
-        var name = nameField = UiStyle.Field(Net.PlayerName, "Name");
-        name.MaxLength = Protocol.MaxNameLength;
-        name.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
-        name.TextSubmitted += text => SetProfile(text, Net.Appearance);
-        name.FocusExited += () =>
-        {
-            if (!rebuilding && IsInstanceValid(name) && Protocol.CleanName(name.Text) != Net.PlayerName)
-            {
-                SetProfile(name.Text, Net.Appearance);
-            }
-        };
-        profile.AddChild(name);
-        layout.AddChild(profile);
-        var colors = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.Center };
-        colors.AddThemeConstantOverride("separation", 8);
-        for (var i = 0; i < Protocol.PlayerColors.Length; i++)
-        {
-            var index = i;
-            var mine = Net.Appearance.Color == AppearanceRecord.FromPalette(i).Color;
-            var swatch = UiStyle.Swatch(Protocol.PlayerColor(i), mine, $"color_{i}", Protocol.ColorNames[i]);
-            swatch.Pressed += () => SetProfile(nameField?.Text ?? Net.PlayerName, Net.Appearance.WithColor(Protocol.PlayerColor(index)));
-            colors.AddChild(swatch);
-        }
-        layout.AddChild(colors);
-        var custom = UiStyle.Button($"Custom color · #{Net.Appearance.Color.ToHtml(false).ToUpperInvariant()}");
-        custom.SetMeta("focus_key", "custom_color");
-        custom.Disabled = lobby.Phase != LobbyServer.LobbyPhase.Waiting;
-        custom.Pressed += () =>
-        {
-            if (picker != null) { return; }
-            picker = new AppearancePicker { Initial = Net.Appearance };
-            picker.Applied += appearance => SetProfile(nameField?.Text ?? Net.PlayerName, appearance);
-            picker.Closed += () =>
-            {
-                picker = null;
-                if (Visible) { navigation.Configure("custom_color"); }
-            };
-            AddChild(picker);
-        };
-        layout.AddChild(custom);
-        layout.AddChild(new HSeparator());
-
-        BuildModeChoice(lobby);
-
-        // Match length (a King round's length): the creator sets it.
-        var king = lobby.Mode.ModeId == Modes.ModeRegistry.KingId;
-        var length = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.Center };
-        length.AddThemeConstantOverride("separation", 12);
-        length.AddChild(UiStyle.Text(king ? "Round length" : "Match length", 20));
-        var step = Mathf.Max(tuning.MatchLengthStep, 1f);
-        if (Net.IsCreator)
-        {
-            var shorter = UiStyle.Button("−");
-            shorter.CustomMinimumSize = new Vector2(44, 40);
-            shorter.Disabled = lobby.MatchLength <= tuning.MatchLengthMin;
-            shorter.Pressed += () => Net.SetMatchLength(Mathf.Max(tuning.MatchLengthMin, lobby.MatchLength - step));
-            length.AddChild(shorter);
-        }
-        if (Net.IsCreator)
-        {
-            var minutes = UiStyle.Button(UiStyle.FormatTime(lobby.MatchLength));
-            minutes.SetMeta("focus_key", "match_length");
-            minutes.TooltipText = $"Left / right to change {(king ? "round" : "match")} length";
-            minutes.CustomMinimumSize = new Vector2(80, 40);
-            // Keep the existing mouse −/+ buttons; the time itself is a controller adjustment target.
-            minutes.GuiInput += e =>
-            {
-                if (e is InputEventKey && (e.IsActionPressed("ui_left") || e.IsActionPressed("ui_right")))
-                {
-                    AdjustMatchLength(e.IsActionPressed("ui_left") ? -1 : 1);
-                    minutes.AcceptEvent();
-                }
-            };
-            length.AddChild(minutes);
-        }
-        else
-        {
-            var minutes = UiStyle.Title(UiStyle.FormatTime(lobby.MatchLength), 26);
-            minutes.CustomMinimumSize = new Vector2(80, 0);
-            length.AddChild(minutes);
-        }
-        if (Net.IsCreator)
-        {
-            var longer = UiStyle.Button("+");
-            longer.CustomMinimumSize = new Vector2(44, 40);
-            longer.Disabled = lobby.MatchLength >= tuning.MatchLengthMax;
-            longer.Pressed += () => Net.SetMatchLength(Mathf.Min(tuning.MatchLengthMax, lobby.MatchLength + step));
-            length.AddChild(longer);
-        }
-        var settings = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.Center };
-        settings.AddThemeConstantOverride("separation", 24);
-        settings.AddChild(length);
-        var capacity = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.Center };
-        capacity.AddThemeConstantOverride("separation", 8);
-        capacity.AddChild(UiStyle.Text("Capacity", 20));
-        if (Net.IsCreator)
-        {
-            var fewer = UiStyle.Button("−");
-            fewer.SetMeta("focus_key", "capacity_down");
-            fewer.Disabled = lobby.Phase != LobbyServer.LobbyPhase.Waiting || lobby.Capacity <= Mathf.Max(2, lobby.Members.Count);
-            fewer.Pressed += () => Net.SetCapacity(lobby.Capacity - 1);
-            capacity.AddChild(fewer);
-        }
-        capacity.AddChild(UiStyle.Text($"{lobby.Capacity} / {Net.LobbyCapacity}", 20, UiStyle.Ink));
-        if (Net.IsCreator)
-        {
-            var more = UiStyle.Button("+");
-            more.SetMeta("focus_key", "capacity_up");
-            more.Disabled = lobby.Phase != LobbyServer.LobbyPhase.Waiting || lobby.Capacity >= Net.LobbyCapacity;
-            more.Pressed += () => Net.SetCapacity(lobby.Capacity + 1);
-            capacity.AddChild(more);
-        }
-        settings.AddChild(capacity);
-        layout.AddChild(settings);
-
-        var buttons = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.Center };
-        buttons.AddThemeConstantOverride("separation", 10);
-        if (Net.IsCreator)
-        {
-            // Two players make a match; a debug build may start alone, for testing.
-            var needed = OS.IsDebugBuild() ? 1 : 2;
-            var start = UiStyle.Button(lobby.Members.Count < needed ? "Waiting for players" : "Start match");
-            start.Disabled = lobby.Members.Count < needed || lobby.Phase != LobbyServer.LobbyPhase.Waiting;
-            start.Pressed += Net.StartMatch;
-            buttons.AddChild(start);
-        }
-        else
-        {
-            layout.AddChild(UiStyle.Text($"Waiting for {creator?.Name ?? "the creator"} to start", 16, UiStyle.SoftInk, HorizontalAlignment.Center));
-        }
-        var leave = UiStyle.Button("Leave lobby");
-        leave.Pressed += Net.LeaveLobby;
-        buttons.AddChild(leave);
-        if (Docked)
-        {
-            var close = UiStyle.Button("Close");
-            close.SetMeta("focus_key", "close_panel");
-            close.TooltipText = "Back to the lobby world (Esc)";
-            close.Pressed += () => PanelClosed?.Invoke();
-            buttons.AddChild(close);
-        }
-        layout.AddChild(buttons);
-        AddMessage();
-    }
-
-    /// <summary>
-    /// The mode the lobby will play, which everyone sees and only the creator changes: Tank Bank or King of the
-    /// Cul-de-sac, tank supply, and King's mint pace (seconds a lone holder needs for each tank) on the Lab's steps.
-    /// </summary>
-    private void BuildModeChoice(LobbyInfo lobby)
-    {
-        var settings = lobby.Mode;
-        var chosen = Modes.ModeRegistry.ForLobby(settings.ModeId) ?? Modes.ModeRegistry.TankBank;
-        var waiting = lobby.Phase == LobbyServer.LobbyPhase.Waiting;
-        var modes = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.Center };
-        modes.AddThemeConstantOverride("separation", 10);
-        modes.AddChild(UiStyle.Text("Mode", 20));
-        if (Net.IsCreator)
-        {
-            foreach (var mode in Modes.ModeRegistry.Lobby)
-            {
-                var button = UiStyle.Button(mode.Name);
-                button.SetMeta("focus_key", $"mode_{mode.Id}");
-                button.Disabled = !waiting;
-                UiStyle.Choose(button, mode == chosen);
-                var id = mode.Id;
-                button.Pressed += () => { if (id != Net.Lobby?.Mode.ModeId) Net.SetMode(settings with { ModeId = id }); };
-                modes.AddChild(button);
-            }
-        }
-        else
-        {
-            modes.AddChild(UiStyle.Title(chosen.Name, 24));
-        }
-        layout.AddChild(modes);
-        layout.AddChild(UiStyle.Text(chosen.Id == Modes.ModeRegistry.KingId
-            ? "Hold the beam alone to mint banked tanks; it moves between tank piles. Hits and throws spill."
-            : "Every tank you blow up is banked; getting hit or thrown spills them. Most banked wins.", 15, UiStyle.SoftInk, HorizontalAlignment.Center));
-        BuildLobbyDial("Tank supply", $"{settings.TankSupply}×", "tank_supply", "tank_less", "tank_more",
-            waiting, settings.TankSupply <= Tuning.TankSupplyMinimum, settings.TankSupply >= Tuning.TankSupplyMaximum, AdjustTankSupply);
-        // Guests do not have the creator's debug tuning until match start. Label the default-tuning preview rather
-        // than pretending their local template describes this match; generation remains the server's job.
-        using var defaults = new Tuning();
-        settings.Apply(defaults);
-        var count = chosen.Supply.Suburb(defaults, lobby.Members.Count).TankCount;
-        layout.AddChild(UiStyle.Text($"{count} tanks at default tuning · {lobby.Members.Count} players", 15, UiStyle.SoftInk, HorizontalAlignment.Center));
-        if (chosen.Id == Modes.ModeRegistry.KingId)
-        {
-            BuildLobbyDial("Mint pace", $"A tank every {settings.MintSeconds:0.0} s", "mint_pace", "mint_faster", "mint_slower",
-                waiting, settings.MintSeconds <= Modes.KingRules.MintPaceMin, settings.MintSeconds >= Modes.KingRules.MintPaceMax, AdjustMintPace);
-        }
-    }
-
-    /// <summary>The mouse buttons flank a value that keyboard and controller left/right adjust.</summary>
-    private void BuildLobbyDial(string label, string text, string key, string lessKey, string moreKey,
-        bool waiting, bool atMinimum, bool atMaximum, Action<int> adjust)
-    {
-        var row = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.Center };
-        row.AddThemeConstantOverride("separation", 12);
-        row.AddChild(UiStyle.Text(label, 20));
-        if (Net.IsCreator)
-        {
-            var less = UiStyle.Button("−");
-            less.SetMeta("focus_key", lessKey);
-            less.CustomMinimumSize = new Vector2(44, 40);
-            less.Disabled = !waiting || atMinimum;
-            less.Pressed += () => adjust(-1);
-            row.AddChild(less);
-            var value = UiStyle.Button(text);
-            value.SetMeta("focus_key", key);
-            value.TooltipText = $"Left / right to change {label.ToLowerInvariant()}";
-            value.Disabled = !waiting;
-            value.GuiInput += e =>
-            {
-                if (e is InputEventKey && (e.IsActionPressed("ui_left") || e.IsActionPressed("ui_right")))
-                {
-                    adjust(e.IsActionPressed("ui_left") ? -1 : 1);
-                    value.AcceptEvent();
-                }
-            };
-            row.AddChild(value);
-            var more = UiStyle.Button("+");
-            more.SetMeta("focus_key", moreKey);
-            more.CustomMinimumSize = new Vector2(44, 40);
-            more.Disabled = !waiting || atMaximum;
-            more.Pressed += () => adjust(1);
-            row.AddChild(more);
-        }
-        else
-        {
-            row.AddChild(UiStyle.Title(text, 24));
-        }
-
-        layout.AddChild(row);
-    }
-
-    private void AdjustTankSupply(int direction)
-    {
-        if (Net.Lobby is not { Phase: LobbyServer.LobbyPhase.Waiting } lobby || !Net.IsCreator) return;
-        var supply = Math.Clamp(lobby.Mode.TankSupply + direction, Tuning.TankSupplyMinimum, Tuning.TankSupplyMaximum);
-        if (supply != lobby.Mode.TankSupply) Net.SetMode(lobby.Mode with { TankSupply = supply });
-    }
-
-    /// <summary>One step of King's mint pace: left is faster (fewer seconds per tank), right slower.</summary>
-    private void AdjustMintPace(int direction)
-    {
-        if (Net.Lobby is not { Phase: LobbyServer.LobbyPhase.Waiting } lobby || !Net.IsCreator) return;
-        var seconds = (float)Math.Clamp(lobby.Mode.MintSeconds + direction * Modes.KingRules.MintPaceStep, Modes.KingRules.MintPaceMin, Modes.KingRules.MintPaceMax);
-        if (seconds != lobby.Mode.MintSeconds) Net.SetMode(lobby.Mode with { MintSeconds = seconds });
-    }
-
-    private void OpenBotEditor(PlayerProfile? editing)
-    {
-        if (botEditor != null || picker != null || Net.Lobby is not { Phase: LobbyServer.LobbyPhase.Waiting } lobby) { return; }
-        botEditor = new BotEditor
-        {
-            Net = Net,
-            Editing = editing,
-            InitialName = editing?.Name ?? DefaultBotName(lobby),
-            InitialAppearance = editing?.Appearance ?? DefaultBotAppearance(lobby),
-            InitialDifficulty = editing != null ? (BotDifficulty)Math.Min(editing.ControllerConfig.Difficulty, (byte)BotDifficulty.Hard) : BotDifficulty.Normal,
-        };
-        botEditor.Closed += () =>
-        {
-            botEditor = null;
-            if (Visible) { navigation.Configure(editing != null ? $"bot_{editing.Id}" : "add_bot"); }
-        };
-        AddChild(botEditor);
-    }
-
-    /// <summary>"Bot 1", "Bot 2"...: the first number nobody in the lobby is named with.</summary>
-    internal static string DefaultBotName(LobbyInfo lobby)
-    {
-        for (var n = 1; ; n++)
-        {
-            var name = $"Bot {n}";
-            if (!lobby.Members.Any(m => Protocol.SameName(m.Name, name))) { return name; }
-        }
-    }
-
-    /// <summary>The first preset nobody in the lobby wears; any color stays allowed.</summary>
-    private static AppearanceRecord DefaultBotAppearance(LobbyInfo lobby)
-    {
-        for (var i = 0; i < Protocol.PlayerColors.Length; i++)
-        {
-            var preset = AppearanceRecord.FromPalette(i);
-            if (!lobby.Members.Any(m => m.Appearance.Color == preset.Color)) { return preset; }
-        }
-        return AppearanceRecord.FromPalette(lobby.Members.Count);
-    }
-
-    private void AdjustMatchLength(int direction)
-    {
-        if (Net.Lobby is not { } lobby || !Net.IsCreator)
-        {
-            return;
-        }
-        var tuning = Net.Template;
-        var seconds = Mathf.Clamp(lobby.MatchLength + direction * Mathf.Max(tuning.MatchLengthStep, 1f),
-            tuning.MatchLengthMin, tuning.MatchLengthMax);
-        if (seconds != lobby.MatchLength)
-        {
-            Net.SetMatchLength(seconds);
-        }
-    }
+    internal static string DefaultBotName(LobbyInfo lobby) => LobbyDialogs.DefaultBotName(lobby);
 
     private void GoBack()
     {
@@ -812,64 +268,4 @@ public partial class Menus : CanvasLayer
         var button = layout.FindChildren("*", "Button", owned: false).OfType<Button>().FirstOrDefault(b => b.Text == text);
         button?.EmitSignal(BaseButton.SignalName.Pressed);
     }
-
-    private void SetProfile(string name, AppearanceRecord appearance)
-    {
-        SaveName(name);
-        PlayerSettings.Appearance = appearance;
-        Net.SetProfile(name, appearance);
-    }
-
-    // ------------------------------------------------------------------ Helpers
-
-    private void AddHostingNote()
-    {
-        if (HostingNote.Length > 0)
-        {
-            layout.AddChild(Wrap(UiStyle.Text(HostingNote, 15, UiStyle.SoftInk, HorizontalAlignment.Center)));
-        }
-    }
-
-    /// <summary>A button that downloads this platform's archive through the browser.</summary>
-    private void AddDownload(string text, string release)
-    {
-        var row = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.Center };
-        var download = UiStyle.Button(text);
-        download.Pressed += () => OS.ShellOpen(BuildInfo.DownloadUrl(release, OS.GetName()));
-        row.AddChild(download);
-        layout.AddChild(row);
-    }
-
-    private void AddMessage()
-    {
-        status = UiStyle.Text(message, 16, new Color(0.75f, 0.2f, 0.12f), HorizontalAlignment.Center);
-        Wrap(status);
-        status.Visible = message.Length > 0;
-        layout.AddChild(status);
-    }
-
-    private static Label Wrap(Label label)
-    {
-        label.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-        label.CustomMinimumSize = new Vector2(480, 0);
-        return label;
-    }
-
-    private static string DefaultName()
-    {
-        var saved = PlayerSettings.Name;
-        if (saved.Length > 0)
-        {
-            return saved;
-        }
-        var user = System.Environment.UserName;
-        return Protocol.CleanName(user.Length > 0 ? char.ToUpperInvariant(user[0]) + user[1..] : "Player");
-    }
-
-    private static AppearanceRecord DefaultAppearance()
-    {
-        return PlayerSettings.Appearance ?? AppearanceRecord.FromPalette((int)(GD.Randi() % Protocol.PlayerColors.Length));
-    }
-
-    private static void SaveName(string name) => PlayerSettings.Name = Protocol.CleanName(name);
 }
