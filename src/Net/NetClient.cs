@@ -194,7 +194,7 @@ public partial class NetClient : Node
     {
         if (connection == server)
         {
-            Send(new NetWriter(Msg.Hello).Int((int)Dev.DevArgs.GetFloat("fake-protocol", Protocol.Version)).String(BuildInfo.GameVersion).String(BuildInfo.Build).String(PlayerName).Int(Appearance.LegacyIndex).Bool(OS.IsDebugBuild()).Appearance(Appearance));
+            Send(new NetWriter(Msg.Hello).Int((int)LaunchArgs.Current.GetFloat("fake-protocol", Protocol.Version)).String(BuildInfo.GameVersion).String(BuildInfo.Build).String(PlayerName).Int(Appearance.LegacyIndex).Bool(OS.IsDebugBuild()).Appearance(Appearance));
         }
     }
 

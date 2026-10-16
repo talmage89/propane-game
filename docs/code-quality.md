@@ -60,6 +60,36 @@ classic/docked lobbies, host/guest, 2/8/16 participants, controller focus, King 
 dialogs. Its headless assertions preserve draft/caret/focus and overlay ownership across refreshes.
 The real-device and network menu scenes remain responsible for input delivery and roaming-world behavior.
 
+## Runtime launch options and the Dev boundary
+
+`LaunchArgs` (`src/Core`) parses the user arguments after `--` once per process and caches them as `LaunchArgs.Current`.
+`--key=value` is read as written and a bare `--key` is `"true"`; leading dashes are dropped, only the first `=` splits
+(an `=` in first place is part of the key), a later argument replaces an earlier one, and numbers use the current culture
+and fall back when absent or not numbers. `Has` means the argument was given with any value, so `--classic-lobby=false`
+still counts. `Dev.DevArgs` reads the same cache for the harnesses and keeps their `Setup`, `MarkReady` and optimized-Debug
+verification; nothing outside `src/Dev` reads `DevArgs`.
+
+The shipped game reads the options below and no others. The harness options (`--scenario`, `--capture-dir`, `--tune.*`
+and the rest) go through `DevArgs`; a Debug server applies `--tune.*` too, before it listens.
+
+| Option | Read by | Effect |
+| --- | --- | --- |
+| `--server`, `--port=N`, `--start-score=N` | `Main` | Run only the multiplayer server, on `N` (default `Protocol.DefaultPort`), starting scores at `N` (default 0). |
+| `--match-seed=N` | `LobbyServer` | Debug builds: the next match plan uses seed `N`. |
+| `--connect=host[:port]`, `--name=Name` | `Main` | Open the Connect screen on that server as that name. |
+| `--windowed` | `Main` | Do not maximize a windowed game. |
+| `--release-test` | `Main` | Run the release smoke test in place of the front end (below). |
+| `--classic-lobby` | `LobbyWorldDefault` | Lobby menu over the backdrop instead of the lobby world. |
+| `--update-check`, `--update-url=URL` | `UpdateCheck` | Check for a newer release when run from the editor; ask `URL` instead of GitHub. |
+| `--fake-version=X.Y.Z`, `--fake-protocol=N` | `BuildInfo`, `NetClient` | Pretend to be another game version or protocol in the Hello and in version checks. |
+| `--net-lag`, `--net-jitter`, `--net-reliable-stall`, `--net-body-stall` (ms), `--net-loss` (%), `--net-seed=N` | `PacketTransports` | Wrap the transport in `FaultPacketTransport` when any fault is positive. |
+| `--net-throttle-trace`, `--capacity-metrics`, `--tank-authority-trace` | `LobbyServer` | Server diagnostics: per-peer transport lines every 0.25 s instead of every 10 s; a process and transport metrics line; tank authority publications. |
+
+The `LaunchArgsTests` unit suite checks the parser against the parser as it stood before it left `DevArgs`, and each
+option above that a headless unit can reach through its real consumer. The native `server_tuning_tests` and `server_seed_tests`
+scenes cover Main's server entry; the exported launches (ordinary start, `--server`, `--classic-lobby`, `--release-test`)
+cover the rest. Add a new runtime option to `LaunchArgs`'s consumers, this table and that suite together.
+
 ## Fast gate and deep sweeps
 
 `make test` is the union of four targets. Each builds first, so it also works independently:
