@@ -81,6 +81,9 @@ never run refresh to make a refactor pass. `provenance.json` records production 
 Godot/.NET versions, configuration, seeds, tuner sources/overrides and commands, with checkout paths removed.
 Compressed JSON can be inspected with Python's `gzip` and `json` modules. Do not edit compressed files by hand.
 
+[Recorded v0.4.0 verification](release-reference-verification.md) includes repeated-load results, timings, rejection
+probes, reviewed captures and native smoke checks.
+
 ## Limits
 
 World hashes include construction, meshes and collision, but do not prove feel. These exact Linux/Jolt traces do not
