@@ -63,9 +63,11 @@ tools/dev/net_bots.sh -n 1 -w 0 -l 90 -t clean \
 Read `bot idle:` and the final server standings; compare only lobby bots' retained banks, since the primary actor
 uses its own Hard brain. Baseline/candidate lobby soaks ran in parallel, on separate local servers. For cost,
 alternate baseline/candidate `make bench` per case/repetition, headless/rendered, with 4/8/16 bots, 1× supply,
-ten measured seconds, two warm-up seconds, three repetitions, and `BENCH_ARGS=--bot-skill=0.2` or `--bot-skill=0.6`.
-The baseline benchmark sources receive only the same `ScaleBench` argument/telemetry additions; its production
-brains remain at the baseline commit. Keep all JSON and raw samples.
+ten measured seconds, two warm-up seconds, three repetitions, and `BENCH_ARGS='--bot-skill=0.2 --replay-random'` or
+`BENCH_ARGS='--bot-skill=0.6 --replay-random'`. The replay mode also fixes simulation FPS at 60: free-running process
+cadence otherwise changes when fragments enter physics, even with seeded scatter. It measures CPU cost per tick;
+its synthetic-frame FPS is not real-time gameplay FPS. The baseline receives the same replay plumbing and
+`ScaleBench` arguments/telemetry; its production brains remain at the baseline commit. Keep all JSON and raw samples.
 
 ## Measured results (Linux, Godot 4.7.2, .NET 10)
 

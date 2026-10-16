@@ -33,12 +33,18 @@ There is one idle player plus the requested number of camera-free bots on the cr
 case is an offline stress fixture with seventeen actors, beyond the sixteen-actor network lobby ceiling.
 
 The scene uses the real Lab Tank Bank runner, including shooting, banking, spills, ammo pickups, vent thrust,
-chain fuses, ragdolls and gathering. No physics, effect or gameplay tuner is reduced. Halfway through measurement,
+chain fuses, ragdolls and gathering. By default, no physics, effect or gameplay tuner is reduced. Halfway through measurement,
 it punctures every fourth surviving tank through `TakeShot`, exercising tank/vent cost even with zero bots. JSON
 has separate `intact` and `disturbed` stage summaries; `intact` means before this scripted disturbance, and bots
 can already have punctured/exploded tanks. The fixed overview camera renders at 1280×720. This is a reproducible
 scale view, not a prediction of frame rate from the player's shoulder camera. Headless still runs scripts and
 physics. Rendering can change process/physics cadence, so compare each view separately.
+
+For repeatable CPU cost comparisons, add `BENCH_ARGS=--replay-random`. This seeds physical-event generators,
+disables wall-clock hitstop and uses `--fixed-fps 60` to keep process/physics cadence fixed. JSON records the mode,
+and the comparator refuses to mix it with ordinary runs. Compare brain time per physics tick in this mode;
+its FPS is throughput of synthetic simulation frames, not a real-time gameplay frame rate. Ordinary runs retain
+fresh physical entropy, hitstop and real-time simulation pacing.
 
 ## Reading the measurements
 
