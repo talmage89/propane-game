@@ -329,6 +329,10 @@ def main():
         scratch = pathlib.Path(directory)
         shutil.copyfile(ROOT / "Propane.csproj", scratch / "Probe.csproj")
         shutil.copyfile(ROOT / ".editorconfig", scratch / ".editorconfig")
+        # The project compiles the files it lists in an explicit order (the Tuning parts); the probe has none of them.
+        for part in re.findall(r'<TuningPart Include="([^"]+)"', (ROOT / "Propane.csproj").read_text()):
+            (scratch / part).parent.mkdir(parents=True, exist_ok=True)
+            (scratch / part).write_text("")
         source = scratch / "Probe.cs"
         source.write_text("""using System.IO;
 using System.Threading.Tasks;
