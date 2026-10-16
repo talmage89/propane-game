@@ -176,6 +176,7 @@ class ProcessOwnership(unittest.TestCase):
         self.pids = self.root / "pids"
         self.pids.mkdir()
         self.runs = 0
+        self.launchers = []
         self.addCleanup(self.kill_survivors)
 
     def recorded(self):
@@ -188,6 +189,10 @@ class ProcessOwnership(unittest.TestCase):
         return bool(state) and not state.startswith("Z")
 
     def kill_survivors(self):
+        # A failing test must not leave its launcher or fakes running.
+        for launcher in self.launchers:
+            if launcher.poll() is None:
+                os.killpg(launcher.pid, signal.SIGKILL)
         for pid in self.recorded():
             if self.running(pid):
                 os.kill(pid, signal.SIGKILL)
@@ -200,9 +205,14 @@ class ProcessOwnership(unittest.TestCase):
     def launch(self, *flags, **environment):
         self.runs += 1
         env = {**os.environ, "NAS_FAULT": "none", "NAS_PIDS": str(self.pids), "NET_BOTS_GRACE": "1", **environment}
-        return subprocess.Popen(["bash", str(SCRIPT), "-g", str(self.fake), "-n", "2", "-l", "4",
-                                 "-o", str(self.root / f"logs{self.runs}"), *flags], env=env, text=True,
-                                stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
+        # A test runner started in the background, or under nohup, passes down ignored SIGINT and SIGHUP, which no
+        # script can trap again; the launcher under test must start with the default dispositions.
+        defaults = lambda: [signal.signal(number, signal.SIG_DFL) for number in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP)]
+        launcher = subprocess.Popen(["bash", str(SCRIPT), "-g", str(self.fake), "-n", "2", "-l", "4",
+                                     "-o", str(self.root / f"logs{self.runs}"), *flags], env=env, text=True,
+                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True, preexec_fn=defaults)
+        self.launchers.append(launcher)
+        return launcher
 
     def wait_for_processes(self, since, count, launcher):
         deadline = time.monotonic() + 30

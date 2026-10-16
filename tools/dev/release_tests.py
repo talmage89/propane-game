@@ -169,11 +169,11 @@ exit "$(cat "{self.state}/godot" 2>/dev/null || echo 0)"
                 self.assertEqual(self.snapshot(), before)
                 self.assertEqual(self.git(self.work, "status", "--porcelain"), "")
 
-    def test_the_gate_failure_is_final_even_with_several_attempts(self):
+    def test_a_failing_gate_stops_every_kind_of_release(self):
         before = self.snapshot()
-        for _ in range(2):
-            self.assertEqual(self.cut("minor", "-y", make_exit=2)[0].returncode, 1)
-        self.assertEqual(self.snapshot(), before)
+        for bump in ("minor", "major", "1.2.5"):
+            self.assertEqual(self.cut(bump, "-y", make_exit=2)[0].returncode, 1, bump)
+            self.assertEqual(self.snapshot(), before, bump)
 
     def test_refusals_stop_before_the_gate(self):
         self.refuses("usage:")
