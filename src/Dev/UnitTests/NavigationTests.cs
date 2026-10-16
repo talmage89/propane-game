@@ -213,13 +213,14 @@ internal static class NavigationTests
                 "walking recovery crossed a dissolved lot with supported endpoints");
             TestRunner.Assert(!BotMotor.RecoveryAllowed(Vector3.Right * 0.8f, Vector3.Right * 0.7f, hazards, 0.1f, area),
                 "walking recovery stepped off the remaining ground");
-            var before = GC.GetAllocatedBytesForCurrentThread();
-            for (var i = 0; i < 100; i++)
+            TestRunner.AssertNoAllocation(() =>
             {
-                TestRunner.Assert(BotMotor.RecoveryAllowed(Vector3.Right, Vector3.Right * 1.1f, hazards, 0.1f, area),
-                    "safe recovery changed after warm-up");
-            }
-            TestRunner.Assert(GC.GetAllocatedBytesForCurrentThread() == before, "walking recovery allocated");
+                for (var i = 0; i < 100; i++)
+                {
+                    TestRunner.Assert(BotMotor.RecoveryAllowed(Vector3.Right, Vector3.Right * 1.1f, hazards, 0.1f, area),
+                        "safe recovery changed after warm-up");
+                }
+            }, "walking recovery allocated");
         });
         runner.Run("navigation/crowded King recovery regroups forward then returns without warm allocation", () =>
         {
@@ -248,9 +249,8 @@ internal static class NavigationTests
                 var yaw = Mathf.DegToRad(player.Aim.Yaw);
                 TestRunner.Assert(new Vector3(-Mathf.Sin(yaw), 0, -Mathf.Cos(yaw)).Dot(Vector3.Right) > 0.9f,
                     "retreat must face outward so the controller permits sprint");
-                var before = GC.GetAllocatedBytesForCurrentThread();
-                for (var i = 0; i < 100; i++) brain.Think(crowd, 1f / 120);
-                TestRunner.Assert(GC.GetAllocatedBytesForCurrentThread() == before, "warmed regroup thoughts allocate");
+                TestRunner.AssertNoAllocation(() => { for (var i = 0; i < 100; i++) brain.Think(crowd, 1f / 120); },
+                    "warmed regroup thoughts allocate");
                 brain.Think(crowd, runner.World.Tuning.BotKingRegroupMax + 1);
                 brain.Think(crowd, 1f / 120);
                 TestRunner.Assert(brain.Status != "regrouping outside the zone", "regroup must end and resume the zone policy");
@@ -288,9 +288,8 @@ internal static class NavigationTests
                 brain.Prepare(crowd);
                 for (var i = 0; i < 400; i++) brain.Think(crowd, 1f / 120);
                 TestRunner.Assert(brain.Status.StartsWith("siege:", StringComparison.Ordinal), "a sustained contest must break off before the next raid");
-                var before = GC.GetAllocatedBytesForCurrentThread();
-                for (var i = 0; i < 100; i++) brain.Think(crowd, 1f / 120);
-                TestRunner.Assert(GC.GetAllocatedBytesForCurrentThread() == before, "warmed siege thoughts allocate");
+                TestRunner.AssertNoAllocation(() => { for (var i = 0; i < 100; i++) brain.Think(crowd, 1f / 120); },
+                    "warmed siege thoughts allocate");
                 player.Teleport(Vector3.Right * 10, 0);
                 enemy.Teleport(Vector3.Right * 8, 0);
                 for (var i = 0; i < 60; i++) brain.Think(crowd, 1f / 120);
@@ -390,14 +389,14 @@ internal static class NavigationTests
                     snapshot.Holder, snapshot.Warning, snapshot.UntilMove);
                 TestRunner.Assert(KingBotView.Read(rules, clock) == expected &&
                     KingBotView.Read(snapshot, elapsed) == expected, "rule and network clocks disagree at a warning or move");
-                var before = GC.GetAllocatedBytesForCurrentThread();
-                for (var i = 0; i < 1000; i++)
+                TestRunner.AssertNoAllocation(() =>
                 {
-                    TestRunner.Assert(KingBotView.Read(rules, clock) == expected && KingBotView.Read(snapshot, elapsed) == expected,
-                        "a warmed King view changed");
-                }
-
-                TestRunner.Assert(GC.GetAllocatedBytesForCurrentThread() == before, "warmed King observations allocate");
+                    for (var i = 0; i < 1000; i++)
+                    {
+                        TestRunner.Assert(KingBotView.Read(rules, clock) == expected && KingBotView.Read(snapshot, elapsed) == expected,
+                            "a warmed King view changed");
+                    }
+                }, "warmed King observations allocate");
             }
         });
         runner.Run("navigation/large Short Fuse rosters use separated road starts across resets", () =>
@@ -685,18 +684,19 @@ internal static class NavigationTests
             hazards.Add(Vector3.Zero, 4);
             hazards.Add(new Vector3(100000000, 0, 0), 4);
             hazards.Build();
-            var before = GC.GetAllocatedBytesForCurrentThread();
-            for (var i = 0; i < 100; i++)
+            TestRunner.AssertNoAllocation(() =>
             {
-                hazards.Clear();
-                hazards.Add(Vector3.Zero, 4);
-                var far = new Vector3(10000000000f + i * 100000, 0, 0);
-                hazards.Add(far, 4);
-                hazards.Build();
-                TestRunner.Assert(!hazards.Safe(Vector3.Zero) && !hazards.Safe(far) && hazards.Safe(new Vector3(0, 0, 10)),
-                    "far hazards must preserve local answers");
-            }
-            TestRunner.Assert(GC.GetAllocatedBytesForCurrentThread() == before, "moving hazards allocate by world span");
+                for (var i = 0; i < 100; i++)
+                {
+                    hazards.Clear();
+                    hazards.Add(Vector3.Zero, 4);
+                    var far = new Vector3(10000000000f + i * 100000, 0, 0);
+                    hazards.Add(far, 4);
+                    hazards.Build();
+                    TestRunner.Assert(!hazards.Safe(Vector3.Zero) && !hazards.Safe(far) && hazards.Safe(new Vector3(0, 0, 10)),
+                        "far hazards must preserve local answers");
+                }
+            }, "moving hazards allocate by world span");
         });
         runner.Run("mode boundaries reject cached walks across removed ground", () =>
         {
@@ -731,13 +731,15 @@ internal static class NavigationTests
                 nav.Reset(); grid.BeginTick(i);
                 nav.Navigate(grid, hazards, state, goal, tuning, 1f / 120);
             }
-            var before = GC.GetAllocatedBytesForCurrentThread();
-            for (var i = 0; i < 100; i++)
+            var tick = 100;
+            TestRunner.AssertNoAllocation(() =>
             {
-                nav.Reset(); grid.BeginTick(i + 100);
-                nav.Navigate(grid, hazards, state, goal, tuning, 1f / 120);
-            }
-            TestRunner.Assert(GC.GetAllocatedBytesForCurrentThread() == before, "steady route and hazard hot paths allocate");
+                for (var i = 0; i < 100; i++)
+                {
+                    nav.Reset(); grid.BeginTick(tick++);
+                    nav.Navigate(grid, hazards, state, goal, tuning, 1f / 120);
+                }
+            }, "steady route and hazard hot paths allocate");
         });
         runner.Run("banking bots pursue a richer opponent after the suburb is cleared", () =>
         {
