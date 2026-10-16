@@ -3,9 +3,9 @@ using System.Linq;
 using System.Threading.Tasks;
 using Godot;
 using Propane.Core;
+using Propane.Dev.UnitTests;
 using Propane.Net;
 using Propane.UI;
-using Propane.Dev.UnitTests;
 
 namespace Propane.Dev;
 
@@ -55,14 +55,19 @@ public partial class MenuCompositionTests : Node
             }));
             await Shot("browser_list").ConfigureAwait(true);
             foreach (var docked in new[] { false, true })
+            {
                 foreach (var count in new[] { 2, 8, 16 })
+                {
                     foreach (var guest in new[] { false, true })
                     {
                         var members = Enumerable.Range(0, count).Select(i => new PlayerProfile(1001 + i,
                             i == 0 ? "Creator" : $"Participant {i + 1:00}", AppearanceRecord.FromPalette(i))
-                        { OwnerPeerId = i == 0 ? (guest ? 3 : 2) : i == 1 ? (guest ? 2 : 3) : i == count - 1 ? 2 : 3 + i,
+                        {
+                            OwnerPeerId = i == 0 ? (guest ? 3 : 2) : i == 1 ? (guest ? 2 : 3) : i == count - 1 ? 2 : 3 + i,
                             ControllerConfig = i > 1 && i == count - 1 ? ControllerConfig.Bot : ControllerConfig.Human,
-                            Kind = i > 1 && i == count - 1 ? ActorKind.Bot : ActorKind.Human, AllocationSlot = i }).ToArray();
+                            Kind = i > 1 && i == count - 1 ? ActorKind.Bot : ActorKind.Human,
+                            AllocationSlot = i
+                        }).ToArray();
                         var lobby = new LobbyInfo(1, guest ? 3 : 2, 180, LobbyServer.LobbyPhase.Waiting, members, 16);
                         Packet(Msg.LobbyState, lobby);
                         menus.Show(Menus.Screen.Lobby, docked: docked);
@@ -83,7 +88,8 @@ public partial class MenuCompositionTests : Node
                         Press("custom_color");
                         await Shot(prefix + "_appearance").ConfigureAwait(true);
                         Packet(Msg.LobbyState, lobby);
-                        TestRunner.Assert(GetViewport().GuiGetFocusOwner() != rebuilt, "refresh stole dialog focus");
+                        var picker = menus.FindChildren("*", "CanvasLayer", owned: false).OfType<AppearancePicker>().Single(p => p.Visible);
+                        TestRunner.Assert(picker.IsAncestorOf(GetViewport().GuiGetFocusOwner()), "refresh stole dialog focus");
                         Press("Cancel");
                         Press(count == 16 ? $"bot_{members[^1].Id}" : "add_bot");
                         await Shot(prefix + "_bot").ConfigureAwait(true);
@@ -93,12 +99,25 @@ public partial class MenuCompositionTests : Node
                         Packet(Msg.LobbyState, lobby);
                         TestRunner.Assert(menus.FindChildren("*", "CanvasLayer", owned: false).OfType<BotEditor>().Count() == 1, "refresh lost bot dialog");
                         Press("bot_cancel");
-                        if (!guest)
-                        {
-                            Packet(Msg.LobbyState, lobby with { Mode = new ModeSettings(Modes.ModeRegistry.KingId, 2) });
-                            await Shot(prefix + "_king").ConfigureAwait(true);
-                        }
+                        TestRunner.Assert(MenuNavigation.Key(GetViewport().GuiGetFocusOwner()) ==
+                            (count == 16 ? $"bot_{members[^1].Id}" : "add_bot"), "bot close lost its focus return target");
+                        Packet(Msg.LobbyState, lobby with { Mode = new ModeSettings(Modes.ModeRegistry.KingId, 2) });
+                        await Shot(prefix + "_king").ConfigureAwait(true);
                     }
+                }
+            }
+
+            menus.Show(Menus.Screen.Connect);
+            var fields = menus.FindChildren("*", "LineEdit", owned: false).OfType<LineEdit>().ToArray();
+            fields[0].Text = "Connect draft";
+            fields[0].CaretColumn = 4;
+            fields[1].Text = "unsubmitted.example:24680";
+            fields[1].GrabFocus();
+            Packet(Msg.Notice, new TextMessage("Refresh while entering a server"));
+            var refreshed = menus.FindChildren("*", "LineEdit", owned: false).OfType<LineEdit>().ToArray();
+            TestRunner.Assert(refreshed[0].Text == "Connect draft" && refreshed[0].CaretColumn == 4 &&
+                refreshed[1].Text == "unsubmitted.example:24680" && GetViewport().GuiGetFocusOwner() == refreshed[1],
+                "connect refresh lost drafts, name caret or server focus");
             GD.Print("[menu composition] PASS screen matrix, drafts, caret, focus and overlay ownership");
             ShutdownGuard.Quit(GetTree());
         }
