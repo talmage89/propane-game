@@ -157,7 +157,10 @@ A throw immediately clears weapon poses and cancels reload, so get-up cannot res
 
 ## Tuning
 
-Every gameplay and effect dial is a property of `src/Core/Tuning.cs`. Press F1 in game for live sliders. Run from
+Every gameplay and effect dial is a property of `Tuning`, declared by domain in the parts `src/Core/Tuning.NN.Name.cs`.
+The number orders the parts, and with them the panel and inspector groups and the shared snapshot's bytes, on every
+machine: a new part takes a free number and a line in `Propane.csproj`, and `Tuning.cs` keeps the machinery and no dials.
+Press F1 in game for live sliders. Run from
 the editor, **Save** writes them to `res://tuning.tres`, which the game loads on start and which the Godot inspector
 can edit. In a downloaded build, Save writes the player's own `tuning.tres` in the game's data folder
 (`%APPDATA%\Godot\app_userdata\Propane` on Windows,

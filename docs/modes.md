@@ -212,7 +212,7 @@ The Lab plays them against its own bots ([lab.md](lab.md#prototype-modes)) throu
 rules what a server would: the round's phases on its clock, and every step the positions of all actors
 (`ActorsSampled`; a server would sample what its clients already send, so a mode needs no traffic of its own), who
 knocked whom down (`ActorThrown`: a melee hit's attacker, or the initiator of the chain whose blast threw them), and
-for King the attributed detonations, hits and throws exactly as the Lab duel feeds Tank Bank. King's shared zone and pile dials (`Tuning.Prototype.cs`) are exported and transmitted with match tuning;
+for King the attributed detonations, hits and throws exactly as the Lab duel feeds Tank Bank. King's shared zone and pile dials (`Tuning.95.Prototype.cs`) are exported and transmitted with match tuning;
 the other prototypes and Lab-only layout dials remain local. Rules copy their dials into `ModeTuners`.
 
 **Ring Out** (`RingOutRules`). A square slab of lots (`RingOutLots` per side, odd, `RingOutLotSize` meters) centered
