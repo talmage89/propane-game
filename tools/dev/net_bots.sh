@@ -1,8 +1,12 @@
 #!/usr/bin/env bash
 # Runs a local multiplayer test: a headless server and N bot clients (scenes/dev/net_test.tscn) playing one match.
 # Logs go to the output directory; tank agreement and final scores are checked automatically.
-# Usage: tools/dev/net_bots.sh [-n bots] [-l match seconds] [-o out dir, default build/net] [-g godot] [-w windowed bots] [-s "server args"] [-S host:port of an existing server]
+# Usage: tools/dev/net_bots.sh [-n bots] [-l match seconds] [-o out dir, default build/net] [-f] [-g godot] [-w windowed bots] [-s "server args"] [-S host:port of an existing server]
 #   [-k skip checks] [-t faults|clean] [-b brain per bot, e.g. smart,simple,simple] [-c hex colors per bot, e.g. 12ABEF,12ABEF,F6F6F6] [-- extra bot args]
+#   An output directory that already holds *.log files from an earlier run is refused, so a run never destroys another's
+#   logs: pick a new -o, or pass -f to replace them on purpose (gates that rerun into one directory do).
+#   The server, every bot and everything they start are stopped and reaped when the script finishes, fails or is
+#   interrupted (SIGINT, SIGTERM, SIGHUP); a process that ignores SIGTERM is killed after $NET_BOTS_GRACE seconds (default 10).
 #   --tank-supply=1..8 sets the lobby supply in either mode; defaults to the local TankCountMultiplier tuner.
 #   King: -- --mode=king [--mint-seconds=2]; -n 3 -l 110 -k with --scenario=king-late --tune.PlayerSendRate=20 --delay-who=Bot3 --match-delay=70 tests a late builder; check scores separately.
 # Extra bot args (after --) go to every bot, e.g. --net-lag=120 --net-jitter=30 --net-loss=5 --capture-dir=... --shot-every=5
@@ -22,7 +26,8 @@ brains=""
 colors=""
 checks=1
 profile=faults
-while getopts "n:l:o:g:w:p:s:S:b:c:kt:" opt; do
+reuse=0
+while getopts "n:l:o:g:w:p:s:S:b:c:kt:f" opt; do
   case "$opt" in
     n) bots="$OPTARG" ;;
     l) length="$OPTARG" ;;
@@ -36,6 +41,7 @@ while getopts "n:l:o:g:w:p:s:S:b:c:kt:" opt; do
     c) colors="$OPTARG" ;;
     k) checks=0 ;;
     t) profile="$OPTARG" ;;
+    f) reuse=1 ;;
     *) exit 2 ;;
   esac
 done
@@ -46,10 +52,95 @@ if (( checks )) && [[ -n "$remote" ]]; then
   echo "-S needs -k: the remote server audit log is unavailable; run checks separately with that log" >&2
   exit 2
 fi
+if [[ -n "$colors" ]]; then
+  # Check every bot's color before anything is launched.
+  for i in $(seq 1 "$bots"); do
+    color="$(echo "$colors" | cut -d, -f"$i")"
+    [[ "$color" =~ ^[0-9A-Fa-f]{6}$ ]] || { echo "missing or invalid hex color for bot $i" >&2; exit 2; }
+  done
+fi
 project="$(cd "$(dirname "$0")/../.." && pwd)"
 out="${out:-$project/build/net}"
 mkdir -p "$out"
-rm -f "$out"/*.log
+previous=()
+for log in "$out"/*.log; do
+  [[ -e "$log" ]] && previous+=("$log")
+done
+if (( ${#previous[@]} )); then
+  if (( ! reuse )); then
+    echo "FAIL: $out already holds ${#previous[@]} log file(s) from an earlier run (${previous[0]##*/}...)." >&2
+    echo "      Use another -o directory, or pass -f to replace those logs." >&2
+    exit 2
+  fi
+  rm -f "${previous[@]}"
+fi
+
+# Everything this script starts is tracked here so that every way out stops the whole tree: a client or the server may
+# have children of its own (an encoder, a windowed wrapper), and nothing may outlive the run.
+owned=()
+tree_of() {
+  # The process and all its descendants, from one snapshot of the process table.
+  ps -A -o pid= -o ppid= | awk -v root="$1" '
+    { parent[$1] = $2 }
+    END {
+      print root
+      do {
+        added = 0
+        for (p in parent) if (!(p in seen) && (parent[p] == root || parent[p] in seen)) { seen[p] = 1; print p; added = 1 }
+      } while (added)
+    }'
+}
+running() {
+  # A zombie is finished: it only waits for its parent to collect it.
+  local state
+  state="$(ps -o stat= -p "$1" 2>/dev/null)" || return 1
+  [[ -n "$state" && "$state" != Z* ]]
+}
+any_running() {
+  local pid
+  for pid in "$@"; do
+    running "$pid" && return 0
+  done
+  return 1
+}
+owned_trees() {
+  local pid
+  for pid in ${owned[@]+"${owned[@]}"}; do
+    # Only a child of this script that is still there: a finished one may have had its number reused.
+    if [[ "$(ps -o ppid= -p "$pid" 2>/dev/null)" -eq $$ ]]; then tree_of "$pid" || true; fi
+  done
+}
+stop_owned() {
+  local victims pid deadline
+  victims=($(owned_trees))
+  if (( ${#victims[@]} )); then
+    kill -TERM "${victims[@]}" 2>/dev/null || true
+    deadline=$((SECONDS + ${NET_BOTS_GRACE:-10}))
+    # "command sleep" because the unit tests replace sleep with a function to skip the launcher's startup pauses.
+    while any_running "${victims[@]}" && (( SECONDS < deadline )); do
+      command sleep 0.1
+    done
+    if any_running "${victims[@]}"; then
+      # Look again: a stopping process may have started more. Then nothing is left to ask nicely.
+      kill -KILL "${victims[@]}" $(owned_trees) 2>/dev/null || true
+    fi
+  fi
+  for pid in ${owned[@]+"${owned[@]}"}; do
+    wait "$pid" 2>/dev/null || true
+  done
+  owned=()
+}
+finish() {
+  local code=$?
+  set +e
+  trap '' INT TERM HUP
+  stop_owned
+  exit "$code"
+}
+trap finish EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+trap 'exit 129' HUP
 # Each match adds its length plus loading, countdown and results; --matches=N plays N on one connection.
 # --lobby-roam=S adds S seconds of roaming the lobby world before each match and after the last, plus each stage.
 matches=1
@@ -83,7 +174,7 @@ for _ in range(200):
     fi
     "$godot" --headless --path "$project" -- --server --port="$port" $server_args >"$out/server.log" 2>&1 &
     server=$!
-    trap 'kill $server 2>/dev/null || true' EXIT
+    owned+=("$server")
     # Wait for the actual bind, not a fixed startup delay. A loaded editor may need longer than 1.5 s.
     startup_deadline=$((SECONDS + 30))
     while ! grep -qE "listening on UDP $port |Couldn't create an ENet host" "$out/server.log"; do
@@ -97,8 +188,7 @@ for _ in range(200):
       sleep 0.05
     done
     grep -q "Couldn't create an ENet host" "$out/server.log" 2>/dev/null || break
-    kill $server 2>/dev/null || true
-    wait $server 2>/dev/null || true
+    stop_owned
     if (( !pick || attempt == 5 )); then
       echo "FAIL: the server could not listen on port $port" >&2
       exit 1
@@ -114,16 +204,16 @@ for i in $(seq 1 "$bots"); do
   appearance=()
   if [[ -n "$colors" ]]; then
     color="$(echo "$colors" | cut -d, -f"$i")"
-    [[ "$color" =~ ^[0-9A-Fa-f]{6}$ ]] || { echo "missing or invalid hex color for bot $i" >&2; exit 2; }
     appearance=("--appearance=$color" "--expected-appearances=$colors")
   fi
   display=(--headless)
   if (( i <= windowed )); then
     display=(--disable-vsync --resolution 960x540 --position $(( (i - 1) * 970 )),40)
   fi
-  timeout "$budget" "$godot" "${display[@]}" --path "$project" res://scenes/dev/net_test.tscn -- --server="$address" --port="$port" \
+  timeout -k 10 "$budget" "$godot" "${display[@]}" --path "$project" res://scenes/dev/net_test.tscn -- --server="$address" --port="$port" \
     --tank-check --role="$role" --players="$bots" --length="$length" --name="Bot$i" --color=$((i - 1)) --brain="${brain:-smart}" --windowed "${appearance[@]}" "$@" >"$out/bot$i.log" 2>&1 &
   pids+=($!)
+  owned+=($!)
   sleep 0.4
 done
 status=0

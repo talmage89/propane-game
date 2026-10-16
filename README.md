@@ -411,7 +411,9 @@ $GODOT --fixed-fps 60 --resolution 1280x720 res://scenes/dev/menu_test.tscn -- -
 $GODOT --fixed-fps 60 --resolution 1280x720 res://scenes/dev/menu_test.tscn -- --scenario=bots --port=24681 --capture-dir="$PWD/build/bots"
 
 # Multiplayer: a local server and bot players under simulated lag and loss; asserts tank agreement and scores.
-# Logs go to build/net (-o picks another directory).
+# Logs go to build/net (-o picks another directory). A directory that still holds *.log files from an earlier run is
+# refused rather than emptied: pick a new -o, or pass -f to replace them. Ctrl-C or a failure stops the server, every bot
+# and anything they started.
 GODOT=$GODOT tools/dev/net_bots.sh -n 3 -l 60 -- --net-lag=120 --net-jitter=30 --net-loss=3
 # Add --tank-supply=4 to the bot arguments for 4× lobby supply in either mode.
 # Logged engine/protocol errors also fail the run. make test-full includes a 90-second faulted rifle soak.

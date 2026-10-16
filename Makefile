@@ -181,9 +181,9 @@ test-full-engine: build
 $(DEEP): test-full-engine
 
 test-full-bots: build
-	$(LABEL) bots tools/dev/net_bots.sh -o "$(CURDIR)/build/rifle-soak-gate" -n 4 -w 0 -l 90 -s '--match-seed=25' -- --melee-start --net-seed=2 --net-lag=120 --net-jitter=30 --net-loss=3
-	$(LABEL) bots tools/dev/net_bots.sh -n 2 -w 0 -l 20 -s '--start-score=8 --match-seed=23' -o "$(CURDIR)/build/duel-lane-gate" -- --scenario=duel --matches=2 --duel-blocked --tune.DropScatter=0 --tune.DropToss=0 --net-lag=120 --net-jitter=30 --net-loss=3
-	$(LABEL) bots tools/dev/net_bots.sh -n 2 -l 20 -o "$(CURDIR)/build/loading-readiness-gate" -- --scenario=body-stream --tank-check-ready-stall=Bot2
+	$(LABEL) bots tools/dev/net_bots.sh -f -o "$(CURDIR)/build/rifle-soak-gate" -n 4 -w 0 -l 90 -s '--match-seed=25' -- --melee-start --net-seed=2 --net-lag=120 --net-jitter=30 --net-loss=3
+	$(LABEL) bots tools/dev/net_bots.sh -f -n 2 -w 0 -l 20 -s '--start-score=8 --match-seed=23' -o "$(CURDIR)/build/duel-lane-gate" -- --scenario=duel --matches=2 --duel-blocked --tune.DropScatter=0 --tune.DropToss=0 --net-lag=120 --net-jitter=30 --net-loss=3
+	$(LABEL) bots tools/dev/net_bots.sh -f -n 2 -l 20 -o "$(CURDIR)/build/loading-readiness-gate" -- --scenario=body-stream --tank-check-ready-stall=Bot2
 
 $(LAB_SHARDS): test-full-lab-%: build
 	$(LABEL) lab-$* env GODOT="$(FULL_GODOT)" python3 -B tools/dev/check_lab.py --full $(LAB_$*)
