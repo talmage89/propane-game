@@ -33,6 +33,8 @@ public partial class Tuning
     public bool BotHuntWhenEmpty { get; set; } = true;
     // Easy keeps looking for company when no banking objective is available, even against an empty rival.
     public bool BotEasySeekRivals { get; set; } = true;
+    public float BotEasyRoamRadius { get; set; } = 12f;
+    public float BotEasyRoamSeconds { get; set; } = 4f;
     // Periodic observations leave steering and aiming at the physics rate.
     public float BotSightInterval { get; set; } = 0.1f;
     // King contests move through short sight gaps at melee range; caching visibility lost its banking strength.

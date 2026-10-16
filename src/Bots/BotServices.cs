@@ -30,6 +30,7 @@ public sealed class BotServices : IDisposable
     private NavigationGrid? grid;
     private RayCast3D? sight;
     private readonly Dictionary<PlayerCharacter, HashSet<Rid>> actorColliders = new(32);
+    private readonly Dictionary<PlayerCharacter, (long Tick, Vector3 Position)> actorPositions = new(32, ReferenceEqualityComparer.Instance);
     private float gridSpacing;
     private float gridMinimumJump;
     private float gridMargin;
@@ -197,6 +198,16 @@ public sealed class BotServices : IDisposable
             if (child is CollisionObject3D collider) colliders.Add(collider.GetRid());
         }
         actorColliders.Add(actor, colliders);
+        actorPositions.TryAdd(actor, (-1, Vector3.Zero));
+    }
+
+    /// <summary>One root-position observation per bot batch; owners begin the tick before thinking, then move actors.</summary>
+    public Vector3 ActorPosition(PlayerCharacter actor)
+    {
+        if (actorPositions.TryGetValue(actor, out var sample) && sample.Tick == Tick) return sample.Position;
+        var at = actor.GlobalPosition;
+        actorPositions[actor] = (Tick, at);
+        return at;
     }
 
     /// <summary>The same ownership as walking collider parents, without binding new managed node wrappers.</summary>
@@ -290,6 +301,7 @@ public sealed class BotServices : IDisposable
         if (disposed) return;
         disposed = true;
         actorColliders.Clear();
+        actorPositions.Clear();
         world.Events.Explosion -= Disturb;
         physics?.Dispose();
         physics = null;

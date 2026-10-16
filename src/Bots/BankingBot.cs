@@ -33,6 +33,8 @@ public sealed class BankingBot : IBotGoalPolicy
     private PlayerIntent intent;
     private Node3D? target;
     private bool seekingRival;
+    private Vector3? roamGoal;
+    private float roamUntil;
     private float retarget;
     private float blocked;
     private float unaimed;
@@ -131,7 +133,7 @@ public sealed class BankingBot : IBotGoalPolicy
             navigator.Reset();
             return;
         }
-        var here = player.GlobalPosition;
+        var here = match.Services.ActorPosition(player);
         var ammo = player.Ammo;
 
         // 1. Get away from a venting tank that comes close: it may go up any moment, and it hits like a car.
@@ -234,6 +236,7 @@ public sealed class BankingBot : IBotGoalPolicy
                 unaimed = 0;
                 if (!navigator.Jumping) { navigator.Reset(); }
                 vantage = null;
+                roamGoal = null;
                 target = chosen;
             }
         }
@@ -253,7 +256,7 @@ public sealed class BankingBot : IBotGoalPolicy
                 intent.Sprint = true;
                 break;
             case PlayerCharacter enemy:
-                if (seekingRival) Approach(player, enemy, enemy.GlobalPosition.DistanceTo(here), dt);
+                if (seekingRival) Roam(player, enemy, here, dt);
                 else Fight(match, player, enemy, dt);
                 break;
             case PropaneTank tank:
@@ -298,7 +301,7 @@ public sealed class BankingBot : IBotGoalPolicy
             for (var i = 0; i < bodies.Count; i++)
             {
                 var e = bodies[i];
-                var distance = e.GlobalPosition.DistanceTo(here);
+                var distance = match.Services.ActorPosition(e).DistanceTo(here);
                 if (distance > tried && distance < nextDistance && !e.IsRagdolled && match.Scores.GetValueOrDefault(e.ActorId) <= match.MyScore)
                 {
                     next = e;
@@ -322,8 +325,10 @@ public sealed class BankingBot : IBotGoalPolicy
             for (var i = 0; i < bodies.Count; i++)
             {
                 var e = bodies[i];
-                var distance = e.GlobalPosition.DistanceSquaredTo(here);
-                if (!e.IsRagdolled && distance > tried && distance < nextDistance && e.GlobalPosition.DistanceTo(here) <= reach)
+                if (e.IsRagdolled) continue;
+                var at = match.Services.ActorPosition(e);
+                var distance = at.DistanceSquaredTo(here);
+                if (distance > tried && distance < nextDistance && at.DistanceTo(here) <= reach)
                 {
                     next = e;
                     nextDistance = distance;
@@ -487,12 +492,18 @@ public sealed class BankingBot : IBotGoalPolicy
                 best = tank;
             }
         }
-        // Easy often exhausts its useful targets before it earns a bank worth defending. Walk toward the
-        // nearest upright rival rather than waiting for someone richer to become visible. This is a fallback:
+        // Easy often exhausts its useful targets before it earns a bank worth defending. Scout near the
+        // nearest upright rival while waiting for someone richer to become visible. This is a fallback:
         // ammo, tanks and profitable fights still win, and the ordinary aim/reaction/navigation limits apply.
         if (best == null && tuning.BotEasySeekRivals && !PointsDriven &&
             BotProfile.Nearest(Skill, tuning) == BotDifficulty.Easy)
         {
+            if (roamGoal != null && clock < roamUntil && target is PlayerCharacter current &&
+                GodotObject.IsInstanceValid(current) && !current.IsRagdolled && !blacklist.ContainsKey(current.GetInstanceId()))
+            {
+                seekingRival = true;
+                return current;
+            }
             var nearest = float.MaxValue;
             for (var i = 0; i < bodies.Count; i++)
             {
@@ -543,7 +554,11 @@ public sealed class BankingBot : IBotGoalPolicy
         {
             // Clearing the suburb must not strand a trailing bot outside rifle range forever. Route to the
             // richer opponent's actual position, rather than a short leg that may end inside a house.
-            Approach(player, enemy, distance, dt);
+            fightTime = 0;
+            Face(player, Aim(enemy), dt);
+            MoveToward(player, Flat((enemy.IsRagdolled ? enemy.PelvisPosition : enemy.GlobalPosition) - player.GlobalPosition));
+            intent.Sprint = distance > tuning.BotSprintDistance;
+            status.Set("closing on {0} at {1:0.0} m", enemy.ActorId, distance);
             return;
         }
         fightTime += dt;
@@ -580,13 +595,20 @@ public sealed class BankingBot : IBotGoalPolicy
         status.Set("fighting {0} at {1:0.0} m, error {2:0.00} m, firing {4}", enemy.ActorId, distance, error, word: firing ? "True" : "False");
     }
 
-    private void Approach(PlayerCharacter player, PlayerCharacter enemy, float distance, float dt)
+    private void Roam(PlayerCharacter player, PlayerCharacter enemy, Vector3 here, float dt)
     {
-        fightTime = 0;
-        Face(player, Aim(enemy), dt);
-        MoveToward(player, Flat((enemy.IsRagdolled ? enemy.PelvisPosition : enemy.GlobalPosition) - player.GlobalPosition));
-        intent.Sprint = distance > tuning.BotSprintDistance;
-        status.Set("closing on {0} at {1:0.0} m", enemy.ActorId, distance);
+        if (roamGoal == null || clock >= roamUntil || Flat(roamGoal.Value - here).Length() < tuning.BotGoalRadius * 2)
+        {
+            var angle = rng.RandfRange(0, Mathf.Tau);
+            var near = enemy.GlobalPosition;
+            roamGoal = new Vector3(near.X + Mathf.Cos(angle) * tuning.BotEasyRoamRadius, here.Y,
+                near.Z + Mathf.Sin(angle) * tuning.BotEasyRoamRadius);
+            roamUntil = clock + tuning.BotEasyRoamSeconds;
+        }
+        // A weak player looks around where others were seen, rather than charging straight into melee or
+        // running rifle combat against an empty bank. A held destination also avoids per-tick combat replans.
+        RunTo(player, roamGoal.Value, dt);
+        status.Set("looking for rivals near {0}, {1:0.0} m to walk", enemy.ActorId, Flat(roamGoal.Value - here).Length());
     }
 
     private void Demolish(IBotWorld match, PlayerCharacter player, PropaneTank tank, float dt)
@@ -859,7 +881,9 @@ public sealed class BankingBot : IBotGoalPolicy
             {
                 fleeGoal = BotMotor.EscapeGoal(player.GlobalPosition, fleeing.GlobalPosition, tuning, ++fleeAttempt);
             }
-            if (target != null) { Blacklist(target, tuning.BotTargetRetryTime); }
+            // A scouting target is a hint, not an objective: a failed waypoint/escape does not rule it out.
+            if (seekingRival) roamGoal = null;
+            else if (target != null) { Blacklist(target, tuning.BotTargetRetryTime); }
             target = null;
             vantage = cover = null;
             retarget = 0;

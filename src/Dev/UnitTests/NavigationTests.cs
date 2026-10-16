@@ -761,6 +761,27 @@ internal static class NavigationTests
                 player.Free(); enemy.Free();
             }
         });
+        runner.Run("actor positions share a batch observation and refresh on the next tick", () =>
+        {
+            var actor = new PlayerCharacter { World = runner.World, ActorId = 1 };
+            runner.World.Root.AddChild(actor);
+            using var services = new BotServices(runner.World);
+            var tanks = new List<PropaneTank>();
+            try
+            {
+                services.PrepareActor(actor);
+                services.BeginTick(tanks);
+                var before = services.ActorPosition(actor);
+                actor.GlobalPosition = before + Vector3.Right * 2;
+                TestRunner.Assert(services.ActorPosition(actor) == before, "one batch resampled an actor after a motor moved it");
+                services.BeginTick(tanks);
+                TestRunner.Assert(services.ActorPosition(actor) == actor.GlobalPosition, "the next tick reused an old actor position");
+                var allocated = GC.GetAllocatedBytesForCurrentThread();
+                for (var i = 0; i < 1000; i++) _ = services.ActorPosition(actor);
+                TestRunner.Assert(GC.GetAllocatedBytesForCurrentThread() == allocated, "cached actor positions allocate");
+            }
+            finally { actor.Free(); }
+        });
         runner.Run("Easy seeks an empty rival only when it has no banking objective", () =>
         {
             var player = new PlayerCharacter { World = runner.World, ActorId = 1, Ammo = AmmoState.Starting(tuning) };
@@ -787,16 +808,16 @@ internal static class NavigationTests
                     }
                 }
                 Think();
-                TestRunner.Assert(brain.Status.StartsWith("closing on 2", StringComparison.Ordinal), "Easy waits for a bank instead of seeking a rival");
+                TestRunner.Assert(brain.Status.StartsWith("looking for rivals near 2", StringComparison.Ordinal), "Easy waits for a bank instead of seeking a rival");
                 TestRunner.Assert(!brain.Read().FireHeld, "Easy fires beyond its ordinary rifle range");
                 var before = GC.GetAllocatedBytesForCurrentThread();
-                for (var i = 0; i < 100; i++) brain.Think(observations, 1f / 120);
+                for (var i = 0; i < 600; i++) brain.Think(observations, 1f / 120);
                 var bytes = GC.GetAllocatedBytesForCurrentThread() - before;
                 TestRunner.Assert(bytes == 0, $"Easy fallback allocates {bytes} bytes");
                 enemy.GlobalPosition = Vector3.Right * 20;
                 Think();
-                TestRunner.Assert(brain.Status.StartsWith("closing on 2", StringComparison.Ordinal) && !brain.Read().Aim,
-                    "Easy should approach an empty rival instead of running rifle combat");
+                TestRunner.Assert(brain.Status.StartsWith("looking for rivals near 2", StringComparison.Ordinal) && !brain.Read().Aim,
+                    "Easy should scout near an empty rival instead of running rifle combat");
                 scores[2] = 8;
                 Think();
                 TestRunner.Assert(brain.Status.StartsWith("fighting 2", StringComparison.Ordinal),

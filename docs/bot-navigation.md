@@ -220,11 +220,16 @@ Windows and macOS were not exercised here.
 
 ## Idle bots
 
-Easy bankers that have no useful banking target seek the nearest upright rival, even one with an empty bank.
-Ammo, tanks and profitable fights take priority. The fallback uses the existing approach and route execution;
-ordinary melee takes over at reach, and a profitable target resumes rifle combat with Easy's existing aim and reaction.
-It keeps the shared query/expansion budgets. `BotEasySeekRivals` is a local
-brain dial for comparisons; Normal and Hard retain their goal policies.
+Easy bankers that have no useful banking target wander near the nearest upright rival, even one with an empty bank.
+Ammo, tanks and profitable fights take priority. A destination within `BotEasyRoamRadius` of the rival stays fixed
+for `BotEasyRoamSeconds` or until reached; this keeps scouting cheap and avoids charging every empty rival into melee.
+An unreachable scouting point is replaced without blacklisting the rival. Ordinary melee and profitable rifle fights
+keep Easy's existing aim and reaction, and navigation retains its shared query/expansion budgets. These dials and
+`BotEasySeekRivals` are local; Normal and Hard retain their goal policies.
+
+Banking brains share one root-position observation per actor per think batch. The owner thinks all bots before
+moving actors, so this removes repeated native position reads without changing when an observation is taken.
+Sight, aim and ragdoll-bone observations keep their existing paths.
 
 `BotActivity` measures whether a bot plays. Play is cut into one-second windows; a window is idle when the bot stayed
 upright, ended it less than a meter from where it began, and neither fired, meleed nor stood in King's zone. It counts
