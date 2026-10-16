@@ -8,7 +8,7 @@ namespace Propane.Core;
 /// The user arguments after <c>--</c> on the Godot command line (<c>--key=value</c>, or <c>--key</c> alone for
 /// <c>"true"</c>), parsed once per process. The shipped game reads its few launch options here (server mode, transport
 /// faults, version and protocol overrides, update checks, <c>--classic-lobby</c>, <c>--release-test</c>; see
-/// docs/code-quality.md), and the dev harnesses read theirs through <c>Dev.DevArgs</c>, which shares this cache.
+/// docs/code-quality.md), and the dev harnesses read theirs through <c>DevArgs</c>, which shares this cache.
 /// </summary>
 public sealed class LaunchArgs
 {

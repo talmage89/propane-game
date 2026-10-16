@@ -224,7 +224,7 @@ release to be minor (`Protocol.Version` is 3).
 | `src/Fx` | Explosions, tracers, impacts, hitstop, particle helpers, and the shader warm-up. |
 | `src/UI` | HUD, menus (main, multiplayer, lobby, pause, match, results), match HUD, tuning panel. |
 | `src/Navigation` | Reusable bot routes, capsule sweeps, jump links and bounded recovery. |
-| `src/Dev`, `scenes/dev` | Test harnesses (below). |
+| `src/Dev`, `scenes/dev` | Test harnesses (below), and the `--release-test` smoke the exported game carries ([code quality](docs/code-quality.md#release-smoke)). |
 | `shaders` | World, tank, ground, void and effect shaders, plus the shared reveal transition. |
 | `tools/blender` | Scripts that build the assets in `assets/`. |
 | `tools/release`, `.github/workflows` | Export templates, the release build, quality checks, and release publishing. |

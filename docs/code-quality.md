@@ -78,7 +78,7 @@ and the rest) go through `DevArgs`; a Debug server applies `--tune.*` too, befor
 | `--match-seed=N` | `LobbyServer` | Debug builds: the next match plan uses seed `N`. |
 | `--connect=host[:port]`, `--name=Name` | `Main` | Open the Connect screen on that server as that name. |
 | `--windowed` | `Main` | Do not maximize a windowed game. |
-| `--release-test` | `Main` | Run the release smoke test in place of the front end (below). |
+| `--release-test` | `Main` | Run the release smoke test in place of the front end ([Release smoke](#release-smoke)). |
 | `--classic-lobby` | `LobbyWorldDefault` | Lobby menu over the backdrop instead of the lobby world. |
 | `--update-check`, `--update-url=URL` | `UpdateCheck` | Check for a newer release when run from the editor; ask `URL` instead of GitHub. |
 | `--fake-version=X.Y.Z`, `--fake-protocol=N` | `BuildInfo`, `NetClient` | Pretend to be another game version or protocol in the Hello and in version checks. |
@@ -89,6 +89,29 @@ The `LaunchArgsTests` unit suite checks the parser against the parser as it stoo
 option above that a headless unit can reach through its real consumer. The native `server_tuning_tests` and `server_seed_tests`
 scenes cover Main's server entry; the exported launches (ordinary start, `--server`, `--classic-lobby`, `--release-test`)
 cover the rest. Add a new runtime option to `LaunchArgs`'s consumers, this table and that suite together.
+
+### Release smoke
+
+`--release-test` is the one shipped entry point that lives in `src/Dev`. Official export templates disallow scene
+overrides, so an archive's own main scene hosts the test: `Main._Ready` adds `ReleaseTest` in place of the front end when
+the argument is given and `Main` is a child of the root. `ReleaseTest` then builds a nested `Main`, presses the real menu
+buttons and exits 0 on PASS and 1 on a missing button, empty suburb or stage timeout. With `--scenario=network
+--connect=host:port` it creates a lobby, waits for `--players` (default 2) and plays a `--length` match with a bot. Its
+transitive dependencies in `src/Dev`:
+
+| Class | File | Used for |
+| --- | --- | --- |
+| `ReleaseTest` | `ReleaseTest.cs` | The staged smoke run, its timeouts and exit codes. |
+| `CaptureDirector`, `FrameMetrics`, `FrameEncoder` | `CaptureDirector.cs`, `FrameMetrics.cs` | `--capture-dir` screenshots, `--record` with its fps and timeout, `--frame-metrics`. |
+| `Bot`, `IBotBrain` | `Bot.cs` | The bot that plays the network scenario's match for the first client. |
+| `DevArgs` | `DevArgs.cs` | The smoke's own options (`--scenario`, `--players`, `--length`, `--capture-dir`...), read through `LaunchArgs`. |
+
+Everything else it touches is ordinary game code (`Main`, `Menus`, `Game`, `Match`, `NetClient`, `PlayerSettings`).
+All of `src/Dev` stays compiled into Release builds; there is no exclusion or assembly split, and the dev scenes in
+`scenes/dev` are what the export presets leave out. Nothing else in `src/Dev` is reachable from a shipped entry point:
+`make test-infra` fails if code outside `src/Dev` names the Dev namespace, other than `Main` creating `ReleaseTest`.
+Moving the smoke or its dependencies out of `src/Dev` (for example to exclude `src/Dev` from Release) means moving this
+whole set together.
 
 ## Fast gate and deep sweeps
 
