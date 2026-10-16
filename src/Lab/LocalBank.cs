@@ -26,6 +26,8 @@ public partial class LocalBank : Node
     public IReadOnlyDictionary<int, int> Earned => scores.Keys.ToDictionary(id => id, id => rules.StatsFor(id).Gained);
     private readonly Dictionary<PropaneTank, int> directShots = new();
     private readonly HashSet<PropaneTank> drops = new();
+    private TankTracking tracking = null!;
+    internal int TrackingCount => tracking.Count;
     private readonly List<AmmoPickup> pickups = new();
     private readonly List<(IBotGoalPolicy Brain, PlayerCharacter Actor, BotWorld View)> brains = new();
     private BotServices services = null!;
@@ -63,6 +65,8 @@ public partial class LocalBank : Node
         rules.Initialize(new ModeSetup(roster,
             new ModeWorld(Lab.EnvironmentKind == LabEnvironment.Void ? ModeWorldSource.Void : ModeWorldSource.SuburbPlan, 1, InitialSupply),
             mode.CopyTuners(World.Tuning), 0));
+        tracking = new TankTracking(tank => { directShots.Remove(tank); drops.Remove(tank); });
+        Lab.Session.OnUnsubscribing(tracking.Dispose);
         foreach (var tank in Lab.LiveTanks) Track(tank);
         foreach (var actor in Lab.Session.Actors.Select(a => a.Character))
         {
@@ -207,15 +211,9 @@ public partial class LocalBank : Node
             changed.BlastRequest = (uint)scorer;
             if (IsPlaying && scores.ContainsKey(scorer))
                 Apply(rules.Handle(new TankDetonated(scorer, drops.Remove(changed) ? TankOrigin.Drop : TankOrigin.Map), Clock));
-            changed.Punctured -= Punctured;
-            changed.Detonated -= Detonated;
+            tracking.Forget(changed);
         }
-        tank.Punctured += Punctured;
-        tank.Detonated += Detonated;
-        Lab.Session.OnUnsubscribing(() =>
-        {
-            if (IsInstanceValid(tank)) { tank.Punctured -= Punctured; tank.Detonated -= Detonated; }
-        });
+        tracking.Track(tank, Punctured, Detonated);
     }
 
     private void Hit(PlayerCharacter shooter, PlayerCharacter victim)

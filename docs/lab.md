@@ -128,10 +128,27 @@ reads an actor-specific `IBotWorld`, with scores and hit attribution keyed by ac
 simulation clock; its Protocol 2 dev adapter uses the existing monotonic clock. Both local actors share one owner
 peer and retain separate banks. The factory and session retain ordered teardown on reset, exit and partial failure.
 
+Both runners own a `TankTracking` collection, with one session unsubscribe drain. Each registration detaches its
+puncture/detonation handlers and releases captured state on detonation or content retirement. Remaining registrations
+drain in reverse registration order after world invalidation and before runner services stop. Attribution stays in the
+runners. These are managed events, so detachment also clears callbacks on wrappers whose native bodies were freed
+first. Dissolve Run explicitly forgets tracking before starting native segment retirement; visual dissolution alone
+keeps the registration until retirement. Shooter/drop references retire with their tank. This bounds subscription roots,
+not every streaming data structure: forgotten-index history, timing lists, navigation chunks and the global reveal window
+remain separate work.
+
 ## Verification
+
+[Tracking lifetime verification and performance status](lab-tracking-verification.md) records P2’s parent comparisons,
+collection proofs, reviewed captures, retained failures and remaining measurement work.
 
 `python3 -B tools/dev/check_lab.py` is the fast gate: one lifecycle cycle per allowed pair, local rules, the bot's
 aim-stall probe and a 15-second scripted duel. It requires a success marker, exit 0 and no engine warnings/errors.
+The lifecycle run's first shard also runs `--scenario=tracking`: detonate/retire/reset/repeated-exit permutations,
+captured shooter/drop cleanup, the unchanged visual-dissolve boundary and weak-reference collection while a session
+remains alive. Discovered `TankTrackingTests` cover all six detonate/retire/shutdown orders, duplicate registration,
+reverse drain through removal/re-registration, already-freed native objects, cleanup failure and captured callback state.
+`LabCreditTests` exercise both runners' direct/chain/drop attribution and emit a parent-comparable command transcript.
 It also plays a Ring Out round and a King round to their ends with shortened dials (`--scenario=prototype --quick`),
 a bot on every actor, one quick Short Fuse match (`--scenario=shortfuse --quick`: 60 s rounds, first to two), and a
 scripted Short Fuse round (`--scenario=shortfuse-combo`) through the real reports: Bot 2 shoots the player dead (the
@@ -156,6 +173,8 @@ chain and one push), segments built and retired, and the result paused on the co
 runs (`dissolve-full`: the bot on two seeds; `dissolve-pace`: a pacer that runs down the street without bot navigation,
 so its frame times measure the stream rather than the bot), which also require the live segments, their nodes and bodies
 and the whole tree's nodes to stay bounded (the last third of the run holding no more than the first third, give or take).
+They also enable `--tracking-proof --assert-tracking`: every census requires one registration per unexploded tank in
+active segments (including visually dissolved tanks), and the end checkpoint collects retired wrappers before exit.
 The dial sweep locks actor input while gravity settles before and after each reset. Its floor/fixture assertions
 check layout and retirement; active bot combat (including Hard's immediate banking) is covered by the duel,
 prototype rounds and points sweep. A valid early blast or hitstop must not masquerade as a failed reset.
@@ -196,7 +215,16 @@ A Dissolve Run alone: `lab_test.tscn -- --scenario=dissolve [--seconds=240] [--s
 [--driver=pace --pace=walk|run|sprint] [--report-every=30] [--census-every=1] [--metrics=$PWD/build/run-{seed}.csv]
 [--trace] [--trace-frames]`; `--shots=4,12.5` adds `--capture-dir` screenshots at those run times and `--overview` watches
 from a high camera behind the runner. It prints frame times, segment build and retire step times, segment, node, body and
-tree counts, memory, managed allocation and GC pauses.
+tree counts, memory, managed allocation and GC pauses. `--tracking-metrics` also brackets all managed physics
+callbacks with first/last tick probes and reports tick count, callback mean/p95/p99 and allocation, plus whole-session
+allocation after assembly. Whole-tick timers close at the next physics/process signal, including the native tail
+(engine bookkeeping and query flush too, as in `FrameMetrics`); their mean/p95/p99 exclude rendering and are not
+Jolt-internal solver timings. Frame-wall timings include rendering; callback timings exclude the native tail.
+`--tracking-proof` observes tanks through weak references, prints the tracking count alongside active content and
+historical supply, and collects freed wrappers while the session is still alive at the end checkpoint.
+`--assert-tracking` additionally requires matching counts and no retained freed wrappers (use with `--tracking-proof`).
+These diagnostics are opt-in; keep equivalence observers out of measurements and collection proofs because they retain
+tanks deliberately. The immediate parent can run the same instrumentation: its absent tracking count prints as -1.
 `--scenario=aimstall` puts a shot-stopping prop in front of the bot and asserts it leaves the pile.
 
 `menu_test --scenario=input` injects real keyboard, mouse and controller events through Lab menus, movement/combat,

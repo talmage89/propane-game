@@ -62,8 +62,12 @@ public static class LifecycleTests
                 sync.OnState(2, state, rest: true, 1);
                 sync.OnAuthority(new BodyAuthority(state with { Epoch = 2, Sequence = 0 }, 3, TankLedger.State.Intact, true, null, Vector3.Zero));
                 TestRunner.Assert(sync.Get(id) is { Owner: 3, HasTarget: false, Epoch: 2 }, "old owner still corrects the successor");
-                TestRunner.Assert(sync.Collect(1).Rested.SingleOrDefault()?.Id == id, "sleeping successor omitted its final state");
-                TestRunner.Assert(sync.Collect(1).Rested.Count == 0, "handoff repeatedly sends rest");
+                var moving = new List<BodySync.Entry>();
+                var rested = new List<BodySync.Entry>();
+                sync.Collect(1, moving, rested);
+                TestRunner.Assert(rested.SingleOrDefault()?.Id == id, "sleeping successor omitted its final state");
+                sync.Collect(1, moving, rested);
+                TestRunner.Assert(rested.Count == 0, "handoff repeatedly sends rest");
             }
             finally { body.Free(); }
         });

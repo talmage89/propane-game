@@ -232,6 +232,15 @@ unblocks them. Chain punctures wait until the complete blast push before sending
 that impulse and spin. An already freed predicted tank retains its original proposal; explosion centers always stay
 at the position of the predicted event.
 
+Each match owns one plain `BodyPublisher`, called at the existing physics callback position after actor states
+and before pickup checks. `BodySync.Collect` clears and fills its reusable moving/rested buffers. The publisher
+groups moving entries into reusable traffic buffers in first-encounter order, preserving member order and the
+existing `Protocol.MaxBodyStates` batch boundaries. It samples transforms and velocities only while serializing
+each batch, with a fresh server-clock sampling conversion per batch. Packet writers and transport copy ownership
+are unchanged. Every send still checks world lifetime synchronously; retirement during a send suppresses later
+delivery while the already-collected entries retain their sequence progression. Buffers release entry references
+after each publication, including exceptions, while retaining capacity for the next tick.
+
 Loose tanks gather in both modes through `TankGather`: intact, unshielded tanks outside their built/gathered pile
 connect within `GatherRadius` (3 m) and wait `GatherDelay` (20 s), with at least `GatherMinimum` (2) members. Motion,
 disturbance and membership changes restart that wait. The creator (or current world-authority successor) requests

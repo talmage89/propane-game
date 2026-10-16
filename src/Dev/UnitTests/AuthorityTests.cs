@@ -137,13 +137,15 @@ public static class AuthorityTests
             var entry = f.Match.Bodies.Get(Id)!;
             tank.BeginGather();
             tank.Sleeping = true; // Native frozen bodies can sleep while the owner moves their transform.
-            var flight = f.Match.Bodies.Collect(.1);
-            TestRunner.Assert(flight.Moving.Contains(entry) && !flight.Rested.Contains(entry),
+            var moving = new List<BodySync.Entry>();
+            var rested = new List<BodySync.Entry>();
+            f.Match.Bodies.Collect(.1, moving, rested);
+            TestRunner.Assert(moving.Contains(entry) && !rested.Contains(entry),
                 "frozen glide published a rest that ends observer gathering");
             tank.EndGather();
             tank.Sleeping = true;
-            var settled = f.Match.Bodies.Collect(.1);
-            TestRunner.Assert(settled.Rested.Contains(entry), "actual gather completion lost its final rest");
+            f.Match.Bodies.Collect(.1, moving, rested);
+            TestRunner.Assert(rested.Contains(entry), "actual gather completion lost its final rest");
         });
         runner.Run("authority/each body's checkpoints advance independent retransmission lanes", () =>
         {
@@ -152,9 +154,12 @@ public static class AuthorityTests
             sync.Register(Id, body.Body, true, 2);
             body.Body.Sleeping = false;
             var lanes = new HashSet<int>();
+            var moving = new List<BodySync.Entry>();
+            var rested = new List<BodySync.Entry>();
             for (var i = 0; i < 3; i++)
             {
-                var sample = sync.Collect((i + 1) * .3).Moving.Single();
+                sync.Collect((i + 1) * .3, moving, rested);
+                var sample = moving.Single();
                 TestRunner.Assert(sample.PublishReliably, "probe did not collect a checkpoint");
                 lanes.Add(NetTransport.Channel(sample.CheckpointTraffic));
             }
@@ -199,7 +204,10 @@ public static class AuthorityTests
             body.Body.Sleeping = false;
             var sync = new BodySync(Tuning.SavedTemplate, 2, 2);
             sync.Register(Id, body.Body, true, 2);
-            var first = sync.Collect(.01).Moving.Single();
+            var moving = new List<BodySync.Entry>();
+            var rested = new List<BodySync.Entry>();
+            sync.Collect(.01, moving, rested);
+            var first = moving.Single();
             TestRunner.Assert(first.PublishReliably, "new owner started with only disposable movement");
             var reliable = 0;
             var disposable = 0;
@@ -207,7 +215,8 @@ public static class AuthorityTests
             for (var step = 0; step < 120; step++)
             {
                 silence += 1.0 / 60;
-                foreach (var entry in sync.Collect(.01 + (step + 1) / 60.0).Moving)
+                sync.Collect(.01 + (step + 1) / 60.0, moving, rested);
+                foreach (var entry in moving)
                 {
                     if (entry.PublishReliably) { reliable++; silence = 0; }
                     else { disposable++; }
@@ -349,8 +358,12 @@ public static class AuthorityTests
             body.Body.Sleeping = true;
             var sync = new BodySync(Tuning.SavedTemplate, 2, 2);
             sync.Register(Id, body.Body, true, 2);
-            TestRunner.Assert(sync.Collect(.01).Rested.SingleOrDefault()?.Id == Id, "initially asleep owner never sent an authoritative rest");
-            TestRunner.Assert(sync.Collect(.01).Rested.Count == 0, "unchanged sleep repeated its reliable publication");
+            var moving = new List<BodySync.Entry>();
+            var rested = new List<BodySync.Entry>();
+            sync.Collect(.01, moving, rested);
+            TestRunner.Assert(rested.SingleOrDefault()?.Id == Id, "initially asleep owner never sent an authoritative rest");
+            sync.Collect(.01, moving, rested);
+            TestRunner.Assert(rested.Count == 0, "unchanged sleep repeated its reliable publication");
         });
         runner.Run("authority/match copies local bot dials beside creator tuning", () =>
         {
@@ -395,7 +408,10 @@ public static class AuthorityTests
             sync.Get(Other)!.ClaimPending = false;
             var group = sync.ClaimGroup(new[] { mine.Body, other.Body, mine.Body });
             TestRunner.Assert(group.Count == 2 && group.All(b => b.Epoch == 1) && sync.Entries.All(e => e.ClaimPending), "owned member was omitted or duplicate member repeated");
-            TestRunner.Assert(sync.Collect(1).Moving.Count == 0, "unconfirmed group published motion");
+            var moving = new List<BodySync.Entry>();
+            var rested = new List<BodySync.Entry>();
+            sync.Collect(1, moving, rested);
+            TestRunner.Assert(moving.Count == 0, "unconfirmed group published motion");
         });
         runner.Run("authority/group grants include partial ownership overlap", () =>
         {
