@@ -767,9 +767,10 @@ internal static class NavigationTests
             var enemy = new PlayerCharacter { World = runner.World, ActorId = 2, Position = Vector3.Right * 100 };
             runner.World.Root.AddChild(player);
             runner.World.Root.AddChild(enemy);
+            var scores = new Dictionary<int, int> { [1] = 0, [2] = 0 };
             using var observations = new BankingWorld(runner.World, player, enemy)
             {
-                Scores = new Dictionary<int, int> { [1] = 0, [2] = 0 }
+                Scores = scores
             };
             using var brain = new BankingBot(23) { Skill = runner.World.Tuning.BotEasySkill };
             var old = runner.World.Tuning.BotEasySeekRivals;
@@ -792,6 +793,15 @@ internal static class NavigationTests
                 for (var i = 0; i < 100; i++) brain.Think(observations, 1f / 120);
                 var bytes = GC.GetAllocatedBytesForCurrentThread() - before;
                 TestRunner.Assert(bytes == 0, $"Easy fallback allocates {bytes} bytes");
+                enemy.GlobalPosition = Vector3.Right * 20;
+                Think();
+                TestRunner.Assert(brain.Status.StartsWith("closing on 2", StringComparison.Ordinal) && !brain.Read().Aim,
+                    "Easy should approach an empty rival instead of running rifle combat");
+                scores[2] = 8;
+                Think();
+                TestRunner.Assert(brain.Status.StartsWith("fighting 2", StringComparison.Ordinal),
+                    $"a profitable fight must leave the fallback approach: {brain.Status}");
+                scores[2] = 0;
                 brain.Skill = runner.World.Tuning.BotNormalSkill;
                 Think();
                 TestRunner.Assert(brain.Status == "no target", "Easy fallback changed Normal's goals");

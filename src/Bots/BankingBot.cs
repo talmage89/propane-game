@@ -32,6 +32,7 @@ public sealed class BankingBot : IBotGoalPolicy
     private readonly Vantage[] vantages = new Vantage[48];
     private PlayerIntent intent;
     private Node3D? target;
+    private bool seekingRival;
     private float retarget;
     private float blocked;
     private float unaimed;
@@ -252,7 +253,8 @@ public sealed class BankingBot : IBotGoalPolicy
                 intent.Sprint = true;
                 break;
             case PlayerCharacter enemy:
-                Fight(match, player, enemy, dt);
+                if (seekingRival) Approach(player, enemy, enemy.GlobalPosition.DistanceTo(here), dt);
+                else Fight(match, player, enemy, dt);
                 break;
             case PropaneTank tank:
                 Demolish(match, player, tank, dt);
@@ -377,6 +379,7 @@ public sealed class BankingBot : IBotGoalPolicy
         using var profile = EffectProfile.Measure(EffectProfile.System.BotChoose);
         var player = match.Player;
         var here = player.GlobalPosition;
+        seekingRival = false;
         expired.Clear();
         foreach (var (key, until) in blacklist)
         {
@@ -500,6 +503,7 @@ public sealed class BankingBot : IBotGoalPolicy
                 nearest = distance;
                 best = enemy;
             }
+            seekingRival = best != null;
         }
         return best;
     }
@@ -539,11 +543,7 @@ public sealed class BankingBot : IBotGoalPolicy
         {
             // Clearing the suburb must not strand a trailing bot outside rifle range forever. Route to the
             // richer opponent's actual position, rather than a short leg that may end inside a house.
-            fightTime = 0;
-            Face(player, Aim(enemy), dt);
-            MoveToward(player, Flat((enemy.IsRagdolled ? enemy.PelvisPosition : enemy.GlobalPosition) - player.GlobalPosition));
-            intent.Sprint = distance > tuning.BotSprintDistance;
-            status.Set("closing on {0} at {1:0.0} m", enemy.ActorId, distance);
+            Approach(player, enemy, distance, dt);
             return;
         }
         fightTime += dt;
@@ -578,6 +578,15 @@ public sealed class BankingBot : IBotGoalPolicy
             intent.FirePressed = true;
         }
         status.Set("fighting {0} at {1:0.0} m, error {2:0.00} m, firing {4}", enemy.ActorId, distance, error, word: firing ? "True" : "False");
+    }
+
+    private void Approach(PlayerCharacter player, PlayerCharacter enemy, float distance, float dt)
+    {
+        fightTime = 0;
+        Face(player, Aim(enemy), dt);
+        MoveToward(player, Flat((enemy.IsRagdolled ? enemy.PelvisPosition : enemy.GlobalPosition) - player.GlobalPosition));
+        intent.Sprint = distance > tuning.BotSprintDistance;
+        status.Set("closing on {0} at {1:0.0} m", enemy.ActorId, distance);
     }
 
     private void Demolish(IBotWorld match, PlayerCharacter player, PropaneTank tank, float dt)

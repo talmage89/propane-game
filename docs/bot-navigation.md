@@ -221,8 +221,9 @@ Windows and macOS were not exercised here.
 ## Idle bots
 
 Easy bankers that have no useful banking target seek the nearest upright rival, even one with an empty bank.
-Ammo, tanks and profitable fights take priority. The fallback uses the existing fighting and route execution,
-including Easy's aim error and reaction time and the shared query/expansion budgets. `BotEasySeekRivals` is a local
+Ammo, tanks and profitable fights take priority. The fallback uses the existing approach and route execution;
+ordinary melee takes over at reach, and a profitable target resumes rifle combat with Easy's existing aim and reaction.
+It keeps the shared query/expansion budgets. `BotEasySeekRivals` is a local
 brain dial for comparisons; Normal and Hard retain their goal policies.
 
 `BotActivity` measures whether a bot plays. Play is cut into one-second windows; a window is idle when the bot stayed
