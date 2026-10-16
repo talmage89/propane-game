@@ -274,7 +274,9 @@ def check_ci_partitions():
     commands = [line for line in output.splitlines() if line and not line.startswith("make")]
     require(code == 0 and commands[-1] == "python3 -B tools/dev/lint_tests.py", "make check must end with the gate self-tests", output)
     code, output = run(ROOT, "make", "-n", "test-infra")
-    require(code == 0 and output.strip() == "python3 -B tools/dev/lint_tests.py", "make test-infra must run lint_tests.py alone", output)
+    # A recursive make (CI runs `make test-infra` itself) prints directory lines around the command.
+    commands = [line for line in output.splitlines() if line and not line.startswith("make")]
+    require(code == 0 and commands == ["python3 -B tools/dev/lint_tests.py"], "make test-infra must run lint_tests.py alone", output)
     print("PASS: CI runs the local partitions and the gate self-tests, and requires every result")
 
 
