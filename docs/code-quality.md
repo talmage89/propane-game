@@ -20,11 +20,12 @@ can be useful here. Disposable resources in new code still need an explicit life
 The CA2213 trial also flagged `CaptureDirector`'s Process and BlockingCollection; their disposal and shutdown lifetimes remain
 a separate audit item rather than being changed as part of the gate.
 
-Seven class-specific CA1001 suppressions preserve current lifetimes, with the reason beside each declaration:
+Class-specific CA1001 suppressions preserve current lifetimes, with the reason beside each declaration:
 
 - `Bot` and `SimpleBot`: the random generator is Godot RefCounted.
 - `MeshKit`: SurfaceTool is Godot RefCounted.
 - `CharacterAnimator`: the model root owns and frees the AnimationTree node.
+- `LobbyDialogs`: the menu scene tree owns and frees the open dialog nodes.
 - `NetTransport`: Close releases the connection while the RefCounted peer stays reusable for reconnects.
 - `NetWriter` and `NetReader`: their streams contain managed byte arrays, without file or socket handles.
 
@@ -43,6 +44,19 @@ accept command-line and environment overrides.
 The shutdown proof permits `AnimationReview.Quit` only with its guarded current-build branch and explicit
 historical-release branch; direct current-build `SceneTree.Quit` calls still fail.
 
+## Menu composition
+
+`Menus` keeps application routing, the main menu's application actions and its public facade. `ConnectScreen` and `LobbyBrowserScreen` build their
+forms; both lobby layouts use `LobbyScreen`, `LobbyRoster`, `LobbySettingsPanel` and `LobbyDialogs`.
+`MenuCommands` dispatches connection/lobby/profile commands, `MenuProfile` keeps identity defaults and persistence, and
+`MenuContent` supplies shared presentation helpers. `MenuRefreshState` owns the rebuild transaction: name/server
+drafts, name caret, stable focus and the removal guard; open dialogs retain focus until they close.
+
+The composition probe renders the production UI against decoded packets on a fixed backdrop. It covers
+classic/docked lobbies, host/guest, 2/8/16 participants, controller focus, King settings and appearance/bot
+dialogs. Its headless assertions preserve draft/caret/focus and overlay ownership across refreshes.
+The real-device and network menu scenes remain responsible for input delivery and roaming-world behavior.
+
 ## Fast gate and deep sweeps
 
 `make test` is the union of four targets. Each builds first, so it also works independently:
@@ -50,7 +64,7 @@ historical-release branch; direct current-build `SceneTree.Quit` calls still fai
 | Target | Assertions |
 | --- | --- |
 | `test-core` | Python timing/world-wrapper/score/vent/tank-agreement/launcher checkers, benchmark smoke, platform, movement, all unit suites, scripted mode rules (`mode_test`), normal shutdown and paused window-close witnesses |
-| `test-behavior` | Native server admission overrides and vent correction, session actors and animation metrics, scoped worlds, blast completeness, upright piles, gather/races/appearance/real-game gather, melee collision/poses, navigation, gamepad/devices/input/mouse menus, grip/recovery, feet/corrections/events, movement/motion continuity |
+| `test-behavior` | Native server admission overrides and vent correction, session actors and animation metrics, scoped worlds, blast completeness, upright piles, gather/races/appearance/real-game gather, melee collision/poses, navigation, menu composition/refresh and gamepad/devices/input/mouse/bots/King/lobby menus, grip/recovery, feet/corrections/events, movement/motion continuity |
 | `test-generator` | 20 single-player and 2-player seeds, three each at 8/16/24/32 players, two forced seeds for every formation at all six sizes |
 | `test-world` | All four saved formation plans built and hashed in two fresh processes |
 

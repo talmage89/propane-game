@@ -262,6 +262,9 @@ $GODOT --fixed-fps 60 res://scenes/dev/session_actors_tests.tscn -- --capture-di
 # Participant capacity: production lobby/results layouts and real keyboard/mouse/gamepad delivery.
 # Repeat with 2/8 entries and 1920x1080; make test covers all counts headlessly.
 $GODOT --resolution 1280x720 --fixed-fps 60 res://scenes/dev/capacity_ui_tests.tscn -- --players=16 --capture-dir="$PWD/build/capacity-ui"
+# Deterministic menu portraits: host/guest, classic/docked, 2/8/16 players, color/bot dialogs and focus.
+# Also checks draft/caret/focus preservation across decoded lobby packets; runs headlessly in make test.
+$GODOT --resolution 1600x900 --fixed-fps 60 res://scenes/dev/menu_composition_tests.tscn -- --capture-dir="$PWD/build/menu-composition"
 # Repeated sixteen-client acceptance and resource measurements: docs/network-soak.md.
 make test-capacity
 
