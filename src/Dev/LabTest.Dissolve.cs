@@ -87,10 +87,11 @@ public partial class LabTest
                 Template = template,
                 PauseOnFocusLoss = false,
                 TestRandomSeed = (ulong)seed,
+                TestSeedPhysicsRandom = DevArgs.Get("replay-random") != null,
                 DrivePlayer = DevArgs.Get("driver") != "pace",
                 Name = "Lab"
             };
-            AddChild(lab);
+            AddLab(lab);
             if (!lab.DrivePlayer)
             {
                 var pace = DevArgs.Get("pace") ?? "run";

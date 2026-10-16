@@ -21,6 +21,8 @@ public partial class LabSession : Node3D
     public Tuning Template { get; init; } = Tuning.SavedTemplate;
     public bool PauseOnFocusLoss { get; set; } = true;
     internal ulong? TestRandomSeed { get; init; }
+    internal System.Action<PropaneTank>? TestObserveTank { get; set; }
+    internal System.Action<Propane.Modes.ModeCommand>? TestObserveCommand { get; set; }
     internal bool TestSeedPhysicsRandom { get; init; }
     // The scale fixture fixes supply/starts across cases and can request zero or sixteen bots.
     internal SuburbSettings? TestSuburbSettings { get; init; }

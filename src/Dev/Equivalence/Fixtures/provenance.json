@@ -1,0 +1,144 @@
+{
+  "format": 1,
+  "production_revision": "629bf19efa4d325c092f1cd9aaeb4c98481b84ad",
+  "instrumentation_revision": "629bf19efa4d325c092f1cd9aaeb4c98481b84ad",
+  "instrumentation_sources_sha256": "378706ca0dbea9eb50fa4a7c016e88f5f216f3c8a17e7c0419e945bc7fc5404b",
+  "engine": "4.7.2.stable.mono.arch_linux.ed1daf0bf",
+  "dotnet": "10.0.112",
+  "configuration": "Debug, Linux x86_64, headless, physics 120 Hz, process fixed 60 FPS",
+  "tuners": "Baked release defaults; full shared/local schema in tuners.json.gz; overrides below",
+  "world": "seed 23, four forced formations, four actors; segment runs 1..5, indices 11..0",
+  "lab": {
+    "bank": [
+      "--scenario=soak",
+      "--environment=suburb",
+      "--bots=8",
+      "--seconds=40",
+      "--max-idle=0.12",
+      "--max-idle-worst=0.3"
+    ],
+    "king": [
+      "--scenario=prototype",
+      "--mode=king",
+      "--environment=suburb",
+      "--bots=15",
+      "--quick",
+      "--seeds=1",
+      "--first-seed=11",
+      "--tune.KingRoundSeconds=45",
+      "--max-idle=0.15",
+      "--max-idle-worst=0.4"
+    ],
+    "spill-chain": [
+      "--scenario=rules"
+    ],
+    "shortfuse": [
+      "--scenario=shortfuse-combo"
+    ],
+    "dissolve": [
+      "--scenario=reference-retirement"
+    ]
+  },
+  "replay": [
+    "--replay-random",
+    "--tune.HitstopDuration=0"
+  ],
+  "commands": [
+    [
+      "godot-mono",
+      "--headless",
+      "--fixed-fps",
+      "60",
+      "--path",
+      "$CHECKOUT",
+      "res://scenes/dev/unit_tests.tscn",
+      "--",
+      "--suite=ReferenceTests",
+      "--write-reference=$CHECKOUT/src/Dev/Equivalence/Fixtures"
+    ],
+    [
+      "godot-mono",
+      "--headless",
+      "--fixed-fps",
+      "60",
+      "--path",
+      "$CHECKOUT",
+      "res://scenes/dev/lab_test.tscn",
+      "--",
+      "--scenario=soak",
+      "--environment=suburb",
+      "--bots=8",
+      "--seconds=40",
+      "--max-idle=0.12",
+      "--max-idle-worst=0.3",
+      "--replay-random",
+      "--tune.HitstopDuration=0",
+      "--equivalence-trace=$CHECKOUT/build/rfp0-freeze-reviewed/run-1/bank.json"
+    ],
+    [
+      "godot-mono",
+      "--headless",
+      "--fixed-fps",
+      "60",
+      "--path",
+      "$CHECKOUT",
+      "res://scenes/dev/lab_test.tscn",
+      "--",
+      "--scenario=prototype",
+      "--mode=king",
+      "--environment=suburb",
+      "--bots=15",
+      "--quick",
+      "--seeds=1",
+      "--first-seed=11",
+      "--tune.KingRoundSeconds=45",
+      "--max-idle=0.15",
+      "--max-idle-worst=0.4",
+      "--replay-random",
+      "--tune.HitstopDuration=0",
+      "--equivalence-trace=$CHECKOUT/build/rfp0-freeze-reviewed/run-1/king.json"
+    ],
+    [
+      "godot-mono",
+      "--headless",
+      "--fixed-fps",
+      "60",
+      "--path",
+      "$CHECKOUT",
+      "res://scenes/dev/lab_test.tscn",
+      "--",
+      "--scenario=rules",
+      "--replay-random",
+      "--tune.HitstopDuration=0",
+      "--equivalence-trace=$CHECKOUT/build/rfp0-freeze-reviewed/run-1/spill-chain.json"
+    ],
+    [
+      "godot-mono",
+      "--headless",
+      "--fixed-fps",
+      "60",
+      "--path",
+      "$CHECKOUT",
+      "res://scenes/dev/lab_test.tscn",
+      "--",
+      "--scenario=shortfuse-combo",
+      "--replay-random",
+      "--tune.HitstopDuration=0",
+      "--equivalence-trace=$CHECKOUT/build/rfp0-freeze-reviewed/run-1/shortfuse.json"
+    ],
+    [
+      "godot-mono",
+      "--headless",
+      "--fixed-fps",
+      "60",
+      "--path",
+      "$CHECKOUT",
+      "res://scenes/dev/lab_test.tscn",
+      "--",
+      "--scenario=reference-retirement",
+      "--replay-random",
+      "--tune.HitstopDuration=0",
+      "--equivalence-trace=$CHECKOUT/build/rfp0-freeze-reviewed/run-1/dissolve.json"
+    ]
+  ]
+}
