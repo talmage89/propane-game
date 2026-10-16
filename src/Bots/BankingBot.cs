@@ -882,7 +882,7 @@ public sealed class BankingBot : IBotGoalPolicy
                 fleeGoal = BotMotor.EscapeGoal(player.GlobalPosition, fleeing.GlobalPosition, tuning, ++fleeAttempt);
             }
             // A scouting target is a hint, not an objective: a failed waypoint/escape does not rule it out.
-            if (seekingRival) roamGoal = null;
+            if (seekingRival) { roamGoal = null; }
             else if (target != null) { Blacklist(target, tuning.BotTargetRetryTime); }
             target = null;
             vantage = cover = null;
