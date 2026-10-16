@@ -96,3 +96,51 @@ The **complete per-bot reports, status breakdowns and summaries** match across a
 including between normal and optimized Debug. All forty checks passed with clean engine logs. The baseline spans
 2.8–10.0% mean / 5.1–41.0% worst in Bank and 3.1–9.9% mean / 6.8–36.4% worst in King; two baseline Bank checks failed.
 The separate initial King failure above is outside that forty-run baseline matrix.
+
+A scratch regression probe restored `BankingBot`, `KingBot` and `BotNavigator` from immediately before
+`c8aca2e`, with API-only telemetry/policy properties and King's old 30-second regroup maximum. It retained the
+current world, replay controls and other navigation services. Both unchanged fixtures rejected it: Bank mean
+13.7%, worst 33.3%, longest 7 s; King mean 36.4%, worst 65.9%, longest 27 s. This exercises the original failure
+pattern against the replay settings rather than merely comparing the numerical limits to an old report.
+
+### Lobby idle and retained banks
+
+The requested 90-second clean lobby soaks use seeds 21–23, one primary Hard bot with `--melee-start`, and three
+or seven lobby bots at the selected difficulty. Each cell below aggregates three matches; idle excludes the primary
+bot, retained banks are per lobby bot, and longest is the maximum across those matches. All score audits passed.
+
+| Actors/profile | Mean idle before → after | Longest before → after | Retained banks before → after |
+| --- | ---: | ---: | ---: |
+| 4/Easy | 7.6% → 5.0% | 5 → 3 s | 2.889 → 3.778 |
+| 4/Normal | 6.7% → 7.2% | 4 → 4 s | 6.111 → 4.222 |
+| 8/Easy | 7.7% → 7.3% | 5 → 4 s | 2.095 → 2.238 |
+| 8/Normal | 5.4% → 9.0% | 4 → 56 s | 2.429 → 1.762 |
+
+Easy's individual after means are **5.6%, 6.7%, 2.6%** at four actors and **8.2%, 5.8%, 8.0%** at eight. Every
+requested Easy case meets mean <20% and longest <8 s. The reported 61% baseline was not reproduced at these seeds:
+the new behavior is independently covered by an empty-objective unit assertion, including ordinary target priority,
+unchanged Normal/points-policy goals, the local toggle and allocation-free scouting through waypoint refreshes.
+
+The two extra four-actor probes used a Normal primary (`--bot-skill=0.6`) without `--melee-start`, matching an older
+measurement style. Before, seeds 21/25 had mean 9.4%/10.9% and longest 10/8 s; after, 8.2%/13.9% and 3/15 s.
+The latter misses the longest-wait target: its worst bot's idle windows span vantage, cover and scouting states.
+The new fallback addresses an absent objective; it does not eliminate every route/cover stall. Normal's 56-second
+outlier above also remains visible rather than being folded into an Easy-only success claim.
+
+### Difficulty checks
+
+Separate difficulty lobbies change the opponents as well as the brains. The optional same-round
+`check_bot_points.py --easy` comparison uses five seeds (21–25), both spawn-group offsets and 120-second Bank
+rounds, with actual Easy/Normal profiles and objective policies. These are mean retained banks per bot per round:
+
+| Actors | Normal before → after | Easy before → after | Result |
+| --- | ---: | ---: | --- |
+| 4 | 5.150 → 5.000 | 3.700 → 3.850 | Normal remains ahead |
+| 8 | 1.825 → 1.975 | 2.700 → 2.400 | Normal loses both baseline and candidate checks |
+
+The ordinary Hard/Normal checker passed the baseline (Bank 2.275/1.375; King 3.125/1.325), but failed the final
+suburb Bank check (1.500/2.900; King 2.850/1.075). Two earlier candidate iterations also failed suburb Bank ordering.
+The final documented arena policy probe (`--environment=void --policy-only`) passed: Bank 0.600/0.500 and King
+9.625/1.850; King minted 88. These runs retain physical entropy and wall-clock hitstop. They do not certify a stable
+suburb difficulty ordering. Easy's aim/reaction/query limits and Normal/Hard goal policies were not retuned to force
+a result, and none of these outcome gates was weakened.
