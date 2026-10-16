@@ -113,6 +113,20 @@ All of `src/Dev` stays compiled into Release builds; there is no exclusion or as
 Moving the smoke or its dependencies out of `src/Dev` (for example to exclude `src/Dev` from Release) means moving this
 whole set together.
 
+Run these from an exported Linux build (`tools/release/build.sh` stages one in `build/package/linux`) to check the
+launch options and the smoke on the real binary. The clients exit 0 on success; a server runs until stopped:
+
+```sh
+./Propane.x86_64 --headless --quit-after 300                  # ordinary start: the front end builds and quits
+./Propane.x86_64 --headless -- --server --port=24683          # logs "listening on UDP 24683"
+./Propane.x86_64 -- --release-test --capture-dir=/tmp/release # main menu and single player
+# The network scenario presses the classic lobby's Start match, so it needs --classic-lobby on both sides (a lobby
+# world has no such button and the run fails with "start match button missing"), and a second player in the lobby:
+./Propane.x86_64 --headless -- --server --port=24683 --classic-lobby
+./Propane.x86_64 -- --release-test --scenario=network --connect=127.0.0.1:24683 --classic-lobby --capture-dir=/tmp/release
+tools/dev/add_bots.sh -n 1 -S 127.0.0.1:24683                 # once the smoke has created its lobby
+```
+
 ## Fast gate and deep sweeps
 
 `make test` is the union of four targets. Each builds first, so it also works independently:
