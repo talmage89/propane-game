@@ -86,6 +86,26 @@ probes, reviewed captures and native smoke checks.
 
 ## Limits
 
+P3 supplements the immutable publication transcript with `BodyPublicationTests`: later batches must sample after
+earlier synchronous sends, retirement suppresses later sends while preserving sequence advancement, and empty
+collections must not retain traffic groups or their encounter order. To compare the immediate parent, run the
+same suite on both revisions with `--publication-transcript=PATH` and compare those JSON files exactly. These
+artifacts are separate from the release fixtures.
+
+After `make build`, the opt-in collector/publisher micro-benchmark is:
+
+```sh
+godot-mono --headless --path . res://scenes/dev/unit_tests.tscn -- --suite=BodyPublicationTests --publication-bench
+```
+
+It invokes the actual `Match.SendBodies` path with 128 tank entries and 128 car entries, fixed awake native bodies,
+manual 120 Hz network time, 2,000 warm-up ticks and 10,000 measured ticks. It includes packet writers and copied
+payloads; its synchronous transport consumes without queueing or decoding. Results include allocation bytes per
+tick, mean/p95/p99 collector-plus-publisher time, packet count and payload bytes. A second window invokes the whole
+`Match._PhysicsProcess` callback with the same controlled bodies and advancing clock (including corrections, actor
+publication and pickup checks). It does not advance Jolt or other scene nodes. Alternate parent/candidate runs;
+these controlled windows do not replace native match performance and convergence checks.
+
 World hashes include construction, meshes and collision, but do not prove feel. These exact Linux/Jolt traces do not
 establish cross-platform or cross-CPU bit identity, so they are a local target, outside `make test` and CI.
 The original 45-second streamed Dissolve bot workload was tested separately and **excluded** from exact traces:
