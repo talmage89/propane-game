@@ -176,3 +176,75 @@ headless four-bot pairs still showed a 1.3% median cost increase (0.159877 → 0
 reads each upright opponent's position once within a melee search, without the shared cache. Three-pair pilot
 medians fell at both four bots (0.160265 → 0.159661 ms) and eight (0.259889 → 0.256193 ms); the final grid uses that
 local observation reuse. No navigation budget or skill dial is reduced to lower cost.
+
+### Final source results
+
+The final source is `df91caa`: short local scouting steps and one opponent-position read per melee-search pass,
+without a shared position cache. Its replayed Hard/Normal and Easy/Normal sweeps reproduce every complete
+points/skill and per-bot idle report from the controlled comparisons above. All four formation/world hashes and
+sixty segment hashes match `964b408`.
+
+The final ordinary 90-second lobby runs use the same commands, seeds and roster sizes as the baseline. Every
+score audit passes. These are means over three matches per profile, and maximum longest waits:
+
+| Actors/profile | Mean idle before → after | Longest before → after | Retained banks before → after |
+| --- | ---: | ---: | ---: |
+| 4/Easy | 7.6% → 9.0% | 5 → 5 s | 2.889 → 4.778 |
+| 4/Normal | 6.7% → 11.0% | 4 → 32 s | 6.111 → 2.778 |
+| 8/Easy | 7.7% → 6.8% | 5 → 4 s | 2.095 → 3.095 |
+| 8/Normal | 5.4% → 5.9% | 4 → 6 s | 2.429 → 1.048 |
+
+Easy's individual final means are **13.9%, 6.0%, 7.1%** at four actors and **6.4%, 9.8%, 4.3%** at eight. All six
+requested cases meet mean <20% and longest <8 s. The extra Normal-primary/no-melee-start cases also meet both
+limits: seeds 21/25 mean 3.4%/8.6%, longest 4/4 s. Seed 22's actor 2 scouts for 9% of its play, with all three idle
+windows attributed to shooting/cover and none to scouting; the fallback produces real movement.
+
+These separate lobbies change the opponents and the frequency of exchanging hits, so their retained banks mix
+skill with opposition. The controlled shared-round comparisons keep Normal ahead of Easy at both actor counts.
+The ordinary Normal outlier and historical uncontrolled Hard/Normal failures remain disclosed. The reported 61%
+Easy baseline was not reproduced on current `dev` at the measured seeds.
+
+Final rendered verification uses `--fixed-fps 60 --disable-vsync --resolution 1280x720`: Easy's four-actor suburb
+soak at 10/40/75 seconds and round end (`build/wp-idle-flake-easy-local-final`), and King's sixteen-actor suburb
+round at 5/20/40 seconds and round end (`build/wp-idle-flake-king-local-final`). All nine captures were reviewed:
+movement, aiming, tank/vent effects, zone contention/minting and result overlays are intact. Both scenes pass;
+Easy mean/worst/longest is 13.5%/16.9%/7 s, King 4.4%/9.1%/3 s.
+
+The final source repeated both idle fixtures five times per engine/load cell: **40/40 passed**, with all twenty
+complete Bank reports identical and all twenty King reports identical, including per-bot statuses. Their values
+remain Bank 2.3%/5.1%/2 s and King 5.4%/27.3%/11 s (mean/worst/longest). Normal and optimized Debug agree, both
+alone and with four CPU hogs plus another Lab. The original limits remain unchanged.
+
+The final CPU grid alternated baseline/candidate in AB/BA/AB order per cell, three pairs each, one-times supply,
+10 simulated measured seconds plus 2 warm-up seconds, seed 23, Debug, `--replay-random`, and actual skills 0.2/0.6.
+All **72 runs** passed. Repeated workload counters (queries, live tanks, calls, physics ticks and frames) match
+within each build/case, including rendered runs. Every median brain cost is lower, by 0.1–3.7%:
+
+| Profile/view | Bots | Baseline ms/tick | Final ms/tick | Change |
+| --- | ---: | ---: | ---: | ---: |
+| Easy/headless | 4 | 0.159251 | 0.159135 | -0.1% |
+| Easy/headless | 8 | 0.264282 | 0.260106 | -1.6% |
+| Easy/headless | 16 | 0.431738 | 0.425730 | -1.4% |
+| Easy/rendered | 4 | 0.143765 | 0.143224 | -0.4% |
+| Easy/rendered | 8 | 0.250968 | 0.248986 | -0.8% |
+| Easy/rendered | 16 | 0.449507 | 0.432929 | -3.7% |
+| Normal/headless | 4 | 0.161382 | 0.160241 | -0.7% |
+| Normal/headless | 8 | 0.244090 | 0.239569 | -1.9% |
+| Normal/headless | 16 | 0.471255 | 0.463915 | -1.6% |
+| Normal/rendered | 4 | 0.144896 | 0.143870 | -0.7% |
+| Normal/rendered | 8 | 0.237670 | 0.231235 | -2.7% |
+| Normal/rendered | 16 | 0.482242 | 0.467688 | -3.0% |
+
+All six final `scale-final.png` benchmark overviews were reviewed after timing. They show the same suburb geometry
+and active tank/vent/blast work at four/eight/sixteen bots. Capture readback happens outside the measured interval.
+
+Raw evidence remains under `build/wp-idle-flake/`: `before/`, `after-local-final/`, `local-final-points/`,
+`local-final-skills4/`, `local-final-skills8/`, `local-final-after-net-*`, `local-final-replay-bench-*`, merged
+`local-final-replay-s*-{before,after}.json` and `local-final-bench-summary.csv`. Baseline runtime views keep the
+original brains plus only the fixture/reporting adapters described above.
+
+Finish verification with `make check`, `python3 -B tools/dev/lint_tests.py` and `make -j4 test-full` on the recorded
+final head. Their logs are `build/wp-idle-flake/final-{check,lint-tests,test-full}.log`. Build and verification are
+Linux-only; these measurements do not establish replay equality across architectures or engine versions. The
+ordinary game, ordinary benchmark and default strength checks retain their original entropy/hitstop behavior.
+
