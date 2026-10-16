@@ -21,6 +21,8 @@ def compare_easy(args):
                            f'--duel-seconds={args.seconds}', f'--tune.LabHardBots={actors // 2}', f'--tune.LabHardOffset={offset}',
                            '--tune.BotHardChasesPoints=false', '--tune.BotHardSkill=0.6', '--bot-skill=0.2',
                            f'--tune.FixedSeed={seed}', f'--effects-seed={seed}']
+                if args.replay_random:
+                    command += ['--replay-random', '--tune.HitstopDuration=0']
                 log = args.output / f'easy-{actors}-{seed}-{offset}.log'
                 try:
                     code = run_scene(command, log, 900)
@@ -54,6 +56,7 @@ def main():
     parser.add_argument('--policy-only', action='store_true', help='give both groups Normal aim skill')
     parser.add_argument('--easy', action='store_true', help='compare Normal and Easy in the same Bank rounds at four/eight actors')
     parser.add_argument('--actors', type=int, choices=(4, 8), help='select one actor count within --easy')
+    parser.add_argument('--replay-random', action='store_true', help='seed physical events and disable wall-clock hitstop for repeatable comparisons')
     args = parser.parse_args()
     if args.seeds < 1 or args.seconds < 30:
         parser.error('positive seeds and at least 30 seconds required')
@@ -75,6 +78,8 @@ def main():
                            'res://scenes/dev/lab_test.tscn', '--', '--bots=7', '--compare-points',
                            f'--environment={args.environment}', '--tune.LabHardBots=4', f'--tune.LabHardOffset={offset}',
                            f'--tune.FixedSeed={seed}', f'--effects-seed={seed}', '--bot-skill=0.6']
+                if args.replay_random:
+                    command += ['--replay-random', '--tune.HitstopDuration=0']
                 if args.policy_only:
                     command.append('--tune.BotHardSkill=0.6')
                 if mode == 'bank':

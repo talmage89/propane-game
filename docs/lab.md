@@ -266,3 +266,5 @@ timeout so a stopped simulation still fails. Scoring, conservation and legal-out
 `check_bot_points.py --easy` compares Normal and Easy together in Tank Bank at four/eight actors, swapping their
 spawn groups across seeds. Both use objective policies and their actual skill dials; it gates retained banks rather
 than inferring difficulty from separate all-Easy and all-Normal matches.
+`--replay-random` seeds physical events from each world's seeded stream and disables wall-clock hitstop for either
+comparison. Without it, the checker retains ordinary gameplay entropy and hitstop.
