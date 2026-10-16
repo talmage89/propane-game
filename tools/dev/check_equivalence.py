@@ -91,8 +91,12 @@ def diagnose(left, right):
     with gzip.open(left, 'rt') as a, gzip.open(right, 'rt') as b:
         for line, (old, new) in enumerate(itertools.zip_longest(a, b), 1):
             if old != new:
-                difference = first_difference(json.loads(old) if old else None, json.loads(new) if new else None)
-                print(f'First divergent observation (line {line}): {difference}')
+                expected = json.loads(old) if old else None
+                actual = json.loads(new) if new else None
+                difference = first_difference(expected, actual)
+                observation = expected if expected is not None else actual
+                context = f", tick {observation['tick']}, {observation['field']}" if isinstance(observation, dict) else ''
+                print(f'First divergent observation (line {line}{context}): {difference}')
                 return False
     print('All detailed observations agree.')
     return True
