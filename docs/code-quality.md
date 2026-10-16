@@ -6,8 +6,8 @@ layout. Long expressions are not reflowed. Expression bodies and naming remain e
 build warnings. Run `dotnet format Propane.sln` to apply the baseline.
 
 `make lint` verifies formatting, then performs a full build with warnings as errors. A previous incremental build
-cannot hide warnings. `make check` runs lint before the headless regression tests, including with `make -j`. It stops on a
-lint failure. Both tasks appear in `make`'s help listing.
+cannot hide warnings. `make check` runs lint before the headless regression tests, including with `make -j`, and ends with
+`make test-infra`, the gate's own self-tests. It stops on a lint failure. All three tasks appear in `make`'s help listing.
 
 `Propane.csproj` pins analysis to .NET 10's default rules, with the recommended Reliability, Usage and Security
 sets. Nullability is enabled. CA1001 additionally checks ownership of disposable fields; CA2007 requires explicit
@@ -28,7 +28,9 @@ Seven class-specific CA1001 suppressions preserve current lifetimes, with the re
 - `NetTransport`: Close releases the connection while the RefCounted peer stays reusable for reconnects.
 - `NetWriter` and `NetReader`: their streams contain managed byte arrays, without file or socket handles.
 
-`python3 tools/dev/lint_tests.py` proves the gate rejects nullable dereferences, disposable-field ownership,
+`make test-infra` (`python3 -B tools/dev/lint_tests.py`) runs last in `make check` and as its own CI job, `infra`. It
+needs dotnet, make, git and python3 but stubs Godot, so the job needs neither the editor nor imported assets. It proves the
+gate rejects nullable dereferences, disposable-field ownership,
 implicit async context, ValueTask misuse, and whitespace and style drift. It also checks corrected code passes.
 The fixtures compile in an isolated temporary project; they never run or modify game sources.
 `check_world_tests.py` proves failed children retain their logs and exit status, while successful runs remove scratch
@@ -184,7 +186,7 @@ and check its isolation and assertion failures both alone and consolidated. Keep
 
 Keep bounded regression seeds in the gate, and put deeper repetitions in `test-full` while retaining every
 assertion kind and required fixture in the gate. If adding a new partition, update `test` dependencies and the CI
-matrix together. Run `python3 tools/dev/lint_tests.py`, `make check` and the relevant deep sweep before submitting.
+matrix together. Run `make check` (which includes `make test-infra`) and the relevant deep sweep before submitting.
 
 Measure rather than guessing:
 

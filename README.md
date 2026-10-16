@@ -43,7 +43,8 @@ Requires Godot 4.7.2 (.NET edition) and the .NET 10 SDK.
   [Measuring scale](docs/measuring-scale.md#playing-optimized-c-locally). `make` lists the other tasks (tests, a local
   server, bots, releases); they find Godot on `PATH` (`godot-mono` or `godot`) or in `/Applications`, or set `GODOT` to its binary.
 - Quality gate: `make lint` verifies C# formatting and rebuilds with warnings as errors. `make check` runs lint,
-  then `make test`. Run it before submitting a change. `tools/dev/check_world.sh` prints log tails and keeps its
+  then `make test`, then `make test-infra` (the gate's own self-tests, `tools/dev/lint_tests.py`: it needs no Godot,
+  and CI runs it as the `infra` job). Run it before submitting a change. `tools/dev/check_world.sh` prints log tails and keeps its
   scratch directory on failure. GitHub Actions runs the same checks on pushes to `dev`
   and every pull request. `make -j4 test-full` adds the deep sweeps as parallel jobs, each line prefixed with its job's
   name; plain `make test-full` runs the same jobs one at a time. Deep probes use an isolated optimized Debug

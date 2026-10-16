@@ -12,7 +12,7 @@ PORT ?= $(if $(SLOT),$(shell echo $$((24680 + $(SLOT)))),24680)
 SERVER ?= 127.0.0.1:$(PORT)
 
 .DEFAULT_GOAL := help
-.PHONY: help setup run play bench build lint check test test-core test-behavior test-generator test-world test-full test-capacity server bots bots-stop package deploy release-patch release-minor release-major
+.PHONY: help setup run play bench build lint check test test-infra test-core test-behavior test-generator test-world test-full test-capacity server bots bots-stop package deploy release-patch release-minor release-major
 
 help: ## List the tasks
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN { FS = ":.*## " } { printf "  make %-14s %s\n", $$1, $$2 }'
@@ -50,12 +50,19 @@ lint: ## Check C# formatting and script .uid pairs, and compile with warnings as
 	dotnet format Propane.sln --verify-no-changes
 	dotnet build Propane.sln -c Debug --no-restore --no-incremental -nologo -v quiet -warnaserror
 
-# A recipe keeps lint before test even when make runs with -j.
-check: lint ## Run lint, then the tests
+# A recipe keeps lint before test, and the gate self-tests last, even when make runs with -j.
+check: lint ## Run lint, then the tests, then the gate self-tests
 	@$(MAKE) --no-print-directory test
+	@$(MAKE) --no-print-directory test-infra
 
 # These same partitions run as separate CI jobs. Shared build runs once, even with make -j.
 test: test-core test-behavior test-generator test-world ## Run the fast headless gate (the same suites as CI)
+
+# Checks the gate itself rather than the game: that lint rejects the mistakes it claims to, that check and test-full run
+# every command in the order and with the failure propagation they promise, that the deep shards add up, and that CI
+# mirrors the local partitions. Needs dotnet, make, git and python3 only (CI runs it as its own job).
+test-infra: ## Check the gate itself: analyzer negatives, make ordering and failure propagation, deep-shard and CI wiring
+	python3 -B tools/dev/lint_tests.py
 
 test-core: build ## Run checker, platform, movement, unit and scripted mode-rule assertions
 	GODOT="$(GODOT)" python3 -B tools/dev/check_test_threads.py
