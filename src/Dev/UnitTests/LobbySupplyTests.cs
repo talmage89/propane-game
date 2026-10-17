@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 using Godot;
 using Propane.Core;
+using Propane.Dev.UnitTests.Fixtures;
 using Propane.Modes;
 using Propane.Net;
 using Propane.UI;
@@ -53,7 +54,7 @@ public static class LobbySupplyTests
             {
                 foreach (var supply in new[] { 1, 4, 8 })
                 {
-                    using var fixture = new ServerTests.Fixture(modeSettings: ModeSettings.Default with { ModeId = mode.Id, TankSupply = supply },
+                    using var fixture = new ServerFixture(modeSettings: ModeSettings.Default with { ModeId = mode.Id, TankSupply = supply },
                         creatorTankSupply: supply == 8 ? 1 : 8, bots: 2);
                     using var tuning = Tuning.FromSnapshot(fixture.Setup.Tuning);
                     using var defaults = new Tuning();
@@ -70,7 +71,7 @@ public static class LobbySupplyTests
         });
         runner.Run("lobby supply/loading locks creator and guest choices", () =>
         {
-            using var fixture = new ServerTests.Fixture(playing: false, modeSettings: ModeSettings.Default with { TankSupply = 4 });
+            using var fixture = new ServerFixture(playing: false, modeSettings: ModeSettings.Default with { TankSupply = 4 });
             fixture.Receive(Choice(ModeSettings.Default with { TankSupply = 8 }), peer: 3);
             fixture.Receive(Choice(ModeSettings.Default with { TankSupply = 8 }));
             TestRunner.Assert(fixture.Packets.Count == 0, "loading lobby allowed a supply change");
@@ -130,7 +131,7 @@ public static class LobbySupplyTests
         });
         runner.Run("lobby supply/late builder uses shared plan and tuning after buffered Go", () =>
         {
-            using var fixture = new ServerTests.Fixture(modeSettings: ModeSettings.Default with { TankSupply = 4 }, creatorTankSupply: 8);
+            using var fixture = new ServerFixture(modeSettings: ModeSettings.Default with { TankSupply = 4 }, creatorTankSupply: 8);
             var built = new System.Collections.Generic.List<(uint Id, Transform3D Pose)>();
             foreach (var late in new[] { false, true })
             {

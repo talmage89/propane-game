@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Godot;
+using Propane.Dev.UnitTests.Fixtures;
 using Propane.Modes;
 using Propane.Net;
 using Propane.Tank;
@@ -133,7 +134,7 @@ public static class ModeEnvelopeTests
         });
         runner.Run("envelope/server deduplicates repeated and out-of-order spill events", () =>
         {
-            using var f = new ServerTests.Fixture();
+            using var f = new ServerFixture();
             var actor = f.ActorId(2);
             byte[] Ticket(uint eventId, int counter) => MessageCodec.Encode(ModeWireFixtures.Spill(f.Id, actor, 1, eventId, SpillReason.Hit,
                 new[] { Body with { Id = BodySync.DropTankId(0, counter) } }), false);
@@ -152,7 +153,7 @@ public static class ModeEnvelopeTests
         });
         runner.Run("envelope/server refuses a spill from another round or world with its ids", () =>
         {
-            using var f = new ServerTests.Fixture();
+            using var f = new ServerFixture();
             var spill = ModeWireFixtures.Spill(f.Id, f.ActorId(2), 1, 1, SpillReason.Hit, new[] { Body });
             f.Receive(MessageCodec.Encode(spill with { Payload = ((ModeEnvelope)spill.Payload) with { RoundId = 2 } }, false));
             TestRunner.Assert(f.Packets.Single() is { Peer: 2 } only && ModeWireFixtures.Refused(only.Message)?.Single() == Body.Id,
@@ -160,7 +161,7 @@ public static class ModeEnvelopeTests
         });
         runner.Run("envelope/round start publishes the banks as one snapshot", () =>
         {
-            using var f = new ServerTests.Fixture(playing: false);
+            using var f = new ServerFixture(playing: false);
             f.Receive(new NetWriter(Msg.Loaded, f.Id));
             f.Receive(new NetWriter(Msg.Loaded, f.Id), peer: 3);
             f.Advance();
@@ -208,7 +209,7 @@ public static class ModeEnvelopeTests
             RegisterCausalMode();
             var wire = new RecordingWire();
             ModeWires.Register(CausalMode, () => wire);
-            using var f = new ServerTests.Fixture(mode: ModeRegistry.Find(CausalMode, 1));
+            using var f = new ServerFixture(mode: ModeRegistry.Find(CausalMode, 1));
             var actor = f.ActorId(2);
             byte[] Report(uint eventId, uint request) => MessageCodec.Encode(new NetMessage(Msg.ModeEvent, f.Id, 0,
                 new ModeEnvelope(1, 1, CausalMode, 1, actor, 1, eventId, 1, new Report(3, request))), false);

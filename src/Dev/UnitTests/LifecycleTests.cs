@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Godot;
+using Propane.Dev.UnitTests.Fixtures;
 using Propane.Net;
 
 namespace Propane.Dev.UnitTests;
@@ -96,7 +97,7 @@ public static class LifecycleTests
         });
         runner.Run("lifecycle/assembled match preserves the buffered phase presentation", () =>
         {
-            using var server = new ServerTests.Fixture();
+            using var server = new ServerFixture();
             foreach (var ended in new[] { false, true })
             {
                 var client = Client();

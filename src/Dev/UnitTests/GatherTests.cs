@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Godot;
+using Propane.Dev.UnitTests.Fixtures;
 using Propane.Net;
 using Propane.Tank;
 using static Propane.Dev.UnitTests.TestRunner;
@@ -228,7 +229,7 @@ public static class GatherTests
     }
     private sealed class MatchFixture : IDisposable
     {
-        private readonly ServerTests.Fixture server = new();
+        private readonly ServerFixture server = new();
         private readonly NetClient client;
         public Match Match { get; }
         public int Id => server.Id;

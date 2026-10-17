@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Godot;
 using Propane.Core;
+using Propane.Dev.UnitTests.Fixtures;
 using Propane.Modes;
 using Propane.Net;
 using Propane.Tank;
@@ -17,7 +18,7 @@ public static class ServerTests
     {
         runner.Run("server/moving checkpoints retain reliable delivery on the second leg", () =>
         {
-            using var f = new Fixture();
+            using var f = new ServerFixture();
             var traffic = new List<TrafficClass>();
             f.Server.SendOverride = (_, _, delivery) => traffic.Add(delivery);
             byte[] Packet(uint sequence) => MessageCodec.Encode(new NetMessage(Msg.BodyStates, f.Id, 0,
@@ -40,7 +41,7 @@ public static class ServerTests
         });
         runner.Run("server/loading relays the owner's final rest to clients still building", () =>
         {
-            using var f = new Fixture(playing: false);
+            using var f = new ServerFixture(playing: false);
             var id = BodySync.MapTankId(0);
             var pose = new Transform3D(Basis.Identity, new Vector3(1, .3f, 2));
             f.Receive(new NetWriter(Msg.BodyRest, f.Id).UInt(id).Transform(pose).Double(1).UInt(1).UInt(1));
@@ -55,7 +56,7 @@ public static class ServerTests
         });
         runner.Run("server/truncated messages never relay or mutate", () =>
         {
-            using var f = new Fixture();
+            using var f = new ServerFixture();
             foreach (var fixture in ProtocolTests.Fixtures().Where(p => p.Type is <= Msg.RemoveActor || Protocol.IsRelay(p.Type)))
             {
                 var bytes = MessageCodec.Encode(fixture with { MatchId = Protocol.IsMatch(fixture.Type) ? f.Id : 0 }, false);
@@ -67,7 +68,7 @@ public static class ServerTests
         });
         runner.Run("server/unknown and duplicate explosions cannot score", () =>
         {
-            using var f = new Fixture();
+            using var f = new ServerFixture();
             f.Reject(new NetWriter(Msg.Explode, f.Id).UInt(0x12345678).Vec3(Vector3.One).UInt(1).UInt(1).UInt(0).ToArray());
             f.Reject(new NetWriter(Msg.Explode, f.Id).UInt(BodySync.MapTankId(0)).Vec3(new Vector3(float.NaN, 0, 0)).ToArray());
             var explosion = new NetWriter(Msg.Explode, f.Id).UInt(BodySync.MapTankId(0)).Vec3(Vector3.One).UInt(1).UInt(1).UInt(0);
@@ -77,7 +78,7 @@ public static class ServerTests
         });
         runner.Run("server/drop batches are atomic and registered before scoring", () =>
         {
-            using var f = new Fixture();
+            using var f = new ServerFixture();
             var first = DropBody(0, 0);
             var second = DropBody(0, 1);
             f.Reject(f.Drop(new[] { first, second with { Id = BodySync.DropTankId(1, 0) } }));
@@ -93,7 +94,7 @@ public static class ServerTests
         });
         runner.Run("server/drop counts cannot raise scores or exceed bank and tuner", () =>
         {
-            using var f = new Fixture();
+            using var f = new ServerFixture();
             f.Reject(f.RawSpill(0, 0));
             f.Reject(f.RawSpill(0, ModeSchemas.MaxSpill + 1));
             f.Reject(f.Drop(Enumerable.Range(0, 5).Select(i => DropBody(0, i)).ToArray()));
@@ -103,7 +104,7 @@ public static class ServerTests
         });
         runner.Run("server/expired playing clock refuses drops before the phase tick", () =>
         {
-            using var f = new Fixture(playing: false);
+            using var f = new ServerFixture(playing: false);
             f.Receive(new NetWriter(Msg.Loaded, f.Id));
             f.Receive(new NetWriter(Msg.Loaded, f.Id), peer: 3);
             f.Advance(); // Loading -> Countdown.
@@ -121,7 +122,7 @@ public static class ServerTests
         });
         runner.Run("server/gather uses the injected clock at the play deadline", () =>
         {
-            using var f = new Fixture();
+            using var f = new ServerFixture();
             var body = DropBody(0, 0) with { Id = BodySync.MapTankId(0), Sequence = 1 };
             byte[] Packet(uint sequence) => MessageCodec.Encode(new NetMessage(Msg.Gather, f.Id, 0,
                 new GatherMessage(GatherPhase.Glide, new[] { body with { Sequence = sequence } })), false);
@@ -133,7 +134,7 @@ public static class ServerTests
         });
         runner.Run("server/body and shot ids must exist", () =>
         {
-            using var f = new Fixture();
+            using var f = new ServerFixture();
             f.Reject(MessageCodec.Encode(new NetMessage(Msg.Claim, f.Id, 0, new ClaimMessage(1,
                 new[] { DropBody(0, 0) with { Id = BodySync.MapTankId(0) }, DropBody(0, 1) with { Id = 999 } })), false));
             f.Reject(new NetWriter(Msg.Puncture, f.Id).UInt(999).Transform(Transform3D.Identity).Vec3(Vector3.Zero)
@@ -146,7 +147,7 @@ public static class ServerTests
         });
         runner.Run("server/motion bounds future sample timestamps to the relay clock", () =>
         {
-            using var f = new Fixture();
+            using var f = new ServerFixture();
             f.Receive(MessageCodec.Encode(new NetMessage(Msg.BodyStates, f.Id, 0,
                 new BodyStatesMessage(100000, new[] { DropBody(0, 0) with { Id = BodySync.MapTankId(0), Sequence = 1 } })), false));
             TestRunner.Assert(f.Packets.Single().Message.Payload is BodyStatesMessage relayed &&
@@ -154,7 +155,7 @@ public static class ServerTests
         });
         runner.Run("server/motion preserves bounded sample age across both transport legs", () =>
         {
-            using var f = new Fixture();
+            using var f = new ServerFixture();
             var sampled = f.Clock.Seconds - 0.12;
             var body = DropBody(0, 0) with { Id = BodySync.MapTankId(0), Sequence = 1, Linear = Vector3.Right * 200 };
             f.Receive(MessageCodec.Encode(new NetMessage(Msg.BodyStates, f.Id, 0,
@@ -187,7 +188,7 @@ public static class ServerTests
         });
         runner.Run("server/drop registration recovers an early snapshot and preserves the final rest", () =>
         {
-            using var f = new Fixture();
+            using var f = new ServerFixture();
             var dropped = DropBody(0, 0);
             var state = MessageCodec.Encode(new NetMessage(Msg.BodyStates, f.Id, 0,
                 new BodyStatesMessage(1, new[] { DropBody(0, 1) with { Id = BodySync.MapTankId(0), Sequence = 1 }, dropped with { Sequence = 1 } })), false);
@@ -208,7 +209,7 @@ public static class ServerTests
         });
         runner.Run("server/creator departure preserves slots, banks and the new host", () =>
         {
-            using var f = new Fixture();
+            using var f = new ServerFixture();
             f.Receive(MessageCodec.Encode(new NetMessage(Msg.Puncture, f.Id, 0, new PunctureMessage(BodySync.MapTankId(0),
                 Transform3D.Identity, Vector3.Right, Vector3.Up, Vector3.One, Vector3.Up, -1)), false));
             f.Packets.Clear();
@@ -228,7 +229,7 @@ public static class ServerTests
         });
         runner.Run("server/a drop refused after a tuning change gets an explicit reply", () =>
         {
-            using var f = new Fixture();
+            using var f = new ServerFixture();
             f.Receive(new NetWriter(Msg.TuningSet, f.Id).String(nameof(Tuning.RagdollDropCount)).Scalar(1));
             f.Packets.Clear();
             // This batch fit the former count of five when the victim sent it. The creator's tuning arrived first.
@@ -244,7 +245,7 @@ public static class ServerTests
         });
         runner.Run("server/tuning requires original debug creator", () =>
         {
-            using var f = new Fixture();
+            using var f = new ServerFixture();
             var tune = new NetWriter(Msg.TuningSet, f.Id).String(nameof(Tuning.BlastRadius)).Scalar(5f);
             f.Reject(tune.ToArray(), peer: 3);
             f.Reject(new NetWriter(Msg.TuningSet, f.Id).String(nameof(Tuning.BlastRadius)).Scalar(float.NaN).ToArray());
@@ -252,12 +253,12 @@ public static class ServerTests
             TestRunner.Assert(f.Packets.Any(p => p.Message.Payload is TuningMessage { Name: nameof(Tuning.BlastRadius) }), "creator's valid tuning was refused");
             f.Server.OnDisconnected(2);
             f.Reject(tune.ToArray(), peer: 3);
-            using var release = new Fixture(debug: false);
+            using var release = new ServerFixture(debug: false);
             release.Reject(new NetWriter(Msg.TuningSet, release.Id).String(nameof(Tuning.BlastRadius)).Scalar(5f).ToArray());
         });
         runner.Run("server/stale lifecycle and gameplay messages are ignored", () =>
         {
-            using var f = new Fixture();
+            using var f = new ServerFixture();
             f.Reject(new NetWriter(Msg.Explode, f.Id + 1).UInt(BodySync.MapTankId(0)).Vec3(Vector3.One).UInt(1).UInt(1).UInt(0).ToArray());
             f.Advance(20); // End this ten-second match.
             f.Advance(10); // Results -> lobby.
@@ -290,122 +291,4 @@ public static class ServerTests
     }
 
     private static BodyState DropBody(int slot, int counter) => new(BodySync.DropTankId(slot, counter), Transform3D.Identity, Vector3.Up, Vector3.Zero);
-
-    internal sealed class Fixture : IDisposable
-    {
-        public readonly ManualClock Clock = new();
-        public readonly LobbyServer Server;
-        public readonly Tuning Tuning = new() { CountdownTime = 0, ResultsTime = 1 };
-        public readonly List<(int Peer, NetMessage Message)> Packets = new();
-        public readonly int Id;
-        public readonly MatchSetup Setup;
-
-        public Fixture(bool debug = true, bool playing = true, int bots = 0, Func<ParticipantRoster>? rosterFactory = null, ModeDefinition? mode = null, ModeSettings? modeSettings = null, float length = 10, int creatorTankSupply = 1)
-        {
-            // These fixtures count a lobby's own packets; the lobby world has its own suite.
-            Server = new LobbyServer(PacketTransports.CreateServer(), Clock) { StartScore = 4, LobbyMode = mode ?? ModeRegistry.TankBank, Worlds = false };
-            if (rosterFactory != null) Server.RosterFactory = rosterFactory;
-            Server.SendOverride = (peer, bytes, _) => Packets.Add((peer, MessageCodec.Decode(bytes, true)));
-            for (var peer = 2; peer <= 3; peer++)
-            {
-                Server.OnConnected(peer);
-                Receive(new NetWriter(Msg.Hello).Int(Protocol.Version).String(BuildInfo.GameVersion).String("test")
-                    .String($"Player{peer}").Int(peer - 2).Bool(peer == 2 ? debug : true), peer);
-            }
-            Receive(new NetWriter(Msg.CreateLobby));
-            Receive(new NetWriter(Msg.JoinLobby).Int(1), peer: 3);
-            for (var i = 0; i < bots; i++)
-            {
-                Receive(MessageCodec.Encode(new NetMessage(Msg.AddActor, 0, 0,
-                new AddActorMessage((uint)i + 1, ActorKind.Bot, $"Bot{i}", AppearanceRecord.FromPalette(i), ControllerConfig.Bot, Revision())), false));
-            }
-
-            if (modeSettings != null) Receive(MessageCodec.Encode(new NetMessage(Msg.SetMode, 0, 0, modeSettings), false));
-            Receive(new NetWriter(Msg.SetMatchLength).Float(length));
-            Tuning.TankCountMultiplier = creatorTankSupply;
-            Receive(new NetWriter(Msg.StartMatch).Snapshot(Tuning.Snapshot()));
-            Setup = Packets.Select(p => p.Message.Payload).OfType<MatchSetup>().First();
-            Id = Setup.Id;
-            if (playing)
-            {
-                Receive(new NetWriter(Msg.Loaded, Id));
-                Receive(new NetWriter(Msg.Loaded, Id), peer: 3);
-                Advance();
-                Advance();
-                TestRunner.Assert(Packets.Any(p => p.Message.Type == Msg.MatchGo), "fixture never reached play");
-            }
-            Packets.Clear();
-        }
-
-        /// <summary>The current roster revision of peer 2's lobby, for roster requests.</summary>
-        public uint Revision(int peer = 2) => Server.RosterRevision(peer);
-
-        public void Advance(double seconds = 0)
-        {
-            Clock.Seconds += seconds;
-            Server.AdvanceMatches(Clock.Seconds);
-        }
-
-        public void Receive(NetWriter packet, int peer = 2) => Receive(packet.ToArray(), peer);
-        private readonly Dictionary<int, uint> actions = new();
-        public int ActorId(int peer) => Setup.Players.First(p => p.Player.OwnerPeerId == peer).Player.Id;
-        public void Receive(byte[] packet, int peer = 2) => Server.OnReceived(peer, Prepare(packet, peer));
-        private byte[] Prepare(byte[] packet, int peer)
-        {
-            // Legacy payload probes use this fixture's default owner. Production and spoof tests send explicit ids.
-            if (Setup != null && Setup.Players.Any(p => p.Player.OwnerPeerId == peer) && packet.Length >= 17 && Protocol.IsActorMessage((Msg)packet[0]) && BitConverter.ToInt32(packet, 5) == 0)
-            {
-                packet = packet.ToArray();
-                BitConverter.GetBytes(ActorId(peer)).CopyTo(packet, 5);
-                BitConverter.GetBytes(1u).CopyTo(packet, 9);
-                var action = actions.GetValueOrDefault(peer) + 1;
-                actions[peer] = action;
-                BitConverter.GetBytes(action).CopyTo(packet, 13);
-            }
-            return packet;
-        }
-        public void Reject(byte[] bytes, int peer = 2)
-        {
-            Packets.Clear();
-            bytes = Prepare(bytes, peer);
-            Receive(bytes, peer);
-            if (Packets.Count == 1 && Packets[0] is { Message.Payload: AuthorityMessage { Reason: not ClaimRefusal.None } authority } && Packets[0].Peer == peer)
-            {
-                var request = MessageCodec.Decode(bytes, false).Payload switch
-                {
-                    ClaimMessage claim => claim.Request,
-                    PunctureMessage puncture => puncture.Request,
-                    ExplodeMessage explosion => explosion.Request,
-                    _ => throw new InvalidOperationException("non-claim received an authority refusal"),
-                };
-                TestRunner.Assert(authority.Request == request && authority.Peer == peer, "refusal changed its request identity");
-                return;
-            }
-            if (Packets.Count == 1 && ModeWireFixtures.Refused(Packets[0].Message) is { } reply && Packets[0].Peer == peer)
-            {
-                // Only a fully decoded spill may receive a refusal. Malformed packets must emit nothing.
-                var drop = (MessageCodec.Decode(bytes, false).Payload as ModeEnvelope)?.Payload as TankBankSpill;
-                TestRunner.Assert(drop != null && reply.SequenceEqual(drop.Tanks.Select(t => t.Id)), "refusal changed the predicted ids");
-            }
-            else
-            {
-                TestRunner.Assert(Packets.Count == 0, $"invalid {(bytes.Length > 0 ? ((Msg)bytes[0]).ToString() : "empty")} mutated or relayed {Packets.Count} packets");
-            }
-        }
-        private uint NextAction(int peer)
-        {
-            var action = actions.GetValueOrDefault(peer) + 1;
-            actions[peer] = action;
-            return action;
-        }
-        /// <summary>A spill ticket from this peer's actor, sharing its action sequence with its other actor messages.</summary>
-        public byte[] Drop(IReadOnlyList<BodyState> tanks, byte reason = 1, int peer = 2) => MessageCodec.Encode(
-            ModeWireFixtures.Spill(Id, ActorId(peer), 1, NextAction(peer), (SpillReason)reason, tanks), false);
-        /// <summary>A spill envelope whose declared count is invalid, with no bodies following.</summary>
-        public byte[] RawSpill(byte reason, int count, int peer = 2) => new NetWriter(Msg.ModeEvent, Id).UInt(1).UInt(1).Byte(ModeRegistry.TankBankId)
-            .UShort(1).Int(ActorId(peer)).UInt(1).UInt(NextAction(peer)).UShort(ModeSchemas.TankBankKinds.Spill).UShort(2).Byte(reason).Byte((byte)count).ToArray();
-        public void AssertScore(int player, int score, int delta) => TestRunner.Assert(Packets.Any(p => p.Message.Payload is ModeEnvelope { Payload: TankBankScore s } e &&
-            e.ActorId == ActorId(player) && s.Score == score && s.Delta == delta), $"expected score {score}, delta {delta}");
-        public void Dispose() { Server.Free(); Tuning.Dispose(); }
-    }
 }

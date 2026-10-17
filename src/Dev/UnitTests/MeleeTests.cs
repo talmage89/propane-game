@@ -2,6 +2,7 @@ using System.IO;
 using System.Linq;
 using Godot;
 using Propane.Core;
+using Propane.Dev.UnitTests.Fixtures;
 using Propane.Net;
 using Propane.Player;
 
@@ -109,7 +110,7 @@ public static class MeleeTests
         });
         runner.Run("melee/server production relay enforces phase, membership, target and cooldown", () =>
         {
-            using var f = new ServerTests.Fixture();
+            using var f = new ServerFixture();
             byte[] Start(uint swing) => MessageCodec.Encode(new NetMessage(Msg.MeleeStart, f.Id, 0,
                 new MeleeStartMessage(swing, Vector3.Forward)), false);
             byte[] Hit(int victim, uint swing = 1) => MessageCodec.Encode(new NetMessage(Msg.MeleeContact, f.Id, 0,
@@ -123,7 +124,7 @@ public static class MeleeTests
             f.Receive(Hit(f.ActorId(3)));
             TestRunner.Assert(f.Packets.Count == 2 && f.Packets.All(p => p.Message.Payload is MeleeContactMessage), "hit not relayed");
             f.Reject(Hit(f.ActorId(3)));
-            using var loading = new ServerTests.Fixture(playing: false);
+            using var loading = new ServerFixture(playing: false);
             loading.Reject(Start(1));
             loading.Reject(Hit(f.ActorId(3)));
             loading.Receive(new NetWriter(Msg.Loaded, loading.Id));

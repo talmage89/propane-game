@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using Godot;
 using Propane.Core;
+using Propane.Dev.UnitTests.Fixtures;
 using Propane.Modes;
 using Propane.Net;
 using Propane.Player;

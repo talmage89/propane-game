@@ -4,6 +4,7 @@ using System.Linq;
 using Godot;
 using Propane.Bots;
 using Propane.Core;
+using Propane.Dev.UnitTests.Fixtures;
 using Propane.Fx;
 using Propane.Modes;
 using Propane.Net;
@@ -23,16 +24,16 @@ public static class KingOnlineTests
             type == Msg.ModeEvent ? actor : 0, type == Msg.ModeEvent ? 1u : 0, sequence, kind, payload)), type != Msg.ModeEvent);
 
     private static object Decode(byte[] bytes, bool server = true) => ((ModeEnvelope)MessageCodec.Decode(bytes, server).Payload).Payload;
-    private static KingState Latest(ServerTests.Fixture f) => f.Packets.Select(p => p.Message.Payload).OfType<ModeEnvelope>()
+    private static KingState Latest(ServerFixture f) => f.Packets.Select(p => p.Message.Payload).OfType<ModeEnvelope>()
         .Select(e => e.Payload).OfType<KingState>().Last();
 
-    private static void Pose(ServerTests.Fixture f, int peer, Vector3 at, uint sequence, PlayerNetState.Mode mode = PlayerNetState.Mode.Active)
+    private static void Pose(ServerFixture f, int peer, Vector3 at, uint sequence, PlayerNetState.Mode mode = PlayerNetState.Mode.Active)
     {
         var state = new PlayerNetState { Position = at, PelvisPosition = at, State = mode };
         f.Receive(MessageCodec.Encode(new NetMessage(Msg.PlayerState, f.Id, 0, new PlayerStateMessage(0, state), f.ActorId(peer), 1, sequence), false), peer);
     }
 
-    private static void Place(ServerTests.Fixture f, KingPileWanted wanted, int peer = 2, uint sequence = 100, uint round = 1, int count = -1)
+    private static void Place(ServerFixture f, KingPileWanted wanted, int peer = 2, uint sequence = 100, uint round = 1, int count = -1)
     {
         var poses = Enumerable.Range(0, count < 0 ? wanted.Count : count)
             .Select(i => new Transform3D(Basis.Identity, wanted.Spot + Vector3.Right * (i * 0.1f))).ToArray();
@@ -100,7 +101,7 @@ public static class KingOnlineTests
                 var settings = new ModeSettings(ModeRegistry.KingId, pace);
                 var bytes = MessageCodec.Encode(new NetMessage(Msg.SetMode, 0, 0, settings), false);
                 TestRunner.Assert(MessageCodec.Decode(bytes, false).Payload.Equals(settings), "valid lobby pace changed");
-                using var f = new ServerTests.Fixture(modeSettings: settings);
+                using var f = new ServerFixture(modeSettings: settings);
                 using var tuning = Tuning.FromSnapshot(f.Setup.Tuning);
                 TestRunner.Assert(f.Setup.ModeId == ModeRegistry.KingId && tuning.KingMintSeconds == pace &&
                     PlanCodec.Decode(f.Setup.Plan).AmmoSpots.Count == 0, "lobby settings did not reach shared match setup");
@@ -133,7 +134,7 @@ public static class KingOnlineTests
         });
         runner.Run("king online/server samples holds, contests, down bodies, stale poses and departures", () =>
         {
-            using var f = new ServerTests.Fixture(mode: ModeRegistry.King, length: 100);
+            using var f = new ServerFixture(mode: ModeRegistry.King, length: 100);
             f.Advance(); var state = Latest(f); var spot = KingZone.Point(state.Spot);
             Pose(f, 2, spot, 1); f.Advance(.1); state = Latest(f);
             TestRunner.Assert(state.Holder == f.ActorId(2), "reported feet did not hold the zone");
@@ -158,7 +159,7 @@ public static class KingOnlineTests
         });
         runner.Run("king online/moves reset holding and spawn one registered world pile through its authority", () =>
         {
-            using var f = new ServerTests.Fixture(mode: ModeRegistry.King, length: 100);
+            using var f = new ServerFixture(mode: ModeRegistry.King, length: 100);
             f.Advance(); var before = Latest(f);
             var away = (KingZone.Point(before.Spot) - KingZone.Point(before.Next)).Normalized();
             Pose(f, 2, KingZone.Point(before.Spot) + away * (float)before.Radius * .7f, 1); f.Advance(.1);
@@ -185,7 +186,7 @@ public static class KingOnlineTests
         });
         runner.Run("king online/minted banks spill and re-detonate without losing conservation", () =>
         {
-            using var f = new ServerTests.Fixture(mode: ModeRegistry.King, length: 100);
+            using var f = new ServerFixture(mode: ModeRegistry.King, length: 100);
             f.Advance(); Pose(f, 2, KingZone.Point(Latest(f).Spot), 1); f.Advance(.1); f.Advance(4.01);
             TestRunner.Assert(Latest(f).MintedBy(f.ActorId(2)) == 2, "expected two minted tanks");
             var drops = Enumerable.Range(0, 2).Select(i => new BodyState(BodySync.DropTankId(0, i), Transform3D.Identity, Vector3.Zero, Vector3.Zero)).ToArray();
@@ -209,7 +210,7 @@ public static class KingOnlineTests
         });
         runner.Run("king online/peer HUD and lobby bot consume snapshots and ignore stale zone state", () =>
         {
-            using var f = new ServerTests.Fixture(mode: ModeRegistry.King, bots: 1);
+            using var f = new ServerFixture(mode: ModeRegistry.King, bots: 1);
             var client = new NetClient();
             client.Handle(MessageCodec.Encode(new NetMessage(Msg.Welcome, 0, 0, new WelcomeMessage(2, null)), true));
             var match = new Match { Net = client, Setup = f.Setup, CreateLocalView = false };
@@ -242,7 +243,7 @@ public static class KingOnlineTests
         });
         runner.Run("king online/closed-round pile placement cannot create world state", () =>
         {
-            using var f = new ServerTests.Fixture(mode: ModeRegistry.King, length: 60);
+            using var f = new ServerFixture(mode: ModeRegistry.King, length: 60);
             f.Advance(45);
             var wanted = f.Packets.Select(p => p.Message.Payload).OfType<ModeEnvelope>().Select(e => e.Payload).OfType<KingPileWanted>().Last();
             f.Advance(15); f.Packets.Clear(); Place(f, wanted);
@@ -250,7 +251,7 @@ public static class KingOnlineTests
         });
         runner.Run("king online/pending pile passes to successor and empty placement is final", () =>
         {
-            using var f = new ServerTests.Fixture(mode: ModeRegistry.King, length: 100);
+            using var f = new ServerFixture(mode: ModeRegistry.King, length: 100);
             f.Advance(45); // First sample at zone 1 asks for its fresh pile.
             var wanted = f.Packets.Select(p => p.Message.Payload).OfType<ModeEnvelope>().Select(e => e.Payload).OfType<KingPileWanted>().Last();
             f.Packets.Clear(); f.Receive(new NetWriter(Msg.LeaveLobby));

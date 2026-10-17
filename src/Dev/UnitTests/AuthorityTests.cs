@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Godot;
 using Propane.Core;
+using Propane.Dev.UnitTests.Fixtures;
 using Propane.Net;
 using Propane.Tank;
 using Propane.World.Plan;
@@ -595,7 +596,7 @@ public static class AuthorityTests
         }
         runner.Run("authority/server echoes canonical punctures and refuses contenders explicitly", () =>
         {
-            using var f = new ServerTests.Fixture();
+            using var f = new ServerFixture();
             Send(f, 2, Msg.Puncture, Puncture(2));
             TestRunner.Assert(f.Packets.Count(p => p.Message.Payload is AuthorityMessage { Reason: ClaimRefusal.None }) == 2, "canonical echo excluded its contender");
             f.Packets.Clear();
@@ -605,7 +606,7 @@ public static class AuthorityTests
         });
         runner.Run("authority/loading-phase requests receive canonical refusals", () =>
         {
-            using var f = new ServerTests.Fixture(playing: false);
+            using var f = new ServerFixture(playing: false);
             Send(f, 2, Msg.Puncture, Puncture(2));
             TestRunner.Assert(f.Packets.Single().Message.Payload is AuthorityMessage { Reason: ClaimRefusal.WrongPhase } result &&
                 result.Bodies.Single().State == TankLedger.State.Intact, "loading silently discarded a predicted puncture");
@@ -882,7 +883,7 @@ public static class AuthorityTests
         });
     }
 
-    private static void Send(ServerTests.Fixture f, int peer, Msg type, object payload) =>
+    private static void Send(ServerFixture f, int peer, Msg type, object payload) =>
         f.Receive(MessageCodec.Encode(new NetMessage(type, f.Id, 0, payload), false), peer);
 
     private sealed class BodyFixture : IDisposable
@@ -894,13 +895,13 @@ public static class AuthorityTests
 
     internal sealed class MatchFixture : IDisposable
     {
-        public readonly ServerTests.Fixture Server;
+        public readonly ServerFixture Server;
         private readonly NetClient client;
         public readonly Match Match;
         private readonly Queue<byte[]> sent = new();
         public MatchFixture(TestRunner runner, Tuning? template = null, int bots = 0)
         {
-            Server = new ServerTests.Fixture(bots: bots);
+            Server = new ServerFixture(bots: bots);
             client = new NetClient(PacketTransports.CreateClient(), Server.Clock) { Template = template ?? Tuning.SavedTemplate };
             client.Handle(MessageCodec.Encode(new NetMessage(Msg.Welcome, 0, 0, new WelcomeMessage(2, null)), true));
             Match = new Match { Net = client, Setup = Server.Setup, Clock = Server.Clock, AuthoritySendOverride = sent.Enqueue };

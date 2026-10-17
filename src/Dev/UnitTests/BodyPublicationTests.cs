@@ -6,6 +6,7 @@ using System.Linq;
 using System.Reflection;
 using System.Text.Json;
 using Godot;
+using Propane.Dev.UnitTests.Fixtures;
 using Propane.Net;
 using Propane.World;
 
@@ -96,7 +97,7 @@ public static class BodyPublicationTests
 
     private sealed class Fixture : IDisposable
     {
-        private readonly ServerTests.Fixture server = new();
+        private readonly ServerFixture server = new();
         private readonly LoopbackTransport listener;
         private readonly NetClient client;
         public readonly SinkTransport Wire;
