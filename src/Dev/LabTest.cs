@@ -81,14 +81,10 @@ public partial class LabTest : Node, ILabScenarioHost
             {
                 switch (selected)
                 {
-                    case "rules": await BankRules().ConfigureAwait(true); break;
-                    case "duel": await Duel().ConfigureAwait(true); break;
-                    case "soak": await Duel(soak: true).ConfigureAwait(true); break;
                     case "effects": await EffectFrames().ConfigureAwait(true); break;
                     case "measure": await Measure().ConfigureAwait(true); break;
                     case "measure-play": await MeasurePlay().ConfigureAwait(true); break;
                     case "stackfire": await StackFire().ConfigureAwait(true); break;
-                    case "aimstall": await AimStall().ConfigureAwait(true); break;
                     case "prototype": await Prototypes().ConfigureAwait(true); break;
                     case "shortfuse": await ShortFuseMatches().ConfigureAwait(true); break;
                     case "shortfuse-combo": await ShortFuseCombo().ConfigureAwait(true); break;
@@ -136,63 +132,6 @@ public partial class LabTest : Node, ILabScenarioHost
 
 
 
-    private async Task Duel(bool soak = false)
-    {
-        if (DevArgs.Get("duel-seconds") != null) template.LabDuelSeconds = DevArgs.GetFloat("duel-seconds", 180);
-        template.LabBankBots = (int)DevArgs.GetFloat("bots", 1);
-        DevArgs.ApplyTuningOverrides(template);
-        var lab = Enter(LabScenarios.Get("duel"), DevArgs.Get("environment") == "suburb" ? LabEnvironment.Suburb : LabEnvironment.Void);
-        Assert(lab.Session.Actors.Count == template.LabBankBots + 1, "banking roster ignored the bot count");
-        Assert(lab.Session.Actors.Select(a => a.Character.GlobalPosition).Distinct().Count() == lab.Session.Actors.Count, "banking actors share a start");
-        Assert(lab.Session.Actors.Where(a => a.Character != lab.Player).All(a => a.Character.View == null && a.Character.InputOverride is IBotGoalPolicy),
-            "banking bots need owned brains without local views");
-        if (soak) lab.Bank!.AttachBot(lab.Player);
-        else lab.Player.InputOverride = new ScriptedPlayer(lab);
-        // The scripted player taps visible tanks through the actor intent/aim path; neither bank is granted.
-        var seconds = (int)DevArgs.GetFloat("seconds", soak ? 180 : 45);
-        var shots = (DevArgs.Get("shots") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries)
-            .Select(v => double.Parse(v, CultureInfo.InvariantCulture)).ToArray();
-        var shot = 0;
-        var frame = 0;
-        while (lab.Bank!.IsPlaying && lab.World.Clock.Now < seconds)
-        {
-            Assert(frame++ < seconds * 120, "duel simulation stalled");
-            if (DevArgs.Get("trace") != null && frame % 120 == 0) GD.Print($"[lab trace] {lab.World.Clock.Now:F1}s {lab.Bank.BotTrace}");
-            if (shot < shots.Length && lab.World.Clock.Now >= shots[shot]) capture.Screenshot($"duel_{shots[shot++]:000}s");
-            await Frames(1).ConfigureAwait(true);
-        }
-        var bank = lab.Bank!;
-        CheckIdle("duel", bank.Activity);
-        ReportPoints(lab, "bank", template.FixedSeed, bank.Scores, bank.Earned);
-        ReportSkills(lab, template.FixedSeed, bank.Scores);
-        var botEarned = bank.Earned.Where(s => s.Key != lab.Player.ActorId).Sum(s => s.Value);
-        GD.Print($"[lab duel] seconds={seconds} simulation={lab.World.Clock.Now:F3} banked={bank.BankedTotal} spilled={bank.SpilledTotal} hits={bank.Hits} you={bank.Scores[1]} bot={bank.Scores[2]} earned_you={bank.Earned[1]} earned_bot={bank.Earned[2]} live={lab.LiveTanks.Count()} earned_bots={botEarned}");
-        // In a larger roster the first rival can finish empty while the other bots bank.
-        Assert(bank.BankedTotal > 0 && botEarned > 0, "banking bots earned no bank");
-        // A bot that freezes for most of the round (the suburb once banked one tank in 180 s) must not pass.
-        var earned = bank.Earned.Values.Sum();
-        if (soak) Assert(earned >= 10, $"banking bots earned only {earned} tanks");
-        Assert(bank.Scores.Values.Sum() + lab.LiveTanks.Count() == bank.InitialSupply, "bank conservation");
-        if (!bank.IsPlaying)
-        {
-            await Frames(2).ConfigureAwait(true);
-            var best = bank.Scores.Where(s => s.Key != lab.Player.ActorId).OrderByDescending(s => s.Value).First();
-            var mine = bank.Scores[lab.Player.ActorId];
-            var name = template.LabBankBots == 1 ? "BOT" : $"BOT {best.Key - 1}";
-            var expected = mine > best.Value ? "YOU WIN" : mine == best.Value ? "TIED" : $"{name} WINS";
-            Assert(lab.Overlay.ResultTitle == expected, "banking result ignored the strongest bot");
-            Assert(lab.Overlay.StatusText.Contains($"  {best.Value}    ·", StringComparison.Ordinal), "banking HUD omitted the best opponent's score");
-        }
-        Assert(lab.Opponent!.View == null && !lab.World.Networked, "duel needs camera/network");
-        capture.Screenshot(soak ? "duel_soak_end" : "duel_bot_bank");
-        if (!bank.IsPlaying)
-        {
-            await Frames(20).ConfigureAwait(true);
-            capture.Screenshot("duel_round_end");
-            Assert(lab.World.Paused && lab.Overlay.MenuVisible, "round end must pause and show the Lab menu");
-        }
-        lab.Session.Dispose(); lab.Free();
-    }
 
     /// <summary>
     /// Full prototype rounds with a bot on every actor (the player's too), headless, across seeds: each must end with
@@ -612,156 +551,8 @@ public partial class LabTest : Node, ILabScenarioHost
         lab.Session.Dispose(); lab.Free();
     }
 
-    private async Task BankRules()
-    {
-        template.LabDuelPiles = 2;
-        template.LabDuelPileCount = 1;
-        template.LabDuelSeconds = 30;
-        template.PickupRespawnTime = .1f;
-        var lab = Enter(LabScenarios.Get("duel"), LabEnvironment.Void);
-        var bot = lab.Opponent!;
-        Assert(lab.Player.ActorId == 1 && bot.ActorId == 2 && lab.Player.OwnerPeerId == bot.OwnerPeerId,
-            "local human and bot need distinct actors on the same peer");
-        bot.InputOverride = new IdleInput();
-        lab.Player.InputOverride = new IdleInput();
-        lab.Player.Teleport(new Vector3(0, .05f, 18), 0);
-        bot.Teleport(new Vector3(4, .05f, 18), Mathf.Pi / 2);
-        var tanks = lab.LiveTanks.ToArray();
-        tanks[0].Position = Vector3.Zero;
-        tanks[1].Position = new Vector3(.5f, 0, 0);
-        foreach (var tank in tanks) tank.Freeze = true;
-        lab.Player.InputOverride = new IdleInput(aim: true);
-        await Frames(60).ConfigureAwait(true);
-        await FireAt(lab.Player, () => tanks[0].GlobalTransform * PropaneTank.LocalCenter).ConfigureAwait(true);
-        Assert(tanks[0].State == PropaneTank.TankState.Venting && lab.Bank!.Scores[1] == 0, "first shot must puncture, not bank");
-        await FireAt(lab.Player, () => tanks[1].GlobalTransform * PropaneTank.LocalCenter).ConfigureAwait(true);
-        Assert(tanks[1].State == PropaneTank.TankState.Venting, "second fixture did not puncture");
-        await FireAt(lab.Player, () => tanks[0].GlobalTransform * PropaneTank.LocalCenter).ConfigureAwait(true);
-        await Frames(90).ConfigureAwait(true);
-        Assert(lab.Bank!.Scores[1] == 2 && !lab.LiveTanks.Any(), "root and delayed chain must credit the shooter");
-        lab.Player.InputOverride = new IdleInput();
-        await FireAt(bot, () => lab.Player.GlobalPosition + Vector3.Up * 1.2f).ConfigureAwait(true);
-        Assert(lab.Player.Runtime.LastHitBy == bot.ActorId && bot.ActorId != bot.OwnerPeerId,
-            "same-peer hit attribution used the peer instead of the bot actor");
-        var afterHit = lab.Bank.Scores[1];
-        Assert(afterHit == Mathf.Max(0, 2 - lab.World.Tuning.HitDropCount) && lab.LiveTanks.All(t => t.Invulnerable), "hit spill/count/shield");
-        await FireAt(bot, () => lab.Player.GlobalPosition + Vector3.Up * 1.2f).ConfigureAwait(true);
-        Assert(lab.Bank.Scores[1] == afterHit, "hit grace allowed a second spill");
-        bot.InputOverride = new IdleInput();
-        lab.Player.ReceiveMelee(Vector3.Forward);
-        var afterMelee = lab.Bank.Scores[1];
-        Assert(afterMelee == Mathf.Max(0, afterHit - lab.World.Tuning.RagdollDropCount), "melee/ragdoll spill");
-        lab.Player.ReceiveMelee(Vector3.Forward);
-        Assert(lab.Bank.Scores[1] == afterMelee, "already down player spilled twice");
-        Assert(lab.Bank.Scores.Values.Sum() + lab.LiveTanks.Count() == lab.Bank.InitialSupply, "bank conservation after spills");
-        bot.Ammo!.Reserve = 0;
-        bot.Teleport(lab.Bank.Pickups[0].GlobalPosition, 0);
-        await Frames(2).ConfigureAwait(true);
-        Assert(bot.Ammo.Reserve == lab.World.Tuning.PickupAmount && !lab.Bank.Pickups[0].Available, "local pickup admission");
-        bot.Teleport(new Vector3(4, .05f, 18), 0);
-        await Frames(20).ConfigureAwait(true);
-        Assert(lab.Bank.Pickups[0].Available, "local ammo did not respawn");
-        lab.SetMenu(true);
-        var clock = lab.Bank.TimeLeft;
-        await Frames(30).ConfigureAwait(true);
-        Assert(lab.Bank.TimeLeft == clock, "pause advanced bank clock");
-        lab.SetMenu(false);
-        await Frames(30 * 60).ConfigureAwait(true);
-        Assert(!lab.Bank.IsPlaying && lab.World.Paused && lab.Overlay.MenuVisible, "clock did not end/freeze duel");
-        lab.Session.Dispose(); lab.Free();
-        GD.Print("[lab rules] PASS two-shot/chain attribution, hit grace, shielded spill, melee, conservation, ammo respawn, pause and round end");
-    }
 
-    /// <summary>
-    /// The bot's vantage search ignores props that still stop the rifle's ray. It must give a pile up rather than
-    /// stand in front of it, aimed at the obstruction, for the rest of the round.
-    /// </summary>
-    private async Task AimStall()
-    {
-        template.LabDuelPiles = 2;
-        template.LabDuelPileCount = 1;
-        template.LabDuelSeconds = 60;
-        var lab = Enter(LabScenarios.Get("duel"), LabEnvironment.Void);
-        var tanks = lab.LiveTanks.ToArray();
-        tanks[0].Position = new Vector3(-1, 0, -16);
-        tanks[1].Position = new Vector3(1, 0, -16);
-        foreach (var tank in tanks) tank.Freeze = true;
-        lab.Player.InputOverride = new IdleInput();
-        lab.Player.Teleport(new Vector3(0, .05f, 25), 0);
-        lab.Opponent!.Teleport(new Vector3(0, .05f, 0), 0);
-        // Debris stops shots but not the vantage search's sight test or a walking player.
-        var wall = new StaticBody3D { CollisionLayer = Layers.Debris, CollisionMask = 0, Position = new Vector3(0, 3, -5) };
-        wall.AddChild(new CollisionShape3D { Shape = new BoxShape3D { Size = new Vector3(60, 6, .3f) } });
-        lab.World.ContentRoot.AddChild(wall);
-        await Frames(3 * 60).ConfigureAwait(true);
-        Assert(lab.Bank!.BotStatus.StartsWith("shooting", StringComparison.Ordinal) && lab.Opponent.Ammo!.Magazine == lab.Opponent.Ammo.Tuning.MagazineSize,
-            $"fixture must stall the bot on its aim first ({lab.Bank.BotStatus})");
-        await Frames(6 * 60).ConfigureAwait(true);
-        Assert(lab.Bank.BotBlacklisted >= 2, $"bot never gave up a pile with no clear shot ({lab.Bank.BotStatus})");
-        // Hard King's points estimate must validate the rifle path, including shot-only debris. Start with a
-        // clear prize, then put the blocker back after selection: the periodic choice must abandon it too.
-        lab.Bank.SetPhysicsProcess(false);
-        using var king = new KingBot(1) { PointsDriven = true };
-        using var view = new BlockedKingWorld(lab);
-        lab.Opponent.InputOverride = king;
-        wall.CollisionLayer = 0;
-        await Frames(1).ConfigureAwait(true);
-        king.Prepare(view);
-        view.Services.BeginTick(lab.BotTanks);
-        king.Think(view, 1f / 60);
-        Assert(king.Status.StartsWith("points: banking", StringComparison.Ordinal), "King did not choose the clear prize");
-        wall.CollisionLayer = Layers.Debris;
-        for (var frame = 0; frame < 3 * 60; frame++)
-        {
-            view.Services.BeginTick(lab.BotTanks);
-            king.Think(view, 1f / 60);
-            await Frames(1).ConfigureAwait(true);
-        }
-        Assert(!king.Status.StartsWith("points: banking", StringComparison.Ordinal) && tanks.All(t => t.State == PropaneTank.TankState.Intact),
-            $"Hard King kept choosing prizes behind shot-only debris ({king.Status})");
-        // A valid route with no actual movement must eventually fail, even while the prototype motor tries its
-        // direct walking recovery. Lock the actor (gravity/collision remain live) to hold that condition exactly.
-        lab.Opponent.InputOverride = new IdleInput();
-        lab.Opponent.InputLocked = true;
-        await Frames(60).ConfigureAwait(true); // Let the previous zone run lose its momentum before measuring a stall.
-        var motor = new BotMotor();
-        motor.Prepare(view);
-        var anchor = lab.Opponent.GlobalPosition;
-        var goal = anchor + Vector3.Right * 10;
-        var recoveryFailed = false;
-        for (var frame = 0; frame < 6 * 60 && !recoveryFailed; frame++)
-        {
-            view.Services.BeginTick(lab.BotTanks);
-            motor.Begin(1f / 60);
-            motor.MoveTo(goal);
-            motor.Navigate(view, 1f / 60);
-            recoveryFailed = motor.Failed;
-            await Frames(1).ConfigureAwait(true);
-        }
-        Assert(recoveryFailed && BotMotor.Flat(lab.Opponent.GlobalPosition - anchor).Length() < lab.World.Tuning.BotProgressDistance,
-            $"direct walking recovery failed={recoveryFailed} travel={BotMotor.Flat(lab.Opponent.GlobalPosition - anchor).Length():F3}: {motor.NavigationDiagnostics}");
-        lab.Opponent.InputOverride = null;
-        lab.Session.Dispose(); lab.Free();
-        GD.Print("[lab aimstall] PASS bankers and Hard King leave blocked shots; walking recovery preserves bounded route failure");
-    }
 
-    private sealed class BlockedKingWorld(LabSession lab) : IBotWorld, IDisposable
-    {
-        public WorldContext World => lab.World;
-        public PlayerCharacter Player => lab.Opponent!;
-        public bool IsPlaying => true;
-        public float TimeLeft => 60;
-        public int MyScore => 0;
-        public IReadOnlyDictionary<int, int> Scores { get; } = new Dictionary<int, int>();
-        public double Now => lab.World.Clock.Now;
-        public double LastHitTime => double.NegativeInfinity;
-        public int LastHitBy => 0;
-        public IReadOnlyList<PlayerCharacter> RemoteBodies => Array.Empty<PlayerCharacter>();
-        public IReadOnlyList<AmmoPickup> Pickups => Array.Empty<AmmoPickup>();
-        public BotServices Services { get; } = new(lab.World);
-        public KingBotView? King => new KingBotView(0, new ModeSpot(100, 0, 0), new ModeSpot(200, 0, 0), 6, 0, false, 0.1);
-        public void Dispose() => Services.Dispose();
-    }
 
 
 
@@ -1012,24 +803,6 @@ public partial class LabTest : Node, ILabScenarioHost
         }
     }
 
-    private sealed class ScriptedPlayer(LabSession lab) : IPlayerInputSource
-    {
-        private readonly BotAim aim = new();
-        private PropaneTank? target;
-        private float cooldown;
-        public PlayerIntent Read()
-        {
-            if (!lab.Bank!.IsPlaying) return default;
-            cooldown -= 1f / 60;
-            if (target == null || !IsInstanceValid(target) || target.State == PropaneTank.TankState.Exploded)
-                target = lab.LiveTanks.OrderBy(t => t.GlobalPosition.DistanceSquaredTo(lab.Player.GlobalPosition)).FirstOrDefault();
-            if (target == null) return default;
-            aim.Track(lab.Player, target.GlobalTransform * PropaneTank.LocalCenter, 1f / 60, 1, smooth: false);
-            var fire = cooldown <= 0;
-            if (fire) cooldown = .25f;
-            return new PlayerIntent { Aim = true, FirePressed = fire, ReloadPressed = lab.Player.Ammo!.Magazine == 0 };
-        }
-    }
 
     private async Task Collect()
     {

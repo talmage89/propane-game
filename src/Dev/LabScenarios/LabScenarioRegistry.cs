@@ -12,6 +12,10 @@ internal static class LabScenarioRegistry
     {
         new("dials", host => new DialsScenario(host)),
         new("frames", host => new FramesScenario(host)),
+        new("duel", host => new BankScenario(host)),
+        new("soak", host => new BankScenario(host, soak: true)),
+        new("rules", host => new BankRulesScenario(host)),
+        new("aimstall", host => new AimStallScenario(host)),
         new("lifetime", host => new LifetimeScenario(host)),
         new("tracking", host => new LifetimeScenario(host, trackingOnly: true))
     };

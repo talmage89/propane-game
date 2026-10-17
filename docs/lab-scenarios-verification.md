@@ -21,3 +21,12 @@ contain 11 lifetime pairs and 514 dial fixtures (the older 530-fixture documenta
   particles and active duel effects/HUD values. The first separate input probe collided with the ongoing gate's
   UDP port and failed at host-browser creation; its log remains. The isolated-port repeat is recorded separately.
   Isolated `menu_test --scenario=input --classic-lobby --port=24781`: 165 assertions, zero failures.
+
+The first normal `make test` session reached 459 unit assertions and all eleven fast Lab sessions successfully,
+then its execution session terminated during the later behavior probes. The raw log is retained as
+`test-lifetime.log`; this is not claimed as a complete gate. Final gates use a detached supervisor with exact
+revision, command, exit status and elapsed time in `final-status.json` to outlive the tool session.
+- Banking family: warning-free build; native rules, blocked-aim, 15-second driven duel and seeded 40-second
+  nine-actor suburb soak all pass. The seeded soak's idle and bank-result lines match the parent exactly;
+  source assertions/options/logs/captures are unchanged. The three owners isolate the scripted player,
+  blocked King world and bank-rule fixture without changing shared mechanics.
