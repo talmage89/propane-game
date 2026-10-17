@@ -174,7 +174,7 @@ public static class ModeEnvelopeTests
         });
         runner.Run("envelope/client applies commands once, in order", () =>
         {
-            using var f = new AuthorityTests.MatchFixture(runner);
+            using var f = new AuthorityFixture(runner);
             var me = f.Match.Player.ActorId;
             var newer = ModeWireFixtures.Score(f.Server.Id, me, 5, 5);
             var older = ModeWireFixtures.Score(f.Server.Id, me, 2, -3);

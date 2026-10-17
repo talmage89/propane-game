@@ -154,7 +154,7 @@ public static class GatherTests
         });
         runner.Run("gather/reliable presentation survives overtaking motion and ends exactly", () =>
         {
-            using var fixture = new MatchFixture(runner);
+            using var fixture = new GatherFixture(runner);
             var match = fixture.Match;
             var tank = match.LiveTanks.First();
             var entry = match.Bodies.Get(tank.NetId)!;
@@ -172,7 +172,7 @@ public static class GatherTests
         });
         runner.Run("gather/final body rest releases an observer without inventing a pile", () =>
         {
-            using var fixture = new MatchFixture(runner);
+            using var fixture = new GatherFixture(runner);
             var match = fixture.Match;
             var tank = match.LiveTanks.First();
             var builtPose = tank.PilePose;
@@ -186,7 +186,7 @@ public static class GatherTests
         });
         runner.Run("gather/epoch handoff cancels frozen observer and refuses old completion", () =>
         {
-            using var fixture = new MatchFixture(runner);
+            using var fixture = new GatherFixture(runner);
             var match = fixture.Match;
             var tank = match.LiveTanks.First();
             var entry = match.Bodies.Get(tank.NetId)!;
@@ -226,21 +226,5 @@ public static class GatherTests
             ledger.Puncture(2, new PunctureMessage(state.Id, state.Transform, Vector3.Zero, Vector3.Zero, Vector3.Right, Vector3.Right, 1), 102, true);
             Assert(!ledger.Gather(2, 2, message with { Bodies = new[] { state with { Epoch = 2, Sequence = 2 } } }, true), "venting gather accepted");
         });
-    }
-    private sealed class MatchFixture : IDisposable
-    {
-        private readonly ServerFixture server = new();
-        private readonly NetClient client;
-        public Match Match { get; }
-        public int Id => server.Id;
-        public MatchFixture(TestRunner runner)
-        {
-            client = new NetClient(PacketTransports.CreateClient(), server.Clock);
-            client.Handle(MessageCodec.Encode(new NetMessage(Msg.Welcome, 0, 0, new WelcomeMessage(3, null)), true));
-            Match = new Match { Net = client, Setup = server.Setup, Clock = server.Clock };
-            runner.AddChild(Match);
-        }
-        public void Receive(Msg type, object payload) => Match.OnMessage(new NetMessage(type, Id, 2, payload));
-        public void Dispose() { Match.World.Dispose(); Match.Free(); client.Free(); server.Dispose(); }
     }
 }
