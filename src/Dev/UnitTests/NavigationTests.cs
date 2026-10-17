@@ -804,10 +804,10 @@ internal static class NavigationTests
                     step.Dot(enemy.GlobalPosition - player.GlobalPosition) >= 0, "Easy routes to a distant rival instead of a short step toward it");
                 Think();
                 TestRunner.Assert(brain.ScoutingGoal == scouting, "Easy's scouting waypoint changes with each target observation");
-                var before = GC.GetAllocatedBytesForCurrentThread();
-                for (var i = 0; i < 600; i++) brain.Think(observations, 1f / 120);
-                var bytes = GC.GetAllocatedBytesForCurrentThread() - before;
-                TestRunner.Assert(bytes == 0, $"Easy fallback allocates {bytes} bytes");
+                TestRunner.AssertNoAllocation(() =>
+                {
+                    for (var i = 0; i < 600; i++) brain.Think(observations, 1f / 120);
+                }, "Easy fallback allocates");
                 enemy.GlobalPosition = Vector3.Right * 20;
                 Think();
                 TestRunner.Assert(brain.Status.StartsWith("looking for rivals near 2", StringComparison.Ordinal) && !brain.Read().Aim,
