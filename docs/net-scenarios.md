@@ -1,8 +1,7 @@
 # Network scenario ownership
 
-Duel, drop-refusal, gather, pickup, watch, melee, movement, puncture-race, body-stream, vent-contact, capacity, king and king-late currently use extracted owners. The remaining registered cases still dispatch
-through the host during the family-by-family migration described below. Inventory comparison currently reports
-one extra generic completion expression: the temporary bridge for cases still in the host.
+All registered scenario families now use plain owners. The temporary completion bridge and host dispatch cleanup
+are the final migration step.
 
 `NetTest` hosts the client connection, match construction/lifecycle, roaming lobby world, bot fallback, capture
 service and telemetry. Plain scenario objects under `src/Dev/NetScenarios/` own case state, scripted input,
@@ -160,6 +159,16 @@ Setup/build (zero warnings), seven lifecycle tests and unchanged expression inve
 King fixture passed all hold/contest/mint/warning/move/fresh-pile obligations and audits. Reviewed contest,
 settled-pile and 23/0 results frames against the parent. The identical 110 s late-builder command passed: Bot3
 replayed zone 1 and 90 minted tanks before readiness, then all peers finished with 217 minted/banked for the host.
-The undelayed peers passed 2,400 continuous grids; all three completion inventories/poses agree at 0 m peak drift.
+The undelayed peers passed 2,399 continuous grids; all three completion inventories/poses agree at 0 m peak drift.
 `check_scores.py` and the separate `build/rfp4/late.py` audit passed with no engine/protocol errors. Evidence:
 `build/rfp4/king-*.log`, `build/rfp4-candidate/{king,king-late}`, `king-late-audit.txt`.
+
+### Appearance migration
+
+The owner initializes menus and handles lobby/setup checks at the same host callback positions. Lobby screenshots
+use connection lifetime, while results screenshots use match lifetime; a new fake-context assertion ensures
+lobby callbacks survive a match return and stop at connection disposal. Warning-free builds and all eight
+lifecycle tests passed. Both rendered three-peer repeats with duplicate cyan/near-white colors passed exact
+lobby/setup/body/drop/results checks and complete audits, with no engine/protocol errors. Reviewed tags/glow and
+results captures against the parent. Evidence: `build/rfp4/appearance-*.log`,
+`build/rfp4-candidate/{appearance-initial,appearance}`.

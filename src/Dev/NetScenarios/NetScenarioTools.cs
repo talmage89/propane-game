@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using Godot;
 using Propane.Net;
 using Propane.Player;
@@ -25,4 +26,13 @@ internal static class NetScenarioTools
 
     // Stopwatch is shared by the local processes; the packet-corrected countdown cannot align their samples.
     internal static double TankCheckTime() => (double)System.Diagnostics.Stopwatch.GetTimestamp() / System.Diagnostics.Stopwatch.Frequency;
+    internal static AppearanceRecord ParseAppearance(string hex)
+    {
+        if (hex.Length != 6 || !uint.TryParse(hex, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var rgb))
+        {
+            throw new ArgumentException("appearance must be six sRGB hex digits");
+        }
+        return new AppearanceRecord((byte)(rgb >> 16), (byte)(rgb >> 8), (byte)rgb);
+    }
+
 }

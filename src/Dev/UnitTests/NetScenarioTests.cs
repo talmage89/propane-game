@@ -43,6 +43,7 @@ public static class NetScenarioTests
         protected override void Run(Match match, float dt) { Ticks++; host.Events.Add("tick"); }
         public override void Complete(Match match) => host.Events.Add("complete");
         public void Pass() => scenarioPassed = !scenarioFailed;
+        public Action ConnectionCallback() => GuardConnection(() => host.Events.Add("connection callback"));
     }
 
     private sealed class Idle(Host host) : NetScenario(host);
@@ -121,6 +122,20 @@ public static class NetScenarioTests
             scenario.BeginAssembly(null!);
             scenario.AfterAssembly(null!);
             Assert(!scenario.Tick(null!, .01f), "watch consumed a joiner's bot tick");
+        });
+        runner.Run("net scenarios/lobby callbacks survive match retirement and stop on connection disposal", () =>
+        {
+            var host = new Host();
+            var scenario = new Scenario(host);
+            var lobby = scenario.ConnectionCallback();
+            scenario.BeginAssembly(null!);
+            scenario.AfterAssembly(null!);
+            scenario.RetireMatch();
+            lobby();
+            Assert(host.Events.Count(e => e == "connection callback") == 1, "returning from a match lost a lobby callback");
+            scenario.Dispose();
+            lobby();
+            Assert(host.Events.Count(e => e == "connection callback") == 1, "connection disposal allowed a late lobby callback");
         });
         runner.Run("net scenarios/warmed dispatch allocates nothing", () =>
         {

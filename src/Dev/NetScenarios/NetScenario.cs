@@ -67,6 +67,9 @@ internal abstract class NetScenario : IDisposable
         return () => { if (IsCurrent(captured)) callback(); };
     }
 
+    // Lobby captures belong to the connection; returning from a match must not retire them.
+    protected Action GuardConnection(Action callback) => () => { if (!disposed) callback(); };
+
     public void BeginAssembly(Match match)
     {
         ObjectDisposedException.ThrowIf(disposed, this);

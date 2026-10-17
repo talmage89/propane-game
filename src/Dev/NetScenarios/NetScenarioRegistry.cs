@@ -25,7 +25,7 @@ internal static class NetScenarioRegistry
         new("vent-contact", host => new VentContactScenario(host), NetScenarioCompletion.Assertions),
         new("king", host => new KingScenario(host), NetScenarioCompletion.Assertions),
         new("king-late", host => new KingLateScenario(host), NetScenarioCompletion.Assertions),
-        new("appearance", null, NetScenarioCompletion.Assertions),
+        new("appearance", host => new AppearanceScenario(host), NetScenarioCompletion.Assertions),
         new("capacity", host => new CapacityScenario(host), NetScenarioCompletion.FinalChecks)
     };
 

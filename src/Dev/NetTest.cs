@@ -122,11 +122,7 @@ public partial class NetTest : Node, INetScenarioHost
                 net.JoinLobby(lobby.Id);
             }
         };
-        if (DevArgs.Get("scenario") == "appearance")
-        {
-            appearanceMenus = new UI.Menus { Net = net, Visible = false };
-            AddChild(appearanceMenus);
-        }
+        scenario?.Initialize();
         net.LobbyChanged += () =>
         {
             // The server retires replication before each client's delayed results timer ends.
@@ -141,12 +137,7 @@ public partial class NetTest : Node, INetScenarioHost
                     net.SetCapacity(players + lobbyBotsTotal);
                 AddLobbyBot();
                 Log($"lobby {lobby.Id}: {string.Join(", ", lobby.Members.Select(m => $"{m.Name}/{m.Appearance.Color.ToHtml(false)}"))}, {lobby.Phase}");
-                if (DevArgs.Get("scenario") == "appearance" && lobby.Phase == LobbyServer.LobbyPhase.Waiting && lobby.Members.Count == players)
-                {
-                    CheckAppearances(lobby.Members);
-                    appearanceMenus!.Show(UI.Menus.Screen.Lobby);
-                    GetTree().CreateTimer(0.15).Timeout += () => director.Screenshot($"{net.PlayerName}_appearance_lobby");
-                }
+                scenario?.LobbyChanged(lobby);
                 TryStartMatch();
             }
         };
@@ -166,8 +157,7 @@ public partial class NetTest : Node, INetScenarioHost
                 EnterLobbyWorld(setup);
                 return;
             }
-            appearanceMenus?.Show(UI.Menus.Screen.None);
-            if (DevArgs.Get("scenario") == "appearance") { CheckAppearances(setup.Players.Select(p => p.Player)); }
+            scenario?.MatchStarting(setup);
             var delay = DevArgs.Get("delay-who") is not { } delayed || delayed == net.PlayerName ? DevArgs.GetFloat("match-delay", 0) : 0;
             if (scenario != null) delay = scenario.ConstructionDelay(delay);
             if (delay > 0)
@@ -342,14 +332,12 @@ public partial class NetTest : Node, INetScenarioHost
             tankCheckFinal = false;
             nudgedTank = null;
             scenarioPassed = scenarioFailed = false;
-            appearanceTime = -1;
-            appearanceDropped = appearanceGlowChecked = appearanceResultsChecked = false;
             scenario?.AfterAssembly(match);
             Log($"match {setup.Id} ready with {setup.Players.Count} players; playing {match.IsPlaying}, over {match.IsOver}");
         };
         var name = DevArgs.Get("name") ?? (role == "host" ? "HostBot" : $"Bot{OS.GetProcessId() % 1000}");
         var color = (int)DevArgs.GetFloat("color", role == "host" ? 0 : 1);
-        var appearance = DevArgs.Get("appearance") is { } hex ? ParseAppearance(hex) : AppearanceRecord.FromPalette(color);
+        var appearance = DevArgs.Get("appearance") is { } hex ? NetScenarioTools.ParseAppearance(hex) : AppearanceRecord.FromPalette(color);
         // Give a hosted server a moment to open its port.
         GetTree().CreateTimer(DevArgs.Get("host-server") != null ? 0.3 : 0.05).Timeout += () => net.Connect(address, port, name, appearance);
     }
@@ -447,10 +435,6 @@ public partial class NetTest : Node, INetScenarioHost
             if (crowdState.Holder != 0) kingLoneSeconds += dt;
         }
         if (scenario?.Tick(match, dt) == true) { }
-        else if (DevArgs.Get("scenario") == "appearance")
-        {
-            AppearanceScenario(match, dt);
-        }
         else if (DevArgs.Get("look-at-bots") != null && match.Session.Actors.Select(a => a.Character).Where(b => b != match.Player && match.Setup.Players.Any(p => p.Player.Id == b.ActorId &&
                      p.Player.Kind == ActorKind.Bot)).OrderBy(b => b.GlobalPosition.DistanceTo(match.Player.GlobalPosition)).FirstOrDefault() is { } watched)
         {
