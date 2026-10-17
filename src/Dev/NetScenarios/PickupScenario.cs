@@ -1,16 +1,6 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using Godot;
-using Propane.Bots;
-using Propane.Core;
-using Propane.Modes;
 using Propane.Net;
 using Propane.Player;
-using Propane.Tank;
-
-using ProcessModeEnum = Godot.Node.ProcessModeEnum;
 
 namespace Propane.Dev.NetScenarios;
 
@@ -18,9 +8,10 @@ internal sealed class PickupScenario(INetScenarioHost host) : NetScenario(host)
 {
     private float duelTime = -1;
     private ScriptedInput duelInput = new();
-    private bool Once(float at, float dt) => duelTime >= at && duelTime - dt < at;
     private float pickupTakenAt = -1;
     private bool pickupMovedAway;
+
+    private bool Once(float at, float dt) => duelTime >= at && duelTime - dt < at;
 
     protected override void Assembled(Match match)
     {

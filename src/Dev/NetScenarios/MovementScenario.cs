@@ -1,16 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using Godot;
-using Propane.Bots;
 using Propane.Core;
-using Propane.Modes;
 using Propane.Net;
 using Propane.Player;
-using Propane.Tank;
-
-using ProcessModeEnum = Godot.Node.ProcessModeEnum;
 
 namespace Propane.Dev.NetScenarios;
 
@@ -19,21 +13,6 @@ internal sealed class MovementScenario(INetScenarioHost host) : NetScenario(host
     private readonly HashSet<string> meleeCaptured = new();
     private float duelTime = -1;
     private ScriptedInput duelInput = new();
-
-    protected override void Assembled(Match match)
-    {
-        duelTime = -1; duelInput = new ScriptedInput();
-        movementCamera = null;
-        remoteFeet = null; remoteGrip = null; remoteMotion = null;
-        sawRemoteReload = false;
-        sawRemoteCreep = sawRemoteSprint = sawRemoteAir = sawRemoteRestoredAim = movementProved = false;
-        capturedCreep = capturedSprint = capturedLanding = capturedRelease = false;
-        remoteGait = PlayerGait.Default; remoteGaitTime = 0;
-        meleeCaptured.Clear();
-    }
-
-    protected override void Run(Match match, float dt) => Movement(match, dt);
-
     private Camera3D? movementCamera;
     private GripProbe? remoteGrip;
     private LocomotionProbe? remoteFeet;
@@ -50,6 +29,20 @@ internal sealed class MovementScenario(INetScenarioHost host) : NetScenario(host
     private bool capturedSprint;
     private bool capturedLanding;
     private bool capturedRelease;
+
+    protected override void Assembled(Match match)
+    {
+        duelTime = -1; duelInput = new ScriptedInput();
+        movementCamera = null;
+        remoteFeet = null; remoteGrip = null; remoteMotion = null;
+        sawRemoteReload = false;
+        sawRemoteCreep = sawRemoteSprint = sawRemoteAir = sawRemoteRestoredAim = movementProved = false;
+        capturedCreep = capturedSprint = capturedLanding = capturedRelease = false;
+        remoteGait = PlayerGait.Default; remoteGaitTime = 0;
+        meleeCaptured.Clear();
+    }
+
+    protected override void Run(Match match, float dt) => Movement(match, dt);
 
     /// <summary>Two-player gait/stance proof on the unobstructed void floor, seen through real snapshots.</summary>
     private void Movement(Match match, float dt)

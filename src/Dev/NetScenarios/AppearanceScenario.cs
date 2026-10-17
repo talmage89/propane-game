@@ -5,13 +5,18 @@ using Godot;
 using Propane.Net;
 using Propane.UI;
 using Propane.World;
-
 using ProcessModeEnum = Godot.Node.ProcessModeEnum;
 
 namespace Propane.Dev.NetScenarios;
 
 internal sealed class AppearanceScenario(INetScenarioHost host) : NetScenario(host)
 {
+    private Menus? appearanceMenus;
+    private float appearanceTime = -1;
+    private bool appearanceDropped;
+    private bool appearanceGlowChecked;
+    private bool appearanceResultsChecked;
+
     public override void Initialize()
     {
         appearanceMenus = new Menus { Net = net, Visible = false };
@@ -37,12 +42,6 @@ internal sealed class AppearanceScenario(INetScenarioHost host) : NetScenario(ho
         appearanceDropped = appearanceGlowChecked = appearanceResultsChecked = false;
     }
     protected override void Run(Match match, float dt) => Appearance(match, dt);
-
-    private Menus? appearanceMenus;
-    private float appearanceTime = -1;
-    private bool appearanceDropped;
-    private bool appearanceGlowChecked;
-    private bool appearanceResultsChecked;
 
     private void CheckAppearances(System.Collections.Generic.IEnumerable<PlayerProfile> profiles)
     {

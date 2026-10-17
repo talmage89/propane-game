@@ -1,16 +1,8 @@
-using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using Godot;
-using Propane.Bots;
-using Propane.Core;
-using Propane.Modes;
 using Propane.Net;
 using Propane.Player;
-using Propane.Tank;
-
-using ProcessModeEnum = Godot.Node.ProcessModeEnum;
 
 namespace Propane.Dev.NetScenarios;
 
@@ -18,10 +10,14 @@ internal sealed class MeleeScenario(INetScenarioHost host) : NetScenario(host)
 {
     private float duelTime = -1;
     private ScriptedInput duelInput = new();
-    private bool Once(float at, float dt) => duelTime >= at && duelTime - dt < at;
     private Camera3D? movementCamera;
     private GripProbe? remoteGrip;
     private MotionProbe? remoteMotion;
+    private int meleeThrows, meleeGetups;
+    private bool meleeFirstDown, meleeSecondDown;
+    private readonly HashSet<string> meleeCaptured = new();
+
+    private bool Once(float at, float dt) => duelTime >= at && duelTime - dt < at;
 
     protected override void Assembled(Match match)
     {
@@ -33,10 +29,6 @@ internal sealed class MeleeScenario(INetScenarioHost host) : NetScenario(host)
     }
 
     protected override void Run(Match match, float dt) => Melee(match, dt);
-
-    private int meleeThrows, meleeGetups;
-    private bool meleeFirstDown, meleeSecondDown;
-    private readonly HashSet<string> meleeCaptured = new();
 
     private void Melee(Match match, float dt)
     {

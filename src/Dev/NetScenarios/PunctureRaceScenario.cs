@@ -1,21 +1,19 @@
 using System;
-using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using Godot;
-using Propane.Bots;
 using Propane.Core;
-using Propane.Modes;
 using Propane.Net;
-using Propane.Player;
 using Propane.Tank;
-
-using ProcessModeEnum = Godot.Node.ProcessModeEnum;
 
 namespace Propane.Dev.NetScenarios;
 
 internal sealed class PunctureRaceScenario(INetScenarioHost host) : NetScenario(host)
 {
+    private int raceTick;
+    private int raceSamples;
+    private float raceWorst;
+    private VentParameters? raceVent;
+    private Camera3D? raceCamera;
 
     protected override void Preparing(Match match)
     {
@@ -35,12 +33,6 @@ internal sealed class PunctureRaceScenario(INetScenarioHost host) : NetScenario(
     }
 
     protected override void Run(Match match, float dt) => PunctureRace(match);
-
-    private int raceTick;
-    private int raceSamples;
-    private float raceWorst;
-    private VentParameters? raceVent;
-    private Camera3D? raceCamera;
 
     /// <summary>
     /// Injects two opposed bullet contacts on the same simulation tick, while both copies are intact. This isolates

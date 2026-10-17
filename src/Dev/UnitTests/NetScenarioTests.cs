@@ -158,6 +158,12 @@ public static class NetScenarioTests
                 .Order(StringComparer.Ordinal).SequenceEqual(required.Order(StringComparer.Ordinal)), "required completion coverage changed");
             Assert(NetScenarioRegistry.Find("movement").Completion == NetScenarioCompletion.Movement &&
                 NetScenarioRegistry.Find("capacity").Completion == NetScenarioCompletion.FinalChecks, "movement/capacity completion phase changed");
+            foreach (var registration in NetScenarioRegistry.All)
+            {
+                Assert((registration.Factory == null) == (registration.Name == ""), "a named scenario still uses legacy host dispatch");
+                using var scenario = registration.Factory?.Invoke(new Host());
+                Assert((scenario == null) == (registration.Name == ""), "a registered factory did not create its owner");
+            }
             Assert(NetScenarioRegistry.Find(null) == NetScenarioRegistry.Find(""), "default bot selection changed");
             Throws<ArgumentException>(() => NetScenarioRegistry.Find("not-a-scenario"));
         });

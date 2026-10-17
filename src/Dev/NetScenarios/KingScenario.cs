@@ -1,10 +1,8 @@
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using Godot;
 using Propane.Modes;
 using Propane.Net;
-using Propane.Player;
 
 namespace Propane.Dev.NetScenarios;
 

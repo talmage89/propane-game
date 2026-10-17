@@ -1,9 +1,7 @@
-using System;
 using System.Linq;
 using Godot;
 using Propane.Core;
 using Propane.Net;
-using Propane.Player;
 using Propane.Tank;
 using Propane.World;
 
@@ -11,11 +9,6 @@ namespace Propane.Dev.NetScenarios;
 
 internal sealed class CapacityScenario(INetScenarioHost host) : NetScenario(host)
 {
-    public override float ConstructionDelay(float delay) => DevArgs.Get("name") == $"Bot{players}" ? 26 : delay;
-    public override void BeforeInbox(Match match) => PrepareCapacity(match, match.Setup);
-    protected override void Run(Match match, float dt) => CapacityScenarioTick(match, dt);
-    public override void Complete(Match match) => FinishCapacity(match);
-
     private float capacityTime;
     private bool capacityClaimed;
     private bool capacityPunctured;
@@ -27,6 +20,11 @@ internal sealed class CapacityScenario(INetScenarioHost host) : NetScenario(host
     private int capacitySlot;
     private bool capacityQuiesced;
     private double capacityReadyAt;
+
+    public override float ConstructionDelay(float delay) => DevArgs.Get("name") == $"Bot{players}" ? 26 : delay;
+    public override void BeforeInbox(Match match) => PrepareCapacity(match, match.Setup);
+    protected override void Run(Match match, float dt) => CapacityScenarioTick(match, dt);
+    public override void Complete(Match match) => FinishCapacity(match);
 
     private void PrepareCapacity(Match current, MatchSetup setup)
     {

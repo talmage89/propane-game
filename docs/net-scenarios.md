@@ -1,7 +1,6 @@
 # Network scenario ownership
 
-All registered scenario families now use plain owners. The temporary completion bridge and host dispatch cleanup
-are the final migration step.
+All registered scenario families use plain owners; the host contains no scenario-selection chain or case state.
 
 `NetTest` hosts the client connection, match construction/lifecycle, roaming lobby world, bot fallback, capture
 service and telemetry. Plain scenario objects under `src/Dev/NetScenarios/` own case state, scripted input,
@@ -172,3 +171,21 @@ lifecycle tests passed. Both rendered three-peer repeats with duplicate cyan/nea
 lobby/setup/body/drop/results checks and complete audits, with no engine/protocol errors. Reviewed tags/glow and
 results captures against the parent. Evidence: `build/rfp4/appearance-*.log`,
 `build/rfp4-candidate/{appearance-initial,appearance}`.
+
+### Host completion
+
+The legacy completion bridge, case fields and selection chain are removed. The connection callback is named
+`OnMatchStarting`; `_Ready` keeps connection wiring and is 100 lines. `NetTest.cs` is 612 lines (from 1,458),
+with the unchanged 95-line roaming-lobby service beside it. All named factories construct owners in fake contexts;
+only the default bot path has no scenario. The shared shield-reader regression scene now calls the extracted
+utility directly and passes its native impulse/contact/readback checks.
+
+Warning-free build, eight lifecycle tests and `git diff --check` passed. The final source inventory exactly matches
+`128a664`: 51 options, 58 complete assertion expressions, 20 direct capture expressions and 82 log expressions.
+Against the immediate parent, the only inventory difference is removal of the temporary duplicate completion
+bridge. The new guide/tool add two reference sites; all original 122 sites remain available in the parent inventory.
+An actual unknown-scenario launch with `--host-server` exits 1 before binding/connecting, the intentional tooling
+correction. Evidence: `build/rfp4/{host-*,final-source-inventory,unknown-scenario}.log`.
+
+Remaining acceptance runs: final gates, repeated capacity acceptance, clean/faulted soaks, roaming repeats/departure
+and paired host/whole-tick measurements. The preserved vent-contact fixture failure remains an explicit blocker.

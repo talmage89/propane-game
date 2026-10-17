@@ -1,28 +1,18 @@
-using System;
-using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using Godot;
-using Propane.Bots;
-using Propane.Core;
-using Propane.Modes;
 using Propane.Net;
-using Propane.Player;
 using Propane.Tank;
-
-using ProcessModeEnum = Godot.Node.ProcessModeEnum;
 
 namespace Propane.Dev.NetScenarios;
 
 internal sealed class BodyStreamScenario(INetScenarioHost host) : NetScenario(host)
 {
-
-    protected override void Run(Match match, float dt) => BodyStream(match);
-
     // Preserve the original connection lifetime; the documented lane fixture runs one match.
     private PropaneTank? streamTank;
     private Vector3 streamOrigin;
     private float streamStarted;
+
+    protected override void Run(Match match, float dt) => BodyStream(match);
 
     // Native replication fixture: straight flight isolates packet delivery from collisions/vent chaos.
     // Only the host drives the owner; observers must learn motion through the actual transport.

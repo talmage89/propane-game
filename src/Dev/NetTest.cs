@@ -10,6 +10,7 @@ using Propane.Modes;
 using Propane.Net;
 using Propane.Player;
 using Propane.Tank;
+using static Propane.Dev.NetScenarios.NetScenarioTools;
 
 namespace Propane.Dev;
 
@@ -150,196 +151,194 @@ public partial class NetTest : Node, INetScenarioHost
             // An accepted bot's roster arrives next and adds the following one; a refusal retries now.
             if (!result.Accepted) AddLobbyBot();
         };
-        net.MatchStarting += async setup =>
-        {
-            if (setup.ModeId == ModeRegistry.LobbyWorldId)
-            {
-                EnterLobbyWorld(setup);
-                return;
-            }
-            scenario?.MatchStarting(setup);
-            var delay = DevArgs.Get("delay-who") is not { } delayed || delayed == net.PlayerName ? DevArgs.GetFloat("match-delay", 0) : 0;
-            if (scenario != null) delay = scenario.ConstructionDelay(delay);
-            if (delay > 0)
-            {
-                Log($"delaying match {setup.Id} construction by {delay} s");
-                await ToSignal(GetTree().CreateTimer(delay), SceneTreeTimer.SignalName.Timeout);
-                if (net.ActiveMatchId != setup.Id || net.State != NetClient.Status.Connected) { return; }
-            }
-            EndLobbyWorld();
-            if (match != null)
-            {
-                RemoveChild(match);
-                match.QueueFree();
-            }
-            if (DevArgs.Get("tank-check-load-stall") == net.PlayerName)
-            {
-                // Native transport regression: a legitimate construction frame can outlast an 8 s timeout.
-                Log("tank-check loading stall 9s");
-                System.Threading.Thread.Sleep(TimeSpan.FromSeconds(9));
-            }
-            matchAllocated = GC.GetTotalAllocatedBytes();
-            matchGcPause = GC.GetTotalPauseDuration();
-            for (var generation = 0; generation < matchCollections.Length; generation++) matchCollections[generation] = GC.CollectionCount(generation);
-            (bot as IDisposable)?.Dispose();
-            // The transmitted definition chooses the policy. The original simple benchmark remains Tank Bank only.
-            bot = setup.ModeId == ModeRegistry.TankBankId && DevArgs.Get("brain") == "simple" ? new SimpleBot()
-                : new Bot(setup.Mode) { Skill = DevArgs.GetFloat("bot-skill", 1f) };
-            match = new Match
-            {
-                Name = "Match",
-                Net = net,
-                Setup = setup,
-                CreateLocalView = DisplayServer.GetName() != "headless",
-                BeforeInboxAttach = () => scenario?.BeforeInbox(match!)
-            };
-            finishMatch = () =>
-            {
-                if (match == null) return;
-                if (scenario != null)
-                {
-                    if (!scenario.CheckCompletion(registration.Completion)) return;
-                }
-                else if (registration.Completion == NetScenarioCompletion.Assertions)
-                {
-                    ScenarioAssert(scenarioPassed, "scenario ended before all assertions passed");
-                }
-                if (bot is Bot smart)
-                {
-                    Log($"navigation finished: stuck={smart.StuckEvents} blacklist={smart.BlacklistedTargets} replans={smart.Replans} jumps={smart.Jumps}");
-                }
-                scenario?.Complete(match);
-                if (match.BotCost is { Bots: > 0 } cost)
-                {
-                    Log(FormattableString.Invariant($"lobby bots {cost.Bots}: {cost.Thinks} thinks, mean {cost.Seconds * 1000 / Math.Max(cost.Thinks, 1):0.000} ms, {cost.Bytes / Math.Max(cost.Thinks, 1)} B allocated per think"));
-                    var warm = match.WarmBotCost;
-                    Log(FormattableString.Invariant($"bot ticks {cost.Ticks}: mean_ms={cost.Seconds * 1000 / Math.Max(cost.Ticks, 1):F3} worst_ms={cost.Worst * 1000:F3} queries={cost.Queries} rays={cost.Rays}"));
-                    Log(FormattableString.Invariant($"bot warm ticks {warm.Ticks}: mean_ms={warm.Seconds * 1000 / Math.Max(warm.Ticks, 1):F3} p50_ms={match.BotTickPercentile(0.5):F2} p95_ms={match.BotTickPercentile(0.95):F2} p99_ms={match.BotTickPercentile(0.99):F2} worst_ms={warm.Worst * 1000:F3} bytes={warm.Bytes} allocating_ticks={warm.AllocatingTicks} peak_bytes={warm.PeakBytes}"));
-                    foreach (var actor in match.Session.OwnedActors)
-                    {
-                        if (match.BotBrain(actor.Character.ActorId) is BankingBot bank)
-                            Log($"bot navigation {actor.Character.ActorId}: stuck={bank.StuckEvents} blacklist={bank.BlacklistedTargets} replans={bank.Replans} jumps={bank.Jumps}");
-                    }
-                    if (match.BotNavigationSaturation is { Ticks: > 0 } saturation)
-                        Log(FormattableString.Invariant($"bot navigation budget: ticks={saturation.Ticks} query_limited={saturation.QueryLimited * 100.0 / saturation.Ticks:0.0}% expansion_limited={saturation.ExpansionLimited * 100.0 / saturation.Ticks:0.0}%"));
-                    LogBotActivity(match);
-                }
-                if (playerActivity.Windows > 0) Log($"player bot activity: {playerActivity.Report()}");
-                if (DevArgs.Get("frame-metrics") != null)
-                {
-                    Log(FormattableString.Invariant($"match gc: allocated_bytes={GC.GetTotalAllocatedBytes() - matchAllocated} pause_ms={(GC.GetTotalPauseDuration() - matchGcPause).TotalMilliseconds:F3} collections={GC.CollectionCount(0) - matchCollections[0]}/{GC.CollectionCount(1) - matchCollections[1]}/{GC.CollectionCount(2) - matchCollections[2]}"));
-                }
-                Digest();
-                if (!tankCheckFinal) { LogTankCheck(final: true); }
-                LogTankCheck(completion: true);
-                if (match.ModeView is KingState king)
-                {
-                    Log(FormattableString.Invariant($"king crowd: seconds={kingSampleSeconds:F2} lone_share={kingLoneSeconds / Math.Max(kingSampleSeconds, 0.001):F4} minters={king.Minted.Count(m => m.Count > 0)}"));
-                    Log($"finished king {match.Setup.Id}; minted " + string.Join(" ", match.Setup.Players.OrderBy(p => p.Player.Id).Select(p => $"{p.Player.Id}={king.MintedBy(p.Player.Id)}")));
-                }
-                Log($"finished match {match.Setup.Id}; final scores {ScoreLine()}");
-                RemoveChild(match);
-                match.QueueFree();
-                scenario?.RetireMatch();
-                match = null;
-                matches++;
-                started = matches >= matchesWanted;
-                // Lobby Waiting may have arrived before this client's results timer finished.
-                TryStartMatch();
-                // A roaming run quits once it has roamed the world it returns to.
-                if (matches >= matchesWanted && !roam)
-                {
-                    GetTree().CreateTimer(1.0).Timeout += () => ShutdownGuard.Quit(GetTree());
-                }
-            };
-            match.Finished += finishMatch;
-            match.AuthorityResolved += result =>
-            {
-                if (DevArgs.Get("tank-authority-trace") != null)
-                {
-                    var bodies = string.Join(" ", result.Bodies.Select(b => $"{b.Body.Id:x}:{b.Owner}:{b.Body.Epoch}:{b.Body.Sequence}:{b.State}:{b.Rest}"));
-                    Log(FormattableString.Invariant($"authority-trace match {setup.Id} time {TankCheckTime():0.000000} peer {result.Peer} request {result.Request} reason {result.Reason} bodies {bodies}"));
-                }
-            };
-            scenario?.BeginAssembly(match);
-            AddChild(match);
-            if (delay >= 70 && setup.ModeId == ModeRegistry.KingId)
-            {
-                ScenarioAssert(match.IsPlaying && match.ModeView is KingState { Zone: >= 1 },
-                    "King late builder did not replay the current moved zone before readiness");
-                Log($"King catch-up at readiness: zone {(match.ModeView as KingState)?.Zone}, minted " +
-                    string.Join(" ", (match.ModeView as KingState)?.Minted.Select(m => $"{m.ActorId}={m.Count}") ?? Array.Empty<string>()));
-            }
-            if (DevArgs.Get("tank-check-ready-stall") == net.PlayerName)
-            {
-                // Readiness can be sent from packet delivery while construction still blocks native ACK service.
-                Log("tank-check readiness callback stall 9s");
-                System.Threading.Thread.Sleep(TimeSpan.FromSeconds(9));
-            }
-            if (DevArgs.Get("gather-trace") != null && match.World.Root.FindChild("Gather", true, false) is TankGather gatherProbe)
-            {
-                gatherProbe.Trace = text => Log($"gather-trace time {TankCheckTime():0.000000} {text}");
-            }
-
-            if (DevArgs.Get("tank-trace") != null)
-            {
-                match.Bodies.Trace = (entry, reason) =>
-                {
-                    if (!entry.IsTank || !IsInstanceValid(entry.Body)) { return; }
-                    if (DevArgs.Get("tank-trace") is { Length: > 0 } selected && entry.Id.ToString("x") != selected) { return; }
-                    var body = entry.Body;
-                    var p = body.GlobalPosition;
-                    var target = entry.Target.Origin;
-                    var angle = entry.HasTarget ? body.GlobalBasis.Orthonormalized().GetRotationQuaternion().AngleTo(entry.Target.Basis.GetRotationQuaternion()) : 0;
-                    Log(FormattableString.Invariant($"tank-trace match {match.Setup.Id} time {TankCheckTime():0.000000} id {entry.Id:x} {reason} owner={entry.Owner} epoch={entry.Epoch} sequence={entry.Sequence} last={entry.LastSequence} pending={entry.ClaimPending} sleeping={body.Sleeping} target={entry.HasTarget}/{entry.TargetRest} pos={p.X:0.000},{p.Y:0.000},{p.Z:0.000} goal={target.X:0.000},{target.Y:0.000},{target.Z:0.000} speed={body.LinearVelocity.Length():0.000} goal-speed={entry.TargetLinear.Length():0.000} spin={body.AngularVelocity.Length():0.000} goal-spin={entry.TargetAngular.Length():0.000} angle={angle:0.000} gather={(body as PropaneTank)?.Gathering} revision={(body as PropaneTank)?.Disturbance}"));
-                };
-            }
-            match.Player.InputOverride = bot;
-            if (bot is Bot clientBot)
-            {
-                clientBot.Policy.PointsDriven =
-                BotProfile.Nearest(clientBot.Skill, match.World.Tuning) == BotDifficulty.Hard && match.World.Tuning.BotHardChasesPoints;
-            }
-
-            playerActivity = new BotActivity();
-            kingLoneSeconds = kingSampleSeconds = 0;
-            if (DisplayServer.GetName() == "headless")
-            {
-                ScenarioAssert(match.Session.LocalViews.Count == 0 && match.FindChildren("*", "Camera3D", owned: false).Count == 0,
-                    "headless bot match constructed a camera");
-                Log("camera-free actor: no local views or cameras");
-            }
-            if (DevArgs.Get("melee-start") != null)
-            {
-                // Stage before countdown so snapshots settle before the ordinary brains choose any targets.
-                // Pairs by actor id, lobby bots included; each owner stages the second actor of each pair it owns.
-                var peers = setup.Players.OrderBy(p => p.Player.Id).ToList();
-                foreach (var owned in match.Session.OwnedActors.Select(a => a.Character).ToList())
-                {
-                    var slot = peers.FindIndex(p => p.Player.Id == owned.ActorId);
-                    if (slot % 2 == 0) continue;
-                    var anchor = match.Session.Actor(peers[slot - 1].Player.Id)!.Character;
-                    var yaw = anchor.FacingYaw;
-                    var forward = new Vector3(-Mathf.Sin(yaw), 0, -Mathf.Cos(yaw));
-                    // Use a normal clear spawn so navigation still has useful routes after the initial knockdowns.
-                    owned.Teleport(anchor.GlobalPosition + forward * 1.8f, yaw + Mathf.Pi);
-                }
-            }
-            match.Player.MeleeStarted += (swing, _) => Log($"melee swing {swing}");
-            match.Player.MeleeHit += hit => Log($"melee contact {hit.Swing} victim {PlayerCharacter.Owning(hit.Collider)?.ActorId ?? 0}");
-            clock = 0;
-            tankCheckNext = 0;
-            tankCheckFinal = false;
-            nudgedTank = null;
-            scenarioPassed = scenarioFailed = false;
-            scenario?.AfterAssembly(match);
-            Log($"match {setup.Id} ready with {setup.Players.Count} players; playing {match.IsPlaying}, over {match.IsOver}");
-        };
+        net.MatchStarting += OnMatchStarting;
         var name = DevArgs.Get("name") ?? (role == "host" ? "HostBot" : $"Bot{OS.GetProcessId() % 1000}");
         var color = (int)DevArgs.GetFloat("color", role == "host" ? 0 : 1);
         var appearance = DevArgs.Get("appearance") is { } hex ? NetScenarioTools.ParseAppearance(hex) : AppearanceRecord.FromPalette(color);
         // Give a hosted server a moment to open its port.
         GetTree().CreateTimer(DevArgs.Get("host-server") != null ? 0.3 : 0.05).Timeout += () => net.Connect(address, port, name, appearance);
+    }
+
+    private async void OnMatchStarting(MatchSetup setup)
+    {
+        if (setup.ModeId == ModeRegistry.LobbyWorldId)
+        {
+            EnterLobbyWorld(setup);
+            return;
+        }
+        scenario?.MatchStarting(setup);
+        var delay = DevArgs.Get("delay-who") is not { } delayed || delayed == net.PlayerName ? DevArgs.GetFloat("match-delay", 0) : 0;
+        if (scenario != null) delay = scenario.ConstructionDelay(delay);
+        if (delay > 0)
+        {
+            Log($"delaying match {setup.Id} construction by {delay} s");
+            await ToSignal(GetTree().CreateTimer(delay), SceneTreeTimer.SignalName.Timeout);
+            if (net.ActiveMatchId != setup.Id || net.State != NetClient.Status.Connected) { return; }
+        }
+        EndLobbyWorld();
+        if (match != null)
+        {
+            RemoveChild(match);
+            match.QueueFree();
+            scenario?.RetireMatch();
+        }
+        if (DevArgs.Get("tank-check-load-stall") == net.PlayerName)
+        {
+            // Native transport regression: a legitimate construction frame can outlast an 8 s timeout.
+            Log("tank-check loading stall 9s");
+            System.Threading.Thread.Sleep(TimeSpan.FromSeconds(9));
+        }
+        matchAllocated = GC.GetTotalAllocatedBytes();
+        matchGcPause = GC.GetTotalPauseDuration();
+        for (var generation = 0; generation < matchCollections.Length; generation++) matchCollections[generation] = GC.CollectionCount(generation);
+        (bot as IDisposable)?.Dispose();
+        // The transmitted definition chooses the policy. The original simple benchmark remains Tank Bank only.
+        bot = setup.ModeId == ModeRegistry.TankBankId && DevArgs.Get("brain") == "simple" ? new SimpleBot()
+            : new Bot(setup.Mode) { Skill = DevArgs.GetFloat("bot-skill", 1f) };
+        match = new Match
+        {
+            Name = "Match",
+            Net = net,
+            Setup = setup,
+            CreateLocalView = DisplayServer.GetName() != "headless",
+            BeforeInboxAttach = () => scenario?.BeforeInbox(match!)
+        };
+        finishMatch = () =>
+        {
+            if (match == null) return;
+            if (scenario != null)
+            {
+                if (!scenario.CheckCompletion(registration.Completion)) return;
+            }
+            if (bot is Bot smart)
+            {
+                Log($"navigation finished: stuck={smart.StuckEvents} blacklist={smart.BlacklistedTargets} replans={smart.Replans} jumps={smart.Jumps}");
+            }
+            scenario?.Complete(match);
+            if (match.BotCost is { Bots: > 0 } cost)
+            {
+                Log(FormattableString.Invariant($"lobby bots {cost.Bots}: {cost.Thinks} thinks, mean {cost.Seconds * 1000 / Math.Max(cost.Thinks, 1):0.000} ms, {cost.Bytes / Math.Max(cost.Thinks, 1)} B allocated per think"));
+                var warm = match.WarmBotCost;
+                Log(FormattableString.Invariant($"bot ticks {cost.Ticks}: mean_ms={cost.Seconds * 1000 / Math.Max(cost.Ticks, 1):F3} worst_ms={cost.Worst * 1000:F3} queries={cost.Queries} rays={cost.Rays}"));
+                Log(FormattableString.Invariant($"bot warm ticks {warm.Ticks}: mean_ms={warm.Seconds * 1000 / Math.Max(warm.Ticks, 1):F3} p50_ms={match.BotTickPercentile(0.5):F2} p95_ms={match.BotTickPercentile(0.95):F2} p99_ms={match.BotTickPercentile(0.99):F2} worst_ms={warm.Worst * 1000:F3} bytes={warm.Bytes} allocating_ticks={warm.AllocatingTicks} peak_bytes={warm.PeakBytes}"));
+                foreach (var actor in match.Session.OwnedActors)
+                {
+                    if (match.BotBrain(actor.Character.ActorId) is BankingBot bank)
+                        Log($"bot navigation {actor.Character.ActorId}: stuck={bank.StuckEvents} blacklist={bank.BlacklistedTargets} replans={bank.Replans} jumps={bank.Jumps}");
+                }
+                if (match.BotNavigationSaturation is { Ticks: > 0 } saturation)
+                    Log(FormattableString.Invariant($"bot navigation budget: ticks={saturation.Ticks} query_limited={saturation.QueryLimited * 100.0 / saturation.Ticks:0.0}% expansion_limited={saturation.ExpansionLimited * 100.0 / saturation.Ticks:0.0}%"));
+                LogBotActivity(match);
+            }
+            if (playerActivity.Windows > 0) Log($"player bot activity: {playerActivity.Report()}");
+            if (DevArgs.Get("frame-metrics") != null)
+            {
+                Log(FormattableString.Invariant($"match gc: allocated_bytes={GC.GetTotalAllocatedBytes() - matchAllocated} pause_ms={(GC.GetTotalPauseDuration() - matchGcPause).TotalMilliseconds:F3} collections={GC.CollectionCount(0) - matchCollections[0]}/{GC.CollectionCount(1) - matchCollections[1]}/{GC.CollectionCount(2) - matchCollections[2]}"));
+            }
+            Digest();
+            if (!tankCheckFinal) { LogTankCheck(final: true); }
+            LogTankCheck(completion: true);
+            if (match.ModeView is KingState king)
+            {
+                Log(FormattableString.Invariant($"king crowd: seconds={kingSampleSeconds:F2} lone_share={kingLoneSeconds / Math.Max(kingSampleSeconds, 0.001):F4} minters={king.Minted.Count(m => m.Count > 0)}"));
+                Log($"finished king {match.Setup.Id}; minted " + string.Join(" ", match.Setup.Players.OrderBy(p => p.Player.Id).Select(p => $"{p.Player.Id}={king.MintedBy(p.Player.Id)}")));
+            }
+            Log($"finished match {match.Setup.Id}; final scores {ScoreLine()}");
+            RemoveChild(match);
+            match.QueueFree();
+            scenario?.RetireMatch();
+            match = null;
+            matches++;
+            started = matches >= matchesWanted;
+            // Lobby Waiting may have arrived before this client's results timer finished.
+            TryStartMatch();
+            // A roaming run quits once it has roamed the world it returns to.
+            if (matches >= matchesWanted && !roam)
+            {
+                GetTree().CreateTimer(1.0).Timeout += () => ShutdownGuard.Quit(GetTree());
+            }
+        };
+        match.Finished += finishMatch;
+        match.AuthorityResolved += result =>
+        {
+            if (DevArgs.Get("tank-authority-trace") != null)
+            {
+                var bodies = string.Join(" ", result.Bodies.Select(b => $"{b.Body.Id:x}:{b.Owner}:{b.Body.Epoch}:{b.Body.Sequence}:{b.State}:{b.Rest}"));
+                Log(FormattableString.Invariant($"authority-trace match {setup.Id} time {TankCheckTime():0.000000} peer {result.Peer} request {result.Request} reason {result.Reason} bodies {bodies}"));
+            }
+        };
+        scenario?.BeginAssembly(match);
+        AddChild(match);
+        if (delay >= 70 && setup.ModeId == ModeRegistry.KingId)
+        {
+            ScenarioAssert(match.IsPlaying && match.ModeView is KingState { Zone: >= 1 },
+                "King late builder did not replay the current moved zone before readiness");
+            Log($"King catch-up at readiness: zone {(match.ModeView as KingState)?.Zone}, minted " +
+                string.Join(" ", (match.ModeView as KingState)?.Minted.Select(m => $"{m.ActorId}={m.Count}") ?? Array.Empty<string>()));
+        }
+        if (DevArgs.Get("tank-check-ready-stall") == net.PlayerName)
+        {
+            // Readiness can be sent from packet delivery while construction still blocks native ACK service.
+            Log("tank-check readiness callback stall 9s");
+            System.Threading.Thread.Sleep(TimeSpan.FromSeconds(9));
+        }
+        if (DevArgs.Get("gather-trace") != null && match.World.Root.FindChild("Gather", true, false) is TankGather gatherProbe)
+        {
+            gatherProbe.Trace = text => Log($"gather-trace time {TankCheckTime():0.000000} {text}");
+        }
+
+        if (DevArgs.Get("tank-trace") != null)
+        {
+            match.Bodies.Trace = (entry, reason) =>
+            {
+                if (!entry.IsTank || !IsInstanceValid(entry.Body)) { return; }
+                if (DevArgs.Get("tank-trace") is { Length: > 0 } selected && entry.Id.ToString("x") != selected) { return; }
+                var body = entry.Body;
+                var p = body.GlobalPosition;
+                var target = entry.Target.Origin;
+                var angle = entry.HasTarget ? body.GlobalBasis.Orthonormalized().GetRotationQuaternion().AngleTo(entry.Target.Basis.GetRotationQuaternion()) : 0;
+                Log(FormattableString.Invariant($"tank-trace match {match.Setup.Id} time {TankCheckTime():0.000000} id {entry.Id:x} {reason} owner={entry.Owner} epoch={entry.Epoch} sequence={entry.Sequence} last={entry.LastSequence} pending={entry.ClaimPending} sleeping={body.Sleeping} target={entry.HasTarget}/{entry.TargetRest} pos={p.X:0.000},{p.Y:0.000},{p.Z:0.000} goal={target.X:0.000},{target.Y:0.000},{target.Z:0.000} speed={body.LinearVelocity.Length():0.000} goal-speed={entry.TargetLinear.Length():0.000} spin={body.AngularVelocity.Length():0.000} goal-spin={entry.TargetAngular.Length():0.000} angle={angle:0.000} gather={(body as PropaneTank)?.Gathering} revision={(body as PropaneTank)?.Disturbance}"));
+            };
+        }
+        match.Player.InputOverride = bot;
+        if (bot is Bot clientBot)
+        {
+            clientBot.Policy.PointsDriven =
+            BotProfile.Nearest(clientBot.Skill, match.World.Tuning) == BotDifficulty.Hard && match.World.Tuning.BotHardChasesPoints;
+        }
+
+        playerActivity = new BotActivity();
+        kingLoneSeconds = kingSampleSeconds = 0;
+        if (DisplayServer.GetName() == "headless")
+        {
+            ScenarioAssert(match.Session.LocalViews.Count == 0 && match.FindChildren("*", "Camera3D", owned: false).Count == 0,
+                "headless bot match constructed a camera");
+            Log("camera-free actor: no local views or cameras");
+        }
+        if (DevArgs.Get("melee-start") != null)
+        {
+            // Stage before countdown so snapshots settle before the ordinary brains choose any targets.
+            // Pairs by actor id, lobby bots included; each owner stages the second actor of each pair it owns.
+            var peers = setup.Players.OrderBy(p => p.Player.Id).ToList();
+            foreach (var owned in match.Session.OwnedActors.Select(a => a.Character).ToList())
+            {
+                var slot = peers.FindIndex(p => p.Player.Id == owned.ActorId);
+                if (slot % 2 == 0) continue;
+                var anchor = match.Session.Actor(peers[slot - 1].Player.Id)!.Character;
+                var yaw = anchor.FacingYaw;
+                var forward = new Vector3(-Mathf.Sin(yaw), 0, -Mathf.Cos(yaw));
+                // Use a normal clear spawn so navigation still has useful routes after the initial knockdowns.
+                owned.Teleport(anchor.GlobalPosition + forward * 1.8f, yaw + Mathf.Pi);
+            }
+        }
+        match.Player.MeleeStarted += (swing, _) => Log($"melee swing {swing}");
+        match.Player.MeleeHit += hit => Log($"melee contact {hit.Swing} victim {PlayerCharacter.Owning(hit.Collider)?.ActorId ?? 0}");
+        clock = 0;
+        tankCheckNext = 0;
+        tankCheckFinal = false;
+        nudgedTank = null;
+        scenario?.AfterAssembly(match);
+        Log($"match {setup.Id} ready with {setup.Players.Count} players; playing {match.IsPlaying}, over {match.IsOver}");
     }
 
     public override void _ExitTree()
@@ -434,21 +433,23 @@ public partial class NetTest : Node, INetScenarioHost
             kingSampleSeconds += dt;
             if (crowdState.Holder != 0) kingLoneSeconds += dt;
         }
-        if (scenario?.Tick(match, dt) == true) { }
-        else if (DevArgs.Get("look-at-bots") != null && match.Session.Actors.Select(a => a.Character).Where(b => b != match.Player && match.Setup.Players.Any(p => p.Player.Id == b.ActorId &&
-                     p.Player.Kind == ActorKind.Bot)).OrderBy(b => b.GlobalPosition.DistanceTo(match.Player.GlobalPosition)).FirstOrDefault() is { } watched)
+        if (scenario?.Tick(match, dt) != true)
         {
-            // --look-at-bots: a still observer facing the nearest bot, including actors this peer owns.
-            match.Player.Spectating = watched;
-            AimAt(match.Player, watched.GlobalPosition + Vector3.Up * 1.2f);
-        }
-        else if (DevArgs.Get("human") != "idle") // --human=idle: a still player, so frame costs measure lobby bots alone.
-        {
-            bot.Think(match, dt);
-            if (bot is Bot policy) playerActivity.Sample(match.IsPlaying, match.Player, policy.Policy, match.BotKing, dt);
-            if (DevArgs.Get("bot-log") != null && Mathf.PosMod(clock, 2f) < dt)
+            if (DevArgs.Get("look-at-bots") != null && match.Session.Actors.Select(a => a.Character).Where(b => b != match.Player && match.Setup.Players.Any(p => p.Player.Id == b.ActorId &&
+                         p.Player.Kind == ActorKind.Bot)).OrderBy(b => b.GlobalPosition.DistanceTo(match.Player.GlobalPosition)).FirstOrDefault() is { } watched)
             {
-                Log($"bot: {bot.Status}" + (bot is Bot smart ? $"; stuck={smart.StuckEvents} blacklist={smart.BlacklistedTargets} replans={smart.Replans} jumps={smart.Jumps}" : ""));
+                // --look-at-bots: a still observer facing the nearest bot, including actors this peer owns.
+                match.Player.Spectating = watched;
+                AimAt(match.Player, watched.GlobalPosition + Vector3.Up * 1.2f);
+            }
+            else if (DevArgs.Get("human") != "idle") // --human=idle: a still player, so frame costs measure lobby bots alone.
+            {
+                bot.Think(match, dt);
+                if (bot is Bot policy) playerActivity.Sample(match.IsPlaying, match.Player, policy.Policy, match.BotKing, dt);
+                if (DevArgs.Get("bot-log") != null && Mathf.PosMod(clock, 2f) < dt)
+                {
+                    Log($"bot: {bot.Status}" + (bot is Bot smart ? $"; stuck={smart.StuckEvents} blacklist={smart.BlacklistedTargets} replans={smart.Replans} jumps={smart.Jumps}" : ""));
+                }
             }
         }
 
@@ -493,29 +494,11 @@ public partial class NetTest : Node, INetScenarioHost
         }
     }
 
-    private static string Vector(Vector3 v) => FormattableString.Invariant($"{v.X:R},{v.Y:R},{v.Z:R}");
-
-    // No instance override exists until the new tank's first process update. Its material's
-    // shield is transparent; converting Nil directly to Color instead fabricates opaque black.
-    internal static Color ReadShieldColor(Variant value) => value.VariantType == Variant.Type.Nil ? Colors.Transparent : value.AsColor();
-
-    private bool scenarioPassed;
-    private bool scenarioFailed;
-
-    private static bool IsDrop(PropaneTank tank) => tank.NetId is >= BodySync.DropTankBase and < BodySync.CarBase;
-
     private void ScenarioAssert(bool condition, string failure)
     {
         if (condition) { return; }
-        scenarioFailed = true;
         GD.PushError(failure);
         ShutdownGuard.Quit(GetTree(), 1);
-    }
-
-    private static void AimAt(PlayerCharacter player, Vector3 point)
-    {
-        var view = point - player.Aim.EyeOrigin;
-        player.Aim.SetOrientation(Mathf.RadToDeg(Mathf.Atan2(-view.X, -view.Z)), Mathf.RadToDeg(Mathf.Asin(Mathf.Clamp(view.Normalized().Y, -1, 1))));
     }
 
     /// <summary>Scores and where this game has each tank, keyed by match clock, for comparing players' views.</summary>
@@ -550,10 +533,6 @@ public partial class NetTest : Node, INetScenarioHost
     }
 
     private string ScoreLine() => match == null ? "" : string.Join(" ", match.Scores.Select(s => $"{s.Key}={s.Value}"));
-
-    // Stopwatch uses the OS monotonic clock shared by processes on this machine. Match.TimeLeft is a
-    // packet-corrected countdown, unsuitable for alignment. This dev probe is for net_bots' local clients.
-    private static double TankCheckTime() => (double)System.Diagnostics.Stopwatch.GetTimestamp() / System.Diagnostics.Stopwatch.Frequency;
 
     private void LogTankCheck(bool final = false, bool completion = false)
     {

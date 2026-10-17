@@ -2,6 +2,7 @@ using System;
 using System.Threading.Tasks;
 using Godot;
 using Propane.Core;
+using Propane.Dev.NetScenarios;
 using Propane.Net;
 using Propane.Tank;
 using static Propane.Dev.UnitTests.TestRunner;
@@ -87,12 +88,12 @@ public partial class BodyCorrectionTests : Node3D
         var mesh = tank.GetNode<MeshInstance3D>("Mesh");
         var initial = mesh.GetInstanceShaderParameter("shield_color");
         Assert(initial.VariantType == Variant.Type.Nil, "new shield fixture already had an instance override");
-        Assert(NetTest.ReadShieldColor(initial).A == 0, "unset shield override fabricated an opaque black glow");
-        Assert(NetTest.ReadShieldColor(Colors.Black) == Colors.Black, "real opaque black was treated as an unset shield");
+        Assert(NetScenarioTools.ReadShieldColor(initial).A == 0, "unset shield override fabricated an opaque black glow");
+        Assert(NetScenarioTools.ReadShieldColor(Colors.Black) == Colors.Black, "real opaque black was treated as an unset shield");
         for (var frame = 0; frame < 2; frame++) { await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
         if (DisplayServer.GetName() != "headless")
         {
-            var glow = NetTest.ReadShieldColor(mesh.GetInstanceShaderParameter("shield_color"));
+            var glow = NetScenarioTools.ReadShieldColor(mesh.GetInstanceShaderParameter("shield_color"));
             Assert(glow.A > 0 && new Color(glow, 1) == expected, "processed shield did not publish its accepted appearance");
             GD.Print("[body correction] rendered shield override transitions from unset to accepted color");
         }

@@ -9,10 +9,10 @@ namespace Propane.Dev.NetScenarios;
 
 internal sealed class VentContactScenario(INetScenarioHost host) : NetScenario(host)
 {
+    private int ventContactTick;
+
     protected override void Preparing(Match match) => ventContactTick = 0;
     protected override void Run(Match match, float dt) => VentContact(match);
-
-    private int ventContactTick;
 
     // Eight independently fluttering vents on clear ground isolate contact tracking from blasts,
     // local shot predictions and missed grants. Only the confirmed owner initiates each vent.

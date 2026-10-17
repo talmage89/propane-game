@@ -1,16 +1,14 @@
-using System;
-using System.Collections.Generic;
 using System.Linq;
 using Godot;
 using Propane.Modes;
 using Propane.Net;
-using Propane.Player;
 
 namespace Propane.Dev.NetScenarios;
 
 internal sealed class KingLateScenario(INetScenarioHost host) : NetScenario(host)
 {
     private int kingStage = -1;
+
     protected override void Preparing(Match match) => kingStage = -1;
     protected override void Run(Match match, float dt) => KingLate(match);
 
