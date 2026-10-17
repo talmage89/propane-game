@@ -3,7 +3,7 @@
 **Status:** Dated record (2026-10-14). The branch did not meet its acceptance brief, and its original frame-rate and
 pacing claims are superseded by the restored-catch-up follow-up inside it. Its shared tuners, scaled supply and catch-
 up policy shipped in 0.4.0; the current rules are in [world-services.md](../world-services.md) and the
-[README](../../README.md).
+[developer guide](../development.md#tuning).
 
 The performance work is substantial, but this branch **does not satisfy the complete acceptance brief**.
 The original FPS tables below used a rejected two-step catch-up policy and include simulation slowdown.

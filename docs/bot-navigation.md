@@ -181,7 +181,7 @@ course. `--first-seed=39 --seeds=1 --nav-log` replays a seed and traces its rout
 The default run fails unless at least 95% of goals are reached within 15 seconds. Additional assertions require a
 planned jump on closed-fence courses, walking through the direct gate, and no airborne entry into pile clearance.
 At takeoff, injected pile/vent circles must reject the same arc, and a bot inside danger must be able to walk out.
-`make test` runs five seeds; larger sweeps and screenshots use the commands in the README. Screenshots capture
+`make test` runs five seeds; larger sweeps and screenshots use the commands in the [developer guide](development.md#dev-harnesses). Screenshots capture
 picket/privacy crossings and supported landings. Unit tests cover physics-derived reach, gates, bounded alternate
 route recovery, nearby goal stability, committed flight, per-tick search work, valid creep at 60/120 Hz and the
 unchanged match tuning schema.

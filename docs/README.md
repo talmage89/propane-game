@@ -20,6 +20,7 @@ current and binding, and no one else edits it. Start with [VISION.md](../design/
 
 | Document | What it covers |
 | --- | --- |
+| [development.md](development.md) | The developer guide: running from source, the gate, tuning, repository layout, the scripted scenes in `scenes/dev`, versions and releases, and how the README media are made. |
 | [multiplayer.md](multiplayer.md) | Networking model, messages and protocol 3, hosting, the lobby and its world, bots and the network test tools. |
 | [net-scenarios.md](net-scenarios.md) | Network harness ownership, lifecycle, CLI inventory and completion obligations. |
 | [modes.md](modes.md) | How a game mode plugs in (rules, definition, runner, envelope) and the Lab prototypes. |
@@ -91,11 +92,11 @@ the report concludes; the contract named in each report's status line holds the 
 Their data and images sit beside them: `evidence/perf-vents/`, `evidence/recoil/`, `evidence/tank-scaling/`,
 `evidence/lobby-tanks/` and `evidence/king-crowd-results.csv`. Some tools read them (the vent baseline patch in
 `perf-vents/`, the default output of `tools/dev/plot_recoil.py`), so move them only together with those references.
-`readme_chain.gif` and `readme_still.jpg` illustrate the root README.
+`readme_chain.gif` and `readme_still.jpg` illustrate the root README; [development.md](development.md#readme-media) says how they are made.
 
 ## Outside docs/
 
-- [README.md](../README.md): what the game is, how to run it, the harness commands and the release process.
+- [README.md](../README.md): what the game is and how to download, play, host and build it. The harness commands and the release process are in [development.md](development.md).
 - [AGENTS.md](../AGENTS.md): the rules for agents working in this repository.
 
 ## Adding or changing a document
