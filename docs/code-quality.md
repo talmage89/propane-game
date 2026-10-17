@@ -5,9 +5,12 @@ namespaces, `var` locals and System usings first. Inline statements and switch-c
 layout. Long expressions are not reflowed. Expression bodies and naming remain editor suggestions rather than
 build warnings. Run `dotnet format Propane.sln` to apply the baseline.
 
-`make lint` verifies formatting, then performs a full build with warnings as errors. A previous incremental build
+`make lint` first checks that every relative link and image in the tracked Markdown files resolves to a tracked file
+and, for a `#fragment`, to a heading in it (`tools/dev/check_links.py`, standard library only; links to other sites are
+not fetched). It then verifies formatting and performs a full build with warnings as errors. A previous incremental build
 cannot hide warnings. `make check` runs lint before the headless regression tests, including with `make -j`, and ends with
 `make test-infra`, the gate's own self-tests. It stops on a lint failure. All three tasks appear in `make`'s help listing.
+When you move or rename a document, fix its links in the same commit; the check names each broken one with its line.
 
 `Propane.csproj` pins analysis to .NET 10's default rules, with the recommended Reliability, Usage and Security
 sets. Nullability is enabled. CA1001 additionally checks ownership of disposable fields; CA2007 requires explicit
@@ -33,7 +36,9 @@ Class-specific CA1001 suppressions preserve current lifetimes, with the reason b
 `make test-infra` (`python3 -B tools/dev/lint_tests.py`) runs last in `make check` and as its own CI job, `infra`. It
 needs dotnet, make, git and python3 but stubs Godot, so the job needs neither the editor nor imported assets. It proves the
 gate rejects nullable dereferences, disposable-field ownership,
-implicit async context, ValueTask misuse, and whitespace and style drift. It also checks corrected code passes.
+implicit async context, ValueTask misuse, and whitespace and style drift. It also checks corrected code passes, and
+(`check_links_tests.py`) that the link check rejects a missing file, image or definition target, a missing heading, an
+untracked target and a path leaving the repository, while ignoring links inside code.
 The fixtures compile in an isolated temporary project; they never run or modify game sources.
 `check_world_tests.py` proves failed children retain their logs and exit status, while successful runs remove scratch
 files. The script also stubs external tools to prove `make -j4 check` runs lint before every gate suite and
