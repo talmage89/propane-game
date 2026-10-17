@@ -30,6 +30,7 @@ current and binding, and no one else edits it. Start with [VISION.md](../design/
 | [release-reference.md](release-reference.md) | The frozen v0.4.0 reference fixtures, their checks and the deliberate refresh. |
 | [bot-navigation.md](bot-navigation.md) | The navigation layer and the bot policies. |
 | [lab.md](lab.md) | The Lab: its stations, environments and how its sessions are verified. |
+| [lab-scenarios.md](lab-scenarios.md) | Lab harness ownership: the host, scenario lifecycle, registry and completion obligations. |
 | [recoil.md](recoil.md) | How a shot kicks the logical aim, the recoil tuners and the logical muzzle. |
 | [locomotion.md](locomotion.md), [motion.md](motion.md) | Clips played as authored on one stride clock, and the rifle stance layered over them. |
 | [animation-sources.md](animation-sources.md) | Where the animation clips come from, and their licenses. |
@@ -60,6 +61,7 @@ the report concludes; the contract named in each report's status line holds the 
 | [evidence/participant-integration.md](evidence/participant-integration.md) | 2026-10-11, 10-12 | No | The participant (A6) merge review, the capacity proof and the tank-agreement tails it left open. |
 | [evidence/net-scenarios-verification.md](evidence/net-scenarios-verification.md) | 2026-10-16 | No | The P4 harness migration: preserved vent-contact failure, native inventories, paired measurements. |
 | [evidence/world-clock-verification.md](evidence/world-clock-verification.md) | 2026-10-16 | No | The B6 clock dispatch change: parent callback transcripts, allocation and burst measurements. |
+| [evidence/lab-scenarios-verification.md](evidence/lab-scenarios-verification.md) | 2026-10-17 | No | The B7a Lab harness migration: parent inventories, ordered awaits, byte-identical traces, captures. |
 | [evidence/king-online.md](evidence/king-online.md) | 2026-10-14 | No | King online: gates, network matrix, late loading, rendered presentation. |
 | [evidence/king-crowd.md](evidence/king-crowd.md) | 2026-10-15 | No | King crowd tactics: holds, mints and thinking cost at 4, 8 and 16 actors (data: [king-crowd-results.csv](evidence/king-crowd-results.csv)). |
 | [evidence/lobby-tanks.md](evidence/lobby-tanks.md) | 2026-10-14 | No | Lobby and Lab tank supply: gates, device delivery, native matrix (images in `lobby-tanks/`). |

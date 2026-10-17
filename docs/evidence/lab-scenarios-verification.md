@@ -1,5 +1,8 @@
 # Lab scenario extraction verification
 
+**Status:** Dated record (2026-10-17, refactor package B7a). Not superseded. The harness it verifies is described in
+[lab-scenarios.md](../lab-scenarios.md).
+
 Parent: `1019775`. No production or design files, release fixtures, Make targets or checker thresholds change.
 Raw logs, capture manifests and source inventories are retained under `build/rfb7a/`. The temporary runnable
 parent snapshot is removed after the final comparisons.

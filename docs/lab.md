@@ -196,7 +196,7 @@ worlds. Lifetime has the same listing and shard arguments (`--list-lifetime`, `-
 exactly once. The fast checker retains its 600-second session timeout. Full sessions have 1,800 seconds, while dial
 sweeps have `max(600, 2400 / shards)` seconds; a timeout kills the engine and any timing wrapper together.
 
-The scripted harness uses [owned Lab scenarios](lab-scenarios.md); its [extraction proof](lab-scenarios-verification.md)
+The scripted harness uses [owned Lab scenarios](lab-scenarios.md); its [extraction proof](evidence/lab-scenarios-verification.md)
 records the preserved case, assertion and capture inventory.
 
 King outcome runs print `[king crowd]`: audited mints, mints per minute, the sampled fraction of simulation time

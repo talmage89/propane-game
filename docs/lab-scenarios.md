@@ -51,4 +51,4 @@ python3 -B tools/dev/lab_scenario_inventory.py --compare=1019775 --output=build/
 The comparison checks executable expressions; caller context is retained for review because new documentation
 naturally adds references. Numeric telemetry and native streaming completion are compared separately.
 
-[Verification record](lab-scenarios-verification.md) includes migration proofs, failed attempts and native capture comparisons.
+[Verification record](evidence/lab-scenarios-verification.md) includes migration proofs, failed attempts and native capture comparisons.
