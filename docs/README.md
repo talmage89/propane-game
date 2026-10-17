@@ -24,6 +24,7 @@ current and binding, and no one else edits it. Start with [VISION.md](../design/
 | [net-scenarios.md](net-scenarios.md) | Network harness ownership, lifecycle, CLI inventory and completion obligations. |
 | [modes.md](modes.md) | How a game mode plugs in (rules, definition, runner, envelope) and the Lab prototypes. |
 | [world-services.md](world-services.md) | `Game`, `Match`, session and world contexts: who owns what, and what stays shared. |
+| [suburb-generation.md](suburb-generation.md) | Generator ownership, stage order, random streams and exact-plan verification. |
 | [world-clock.md](world-clock.md) | `WorldClock` timer scheduling and dispatch: order, cancellation, nesting, allocation. |
 | [shutdown.md](shutdown.md) | Orderly process exit through `ShutdownGuard` and finalizer draining. |
 | [code-quality.md](code-quality.md) | Formatting and analyzers, the gate (`make lint`, `check`, `test`, `test-infra`, `test-full`), launch options, adding a suite or scene. |
