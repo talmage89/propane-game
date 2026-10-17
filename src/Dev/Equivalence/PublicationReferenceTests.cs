@@ -5,6 +5,7 @@ using System.Reflection;
 using Godot;
 using Propane.Core;
 using Propane.Dev.UnitTests;
+using Propane.Dev.UnitTests.Fixtures;
 using Propane.Net;
 using Propane.Tank;
 using Propane.World;
@@ -45,7 +46,7 @@ public static class PublicationReferenceTests
     {
         runner.Run("reference/publication mixed batches, gathers, sleep/wake, pending drops, epochs, checkpoints and failed sends", () =>
         {
-            using var fixture = new ServerTests.Fixture(bots: 1);
+            using var fixture = new ServerFixture(bots: 1);
             var network = new LoopbackNetwork();
             var rawServer = network.Create(); var rawClient = network.Create();
             var wire = new RecordingTransport(rawClient);

@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 using Godot;
 using Propane.Core;
+using Propane.Dev.UnitTests.Fixtures;
 using Propane.Net;
 
 namespace Propane.Dev.UnitTests;

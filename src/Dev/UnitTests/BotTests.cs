@@ -5,6 +5,7 @@ using System.Linq;
 using Godot;
 using Propane.Bots;
 using Propane.Core;
+using Propane.Dev.UnitTests.Fixtures;
 using Propane.Net;
 using Propane.Player;
 
@@ -18,21 +19,21 @@ public static class BotTests
     private static void Assert(bool condition, string reason) => TestRunner.Assert(condition, reason);
 
     /// <summary>A fixture whose first match has ended, with both peers back in the waiting lobby.</summary>
-    private static ServerTests.Fixture Waiting()
+    private static ServerFixture Waiting()
     {
-        var f = new ServerTests.Fixture(playing: false);
+        var f = new ServerFixture(playing: false);
         f.Advance(50); f.Advance(); f.Advance(20); f.Advance(2);
         f.Packets.Clear();
         return f;
     }
 
-    private static ActorRequestResultMessage Result(ServerTests.Fixture f, int peer) =>
+    private static ActorRequestResultMessage Result(ServerFixture f, int peer) =>
         f.Packets.Where(p => p.Peer == peer).Select(p => p.Message.Payload).OfType<ActorRequestResultMessage>().Single();
 
-    private static IReadOnlyList<PlayerProfile> Roster(ServerTests.Fixture f) =>
+    private static IReadOnlyList<PlayerProfile> Roster(ServerFixture f) =>
         f.Packets.Select(p => p.Message.Payload).OfType<RosterStateMessage>().Last().Actors;
 
-    private static ActorRequestResultMessage Add(ServerTests.Fixture f, uint request, string name, int peer = 3, byte difficulty = 1,
+    private static ActorRequestResultMessage Add(ServerFixture f, uint request, string name, int peer = 3, byte difficulty = 1,
         AppearanceRecord? appearance = null, uint? revision = null, ActorKind kind = ActorKind.Bot)
     {
         f.Packets.Clear();
@@ -42,7 +43,7 @@ public static class BotTests
         return Result(f, peer);
     }
 
-    private static ActorRequestResultMessage Update(ServerTests.Fixture f, uint request, int actor, string name, int peer = 3, byte difficulty = 1,
+    private static ActorRequestResultMessage Update(ServerFixture f, uint request, int actor, string name, int peer = 3, byte difficulty = 1,
         AppearanceRecord? appearance = null, uint? revision = null)
     {
         f.Packets.Clear();
@@ -51,7 +52,7 @@ public static class BotTests
         return Result(f, peer);
     }
 
-    private static ActorRequestResultMessage Remove(ServerTests.Fixture f, uint request, int actor, int peer = 3, uint? revision = null)
+    private static ActorRequestResultMessage Remove(ServerFixture f, uint request, int actor, int peer = 3, uint? revision = null)
     {
         f.Packets.Clear();
         f.Receive(Request(Msg.RemoveActor, new RemoveActorMessage(request, actor, revision ?? f.Revision(peer))), peer);
@@ -222,7 +223,7 @@ public static class BotTests
         });
         runner.Run("bots/the owner simulates its bots with the mode's brain and no view", () =>
         {
-            using var f = new ServerTests.Fixture(bots: 1);
+            using var f = new ServerFixture(bots: 1);
             var client = new NetClient();
             client.Handle(MessageCodec.Encode(new NetMessage(Msg.Welcome, 0, 0, new WelcomeMessage(2, null)), true));
             var match = new Match { Net = client, Setup = f.Setup, CreateLocalView = false };
@@ -264,7 +265,7 @@ public static class BotTests
                 Assert(Roster(lobby).All(a => a.OwnerPeerId != 3) && lobby.Packets.Any(p => p.Peer == 2 && p.Message.Payload is LobbyInfo l && l.Members.Count == 1),
                     "a departed creator's lobby bots stayed");
             }
-            using var f = new ServerTests.Fixture(bots: 2);
+            using var f = new ServerFixture(bots: 2);
             var departing = f.Setup.Players.Where(p => p.Player.OwnerPeerId == 2).Select(p => p.Player.Id).ToArray();
             Assert(departing.Length == 3 && f.Setup.Players.Count(p => p.Player.Kind == ActorKind.Bot) == 2, "fixture bots");
             f.Server.OnDisconnected(2);

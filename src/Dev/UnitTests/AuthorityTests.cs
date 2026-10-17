@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Godot;
 using Propane.Core;
+using Propane.Dev.UnitTests.Fixtures;
 using Propane.Net;
 using Propane.Tank;
 using Propane.World.Plan;
@@ -37,7 +38,7 @@ public static class AuthorityTests
         {
             runner.Run($"authority/unconfirmed {(sleeping ? "resting" : "moving")} drops from {(botVictim ? "bot" : "human")} defer publication until creation", () =>
             {
-                using var f = new MatchFixture(runner, bots: 1);
+                using var f = new AuthorityFixture(runner, bots: 1);
                 var victim = botVictim ? f.Match.Session.OwnedActors.Single(a => a.Character != f.Match.Player).Character : f.Match.Player;
                 f.Match.OnMessage(new NetMessage(Msg.MatchGo, f.Server.Id, 0, new FloatMessage(60)));
                 f.Match.OnMessage(ModeWireFixtures.Score(f.Server.Id, victim.ActorId, 5, 0));
@@ -122,7 +123,7 @@ public static class AuthorityTests
         });
         runner.Run("authority/match queue preserves a nonpredictive gather target", () =>
         {
-            using var f = new MatchFixture(runner);
+            using var f = new AuthorityFixture(runner);
             var tank = f.Match.LiveTanks.Single(t => t.NetId == Id);
             f.Match.Bodies.OnAuthority(Grant(3, 2) with { Rest = true }, 0);
             f.Match.Bodies.Correct(1);
@@ -132,7 +133,7 @@ public static class AuthorityTests
         });
         runner.Run("authority/frozen gather motion never publishes a premature rest", () =>
         {
-            using var f = new MatchFixture(runner);
+            using var f = new AuthorityFixture(runner);
             var tank = f.Match.LiveTanks.Single(t => t.NetId == Id);
             var entry = f.Match.Bodies.Get(Id)!;
             tank.BeginGather();
@@ -227,7 +228,7 @@ public static class AuthorityTests
         });
         runner.Run("authority/match publications keep real-time cadence when physics falls behind", () =>
         {
-            using var f = new MatchFixture(runner);
+            using var f = new AuthorityFixture(runner);
             var tank = f.Match.LiveTanks.Single(t => t.NetId == Id);
             var entry = f.Match.Bodies.Get(Id)!;
             tank.Sleeping = false;
@@ -264,7 +265,7 @@ public static class AuthorityTests
         });
         runner.Run("authority/vent spin limit does not erase observer steering", () =>
         {
-            using var f = new MatchFixture(runner);
+            using var f = new AuthorityFixture(runner);
             var tank = f.Match.LiveTanks.Single(t => t.NetId == Id);
             tank.PunctureRemote(Vector3.Zero, Vector3.Right, 1);
             tank.GlobalTransform = new Transform3D(Basis.Identity, tank.GlobalPosition);
@@ -291,7 +292,7 @@ public static class AuthorityTests
         });
         runner.Run("authority/settled intact contact recovers despite continuous awake publications", () =>
         {
-            using var f = new MatchFixture(runner);
+            using var f = new AuthorityFixture(runner);
             var tank = f.Match.LiveTanks.Single(t => t.NetId == Id);
             var pose = tank.GlobalTransform;
             var stalled = new Transform3D(new Basis(Vector3.Forward, .45f) * pose.Basis, pose.Origin + Vector3.Up * .15f);
@@ -312,7 +313,7 @@ public static class AuthorityTests
         });
         runner.Run("authority/owner motion restarts settled contact recovery", () =>
         {
-            using var f = new MatchFixture(runner);
+            using var f = new AuthorityFixture(runner);
             var tank = f.Match.LiveTanks.Single(t => t.NetId == Id);
             var pose = tank.GlobalTransform;
             var stalled = pose.Translated(Vector3.Up * .15f);
@@ -368,7 +369,7 @@ public static class AuthorityTests
         runner.Run("authority/match copies local bot dials beside creator tuning", () =>
         {
             using var local = new Tuning { TankMass = 7, BotRouteSpacing = 9 };
-            using var fixture = new MatchFixture(runner, local);
+            using var fixture = new AuthorityFixture(runner, local);
             var tuning = fixture.Match.World.Tuning;
             TestRunner.Assert(tuning.TankMass == fixture.Server.Setup.Tuning["TankMass"].AsSingle() && tuning.BotRouteSpacing == 9,
                 "local brain dials were lost or local gameplay tuning overrode the creator");
@@ -427,7 +428,7 @@ public static class AuthorityTests
         });
         runner.Run("authority/departure resolves an overlapping in-flight group claim", () =>
         {
-            using var f = new MatchFixture(runner);
+            using var f = new AuthorityFixture(runner);
             var group = f.Match.LiveTanks.Where(t => t.NetId == Id || t.NetId == Other).ToArray();
             f.Match.Claim(group, atomic: true);
             Send(f.Server, 3, Msg.Claim, Claim(10, Pose(Id), Pose(Other)));
@@ -569,14 +570,14 @@ public static class AuthorityTests
         {
             runner.Run($"authority/new canonical vent reconciles an intact observer (moving {moving})", () =>
             {
-                using var f = new MatchFixture(runner);
+                using var f = new AuthorityFixture(runner);
                 var tank = f.Match.LiveTanks.Single(t => t.NetId == Id);
                 // A relayed blast can already have pushed this intact observer before its child puncture arrives.
                 var current = new Transform3D(Basis.Identity, new Vector3(9, 4, 8));
                 BodySync.Snap(tank, current, Vector3.One * 20, Vector3.One * 2);
                 tank.Sleeping = !moving;
                 var puncture = Puncture(3);
-                Send(f.Server, 3, Msg.Puncture, puncture);
+                SendActor(f.Server, 3, Msg.Puncture, puncture);
                 f.Deliver();
                 TestRunner.Assert(tank.State == PropaneTank.TankState.Venting && tank.HoleLocal == puncture.Hole &&
                     f.Match.Bodies.Get(Id) is { Owner: 3, Epoch: 2 }, "observer did not adopt canonical vent authority");
@@ -595,18 +596,18 @@ public static class AuthorityTests
         }
         runner.Run("authority/server echoes canonical punctures and refuses contenders explicitly", () =>
         {
-            using var f = new ServerTests.Fixture();
-            Send(f, 2, Msg.Puncture, Puncture(2));
+            using var f = new ServerFixture();
+            SendActor(f, 2, Msg.Puncture, Puncture(2));
             TestRunner.Assert(f.Packets.Count(p => p.Message.Payload is AuthorityMessage { Reason: ClaimRefusal.None }) == 2, "canonical echo excluded its contender");
             f.Packets.Clear();
-            Send(f, 3, Msg.Puncture, Puncture(3));
+            SendActor(f, 3, Msg.Puncture, Puncture(3));
             TestRunner.Assert(f.Packets.Single() is { Peer: 3, Message.Payload: AuthorityMessage { Reason: ClaimRefusal.StaleEpoch } refusal } &&
                 refusal.Bodies.Single().Vent == new VentParameters(Puncture(2).Hole, Puncture(2).Normal, Puncture(2).Swirl), "loser did not receive the canonical vent");
         });
         runner.Run("authority/loading-phase requests receive canonical refusals", () =>
         {
-            using var f = new ServerTests.Fixture(playing: false);
-            Send(f, 2, Msg.Puncture, Puncture(2));
+            using var f = new ServerFixture(playing: false);
+            SendActor(f, 2, Msg.Puncture, Puncture(2));
             TestRunner.Assert(f.Packets.Single().Message.Payload is AuthorityMessage { Reason: ClaimRefusal.WrongPhase } result &&
                 result.Bodies.Single().State == TankLedger.State.Intact, "loading silently discarded a predicted puncture");
         });
@@ -650,7 +651,7 @@ public static class AuthorityTests
         });
         runner.Run("authority/refused ownership restores the latest canonical pose and clears prediction", () =>
         {
-            using var f = new MatchFixture(runner);
+            using var f = new AuthorityFixture(runner);
             Send(f.Server, 3, Msg.Claim, Claim(5, Pose(Id)));
             f.Deliver();
             var tank = f.Match.LiveTanks.Single(t => t.NetId == Id);
@@ -664,7 +665,7 @@ public static class AuthorityTests
         });
         runner.Run("authority/queued puncture proposes its current motion after the preceding grant", () =>
         {
-            using var f = new MatchFixture(runner);
+            using var f = new AuthorityFixture(runner);
             var tank = f.Match.LiveTanks.Single(t => t.NetId == Id);
             f.Match.Claim(new[] { tank }, atomic: true);
             tank.TakeShot(tank.ToGlobal(new Vector3(.15f, .23f, 0)), tank.GlobalBasis * Vector3.Right, Vector3.Left, f.Match.Player.ActorId);
@@ -682,7 +683,7 @@ public static class AuthorityTests
         });
         runner.Run("authority/chain puncture proposes motion after the complete blast push", () =>
         {
-            using var f = new MatchFixture(runner);
+            using var f = new AuthorityFixture(runner);
             var root = f.Match.LiveTanks.Single(t => t.NetId == Id);
             var child = f.Match.LiveTanks.Single(t => t.NetId == Other);
             root.GlobalPosition = new Vector3(0, 60, 0);
@@ -704,7 +705,7 @@ public static class AuthorityTests
         });
         runner.Run("authority/queued group proposes current motion after its root is sent", () =>
         {
-            using var f = new MatchFixture(runner);
+            using var f = new AuthorityFixture(runner);
             Send(f.Server, 3, Msg.Claim, Claim(20, Pose(Other)));
             f.Deliver();
             var root = f.Match.LiveTanks.Single(t => t.NetId == Id);
@@ -729,10 +730,10 @@ public static class AuthorityTests
         {
             runner.Run($"authority/losing puncture preserves motion (broadcast first {broadcastFirst})", () =>
             {
-                using var f = new MatchFixture(runner);
+                using var f = new AuthorityFixture(runner);
                 var tank = f.Match.LiveTanks.Single(t => t.NetId == Id);
                 tank.TakeShot(tank.ToGlobal(new Vector3(.15f, .23f, 0)), tank.GlobalBasis * Vector3.Right, Vector3.Left, f.Match.Player.ActorId);
-                Send(f.Server, 3, Msg.Puncture, Puncture(3));
+                SendActor(f.Server, 3, Msg.Puncture, Puncture(3));
                 if (!broadcastFirst) { f.Server.Packets.Clear(); }
                 var transform = new Transform3D(new Basis(Vector3.Up, .7f), new Vector3(8, 2, 9));
                 BodySync.Snap(tank, transform, Vector3.One * 3, Vector3.One * 2);
@@ -747,7 +748,7 @@ public static class AuthorityTests
         }
         runner.Run("authority/refused root cancels a chain fuse on an already owned vent", () =>
         {
-            using var f = new MatchFixture(runner);
+            using var f = new AuthorityFixture(runner);
             var root = f.Match.LiveTanks.Single(t => t.NetId == Id);
             var child = f.Match.LiveTanks.Single(t => t.NetId == Other);
             child.TakeShot(child.ToGlobal(new Vector3(.15f, .23f, 0)), child.GlobalBasis * Vector3.Right, Vector3.Left, f.Match.Player.ActorId);
@@ -772,7 +773,7 @@ public static class AuthorityTests
         });
         runner.Run("authority/refused vent ownership cancels its predicted chain fuse", () =>
         {
-            using var f = new MatchFixture(runner);
+            using var f = new AuthorityFixture(runner);
             var tank = f.Match.LiveTanks.Single(t => t.NetId == Id);
             tank.TakeShot(tank.ToGlobal(new Vector3(.15f, .23f, 0)), tank.GlobalBasis * Vector3.Right, Vector3.Left, f.Match.Player.ActorId);
             f.Flush();
@@ -790,7 +791,7 @@ public static class AuthorityTests
         });
         runner.Run("authority/wrong-phase puncture restores intact state without a phantom vent", () =>
         {
-            using var f = new MatchFixture(runner);
+            using var f = new AuthorityFixture(runner);
             var tank = f.Match.LiveTanks.Single(t => t.NetId == Id);
             tank.TakeShot(tank.ToGlobal(new Vector3(0.15f, 0.23f, 0)), tank.GlobalBasis * Vector3.Right, Vector3.Left, f.Match.Player.ActorId);
             f.Server.Advance(20);
@@ -801,7 +802,7 @@ public static class AuthorityTests
         });
         runner.Run("gather/refused explosion preserves gathered pile membership", () =>
         {
-            using var f = new MatchFixture(runner);
+            using var f = new AuthorityFixture(runner);
             var tank = f.Match.LiveTanks.Single(t => t.NetId == Id);
             tank.GlobalTransform = new Transform3D(Basis.Identity, new Vector3(0, 60, 0));
             tank.MarkPile();
@@ -819,7 +820,7 @@ public static class AuthorityTests
         });
         runner.Run("authority/refused predicted detonation recreates the canonical venting body", () =>
         {
-            using var f = new MatchFixture(runner);
+            using var f = new AuthorityFixture(runner);
             var tank = f.Match.LiveTanks.Single(t => t.NetId == Id);
             tank.TakeShot(tank.ToGlobal(new Vector3(0.15f, 0.23f, 0)), tank.GlobalBasis * Vector3.Right, Vector3.Left, f.Match.Player.ActorId);
             f.Flush();
@@ -837,8 +838,8 @@ public static class AuthorityTests
         });
         runner.Run("authority/newer motion cannot suppress refused lifecycle restoration", () =>
         {
-            using var f = new MatchFixture(runner);
-            Send(f.Server, 3, Msg.Puncture, Puncture(3));
+            using var f = new AuthorityFixture(runner);
+            SendActor(f.Server, 3, Msg.Puncture, Puncture(3));
             f.Deliver();
             var tank = f.Match.LiveTanks.Single(t => t.NetId == Id);
             tank.GlobalPosition = new Vector3(0, 60, 0);
@@ -862,8 +863,8 @@ public static class AuthorityTests
         });
         runner.Run("authority/newer motion cannot suppress refused fuse cancellation", () =>
         {
-            using var f = new MatchFixture(runner);
-            Send(f.Server, 3, Msg.Puncture, Puncture(3));
+            using var f = new AuthorityFixture(runner);
+            SendActor(f.Server, 3, Msg.Puncture, Puncture(3));
             f.Deliver();
             var tank = f.Match.LiveTanks.Single(t => t.NetId == Id);
             Action? callback = null;
@@ -882,40 +883,17 @@ public static class AuthorityTests
         });
     }
 
-    private static void Send(ServerTests.Fixture f, int peer, Msg type, object payload) =>
+    /// <summary>A message without an actor header: claims, motion and rests.</summary>
+    private static void Send(ServerFixture f, int peer, Msg type, object payload) =>
         f.Receive(MessageCodec.Encode(new NetMessage(type, f.Id, 0, payload), false), peer);
+
+    /// <summary>An actor message (a puncture) from the peer's actor, with its real header.</summary>
+    private static void SendActor(ServerFixture f, int peer, Msg type, object payload) => f.Receive(f.ActorPacket(type, payload, peer), peer);
 
     private sealed class BodyFixture : IDisposable
     {
         public readonly RigidBody3D Body = new();
         public BodyFixture(Node? parent = null) => parent?.AddChild(Body);
         public void Dispose() => Body.Free();
-    }
-
-    internal sealed class MatchFixture : IDisposable
-    {
-        public readonly ServerTests.Fixture Server;
-        private readonly NetClient client;
-        public readonly Match Match;
-        private readonly Queue<byte[]> sent = new();
-        public MatchFixture(TestRunner runner, Tuning? template = null, int bots = 0)
-        {
-            Server = new ServerTests.Fixture(bots: bots);
-            client = new NetClient(PacketTransports.CreateClient(), Server.Clock) { Template = template ?? Tuning.SavedTemplate };
-            client.Handle(MessageCodec.Encode(new NetMessage(Msg.Welcome, 0, 0, new WelcomeMessage(2, null)), true));
-            Match = new Match { Net = client, Setup = Server.Setup, Clock = Server.Clock, AuthoritySendOverride = sent.Enqueue };
-            runner.AddChild(Match);
-        }
-        public void Deliver()
-        {
-            var messages = Server.Packets.Where(p => p.Peer == 2 && p.Message.Type == Msg.Authority).Select(p => p.Message).ToArray();
-            Server.Packets.Clear();
-            foreach (var message in messages) { Match.OnMessage(message); }
-        }
-        public void Flush()
-        {
-            while (sent.TryDequeue(out var packet)) { Server.Receive(packet); Deliver(); }
-        }
-        public void Dispose() { Match.World.Dispose(); Match.Free(); client.Free(); Server.Dispose(); }
     }
 }

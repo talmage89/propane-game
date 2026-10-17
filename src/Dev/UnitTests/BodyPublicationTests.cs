@@ -6,6 +6,7 @@ using System.Linq;
 using System.Reflection;
 using System.Text.Json;
 using Godot;
+using Propane.Dev.UnitTests.Fixtures;
 using Propane.Net;
 using Propane.World;
 
@@ -96,7 +97,7 @@ public static class BodyPublicationTests
 
     private sealed class Fixture : IDisposable
     {
-        private readonly ServerTests.Fixture server = new();
+        private readonly ServerFixture server = new();
         private readonly LoopbackTransport listener;
         private readonly NetClient client;
         public readonly SinkTransport Wire;
@@ -115,7 +116,7 @@ public static class BodyPublicationTests
             client.Connect("", 1234, "Publication", 0);
             client._Process(0);
             listener.Poll();
-            client.Handle(MessageCodec.Encode(new NetMessage(Msg.Welcome, 0, 0, new WelcomeMessage(2, null)), true));
+            Handshake.Welcome(client, 2);
             var setup = server.Setup with { Plan = PlanCodec.Encode(SuburbPlans.Generate(SuburbPlans.Match(server.Tuning, 2), 23)) };
             Match = new Match { Net = client, Setup = setup, Clock = server.Clock, CreateLocalView = false };
             runner.AddChild(Match);

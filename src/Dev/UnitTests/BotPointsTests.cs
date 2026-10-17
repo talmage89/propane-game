@@ -1,6 +1,7 @@
 using System.Linq;
 using Propane.Bots;
 using Propane.Core;
+using Propane.Dev.UnitTests.Fixtures;
 using Propane.Net;
 
 namespace Propane.Dev.UnitTests;
@@ -46,7 +47,7 @@ public static class BotPointsTests
         {
             foreach (var mode in new[] { Modes.ModeRegistry.TankBank, Modes.ModeRegistry.King })
             {
-                using var fixture = new ServerTests.Fixture(bots: 3, mode: mode);
+                using var fixture = new ServerFixture(bots: 3, mode: mode);
                 var players = fixture.Setup.Players.Select((p, i) => p.Player.Kind == ActorKind.Bot
                     ? p with { Player = p.Player with { ControllerConfig = ControllerConfig.ForBot((byte)(i - 2)) } } : p).ToArray();
                 // The fixture's two humans precede its bots.

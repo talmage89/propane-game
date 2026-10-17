@@ -2,6 +2,7 @@ using System.IO;
 using System.Linq;
 using Godot;
 using Propane.Core;
+using Propane.Dev.UnitTests.Fixtures;
 using Propane.Net;
 using Propane.Player;
 
@@ -109,33 +110,32 @@ public static class MeleeTests
         });
         runner.Run("melee/server production relay enforces phase, membership, target and cooldown", () =>
         {
-            using var f = new ServerTests.Fixture();
-            byte[] Start(uint swing) => MessageCodec.Encode(new NetMessage(Msg.MeleeStart, f.Id, 0,
-                new MeleeStartMessage(swing, Vector3.Forward)), false);
-            byte[] Hit(int victim, uint swing = 1) => MessageCodec.Encode(new NetMessage(Msg.MeleeContact, f.Id, 0,
-                new MeleeContactMessage(swing, victim, -1)), false);
-            f.Reject(Hit(f.ActorId(3)));
-            f.Reject(Start(1), peer: 999);
-            f.Receive(Start(1));
+            using var f = new ServerFixture();
+            byte[] Start(ServerFixture on, uint swing) => on.ActorPacket(Msg.MeleeStart, new MeleeStartMessage(swing, Vector3.Forward));
+            byte[] Hit(ServerFixture on, int victim, uint swing = 1) => on.ActorPacket(Msg.MeleeContact, new MeleeContactMessage(swing, victim, -1));
+            f.Reject(Hit(f, f.ActorId(3)));
+            // A well-formed start from peer 2's actor, arriving from a peer that never connected.
+            f.Reject(ActorMessages.Encode(Msg.MeleeStart, f.Id, f.ActorId(2), 1, 1, new MeleeStartMessage(1, Vector3.Forward)), peer: 999);
+            f.Receive(Start(f, 1));
             TestRunner.Assert(f.Packets.Count == 2 && f.Packets.Any(p => p.Peer == 3 && p.Message.Sender == 2), "start not relayed");
-            f.Reject(Start(2));
-            f.Reject(Hit(999)); f.Reject(Hit(f.ActorId(2))); f.Reject(Hit(3, 2));
-            f.Receive(Hit(f.ActorId(3)));
+            f.Reject(Start(f, 2));
+            f.Reject(Hit(f, 999)); f.Reject(Hit(f, f.ActorId(2))); f.Reject(Hit(f, 3, 2));
+            f.Receive(Hit(f, f.ActorId(3)));
             TestRunner.Assert(f.Packets.Count == 2 && f.Packets.All(p => p.Message.Payload is MeleeContactMessage), "hit not relayed");
-            f.Reject(Hit(f.ActorId(3)));
-            using var loading = new ServerTests.Fixture(playing: false);
-            loading.Reject(Start(1));
-            loading.Reject(Hit(f.ActorId(3)));
+            f.Reject(Hit(f, f.ActorId(3)));
+            using var loading = new ServerFixture(playing: false);
+            loading.Reject(Start(loading, 1));
+            loading.Reject(Hit(loading, f.ActorId(3)));
             loading.Receive(new NetWriter(Msg.Loaded, loading.Id));
             loading.Receive(new NetWriter(Msg.Loaded, loading.Id), peer: 3);
             loading.Advance();
-            loading.Reject(Start(1)); // Countdown.
+            loading.Reject(Start(loading, 1)); // Countdown.
             loading.Advance();
             loading.Clock.Seconds += 20;
-            loading.Reject(Start(1)); // Expired play, before the next phase tick.
+            loading.Reject(Start(loading, 1)); // Expired play, before the next phase tick.
             loading.Advance();
-            loading.Reject(Start(1)); // Results.
-            loading.Reject(Hit(f.ActorId(3)));
+            loading.Reject(Start(loading, 1)); // Results.
+            loading.Reject(Hit(loading, f.ActorId(3)));
         });
     }
 

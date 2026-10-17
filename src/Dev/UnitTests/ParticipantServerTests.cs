@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Godot;
+using Propane.Dev.UnitTests.Fixtures;
 using Propane.Net;
 using Propane.Player;
 using Propane.Tank;
@@ -14,7 +15,7 @@ public static class ParticipantServerTests
 {
     private static byte[] Request(Msg type, object payload) => MessageCodec.Encode(new NetMessage(type, 0, 0, payload), false);
     private static void Assert(bool condition, string reason) => TestRunner.Assert(condition, reason);
-    private static void AssertFreshLobby(ServerTests.Fixture f)
+    private static void AssertFreshLobby(ServerFixture f)
     {
         f.Server.RosterFactory = () => new ParticipantRoster();
         f.Server.OnConnected(4);
@@ -33,7 +34,7 @@ public static class ParticipantServerTests
         {
             runner.Run($"participants/{counter} exhaustion retires the lobby without aborting server ticks", () =>
             {
-                using var f = new ServerTests.Fixture(rosterFactory: () => counter == "life"
+                using var f = new ServerFixture(rosterFactory: () => counter == "life"
                     ? new ParticipantRoster(firstLife: uint.MaxValue)
                     : new ParticipantRoster(firstRevision: uint.MaxValue - 2));
                 Assert(counter == "life" ? f.Setup.Players.All(p => p.Player.LifeId == uint.MaxValue)
@@ -55,7 +56,7 @@ public static class ParticipantServerTests
         }
         runner.Run("participants/revision exhaustion during departure retires the lobby", () =>
         {
-            using var f = new ServerTests.Fixture(rosterFactory: () => new ParticipantRoster(firstRevision: uint.MaxValue - 2));
+            using var f = new ServerFixture(rosterFactory: () => new ParticipantRoster(firstRevision: uint.MaxValue - 2));
             Assert(f.Setup.RosterRevision == uint.MaxValue, "fixture did not exhaust revision space");
             var capture = f.Server.SendOverride!;
             f.Server.SendOverride = (peer, bytes, traffic) =>
@@ -72,7 +73,7 @@ public static class ParticipantServerTests
         });
         runner.Run("participants/rounds retain actor and allocation identities but advance lives", () =>
         {
-            using var f = new ServerTests.Fixture();
+            using var f = new ServerFixture();
             var first = f.Setup;
             f.Advance(11); f.Advance(20);
             f.Packets.Clear();
@@ -90,7 +91,7 @@ public static class ParticipantServerTests
         });
         runner.Run("participants/creator can start with an owned bot actor", () =>
         {
-            using var f = new ServerTests.Fixture(playing: false);
+            using var f = new ServerFixture(playing: false);
             f.Advance(50); f.Advance(); f.Advance(20); f.Advance(2);
             var human = f.Setup.Players.Single(p => p.Player.OwnerPeerId == 2).Player;
             f.Receive(Request(Msg.RemoveActor, new RemoveActorMessage(1, human.Id, f.Revision())));
@@ -108,7 +109,7 @@ public static class ParticipantServerTests
         });
         runner.Run("participants/server owns revisions and idempotent roster requests", () =>
         {
-            using var f = new ServerTests.Fixture(playing: false);
+            using var f = new ServerFixture(playing: false);
             f.Advance(50); f.Advance(); f.Advance(20); f.Advance(2); // Return to Waiting.
             var revision = f.Packets.Select(p => p.Message.Payload).OfType<LobbyInfo>().Last().RosterRevision;
             f.Packets.Clear();
@@ -144,7 +145,7 @@ public static class ParticipantServerTests
         });
         runner.Run("participants/frozen roster counts actors and validates ownership and lives", () =>
         {
-            using var f = new ServerTests.Fixture(bots: 1);
+            using var f = new ServerFixture(bots: 1);
             Assert(f.Setup.Players.Count == 3 && f.Setup.Peers.Count == 2, "actor count conflated with readiness peers");
             var bot = f.Setup.Players.Single(p => p.Player.Kind == ActorKind.Bot).Player;
             var human = f.Setup.Players.Single(p => p.Player.OwnerPeerId == 2 && p.Player.Kind == ActorKind.Human).Player;
@@ -165,7 +166,7 @@ public static class ParticipantServerTests
         });
         runner.Run("participants/departure removes every actor and retains departed banks", () =>
         {
-            using var f = new ServerTests.Fixture(bots: 1);
+            using var f = new ServerFixture(bots: 1);
             var departed = f.Setup.Players.Where(a => a.Player.OwnerPeerId == 2).Select(a => a.Player.Id).ToArray();
             f.Server.OnDisconnected(2);
             Assert(f.Packets.Any(p => p.Message.Payload is AuthorityMessage a && a.Bodies.All(b => b.Owner == 3 && b.Body.Epoch == 2)), "body authority was not transferred with a fresh epoch");
@@ -179,7 +180,7 @@ public static class ParticipantServerTests
         {
             runner.Run($"participants/readiness {(failSend ? "stops after send failure" : "waits for the first complete frame")}", () =>
             {
-                using var f = new ServerTests.Fixture();
+                using var f = new ServerFixture();
                 var network = new LoopbackNetwork();
                 var server = network.Create();
                 var transport = network.Create();
@@ -221,7 +222,7 @@ public static class ParticipantServerTests
 
         runner.Run("participants/same-peer shot and melee use one event path and dedupe echoes", () =>
         {
-            using var f = new ServerTests.Fixture(bots: 1);
+            using var f = new ServerFixture(bots: 1);
             var client = new NetClient();
             client.Handle(MessageCodec.Encode(new NetMessage(Msg.Welcome, 0, 0, new WelcomeMessage(2, null)), true));
             var match = new Match { Net = client, Setup = f.Setup, CreateLocalView = false };
@@ -278,7 +279,7 @@ public static class ParticipantServerTests
         });
         runner.Run("participants/delayed view stages its actor before buffered blast delivery", () =>
         {
-            using var fixture = new ServerTests.Fixture();
+            using var fixture = new ServerFixture();
             var client = new NetClient();
             client.Handle(MessageCodec.Encode(new NetMessage(Msg.Welcome, 0, 0, new WelcomeMessage(2, null)), true));
             client.Handle(MessageCodec.Encode(new NetMessage(Msg.LobbyState, 0, 0, new LobbyInfo(1, 2, 10,
@@ -320,7 +321,7 @@ public static class ParticipantServerTests
         });
         runner.Run("participants/capacity counts actors and only the waiting creator can select it", () =>
         {
-            using var f = new ServerTests.Fixture(playing: false);
+            using var f = new ServerFixture(playing: false);
             f.Advance(50); f.Advance(); f.Advance(20); f.Advance(2);
             f.Packets.Clear();
             f.Receive(Request(Msg.SetCapacity, new IntMessage(16)), 3);
