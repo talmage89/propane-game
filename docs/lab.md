@@ -110,6 +110,20 @@ multi-round prototype (Short Fuse) keeps a `LabMatch` on the session: each round
 round and mode clock and builds the next suburb from the match's seed stepped by round, while Backspace or Reset starts a
 new match. There are still no teams.
 
+Each local runner owns a `ModeTunerSampler`: typed scalar getters are resolved once from its mode definition's
+tuner names. Prototypes poll the live resource every physics tick; Bank polls on spill. An unchanged sample reuses
+its immutable `ModeTuners` snapshot, but every original `TunersChanged` event is still delivered. Direct property
+edits, CLI overrides, panel edits, Defaults and snapshot application all remain visible at those sampling points.
+Rules still decide which values latch for the round; a replacement runner gets its own sampler.
+
+`ModeTunerSamplerTests` compares scalar bits and ordered rule commands with the reflection-based `CopyTuners`
+path, including direct edits, shared snapshots, defaults and a fresh round sampler, and asserts zero allocation
+for warmed unchanged sampling. The opt-in `lab_test.tscn -- --scenario=runner-sampling` probe times the whole
+prototype runner callback (including brains and King's internal retuning), with 2,000 warm-up and 10,000 measured
+120 Hz ticks per mode. It reports bytes/tick and mean/p95/p99 microseconds. This is a synchronous, stationary
+fixture: runner clocks advance, but Jolt, arena processing and other scene nodes do not. Run identical probe
+sources on parent and candidate in alternating pairs; ordinary rendered scenarios still verify play and appearance.
+
 `VoidWorldSource`, `SuburbWorldSource` and `SegmentWorldSource` implement the existing `ISessionWorldSource` seam. The
 factory needs no source-specific branches. The segment source is the streaming one: each segment is its own suburb (its
 own content root, effects and physics bodies) under a run root, built from a `SegmentPlan` that an `ISegmentFeed`

@@ -22,6 +22,7 @@ internal static class LabScenarioRegistry
         new("aimstall", host => new AimStallScenario(host)),
         new("dials", host => new DialsScenario(host)),
         new("prototype", host => new PrototypeScenario(host)),
+        new("runner-sampling", host => new RunnerSamplingScenario(host)),
         new("shortfuse", host => new ShortFuseScenario(host)),
         new("shortfuse-combo", host => new ShortFuseScenario(host, combo: true)),
         new("tracking", host => new LifetimeScenario(host, trackingOnly: true)),

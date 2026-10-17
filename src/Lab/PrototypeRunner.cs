@@ -38,6 +38,7 @@ public partial class PrototypeRunner : Node
     internal int TrackingCount => tracking.Count;
     private readonly List<(IBotGoalPolicy Brain, PlayerCharacter Actor, BotWorld View)> brains = new();
     private BotServices services = null!;
+    private ModeTunerSampler tunerSampler = null!;
     private int botTurn;
     private readonly HashSet<int> spectating = new();
     private readonly Dictionary<int, uint> shots = new();
@@ -87,6 +88,7 @@ public partial class PrototypeRunner : Node
         services = new BotServices(World, Lab.BotBounds);
         foreach (var actor in Lab.Session.Actors) services.PrepareActor(actor.Character);
         var tuning = World.Tuning;
+        tunerSampler = new ModeTunerSampler(Mode);
         length = Mode.Id == ModeRegistry.KingId ? tuning.KingRoundSeconds : Mode.Id == ModeRegistry.ShortFuseId ? tuning.ShortFuseRoundSeconds : 0;
         roster = Lab.Session.Actors.Select(a => new ModeActor(a.Character.ActorId, a.Character.Name)).ToArray();
         foreach (var actor in roster) scores[actor.ActorId] = 0;
@@ -102,7 +104,7 @@ public partial class PrototypeRunner : Node
             Rules = Mode.CreateRules();
             Rules.Initialize(new ModeSetup(roster,
                 new ModeWorld(Lab.EnvironmentKind == LabEnvironment.Void ? ModeWorldSource.Void : ModeWorldSource.SuburbPlan, 1, Lab.LiveTanks.Count(), Spots),
-                Mode.CopyTuners(tuning), World.Random.Randi()));
+                tunerSampler.Sample(tuning), World.Random.Randi()));
             if (Match != null) Match.Rules = Rules;
         }
         if (Rules is ShortFuseRules fuse)
@@ -162,7 +164,7 @@ public partial class PrototypeRunner : Node
         ThinkSeconds += System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalSeconds;
         var zone = Rules is KingRules king ? KingBotView.Read(king, Clock) : null;
         foreach (var (brain, actor, _) in brains) ActivityOf(actor.ActorId).Sample(IsPlaying, actor, brain, zone, (float)delta);
-        Apply(Rules.Handle(new TunersChanged(Mode.CopyTuners(World.Tuning)), Clock)); // Session tuning is live.
+        Apply(Rules.Handle(new TunersChanged(tunerSampler.Sample(World.Tuning)), Clock)); // Session tuning is live.
         var samples = Lab.Session.Actors.Select(a => a.Character).Where(a => !spectating.Contains(a.ActorId)).Select(Sample).ToArray();
         Apply(Rules.Handle(new ActorsSampled(samples), Clock));
         if (IsPlaying && Mode.Timer == RoundTimer.Countdown && elapsed >= length) End();

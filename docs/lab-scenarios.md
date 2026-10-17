@@ -27,6 +27,7 @@ namespace to avoid colliding with the gameplay fixture registry `Propane.Lab.Lab
 | `shortfuse`, `shortfuse-combo` | `ShortFuseScenario` |
 | `effects`, `stackfire` | `EffectsScenario`, `StackFireScenario` |
 | `measure`, `measure-play` | `MeasureScenario` |
+| `runner-sampling` (opt-in whole-callback benchmark) | `RunnerSamplingScenario` |
 | `dissolve`, `reference-retirement` | `DissolveScenario`, `RetirementScenario` |
 
 Subscriptions can detach at fixture/round boundaries and are removed from the owner immediately, so cleanup does
