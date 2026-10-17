@@ -1,6 +1,6 @@
 # Network scenario ownership
 
-Duel, drop-refusal, gather, pickup, watch, melee, movement and puncture-race currently use extracted owners. The remaining registered cases still dispatch
+Duel, drop-refusal, gather, pickup, watch, melee, movement, puncture-race and body-stream currently use extracted owners. The remaining registered cases still dispatch
 through the host during the family-by-family migration described below. Inventory comparison currently reports
 one extra generic completion expression: the temporary bridge for cases still in the host.
 
@@ -121,3 +121,11 @@ canonical-vent subscription is installed after host authority telemetry and befo
 order. The same rendered 20 s faulted race passed native assertions, complete tank/score audits and
 `compare_vents.py`: 280 paired trajectory samples, median/p95/max drift 0.112/0.226/0.358 m.
 Evidence: `build/rfp4/race-*.log`, `build/rfp4-candidate/race`.
+
+### Body-stream migration
+
+Warning-free setup/build, seven lifecycle tests and the unchanged expression inventory passed. The same 20 s
+native fixture with server `--net-loss=100 --net-body-stall=2000 --match-seed=23` passed owner-motion assertions
+on both clients, continuous tank coverage and score conservation with zero engine/protocol errors. Its existing
+connection-scoped tank reference is preserved and documented rather than silently reset. Evidence:
+`build/rfp4/stream-*.log`, `build/rfp4-candidate/stream`.
