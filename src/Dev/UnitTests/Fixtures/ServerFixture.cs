@@ -62,24 +62,21 @@ internal sealed class ServerFixture : IDisposable
     public void Advance(double seconds = 0) => driver.Advance(seconds);
 
     public void Receive(NetWriter packet, int peer = 2) => Receive(packet.ToArray(), peer);
+    /// <summary>Deliver exactly these bytes, as a client or an attacker could send them: nothing is added to the header.</summary>
+    public void Receive(byte[] packet, int peer = 2) => driver.Receive(packet, peer);
     public int ActorId(int peer) => Setup.Players.First(p => p.Player.OwnerPeerId == peer).Player.Id;
-    public void Receive(byte[] packet, int peer = 2) => driver.Receive(Prepare(packet, peer), peer);
-    private byte[] Prepare(byte[] packet, int peer)
-    {
-        // Legacy payload probes use this fixture's default owner. Production and spoof tests send explicit ids.
-        if (Setup != null && Setup.Players.Any(p => p.Player.OwnerPeerId == peer) && packet.Length >= 17 && Protocol.IsActorMessage((Msg)packet[0]) && BitConverter.ToInt32(packet, 5) == 0)
-        {
-            packet = packet.ToArray();
-            BitConverter.GetBytes(ActorId(peer)).CopyTo(packet, 5);
-            BitConverter.GetBytes(1u).CopyTo(packet, 9);
-            BitConverter.GetBytes(actions.Next(peer)).CopyTo(packet, 13);
-        }
-        return packet;
-    }
+    private uint NextAction(int peer) => actions.Next(peer);
+    /// <summary>
+    /// The start of an actor message from this peer's actor, ready for a payload: the real header (match, actor, life 1 and the
+    /// next action id of this peer's sequence, shared with <see cref="Drop"/>). <paramref name="matchId"/> names another match.
+    /// </summary>
+    public NetWriter ActorWriter(Msg type, int peer = 2, int? matchId = null) => new(type, matchId ?? Id, ActorId(peer), 1, NextAction(peer));
+    /// <summary>An actor message with a codec-encoded payload, from this peer's actor, with the same header as <see cref="ActorWriter"/>.</summary>
+    public byte[] ActorPacket(Msg type, object payload, int peer = 2) => ActorMessages.Encode(type, Id, ActorId(peer), 1, NextAction(peer), payload);
+    /// <summary>Send raw bytes and assert the server answers with nothing, or with the one explicit refusal this packet earns.</summary>
     public void Reject(byte[] bytes, int peer = 2)
     {
         Packets.Clear();
-        bytes = Prepare(bytes, peer);
         Receive(bytes, peer);
         if (Packets.Count == 1 && Packets[0] is { Message.Payload: AuthorityMessage { Reason: not ClaimRefusal.None } authority } && Packets[0].Peer == peer)
         {
@@ -104,7 +101,6 @@ internal sealed class ServerFixture : IDisposable
             TestRunner.Assert(Packets.Count == 0, $"invalid {(bytes.Length > 0 ? ((Msg)bytes[0]).ToString() : "empty")} mutated or relayed {Packets.Count} packets");
         }
     }
-    private uint NextAction(int peer) => actions.Next(peer);
     /// <summary>A spill ticket from this peer's actor, sharing its action sequence with its other actor messages.</summary>
     public byte[] Drop(IReadOnlyList<BodyState> tanks, byte reason = 1, int peer = 2) => MessageCodec.Encode(
         ModeWireFixtures.Spill(Id, ActorId(peer), 1, NextAction(peer), (SpillReason)reason, tanks), false);

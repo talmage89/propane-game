@@ -577,7 +577,7 @@ public static class AuthorityTests
                 BodySync.Snap(tank, current, Vector3.One * 20, Vector3.One * 2);
                 tank.Sleeping = !moving;
                 var puncture = Puncture(3);
-                Send(f.Server, 3, Msg.Puncture, puncture);
+                SendActor(f.Server, 3, Msg.Puncture, puncture);
                 f.Deliver();
                 TestRunner.Assert(tank.State == PropaneTank.TankState.Venting && tank.HoleLocal == puncture.Hole &&
                     f.Match.Bodies.Get(Id) is { Owner: 3, Epoch: 2 }, "observer did not adopt canonical vent authority");
@@ -597,17 +597,17 @@ public static class AuthorityTests
         runner.Run("authority/server echoes canonical punctures and refuses contenders explicitly", () =>
         {
             using var f = new ServerFixture();
-            Send(f, 2, Msg.Puncture, Puncture(2));
+            SendActor(f, 2, Msg.Puncture, Puncture(2));
             TestRunner.Assert(f.Packets.Count(p => p.Message.Payload is AuthorityMessage { Reason: ClaimRefusal.None }) == 2, "canonical echo excluded its contender");
             f.Packets.Clear();
-            Send(f, 3, Msg.Puncture, Puncture(3));
+            SendActor(f, 3, Msg.Puncture, Puncture(3));
             TestRunner.Assert(f.Packets.Single() is { Peer: 3, Message.Payload: AuthorityMessage { Reason: ClaimRefusal.StaleEpoch } refusal } &&
                 refusal.Bodies.Single().Vent == new VentParameters(Puncture(2).Hole, Puncture(2).Normal, Puncture(2).Swirl), "loser did not receive the canonical vent");
         });
         runner.Run("authority/loading-phase requests receive canonical refusals", () =>
         {
             using var f = new ServerFixture(playing: false);
-            Send(f, 2, Msg.Puncture, Puncture(2));
+            SendActor(f, 2, Msg.Puncture, Puncture(2));
             TestRunner.Assert(f.Packets.Single().Message.Payload is AuthorityMessage { Reason: ClaimRefusal.WrongPhase } result &&
                 result.Bodies.Single().State == TankLedger.State.Intact, "loading silently discarded a predicted puncture");
         });
@@ -733,7 +733,7 @@ public static class AuthorityTests
                 using var f = new AuthorityFixture(runner);
                 var tank = f.Match.LiveTanks.Single(t => t.NetId == Id);
                 tank.TakeShot(tank.ToGlobal(new Vector3(.15f, .23f, 0)), tank.GlobalBasis * Vector3.Right, Vector3.Left, f.Match.Player.ActorId);
-                Send(f.Server, 3, Msg.Puncture, Puncture(3));
+                SendActor(f.Server, 3, Msg.Puncture, Puncture(3));
                 if (!broadcastFirst) { f.Server.Packets.Clear(); }
                 var transform = new Transform3D(new Basis(Vector3.Up, .7f), new Vector3(8, 2, 9));
                 BodySync.Snap(tank, transform, Vector3.One * 3, Vector3.One * 2);
@@ -839,7 +839,7 @@ public static class AuthorityTests
         runner.Run("authority/newer motion cannot suppress refused lifecycle restoration", () =>
         {
             using var f = new AuthorityFixture(runner);
-            Send(f.Server, 3, Msg.Puncture, Puncture(3));
+            SendActor(f.Server, 3, Msg.Puncture, Puncture(3));
             f.Deliver();
             var tank = f.Match.LiveTanks.Single(t => t.NetId == Id);
             tank.GlobalPosition = new Vector3(0, 60, 0);
@@ -864,7 +864,7 @@ public static class AuthorityTests
         runner.Run("authority/newer motion cannot suppress refused fuse cancellation", () =>
         {
             using var f = new AuthorityFixture(runner);
-            Send(f.Server, 3, Msg.Puncture, Puncture(3));
+            SendActor(f.Server, 3, Msg.Puncture, Puncture(3));
             f.Deliver();
             var tank = f.Match.LiveTanks.Single(t => t.NetId == Id);
             Action? callback = null;
@@ -883,8 +883,12 @@ public static class AuthorityTests
         });
     }
 
+    /// <summary>A message without an actor header: claims, motion and rests.</summary>
     private static void Send(ServerFixture f, int peer, Msg type, object payload) =>
         f.Receive(MessageCodec.Encode(new NetMessage(type, f.Id, 0, payload), false), peer);
+
+    /// <summary>An actor message (a puncture) from the peer's actor, with its real header.</summary>
+    private static void SendActor(ServerFixture f, int peer, Msg type, object payload) => f.Receive(f.ActorPacket(type, payload, peer), peer);
 
     private sealed class BodyFixture : IDisposable
     {
