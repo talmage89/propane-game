@@ -1,6 +1,6 @@
 # Network scenario ownership
 
-Duel, drop-refusal, gather, pickup, watch, melee, movement, puncture-race and body-stream currently use extracted owners. The remaining registered cases still dispatch
+Duel, drop-refusal, gather, pickup, watch, melee, movement, puncture-race, body-stream and vent-contact currently use extracted owners. The remaining registered cases still dispatch
 through the host during the family-by-family migration described below. Inventory comparison currently reports
 one extra generic completion expression: the temporary bridge for cases still in the host.
 
@@ -129,3 +129,13 @@ native fixture with server `--net-loss=100 --net-body-stall=2000 --match-seed=23
 on both clients, continuous tank coverage and score conservation with zero engine/protocol errors. Its existing
 connection-scoped tank reference is preserved and documented rather than silently reset. Evidence:
 `build/rfp4/stream-*.log`, `build/rfp4-candidate/stream`.
+
+### Vent-contact migration — preserved baseline failure
+
+Setup/build (zero warnings), seven lifecycle tests and the unchanged expression inventory passed. The candidate
+repeated the parent's exact 30 s mixed-axis/faulted command and failed identically at tick 1200: eight server
+actor-zero puncture rejections and one canonical-vent error on each client (exit 1). The omitted shooter ID
+remains unchanged. This is preservation evidence, **not a passing native acceptance proof**; P4 cannot satisfy
+the zero-error requirement while this preexisting fixture defect remains. The scope question about a separate
+fixture correction is pending. Evidence: `build/rfp4/{parent-matrix,vent-native}.log`,
+`build/rfp4-{parent,candidate}/vent`.

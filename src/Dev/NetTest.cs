@@ -265,7 +265,6 @@ public partial class NetTest : Node, INetScenarioHost
             match.Finished += finishMatch;
             kingStage = -1; kingCamera = null; kingCaptured.Clear();
             kingHeld = kingContested = kingWarned = kingMoved = kingPiled = false;
-            ventContactTick = 0;
             match.AuthorityResolved += result =>
             {
                 if (DevArgs.Get("tank-authority-trace") != null)
@@ -465,10 +464,6 @@ public partial class NetTest : Node, INetScenarioHost
         else if (DevArgs.Get("scenario") == "appearance")
         {
             AppearanceScenario(match, dt);
-        }
-        else if (DevArgs.Get("scenario") == "vent-contact")
-        {
-            VentContactScenario(match);
         }
         else if (DevArgs.Get("look-at-bots") != null && match.Session.Actors.Select(a => a.Character).Where(b => b != match.Player && match.Setup.Players.Any(p => p.Player.Id == b.ActorId &&
                      p.Player.Kind == ActorKind.Bot)).OrderBy(b => b.GlobalPosition.DistanceTo(match.Player.GlobalPosition)).FirstOrDefault() is { } watched)

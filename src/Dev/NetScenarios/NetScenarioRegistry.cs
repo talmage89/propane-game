@@ -22,7 +22,7 @@ internal static class NetScenarioRegistry
         new("movement", host => new MovementScenario(host), NetScenarioCompletion.Movement),
         new("puncture-race", host => new PunctureRaceScenario(host), NetScenarioCompletion.Assertions),
         new("body-stream", host => new BodyStreamScenario(host), NetScenarioCompletion.Assertions),
-        new("vent-contact", null, NetScenarioCompletion.Assertions),
+        new("vent-contact", host => new VentContactScenario(host), NetScenarioCompletion.Assertions),
         new("king", null, NetScenarioCompletion.Assertions),
         new("king-late", null, NetScenarioCompletion.Assertions),
         new("appearance", null, NetScenarioCompletion.Assertions),
