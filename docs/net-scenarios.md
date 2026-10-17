@@ -48,7 +48,7 @@ network timings are not deterministic.
 | `movement` | Two clients; headless at least 18 s, rendered 35 s; `--assert-grip --assert-motion --assert-feet`; `--view=player|rifleleft|rifleright` | Host must finish observed remote gait/support/reload/recoil proof; `remote_00` through `remote_10` labels. |
 | `puncture-race` | Two or three clients; 20 s; lag/jitter/loss 120/30/3; color indices 0/1 contend | Every client requires canonical vent, lean, bounded corrections and 100 path samples; `<name>_race_<tick>`; run `compare_vents.py`. |
 | `body-stream` | Two clients; server `--net-loss=100 --net-body-stall=2000`; 20 s | Every client requires owner motion; no scenario captures. Also used with readiness stall. |
-| `vent-contact` | Two clients; 30 s; `--vent-contact-axis=mixed`, fixed seed 23; optional motion traces | Every client requires eight canonical vents/epochs; no scenario captures. Parent fixture failure is recorded below. |
+| `vent-contact` | Two clients; 30 s; `--vent-contact-axis=mixed`, fixed seed 23; optional motion traces | Every client requires eight canonical vents/epochs; no scenario captures. The parent fixture failure is recorded in the verification report. |
 | `king` | Two clients, `--mode=king`, at least 55 s | Every client requires hold/contest/mint/warning/move/fresh pile; `<name>_king_{hold,contest,warning,moved_pile,settled_pile,results}`. |
 | `king-late` | Three clients; `--mode=king --mint-seconds=0.5 --tune.PlayerSendRate=20 --delay-who=Bot3 --match-delay=70`; 110 s | Every client requires moved zone/holder/mints; delayed peer checks catch-up before readiness. Use `-k`, check server scores/mints, full tank coverage on undelayed peers, and all completion samples. |
 | `appearance` | Three clients; server `--start-score=8`; `-c 12ABEF,12ABEF,F6F6F6` or `000000,0000FF,FFFFFF`; render all three | Every client requires exact accepted lobby/setup/body/drop/results colors; `<name>_appearance_{lobby,tags_glow,results}`. |
@@ -60,132 +60,17 @@ Shared combinations include `--host-server`, `--match-delay`/`--delay-who`, `--m
 authority/body/gather traces and ordinary transport fault overrides. `tools/dev/net_bots.sh` owns startup and final
 cross-process audits; its flags and Make targets are unchanged.
 
-## P4 evidence — October 16, 2026
+## Verification
 
-Parent: `128a664`, Godot 4.7.2 .NET/Jolt, Linux Debug. Evidence lives under the worktree's `build/rfp4*` directories.
-All rendered invocations use `godot-mono` through the headless gamescope wrapper. Scratch uses `build/rfp4/tmp`.
-The parent matrix runs before source changes and retains command arrays, exit codes, assertion/PASS/FAIL lines and
-capture manifests. Failed runs are retained alongside successful ones.
+Run the fake-context suite after `make build`:
 
-The parent `vent-contact` fixture deterministically fails: its `TakeShot` call omits `current.Player.ActorId`.
-`Match.OnTankPunctured` forwards the resulting zero actor/life IDs, and the server rejects all eight punctures with
-`integer out of range: 0`; both clients then fail the existing canonical-vent assertion. No checker limit or
-production code is changed to conceal this failure.
+```sh
+godot-mono --headless --path . res://scenes/dev/unit_tests.tscn -- --suite=NetScenarioTests
+```
 
-### Duel / refusal / gather migration
-
-`make setup`, `make build` and `make test` passed (451 unit assertions, zero failures). Focused
-`unit_tests.tscn -- --suite=NetScenarioTests` passed all five lifecycle checks after the completion-table update.
-The candidate repeated the parent matrix's exact duel/refusal/gather arguments; all three passed, with zero engine
-or protocol errors, complete tank coverage and agreeing server audits. Reviewed the candidate gather shimmer
-and settled-pile captures against the parent. Native output: `build/rfp4-candidate/{duel,refusal,gather}`.
-The scaffold's generic completion bridge is the sole temporary source-inventory addition.
-
-### Pickup migration
-
-`make setup`, warning-free `make build`, the five fake-context lifecycle tests and the source-inventory comparison
-passed (only the temporary completion bridge differs). The single rendered client repeated the parent's 25 s
-pickup command and passed take, exact ammo, absence and return assertions with an agreeing server audit.
-Evidence: `build/rfp4/pickup-*.log`, `build/rfp4-candidate/pickup`.
-
-### Watch migration
-
-Warning-free setup/build, inventory comparison and six lifecycle assertions passed. An added fake-context assertion
-requires a watch joiner to return its tick to ordinary bot dispatch. The rendered 15 s watch host and playing
-joiner repeated the parent command and passed complete tank/score audits with clean engine logs.
-Evidence: `build/rfp4/watch-*.log`, `build/rfp4-candidate/watch`.
-
-### Melee migration
-
-Setup/build (zero warnings), six lifecycle tests and the unchanged source inventory passed. The same rendered
-30 s, two-peer 120/30/3-fault fixture with server `--start-score=5 --match-seed=23` passed grip/motion probes,
-both throws/get-ups, five/zero-bank spills, complete tank coverage and agreeing audits. Reviewed
-`melee_host_1_06.png`: the victim is thrown among five shielded drops, matching the parent presentation.
-Evidence: `build/rfp4/melee-*.log`, `build/rfp4-candidate/melee`.
-
-### Movement migration
-
-Warning-free builds, seven lifecycle tests and source-inventory preservation passed. The new fake-context check
-requires incomplete observer completion to fail on the host and imposes no observer obligation on the joiner.
-The rendered 35 s parent/candidate fixture passed remote gait/support, reload/recoil, grip, feet and motion
-checks, plus tank/score audits. Reviewed `remote_02_air.png` and `remote_06_landed_creep.png` against the parent:
-airborne and shouldered landing poses retain the same presentation. Evidence: `build/rfp4/movement-*.log`,
-`build/rfp4-candidate/movement`.
-
-### Puncture-race migration
-
-Warning-free setup/build, seven lifecycle tests and the unchanged expression inventory passed. The owner's
-canonical-vent subscription is installed after host authority telemetry and before assembly, retaining delivery
-order. The same rendered 20 s faulted race passed native assertions, complete tank/score audits and
-`compare_vents.py`: 280 paired trajectory samples, median/p95/max drift 0.112/0.226/0.358 m.
-Evidence: `build/rfp4/race-*.log`, `build/rfp4-candidate/race`.
-
-### Body-stream migration
-
-Warning-free setup/build, seven lifecycle tests and the unchanged expression inventory passed. The same 20 s
-native fixture with server `--net-loss=100 --net-body-stall=2000 --match-seed=23` passed owner-motion assertions
-on both clients, continuous tank coverage and score conservation with zero engine/protocol errors. Its existing
-connection-scoped tank reference is preserved and documented rather than silently reset. Evidence:
-`build/rfp4/stream-*.log`, `build/rfp4-candidate/stream`.
-
-### Vent-contact migration — preserved baseline failure
-
-Setup/build (zero warnings), seven lifecycle tests and the unchanged expression inventory passed. The candidate
-repeated the parent's exact 30 s mixed-axis/faulted command and failed identically at tick 1200: eight server
-actor-zero puncture rejections and one canonical-vent error on each client (exit 1). The omitted shooter ID
-remains unchanged. This is preservation evidence, **not a passing native acceptance proof**; P4 cannot satisfy
-the zero-error requirement while this preexisting fixture defect remains. The scope question about a separate
-fixture correction is pending. Evidence: `build/rfp4/{parent-matrix,vent-native}.log`,
-`build/rfp4-{parent,candidate}/vent`.
-
-### Capacity migration
-
-The owner keeps the special last-builder delay, pre-inbox staging/subscriptions, tick schedule and post-navigation
-completion phase. Setup/build remained warning-free; seven lifecycle tests and the unchanged expression inventory
-passed. The first native extraction trial failed during retirement: its unsubscribe closure evaluated
-`Match.Player` after session disposal cleared actors. The corrected closure retains the subscribed player itself;
-teardown order is unchanged. The failed trial, including its otherwise agreeing tank/score audit, is retained at
-`build/rfp4-candidate/capacity-retirement-failure` and `build/rfp4/capacity-initial-*.log`.
-
-The corrected full 16-client repeat passed with zero engine/protocol errors: 2,489 grids, 41,729,416 body pairs,
-no disagreements or overflows, identical 49-bank standings and explicit creator departure/authority transfer.
-The delayed client's inbox peaked at 2,879 packets / 338,821 bytes. `check_capacity.py` passed every obligation.
-Evidence: `build/rfp4/capacity-{build,lifecycle,native}.log`, `build/rfp4-candidate/capacity`.
-
-### King / late-builder migration
-
-Setup/build (zero warnings), seven lifecycle tests and unchanged expression inventories passed. The 55 s rendered
-King fixture passed all hold/contest/mint/warning/move/fresh-pile obligations and audits. Reviewed contest,
-settled-pile and 23/0 results frames against the parent. The identical 110 s late-builder command passed: Bot3
-replayed zone 1 and 90 minted tanks before readiness, then all peers finished with 217 minted/banked for the host.
-The undelayed peers passed 2,399 continuous grids; all three completion inventories/poses agree at 0 m peak drift.
-`check_scores.py` and the separate `build/rfp4/late.py` audit passed with no engine/protocol errors. Evidence:
-`build/rfp4/king-*.log`, `build/rfp4-candidate/{king,king-late}`, `king-late-audit.txt`.
-
-### Appearance migration
-
-The owner initializes menus and handles lobby/setup checks at the same host callback positions. Lobby screenshots
-use connection lifetime, while results screenshots use match lifetime; a new fake-context assertion ensures
-lobby callbacks survive a match return and stop at connection disposal. Warning-free builds and all eight
-lifecycle tests passed. Both rendered three-peer repeats with duplicate cyan/near-white colors passed exact
-lobby/setup/body/drop/results checks and complete audits, with no engine/protocol errors. Reviewed tags/glow and
-results captures against the parent. Evidence: `build/rfp4/appearance-*.log`,
-`build/rfp4-candidate/{appearance-initial,appearance}`.
-
-### Host completion
-
-The legacy completion bridge, case fields and selection chain are removed. The connection callback is named
-`OnMatchStarting`; `_Ready` keeps connection wiring and is 100 lines. `NetTest.cs` is 612 lines (from 1,458),
-with the unchanged 95-line roaming-lobby service beside it. All named factories construct owners in fake contexts;
-only the default bot path has no scenario. The shared shield-reader regression scene now calls the extracted
-utility directly and passes its native impulse/contact/readback checks.
-
-Warning-free build, eight lifecycle tests and `git diff --check` passed. The final source inventory exactly matches
-`128a664`: 51 options, 58 complete assertion expressions, 20 direct capture expressions and 82 log expressions.
-Against the immediate parent, the only inventory difference is removal of the temporary duplicate completion
-bridge. The new guide/tool add two reference sites; all original 122 sites remain available in the parent inventory.
-An actual unknown-scenario launch with `--host-server` exits 1 before binding/connecting, the intentional tooling
-correction. Evidence: `build/rfp4/{host-*,final-source-inventory,unknown-scenario}.log`.
-
-Remaining acceptance runs: final gates, repeated capacity acceptance, clean/faulted soaks, roaming repeats/departure
-and paired host/whole-tick measurements. The preserved vent-contact fixture failure remains an explicit blocker.
+The suite independently enumerates supported selections and required completion, constructs every named factory,
+and checks phase dispatch, incomplete completion, repeated resets, replacement/disposal, late callbacks, the
+connection lifetime of lobby callbacks, watch joiner fallback, movement host obligations and warmed allocations.
+Use the native commands above and in [multiplayer.md](multiplayer.md) for scene/transport proof.
+[The P4 verification report](net-scenarios-verification.md) records the original inventories, migrations,
+failures, native comparisons, file sizes and paired measurements.
