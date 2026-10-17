@@ -17,6 +17,8 @@ internal static class LabScenarioRegistry
         new("rules", host => new BankRulesScenario(host)),
         new("aimstall", host => new AimStallScenario(host)),
         new("prototype", host => new PrototypeScenario(host)),
+        new("shortfuse", host => new ShortFuseScenario(host)),
+        new("shortfuse-combo", host => new ShortFuseScenario(host, combo: true)),
         new("lifetime", host => new LifetimeScenario(host)),
         new("tracking", host => new LifetimeScenario(host, trackingOnly: true))
     };

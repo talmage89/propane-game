@@ -34,3 +34,7 @@ revision, command, exit status and elapsed time in `final-status.json` to outliv
   parent/candidate detailed trace agrees exactly for all 889 ticks (two windows, 24 tanks), supplementing P0's
   missing Ring Out case. Four lifecycle tests pass, including fixture-scoped detach before collection. The owner
   releases its per-seed observer before the original collection call and disposes it on early exit/failure too.
+- Short Fuse: warning-free build; complete quick match and scripted combo pass. The seeded rendered combo
+  retains all seven parent capture labels; reviewed spectating and round transitions agree (two PNGs are identical;
+  particle/debris frames vary). Observer cleanup follows each replaced runner and the seed's existing collection
+  boundary. Assertion/options/log/capture inventory is unchanged.
