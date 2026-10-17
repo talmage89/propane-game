@@ -6,10 +6,15 @@ using Propane.Lab;
 using Propane.Session;
 using static Propane.Dev.UnitTests.TestRunner;
 
-namespace Propane.Dev;
+using static Godot.GodotObject;
+using static Propane.Dev.LabCases.LabScenarioTools;
 
-public partial class LabTest
+namespace Propane.Dev.LabCases;
+
+internal sealed class RetirementScenario(ILabScenarioHost host) : LabScenario(host)
 {
+    protected override Task RunCore() => ReferenceRetirement();
+
     /// <summary>
     /// A synchronous retirement trace: initial segments are built by the real Lab; no worker completion, wall-time
     /// slicing or native physics step can change an observation boundary. The ordinary streamed run stays a soak.

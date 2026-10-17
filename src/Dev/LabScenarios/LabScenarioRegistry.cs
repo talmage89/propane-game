@@ -23,6 +23,8 @@ internal static class LabScenarioRegistry
         new("stackfire", host => new StackFireScenario(host)),
         new("measure", host => new MeasureScenario(host)),
         new("measure-play", host => new MeasureScenario(host, play: true)),
+        new("dissolve", host => new DissolveScenario(host)),
+        new("reference-retirement", host => new RetirementScenario(host)),
         new("lifetime", host => new LifetimeScenario(host)),
         new("tracking", host => new LifetimeScenario(host, trackingOnly: true))
     };

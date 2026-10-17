@@ -51,3 +51,8 @@ revision, command, exit status and elapsed time in `final-status.json` to outliv
   logs and CSVs. Native signal cleanup uses the owned registration exactly once at its original boundary.
   Source assertion/options/log/capture inventory is unchanged. Timings/allocations remain diagnostics, not
   paired performance claims from these short functional runs.
+- Dissolve/controlled retirement: warning-free build; native 45-second bot run and retirement fixture pass.
+  The retirement JSON is byte-identical to the parent. Pacer, early capture, shots, tracking and metric options
+  also pass. Both original collection checkpoints remain in place; the command observer stays attached through
+  the live-session collection proof and detaches after fixture teardown, before the final collection.
+  The existing tick probes remain attached at the same positions/priorities; scenarios add no processing nodes.

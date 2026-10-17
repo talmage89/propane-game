@@ -78,8 +78,6 @@ public partial class LabTest : Node, ILabScenarioHost
             {
                 switch (selected)
                 {
-                    case "reference-retirement": await ReferenceRetirement().ConfigureAwait(true); break;
-                    case "dissolve": await DissolveRun().ConfigureAwait(true); break;
                     default: throw new ArgumentException($"[lab] unknown scenario '{selected}'");
                 }
             }
