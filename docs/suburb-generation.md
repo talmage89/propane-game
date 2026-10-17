@@ -9,10 +9,19 @@ settings and the existing master RNG, writes into the coordinator's plan, and ex
 for later placement. Strip seam gaps constrain lot packing; cropping restores the full strip length. Cropping also
 rebuilds road clearance areas from the clipped roads.
 
-The remaining furnishing and supply work runs after layout: furnish lots in plan order, merge fences, place street
-furniture, scatter parkland, choose tanks, then choose the single-player spawn. Lot furnishing seeds its own RNG
-from each lot's seed; it does not draw from the master stream. Multiplayer starts and ammo are chosen last so they
-do not perturb single-player plans.
+`SuburbFurnishing` owns houses, paving, yard and street props, parkland, fence segments and gate openings. It receives
+settings, the catalog, the existing master RNG and layout's road clearance areas. Its order is lot furnishing in
+plan order, fence merging, street furniture, then parkland. Each lot seeds its own RNG from its lot seed; lot
+furnishing does not draw from the master stream.
+
+Later supply selection borrows the occupied areas, prop obstacles, story tank sites and original fence segments.
+Clearance uses those original segments, before merging and cutting gate openings, rather than the plan's finished
+fences. Furnishing remains their only writer. Fence segments retain their concrete `List` so repeated clearance
+queries keep struct enumeration; the other outputs expose read-only views. Road-clearance queries live with layout
+and take their plan/settings inputs explicitly.
+
+The remaining supply work chooses tanks and then the single-player spawn. Multiplayer starts and ammo are chosen
+last so they do not perturb single-player plans.
 
 Stages are ordinary owned objects, with no pipeline interface or scene callbacks. The generator retains its stage
 state and random stream for its lifetime, as before extraction; callers normally create one generator per plan.

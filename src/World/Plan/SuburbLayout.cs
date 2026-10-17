@@ -311,5 +311,28 @@ internal sealed class SuburbLayout
 
     private bool Strip => settings.StripLength > 0;
 
+    internal static bool IsClearOfOtherRoads(SuburbSettings settings, SuburbPlan plan, Vector2 p, RoadSegment self, float margin)
+    {
+        foreach (var road in plan.Roads)
+        {
+            if (road == self)
+            {
+                continue;
+            }
+            if (road.RightOfWay(settings.RightOfWayHalfWidth + margin).Contains(p))
+            {
+                return false;
+            }
+        }
+        foreach (var bulb in plan.CulDeSacs)
+        {
+            if (p.DistanceTo(bulb.Center) < bulb.Radius + settings.VergeWidth + settings.SidewalkWidth + margin)
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
     private float Range(float min, float max) => min + (float)rng.NextDouble() * (max - min);
 }
