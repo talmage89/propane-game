@@ -67,6 +67,7 @@ Tests can seed a context explicitly without advancing another world. Layout gene
 generators; `FixedSeed` still controls layouts. Existing continuous ranges and discrete integer draws are preserved.
 
 `WorldClock` measures simulation seconds, advanced once per world physics tick with Godot's simulation delta.
+Its [dispatch contract and focused checks](world-clock.md) cover reentrant callbacks and retained due buffers.
 Tank drop shields and chain fuses use this clock, so fixed-FPS tests and hitstop cannot shorten their gameplay
 durations through wall-clock divergence. Existing delta-driven reload, gather and movement timers keep their
 simulation-time behavior. The victim's hit grace uses simulation time. Source-node retirement cancels scheduled
