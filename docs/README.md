@@ -24,6 +24,7 @@ current and binding, and no one else edits it. Start with [VISION.md](../design/
 | [net-scenarios.md](net-scenarios.md) | Network harness ownership, lifecycle, CLI inventory and completion obligations. |
 | [modes.md](modes.md) | How a game mode plugs in (rules, definition, runner, envelope) and the Lab prototypes. |
 | [world-services.md](world-services.md) | `Game`, `Match`, session and world contexts: who owns what, and what stays shared. |
+| [suburb-generation.md](suburb-generation.md) | Generator ownership, stage order, random streams and exact-plan verification. |
 | [world-clock.md](world-clock.md) | `WorldClock` timer scheduling and dispatch: order, cancellation, nesting, allocation. |
 | [shutdown.md](shutdown.md) | Orderly process exit through `ShutdownGuard` and finalizer draining. |
 | [code-quality.md](code-quality.md) | Formatting and analyzers, the gate (`make lint`, `check`, `test`, `test-infra`, `test-full`), launch options, adding a suite or scene. |
@@ -60,6 +61,7 @@ the report concludes; the contract named in each report's status line holds the 
 | [evidence/network-integration.md](evidence/network-integration.md) | 2026-10-11 | No | The independent review of the network-assertion branch: disconnect latency, vent correction, capacity follow-ups. |
 | [evidence/participant-integration.md](evidence/participant-integration.md) | 2026-10-11, 10-12 | No | The participant (A6) merge review, the capacity proof and the tank-agreement tails it left open. |
 | [evidence/net-scenarios-verification.md](evidence/net-scenarios-verification.md) | 2026-10-16 | No | The P4 harness migration: preserved vent-contact failure, native inventories, paired measurements. |
+| [evidence/suburb-generation-verification.md](evidence/suburb-generation-verification.md) | 2026-10-17 | No | B10: stage ownership, parent plan bytes, exact references, deep sweeps and rendered comparisons. |
 | [evidence/world-clock-verification.md](evidence/world-clock-verification.md) | 2026-10-16 | No | The B6 clock dispatch change: parent callback transcripts, allocation and burst measurements. |
 | [evidence/lab-scenarios-verification.md](evidence/lab-scenarios-verification.md) | 2026-10-17 | No | The B7a Lab harness migration: parent inventories, ordered awaits, byte-identical traces, captures. |
 | [evidence/king-online.md](evidence/king-online.md) | 2026-10-14 | No | King online: gates, network matrix, late loading, rendered presentation. |
