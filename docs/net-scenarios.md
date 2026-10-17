@@ -1,6 +1,6 @@
 # Network scenario ownership
 
-Duel, drop-refusal, gather, pickup, watch, melee, movement, puncture-race, body-stream, vent-contact and capacity currently use extracted owners. The remaining registered cases still dispatch
+Duel, drop-refusal, gather, pickup, watch, melee, movement, puncture-race, body-stream, vent-contact, capacity, king and king-late currently use extracted owners. The remaining registered cases still dispatch
 through the host during the family-by-family migration described below. Inventory comparison currently reports
 one extra generic completion expression: the temporary bridge for cases still in the host.
 
@@ -153,3 +153,13 @@ The corrected full 16-client repeat passed with zero engine/protocol errors: 2,4
 no disagreements or overflows, identical 49-bank standings and explicit creator departure/authority transfer.
 The delayed client's inbox peaked at 2,879 packets / 338,821 bytes. `check_capacity.py` passed every obligation.
 Evidence: `build/rfp4/capacity-{build,lifecycle,native}.log`, `build/rfp4-candidate/capacity`.
+
+### King / late-builder migration
+
+Setup/build (zero warnings), seven lifecycle tests and unchanged expression inventories passed. The 55 s rendered
+King fixture passed all hold/contest/mint/warning/move/fresh-pile obligations and audits. Reviewed contest,
+settled-pile and 23/0 results frames against the parent. The identical 110 s late-builder command passed: Bot3
+replayed zone 1 and 90 minted tanks before readiness, then all peers finished with 217 minted/banked for the host.
+The undelayed peers passed 2,400 continuous grids; all three completion inventories/poses agree at 0 m peak drift.
+`check_scores.py` and the separate `build/rfp4/late.py` audit passed with no engine/protocol errors. Evidence:
+`build/rfp4/king-*.log`, `build/rfp4-candidate/{king,king-late}`, `king-late-audit.txt`.

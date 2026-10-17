@@ -23,8 +23,8 @@ internal static class NetScenarioRegistry
         new("puncture-race", host => new PunctureRaceScenario(host), NetScenarioCompletion.Assertions),
         new("body-stream", host => new BodyStreamScenario(host), NetScenarioCompletion.Assertions),
         new("vent-contact", host => new VentContactScenario(host), NetScenarioCompletion.Assertions),
-        new("king", null, NetScenarioCompletion.Assertions),
-        new("king-late", null, NetScenarioCompletion.Assertions),
+        new("king", host => new KingScenario(host), NetScenarioCompletion.Assertions),
+        new("king-late", host => new KingLateScenario(host), NetScenarioCompletion.Assertions),
         new("appearance", null, NetScenarioCompletion.Assertions),
         new("capacity", host => new CapacityScenario(host), NetScenarioCompletion.FinalChecks)
     };

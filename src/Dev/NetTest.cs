@@ -263,8 +263,6 @@ public partial class NetTest : Node, INetScenarioHost
                 }
             };
             match.Finished += finishMatch;
-            kingStage = -1; kingCamera = null; kingCaptured.Clear();
-            kingHeld = kingContested = kingWarned = kingMoved = kingPiled = false;
             match.AuthorityResolved += result =>
             {
                 if (DevArgs.Get("tank-authority-trace") != null)
@@ -449,14 +447,6 @@ public partial class NetTest : Node, INetScenarioHost
             if (crowdState.Holder != 0) kingLoneSeconds += dt;
         }
         if (scenario?.Tick(match, dt) == true) { }
-        else if (DevArgs.Get("scenario") == "king")
-        {
-            KingScenario(match);
-        }
-        else if (DevArgs.Get("scenario") == "king-late")
-        {
-            KingLateScenario(match);
-        }
         else if (DevArgs.Get("scenario") == "appearance")
         {
             AppearanceScenario(match, dt);
