@@ -439,7 +439,8 @@ with assertions and labeled frames), `drop-refusal` (rolling back a refused pred
 (canonical vent adoption and trajectory assertions after two simultaneous bullet contacts), and `vent-contact`
 (eight owner-started, rapidly spinning vents on clear floor, with contact and trajectory logs).
 `tools/dev/compare_vents.py` compares its logs.
-[docs/multiplayer.md](docs/multiplayer.md) lists the commands.
+[docs/multiplayer.md](docs/multiplayer.md) lists the commands. [Network scenario ownership](docs/net-scenarios.md) describes the harness lifecycle,
+completion obligations and full scenario/option inventory.
 
 The creep probe reports median and 75th-percentile horizontal foot/toe drift for adjacent samples within 3 cm of
 each bone's minimum height, after two seconds of settling. These are near-floor proxies for planted contacts, not
