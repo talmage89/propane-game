@@ -1,6 +1,6 @@
 # Network scenario ownership
 
-Duel, drop-refusal, gather, pickup, watch, melee and movement currently use extracted owners. The remaining registered cases still dispatch
+Duel, drop-refusal, gather, pickup, watch, melee, movement and puncture-race currently use extracted owners. The remaining registered cases still dispatch
 through the host during the family-by-family migration described below. Inventory comparison currently reports
 one extra generic completion expression: the temporary bridge for cases still in the host.
 
@@ -113,3 +113,11 @@ The rendered 35 s parent/candidate fixture passed remote gait/support, reload/re
 checks, plus tank/score audits. Reviewed `remote_02_air.png` and `remote_06_landed_creep.png` against the parent:
 airborne and shouldered landing poses retain the same presentation. Evidence: `build/rfp4/movement-*.log`,
 `build/rfp4-candidate/movement`.
+
+### Puncture-race migration
+
+Warning-free setup/build, seven lifecycle tests and the unchanged expression inventory passed. The owner's
+canonical-vent subscription is installed after host authority telemetry and before assembly, retaining delivery
+order. The same rendered 20 s faulted race passed native assertions, complete tank/score audits and
+`compare_vents.py`: 280 paired trajectory samples, median/p95/max drift 0.112/0.226/0.358 m.
+Evidence: `build/rfp4/race-*.log`, `build/rfp4-candidate/race`.
