@@ -1,6 +1,7 @@
 # Lab tuner sampling verification
 
-**Status:** Dated record (2026-10-17, refactor package P5). Not superseded. The current sampling contract is in
+**Status:** Dated record (2026-10-17, refactor package P5). Not superseded. P5 equivalence/allocation checks pass;
+the aggregate deep gate failed its final native moving-vent convergence check. The current sampling contract is in
 [lab.md](../lab.md#extension-and-ownership).
 
 Production parent: `c26eaf7`. Candidate implementation: `8f5da5d`. Linux, Godot 4.7.2 .NET (`ed1daf0bf`),
@@ -112,11 +113,62 @@ out-of-range Lab dials; the expanded test initially used a float endpoint below 
 initially required two brace fixes. The failed benchmark and scalar logs remain in `build/rfp5/`. Accepted rendered
 runs have the same gamescope vsync warning noted above and no Godot errors.
 
-`make check` passed (490 unit tests, zero failures, warning-free build, all ordinary Lab/native/world suites and
-gate self-tests). Final acceptance commands on the evidence commit are `make check` and `make -j4 test-full`, with
-logs in `build/rfp5/check-head.log` and `build/rfp5/test-full-head.log`. The full gate includes all Lab dial endpoints,
-all-at-once resets, full seeded prototype outcomes, deep generator sweeps and independent shard coverage.
+`make check` passed on `21d1500` (490 unit tests, zero failures, warning-free build, all ordinary Lab/native/world
+suites and gate self-tests). `make -j4 test-full` ran once on that same head and failed its final native bot soak.
+Logs are `build/rfp5/check-head.log` and `build/rfp5/test-full-head.log`. All preceding ordinary/deep jobs passed,
+including the full seeded prototype outcomes, 700/700 navigation courses, 514 dial fixtures built and reset,
+550 independently enumerated Lab cases and 1,044 generator cases without duplicate shard coverage. Later changes
+extend this record only; production and tests remain at `8f5da5d`.
 
-This is a Lab-only optimization. No multiplayer native matrix was needed; no message, shared tuner value,
-construction or tank behavior changes, and `Protocol.Version` stays unchanged. Exact Linux traces do not prove
-cross-platform bit identity; the stationary callback probe does not model native physics or streaming scheduling.
+## Deep-gate network failure and isolation
+
+The final four-client, 90-second faulted soak failed the unchanged 0.50 m final-moving bound. Body `2020000e`
+was venting/moving on all peers, but peer 1 differed from peers 2/3/4 by 0.710/0.639/0.672 m at the final shared
+grid. It compared 2,000 grids and 263,746 pairs, with no unobserved grids. Final resting drift was 0.001 m;
+the longest above-tolerance episode was 0.80 s. All four clients agreed with the server's conservation audit:
+`0 initial + 35 map + 42 drops - 56 spills = 21 banked`. All five process logs contain zero engine errors/warnings.
+The failed process logs were copied intact to `build/rfp5/full-failed-bots/` before any follow-up.
+
+The full target stopped before its subsequent duel-lane and loading-readiness commands. Diagnostic native runs
+use fresh output directories, not `-f`; the original failed run remains a failed gate. A new parent source archive
+was independently imported/built for the first comparison, without the sampler or new instrumentation:
+
+```sh
+# Run once against the parent, then once against the candidate, with distinct OUTPUT directories.
+"$CHECKOUT/tools/dev/net_bots.sh" -o "$OUTPUT" -p 24681 -n 4 -w 0 -l 90 -s '--match-seed=25' -- \
+  --melee-start --net-seed=2 --net-lag=120 --net-jitter=30 --net-loss=3
+```
+
+| Run | Result | Grids / body pairs | Final rest / moving m | Longest episode s | Bank audit |
+| --- | --- | --- | --- | --- | --- |
+| Full gate, candidate | FAIL, 3 final disagreements | 2000 / 263746 | 0.001 / 0.710 | 0.80 | 21, all clients agree |
+| `net-parent-1`, `c26eaf7` | PASS | 1999 / 195722 | 0.000 / 0.000 | 1.00 | 34, all clients agree |
+| `net-candidate-1`, `21d1500` | PASS | 1998 / 168936 | 0.001 / 0.000 | 0.55 | 19, all clients agree |
+
+Both isolated runs have zero unobserved grids and zero engine errors/warnings. They demonstrate variability,
+not a causal explanation of the original vent trajectory. Network code, mode rules, the soak launcher and checker
+have empty diffs from the parent; the changed Lab runners are absent from `src/Net` and the native NetTest path.
+The failed vent/moving state is consistent with the previously documented
+[residual final moving-vent convergence failure](network-corrections.md). That classification is an inference,
+not a proof of its contact dynamics. No tolerance, prediction, gameplay or network code was changed for P5.
+
+The two skipped native commands were then run separately against the candidate, with fresh directories:
+
+```sh
+tools/dev/net_bots.sh -n 2 -w 0 -p 24681 -l 20 -s '--start-score=8 --match-seed=23' \
+  -o "$PWD/build/rfp5/net-duel" -- --scenario=duel --matches=2 --duel-blocked \
+  --tune.DropScatter=0 --tune.DropToss=0 --net-lag=120 --net-jitter=30 --net-loss=3
+tools/dev/net_bots.sh -n 2 -p 24681 -l 20 -o "$PWD/build/rfp5/net-readiness" -- \
+  --scenario=body-stream --tank-check-ready-stall=Bot2
+```
+
+Both passed with zero unobserved grids and clean engine logs. Duel: 1,199 grids / 39,194 body pairs,
+final rest/moving drift 0.000/0.227 m, longest episode 0.25 s, both clients agree with both bank audits (11 and 10).
+Readiness: 600 grids / 16,800 pairs, final drift 0.000/0.000 m, no episodes, both clients agree with the zero-bank
+audit. These passes complete the otherwise skipped component checks; they do not turn the failed full invocation
+into a pass. No second full sweep was run to seek a green result.
+
+The package changes only Lab runners. No message, shared tuner value, construction or tank behavior changes, and
+`Protocol.Version` stays 3. The deep gate remains blocked by the retained network failure. Exact Linux traces do
+not prove cross-platform bit identity; the stationary callback probe does not model native physics or streaming
+scheduling.
