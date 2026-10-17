@@ -5,15 +5,18 @@ using Propane.Net;
 using Propane.Player;
 using Propane.Tank;
 
-namespace Propane.Dev;
+namespace Propane.Dev.NetScenarios;
 
-public partial class NetTest
+internal sealed class VentContactScenario(INetScenarioHost host) : NetScenario(host)
 {
     private int ventContactTick;
 
+    protected override void Preparing(Match match) => ventContactTick = 0;
+    protected override void Run(Match match, float dt) => VentContact(match);
+
     // Eight independently fluttering vents on clear ground isolate contact tracking from blasts,
     // local shot predictions and missed grants. Only the confirmed owner initiates each vent.
-    private void VentContactScenario(Match current)
+    private void VentContact(Match current)
     {
         if (!current.IsPlaying) { return; }
         ventContactTick++;

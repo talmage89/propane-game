@@ -5,10 +5,11 @@ using Godot;
 using Propane.Net;
 using Propane.UI;
 using Propane.World;
+using ProcessModeEnum = Godot.Node.ProcessModeEnum;
 
-namespace Propane.Dev;
+namespace Propane.Dev.NetScenarios;
 
-public partial class NetTest
+internal sealed class AppearanceScenario(INetScenarioHost host) : NetScenario(host)
 {
     private Menus? appearanceMenus;
     private float appearanceTime = -1;
@@ -16,14 +17,31 @@ public partial class NetTest
     private bool appearanceGlowChecked;
     private bool appearanceResultsChecked;
 
-    private static AppearanceRecord ParseAppearance(string hex)
+    public override void Initialize()
     {
-        if (hex.Length != 6 || !uint.TryParse(hex, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var rgb))
-        {
-            throw new ArgumentException("appearance must be six sRGB hex digits");
-        }
-        return new AppearanceRecord((byte)(rgb >> 16), (byte)(rgb >> 8), (byte)rgb);
+        appearanceMenus = new Menus { Net = net, Visible = false };
+        Attach(appearanceMenus);
     }
+    public override void LobbyChanged(LobbyInfo lobby)
+    {
+        if (lobby.Phase == LobbyServer.LobbyPhase.Waiting && lobby.Members.Count == players)
+        {
+            CheckAppearances(lobby.Members);
+            appearanceMenus!.Show(Menus.Screen.Lobby);
+            GetTree().CreateTimer(0.15).Timeout += GuardConnection(() => director.Screenshot($"{net.PlayerName}_appearance_lobby"));
+        }
+    }
+    public override void MatchStarting(MatchSetup setup)
+    {
+        appearanceMenus?.Show(Menus.Screen.None);
+        CheckAppearances(setup.Players.Select(p => p.Player));
+    }
+    protected override void Assembled(Match match)
+    {
+        appearanceTime = -1;
+        appearanceDropped = appearanceGlowChecked = appearanceResultsChecked = false;
+    }
+    protected override void Run(Match match, float dt) => Appearance(match, dt);
 
     private void CheckAppearances(System.Collections.Generic.IEnumerable<PlayerProfile> profiles)
     {
@@ -31,7 +49,7 @@ public partial class NetTest
         foreach (var profile in profiles)
         {
             var index = int.Parse(profile.Name.AsSpan(3), CultureInfo.InvariantCulture) - 1;
-            ScenarioAssert(index >= 0 && index < expected.Length && profile.Appearance == ParseAppearance(expected[index]),
+            ScenarioAssert(index >= 0 && index < expected.Length && profile.Appearance == NetScenarioTools.ParseAppearance(expected[index]),
                 $"appearance: accepted profile differs for {profile.Name}");
         }
     }
@@ -40,7 +58,7 @@ public partial class NetTest
     /// A stationary lineup in a real match. Each client sends one bounded drop request from its own bank, without
     /// any color field; every copy must render the dropper's frozen MatchStart profile. Uses the actual results UI.
     /// </summary>
-    private void AppearanceScenario(Match match, float dt)
+    private void Appearance(Match match, float dt)
     {
         if (match.IsOver)
         {
@@ -55,7 +73,7 @@ public partial class NetTest
             }
             appearanceResultsChecked = true;
             scenarioPassed = appearanceGlowChecked && !scenarioFailed;
-            GetTree().CreateTimer(0.2).Timeout += () => director.Screenshot($"{net.PlayerName}_appearance_results");
+            GetTree().CreateTimer(0.2).Timeout += Guard(() => director.Screenshot($"{net.PlayerName}_appearance_results"));
             Log($"appearance: assertions passed={scenarioPassed}, profiles/bodies/drops/results {match.Setup.Players.Count}");
             return;
         }

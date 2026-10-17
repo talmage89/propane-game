@@ -15,6 +15,7 @@ These describe the code as it is today. Change them in the same commit as the co
 | Document | What it covers |
 | --- | --- |
 | [multiplayer.md](multiplayer.md) | Networking model, messages and protocol 3, hosting, the lobby, bots and the network test tools. |
+| [net-scenarios.md](net-scenarios.md) | Network harness ownership, lifecycle, CLI inventory and completion obligations. |
 | [modes.md](modes.md) | How a game mode plugs in (rules, definition, runner, envelope) and the Lab prototypes. |
 | [world-services.md](world-services.md) | `Game`, `Match`, session and world contexts: who owns what, and what stays shared. |
 | [shutdown.md](shutdown.md) | Orderly process exit through `ShutdownGuard` and finalizer draining. |
@@ -41,6 +42,9 @@ rule or procedure, which the contract documents above restate.
 | [tank-scaling.md](tank-scaling.md), [scale-actors.md](scale-actors.md), [scale-baseline.md](scale-baseline.md), [bot-scale.md](bot-scale.md), [vent-performance.md](vent-performance.md) | Performance and scale work: baselines, paired measurements, rejected approaches. |
 | [king-online.md](king-online.md), [king-crowd.md](king-crowd.md), [lobby-tanks.md](lobby-tanks.md) | Verification of King online, crowd tactics and lobby tank supply. |
 | [recoil.md](recoil.md), [rifle-contact.md](rifle-contact.md), [movement.md](movement.md) | Recoil, rifle contact and creep-speed work; each marks which parts are superseded. |
+
+[Network scenario ownership verification](net-scenarios-verification.md) records the P4 harness migration,
+including the preserved vent-contact failure, native inventories and paired measurements.
 
 Their data and images sit beside them: `perf-vents/`, `recoil/`, `tank-scaling/`, `lobby-tanks/` and
 `king-crowd-results.csv`. Some tools read them (for example, the vent baseline patch in `perf-vents/`), so move them
