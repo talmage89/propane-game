@@ -21,6 +21,7 @@ public partial class LocalBank : Node
 {
     public required LabSession Lab { get; init; }
     private readonly ModeDefinition mode = ModeRegistry.TankBank;
+    private readonly ModeTunerSampler tunerSampler = new(ModeRegistry.TankBank);
     private readonly TankBankRules rules = new();
     private readonly Dictionary<int, int> scores = new();
     public IReadOnlyDictionary<int, int> Earned => scores.Keys.ToDictionary(id => id, id => rules.StatsFor(id).Gained);
@@ -64,7 +65,7 @@ public partial class LocalBank : Node
         foreach (var actor in roster) scores[actor.ActorId] = 0;
         rules.Initialize(new ModeSetup(roster,
             new ModeWorld(Lab.EnvironmentKind == LabEnvironment.Void ? ModeWorldSource.Void : ModeWorldSource.SuburbPlan, 1, InitialSupply),
-            mode.CopyTuners(World.Tuning), 0));
+            tunerSampler.Sample(World.Tuning), 0));
         tracking = new TankTracking(tank => { directShots.Remove(tank); drops.Remove(tank); });
         Lab.Session.OnUnsubscribing(tracking.Dispose);
         foreach (var tank in Lab.LiveTanks) Track(tank);
@@ -248,7 +249,7 @@ public partial class LocalBank : Node
         if (!IsPlaying) return;
         var count = TankBankRules.SpillCount(wanted, scores[actor.ActorId], rules.Reserved(actor.ActorId));
         if (count <= 0) return;
-        rules.Handle(new TunersChanged(mode.CopyTuners(World.Tuning)), Clock); // Session tuning is live.
+        rules.Handle(new TunersChanged(tunerSampler.Sample(World.Tuning)), Clock); // Session tuning is live.
         var ticket = new SpillTicket(actor.ActorId, actor.LifeId, ++nextTicket);
         if (!rules.Handle(new SpillRequested(ticket, reason, count), Clock).OfType<SpillReserved>().Any()) return;
         SpawnDrops(Lab, actor, count, origin, away, tank => { drops.Add(tank); Track(tank); });
