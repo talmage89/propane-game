@@ -1,6 +1,6 @@
 # Network scenario ownership
 
-Duel, drop-refusal, gather, pickup and watch currently use extracted owners. The remaining registered cases still dispatch
+Duel, drop-refusal, gather, pickup, watch and melee currently use extracted owners. The remaining registered cases still dispatch
 through the host during the family-by-family migration described below. Inventory comparison currently reports
 one extra generic completion expression: the temporary bridge for cases still in the host.
 
@@ -96,3 +96,11 @@ Warning-free setup/build, inventory comparison and six lifecycle assertions pass
 requires a watch joiner to return its tick to ordinary bot dispatch. The rendered 15 s watch host and playing
 joiner repeated the parent command and passed complete tank/score audits with clean engine logs.
 Evidence: `build/rfp4/watch-*.log`, `build/rfp4-candidate/watch`.
+
+### Melee migration
+
+Setup/build (zero warnings), six lifecycle tests and the unchanged source inventory passed. The same rendered
+30 s, two-peer 120/30/3-fault fixture with server `--start-score=5 --match-seed=23` passed grip/motion probes,
+both throws/get-ups, five/zero-bank spills, complete tank coverage and agreeing audits. Reviewed
+`melee_host_1_06.png`: the victim is thrown among five shielded drops, matching the parent presentation.
+Evidence: `build/rfp4/melee-*.log`, `build/rfp4-candidate/melee`.

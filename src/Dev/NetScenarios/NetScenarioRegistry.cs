@@ -18,7 +18,7 @@ internal static class NetScenarioRegistry
         new("drop-refusal", host => new DuelScenario(host), NetScenarioCompletion.Assertions),
         new("gather", host => new DuelScenario(host), NetScenarioCompletion.Assertions),
         new("pickup", host => new PickupScenario(host), NetScenarioCompletion.Assertions),
-        new("melee", null, NetScenarioCompletion.Assertions),
+        new("melee", host => new MeleeScenario(host), NetScenarioCompletion.Assertions),
         new("movement", null, NetScenarioCompletion.Movement),
         new("puncture-race", null, NetScenarioCompletion.Assertions),
         new("body-stream", null, NetScenarioCompletion.Assertions),
