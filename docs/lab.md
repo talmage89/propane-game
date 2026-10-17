@@ -139,7 +139,7 @@ remain separate work.
 
 ## Verification
 
-[Tracking lifetime verification and performance status](lab-tracking-verification.md) records P2’s parent comparisons,
+[Tracking lifetime verification and performance status](evidence/lab-tracking-verification.md) records P2’s parent comparisons,
 collection proofs, reviewed captures, retained failures and remaining measurement work.
 
 `python3 -B tools/dev/check_lab.py` is the fast gate: one lifecycle cycle per allowed pair, local rules, the bot's
@@ -182,7 +182,7 @@ prototype rounds and points sweep. A valid early blast or hitstop must not masqu
 Two idle checks keep crowds of bots playing: `idle-bank` (a 40-second suburb soak with eight NPCs and the driven
 player) and `idle-king` (a 45-second suburb King round with sixteen driven actors). Their fixtures seed the per-event
 blast, ragdoll and debris generators (`--replay-random`) and disable wall-clock hitstop. Every other Lab run retains
-ordinary entropy and hitstop. [Idle check verification](idle-checks.md) records the cause and repeated load trials.
+ordinary entropy and hitstop. [Idle check verification](evidence/idle-checks.md) records the cause and repeated load trials.
 Every Lab bot run prints `[lab idle]` lines: each bot's idle share (see [bot navigation](bot-navigation.md#idle-bots)),
 longest idle run and commonest statuses. `--max-idle=F` and `--max-idle-worst=F` assert that run's mean and worst shares;
 the checks retain their original limits of 12%/30% and 15%/40%.
@@ -275,7 +275,7 @@ requirements remain unmet. Forty is still near a 30 FPS blast budget, not a prom
 and no larger product ceiling is justified. The original idle sweep reached 1,024 tanks at GPU p95 9.9 ms
 (wall p95 18.4 ms); that size was not repeated in this comparison. Resting bodies remain cheap; persistent lit smoke
 and chain CPU/physics bursts remain expensive. Gameplay values and particle counts are unchanged. See
-[crowded effect profiling](vent-performance.md) for every phase's GPU/wall p50, p95 and worst, profiler breakdown,
+[crowded effect profiling](evidence/vent-performance.md) for every phase's GPU/wall p50, p95 and worst, profiler breakdown,
 load records, rendered suburb matches, visual comparisons and reproducible baseline commands.
 
 The measurement registry callback deliberately permits 24–1,024 tanks while retaining the actual Lab fixture

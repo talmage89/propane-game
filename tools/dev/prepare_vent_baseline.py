@@ -25,7 +25,7 @@ def main():
         with zipfile.ZipFile(archive) as files:
             files.extractall(output)
     subprocess.run(["git", "apply", "--directory=" + str(output.relative_to(project)),
-                    "docs/perf-vents/baseline-instrumentation.patch"], cwd=project, check=True)
+                    "docs/evidence/perf-vents/baseline-instrumentation.patch"], cwd=project, check=True)
     # Diagnostics only: the archived project retains its original effects, tuning and warm-up.
     for path in ("src/Dev/LabTest.cs", "src/Dev/CaptureDirector.cs", "src/Dev/FrameMetrics.cs",
                  "src/Dev/FrameMetrics.cs.uid", "src/Fx/EffectProfile.cs", "src/Fx/EffectProfile.cs.uid"):

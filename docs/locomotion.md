@@ -73,4 +73,4 @@ pairs per episode (the run touches down briefly) and feet that lift 1.5 cm in st
 lifts its trailing foot only about 3 cm). They report near-floor foot drift and ankle separation without asserting
 them: the `feet` matrix runs every gait in every direction with the body held facing forward, which play never does
 at a run, so its sideways runs slide. Judge the motion from rendered
-clips ([animation review](animation-review.md)).
+clips ([animation review](runbooks/animation-review.md)).

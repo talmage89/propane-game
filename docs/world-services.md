@@ -125,7 +125,7 @@ the resulting transform and adds its own short recoil spring; that extra rotatio
 Rifle/torso sway and the rifle recoil spring remain body presentation; they still affect muzzle placement and
 its obstruction ray, never the primary aim ray. Before the obstruction ray, the rig aligns a reachable rifle pose
 to the sampled endpoint; afterward the barrel rotates about the same muzzle to follow any nearer obstruction.
-The firing frame retains that pose, and intervening burst frames track logical aim. See [recoil](recoil.md).
+The firing frame retains that pose, and intervening burst frames track logical aim. See [recoil](evidence/recoil.md).
 FOV affects projection/crosshair only. Hitstop remains the existing
 exclusive offline-world time-scale lease: it changes simulation timing, never an aim angle.
 

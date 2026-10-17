@@ -144,7 +144,7 @@ six forced seeds per formation/size, 100 navigation seeds, and the melee-reload 
 ordinary seeds 21–100, large seeds 4–10 and forced seeds 3–6 moved to this deeper sweep.
 
 Each deep step is its own `test-full-*` target, so `make -j4 test-full` runs them side by side with the gate's four
-partitions; [test-speed.md](test-speed.md#parallel-deep-sweeps) has the timings. `tools/dev/label.sh` prefixes every line
+partitions; [test-speed.md](evidence/test-speed.md#parallel-deep-sweeps) has the timings. `tools/dev/label.sh` prefixes every line
 a deep job prints with its name (`[generator-3]`, `[lab-king]`, `[bots]`) and, on failure, prints that name, the exit
 status and the command; make then names the failed target. The jobs:
 
@@ -167,7 +167,7 @@ Normal `make test`, `make check`, CI and the final real-time bot tail retain uno
 can rebuild it without replacing a running deep probe's assembly. All Godot processes of a checkout still append to its one `user://logs`, as under `make -j4 check`. The bot
 matches run alone, after every other job: their server and clients run in real time, and beside other jobs on four
 CPUs, clients dropped to a few frames a second and failed tank agreement, and the loading-readiness match lost its
-stalled client far more often ([test-speed.md](test-speed.md#parallel-deep-sweeps)). `-j` is not
+stalled client far more often ([test-speed.md](evidence/test-speed.md#parallel-deep-sweeps)). `-j` is not
 the default: worktree agents share one machine, so each run chooses its own job count. Use `-j4` on a quiet machine,
 fewer when other worktrees are busy. To shard a sweep differently, change the `GENERATOR_*` or `LAB_*` variables in
 the Makefile; the coverage job and `lint_tests.py` reject a split that loses or repeats seeds or sessions.
@@ -301,4 +301,4 @@ The profiler uses Python's standard library and preserves command failures, incl
 It records total gate time and every dotnet/Python/Godot invocation in JSON. With `PROPANE_GATE_TIMING=1`, dev
 scenes print a marker at the start of `_Ready`: launch-to-marker is startup, marker-to-exit is work plus shutdown.
 Runtime scenes use imported assets; cold import and restored-import index rebuilds should be timed separately.
-See [the gate timing report](test-speed.md) for the measurements and the CI estimate.
+See [the gate timing report](evidence/test-speed.md) for the measurements and the CI estimate.

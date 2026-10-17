@@ -1,6 +1,6 @@
 # Lab tank tracking verification
 
-Recorded October 16, 2026 for refactor package P2. **Acceptance is incomplete: rendered paired performance needs a coordinated quiet window.** This is evidence; [Lab](lab.md) is the current contract.
+Recorded October 16, 2026 for refactor package P2. **Acceptance is incomplete: rendered paired performance needs a coordinated quiet window.** This is evidence; [Lab](../lab.md) is the current contract.
 
 ## Revisions and environment
 

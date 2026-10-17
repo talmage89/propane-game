@@ -469,7 +469,7 @@ Details settled while building, within the decisions above:
 | `make test` | Plain C# assertion suites (every wire message, malformed payloads, server ledger and permissions, lifecycle buffering and ownership, transport faults/reconnect/lifetime, pure mode rules and the mode envelope), the scripted `mode_test` rules harness, score-checker regressions, movement, gamepad menu, device switching and platform checks, generator checks (20 seeds plus large layouts and forced formations), and separate-process built-world hashes. `make test-full` adds deeper layout, navigation and lifetime sweeps. Add suites under `src/Dev/UnitTests/` and mark them `[UnitSuite]` for discovery; any failure prints its name and exits nonzero. |
 | `godot --headless res://scenes/dev/generator_tests.tscn -- --seeds=100` | All four formations; 2, 8, 16, 24 and 32 players; exact supply counts, clear separated reachable starts, hull overlaps and supports, and exact `PlanCodec` round trips. |
 | `tools/dev/net_bots.sh -n 3 -l 60 -- --net-lag=120 --net-jitter=30 --net-loss=3` | A local server and bot players (`scenes/dev/net_test.tscn`) that run to tanks, shoot them and each other, and fetch ammo, under simulated lag and loss. `-w N` shows N of them in windows; `-S host:port -k` uses an existing server (audit it separately with its server log). `-o DIR` picks the log directory (default `build/net`); one that already holds `*.log` files is refused unless `-f` replaces them, and the server, every bot and their child processes are stopped when the script ends or is interrupted. Tank agreement and score checks run automatically; either failure fails the command. `-k` skips checks, `-t clean` uses tighter tank limits. |
-| `tools/dev/compare_tanks.py [--profile clean] out/bot*.log` | Same-machine shared monotonic samples interpolated to a 50 ms grid, all peer pairs, bounded lifecycle/moving/resting disagreement and settled final agreement. Missing samples, gaps or incomplete matches fail. `--details` prints disagreement intervals. Replaces the coarse countdown and tank-path comparers. See [calibration](network-soak.md) for limits and observed failures on dev. |
+| `tools/dev/compare_tanks.py [--profile clean] out/bot*.log` | Same-machine shared monotonic samples interpolated to a 50 ms grid, all peer pairs, bounded lifecycle/moving/resting disagreement and settled final agreement. Missing samples, gaps or incomplete matches fail. `--details` prints disagreement intervals. Replaces the coarse countdown and tank-path comparers. See [calibration](evidence/network-soak.md) for limits and observed failures on dev. |
 | `tools/dev/check_scores.py out/server.log out/bot*.log` | Server conservation audit and identical per-player final scores on every bot; exits nonzero on a missing audit or disagreement. |
 | `python3 -B tools/dev/check_liveness.py --output=build/liveness [--silent=server]` | Stops a native client or server process during play without sending Leave; asserts detection within 10 s. Run after `make build`; separate-process logs stay in the chosen directory. `--project` and `--maximum` allow historical baseline measurements. |
 | `net_bots.sh -n 2 -l 45 -s "--start-score=8" -- --scenario=gather --tune.DropScatter=0.2 --tune.DropToss=1 --net-lag=120 --net-jitter=30 --net-loss=3` | Two bot hits spill two close tanks from the joiner; both clients require an intact stable gathered pile owned by the world authority. Scatter/toss are fixture overrides to keep the drops within the gather radius. Add `-w 2` and `--capture-dir=DIR` to verify both clients' shield colors and shimmer as well as the glide; headless clients assert gameplay state without shader readback. |
@@ -577,9 +577,9 @@ final standings agreed: 20 map gains + 34 drop gains - 50 spills = 4 banked. The
 identical ids/states and at most 0.165 m drift. During active chains the diagnostic reported transient differences
 up to five states and 5.862 m drift; it is a
 comparison report, not a threshold assertion. Those transients converged in the original melee package.
-The later [tank assertion and correction work](network-corrections.md) adds automatic failure checks and fixes
+The later [tank assertion and correction work](evidence/network-corrections.md) adds automatic failure checks and fixes
 the replication causes identified by repeated soaks.
-The [independent integration review](network-integration.md) records A4 integration, native regressions,
+The [independent integration review](evidence/network-integration.md) records A4 integration, native regressions,
 remaining capacity limits and the verification matrix for this branch.
 
 comparison report, not a threshold assertion. Those transients converged; this package does not revise body sync.
@@ -641,7 +641,7 @@ The wire safety ceiling is 64 actors/peers, separate from capacity and the color
 retain their layouts. `Protocol.Version` remains **2** (released in 0.3.0); these changes require a
 minor release.
 
-The repeatable separate-client capacity gate and its measured evidence are in [network-soak.md](network-soak.md).
+The repeatable separate-client capacity gate and its measured evidence are in [network-soak.md](evidence/network-soak.md).
 
 ## Modes (A7, Protocol 2)
 
@@ -699,7 +699,7 @@ peer on `PlayerLeft`, and the owners of other bots refresh their brains' view of
 **Cost.** Brains share one cached navigation grid and process-wide query/expansion budgets, with rotating priority.
 Sight and goal selection run less often than steering; the hot paths reuse buffers and query nodes.
 [Bot navigation](bot-navigation.md) describes the cache, dynamic checks and allocation limits. `Match.BotCost` counts thinks, total/worst tick seconds, allocated bytes and queries;
-`net_test` logs them at the end of a match, plus tick percentiles and allocations after ten simulated seconds of warm-up. Measurements are in [network-soak.md](network-soak.md#lobby-bots-a8).
+`net_test` logs them at the end of a match, plus tick percentiles and allocations after ten simulated seconds of warm-up. Measurements are in [network-soak.md](evidence/network-soak.md#lobby-bots-a8).
 
 **Tests.** `BotTests` covers the requests (add, edit, remove, ownership, capacity, stale revisions, names, malformed
 input), the profiles, the owner's runtime and departure. `menu_test --scenario=bots` adds, edits, cancels and removes
@@ -741,7 +741,7 @@ King schema 4/1. King's shared zone, pile and presentation dials are now exporte
 controls. `Protocol.Version` is **3**, superseding the Protocol 2 entries above (released in 0.3.0); this required a
 **minor release**, 0.4.0. Hello, Welcome and Rejected retain their layouts. Ring Out, Short Fuse and Dissolve Run remain Lab-only.
 
-[King online verification](king-online.md) records the soaks, delayed builder, device controls, reviewed captures
+[King online verification](evidence/king-online.md) records the soaks, delayed builder, device controls, reviewed captures
 and known vent outlier.
 
 ## Lobby supply probes
@@ -766,7 +766,7 @@ late client assembling the same tank identities and poses after buffered Go.
 These trailing lobby settings fields are part of Protocol 3 (released in 0.4.0). No further protocol bump was made;
 Hello, Welcome and Rejected are unchanged.
 
-[Lobby tank supply verification](lobby-tanks.md) records the gates, reviewed captures, native matrix and stock-soak variability.
+[Lobby tank supply verification](evidence/lobby-tanks.md) records the gates, reviewed captures, native matrix and stock-soak variability.
 
 ## Lobby world (A12, Protocol 3)
 

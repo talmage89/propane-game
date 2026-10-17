@@ -1,7 +1,7 @@
 # Animation review
 
 This is the acceptance harness for character animation: clips played as authored under a light rifle stance
-([locomotion](locomotion.md), [rifle stance](motion.md)). The owner approves the look from rendered clips; numerical
+([locomotion](../locomotion.md), [rifle stance](../motion.md)). The owner approves the look from rendered clips; numerical
 checks support that review, never replace it.
 
 ## Controller review
@@ -96,7 +96,7 @@ no free source clip shoulders a rifle, so an empirical rifle-clip calibration is
 ## External clip review
 
 Official free CC0 source archives are kept outside the repository in a shared `assets-src/` directory. Its
-`SOURCES.md` records stable download URLs, licenses and archive SHA-256 values. See [source choices](animation-sources.md).
+`SOURCES.md` records stable download URLs, licenses and archive SHA-256 values. See [source choices](../animation-sources.md).
 Inventory every clip, including the separate root-motion variants:
 
 ```sh

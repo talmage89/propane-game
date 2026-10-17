@@ -1,6 +1,6 @@
 # Rifle contact
 
-The clip redo ([rifle stance](motion.md)) keeps this package's wrist frames, finger curls, reload contact path and
+The clip redo ([rifle stance](../motion.md)) keeps this package's wrist frames, finger curls, reload contact path and
 grip proxies, and retires the rest: the spine in the upper-body filter, the raised clavicle, the neck/head fit to
 `Socket_Eye`, the 25 mm reach margin and sphere projection, and the millimeter bounds. `--assert-grip` now checks
 sanity: wrists within 2 cm of their grip frames, no hand 1 cm into the rifle's solid proxies, an aimed eye within

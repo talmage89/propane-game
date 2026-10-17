@@ -72,5 +72,5 @@ The suite independently enumerates supported selections and required completion,
 and checks phase dispatch, incomplete completion, repeated resets, replacement/disposal, late callbacks, the
 connection lifetime of lobby callbacks, watch joiner fallback, movement host obligations and warmed allocations.
 Use the native commands above and in [multiplayer.md](multiplayer.md) for scene/transport proof.
-[The P4 verification report](net-scenarios-verification.md) records the original inventories, migrations,
+[The P4 verification report](evidence/net-scenarios-verification.md) records the original inventories, migrations,
 failures, native comparisons, file sizes and paired measurements.

@@ -16,7 +16,7 @@ This is 240 separate processes. Debug/Release alternate within each case/repetit
 odd repetitions. Seed 23, fixed 254 m map, 40/80/160/320 tanks, 120 Hz physics, 1280×720 overview.
 The scene plays during warm-up, then punctures every fourth surviving tank halfway through measurement.
 All runs passed assembly/optimization, uncapped pacing, exact observed tick/brain counts and JSON validation.
-Stopped and preliminary capped runs are excluded. [Measurement definitions and reproduction](measuring-scale.md).
+Stopped and preliminary capped runs are excluded. [Measurement definitions and reproduction](../runbooks/measuring-scale.md).
 
 ## Where the time goes
 

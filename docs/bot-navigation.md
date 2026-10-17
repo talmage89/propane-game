@@ -135,7 +135,7 @@ these tactical retreats from knockdown regrouping in activity logs. These seven 
 and travel in the creator's tuning snapshot; they require the upcoming minor release. Existing local dials,
 King's rules, shared state and messages are unchanged. Prize searches cache native positions and ranking distances
 within each search; crosshair hit tests skip only the existing trigger cooldown. Hard's blocked-shot observation
-still runs every tick. [Crowd verification](king-crowd.md) records the paired outcomes and performance limits.
+still runs every tick. [Crowd verification](evidence/king-crowd.md) records the paired outcomes and performance limits.
 
 ## Hard points policy
 
@@ -189,7 +189,7 @@ unchanged match tuning schema.
 ## Measured checks
 
 The following measurements record the original navigator. The shared-cache implementation's
-[scale verification](bot-scale.md) includes its final course sweeps, paired match outcomes and frame/brain costs.
+[scale verification](evidence/bot-scale.md) includes its final course sweeps, paired match outcomes and frame/brain costs.
 
 Linux, Godot 4.7.2 .NET/Jolt, baked movement tuning, physics at 120 Hz and courses at fixed 60 FPS:
 
@@ -237,5 +237,5 @@ in each status (by its format, `IBotGoalPolicy.StatusKind`). Owners sample their
 measured brain cost. `net_test` logs `bot activity` per owned bot and a `bot idle:` summary at the end of a match, and
 `bot navigation budget:` (how many ticks waited on the shared query or expansion budget); the Lab prints `[lab idle]`
 and gates it ([lab.md](lab.md)). Measurements before and after the fixes above are in
-[bot-scale.md](bot-scale.md#idle-bots).
+[bot-scale.md](evidence/bot-scale.md#idle-bots).
 

@@ -117,7 +117,7 @@ sixteen clients.
 
 At that run's live final, vent `20a00002` has epoch 2 and owner 12. Observer motion targets have sequences 179, receipt
 silence 0.003/0.014 seconds, no pending claim and no barrier; owner spin is about 30 rad/s. This matches the fresh
-nonlinear vent-tracking residual already recorded on dev (0.531 m) in `docs/network-corrections.md`. BodySync correction
+nonlinear vent-tracking residual already recorded on dev (0.531 m) in `docs/evidence/network-corrections.md`. BodySync correction
 methods and vent-force callbacks are unchanged from dev; the existing-residual attribution is supported but remains an
 inference, not deterministic replay. Fixed map/fault seeds do not fix physical timing or effect randomness.
 

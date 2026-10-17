@@ -24,8 +24,8 @@ These describe the code as it is today. Change them in the same commit as the co
 | [lab.md](lab.md) | The Lab: its stations, environments and how its sessions are verified. |
 | [locomotion.md](locomotion.md), [motion.md](motion.md) | Clips played as authored, and the rifle stance layered over them. |
 | [animation-sources.md](animation-sources.md) | Where the animation clips come from, and their licenses. |
-| [animation-review.md](animation-review.md) | The animation acceptance harness: commands and what it checks. |
-| [measuring-scale.md](measuring-scale.md) | `make bench` and how to measure scale. |
+| [animation-review.md](runbooks/animation-review.md) | The animation acceptance harness: commands and what it checks. |
+| [measuring-scale.md](runbooks/measuring-scale.md) | `make bench` and how to measure scale. |
 | [upright-piles.md](upright-piles.md) | How upright pyramids are built and proved stable (ends with a dated review). |
 
 ## Dated investigation and verification evidence
@@ -36,14 +36,14 @@ rule or procedure, which the contract documents above restate.
 
 | Document | What it records |
 | --- | --- |
-| [test-speed.md](test-speed.md), [test-flakes.md](test-flakes.md) | Gate timings and the flaky-test investigations behind today's scheduler and fixtures. |
-| [idle-checks.md](idle-checks.md) | Why Lab idle replays were not deterministic, and how they were made so. |
-| [network-soak.md](network-soak.md), [network-corrections.md](network-corrections.md), [network-integration.md](network-integration.md), [participant-integration.md](participant-integration.md) | Tank-agreement calibration, correction fixes and integration reviews, with the soak and capacity procedures they used. |
-| [tank-scaling.md](tank-scaling.md), [scale-actors.md](scale-actors.md), [scale-baseline.md](scale-baseline.md), [bot-scale.md](bot-scale.md), [vent-performance.md](vent-performance.md) | Performance and scale work: baselines, paired measurements, rejected approaches. |
-| [king-online.md](king-online.md), [king-crowd.md](king-crowd.md), [lobby-tanks.md](lobby-tanks.md) | Verification of King online, crowd tactics and lobby tank supply. |
-| [recoil.md](recoil.md), [rifle-contact.md](rifle-contact.md), [movement.md](movement.md) | Recoil, rifle contact and creep-speed work; each marks which parts are superseded. |
+| [test-speed.md](evidence/test-speed.md), [test-flakes.md](evidence/test-flakes.md) | Gate timings and the flaky-test investigations behind today's scheduler and fixtures. |
+| [idle-checks.md](evidence/idle-checks.md) | Why Lab idle replays were not deterministic, and how they were made so. |
+| [network-soak.md](evidence/network-soak.md), [network-corrections.md](evidence/network-corrections.md), [network-integration.md](evidence/network-integration.md), [participant-integration.md](evidence/participant-integration.md) | Tank-agreement calibration, correction fixes and integration reviews, with the soak and capacity procedures they used. |
+| [tank-scaling.md](evidence/tank-scaling.md), [scale-actors.md](evidence/scale-actors.md), [scale-baseline.md](evidence/scale-baseline.md), [bot-scale.md](evidence/bot-scale.md), [vent-performance.md](evidence/vent-performance.md) | Performance and scale work: baselines, paired measurements, rejected approaches. |
+| [king-online.md](evidence/king-online.md), [king-crowd.md](evidence/king-crowd.md), [lobby-tanks.md](evidence/lobby-tanks.md) | Verification of King online, crowd tactics and lobby tank supply. |
+| [recoil.md](evidence/recoil.md), [rifle-contact.md](evidence/rifle-contact.md), [movement.md](evidence/movement.md) | Recoil, rifle contact and creep-speed work; each marks which parts are superseded. |
 
-[Network scenario ownership verification](net-scenarios-verification.md) records the P4 harness migration,
+[Network scenario ownership verification](evidence/net-scenarios-verification.md) records the P4 harness migration,
 including the preserved vent-contact failure, native inventories and paired measurements.
 
 Their data and images sit beside them: `perf-vents/`, `recoil/`, `tank-scaling/`, `lobby-tanks/` and

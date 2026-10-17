@@ -214,7 +214,7 @@ python3 -B tools/dev/recoil_baselines.py --output build/rcl-reproduced
 for stance in aim hip creep; do
   godot-mono --headless --fixed-fps 60 res://scenes/dev/player_range.tscn -- --scenario=recoil --stance=$stance --assert-grip --assert-motion --capture-dir="$PWD/build/rcl-branch-$stance"
 done
-python3 -B tools/dev/plot_recoil.py --baselines build/rcl-reproduced --branch build --output docs/recoil
+python3 -B tools/dev/plot_recoil.py --baselines build/rcl-reproduced --branch build --output docs/evidence/recoil
 for stance in aim hip; do
   for pitch in -60 30; do
     godot-mono --headless --fixed-fps 60 res://scenes/dev/player_range.tscn -- --scenario=recoil --stance=$stance --pitch=$pitch --assert-grip --assert-motion --capture-dir="$PWD/build/rcl-$stance-$pitch"

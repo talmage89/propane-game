@@ -686,5 +686,5 @@ The seven new exported tuners, scaled supply/formation construction, fragment ph
 shared match behavior and require the next release to be minor (0.4 after the merged 0.3.0 release). Tank scaling
 does not change message layouts or bump the protocol. The final `dev` integration brings online King's message
 changes and `Protocol.Version` **3**; earlier measured revisions used Protocol 2. See
-[King's compatibility notes](multiplayer.md#king-online-protocol-3) for that separate change.
+[King's compatibility notes](../multiplayer.md#king-online-protocol-3) for that separate change.
 At multiplier 1, separate-process world hashes for all four formations equal the baseline hashes.
