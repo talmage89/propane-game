@@ -151,7 +151,7 @@ and string limits apply inside the plan, and starts must agree with the player a
 **Players:**
 - Each client owns its own player's movement and sends it to the others, who show it smoothed. Player snapshots
   include discrete gait, support phase and weapon action alongside the blended rifle poses, so remote creep uses
-  the walk clip and remote sprint uses the sprint clip. Protocol 2 adds these three bytes; this needs a minor release.
+  the walk clip and remote sprint uses the sprint clip. These three bytes joined Protocol 2, a minor release (0.3.0).
   Gaits share a distance-driven phase based on displayed motion. Feet retain world contacts on static ground,
   releasing and blending after support changes or snapshot corrections; foot positions are not sent.
 - The shooter's client decides whether a bullet hit a player.
@@ -307,7 +307,7 @@ every match it starts. `-k 0.5` makes them easier (slower to turn, looser aim, s
 the first, easy brain, and `-x` stops them. Each uses about 7% of a core and 0.6 GB while it waits. These test tools
 play at skill 1 unless told otherwise, the Hard profile.
 
-The bot (`src/Dev/Bot.cs`) plays to win:
+The Tank Bank brain (`BankingBot`, `src/Bots/BankingBot.cs`) plays to win:
 - it sets tanks off from outside the throw radius, wider for a pile, puncturing and detonating in one burst, from a
   spot with a clear view that it finds and walks to;
 - it runs from venting tanks that come close;
@@ -328,12 +328,8 @@ It has no `Match` dependency. [Bot navigation](bot-navigation.md) describes its 
 and seeded regression course. `Tuning.Bot...` properties are local C# dials (also accepted by `--tune.Bot...` in dev
 harnesses); they are deliberately absent from exported match tuning and its snapshot schema. Each world copies
 those local values alongside the creator's shared movement tuning. `--bot-log` logs cumulative stuck,
-blacklist, replan and jump counts. The simple brain remains the original benchmark.
-
-Measured over two-minute matches of four bots each, before and after (the server logs each player's tanks gained,
-lost to hits and lost to throws at the end of a match): the first bot often threw itself with its own blasts and
-ended with almost nothing; the current bots never throw themselves on purpose, and the leader usually ends with 8–17
-banked. Against the first bot, two current bots ended 15 and 14 to 1 and 0, and 8 and 6 to 3 and 1.
+blacklist, replan and jump counts. The simple brain remains the original benchmark. Measured bot comparisons from the
+first bot package are in the [multiplayer verification records](evidence/multiplayer-verification.md#bot-comparison-date-not-recorded).
 
 ## Hosting the server
 
@@ -501,7 +497,10 @@ not move them out of frame. The pickup scenario checks that a can adds its round
 allow at least `PickupRespawnTime + PickupRevealTime * 1.2 + 6` seconds. Both scenarios exit nonzero if a stage fails
 or the match ends before all checks complete. These assertions also run headlessly.
 
-Results, 2026-10-09: with three bots under 120 ms round trip, 30 ms jitter and 3% loss, every bot agreed on which tanks existed and their states throughout; resting tanks matched exactly and venting tanks to within about half a meter. The same held through the Docker server on another machine, over the LAN and over a VPN. When the match's creator left mid-match, the others played on in step. A client with a different protocol was turned away with a message.
+Dated soak and melee results are in the [multiplayer verification records](evidence/multiplayer-verification.md). The
+[tank assertion and correction work](evidence/network-corrections.md) added the automatic failure checks and the
+replication fixes found by repeated soaks, and the [independent integration review](evidence/network-integration.md)
+records the A4 integration, native regressions, remaining capacity limits and verification matrix.
 
 Protocol 2 also changes **Hello** (trailing appearance record), **SetProfile**, **LobbyState**, **MatchStart** and
 **MatchEnd** (one appearance record in each profile/standing), and **Drop** (removes the redundant palette index).
@@ -542,8 +541,8 @@ five-tank drop. A zero-bank victim still falls; an already-down victim receives 
 Bullets remain able to hit ragdolls.
 
 PlayerState gains one byte of normalized melee progress, before gait/support/weapon. Remote poses consume that
-progress; interpolation cannot rewind across a new swing or release. Protocol.Version stayed **2** (released in 0.3.0).
-These two messages, snapshot field and shared tuners require a **minor release**.
+progress; interpolation cannot rewind across a new swing or release. These two messages, the snapshot field and
+the shared tuners joined Protocol 2 and required a **minor release** (0.3.0).
 
 The smart bot chooses a nearby visible opponent when it is not aiming at a tank. Its approach reach derives from
 melee range plus the lunge distance. It can stun an empty-bank opponent and uses the resolver's grounded/cooldown
@@ -567,22 +566,8 @@ so screenshots do not skip contact or stall the connection. For a four-bot 90-se
 accepted swing/contact logs show actual use. The launcher audits that run automatically with both scripts and all four bot logs.
 `make test` runs the pure resolver/geometry/contact/server/wire assertions, real wall/tank/prop contact fixture,
 input bindings and device reference checks, plus the local strike grip/rotation probe. `make test-full` adds ten
-reload cancellations spanning early/late progress in both reload clips.
-
-Verified on Linux, 2026-10-11: the lagged duel spilled exactly five tanks once, stunned the empty bank without a
-second drop, and completed both get-ups. Both clients agreed with the bank audit (10 initial minus 5 spilled = 5).
-The final 90-second close-pair soak recorded 14 accepted swings and eight player contacts across four smart bots,
-including strikes while repositioning for tanks, followed by ordinary navigation, tank shooting and scoring. All four
-final standings agreed: 20 map gains + 34 drop gains - 50 spills = 4 banked. The 407 tank comparisons ended with
-identical ids/states and at most 0.165 m drift. During active chains the diagnostic reported transient differences
-up to five states and 5.862 m drift; it is a
-comparison report, not a threshold assertion. Those transients converged in the original melee package.
-The later [tank assertion and correction work](evidence/network-corrections.md) adds automatic failure checks and fixes
-the replication causes identified by repeated soaks.
-The [independent integration review](evidence/network-integration.md) records A4 integration, native regressions,
-remaining capacity limits and the verification matrix for this branch.
-
-comparison report, not a threshold assertion. Those transients converged; this package does not revise body sync.
+reload cancellations spanning early/late progress in both reload clips. The package's dated verification is in the
+[multiplayer verification records](evidence/multiplayer-verification.md#melee-verification-2026-10-11).
 
 ## Participants (A6, Protocol 2)
 
@@ -638,8 +623,7 @@ Wire changes in this package:
 The server retains departed actors' banks for conservation and final standings, transfers surviving body ownership
 with new epochs, and may transfer lobby creator controls. Original debug-tuning capability does not transfer.
 The wire safety ceiling is 64 actors/peers, separate from capacity and the color presets. Hello, Welcome and Rejected
-retain their layouts. `Protocol.Version` remains **2** (released in 0.3.0); these changes require a
-minor release.
+retain their layouts. These changes joined Protocol 2 and required a minor release (0.3.0).
 
 The repeatable separate-client capacity gate and its measured evidence are in [network-soak.md](evidence/network-soak.md).
 
@@ -652,8 +636,8 @@ Tank Bank now runs on the mode framework described in [modes.md](modes.md), with
   their numbers (40, 71, 47) stay unused. Round start sends one bank snapshot instead of restating nonzero scores.
 - `MatchStart` appends the mode id (UInt8) and schema version (UInt16).
 
-Hello, Welcome and Rejected are unchanged. `Protocol.Version` stays **2** (released in 0.3.0); these
-changes require a minor release. No tuner, construction rule or world hash changed.
+Hello, Welcome and Rejected are unchanged. These changes joined Protocol 2 and required a minor release (0.3.0).
+No tuner, construction rule or world hash changed.
 
 ## Lobby bots (A8, Protocol 2)
 
@@ -709,9 +693,8 @@ each client lobby bots before the host starts; `--leave-at=S --leave-who=BotI` m
 `net_bots.sh` then omits that client's log from the completion checks while the survivors and the server's audit still
 run them.
 
-Hello, Welcome and Rejected are unchanged. `Protocol.Version` stays **2** (released in 0.3.0); the roster
-requests change shape, so it had to be a minor release. No shared tuner, construction rule or world hash
-changed.
+Hello, Welcome and Rejected are unchanged. The roster requests changed shape, so these changes joined Protocol 2
+and required a minor release (0.3.0). No shared tuner, construction rule or world hash changed.
 
 ## King online (Protocol 3)
 
