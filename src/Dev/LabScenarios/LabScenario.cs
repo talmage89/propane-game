@@ -80,6 +80,7 @@ internal abstract class LabScenario(ILabScenarioHost host) : IDisposable
             GC.SuppressFinalize(this);
         }
     }
+
     protected Action Guard(Action action) => () => { if (!disposed) action(); };
     protected Action<T> Guard<T>(Action<T> action) => value => { if (!disposed) action(value); };
 

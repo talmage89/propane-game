@@ -56,3 +56,59 @@ revision, command, exit status and elapsed time in `final-status.json` to outliv
   also pass. Both original collection checkpoints remain in place; the command observer stays attached through
   the live-session collection proof and detaches after fixture teardown, before the final collection.
   The existing tick probes remain attached at the same positions/priorities; scenarios add no processing nodes.
+
+## Final dispatch and lifecycle proof
+
+All seventeen selections have factories. The fake-context suite has seven passing tests: pending completion,
+continuation boundary, failure propagation, single reverse disposal, early fixture detach, captured-fixture
+collection while the case remains alive, guarded late callbacks (typed and untyped), and an independent factory
+inventory requiring ordinary objects and incomplete completion failure from every owner. Unknown selection and
+forced `lifetime-shards=0` both exit 1 with `[lab] FAIL`; neither can print PASS. The default remains lifetime.
+No scene attachment order, frame count, await configuration, assertion, capture expression or RNG call changed.
+The independent shard/session checker remains unchanged.
+
+Reproduce the per-family native commands from `build/rfb7a/owned/status.json`; the parent command matrix is in
+`parent-rest/status.json` (plus `parent/status.json` and `parent-dials-status.json` for lifetime/dials). The five
+parent release traces passed; the additional Ring Out detailed comparison and retirement JSON match exactly.
+All command/capture names and source expressions match. The only caller-inventory additions are this package's
+documentation; existing references move only by inserted documentation lines. Unseeded streaming, particles,
+active duel and stack outcomes/timings are not exact or benchmark evidence. No expectations were widened.
+
+Final gates run in order on the recorded unchanged commit:
+
+```sh
+make check
+make test-equivalence
+make -j4 test-full
+```
+
+`build/rfb7a/final-status.json` records revision, commands, statuses and elapsed times. Complete output is retained
+in `final-check.log`, `final-equivalence.log` and `final-full.log`. These are completion evidence only after each
+command exits successfully. The full gate includes its unchanged native bot/network audits; this package changes
+no networking code. `Protocol.Version` remains 3, and players share no changed messages, world/tank data or tuners.
+
+## Final sizes
+
+Sizes below are source lines and bytes, excluding UID metadata. Every new script has its generated UID committed.
+
+| File under `src/Dev/` unless noted | Lines | Bytes |
+| --- | ---: | ---: |
+| `LabTest.cs` | 103 | 4269 |
+| `LabScenarios/AimStallScenario.cs` | 112 | 5886 |
+| `LabScenarios/BankRulesScenario.cs` | 74 | 4349 |
+| `LabScenarios/BankScenario.cs` | 96 | 5687 |
+| `LabScenarios/DialsScenario.cs` | 95 | 5235 |
+| `LabScenarios/DissolveScenario.cs` | 388 | 24168 |
+| `LabScenarios/EffectsScenario.cs` | 71 | 3136 |
+| `LabScenarios/FramesScenario.cs` | 84 | 3739 |
+| `LabScenarios/LabScenario.cs` | 94 | 3311 |
+| `LabScenarios/LabScenarioRegistry.cs` | 38 | 1809 |
+| `LabScenarios/LabScenarioTools.cs` | 94 | 5336 |
+| `LabScenarios/LifetimeScenario.cs` | 173 | 9674 |
+| `LabScenarios/MeasureScenario.cs` | 217 | 12556 |
+| `LabScenarios/PrototypeScenario.cs` | 153 | 9804 |
+| `LabScenarios/RetirementScenario.cs` | 52 | 2908 |
+| `LabScenarios/ShortFuseScenario.cs` | 270 | 17585 |
+| `LabScenarios/StackFireScenario.cs` | 56 | 2999 |
+| `UnitTests/LabScenarioTests.cs` | 148 | 7651 |
+| `tools/dev/lab_scenario_inventory.py` | 76 | 4019 |
