@@ -46,3 +46,8 @@ revision, command, exit status and elapsed time in `final-status.json` to outliv
   A first build rejected the Godot signal delegate conversion; its stale-assembly scene attempt was stopped.
   The next native run caught a duplicate signal disconnect despite exit 0. Replacing the original unsubscribe
   statement with idempotent registration disposal fixed it at the same boundary. All failed logs are retained.
+- Measurement: warning-free build; `measure` and `measure-play` pass with metrics output. Five additional
+  runs cover every diagnostic exclusion, blast/chain, warm-up, physics cap 4 and frame cap 30; all return clean
+  logs and CSVs. Native signal cleanup uses the owned registration exactly once at its original boundary.
+  Source assertion/options/log/capture inventory is unchanged. Timings/allocations remain diagnostics, not
+  paired performance claims from these short functional runs.

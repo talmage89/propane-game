@@ -21,6 +21,8 @@ internal static class LabScenarioRegistry
         new("shortfuse-combo", host => new ShortFuseScenario(host, combo: true)),
         new("effects", host => new EffectsScenario(host)),
         new("stackfire", host => new StackFireScenario(host)),
+        new("measure", host => new MeasureScenario(host)),
+        new("measure-play", host => new MeasureScenario(host, play: true)),
         new("lifetime", host => new LifetimeScenario(host)),
         new("tracking", host => new LifetimeScenario(host, trackingOnly: true))
     };
