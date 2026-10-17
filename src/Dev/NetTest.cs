@@ -169,7 +169,7 @@ public partial class NetTest : Node, INetScenarioHost
             appearanceMenus?.Show(UI.Menus.Screen.None);
             if (DevArgs.Get("scenario") == "appearance") { CheckAppearances(setup.Players.Select(p => p.Player)); }
             var delay = DevArgs.Get("delay-who") is not { } delayed || delayed == net.PlayerName ? DevArgs.GetFloat("match-delay", 0) : 0;
-            if (DevArgs.Get("scenario") == "capacity" && DevArgs.Get("name") == $"Bot{players}") delay = 26;
+            if (scenario != null) delay = scenario.ConstructionDelay(delay);
             if (delay > 0)
             {
                 Log($"delaying match {setup.Id} construction by {delay} s");
@@ -201,7 +201,7 @@ public partial class NetTest : Node, INetScenarioHost
                 Net = net,
                 Setup = setup,
                 CreateLocalView = DisplayServer.GetName() != "headless",
-                BeforeInboxAttach = DevArgs.Get("scenario") == "capacity" ? () => PrepareCapacity(setup) : null
+                BeforeInboxAttach = () => scenario?.BeforeInbox(match!)
             };
             finishMatch = () =>
             {
@@ -218,7 +218,7 @@ public partial class NetTest : Node, INetScenarioHost
                 {
                     Log($"navigation finished: stuck={smart.StuckEvents} blacklist={smart.BlacklistedTargets} replans={smart.Replans} jumps={smart.Jumps}");
                 }
-                if (DevArgs.Get("scenario") == "capacity") FinishCapacity();
+                scenario?.Complete(match);
                 if (match.BotCost is { Bots: > 0 } cost)
                 {
                     Log(FormattableString.Invariant($"lobby bots {cost.Bots}: {cost.Thinks} thinks, mean {cost.Seconds * 1000 / Math.Max(cost.Thinks, 1):0.000} ms, {cost.Bytes / Math.Max(cost.Thinks, 1)} B allocated per think"));
@@ -456,10 +456,6 @@ public partial class NetTest : Node, INetScenarioHost
         else if (DevArgs.Get("scenario") == "king-late")
         {
             KingLateScenario(match);
-        }
-        else if (DevArgs.Get("scenario") == "capacity")
-        {
-            CapacityScenario(dt);
         }
         else if (DevArgs.Get("scenario") == "appearance")
         {

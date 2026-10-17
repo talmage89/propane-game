@@ -7,10 +7,15 @@ using Propane.Player;
 using Propane.Tank;
 using Propane.World;
 
-namespace Propane.Dev;
+namespace Propane.Dev.NetScenarios;
 
-public partial class NetTest
+internal sealed class CapacityScenario(INetScenarioHost host) : NetScenario(host)
 {
+    public override float ConstructionDelay(float delay) => DevArgs.Get("name") == $"Bot{players}" ? 26 : delay;
+    public override void BeforeInbox(Match match) => PrepareCapacity(match, match.Setup);
+    protected override void Run(Match match, float dt) => CapacityScenarioTick(match, dt);
+    public override void Complete(Match match) => FinishCapacity(match);
+
     private float capacityTime;
     private bool capacityClaimed;
     private bool capacityPunctured;
@@ -23,9 +28,8 @@ public partial class NetTest
     private bool capacityQuiesced;
     private double capacityReadyAt;
 
-    private void PrepareCapacity(MatchSetup setup)
+    private void PrepareCapacity(Match current, MatchSetup setup)
     {
-        var current = match!;
         capacityTime = 0;
         capacityClaimed = capacityPunctured = capacityExploded = false;
         capacityThrows = capacityTransfers = 0;
@@ -55,23 +59,34 @@ public partial class NetTest
         capacityTank = BodySync.MapTankId(0);
         current.Player.InputOverride = new ScriptedInput();
         current.Player.Teleport(capacityCenter + Vector3.Right.Rotated(Vector3.Up, capacitySlot * Mathf.Tau / players) * 4, 0);
-        current.Player.Ragdolled += (_, _, _) => { capacityThrows++; Log("capacity throw"); };
-        current.AuthorityResolved += reply =>
+        var captured = Epoch;
+        void Thrown(Vector3 position, Vector3 direction, Vector3 impulse)
         {
+            if (!IsCurrent(captured)) return;
+            capacityThrows++; Log("capacity throw");
+        }
+        // Session disposal clears Match.Player before scenario retirement; detach from the subscribed actor itself.
+        var player = current.Player;
+        player.Ragdolled += Thrown;
+        DetachOnRetirement(() => player.Ragdolled -= Thrown);
+        void Resolved(AuthorityMessage reply)
+        {
+            if (!IsCurrent(captured)) return;
             if (reply.Request == 0 && reply.Bodies.Count > 0)
             {
                 capacityTransfers++;
                 ScenarioAssert(reply.Bodies.All(b => b.Owner != setup.CreatorId && b.Body.Epoch > 1), "capacity: invalid departure epoch");
                 Log($"capacity transfer {reply.Bodies.Count} bodies");
             }
-        };
+        }
+        current.AuthorityResolved += Resolved;
+        DetachOnRetirement(() => current.AuthorityResolved -= Resolved);
         Log($"capacity roster-map {string.Join(",", setup.Players.Select(p => $"{p.Player.Id}/{p.Player.OwnerPeerId}/{p.Player.LifeId}/{p.Spawn}/{p.Player.AllocationSlot}/{p.Player.Name}/{p.Player.Appearance.Color.ToHtml(false)}"))}");
         Log($"capacity roster actors={players} peers={setup.Peers.Count} revision={setup.RosterRevision} starts={plan.Spawns.Count} tanks={plan.Tanks.Count} ammo={plan.AmmoSpots.Count} inbox={net.InboxPressure.Packets}/{net.InboxPressure.Bytes}B");
     }
 
-    private void CapacityScenario(float dt)
+    private void CapacityScenarioTick(Match current, float dt)
     {
-        var current = match!;
         if (!current.IsPlaying) { if (capacityQuiesced) HoldCapacityTanks(current); return; }
         capacityTime = current.Setup.Length - current.TimeLeft; // Stage against the replicated match clock, including delayed loading.
         if (!capacityClaimed)
@@ -162,9 +177,8 @@ public partial class NetTest
         }
     }
 
-    private void FinishCapacity()
+    private void FinishCapacity(Match current)
     {
-        var current = match!;
         ScenarioAssert(current.FinalStandings.Count == players && current.Scores.Count == players &&
             current.FinalStandings.All(s => current.Scores[s.Id] == s.Score), "capacity: final per-actor score agreement failed");
         ScenarioAssert(current.FinalStandings.Count(s => !s.Present) == 1 && current.Session.Actors.Count == players - 1 &&

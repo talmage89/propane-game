@@ -26,7 +26,7 @@ internal static class NetScenarioRegistry
         new("king", null, NetScenarioCompletion.Assertions),
         new("king-late", null, NetScenarioCompletion.Assertions),
         new("appearance", null, NetScenarioCompletion.Assertions),
-        new("capacity", null, NetScenarioCompletion.FinalChecks)
+        new("capacity", host => new CapacityScenario(host), NetScenarioCompletion.FinalChecks)
     };
 
     internal static NetScenarioRegistration Find(string? name)

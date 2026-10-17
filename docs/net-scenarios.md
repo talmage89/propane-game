@@ -1,6 +1,6 @@
 # Network scenario ownership
 
-Duel, drop-refusal, gather, pickup, watch, melee, movement, puncture-race, body-stream and vent-contact currently use extracted owners. The remaining registered cases still dispatch
+Duel, drop-refusal, gather, pickup, watch, melee, movement, puncture-race, body-stream, vent-contact and capacity currently use extracted owners. The remaining registered cases still dispatch
 through the host during the family-by-family migration described below. Inventory comparison currently reports
 one extra generic completion expression: the temporary bridge for cases still in the host.
 
@@ -139,3 +139,17 @@ remains unchanged. This is preservation evidence, **not a passing native accepta
 the zero-error requirement while this preexisting fixture defect remains. The scope question about a separate
 fixture correction is pending. Evidence: `build/rfp4/{parent-matrix,vent-native}.log`,
 `build/rfp4-{parent,candidate}/vent`.
+
+### Capacity migration
+
+The owner keeps the special last-builder delay, pre-inbox staging/subscriptions, tick schedule and post-navigation
+completion phase. Setup/build remained warning-free; seven lifecycle tests and the unchanged expression inventory
+passed. The first native extraction trial failed during retirement: its unsubscribe closure evaluated
+`Match.Player` after session disposal cleared actors. The corrected closure retains the subscribed player itself;
+teardown order is unchanged. The failed trial, including its otherwise agreeing tank/score audit, is retained at
+`build/rfp4-candidate/capacity-retirement-failure` and `build/rfp4/capacity-initial-*.log`.
+
+The corrected full 16-client repeat passed with zero engine/protocol errors: 2,489 grids, 41,729,416 body pairs,
+no disagreements or overflows, identical 49-bank standings and explicit creator departure/authority transfer.
+The delayed client's inbox peaked at 2,879 packets / 338,821 bytes. `check_capacity.py` passed every obligation.
+Evidence: `build/rfp4/capacity-{build,lifecycle,native}.log`, `build/rfp4-candidate/capacity`.
