@@ -1,5 +1,8 @@
 # World clock allocation verification
 
+**Status:** Dated record (2026-10-16, refactor package B6). Not superseded. The clock it verifies is described in
+[world-clock.md](../world-clock.md).
+
 B6, October 16, 2026. Production parent: `1019775`; transcript/benchmark scaffolding was committed first as
 `261f2f9`, while production still used the parent clock. Godot 4.7.2, .NET SDK 10.0.112, Linux, normal Debug and
 optimized Release. No release fixtures were changed. Raw evidence and temporary measurement drivers remain in

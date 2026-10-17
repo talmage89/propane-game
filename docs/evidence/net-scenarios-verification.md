@@ -1,7 +1,7 @@
 # Network scenario ownership verification
 
 **Status:** Dated record (2026-10-16, refactor package P4). The harness it verifies is described in [net-
-scenarios.md](../net-scenarios.md). The `vent-contact` failure it preserves belongs to the parent revision.
+scenarios.md](../net-scenarios.md). The `vent-contact` failure it preserves belongs to the parent revision; `1019775` fixed it.
 
 October 16, 2026, Linux, Godot 4.7.2 .NET/Jolt. Parent `128a664`; final code `a4c17b5`.
 

@@ -24,6 +24,7 @@ current and binding, and no one else edits it. Start with [VISION.md](../design/
 | [net-scenarios.md](net-scenarios.md) | Network harness ownership, lifecycle, CLI inventory and completion obligations. |
 | [modes.md](modes.md) | How a game mode plugs in (rules, definition, runner, envelope) and the Lab prototypes. |
 | [world-services.md](world-services.md) | `Game`, `Match`, session and world contexts: who owns what, and what stays shared. |
+| [world-clock.md](world-clock.md) | `WorldClock` timer scheduling and dispatch: order, cancellation, nesting, allocation. |
 | [shutdown.md](shutdown.md) | Orderly process exit through `ShutdownGuard` and finalizer draining. |
 | [code-quality.md](code-quality.md) | Formatting and analyzers, the gate (`make lint`, `check`, `test`, `test-infra`, `test-full`), launch options, adding a suite or scene. |
 | [release-reference.md](release-reference.md) | The frozen v0.4.0 reference fixtures, their checks and the deliberate refresh. |
@@ -58,6 +59,7 @@ the report concludes; the contract named in each report's status line holds the 
 | [evidence/network-integration.md](evidence/network-integration.md) | 2026-10-11 | No | The independent review of the network-assertion branch: disconnect latency, vent correction, capacity follow-ups. |
 | [evidence/participant-integration.md](evidence/participant-integration.md) | 2026-10-11, 10-12 | No | The participant (A6) merge review, the capacity proof and the tank-agreement tails it left open. |
 | [evidence/net-scenarios-verification.md](evidence/net-scenarios-verification.md) | 2026-10-16 | No | The P4 harness migration: preserved vent-contact failure, native inventories, paired measurements. |
+| [evidence/world-clock-verification.md](evidence/world-clock-verification.md) | 2026-10-16 | No | The B6 clock dispatch change: parent callback transcripts, allocation and burst measurements. |
 | [evidence/king-online.md](evidence/king-online.md) | 2026-10-14 | No | King online: gates, network matrix, late loading, rendered presentation. |
 | [evidence/king-crowd.md](evidence/king-crowd.md) | 2026-10-15 | No | King crowd tactics: holds, mints and thinking cost at 4, 8 and 16 actors (data: [king-crowd-results.csv](evidence/king-crowd-results.csv)). |
 | [evidence/lobby-tanks.md](evidence/lobby-tanks.md) | 2026-10-14 | No | Lobby and Lab tank supply: gates, device delivery, native matrix (images in `lobby-tanks/`). |

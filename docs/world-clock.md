@@ -28,5 +28,5 @@ The release chain, Short Fuse and controlled Dissolve traces remain in `make tes
 `ClockAllocationTests` measures warmed 1,024-timer nested bursts, live pending scans, canceled-future cleanup and
 empty due snapshots with `AssertNoAllocation`; each measured window is populated outside the window.
 
-The [verification record](world-clock-verification.md) includes parent comparisons, allocation rejection probes,
+The [verification record](evidence/world-clock-verification.md) includes parent comparisons, allocation rejection probes,
 paired timing results and reviewed dense-chain captures.
