@@ -248,6 +248,28 @@ actor message needs the header a real client sends: take it from `ActorWriter` (
 encoded message), which use the peer's actor, life 1 and the next action id of that peer's sequence, or give every field
 to `ActorMessages.Encode`. A packet with a zero actor id is rejected, as in production.
 
+## Ledger accounting checks
+
+`TankLedgerTests` compares `LiveTanks` with the parent implementation's scan over canonical records after each
+scripted or seeded random operation. It covers mixed tanks/cars, refused atomic registrations, repeated refills,
+claims, punctures, detonations and their causal refusals, motion, gather and transfers. Its per-sequence digests
+include canonical record encounter order, lifecycle, authority and counts, for comparison with the immediate parent.
+It runs in the ordinary discovered unit gate; no reference fixtures are regenerated.
+
+After `make build`, opt into controlled getter and whole server stock-tick measurements:
+
+```sh
+godot-mono --headless --path . res://scenes/dev/unit_tests.tscn -- --suite=TankLedgerTests --ledger-bench
+```
+
+The benchmark uses the real roaming-world ledger with 60 standing tanks and 0/4,096/16,384 tombstones, a manual
+clock advanced by the stock interval (0.5 s), and a send sink. Each case warms 128 calls before 1,024 samples.
+Getter samples batch 16 reads and report per-read costs; server samples run `AdvanceMatches`, including stock and
+rule processing. It reports mean/p95/p99 microseconds and thread allocation bytes per read or tick. Alternate
+parent/candidate builds with identical instrumentation for at least three pairs. Rendered runs can replace
+`--headless` with `--disable-vsync --resolution 960x540`; this synchronous server workload does not measure GPU
+render time or live socket delivery. See the [B1a evidence](evidence/ledger-count-verification.md).
+
 ## Adding a suite
 
 For a unit suite, add a static class in `src/Dev/UnitTests`, mark it `[UnitSuite]`, and expose
