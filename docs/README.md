@@ -60,6 +60,7 @@ the report concludes; the contract named in each report's status line holds the 
 | [evidence/network-integration.md](evidence/network-integration.md) | 2026-10-11 | No | The independent review of the network-assertion branch: disconnect latency, vent correction, capacity follow-ups. |
 | [evidence/participant-integration.md](evidence/participant-integration.md) | 2026-10-11, 10-12 | No | The participant (A6) merge review, the capacity proof and the tank-agreement tails it left open. |
 | [evidence/net-scenarios-verification.md](evidence/net-scenarios-verification.md) | 2026-10-16 | No | The P4 harness migration: preserved vent-contact failure, native inventories, paired measurements. |
+| [evidence/suburb-generation-verification.md](evidence/suburb-generation-verification.md) | 2026-10-17 | No | B10: stage ownership, parent plan bytes, exact references, deep sweeps and rendered comparisons. |
 | [evidence/world-clock-verification.md](evidence/world-clock-verification.md) | 2026-10-16 | No | The B6 clock dispatch change: parent callback transcripts, allocation and burst measurements. |
 | [evidence/king-online.md](evidence/king-online.md) | 2026-10-14 | No | King online: gates, network matrix, late loading, rendered presentation. |
 | [evidence/king-crowd.md](evidence/king-crowd.md) | 2026-10-15 | No | King crowd tactics: holds, mints and thinking cost at 4, 8 and 16 actors (data: [king-crowd-results.csv](evidence/king-crowd-results.csv)). |

@@ -209,7 +209,7 @@ internal sealed class SuburbLayout
         for (var depth = Range(settings.LotDepthMax - 4f, settings.LotDepthMax); depth >= settings.LotDepthMin; depth -= 1.5f)
         {
             var rect = new OrientedRect(frontCenter + inward * depth / 2f, new Vector2(frontage / 2f, depth / 2f), angle);
-            if (!InsideMap(rect) || roadAreas.Any(r => r.Overlaps(rect.Shrunk(0.04f))) ||
+            if (!InsideMap(plan, rect) || roadAreas.Any(r => r.Overlaps(rect.Shrunk(0.04f))) ||
                 plan.Lots.Any(l => l.Bounds.Overlaps(rect.Shrunk(0.02f))))
             {
                 continue;
@@ -220,7 +220,7 @@ internal sealed class SuburbLayout
         return false;
     }
 
-    private bool InsideMap(OrientedRect rect)
+    internal static bool InsideMap(SuburbPlan plan, OrientedRect rect)
     {
         var b = plan.Bounds.Grow(0.01f);
         return rect.Corners().All(b.HasPoint);

@@ -17,11 +17,16 @@ furnishing does not draw from the master stream.
 Later supply selection borrows the occupied areas, prop obstacles, story tank sites and original fence segments.
 Clearance uses those original segments, before merging and cutting gate openings, rather than the plan's finished
 fences. Furnishing remains their only writer. Fence segments retain their concrete `List` so repeated clearance
-queries keep struct enumeration; the other outputs expose read-only views. Road-clearance queries live with layout
-and take their plan/settings inputs explicitly.
+queries keep struct enumeration; the other outputs expose read-only views. Bounds and road-clearance queries live
+with layout and take their inputs explicitly.
 
-The remaining supply work chooses tanks and then the single-player spawn. Multiplayer starts and ammo are chosen
-last so they do not perturb single-player plans.
+`SuburbSupply` receives settings, the existing master RNG and furnishing's clearance/site outputs. It owns tank
+candidate selection, formation placement and spawn/ammo candidate scratch. Its main generation call chooses tanks
+and then the single-player spawn. The coordinator calls multiplayer starts and ammo last so they do not perturb
+single-player plans.
+
+The coordinator creates the plan and calls layout, furnishing and supply in that order. It retains the existing
+`YawFacing` and `FacingVector` conversion API for callers; stages use those same conversions.
 
 Stages are ordinary owned objects, with no pipeline interface or scene callbacks. The generator retains its stage
 state and random stream for its lifetime, as before extraction; callers normally create one generator per plan.
