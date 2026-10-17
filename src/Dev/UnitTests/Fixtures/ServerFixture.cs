@@ -10,7 +10,7 @@ namespace Propane.Dev.UnitTests.Fixtures;
 /// <summary>
 /// A real LobbyServer with two connected peers (2 creates the lobby, 3 joins it) and a started match, by default already
 /// playing, driven through the production receive handler and a manual clock. It counts a lobby's own packets, so the
-/// lobby world is off, and the lobby world has its own fixture.
+/// lobby world is off; <see cref="LobbyWorldFixture"/> has the world.
 /// </summary>
 internal sealed class ServerFixture : IDisposable
 {

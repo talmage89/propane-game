@@ -7,7 +7,6 @@ using Propane.Core;
 using Propane.Dev.UnitTests.Fixtures;
 using Propane.Modes;
 using Propane.Net;
-using Propane.Player;
 
 namespace Propane.Dev.UnitTests;
 
@@ -19,73 +18,6 @@ namespace Propane.Dev.UnitTests;
 [UnitSuite]
 public static class LobbyWorldTests
 {
-    /// <summary>A real server with lobby worlds and recorded packets, a lobby created by peer 2.</summary>
-    internal sealed class Fixture : IDisposable
-    {
-        public readonly ManualClock Clock = new();
-        public readonly LobbyServer Server;
-        /// <summary>Packets since the last clear, and every packet sent (lobby states, starts and actors are looked up there).</summary>
-        public readonly List<(int Peer, NetMessage Message)> Packets = new();
-        public readonly List<(int Peer, NetMessage Message)> All = new();
-        public readonly Tuning Start = new() { CountdownTime = 0, ResultsTime = 1, LobbyStageTime = 2 };
-        private readonly Dictionary<int, uint> actions = new();
-
-        public Fixture(params int[] guests)
-        {
-            Server = new LobbyServer(PacketTransports.CreateServer(), Clock) { Worlds = true };
-            Server.SendOverride = (peer, bytes, _) =>
-            {
-                var message = MessageCodec.Decode(bytes, true);
-                Packets.Add((peer, message));
-                All.Add((peer, message));
-            };
-            Connect(2);
-            Receive(new NetWriter(Msg.CreateLobby));
-            foreach (var guest in guests) { Connect(guest); Join(guest); }
-        }
-
-        public void Connect(int peer)
-        {
-            Server.OnConnected(peer);
-            Receive(new NetWriter(Msg.Hello).Int(Protocol.Version).String(BuildInfo.GameVersion).String("test")
-                .String($"Player{peer}").Int(peer % Protocol.PlayerColors.Length).Bool(true), peer);
-        }
-
-        public void Join(int peer) => Receive(new NetWriter(Msg.JoinLobby).Int(1), peer);
-        public void Receive(NetWriter packet, int peer = 2) => Server.OnReceived(peer, packet.ToArray());
-        public void Receive(byte[] packet, int peer = 2) => Server.OnReceived(peer, packet);
-        public void Advance(double seconds = 0)
-        {
-            Clock.Seconds += seconds;
-            Server.AdvanceMatches(Clock.Seconds);
-        }
-
-        public IEnumerable<T> To<T>(int peer) => Packets.Where(p => p.Peer == peer).Select(p => p.Message.Payload).OfType<T>();
-        private IEnumerable<T> Ever<T>(int peer) => All.Where(p => p.Peer == peer).Select(p => p.Message.Payload).OfType<T>();
-        public LobbyInfo Lobby(int peer = 2) => Ever<LobbyInfo>(peer).Last();
-        public MatchSetup World(int peer = 2) => Ever<MatchSetup>(peer).Last(s => s.ModeId == ModeRegistry.LobbyWorldId);
-        public MatchSetup Match(int peer = 2) => Ever<MatchSetup>(peer).Last(s => s.ModeId != ModeRegistry.LobbyWorldId);
-        public IReadOnlyList<BodyAuthority> Arrived(int peer = 2) => Ever<AuthorityMessage>(peer).Last(a => a.Request == 0 && a.Bodies.All(b => b.Rest)).Bodies;
-        public PlayerProfile Actor(int peer, ActorKind kind = ActorKind.Human) =>
-            Lobby(peer).Members.Last(m => m.OwnerPeerId == peer && m.Kind == kind);
-
-        /// <summary>An actor message from a peer's actor in a run, with its next action id.</summary>
-        public byte[] Act(int peer, int run, Msg type, object payload, PlayerProfile? actor = null)
-        {
-            actor ??= Actor(peer);
-            var action = actions.GetValueOrDefault(actor.Id) + 1;
-            actions[actor.Id] = action;
-            return MessageCodec.Encode(new NetMessage(type, run, 0, payload, actor.Id, actor.LifeId, action), false);
-        }
-
-        public byte[] Pose(int peer, int run, PlayerProfile? actor = null) =>
-            Act(peer, run, Msg.PlayerState, new PlayerStateMessage(0, new PlayerNetState { Position = Vector3.One }), actor);
-
-        public void StartMatch(int peer = 2) => Receive(new NetWriter(Msg.StartMatch).Snapshot(Start.Snapshot()), peer);
-
-        public void Dispose() { Server.Free(); Start.Dispose(); }
-    }
-
     private static ModeSetup Setup(int spots, double delay = 5, int limit = 100, int pile = 10) => new(Array.Empty<ModeActor>(),
         new ModeWorld(ModeWorldSource.Void, 1, 0, LobbyLayout.Spots(spots, 10)),
         new ModeTuners(new Dictionary<string, double>
@@ -168,7 +100,7 @@ public static class LobbyWorldTests
 
         runner.Run("lobby world/creating a lobby opens a stocked world and admits its creator with every body", () =>
         {
-            using var f = new Fixture();
+            using var f = new LobbyWorldFixture();
             var lobby = f.Lobby();
             var world = f.World();
             TestRunner.Assert(lobby.WorldId == world.Id && world.Mode == ModeRegistry.LobbyWorld && world.Players.Single().Player.OwnerPeerId == 2,
@@ -186,7 +118,7 @@ public static class LobbyWorldTests
 
         runner.Run("lobby world/joining while roaming sees the world as it is; leaving and rejoining arrives anew", () =>
         {
-            using var f = new Fixture();
+            using var f = new LobbyWorldFixture();
             var world = f.World().Id;
             var tank = f.Arrived()[0];
             f.Receive(f.Act(2, world, Msg.Explode, new ExplodeMessage(tank.Body.Id, tank.Body.Transform.Origin, 1, 1)));
@@ -216,7 +148,7 @@ public static class LobbyWorldTests
 
         runner.Run("lobby world/bots added while roaming roam it; removed bots leave it", () =>
         {
-            using var f = new Fixture(3);
+            using var f = new LobbyWorldFixture(3);
             var world = f.World().Id;
             f.Receive(MessageCodec.Encode(new NetMessage(Msg.AddActor, 0, 0, new AddActorMessage(1, ActorKind.Bot, "Roamer", AppearanceRecord.FromPalette(4),
                 ControllerConfig.ForBot(2), f.Server.RosterRevision(2))), false));
@@ -232,7 +164,7 @@ public static class LobbyWorldTests
 
         runner.Run("lobby world/only the creator changes settings, starts or cancels; the stage locks the lobby", () =>
         {
-            using var f = new Fixture(3);
+            using var f = new LobbyWorldFixture(3);
             f.Packets.Clear();
             f.Receive(MessageCodec.Encode(new NetMessage(Msg.SetMode, 0, 0, ModeSettings.Default with { TankSupply = 6 }), false), 3);
             f.Receive(new NetWriter(Msg.SetMatchLength).Float(300), 3);
@@ -261,7 +193,7 @@ public static class LobbyWorldTests
 
         runner.Run("lobby world/the stage gives way to the match; the world's traffic is stale from then on", () =>
         {
-            using var f = new Fixture(3);
+            using var f = new LobbyWorldFixture(3);
             var world = f.World().Id;
             var tank = f.Arrived()[0];
             f.StartMatch();
@@ -281,7 +213,7 @@ public static class LobbyWorldTests
 
         runner.Run("lobby world/after the results everyone returns to a new world, membership kept", () =>
         {
-            using var f = new Fixture(3);
+            using var f = new LobbyWorldFixture(3);
             f.Receive(MessageCodec.Encode(new NetMessage(Msg.AddActor, 0, 0, new AddActorMessage(1, ActorKind.Bot, "Stays", AppearanceRecord.FromPalette(4),
                 ControllerConfig.Bot, f.Server.RosterRevision(2))), false));
             var first = f.World();
@@ -306,7 +238,7 @@ public static class LobbyWorldTests
 
         runner.Run("lobby world/the creator leaving hands the world to a successor, and cancels a stage", () =>
         {
-            using (var f = new Fixture(3))
+            using (var f = new LobbyWorldFixture(3))
             {
                 var world = f.World().Id;
                 f.Packets.Clear();
@@ -316,7 +248,7 @@ public static class LobbyWorldTests
                 TestRunner.Assert(f.To<AuthorityMessage>(3).Single().Bodies.All(b => b.Owner == 3) && f.To<AuthorityMessage>(3).Single().Bodies.Count > 0,
                     "the successor owns the departed creator's bodies");
             }
-            using (var f = new Fixture(3))
+            using (var f = new LobbyWorldFixture(3))
             {
                 f.StartMatch();
                 f.Receive(new NetWriter(Msg.LeaveLobby));
@@ -328,7 +260,7 @@ public static class LobbyWorldTests
 
         runner.Run("lobby world/disconnects during the countdown and during loading leave the others to play", () =>
         {
-            using (var f = new Fixture(3, 4))
+            using (var f = new LobbyWorldFixture(3, 4))
             {
                 f.StartMatch();
                 f.Advance(1);
@@ -338,7 +270,7 @@ public static class LobbyWorldTests
                 TestRunner.Assert(match.ModeId == ModeRegistry.TankBankId && match.Peers.Select(p => p.PeerId).OrderBy(p => p).SequenceEqual(new[] { 2, 3 }),
                     "a guest lost during the countdown is left out of the match");
             }
-            using (var f = new Fixture(3))
+            using (var f = new LobbyWorldFixture(3))
             {
                 f.StartMatch();
                 f.Advance(2);
@@ -354,7 +286,7 @@ public static class LobbyWorldTests
 
         runner.Run("lobby world/refills come from the world authority, checked, and materialize for everyone", () =>
         {
-            using var f = new Fixture(3);
+            using var f = new LobbyWorldFixture(3);
             var world = f.World().Id;
             var tuning = Tuning.SavedTemplate;
             var spot = LobbyLayout.Spots(tuning.LobbyPiles, tuning.LobbyPileRing)[0];
@@ -389,7 +321,7 @@ public static class LobbyWorldTests
 
         runner.Run("lobby world/a client builds its world, follows the roster live and stands still on the stage", () =>
         {
-            using var f = new Fixture(3);
+            using var f = new LobbyWorldFixture(3);
             var start = f.World(2);
             using var template = new Tuning();
             var client = new NetClient { Template = template, LobbyWorlds = true };
