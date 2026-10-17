@@ -157,8 +157,8 @@ status and the command; make then names the failed target. The jobs:
 | --- | --- |
 | `test-full-generator-1`…`4` | The generator sweep in four contiguous seed ranges: 50 single-player and 2-player seeds, 25 at each large size and segment stream, and two, two, one and one forced seeds |
 | `test-full-generator-coverage` | `check_generator_shards.py`: the shards' `--list-seeds` listings hold exactly the 1,044 seeds of `--seeds=200 --large-seeds=100 --formation-seeds=6 --segment-seeds=100`, each once |
-| `test-full-lab-*` | All 18 full Lab sessions in 25 jobs: independent rounds/seeds, four lifetime shards, eight dial shards, both soaks; King keeps its cross-round mint assertion |
-| `test-full-lab-coverage` | Every full Lab session/setting/seed and all 530 dial fixtures occur exactly once |
+| `test-full-lab-*` | The full Lab sessions in 25 jobs: independent rounds/seeds, four lifetime shards, eight dial shards, both soaks; King keeps its cross-round mint assertion |
+| `test-full-lab-coverage` | Every full Lab session, setting and seed and every dial fixture occur exactly once (550 cases, 514 of them dial fixtures) |
 | `test-full-engine` | Build isolated optimized Debug for deep probes; each probe verifies optimization and `DEBUG` |
 | `test-full-navigation` | 100 navigation seeds in one process, since its pass rate is over all of them |
 | `test-full-bots` | The rifle soak, duel lane and loading-readiness matches, one at a time and after every other job: they share this checkout's `build/` names and run in real time |
