@@ -1,18 +1,101 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
+using System.Globalization;
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using Godot;
+using Propane.Bots;
+using Propane.Core;
+using Propane.Fx;
 using Propane.Lab;
+using Propane.Modes;
+using Propane.Net;
+using Propane.Player;
 using Propane.Tank;
+using Propane.UI;
 using static Propane.Dev.UnitTests.TestRunner;
 
-namespace Propane.Dev;
+using static Propane.Dev.LabCases.LabScenarioTools;
+using static Godot.GodotObject;
 
-public partial class LabTest
+namespace Propane.Dev.LabCases;
+
+internal sealed class LifetimeScenario(ILabScenarioHost host, bool trackingOnly = false) : LabScenario(host)
 {
+    protected override Task RunCore() => trackingOnly ? TrackingLifetime() : Lifetime();
+
+    private async Task Lifetime()
+    {
+        using var snapshot = template.Snapshot();
+        Assert(!snapshot.ContainsKey(nameof(Tuning.LabStackCount)) && !snapshot.ContainsKey(nameof(Tuning.LabBotSkill)),
+            "Lab dials entered a shared tuning snapshot");
+        var shard = int.Parse(DevArgs.Get("lifetime-shard") ?? "1", CultureInfo.InvariantCulture);
+        var shards = int.Parse(DevArgs.Get("lifetime-shards") ?? "1", CultureInfo.InvariantCulture);
+        Assert(shards > 0 && shard >= 1 && shard <= shards, "invalid lifetime shard");
+        var listing = DevArgs.Get("list-lifetime") != null;
+        var candidates = 0;
+        var selected = 0;
+        foreach (var scenario in LabScenarios.All)
+        {
+            foreach (var environment in scenario.Environments)
+            {
+                if (candidates++ % shards != shard - 1) continue;
+                selected++;
+                if (listing)
+                {
+                    GD.Print($"[lab lifetime-case] {scenario.Id}/{environment}");
+                    continue;
+                }
+                await Cycle(scenario, environment).ConfigureAwait(true);
+                await Collect().ConfigureAwait(true);
+                await Cycle(scenario, environment).ConfigureAwait(true);
+                await Collect().ConfigureAwait(true);
+                var baseline = Counts();
+                for (var cycle = 1; cycle <= (int)DevArgs.GetFloat("cycles", 10); cycle++)
+                {
+                    await Cycle(scenario, environment).ConfigureAwait(true);
+                    await Collect().ConfigureAwait(true);
+                    Assert(Counts() == baseline, $"{scenario.Id}/{environment} cycle {cycle}: {baseline} -> {Counts()}");
+                }
+                GD.Print($"[lab lifetime] {scenario.Id}/{environment}: {(int)DevArgs.GetFloat("cycles", 10)} entry/reset/exit cycles stable {baseline}");
+            }
+        }
+        Assert(selected > 0, "lifetime shard selected no pairs");
+        if (listing) GD.Print($"[lab lifetime] listed {selected} of {candidates} pairs");
+        else if (shard == 1) await TrackingLifetime().ConfigureAwait(true);
+    }
+
+    private async Task Cycle(Propane.Lab.LabScenario scenario, LabEnvironment environment)
+    {
+        var lab = Enter(scenario, environment);
+        var tankCount = lab.LiveTanks.Count();
+        Assert(tankCount > 0, "fixture has no tanks");
+        Assert(!lab.World.Networked && lab.Session.Actors.Count == (scenario.Banking ? template.LabBankBots + 1 :
+            scenario.Prototype && scenario.Definition != ModeRegistry.DissolveRun ? template.LabPrototypeBots + 1 : 1),
+            "local actors/world");
+        Assert(lab.Opponent?.View == null, "bot acquired a camera");
+        if (scenario.Id == "stack") Assert(tankCount == template.LabStackCount && lab.LiveTanks.All(t => t.Transform.Basis.Y.Dot(Vector3.Up) > .99f), "upright stack count");
+        if (scenario.Id == "range") Assert(tankCount == 12, "range fixture count");
+        lab.World.Tuning.RunSpeed = 7;
+        lab.World.Tuning.LabRangeStep = 15;
+        Assert(template.RunSpeed != 7 && template.LabRangeStep == 10, "Lab edited template");
+        await Frames(8).ConfigureAwait(true);
+        var retired = lab.Session;
+        lab.RequestReset();
+        await Frames(6).ConfigureAwait(true);
+        Assert(lab.ResetCount == 1 && lab.Session != retired, "reset did not replace session");
+        Assert(!retired.IsAlive && retired.Actors.Count == 0 && retired.World.Clock.PendingCount == 0 &&
+            retired.World.BlastReceivers.Count == 0, "reset left old services live");
+        Assert(lab.World.Tuning.RunSpeed == 7 && lab.World.Tuning.LabRangeStep == 15, "reset lost session tuning");
+        Assert(lab.LiveTanks.Count() == tankCount, "reset lost fixtures");
+        retired = lab.Session;
+        lab.Session.Dispose(); lab.Free();
+        Assert(!retired.IsAlive && retired.Actors.Count == 0 && retired.World.BlastReceivers.Count == 0, "exit retained services");
+    }
+
     private async Task TrackingLifetime()
     {
         foreach (var detonateFirst in new[] { false, true })

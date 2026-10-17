@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Godot;
 using Propane.Bots;
 using Propane.Core;
+using Propane.Dev.LabCases;
 using Propane.Fx;
 using Propane.Lab;
 using Propane.Modes;
@@ -14,16 +15,36 @@ using Propane.Net;
 using Propane.Player;
 using Propane.Tank;
 using Propane.UI;
+using static Propane.Dev.LabCases.LabScenarioTools;
 using static Propane.Dev.UnitTests.TestRunner;
+using LabCase = Propane.Dev.LabCases.LabScenario;
 
 namespace Propane.Dev;
 
 /// <summary>Real Lab sessions: retirement, fixture counts, session-only tuning, local banks and player-camera frames.</summary>
-public partial class LabTest : Node
+public partial class LabTest : Node, ILabScenarioHost
 {
+    internal static bool RingEliminationsAgree(RingOutRules ring, IReadOnlyList<int> starters, Func<int, bool> spectating) =>
+        LabScenarioTools.RingEliminationsAgree(ring, starters, spectating);
+
     private CaptureDirector capture = null!;
     private Tuning template = null!;
     private Equivalence.LabTrace? equivalence;
+    private LabCase? activeScenario;
+
+    Tuning ILabScenarioHost.Template => template;
+    CaptureDirector ILabScenarioHost.Capture => capture;
+    Equivalence.LabTrace? ILabScenarioHost.Trace => equivalence;
+    SceneTree ILabScenarioHost.Tree => GetTree();
+    Viewport ILabScenarioHost.Viewport => GetViewport();
+    void ILabScenarioHost.Attach(Node node) => AddChild(node);
+    void ILabScenarioHost.AddLab(LabSession lab) => AddLab(lab);
+    LabSession ILabScenarioHost.Enter(Propane.Lab.LabScenario scenario, LabEnvironment environment) => Enter(scenario, environment);
+    Task ILabScenarioHost.Frames(int count) => Frames(count);
+    Task ILabScenarioHost.Collect() => Collect();
+    (int, int, int) ILabScenarioHost.Counts() => Counts();
+
+    public override void _ExitTree() => activeScenario?.Dispose();
 
     private void AddLab(LabSession lab)
     {
@@ -49,26 +70,37 @@ public partial class LabTest : Node
         if (DevArgs.Get("bot-skill") != null) template.LabBotSkill = DevArgs.GetFloat("bot-skill", template.LabBotSkill);
         try
         {
-            switch (DevArgs.Get("scenario") ?? "lifetime")
+            var selected = DevArgs.Get("scenario") ?? "lifetime";
+            activeScenario = LabScenarioRegistry.Create(selected, this);
+            if (activeScenario != null)
             {
-                case "frames": await FramesReview().ConfigureAwait(true); break;
-                case "rules": await BankRules().ConfigureAwait(true); break;
-                case "duel": await Duel().ConfigureAwait(true); break;
-                case "soak": await Duel(soak: true).ConfigureAwait(true); break;
-                case "effects": await EffectFrames().ConfigureAwait(true); break;
-                case "measure": await Measure().ConfigureAwait(true); break;
-                case "measure-play": await MeasurePlay().ConfigureAwait(true); break;
-                case "stackfire": await StackFire().ConfigureAwait(true); break;
-                case "aimstall": await AimStall().ConfigureAwait(true); break;
-                case "dials": await Dials().ConfigureAwait(true); break;
-                case "prototype": await Prototypes().ConfigureAwait(true); break;
-                case "shortfuse": await ShortFuseMatches().ConfigureAwait(true); break;
-                case "shortfuse-combo": await ShortFuseCombo().ConfigureAwait(true); break;
-                case "tracking": await TrackingLifetime().ConfigureAwait(true); break;
-                case "reference-retirement": await ReferenceRetirement().ConfigureAwait(true); break;
-                case "dissolve": await DissolveRun().ConfigureAwait(true); break;
-                default: await Lifetime().ConfigureAwait(true); break;
+                await activeScenario.Execute().ConfigureAwait(true);
+                activeScenario.CheckCompletion();
             }
+            else
+            {
+                switch (selected)
+                {
+                    case "frames": await FramesReview().ConfigureAwait(true); break;
+                    case "rules": await BankRules().ConfigureAwait(true); break;
+                    case "duel": await Duel().ConfigureAwait(true); break;
+                    case "soak": await Duel(soak: true).ConfigureAwait(true); break;
+                    case "effects": await EffectFrames().ConfigureAwait(true); break;
+                    case "measure": await Measure().ConfigureAwait(true); break;
+                    case "measure-play": await MeasurePlay().ConfigureAwait(true); break;
+                    case "stackfire": await StackFire().ConfigureAwait(true); break;
+                    case "aimstall": await AimStall().ConfigureAwait(true); break;
+                    case "dials": await Dials().ConfigureAwait(true); break;
+                    case "prototype": await Prototypes().ConfigureAwait(true); break;
+                    case "shortfuse": await ShortFuseMatches().ConfigureAwait(true); break;
+                    case "shortfuse-combo": await ShortFuseCombo().ConfigureAwait(true); break;
+                    case "reference-retirement": await ReferenceRetirement().ConfigureAwait(true); break;
+                    case "dissolve": await DissolveRun().ConfigureAwait(true); break;
+                    default: throw new ArgumentException($"[lab] unknown scenario '{selected}'");
+                }
+            }
+
+            activeScenario?.Dispose();
             equivalence?.Finish();
             template.Dispose();
             GD.Print("[lab] PASS");
@@ -76,12 +108,13 @@ public partial class LabTest : Node
         }
         catch (Exception error)
         {
+            activeScenario?.Dispose();
             GD.PushError($"[lab] FAIL {error}");
             ShutdownGuard.Quit(GetTree(), 1);
         }
     }
 
-    private LabSession Enter(LabScenario scenario, LabEnvironment environment)
+    private LabSession Enter(Propane.Lab.LabScenario scenario, LabEnvironment environment)
     {
         var lab = new LabSession
         {
@@ -98,46 +131,6 @@ public partial class LabTest : Node
         return lab;
     }
 
-    private async Task Lifetime()
-    {
-        using var snapshot = template.Snapshot();
-        Assert(!snapshot.ContainsKey(nameof(Tuning.LabStackCount)) && !snapshot.ContainsKey(nameof(Tuning.LabBotSkill)),
-            "Lab dials entered a shared tuning snapshot");
-        var shard = int.Parse(DevArgs.Get("lifetime-shard") ?? "1", CultureInfo.InvariantCulture);
-        var shards = int.Parse(DevArgs.Get("lifetime-shards") ?? "1", CultureInfo.InvariantCulture);
-        Assert(shards > 0 && shard >= 1 && shard <= shards, "invalid lifetime shard");
-        var listing = DevArgs.Get("list-lifetime") != null;
-        var candidates = 0;
-        var selected = 0;
-        foreach (var scenario in LabScenarios.All)
-        {
-            foreach (var environment in scenario.Environments)
-            {
-                if (candidates++ % shards != shard - 1) continue;
-                selected++;
-                if (listing)
-                {
-                    GD.Print($"[lab lifetime-case] {scenario.Id}/{environment}");
-                    continue;
-                }
-                await Cycle(scenario, environment).ConfigureAwait(true);
-                await Collect().ConfigureAwait(true);
-                await Cycle(scenario, environment).ConfigureAwait(true);
-                await Collect().ConfigureAwait(true);
-                var baseline = Counts();
-                for (var cycle = 1; cycle <= (int)DevArgs.GetFloat("cycles", 10); cycle++)
-                {
-                    await Cycle(scenario, environment).ConfigureAwait(true);
-                    await Collect().ConfigureAwait(true);
-                    Assert(Counts() == baseline, $"{scenario.Id}/{environment} cycle {cycle}: {baseline} -> {Counts()}");
-                }
-                GD.Print($"[lab lifetime] {scenario.Id}/{environment}: {(int)DevArgs.GetFloat("cycles", 10)} entry/reset/exit cycles stable {baseline}");
-            }
-        }
-        Assert(selected > 0, "lifetime shard selected no pairs");
-        if (listing) GD.Print($"[lab lifetime] listed {selected} of {candidates} pairs");
-        else if (shard == 1) await TrackingLifetime().ConfigureAwait(true);
-    }
 
     /// <summary>
     /// A player can drag any layout slider to either end and press Reset: each end, and every dial at once, must
@@ -219,33 +212,6 @@ public partial class LabTest : Node
         GD.Print($"[lab dials] shard {shard}/{shards}: {sessions} of {candidates} sessions at both slider ends and all-at-once, each built and reset");
     }
 
-    private async Task Cycle(LabScenario scenario, LabEnvironment environment)
-    {
-        var lab = Enter(scenario, environment);
-        var tankCount = lab.LiveTanks.Count();
-        Assert(tankCount > 0, "fixture has no tanks");
-        Assert(!lab.World.Networked && lab.Session.Actors.Count == (scenario.Banking ? template.LabBankBots + 1 :
-            scenario.Prototype && scenario.Definition != ModeRegistry.DissolveRun ? template.LabPrototypeBots + 1 : 1),
-            "local actors/world");
-        Assert(lab.Opponent?.View == null, "bot acquired a camera");
-        if (scenario.Id == "stack") Assert(tankCount == template.LabStackCount && lab.LiveTanks.All(t => t.Transform.Basis.Y.Dot(Vector3.Up) > .99f), "upright stack count");
-        if (scenario.Id == "range") Assert(tankCount == 12, "range fixture count");
-        lab.World.Tuning.RunSpeed = 7;
-        lab.World.Tuning.LabRangeStep = 15;
-        Assert(template.RunSpeed != 7 && template.LabRangeStep == 10, "Lab edited template");
-        await Frames(8).ConfigureAwait(true);
-        var retired = lab.Session;
-        lab.RequestReset();
-        await Frames(6).ConfigureAwait(true);
-        Assert(lab.ResetCount == 1 && lab.Session != retired, "reset did not replace session");
-        Assert(!retired.IsAlive && retired.Actors.Count == 0 && retired.World.Clock.PendingCount == 0 &&
-            retired.World.BlastReceivers.Count == 0, "reset left old services live");
-        Assert(lab.World.Tuning.RunSpeed == 7 && lab.World.Tuning.LabRangeStep == 15, "reset lost session tuning");
-        Assert(lab.LiveTanks.Count() == tankCount, "reset lost fixtures");
-        retired = lab.Session;
-        lab.Session.Dispose(); lab.Free();
-        Assert(!retired.IsAlive && retired.Actors.Count == 0 && retired.World.BlastReceivers.Count == 0, "exit retained services");
-    }
 
     private async Task FramesReview()
     {
@@ -310,48 +276,8 @@ public partial class LabTest : Node
         }
     }
 
-    /// <summary>
-    /// Logs each bot's idle share (<see cref="BotActivity"/>); <c>--max-idle=F</c> and <c>--max-idle-worst=F</c> fail the
-    /// run when the bots' mean or worst share exceeds them.
-    /// </summary>
-    private void CheckIdle(string label, IReadOnlyDictionary<int, BotActivity> activity)
-    {
-        if (activity.Count == 0) return;
-        foreach (var (actor, bot) in activity.OrderBy(pair => pair.Key)) GD.Print($"[lab idle] {label} bot {actor}: {bot.Report()}");
-        var mean = activity.Values.Average(bot => bot.IdleShare);
-        var worst = activity.Values.Max(bot => bot.IdleShare);
-        GD.Print(FormattableString.Invariant($"[lab idle] {label}: bots={activity.Count} mean={mean * 100:0.0}% worst={worst * 100:0.0}% longest={activity.Values.Max(bot => bot.LongestIdle)} s"));
-        if (DevArgs.Get("max-idle") != null)
-            Assert(mean <= DevArgs.GetFloat("max-idle", 1), FormattableString.Invariant($"{label}: bots idle {mean * 100:0.0}% of play on average"));
-        if (DevArgs.Get("max-idle-worst") != null)
-            Assert(worst <= DevArgs.GetFloat("max-idle-worst", 1), FormattableString.Invariant($"{label}: a bot idles {worst * 100:0.0}% of play"));
-    }
 
-    private static void ReportPoints(LabSession lab, string mode, int seed, IReadOnlyDictionary<int, int> scores,
-        IReadOnlyDictionary<int, int> earned)
-    {
-        if (DevArgs.Get("compare-points") == null) return;
-        var hard = lab.Session.Actors.Where(a => a.Character.InputOverride is IBotGoalPolicy { PointsDriven: true }).Select(a => a.Character.ActorId).ToArray();
-        var normal = lab.Session.Actors.Where(a => a.Character.InputOverride is IBotGoalPolicy { PointsDriven: false }).Select(a => a.Character.ActorId).ToArray();
-        Assert(hard.Length > 0 && normal.Length > 0, "points comparison requires both policies");
-        GD.Print($"[lab points] mode={mode} seed={seed} hard={hard.Length} normal={normal.Length} " +
-            $"hard_score={hard.Sum(a => scores.GetValueOrDefault(a))} normal_score={normal.Sum(a => scores.GetValueOrDefault(a))} " +
-            $"hard_earned={hard.Sum(a => earned.GetValueOrDefault(a))} normal_earned={normal.Sum(a => earned.GetValueOrDefault(a))}");
-    }
 
-    private static void ReportSkills(LabSession lab, int seed, IReadOnlyDictionary<int, int> scores)
-    {
-        if (DevArgs.Get("compare-skills") == null) return;
-        var bots = lab.Session.Actors.Select(a => a.Character).ToArray();
-        int[] Group(BotDifficulty difficulty) => bots.Where(a => a.InputOverride is IBotGoalPolicy brain &&
-            !brain.PointsDriven && BotProfile.Nearest(brain.Skill, lab.World.Tuning) == difficulty).Select(a => a.ActorId).ToArray();
-        var normal = Group(BotDifficulty.Normal);
-        var easy = Group(BotDifficulty.Easy);
-        Assert(normal.Length > 0 && easy.Length > 0 && normal.Length + easy.Length == bots.Length,
-            "skill comparison requires Normal and Easy objective-policy bots on every actor");
-        GD.Print($"[lab skills] seed={seed} normal={normal.Length} easy={easy.Length} " +
-            $"normal_score={normal.Sum(a => scores.GetValueOrDefault(a))} easy_score={easy.Sum(a => scores.GetValueOrDefault(a))}");
-    }
 
     private async Task Duel(bool soak = false)
     {
@@ -980,35 +906,8 @@ public partial class LabTest : Node
         public void Dispose() => Services.Dispose();
     }
 
-    private static async Task FireAt(PlayerCharacter actor, Func<Vector3> point)
-    {
-        actor.InputOverride = new OneShot(actor, point);
-        for (var i = 0; i < 15; i++) await actor.ToSignal(actor.GetTree(), SceneTree.SignalName.ProcessFrame);
-        actor.InputOverride = new IdleInput();
-    }
 
-    private sealed class IdleInput(bool aim = false) : IPlayerInputSource { public PlayerIntent Read() => new() { Aim = aim }; }
-    private sealed class OneShot(PlayerCharacter actor, Func<Vector3> point) : IPlayerInputSource
-    {
-        private readonly BotAim aim = new();
-        private bool fired;
-        public PlayerIntent Read()
-        {
-            if (fired) return new PlayerIntent { Aim = true };
-            aim.Track(actor, point(), 1f / Engine.PhysicsTicksPerSecond, 1, smooth: false);
-            fired = true;
-            return new PlayerIntent { Aim = true, FirePressed = true };
-        }
-    }
 
-    internal static bool RingEliminationsAgree(RingOutRules ring, IReadOnlyList<int> starters, Func<int, bool> spectating)
-    {
-        var eliminated = ring.Eliminations.Select(e => e.ActorId).ToHashSet();
-        // The last actors out together share first place and still become spectators.
-        return eliminated.Count == ring.Eliminations.Count && eliminated.SetEquals(starters.Where(spectating)) &&
-            starters.Where(a => !eliminated.Contains(a)).All(a => ring.Place(a) == 1) &&
-            ring.Eliminations.All(e => ring.Place(e.ActorId) == e.Place);
-    }
 
     private async Task EffectFrames()
     {
