@@ -193,8 +193,8 @@ compilation or assertions. Editor setup remains shared with release, whose tool 
 
 ## Deterministic unit time
 
-Time-sensitive network unit tests use manual clocks. Server and match fixtures share a `ManualClock` for message
-receipt, ping estimates, sample timestamps and phase advancement. `Match.Clock` defaults to `MonotonicClock.Instance`
+Time-sensitive network unit tests use manual clocks. Server and match fixtures (`src/Dev/UnitTests/Fixtures`) share a
+`ManualClock` for message receipt, ping estimates, sample timestamps and phase advancement. `Match.Clock` defaults to `MonotonicClock.Instance`
 and can be injected before the node enters the tree, like the existing client and server clocks. Production uses the same process-relative time
 as before. The server's gather deadline also uses its injected clock.
 
@@ -248,6 +248,26 @@ A root `propagate_notification()` caller-thread error immediately before a signa
 an application scene-thread call. Godot's Linux [signal handler](https://github.com/godotengine/godot/blob/ed1daf0bf/platform/linuxbsd/crash_handler_linuxbsd.cpp#L107)
 sends `NOTIFICATION_CRASH` to the tree before printing the report; the tree propagates that notification to the root
 on the signaling thread. Keep the original signal and caller evidence when diagnosing such an error.
+
+## Network unit fixtures
+
+Network unit suites stand on `src/Dev/UnitTests/Fixtures`, not on each other. Four fixtures keep separate identities
+and setup defaults because their worlds differ: `ServerFixture` (two peers, one lobby, a started match, lobby world off),
+`AuthorityFixture` (that match plus peer 2's client `Match`, relaying authority requests when the test says so),
+`GatherFixture` (the same with peer 3's client, fed relayed messages directly) and `LobbyWorldFixture` (world on, no
+match started). Add a new one there, built from the same mechanics, rather than borrowing another suite's, and do not
+grow one configurable fixture.
+
+The mechanics: `ManualClock` (test-owned time); `ServerDriver` (a hand-built `LobbyServer` fed bytes through its
+receive handler, every sent packet decoded and recorded, `Advance` moving the clock and running the phase tick);
+`Handshake` (the Hello a test client sends, the Welcome it receives); `ActionSequence` (action ids per sender);
+`ActorMessages` (explicit actor-message header fields); `MatchClient` (a welcomed, unconnected `NetClient` and its client
+`Match`, torn down in one order).
+
+`ServerFixture.Receive` and `Reject` send exactly the bytes they are given, so malformed-packet tests build raw bytes. An
+actor message needs the header a real client sends: take it from `ActorWriter` (a payload writer) or `ActorPacket` (an
+encoded message), which use the peer's actor, life 1 and the next action id of that peer's sequence, or give every field
+to `ActorMessages.Encode`. A packet with a zero actor id is rejected, as in production.
 
 ## Adding a suite
 
