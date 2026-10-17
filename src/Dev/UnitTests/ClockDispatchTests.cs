@@ -102,6 +102,32 @@ public static class ClockDispatchTests
             clock.Advance(0);
             Transcript(trace, "outer:2|throw:1:1|caught:1:2|remaining:1|new:0");
         });
+        runner.Run("clock/dense fuses preserve cancellation, order and next-tick work", () =>
+        {
+            using var clock = new WorldClock();
+            const int count = 1024;
+            var timers = new IDisposable[count];
+            var fired = 0;
+            var nextTick = 0;
+            for (var i = 0; i < count; i++)
+            {
+                var index = i;
+                timers[i] = clock.Schedule(1, () =>
+                {
+                    Assert(index == fired * 2, "dense fuse order changed");
+                    timers[index + 1].Dispose();
+                    fired++;
+                    clock.Schedule(0, () => nextTick++);
+                });
+            }
+            clock.Advance(0.5);
+            Assert(fired == 0 && clock.PendingCount == count, "dense fuses fired early");
+            clock.Advance(0.5);
+            Assert(fired == count / 2 && nextTick == 0 && clock.PendingCount == count / 2,
+                "dense burst changed eligibility or cancellation");
+            clock.Advance(0);
+            Assert(nextTick == count / 2 && clock.PendingCount == 0, "dense follow-up lost work");
+        });
         if (DevArgs.Get("clock-bench") != null) { Benchmark(); }
     }
 
@@ -114,7 +140,7 @@ public static class ClockDispatchTests
 
     private static void Benchmark()
     {
-        const int width = 256, warmup = 2000, samples = 10000;
+        const int width = 256, warmup = 2000, samples = 100000;
         using var clock = new WorldClock();
         var fired = 0;
         Action callback = () => fired++;
@@ -149,6 +175,6 @@ public static class ClockDispatchTests
         double sum = 0;
         foreach (var time in times) { sum += time; }
         Array.Sort(times);
-        GD.Print($"[clock-bench] {label} ticks={times.Length} timers/tick=256 bytes/tick={bytes / (double)times.Length:F1} mean-us={sum / times.Length:F3} p95-us={times[(int)(times.Length * 0.95)]:F3} p99-us={times[(int)(times.Length * 0.99)]:F3}");
+        GD.Print(FormattableString.Invariant($"[clock-bench] {label} ticks={times.Length} timers/tick=256 bytes/tick={bytes / (double)times.Length:F1} mean-us={sum / times.Length:F3} p95-us={times[(int)(times.Length * 0.95)]:F3} p99-us={times[(int)(times.Length * 0.99)]:F3}"));
     }
 }
