@@ -34,7 +34,7 @@ public readonly record struct SemVer(int Major, int Minor, int Patch) : ICompara
 
 /// <summary>
 /// The build's identity, and which other builds it plays with. Builds play together when their protocol and their
-/// major and minor versions match; the patch may differ (see Versions in the README).
+/// major and minor versions match; the patch may differ (see Versions and releases in docs/development.md).
 /// </summary>
 public static class BuildInfo
 {

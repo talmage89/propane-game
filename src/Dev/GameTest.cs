@@ -207,6 +207,10 @@ public partial class GameTest : Node
         {
             ScriptReadme(director);
         }
+        else if (DevArgs.Get("scenario") == "readme-scout")
+        {
+            ScriptReadmeScout(director);
+        }
         else if (DevArgs.Get("scenario") == "menus")
         {
             director.ShotAt(3f, "00_hud");
@@ -252,40 +256,6 @@ public partial class GameTest : Node
         director.ShotAt(11.5f, "13_materialize");
         director.ShotAt(12.5f, "14_new_suburb");
         director.ShotAt(15f, "15_settled");
-    }
-
-    /// <summary>
-    /// The README footage: punctures two tanks in the biggest group, lets them vent, then detonates one into a chain,
-    /// capturing a numbered frame sequence at 15 fps for the GIF.
-    /// </summary>
-    private void ScriptReadme(CaptureDirector director)
-    {
-        var distance = DevArgs.GetFloat("distance", 6f);
-        PropaneTank? second = null;
-        director.At(2.0f, () =>
-        {
-            var tanks = game.Current!.LiveTanks.ToList();
-            var biggest = tanks.OrderByDescending(t => tanks.Count(o => o.GlobalPosition.DistanceTo(t.GlobalPosition) < 2.5f)).ToList();
-            target = biggest.FirstOrDefault(t => TryStandFacing(t, distance) || TryStandFacing(t, distance * 0.7f)) ?? ApproachNearest(distance);
-            second = tanks.Where(t => t != target).OrderBy(t => t.GlobalPosition.DistanceTo(target!.GlobalPosition)).FirstOrDefault();
-            input.Hold(T(0), T(6f), new Player.PlayerIntent { Aim = true });
-        });
-        director.At(2.6f, () => input.Fire(T(0)));
-        director.At(3.0f, () => target = second);
-        director.At(3.3f, () => input.Fire(T(0)));
-        director.At(4.6f, () => input.Fire(T(0)));
-        // A venting tank can jink out of the way of that shot; the footage needs the blast either way.
-        director.At(4.65f, () =>
-        {
-            if (second != null && IsInstanceValid(second) && second.State != PropaneTank.TankState.Exploded)
-            {
-                second.Detonate();
-            }
-        });
-        for (var i = 0; i < 64; i++)
-        {
-            director.ShotAt(3.4f + i / 15f, $"frame_{i:000}");
-        }
     }
 
     /// <summary>Blows up a tank a few meters away and follows the ragdoll and get-up from the player camera.</summary>
@@ -582,32 +552,45 @@ public partial class GameTest : Node
     /// <summary>Teleports the player a set distance from a tank, somewhere with a clear line of sight to it.</summary>
     private bool TryStandFacing(PropaneTank tank, float distance)
     {
-        var space = game.Player.GetWorld3D().DirectSpaceState;
         var center = tank.GlobalTransform * PropaneTank.LocalCenter;
         for (var i = 0; i < 24; i++)
         {
             var angle = i * Mathf.Tau / 24f;
-            var stand = center + new Vector3(Mathf.Cos(angle), 0, Mathf.Sin(angle)) * distance;
-            var eye = new Vector3(stand.X, 1.7f, stand.Z);
-            var down = PhysicsRayQueryParameters3D.Create(eye + Vector3.Up * 3f, new Vector3(stand.X, -1, stand.Z), Core.Layers.World | Core.Layers.Props);
-            var ground = space.IntersectRay(down);
-            var side = new Vector3(Mathf.Cos(angle + Mathf.Pi / 2), 0, Mathf.Sin(angle + Mathf.Pi / 2));
-            var clear = true;
-            // Clear only if the first thing hit, from both the eye and roughly where the camera will be, is the tank.
-            foreach (var from in new[] { eye, eye + side * 0.7f + (eye - center).Normalized() * 3.4f, eye - side * 0.7f + (eye - center).Normalized() * 3.4f })
+            if (TryStandAt(tank, center + new Vector3(Mathf.Cos(angle), 0, Mathf.Sin(angle)) * distance, angle))
             {
-                var hit = space.IntersectRay(PhysicsRayQueryParameters3D.Create(from, center + (center - from).Normalized(), Core.Layers.Shootable));
-                clear &= hit.Count > 0 && hit["collider"].As<GodotObject>() == tank;
-            }
-            if (clear && ground.Count > 0 && ground["position"].AsVector3().Y < 0.2f && !BushesBetween(eye, center))
-            {
-                var yaw = Mathf.Atan2(-(center.X - stand.X), -(center.Z - stand.Z));
-                game.Player.Teleport(new Vector3(stand.X, 0.2f, stand.Z), yaw);
-                GD.Print($"[test] target tank at {center} player at {stand}");
                 return true;
             }
         }
         return false;
+    }
+
+    /// <summary>
+    /// Teleports the player to <paramref name="stand"/>, facing the tank, if it is clear ground with a clear shot at the tank.
+    /// <paramref name="angle"/> is the compass angle from the tank to the player's spot; the camera sits behind and beside it.
+    /// </summary>
+    private bool TryStandAt(PropaneTank tank, Vector3 stand, float angle)
+    {
+        var space = game.Player.GetWorld3D().DirectSpaceState;
+        var center = tank.GlobalTransform * PropaneTank.LocalCenter;
+        var eye = new Vector3(stand.X, 1.7f, stand.Z);
+        var down = PhysicsRayQueryParameters3D.Create(eye + Vector3.Up * 3f, new Vector3(stand.X, -1, stand.Z), Core.Layers.World | Core.Layers.Props);
+        var ground = space.IntersectRay(down);
+        var side = new Vector3(Mathf.Cos(angle + Mathf.Pi / 2), 0, Mathf.Sin(angle + Mathf.Pi / 2));
+        var clear = true;
+        // Clear only if the first thing hit, from both the eye and roughly where the camera will be, is the tank.
+        foreach (var from in new[] { eye, eye + side * 0.7f + (eye - center).Normalized() * 3.4f, eye - side * 0.7f + (eye - center).Normalized() * 3.4f })
+        {
+            var hit = space.IntersectRay(PhysicsRayQueryParameters3D.Create(from, center + (center - from).Normalized(), Core.Layers.Shootable));
+            clear &= hit.Count > 0 && hit["collider"].As<GodotObject>() == tank;
+        }
+        if (!clear || ground.Count == 0 || ground["position"].AsVector3().Y >= 0.2f || BushesBetween(eye, center))
+        {
+            return false;
+        }
+        var yaw = Mathf.Atan2(-(center.X - stand.X), -(center.Z - stand.Z));
+        game.Player.Teleport(new Vector3(stand.X, 0.2f, stand.Z), yaw);
+        GD.Print($"[test] target tank at {center} player at {stand}");
+        return true;
     }
 
     /// <summary>Bushes have no collision but still hide a tank, so the test avoids looking through them.</summary>
