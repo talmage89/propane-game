@@ -30,3 +30,7 @@ revision, command, exit status and elapsed time in `final-status.json` to outliv
   nine-actor suburb soak all pass. The seeded soak's idle and bank-result lines match the parent exactly;
   source assertions/options/logs/captures are unchanged. The three owners isolate the scripted player,
   blocked King world and bank-rule fixture without changing shared mechanics.
+- Ring Out/King: warning-free build; quick King and two Ring Out seeds pass. An additional seeded Ring Out
+  parent/candidate detailed trace agrees exactly for all 889 ticks (two windows, 24 tanks), supplementing P0's
+  missing Ring Out case. Four lifecycle tests pass, including fixture-scoped detach before collection. The owner
+  releases its per-seed observer before the original collection call and disposes it on early exit/failure too.

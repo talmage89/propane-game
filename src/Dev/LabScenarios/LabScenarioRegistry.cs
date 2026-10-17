@@ -16,6 +16,7 @@ internal static class LabScenarioRegistry
         new("soak", host => new BankScenario(host, soak: true)),
         new("rules", host => new BankRulesScenario(host)),
         new("aimstall", host => new AimStallScenario(host)),
+        new("prototype", host => new PrototypeScenario(host)),
         new("lifetime", host => new LifetimeScenario(host)),
         new("tracking", host => new LifetimeScenario(host, trackingOnly: true))
     };

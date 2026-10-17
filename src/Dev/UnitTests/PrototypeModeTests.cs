@@ -165,8 +165,8 @@ public static class PrototypeModeTests
             var together = Sample(last, 101, Standing(1, 0, 0, -3), Standing(2, 0, 0, -3));
             TestRunner.Assert(together.OfType<ActorEliminated>().All(e => e.Place == 1) && together.OfType<RoundOver>().Any(),
                 "the last two out together share the win");
-            TestRunner.Assert(LabTest.RingEliminationsAgree(last, [1, 2], _ => true), "native harness rejected a legal tied elimination");
-            TestRunner.Assert(!LabTest.RingEliminationsAgree(last, [1, 2], id => id == 1), "native harness accepted a missing spectator");
+            TestRunner.Assert(Propane.Dev.LabCases.LabScenarioTools.RingEliminationsAgree(last, [1, 2], _ => true), "native harness rejected a legal tied elimination");
+            TestRunner.Assert(!Propane.Dev.LabCases.LabScenarioTools.RingEliminationsAgree(last, [1, 2], id => id == 1), "native harness accepted a missing spectator");
         });
 
         runner.Run("prototypes/ring out treats a departure as an elimination without credit, and ignores input outside the round", () =>

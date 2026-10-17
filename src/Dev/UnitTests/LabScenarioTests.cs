@@ -34,11 +34,12 @@ public static class LabScenarioTests
     private sealed class Scenario(Host host, bool fail = false) : LabCase(host)
     {
         public Action? Queued { get; private set; }
+        public IDisposable? First { get; private set; }
         protected override async Task RunCore()
         {
             host.Events.Add("begin");
             Queued = Guard(() => host.Events.Add("callback"));
-            DetachOnDisposal(() => host.Events.Add("detach first"));
+            First = DetachOnDisposal(() => host.Events.Add("detach first"));
             DetachOnDisposal(() => host.Events.Add("detach last"));
             await Frames(3).ConfigureAwait(true);
             host.Events.Add("resume");
@@ -75,6 +76,18 @@ public static class LabScenarioTests
             Throws<ObjectDisposedException>(() => run.GetAwaiter().GetResult());
             Throws<InvalidOperationException>(scenario.CheckCompletion);
             Throws<ObjectDisposedException>(() => scenario.Execute().GetAwaiter().GetResult());
+        });
+        runner.Run("lab scenarios/fixture-scoped subscriptions detach before the next collection", () =>
+        {
+            var host = new Host();
+            var scenario = new Scenario(host);
+            var run = scenario.Execute();
+            scenario.First!.Dispose(); scenario.First.Dispose();
+            host.Gate.SetResult();
+            run.GetAwaiter().GetResult();
+            scenario.Dispose();
+            Assert(host.Events.SequenceEqual(new[] { "begin", "frames 3", "detach first", "resume", "detach last" }),
+                "fixture cleanup was deferred, repeated or changed remaining reverse disposal");
         });
         runner.Run("lab scenarios/failed case never satisfies completion", () =>
         {

@@ -26,7 +26,7 @@ internal interface ILabScenarioHost
 /// <summary>A single owned async case. Returning from its body is its completion obligation.</summary>
 internal abstract class LabScenario(ILabScenarioHost host) : IDisposable
 {
-    private readonly List<Action> detach = new();
+    private readonly List<Subscription> detach = new();
     private bool started;
     private bool completed;
     private bool disposed;
@@ -59,7 +59,27 @@ internal abstract class LabScenario(ILabScenarioHost host) : IDisposable
         if (!completed) throw new InvalidOperationException("Lab scenario ended before completion");
     }
 
-    protected void DetachOnDisposal(Action action) => detach.Add(action);
+    // A case can detach at a fixture boundary without retaining that fixture until the entire case ends.
+    protected IDisposable DetachOnDisposal(Action action)
+    {
+        var subscription = new Subscription(action, detach);
+        detach.Add(subscription);
+        return subscription;
+    }
+
+    private sealed class Subscription(Action action, List<Subscription> owner) : IDisposable
+    {
+        private Action? release = action;
+        public void Dispose()
+        {
+            var callback = release;
+            if (callback == null) return;
+            release = null;
+            owner.Remove(this);
+            callback();
+            GC.SuppressFinalize(this);
+        }
+    }
     protected Action Guard(Action action) => () => { if (!disposed) action(); };
     protected Action<T> Guard<T>(Action<T> action) => value => { if (!disposed) action(value); };
 
@@ -67,8 +87,7 @@ internal abstract class LabScenario(ILabScenarioHost host) : IDisposable
     {
         if (disposed) return;
         disposed = true;
-        for (var i = detach.Count - 1; i >= 0; i--) detach[i]();
-        detach.Clear();
+        while (detach.Count > 0) detach[^1].Dispose();
         GC.SuppressFinalize(this);
     }
 }
