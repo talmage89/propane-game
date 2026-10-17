@@ -41,7 +41,7 @@ Requires Godot 4.7.2 (.NET edition) and the .NET 10 SDK.
   gives the checkout its own Godot user data folder, `Propane-dev/<folder name>`, in a gitignored `override.cfg`.
 - Editor: open `project.godot` and press Play (F5).
 - Command line: `make run`. `make play` runs optimized Release C# locally (`CONFIG=Debug` selects Debug); see
-  [Measuring scale](docs/measuring-scale.md#playing-optimized-c-locally). `make` lists the other tasks (tests, a local
+  [Measuring scale](docs/runbooks/measuring-scale.md#playing-optimized-c-locally). `make` lists the other tasks (tests, a local
   server, bots, releases); they find Godot on `PATH` (`godot-mono` or `godot`) or in `/Applications`, or set `GODOT` to its binary.
 - Quality gate: `make lint` verifies C# formatting and rebuilds with warnings as errors. `make check` runs lint,
   then `make test`, then `make test-infra` (the gate's own self-tests, `tools/dev/lint_tests.py`: it needs no Godot,
@@ -50,7 +50,7 @@ Requires Godot 4.7.2 (.NET edition) and the .NET 10 SDK.
   and every pull request. `make -j4 test-full` adds the deep sweeps as parallel jobs, each line prefixed with its job's
   name; plain `make test-full` runs the same jobs one at a time. Deep probes use an isolated optimized Debug
   assembly (all `DEBUG` checks and tuners retained); fast tests and the final real-time bot matches use normal Debug.
-  Both generator and Lab shard coverage are checked. See [gate measurements](docs/test-speed.md).
+  Both generator and Lab shard coverage are checked. See [gate measurements](docs/evidence/test-speed.md).
 
 [docs/code-quality.md](docs/code-quality.md) describes the formatting and analyzer baseline and its regression
 checks. The gate follows the existing code's style and checks correctness without API design or naming churn.
@@ -62,10 +62,10 @@ the window to recapture it after switching away.
 
 `make bench` measures a fixed suburb across 0/2/4/8/16 in-process bots and 1×/2×/4×/8× tank supply,
 headless and rendered, with three repetitions and JSON comparisons. `make bench CONFIG=Debug,Release` alternates
-the two C# builds per case. [Workload, columns and comparison procedure](docs/measuring-scale.md).
-[Bot scale results](docs/bot-scale.md) compare the shared navigation implementation with the previous brains,
+the two C# builds per case. [Workload, columns and comparison procedure](docs/runbooks/measuring-scale.md).
+[Bot scale results](docs/evidence/bot-scale.md) compare the shared navigation implementation with the previous brains,
 including rendered sixteen-bot runs, match outcomes and remaining allocation/network limits.
-[King crowd verification](docs/king-crowd.md) compares holds, mints and thinking cost at 4/8/16 actors.
+[King crowd verification](docs/evidence/king-crowd.md) compares holds, mints and thinking cost at 4/8/16 actors.
 
 ## Lab
 
@@ -152,7 +152,8 @@ A light rifle stance layers authored rifle poses (carry, hip ready, shouldered, 
 strike), the aim twist and pitch, and two-bone hand IK over the clips ([rifle stance](docs/motion.md)). Shots, their
 obstruction and hits come only from the logical aim, never from the animated pose. Shots climb the logical aim; the
 player pulls against the retained recoil. Short rifle and camera springs supply the visible kick. See
-[the recoil review](docs/recoil.md) for climb and bot measurements.
+[recoil](docs/recoil.md) for the climb and the logical muzzle, and the [recoil report](docs/evidence/recoil.md) for
+R19's measurements.
 A throw immediately clears weapon poses and cancels reload, so get-up cannot restore a pose from before the throw.
 
 ## Tuning
@@ -186,7 +187,7 @@ fuses temporarily limits catch-up to four steps, retaining the limit for 0.5 rea
 The **Dense chain** tuners control the threshold, steps (0 disables it) and tail. Network worlds veto this limit;
 their owned bodies retain ordinary catch-up. Dense offline bursts can briefly slow simulation, but a
 low frame rate alone no longer activates a lower budget.
-[Tank scale trials](docs/tank-scaling.md) records the trade-offs, timing and compatibility.
+[Tank scale trials](docs/evidence/tank-scaling.md) records the trade-offs, timing and compatibility.
 
 Loose intact tanks gather with nearby resting neighbors after 20 undisturbed seconds. The **Tank Gather** tuners
 control radius (3 m), minimum group size (2), delay, a three-stage lift/glide/settle and optional scan shimmer (set
@@ -247,7 +248,7 @@ the engine tears down its C# bindings and native servers. Static caches remain a
 [Release-reference checks](docs/release-reference.md) freeze wire/schema, world construction, body publication and
 seeded Lab behavior before refactors. Unit references run in `make test`; `make test-equivalence` adds local exact traces.
 
-The [animation review harness](docs/animation-review.md) compares controller-driven motion and external CC0 clip candidates from both review views, with calibrated metrics and any-two-build media.
+The [animation review harness](docs/runbooks/animation-review.md) compares controller-driven motion and external CC0 clip candidates from both review views, with calibrated metrics and any-two-build media.
 
 Each scene in `scenes/dev` is a scripted test. Arguments after `--` are parsed once by `src/Core/LaunchArgs.cs`: the game
 reads its own [launch options](docs/code-quality.md#runtime-launch-options-and-the-dev-boundary) there, and the scenes
@@ -276,7 +277,7 @@ $GODOT --resolution 1280x720 --fixed-fps 60 res://scenes/dev/capacity_ui_tests.t
 # Deterministic menu portraits: host/guest, classic/docked, 2/8/16 players, color/bot dialogs and focus.
 # Also checks draft/caret/focus preservation across decoded lobby packets; runs headlessly in make test.
 $GODOT --resolution 1600x900 --fixed-fps 60 res://scenes/dev/menu_composition_tests.tscn -- --capture-dir="$PWD/build/menu-composition"
-# Repeated sixteen-client acceptance and resource measurements: docs/network-soak.md.
+# Repeated sixteen-client acceptance and resource measurements: docs/runbooks/network-soak.md.
 make test-capacity
 
 # Movement resolver: gait/target speed on each transition tick, lifecycle, jump buffer and coyote time;
@@ -450,13 +451,13 @@ The creep probe reports median and 75th-percentile horizontal foot/toe drift for
 each bone's minimum height, after two seconds of settling. These are near-floor proxies for planted contacts, not
 a contact proof. The headless movement suite also checks actual facade velocity and animation playback at 0.98,
 1.6, 2.2 and 2.8 m/s.
-[docs/movement.md](docs/movement.md) records the speed comparison and the default's trade-off.
+[docs/evidence/movement.md](docs/evidence/movement.md) records the speed comparison and the default's trade-off.
 
 The rifle probe measures final wrist position/rotation residuals, sampled skinned hand-surface penetration into
 solid rifle proxies, and right-eye distance from `Socket_Eye` while fully aimed. `--assert-grip` exits 1 on
 non-finite values, missing scenario coverage, a wrist more than 2 cm off its grip, a hand 1 cm into the rifle, or an
 aimed eye more than 15 cm from the sight. These are sanity bounds; rendered views judge the fingers, shoulder pocket
-and cheek weld. [docs/rifle-contact.md](docs/rifle-contact.md) records the wrist and finger calibration.
+and cheek weld. [docs/evidence/rifle-contact.md](docs/evidence/rifle-contact.md) records the wrist and finger calibration.
 
 ## Versions and releases
 

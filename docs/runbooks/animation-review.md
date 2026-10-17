@@ -1,7 +1,7 @@
 # Animation review
 
 This is the acceptance harness for character animation: clips played as authored under a light rifle stance
-([locomotion](locomotion.md), [rifle stance](motion.md)). The owner approves the look from rendered clips; numerical
+([locomotion](../locomotion.md), [rifle stance](../motion.md)). The owner approves the look from rendered clips; numerical
 checks support that review, never replace it.
 
 ## Controller review
@@ -11,7 +11,7 @@ make build
 mkdir -p build/animation-review
 godot-mono --headless --fixed-fps 60 --path . res://scenes/dev/animation_review.tscn -- --cases=walk_000,jog_000,creep_000,creep_180,creep_090,sprint,aim_idle --metrics=$PWD/build/animation-review/metrics.csv
 python3 -B tools/dev/animation_metrics.py build/animation-review/metrics.csv --output build/animation-review/results.json
-python3 -B tools/dev/animation_review.py --build release=v0.2.0 --build dev=dev --build candidate=wp/anim-0 --output build/animation-review
+python3 -B tools/dev/animation_review.py --build release=v0.2.0 --build dev=dev --build candidate=<branch or commit> --output build/animation-review
 ```
 
 The last command archives each commit into ignored scratch projects, overlays only the maintained review scene,
@@ -85,18 +85,20 @@ ending just ahead of the authored butt socket at z=.2605. The head ellipsoid use
 Head weight, mapped through the final head bone. Shoulder is the proximal 14 cm of the right upper arm with a
 55 mm radius. These are good regression proxies, not exact collision meshes: ellipsoid corners and stock cavities
 are approximate. Check stock/head, shoulder and limb silhouettes in rendered views before promoting a clearance
-check. A4 can change their result without changing any gameplay rule.
+check. A pose change can change their result without changing any gameplay rule.
 
-The release passes all alternation and span checks but fails shoulder clearance, sideways creep sliding,
-sideways hips yaw and sprint sliding. Current `dev` fails forward walk/jog/creep alternation and aimed head
-clearance. Good procedural foot locking by itself does not imply natural gait. Neither baseline is a blanket
-naturalism target. Clearance and facing tolerances still need owner confirmation on the accepted rifle pose;
-no free source clip shoulders a rifle, so an empirical rifle-clip calibration is unavailable.
+The release passes all alternation and span checks but fails shoulder clearance, sideways creep sliding, sideways hips
+yaw and sprint sliding. The current build passes every alternation check and leaves other visual checks pending: at
+the last check (2026-10-16) 12 of 46, among them stock/shoulder clearance, sideways and backward creep sliding, sprint
+sliding and one aimed head clearance. `animation_metrics.py` prints each `PENDING` case and value. Good procedural
+foot locking by itself does not imply natural gait. Neither baseline is a blanket naturalism target. Clearance and
+facing tolerances still need owner confirmation on the accepted rifle pose; no free source clip shoulders a rifle, so
+an empirical rifle-clip calibration is unavailable.
 
 ## External clip review
 
 Official free CC0 source archives are kept outside the repository in a shared `assets-src/` directory. Its
-`SOURCES.md` records stable download URLs, licenses and archive SHA-256 values. See [source choices](animation-sources.md).
+`SOURCES.md` records stable download URLs, licenses and archive SHA-256 values. See [source choices](../animation-sources.md).
 Inventory every clip, including the separate root-motion variants:
 
 ```sh
@@ -117,9 +119,8 @@ inside this dev scene, retaining the current rifle rig and hand solve. It is an 
 rifle pose or a controller-driven directional gait. Source root-motion measurements are data only: the controller
 continues to own movement in production.
 
-Burst/reload footage also remains the review fixture for the later recoil package. Recheck nominal barrel versus
-aim-ray alignment there without forcing every spread bullet to follow the bore, and distinguish weapon kick
-return from player-controlled aim recovery.
+Burst and reload footage is the review fixture for recoil. Shots follow the logical aim, not the bore
+([recoil](../recoil.md)), so judge the weapon kick's return separately from the player-controlled aim recovery.
 
-No assets are committed by this package. Rebuilding the character, authoring derivatives, solving aim/body
-clearance, smaller foot IK and stronger melee belong to later packages after A4 and owner clip approval.
+This harness commits no candidate assets. Rebuilding the character, authoring derivatives, solving aim and body
+clearance, smaller foot IK and stronger melee are separate work that waits for the owner's clip approval.

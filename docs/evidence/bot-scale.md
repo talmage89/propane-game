@@ -1,5 +1,9 @@
 # Bot scale verification
 
+**Status:** Dated record (2026-10-14, extended through 2026-10-16). Not superseded, but it records limits that were
+not met, stated in the text. How navigation and the bot dials work today is in [bot-navigation.md](../bot-
+navigation.md).
+
 Sixteen in-process bots meet the frame-rate target in the final benchmark: rendered Release rises from 4.9 to
 88.5 FPS (81.8–94.9 across the three branch runs), and Debug from 3.3 to 70.4 FPS (70.1–75.3). Branch physics
 runs at approximately 120 ticks per wall second. Release rendered frame p50/p95/p99 is 10.80/14.19/19.05 ms,
@@ -316,7 +320,7 @@ assignment using existing minimum spacing; its generated plan and game rules sta
 
 ## Idle bots
 
-A playtest found most lobby bots standing still. `BotActivity` ([bot navigation](bot-navigation.md#idle-bots)) measures
+A playtest found most lobby bots standing still. `BotActivity` ([bot navigation](../bot-navigation.md#idle-bots)) measures
 the share of one-second windows of play in which a bot neither moved a meter, fired, meleed nor held King's zone. Lobby
 matches (`net_bots.sh -n 1 -l 60 -k -s --match-seed=S -- --lobby-bots=K`, Normal unless noted) on `01cc0c6` and with
 the fixes, under other agents' load; mean / worst bot:

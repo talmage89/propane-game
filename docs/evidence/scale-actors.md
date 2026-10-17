@@ -1,5 +1,8 @@
 # Actor scale
 
+**Status:** Dated record (2026-10-14), measured on dev `617a4f5` after tank scaling. The method is in [measuring
+scale](../runbooks/measuring-scale.md); the actor detail rules are in [motion.md](../motion.md#actor-detail).
+
 Actor CPU and rendering work on `wp/scale-actors`, measured against dev `617a4f5` after the tank package landed.
 The full grid compares candidate `8413382` with that baseline plus identical measurement-only actor timers,
 rendering counters, camera modes and feature omissions. The overlay is retained as
@@ -8,7 +11,7 @@ merge and lobby tank-supply UI/codec merge (`804c068`, default 1×) do not alter
 Final integration is branch `d26761f`. These runs still use the original brains.
 
 Measured October 14, 2026. Intel Core i5-10400F (12 logical CPUs), GTX 1660, Godot 4.7.2 .NET, .NET 10.0.12,
-Linux. Other work was active. Use the [measurement definitions](measuring-scale.md) and [original
+Linux. Other work was active. Use the [measurement definitions](../runbooks/measuring-scale.md) and [original
 baseline](scale-baseline.md) alongside this report: inclusive script timings, callback intervals and GPU timings
 cannot be summed.
 
@@ -67,7 +70,7 @@ Every actor still advances locomotion and logical aim clocks each frame and move
 tick. Skeleton work consumes actual accumulated time, staggered across actors. The top-level rifle follows its
 cached final pose relative to the moving body on held frames. Before a hit or physical throw, pending animation
 time is consumed before queuing the new action. This matters for physics: native physical bones read the
-authored pose immediately. See [motion](motion.md#actor-detail) for the implementation contract and checks.
+authored pose immediately. See [motion](../motion.md#actor-detail) for the implementation contract and checks.
 
 ## Paired measurements
 

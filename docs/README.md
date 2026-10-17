@@ -3,52 +3,87 @@
 Which document to trust for what. When they disagree, the owner's [design](../design/) wins on intent, the code wins on
 behavior, and dated evidence yields to both.
 
+Three kinds of document live here, in three places:
+
+- **Contracts** (this folder): how the code works today and the rules for changing it. Binding. Change them in the same
+  commit as the code.
+- **Runbooks** ([runbooks/](runbooks/)): how to measure, soak, test and profile. Current commands, flags and procedures.
+- **Evidence** ([evidence/](evidence/)): dated verification reports and investigations, with their datasets. Records of
+  what was measured then, on that commit and machine. Not binding.
+
 ## Binding design
 
 [`design/`](../design/) is the owner's: what Propane is and must stay (feel, look, personality, direction). It is
 current and binding, and no one else edits it. Start with [VISION.md](../design/VISION.md).
 
-## Current contracts and runbooks
-
-These describe the code as it is today. Change them in the same commit as the code.
+## Contracts
 
 | Document | What it covers |
 | --- | --- |
-| [multiplayer.md](multiplayer.md) | Networking model, messages and protocol 3, hosting, the lobby, bots and the network test tools. |
+| [multiplayer.md](multiplayer.md) | Networking model, messages and protocol 3, hosting, the lobby and its world, bots and the network test tools. |
 | [net-scenarios.md](net-scenarios.md) | Network harness ownership, lifecycle, CLI inventory and completion obligations. |
 | [modes.md](modes.md) | How a game mode plugs in (rules, definition, runner, envelope) and the Lab prototypes. |
 | [world-services.md](world-services.md) | `Game`, `Match`, session and world contexts: who owns what, and what stays shared. |
 | [shutdown.md](shutdown.md) | Orderly process exit through `ShutdownGuard` and finalizer draining. |
-| [code-quality.md](code-quality.md) | Formatting and analyzers, the gate (`make lint`, `check`, `test`, `test-infra`, `test-full`), adding a suite or scene. |
-| [bot-navigation.md](bot-navigation.md) | The navigation layer and bot policies. |
+| [code-quality.md](code-quality.md) | Formatting and analyzers, the gate (`make lint`, `check`, `test`, `test-infra`, `test-full`), launch options, adding a suite or scene. |
+| [release-reference.md](release-reference.md) | The frozen v0.4.0 reference fixtures, their checks and the deliberate refresh. |
+| [bot-navigation.md](bot-navigation.md) | The navigation layer and the bot policies. |
 | [lab.md](lab.md) | The Lab: its stations, environments and how its sessions are verified. |
-| [locomotion.md](locomotion.md), [motion.md](motion.md) | Clips played as authored, and the rifle stance layered over them. |
+| [recoil.md](recoil.md) | How a shot kicks the logical aim, the recoil tuners and the logical muzzle. |
+| [locomotion.md](locomotion.md), [motion.md](motion.md) | Clips played as authored on one stride clock, and the rifle stance layered over them. |
 | [animation-sources.md](animation-sources.md) | Where the animation clips come from, and their licenses. |
-| [animation-review.md](animation-review.md) | The animation acceptance harness: commands and what it checks. |
-| [measuring-scale.md](measuring-scale.md) | `make bench` and how to measure scale. |
-| [upright-piles.md](upright-piles.md) | How upright pyramids are built and proved stable (ends with a dated review). |
+| [upright-piles.md](upright-piles.md) | How upright pyramids are built and proved stable. |
 
-## Dated investigation and verification evidence
+## Runbooks
+
+| Document | What it covers |
+| --- | --- |
+| [runbooks/measuring-scale.md](runbooks/measuring-scale.md) | `make bench`, reading its measurements, comparing optimization branches and playing optimized C# locally. |
+| [runbooks/network-soak.md](runbooks/network-soak.md) | Running the multiplayer soaks, how `compare_tanks.py` judges a match, the capacity gate and the lobby-bot soaks. |
+| [runbooks/profiling-effects.md](runbooks/profiling-effects.md) | Measuring the cost of vents, smoke, blasts and chains in a crowd, alone or against a baseline build. |
+| [runbooks/animation-review.md](runbooks/animation-review.md) | The animation acceptance harness: commands, the metrics gate and external clip review. |
+
+## Evidence
 
 Point-in-time reports: commits, branches, machines and measurements as of their date. Keep them for provenance and for
-the negative results; do not read their numbers or "unreleased" labels as the present state. Several begin with a current
-rule or procedure, which the contract documents above restate.
+the negative results; do not read their numbers or "unreleased" labels as the present state. The date is when the
+work was recorded (the repository's commit dates). "Superseded" says whether a later change or document replaced what
+the report concludes; the contract named in each report's status line holds the current rule.
 
-| Document | What it records |
-| --- | --- |
-| [test-speed.md](test-speed.md), [test-flakes.md](test-flakes.md) | Gate timings and the flaky-test investigations behind today's scheduler and fixtures. |
-| [idle-checks.md](idle-checks.md) | Why Lab idle replays were not deterministic, and how they were made so. |
-| [network-soak.md](network-soak.md), [network-corrections.md](network-corrections.md), [network-integration.md](network-integration.md), [participant-integration.md](participant-integration.md) | Tank-agreement calibration, correction fixes and integration reviews, with the soak and capacity procedures they used. |
-| [tank-scaling.md](tank-scaling.md), [scale-actors.md](scale-actors.md), [scale-baseline.md](scale-baseline.md), [bot-scale.md](bot-scale.md), [vent-performance.md](vent-performance.md) | Performance and scale work: baselines, paired measurements, rejected approaches. |
-| [king-online.md](king-online.md), [king-crowd.md](king-crowd.md), [lobby-tanks.md](lobby-tanks.md) | Verification of King online, crowd tactics and lobby tank supply. |
-| [recoil.md](recoil.md), [rifle-contact.md](rifle-contact.md), [movement.md](movement.md) | Recoil, rifle contact and creep-speed work; each marks which parts are superseded. |
+| Document | Date | Superseded | What it records |
+| --- | --- | --- | --- |
+| [evidence/multiplayer-verification.md](evidence/multiplayer-verification.md) | 2026-10-09 to 10-11 | No | The first-bot comparison, a LAN and VPN soak and the melee package's verification, moved out of the multiplayer contract. |
+| [evidence/network-soak.md](evidence/network-soak.md) | 2026-10-11 to 10-13 | Procedures moved | Tank-agreement calibration, validation, the 16-actor capacity proof and the lobby-bot soaks. |
+| [evidence/network-corrections.md](evidence/network-corrections.md) | 2026-10-11 to 10-16 | No | The replication fixes that followed the soak assertion, each with its soak evidence. |
+| [evidence/network-integration.md](evidence/network-integration.md) | 2026-10-11 | No | The independent review of the network-assertion branch: disconnect latency, vent correction, capacity follow-ups. |
+| [evidence/participant-integration.md](evidence/participant-integration.md) | 2026-10-11, 10-12 | No | The participant (A6) merge review, the capacity proof and the tank-agreement tails it left open. |
+| [evidence/net-scenarios-verification.md](evidence/net-scenarios-verification.md) | 2026-10-16 | No | The P4 harness migration: preserved vent-contact failure, native inventories, paired measurements. |
+| [evidence/king-online.md](evidence/king-online.md) | 2026-10-14 | No | King online: gates, network matrix, late loading, rendered presentation. |
+| [evidence/king-crowd.md](evidence/king-crowd.md) | 2026-10-15 | No | King crowd tactics: holds, mints and thinking cost at 4, 8 and 16 actors (data: [king-crowd-results.csv](evidence/king-crowd-results.csv)). |
+| [evidence/lobby-tanks.md](evidence/lobby-tanks.md) | 2026-10-14 | No | Lobby and Lab tank supply: gates, device delivery, native matrix (images in `lobby-tanks/`). |
+| [evidence/test-speed.md](evidence/test-speed.md) | 2026-10-11 to 10-14 | Partly (the gate changed) | Gate timings and the scheduler changes behind today's parallel `test-full`. |
+| [evidence/test-flakes.md](evidence/test-flakes.md) | 2026-10-14 | No | The gather and torso-twist ragdoll flake investigations. |
+| [evidence/idle-checks.md](evidence/idle-checks.md) | 2026-10-16 | No | Why Lab idle replays were not deterministic and how they were made so. |
+| [evidence/unit-time-regression.md](evidence/unit-time-regression.md) | 2026-10 | No | The loaded-machine proof for manual-clock unit tests. |
+| [evidence/tank-scaling.md](evidence/tank-scaling.md) | 2026-10-14 | Partly (pacing claims) | Tank scaling: baselines, paired measurements, rejected approaches (data in `tank-scaling/`). |
+| [evidence/scale-baseline.md](evidence/scale-baseline.md) | 2026-10-14 | Yes, as a baseline | The scale baseline before bot and tank optimization. |
+| [evidence/scale-actors.md](evidence/scale-actors.md) | 2026-10-14 | No | Actor CPU and rendering scale after tank scaling. |
+| [evidence/bot-scale.md](evidence/bot-scale.md) | 2026-10-14 to 10-16 | No | Bot scale: 16 in-process bots, frame and brain cost, idle bots. |
+| [evidence/bot-navigation-measurements.md](evidence/bot-navigation-measurements.md) | 2026-10-10 | Yes (shared-cache navigator) | The original navigator's course sweeps and paired matches. |
+| [evidence/vent-performance.md](evidence/vent-performance.md) | 2026-10-12 | No | Crowded effect profiling and the optimizations it drove (data in `perf-vents/`). |
+| [evidence/lab-stack-budget.md](evidence/lab-stack-budget.md) | 2026-10 | Yes (the range is now 24-512) | The 24-40 tank stack budget comparison. |
+| [evidence/lab-tracking-verification.md](evidence/lab-tracking-verification.md) | 2026-10-16 | No | P2: tank-tracking lifetime proofs; rendered paired performance still owed. |
+| [evidence/body-publication-verification.md](evidence/body-publication-verification.md) | 2026-10-16 | No | P3: body publication buffers; the native performance matrix is still owed. |
+| [evidence/release-reference-verification.md](evidence/release-reference-verification.md) | 2026-10-16 | No | P0: the v0.4.0 reference fixtures, repeated-load results and rejection probes. |
+| [evidence/recoil.md](evidence/recoil.md) | 2026-10-11 | Partly (the clip redo) | R19 recoil: climb and curves (data in `recoil/`), barrel alignment (removed), bot comparison. |
+| [evidence/rifle-contact.md](evidence/rifle-contact.md) | 2026-10-10 | Mostly (the clip redo) | Package 2: rifle wrist and finger calibration. |
+| [evidence/movement.md](evidence/movement.md) | 2026-10-10 | No | The creep-speed comparison behind the 1.6 m/s default. |
+| [evidence/upright-piles-review.md](evidence/upright-piles-review.md) | 2026-10-11 | No | The Linux stability and soak review of upright pyramids. |
 
-[Network scenario ownership verification](net-scenarios-verification.md) records the P4 harness migration,
-including the preserved vent-contact failure, native inventories and paired measurements.
-
-Their data and images sit beside them: `perf-vents/`, `recoil/`, `tank-scaling/`, `lobby-tanks/` and
-`king-crowd-results.csv`. Some tools read them (for example, the vent baseline patch in `perf-vents/`), so move them
-only together with those references. `readme_chain.gif` and `readme_still.jpg` illustrate the root README.
+Their data and images sit beside them: `evidence/perf-vents/`, `evidence/recoil/`, `evidence/tank-scaling/`,
+`evidence/lobby-tanks/` and `evidence/king-crowd-results.csv`. Some tools read them (the vent baseline patch in
+`perf-vents/`, the default output of `tools/dev/plot_recoil.py`), so move them only together with those references.
+`readme_chain.gif` and `readme_still.jpg` illustrate the root README.
 
 ## Outside docs/
 
@@ -58,6 +93,11 @@ only together with those references. `readme_chain.gif` and `readme_still.jpg` i
 ## Adding or changing a document
 
 - A contract goes in the document that already owns the subject, or in a new one listed above, and changes with the code.
-- A report starts with its date, the commit or branch it measured and the machine; it is not edited afterwards except
-  to mark what has been superseded and where the current statement lives.
+- A runbook gives commands that work today and says how to read their output. When it needs a measurement as proof,
+  it links the evidence report instead of repeating the numbers.
+- A report starts with its date, the commit or branch it measured and the machine, and a **Status** line. It is not edited
+  afterwards except to mark what has been superseded and where the current statement lives. A report that also states a
+  rule moves the rule into the contract and keeps the history here.
 - Release and protocol labels name versions (`Protocol 3`, 0.4.0), not "unreleased", which goes stale.
+- Moving or renaming a document means fixing every link to it. `make lint` runs `tools/dev/check_links.py`, which
+  fails on a relative Markdown link, image or `#fragment` that does not resolve.

@@ -1,5 +1,9 @@
 # Gather and ragdoll gate flakes
 
+**Status:** Dated record (2026-10-14). Neither assertion bound was widened. The fixes are in the code; the torso-twist
+rule is in [motion.md](../motion.md), and the unit-test clock rule is in [code-quality.md](../code-
+quality.md#deterministic-unit-time).
+
 Investigation on `wp/test-flakes`, starting from `d067ef6` (October 14, 2026).
 Neither assertion bound was widened. No tank, effect, bot or navigation implementation changed.
 

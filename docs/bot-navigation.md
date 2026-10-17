@@ -132,10 +132,10 @@ measurement; the existing knockdown recovery remains.
 Crowd observation reads the shared actor list once per `BotKingCrowdInterval` (0.4 s), with no physics queries or
 per-tick allocations. Steering, aiming and close melee retain their existing cadence. Siege statuses distinguish
 these tactical retreats from knockdown regrouping in activity logs. These seven new dials are exported in **Bots**
-and travel in the creator's tuning snapshot; they require the upcoming minor release. Existing local dials,
+and travel in the creator's tuning snapshot; they shipped in 0.4.0 (Protocol 3), a minor release. Existing local dials,
 King's rules, shared state and messages are unchanged. Prize searches cache native positions and ranking distances
 within each search; crosshair hit tests skip only the existing trigger cooldown. Hard's blocked-shot observation
-still runs every tick. [Crowd verification](king-crowd.md) records the paired outcomes and performance limits.
+still runs every tick. [Crowd verification](evidence/king-crowd.md) records the paired outcomes and performance limits.
 
 ## Hard points policy
 
@@ -185,38 +185,8 @@ At takeoff, injected pile/vent circles must reject the same arc, and a bot insid
 picket/privacy crossings and supported landings. Unit tests cover physics-derived reach, gates, bounded alternate
 route recovery, nearby goal stability, committed flight, per-tick search work, valid creep at 60/120 Hz and the
 unchanged match tuning schema.
-
-## Measured checks
-
-The following measurements record the original navigator. The shared-cache implementation's
-[scale verification](bot-scale.md) includes its final course sweeps, paired match outcomes and frame/brain costs.
-
-Linux, Godot 4.7.2 .NET/Jolt, baked movement tuning, physics at 120 Hz and courses at fixed 60 FPS:
-
-| Course run | Goals reached | Mean successful time | Stuck events |
-| --- | ---: | ---: | ---: |
-| Old recovery, same 20 seeds | 120/140 (85.7%) | 3.21 s | 289 |
-| Navigation, 20 seeds | 140/140 (100%) | 3.23 s | 0 |
-| Navigation, 100 seeds | 700/700 (100%) | 3.20 s | 0 |
-
-Every baseline house course timed out at 15 seconds; navigation reaches those goals in about 4.5 seconds.
-The larger sweep includes 216 picket and 484 privacy courses and 600 planned jumps. Direct gates are walked.
-The rendered five-seed run also completes all 35 courses, with fence crossings and supported landings captured.
-The creep regression reproduces the old detector's false stuck result at 120 Hz and verifies the navigator accepts
-normal aimed walking at both 60 and 120 Hz.
-
-In separate four-bot, 120-second matches, the instrumented old smart brain recorded 73 stuck events and 123 target
-exclusions, ending with banks 8/1/10/0. The final navigator recorded 0 stuck events and 7 exclusions, ending 2/5/2/4.
-These are different randomly generated suburbs, so the bank difference is not a controlled strength comparison.
-Three final mixed matches (smart/simple/smart/simple) ended 0/3/2/1, 0/4/22/2 and 9/1/11/1: smart bots banked 44
-against 12 overall, winning two matches and losing one. Mixed smart counters totaled 6 stuck events and 146
-exclusions; exclusions also include the brain's existing inability to find a shooting position. Every final
-match's four clients passed `tools/dev/check_scores.py` against its server audit.
-
-Sampled whole-client physics times fell from a 2761 ms maximum before budgeting to 236 ms after, with medians
-13 and 10 ms. These are sparse samples under shared machine load, not isolated navigation benchmarks or a bound
-on frame time. The asserted per-tick expansion limit is the stronger evidence for bounded search work.
-Windows and macOS were not exercised here.
+The original navigator's course sweeps and paired match outcomes are in the
+[navigation measurements](evidence/bot-navigation-measurements.md).
 
 ## Idle bots
 
@@ -237,5 +207,5 @@ in each status (by its format, `IBotGoalPolicy.StatusKind`). Owners sample their
 measured brain cost. `net_test` logs `bot activity` per owned bot and a `bot idle:` summary at the end of a match, and
 `bot navigation budget:` (how many ticks waited on the shared query or expansion budget); the Lab prints `[lab idle]`
 and gates it ([lab.md](lab.md)). Measurements before and after the fixes above are in
-[bot-scale.md](bot-scale.md#idle-bots).
+[bot-scale.md](evidence/bot-scale.md#idle-bots).
 

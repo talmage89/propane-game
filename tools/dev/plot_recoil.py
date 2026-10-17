@@ -9,7 +9,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--baselines", type=Path, required=True)
     parser.add_argument("--branch", type=Path, required=True, help="directory containing rcl-branch-{stance}/recoil.csv")
-    parser.add_argument("--output", type=Path, default=Path("docs/recoil"))
+    parser.add_argument("--output", type=Path, default=Path("docs/evidence/recoil"))
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=True)
     versions = ["v0.2.0", "dev (8eafd3c)", "R19"]

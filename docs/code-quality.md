@@ -5,9 +5,12 @@ namespaces, `var` locals and System usings first. Inline statements and switch-c
 layout. Long expressions are not reflowed. Expression bodies and naming remain editor suggestions rather than
 build warnings. Run `dotnet format Propane.sln` to apply the baseline.
 
-`make lint` verifies formatting, then performs a full build with warnings as errors. A previous incremental build
+`make lint` first checks that every relative link and image in the tracked Markdown files resolves to a tracked file
+and, for a `#fragment`, to a heading in it (`tools/dev/check_links.py`, standard library only; links to other sites are
+not fetched). It then verifies formatting and performs a full build with warnings as errors. A previous incremental build
 cannot hide warnings. `make check` runs lint before the headless regression tests, including with `make -j`, and ends with
 `make test-infra`, the gate's own self-tests. It stops on a lint failure. All three tasks appear in `make`'s help listing.
+When you move or rename a document, fix its links in the same commit; the check names each broken one with its line.
 
 `Propane.csproj` pins analysis to .NET 10's default rules, with the recommended Reliability, Usage and Security
 sets. Nullability is enabled. CA1001 additionally checks ownership of disposable fields; CA2007 requires explicit
@@ -23,7 +26,7 @@ failure sets the exit status (`CaptureTests` fault-injects broken, stalled, ling
 
 Class-specific CA1001 suppressions preserve current lifetimes, with the reason beside each declaration:
 
-- `Bot` and `SimpleBot`: the random generator is Godot RefCounted.
+- `SimpleBot`: the random generator is Godot RefCounted.
 - `MeshKit`: SurfaceTool is Godot RefCounted.
 - `CharacterAnimator`: the model root owns and frees the AnimationTree node.
 - `LobbyDialogs`: the menu scene tree owns and frees the open dialog nodes.
@@ -33,7 +36,9 @@ Class-specific CA1001 suppressions preserve current lifetimes, with the reason b
 `make test-infra` (`python3 -B tools/dev/lint_tests.py`) runs last in `make check` and as its own CI job, `infra`. It
 needs dotnet, make, git and python3 but stubs Godot, so the job needs neither the editor nor imported assets. It proves the
 gate rejects nullable dereferences, disposable-field ownership,
-implicit async context, ValueTask misuse, and whitespace and style drift. It also checks corrected code passes.
+implicit async context, ValueTask misuse, and whitespace and style drift. It also checks corrected code passes, and
+(`check_links_tests.py`) that the link check rejects a missing file, image or definition target, a missing heading, an
+untracked target and a path leaving the repository, while ignoring links inside code.
 The fixtures compile in an isolated temporary project; they never run or modify game sources.
 `check_world_tests.py` proves failed children retain their logs and exit status, while successful runs remove scratch
 files. The script also stubs external tools to prove `make -j4 check` runs lint before every gate suite and
@@ -145,7 +150,7 @@ six forced seeds per formation/size, 100 navigation seeds, and the melee-reload 
 ordinary seeds 21–100, large seeds 4–10 and forced seeds 3–6 moved to this deeper sweep.
 
 Each deep step is its own `test-full-*` target, so `make -j4 test-full` runs them side by side with the gate's four
-partitions; [test-speed.md](test-speed.md#parallel-deep-sweeps) has the timings. `tools/dev/label.sh` prefixes every line
+partitions; [test-speed.md](evidence/test-speed.md#parallel-deep-sweeps) has the timings. `tools/dev/label.sh` prefixes every line
 a deep job prints with its name (`[generator-3]`, `[lab-king]`, `[bots]`) and, on failure, prints that name, the exit
 status and the command; make then names the failed target. The jobs:
 
@@ -153,8 +158,8 @@ status and the command; make then names the failed target. The jobs:
 | --- | --- |
 | `test-full-generator-1`…`4` | The generator sweep in four contiguous seed ranges: 50 single-player and 2-player seeds, 25 at each large size and segment stream, and two, two, one and one forced seeds |
 | `test-full-generator-coverage` | `check_generator_shards.py`: the shards' `--list-seeds` listings hold exactly the 1,044 seeds of `--seeds=200 --large-seeds=100 --formation-seeds=6 --segment-seeds=100`, each once |
-| `test-full-lab-*` | All 18 full Lab sessions in 25 jobs: independent rounds/seeds, four lifetime shards, eight dial shards, both soaks; King keeps its cross-round mint assertion |
-| `test-full-lab-coverage` | Every full Lab session/setting/seed and all 530 dial fixtures occur exactly once |
+| `test-full-lab-*` | The full Lab sessions in 25 jobs: independent rounds/seeds, four lifetime shards, eight dial shards, both soaks; King keeps its cross-round mint assertion |
+| `test-full-lab-coverage` | Every full Lab session, setting and seed and every dial fixture occur exactly once (550 cases, 514 of them dial fixtures) |
 | `test-full-engine` | Build isolated optimized Debug for deep probes; each probe verifies optimization and `DEBUG` |
 | `test-full-navigation` | 100 navigation seeds in one process, since its pass rate is over all of them |
 | `test-full-bots` | The rifle soak, duel lane and loading-readiness matches, one at a time and after every other job: they share this checkout's `build/` names and run in real time |
@@ -168,7 +173,7 @@ Normal `make test`, `make check`, CI and the final real-time bot tail retain uno
 can rebuild it without replacing a running deep probe's assembly. All Godot processes of a checkout still append to its one `user://logs`, as under `make -j4 check`. The bot
 matches run alone, after every other job: their server and clients run in real time, and beside other jobs on four
 CPUs, clients dropped to a few frames a second and failed tank agreement, and the loading-readiness match lost its
-stalled client far more often ([test-speed.md](test-speed.md#parallel-deep-sweeps)). `-j` is not
+stalled client far more often ([test-speed.md](evidence/test-speed.md#parallel-deep-sweeps)). `-j` is not
 the default: worktree agents share one machine, so each run chooses its own job count. Use `-j4` on a quiet machine,
 fewer when other worktrees are busy. To shard a sweep differently, change the `GENERATOR_*` or `LAB_*` variables in
 the Makefile; the coverage job and `lint_tests.py` reject a split that loses or repeats seeds or sessions.
@@ -205,35 +210,8 @@ that used to extrapolate the authority test's observer backward far enough to fa
 The observer test now asserts its receipt timestamp and corrects at the same manual instant, after an explicit
 30-second pause. Relay timestamp assertions now check exact clamped times; the gather deadline test checks
 acceptance before and refusal exactly at expiry. No tolerance or retry masks scheduling delays.
-
-### Loaded regression proof
-
-The October 2026 regression repeated
-`godot-mono --headless --path . res://scenes/dev/unit_tests.tscn` with eight concurrent processes on 12 available
-CPUs. Additional Python processes ran `while True: pass` throughout each batch. Every child's exit status, named
-assertion failures, final test count and suite BEGIN markers were checked; a successful parent alone is insufficient.
-
-| Code | Runs | CPU hogs | Assertion failures | Native crashes |
-| --- | --- | --- | --- | --- |
-| Before manual time | 300 | 4 | 8 | 1 |
-| After manual time | 300 | 4 | 0 | 0 |
-| After manual time, added load | 300 | 6 | 0 | 0 |
-
-All eight assertion failures were `authority/new canonical vent reconciles an intact observer (moving True)`.
-Each fixed run completed all 13 suites and 190 tests (189 before the additional gather deadline assertion).
-The baseline's separate signal-11 crash interrupted ProtocolTests, with a Godot `propagate_notification()` caller-thread
-error; this change does not diagnose or fix that engine crash. The baseline consequently has 299 complete suite runs.
-
-A full `/tmp` truncated 16 baseline logs whose recorded child exits were zero. Those incomplete records were
-retained and replaced with 16 additional baseline invocations; all assertion failures and the native crash remain
-in the reported 300 records. No failed assertion was retried or discarded. Proof logs were then stored under ignored
-`build/wpflaky-proof/`, along with the repetition driver and validated summaries.
-
-The added-load batch used an isolated copy matching all 305 committed source, scene and project-setting files,
-excluding preexisting unrelated shutdown edits. `make check` passed both there and in the working checkout.
-The rendered three-client puncture race also passed with 120 ms lag, 30 ms jitter and 3% loss: canonical vent
-comparison covered 1,658 trajectory pairs (median/p95/max separation 0.104/0.246/0.390 m), and all score audits agreed.
-Four captured frames were reviewed, showing the tank venting, tipping and tumbling.
+The October 2026 regression proof (eight concurrent runs under CPU load, before and after) is in the
+[unit time regression record](evidence/unit-time-regression.md).
 
 ## Scene-thread assertions
 
@@ -302,4 +280,4 @@ The profiler uses Python's standard library and preserves command failures, incl
 It records total gate time and every dotnet/Python/Godot invocation in JSON. With `PROPANE_GATE_TIMING=1`, dev
 scenes print a marker at the start of `_Ready`: launch-to-marker is startup, marker-to-exit is work plus shutdown.
 Runtime scenes use imported assets; cold import and restored-import index rebuilds should be timed separately.
-See [the gate timing report](test-speed.md) for the measurements and the CI estimate.
+See [the gate timing report](evidence/test-speed.md) for the measurements and the CI estimate.

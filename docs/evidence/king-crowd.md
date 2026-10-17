@@ -1,8 +1,11 @@
 # King crowd verification
 
+**Status:** Dated record (2026-10-15). Its "planned 0.4 minor release" shipped as 0.4.0. The policy is described in
+[bot-navigation.md](../bot-navigation.md#king-crowd-tactics).
+
 King bots wait at an occupied zone's perimeter, break off sustained contests, keep banking and shooting while
 circling, and raid again on independent seeded clocks. The nearest challenger pounces on an empty zone.
-The policy and its seven shared bot dials are described in [bot navigation](bot-navigation.md#king-crowd-tactics).
+The policy and its seven shared bot dials are described in [bot navigation](../bot-navigation.md#king-crowd-tactics).
 
 Linux, Godot 4.7.2 .NET/Jolt, Debug, 120 Hz physics. Baseline runtime source is `39765cd`; 334 runtime files in the
 prepared baseline copy were checked byte-for-byte against that revision. Only test logging/expectations differed.

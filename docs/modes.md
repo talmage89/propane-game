@@ -206,8 +206,8 @@ their objective policy. Travel, contest, shield delay, return-fire risk and choi
 ## Lab prototypes
 
 Ring Out, Short Fuse and Dissolve Run remain Lab-only definitions in `ModeRegistry.Prototypes`. King is in both
-`Prototypes` and `All`, with a lobby choice and envelope schema; its online promotion uses Protocol 3 and needs a
-minor release.
+`Prototypes` and `All`, with a lobby choice and envelope schema; its online promotion joined Protocol 3 and shipped in
+0.4.0, a minor release.
 The Lab plays them against its own bots ([lab.md](lab.md#prototype-modes)) through `PrototypeRunner`, which feeds the
 rules what a server would: the round's phases on its clock, and every step the positions of all actors
 (`ActorsSampled`; a server would sample what its clients already send, so a mode needs no traffic of its own), who

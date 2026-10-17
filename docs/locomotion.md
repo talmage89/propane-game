@@ -3,7 +3,9 @@
 The character plays polished public clips as authored ([sources](animation-sources.md)), the way the first release
 did. Nothing plants, generates or overrides steps; a light rifle stance ([rifle stance](motion.md)) layers the arms,
 aim and hands over the legs. Movement speeds, acceleration, sprint, aim, creep and jump rules belong to the
-controller and are unchanged by presentation.
+controller and are unchanged by presentation: aimed creep is 1.6 m/s (`CreepSpeed`), the run 6 m/s (`RunSpeed`) and the
+sprint 9.5 m/s (`SprintSpeed`). The walk clip's native speed (0.98 m/s) is only a calibration value, not a limit: the
+stride clock below follows the distance travelled, so the clip plays faster or slower with the actual speed.
 
 ## Clips on one stride clock
 
@@ -73,4 +75,4 @@ pairs per episode (the run touches down briefly) and feet that lift 1.5 cm in st
 lifts its trailing foot only about 3 cm). They report near-floor foot drift and ankle separation without asserting
 them: the `feet` matrix runs every gait in every direction with the body held facing forward, which play never does
 at a run, so its sideways runs slide. Judge the motion from rendered
-clips ([animation review](animation-review.md)).
+clips ([animation review](runbooks/animation-review.md)).

@@ -1,5 +1,10 @@
 # Tank agreement in network soaks
 
+**Status:** Dated record (calibration and capacity 2026-10-11, lobby bots 2026-10-13). The procedures and the
+checker's rules that this report introduced now live in the [network soak runbook](../runbooks/network-soak.md); this
+report keeps the calibration, the validation and the measured results. Its Protocol 2 statements were true when
+written (the current protocol is 3).
+
 [Independent participant integration review](participant-integration.md) records the merged six-run capacity
 proof, measurements, verifier fixes and unresolved ordinary-play failures. The staged capacity gate passes;
 those failures still block merge approval.

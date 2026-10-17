@@ -139,7 +139,7 @@ remain separate work.
 
 ## Verification
 
-[Tracking lifetime verification and performance status](lab-tracking-verification.md) records P2’s parent comparisons,
+[Tracking lifetime verification and performance status](evidence/lab-tracking-verification.md) records P2’s parent comparisons,
 collection proofs, reviewed captures, retained failures and remaining measurement work.
 
 `python3 -B tools/dev/check_lab.py` is the fast gate: one lifecycle cycle per allowed pair, local rules, the bot's
@@ -182,7 +182,7 @@ prototype rounds and points sweep. A valid early blast or hitstop must not masqu
 Two idle checks keep crowds of bots playing: `idle-bank` (a 40-second suburb soak with eight NPCs and the driven
 player) and `idle-king` (a 45-second suburb King round with sixteen driven actors). Their fixtures seed the per-event
 blast, ragdoll and debris generators (`--replay-random`) and disable wall-clock hitstop. Every other Lab run retains
-ordinary entropy and hitstop. [Idle check verification](idle-checks.md) records the cause and repeated load trials.
+ordinary entropy and hitstop. [Idle check verification](evidence/idle-checks.md) records the cause and repeated load trials.
 Every Lab bot run prints `[lab idle]` lines: each bot's idle share (see [bot navigation](bot-navigation.md#idle-bots)),
 longest idle run and commonest statuses. `--max-idle=F` and `--max-idle-worst=F` assert that run's mean and worst shares;
 the checks retain their original limits of 12%/30% and 15%/40%.
@@ -258,28 +258,17 @@ other rendered scenes or heavy CPU tests; fixed-FPS captures are independent of 
 
 ## Stack budget
 
-The crowded-effect optimization retains the shipped adjustable range at **24–40 tanks**. A repeated comparison
-on the GTX 1660 at 1920×1080, Forward+, seed 23 and baked tuning measured these pooled results (two back-to-back
-before/after repeats, each with 180 warm-up frames and 600 samples):
-
-| Tanks | Ordinary blast GPU p95 before → after (ms) | Blast wall p95 before → after (ms) | Primed chain wall p95 before → after (ms) |
-| ---: | ---: | ---: | ---: |
-| 32 | 26.4 → 22.2 | 29.7 → 25.7 | 86.8 → 78.7 |
-| 40 | 37.5 → 37.5 | 43.0 → 38.5 | 107.4 → 99.1 |
-| 64 | 62.6 → 58.6 | 67.0 → 61.5 | 129.4 → 40.0 |
-| 128 | 193.1 → 138.5 | 199.2 → 219.0 | 292.6 → 484.5 |
-
-Shared one-minute CPU load ranged from 5.89 to 38.00, with 0–3 other rendered Godot processes; wall results,
-especially chain spikes, cannot establish an isolated hardware limit. The 128-tank 16.7 ms p95 / 50 ms worst
-requirements remain unmet. Forty is still near a 30 FPS blast budget, not a promise of uninterrupted 60 FPS,
-and no larger product ceiling is justified. The original idle sweep reached 1,024 tanks at GPU p95 9.9 ms
-(wall p95 18.4 ms); that size was not repeated in this comparison. Resting bodies remain cheap; persistent lit smoke
-and chain CPU/physics bursts remain expensive. Gameplay values and particle counts are unchanged. See
-[crowded effect profiling](vent-performance.md) for every phase's GPU/wall p50, p95 and worst, profiler breakdown,
-load records, rendered suburb matches, visual comparisons and reproducible baseline commands.
+The shipped adjustable range is 24–512 tanks in steps of 8, starting at 40 (`LabStackMinimum`, `LabStackMaximum`).
+Larger stacks are scale trials: resting bodies stay cheap, but persistent lit smoke and chain bursts are expensive,
+and the 128-tank frame budgets were unmet when last measured. The
+[stack budget measurements](evidence/lab-stack-budget.md) hold the 32, 40, 64 and 128-tank comparison, and
+[crowded effect profiling](evidence/vent-performance.md) has every phase's GPU and wall times, the profiler
+breakdown, load records, rendered suburb matches, visual comparisons and reproducible baseline commands.
 
 The measurement registry callback deliberately permits 24–1,024 tanks while retaining the actual Lab fixture
 builder. It can profile beyond the product ceiling without relaxing the shipped menus or tuning validation.
+
+## Strength trials and outcome probes
 
 For a mixed Hard/Normal strength trial, `python3 -B tools/dev/check_bot_points.py` runs both scoring modes across
 five seeds and both assignments of four Hard spawn slots. `--policy-only` equalizes aim; `--environment=void`

@@ -21,14 +21,14 @@ class Limits:
     # <=2.05m -> 3m (+46%); resting p95 <=0.013m -> 0.10m (>7x margin).
     # Persistent resting outliers are failures, not included in the noise budget.
     # Final moving drift <=0.281m -> 0.50m (+78%); clean <=0.197m -> 0.35m (+78%).
-    # Clean profile: 1.5s/2.5m; see docs/network-soak.md for all runs and margins.
+    # Clean profile: 1.5s/2.5m; see docs/evidence/network-soak.md for all runs and margins.
     # Post-fix dev 21a2ac2 validation: ten faulted/four clean 4-bot/90s soaks.
     # Longest episodes 1.70/0.55s; moving p99 maxima 2.340/1.141m; final rest <=0.001m.
     # Nine faulted and four clean pass; one fresh final vent at 0.531m still fails the
-    # unchanged 0.50m bound. See docs/network-corrections.md; do not hide it by relaxing limits.
+    # unchanged 0.50m bound. See docs/evidence/network-corrections.md; do not hide it by relaxing limits.
     # Loaded-machine validation saw gaps up to 5.923s and a 7.30s late play start. Permit up to 10s
     # per gap, <=10% unobserved time, and <=min(10s, 10% of play) late startup. Positions
-    # across gaps >0.35s are unobserved, never guessed. See docs/network-soak.md.
+    # across gaps >0.35s are unobserved, never guessed. See docs/evidence/network-soak.md.
     settle: float = 2.0
     resting: float = .10
     moving: float = 3.0

@@ -1,5 +1,9 @@
 # Independent network integration review
 
+**Status:** Dated record (2026-10-11), the independent review of the network-assertion branch before it merged into
+dev. The behavior it verifies is described in [multiplayer.md](../multiplayer.md); its capacity follow-ups are listed
+in the text.
+
 Integration starts at `4a03c3d`, merging dev `d2aa9c9` into `wp/net-assert`.
 The sole textual conflict was NetTest's loading-stall fixture beside A4's headless
 actor assembly. Both remain. Match's five small integrations retain their behavior

@@ -94,19 +94,21 @@ fi
               "generator_tests.tscn -- --seeds=20 --large-seeds=3 --formation-seeds=2"]
     probes = checkers + scenes + ["--write-world-plans=", "--hash-world-plans=", "--hash-segments=", "world-diff", "world-missing", "world-partial",
                                   "world-second"]
-    for failure in ["none", "format", "build", *probes]:
+    for failure in ["none", "check_links.py", "format", "build", *probes]:
         log.write_text("")
         counter.write_text("0\n")
         environment["PROBE_FAIL"] = failure
         result = subprocess.run(["make", "-j4", "check"], cwd=ROOT, env=environment,
                                 text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         commands = log.read_text().splitlines()
-        require(bool(commands) and commands[0] == "dotnet format Propane.sln --verify-no-changes", "format must run first", result.stdout)
+        first = ["python3 -B tools/dev/check_links.py", "dotnet format Propane.sln --verify-no-changes"]
+        require(bool(commands) and commands[:2] == first[:len(commands[:2])],
+                "the Markdown link check and format must run first", result.stdout)
         if failure == "none":
-            require(result.returncode == 0 and len(commands) == 3 + len(checkers) + len(scenes) + 5,
+            require(result.returncode == 0 and len(commands) == 4 + len(checkers) + len(scenes) + 5,
                     "check did not run every expected tool call", result.stdout)
-            require("-warnaserror" in commands[1] and "--no-incremental" in commands[1], "lint must rebuild with warnings as errors")
-            require(commands[2].startswith("dotnet build "), "tests ran before lint")
+            require("-warnaserror" in commands[2] and "--no-incremental" in commands[2], "lint must rebuild with warnings as errors")
+            require(commands[3].startswith("dotnet build "), "tests ran before lint")
             require(commands[-1] == "python3 -B tools/dev/lint_tests.py", "the gate self-tests must run last, after every suite")
             for checker in checkers:
                 require(commands.count(f"python3 -B tools/dev/{checker}") == 1, f"check skipped/duplicated {checker}")
@@ -118,8 +120,8 @@ fi
             require(sum("--write-world-plans=" in c for c in commands) == 1 and
                     sum("--hash-world-plans=" in c for c in commands) == 2 and sum("--hash-segments=" in c for c in commands) == 2,
                     "check skipped separate-process world builds", result.stdout)
-        elif failure in ("format", "build"):
-            require(result.returncode != 0 and len(commands) == (1 if failure == "format" else 2),
+        elif failure in ("check_links.py", "format", "build"):
+            require(result.returncode != 0 and len(commands) == {"check_links.py": 1, "format": 2, "build": 3}[failure],
                     "lint failure did not stop check", result.stdout)
         else:
             require(result.returncode != 0, f"parallel check ignored failure: {failure}", result.stdout)
@@ -383,6 +385,8 @@ public static class Formatting
         require(code == 0, "deep engine isolation fixtures failed", output)
         code, output = run(ROOT, "python3", "-B", "tools/dev/check_lab_shards_tests.py")
         require(code == 0, "Lab coverage negative fixtures failed", output)
+        code, output = run(ROOT, "python3", "-B", "tools/dev/check_links_tests.py")
+        require(code == 0, "Markdown link check fixtures failed", output)
         check_make_order(scratch)
         check_scale_knobs(scratch)
         check_installer(scratch)

@@ -1,5 +1,10 @@
 # Tank scaling
 
+**Status:** Dated record (2026-10-14). The branch did not meet its acceptance brief, and its original frame-rate and
+pacing claims are superseded by the restored-catch-up follow-up inside it. Its shared tuners, scaled supply and catch-
+up policy shipped in 0.4.0; the current rules are in [world-services.md](../world-services.md) and the
+[README](../../README.md).
+
 The performance work is substantial, but this branch **does not satisfy the complete acceptance brief**.
 The original FPS tables below used a rejected two-step catch-up policy and include simulation slowdown.
 The lead-review follow-up restores ordinary catch-up and measures simulation/wall ratios explicitly; those
@@ -686,5 +691,5 @@ The seven new exported tuners, scaled supply/formation construction, fragment ph
 shared match behavior and require the next release to be minor (0.4 after the merged 0.3.0 release). Tank scaling
 does not change message layouts or bump the protocol. The final `dev` integration brings online King's message
 changes and `Protocol.Version` **3**; earlier measured revisions used Protocol 2. See
-[King's compatibility notes](multiplayer.md#king-online-protocol-3) for that separate change.
+[King's compatibility notes](../multiplayer.md#king-online-protocol-3) for that separate change.
 At multiplier 1, separate-process world hashes for all four formations equal the baseline hashes.

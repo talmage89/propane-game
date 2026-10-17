@@ -77,11 +77,12 @@ python3 -B tools/dev/check_equivalence.py --refresh --production-revision="$(git
 ```
 
 This explicitly writes the references and manifest. Review their decoded contents and provenance before committing;
-never run refresh to make a refactor pass. `provenance.json` records production and instrumentation revisions,
-Godot/.NET versions, configuration, seeds, tuner sources/overrides and commands, with checkout paths removed.
-Compressed JSON can be inspected with Python's `gzip` and `json` modules. Do not edit compressed files by hand.
+never run refresh to make a refactor pass. [`provenance.json`](../src/Dev/Equivalence/Fixtures/provenance.json)
+records production and instrumentation revisions, Godot/.NET versions, configuration, seeds, tuner sources/overrides
+and commands, with checkout paths removed. Compressed JSON can be inspected with Python's `gzip` and `json` modules.
+Do not edit compressed files by hand.
 
-[Recorded v0.4.0 verification](release-reference-verification.md) includes repeated-load results, timings, rejection
+[Recorded v0.4.0 verification](evidence/release-reference-verification.md) includes repeated-load results, timings, rejection
 probes, reviewed captures and native smoke checks.
 
 ## Limits
@@ -105,7 +106,7 @@ tick, mean/p95/p99 collector-plus-publisher time, packet count and payload bytes
 `Match._PhysicsProcess` callback with the same controlled bodies and advancing clock (including corrections, actor
 publication and pickup checks). It does not advance Jolt or other scene nodes. Alternate parent/candidate runs;
 these controlled windows do not replace native match performance and convergence checks.
-P3's [verification record](body-publication-verification.md) retains the paired measurements, native commands,
+P3's [verification record](evidence/body-publication-verification.md) retains the paired measurements, native commands,
 captures and interrupted/failed attempts.
 
 World hashes include construction, meshes and collision, but do not prove feel. These exact Linux/Jolt traces do not

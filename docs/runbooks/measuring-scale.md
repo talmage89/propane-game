@@ -3,8 +3,8 @@
 `make bench` measures the production in-process Tank Bank brains used in the Lab and lobby, rather than separate
 Godot bot processes. It runs a deterministic dev scene, saves raw CSV/logs and JSON under `build/bench/`, and prints
 one row per case. It is a measuring tool, outside `make test`; the gate runs one fast real-command/JSON smoke.
-[The initial dev baseline](scale-baseline.md) includes the full Debug/Release grid and hotspot breakdown.
-[Actor scaling](scale-actors.md) records actor scopes, rendering-feature attribution, paired measurements,
+[The initial dev baseline](../evidence/scale-baseline.md) includes the full Debug/Release grid and hotspot breakdown.
+[Actor scaling](../evidence/scale-actors.md) records actor scopes, rendering-feature attribution, paired measurements,
 native transition checks and network/visual proof after tank scaling.
 
 ```sh

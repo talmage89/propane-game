@@ -1,5 +1,8 @@
 # Movement verification
 
+**Status:** Dated record (2026-10-10). Still accurate: `CreepSpeed` is 1.6 m/s in code and in the baked tuning. The
+rule is stated in [locomotion.md](../locomotion.md).
+
 `CreepSpeed` defaults to **1.6 m/s** in code and the baked tuning. The walk clip's native speed, 0.98 m/s, is a
 calibration value, not a gameplay constraint: playback follows actual planar speed divided by 0.98. The default
 gait remains 6 m/s and sprint remains 9.5 m/s.

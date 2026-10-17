@@ -1,5 +1,9 @@
 # Tank correction investigation
 
+**Status:** Dated record (2026-10-11 through 2026-10-16), the investigation that followed the soak assertion. Its
+fixes are in the code and described in [multiplayer.md](../multiplayer.md#networking). It records a residual vent
+outlier (0.531 m) that the unchanged 0.50 m final bound still catches.
+
 Follow-up to [the soak assertion](network-soak.md), on `wp/net-assert`, after merging dev `a50b9e5`.
 Gameplay rules and tuner defaults remain unchanged.
 

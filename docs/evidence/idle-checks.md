@@ -1,5 +1,8 @@
 # Lab idle replay and Easy's empty-map fallback
 
+**Status:** Dated record (written 2026-10-16). What it established lives in [lab.md](../lab.md#verification) (the idle
+checks and `--replay-random`) and [bot-navigation.md](../bot-navigation.md#idle-bots).
+
 A fixed-FPS Lab run did not control all of its physics randomness. Its seed fixed `World.Random`, but
 `Blast.Detonate`, `Ragdoll.Begin` and offline `DebrisQueue.Enqueue` each constructed a fresh, unseeded generator.
 [Godot 4.7.2's RNG constructor](https://github.com/godotengine/godot/blob/4.7.2-stable/core/math/random_number_generator.h)

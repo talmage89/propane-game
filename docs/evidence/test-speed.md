@@ -1,5 +1,9 @@
 # Test gate timing
 
+**Status:** Dated record (2026-10-11 through 2026-10-14) of gate timings on specific machines. The gate has changed
+since; its structure is in [code-quality.md](../code-quality.md#fast-gate-and-deep-sweeps). The timings are not
+targets.
+
 ## Test speed 2 (October 14, 2026)
 
 | Alternating run | Wall seconds | Minutes | Initial load (1 / 5 / 15 min) | Result |
@@ -572,7 +576,7 @@ three Lab jobs. Test speed 2 (top of this file) split it into 25 named jobs; `ma
 Before this work, `make test-full` ran the gate and then every deep step one at a time. On `dev` at `a832c5d`, on the
 lead's 12-thread machine at load about 2, it took 2,317 seconds: generator sweep 902, `check_lab.py --full` 612,
 navigation 141, rifle soak 113, deep piles 77, duel lane 77, loading readiness 49, gate about 360. Each deep step is
-now its own target ([code-quality.md](code-quality.md#fast-gate-and-deep-sweeps) lists them), so `make -j4 test-full`
+now its own target ([code-quality.md](../code-quality.md#fast-gate-and-deep-sweeps) lists them), so `make -j4 test-full`
 runs them side by side with the gate's partitions. Nothing is dropped:
 
 - The generator sweep runs as four seed-range shards. `test-full-generator-coverage` runs the sweep's own
@@ -664,7 +668,7 @@ Godot's bundled ENet 1.3.18). So commands lost in the overflow next retried seco
 last send, after six or more attempts, and declared the peer lost instead of resending. The run passed only when no
 retry with an interval that long came due after `Loaded`. The fix keeps the grace after `Loaded` for as long as the
 load took, plus 1 second (`LoadingGrace` in `NetTransport.cs`), and the match passes; see
-[multiplayer.md](multiplayer.md#transport-contract).
+[multiplayer.md](../multiplayer.md#transport-contract).
 
 | Loading-readiness match on the 4-CPU VM | Before | After |
 | --- | ---: | ---: |

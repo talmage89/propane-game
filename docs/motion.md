@@ -71,7 +71,7 @@ frame; the strike peaks near 45 and is continuous, while the IK flips it caught 
 ragdoll limbs and the root bone, and measures the pelvis in world space, because the model turning to the get-up
 heading re-expresses the same pose. The get-up fade keeps each bone on one interpolation path, so a limb never flips
 where the shortest arc to the captured pose changes sides. It also keeps the logical
-recoil climb checks; aimed creep allows 8 cm of lateral muzzle sway (the walk clip's shoulders sway about 6.6 cm). Judge the stance from rendered clips ([animation review](animation-review.md)).
+recoil climb checks; aimed creep allows 8 cm of lateral muzzle sway (the walk clip's shoulders sway about 6.6 cm). Judge the stance from rendered clips ([animation review](runbooks/animation-review.md)).
 
 `rifle_reach_tests` also crosses the aim behind a stationary body and checks every final bone against the same
 60-degree frame bound. This deterministically reproduces the intermittent ragdoll head snap; the physical get-up

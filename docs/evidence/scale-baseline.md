@@ -1,5 +1,9 @@
 # Scale baseline
 
+**Status:** Dated record (2026-10-14), the baseline before bot and tank optimization. Superseded as a performance
+baseline by [actor scale](scale-actors.md), which measures again after tank scaling. The method is in [measuring
+scale](../runbooks/measuring-scale.md).
+
 Baseline for dev `91c97bb`, before bot/tank optimization, with measurement-only commits through `c167cd6`.
 The full reports (all 40 cases, three repetitions per case, stage summaries and load readings) are not committed:
 `make bench` writes them to `build/bench/`, and `tools/dev/bench_compare.py` compares two of them.
@@ -16,7 +20,7 @@ This is 240 separate processes. Debug/Release alternate within each case/repetit
 odd repetitions. Seed 23, fixed 254 m map, 40/80/160/320 tanks, 120 Hz physics, 1280×720 overview.
 The scene plays during warm-up, then punctures every fourth surviving tank halfway through measurement.
 All runs passed assembly/optimization, uncapped pacing, exact observed tick/brain counts and JSON validation.
-Stopped and preliminary capped runs are excluded. [Measurement definitions and reproduction](measuring-scale.md).
+Stopped and preliminary capped runs are excluded. [Measurement definitions and reproduction](../runbooks/measuring-scale.md).
 
 ## Where the time goes
 

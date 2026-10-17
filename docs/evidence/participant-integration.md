@@ -1,5 +1,10 @@
 # Participant integration review
 
+**Status:** Dated record (2026-10-11, reverified 2026-10-12). It merged into dev over its own strict verdict; the
+tank-agreement tails it lists were tracked as separate network work. The rules are in
+[multiplayer.md](../multiplayer.md#participants-a6-protocol-2). Its "Protocol.Version remains 2" was true before 0.4.0
+(the current protocol is 3).
+
 Merged into `dev` at `3a204a8` over this review's strict verdict: its failing active-agreement tails (2.15 s and
 2.05 s against the 2.0 s bound) also occur on stock `dev` (5.05 s on the same seed). The lead's paired faulted soaks
 (match seeds 24–27) passed 8 of 8 with zero errors. The remaining tails are tracked as separate network work.
@@ -117,7 +122,7 @@ sixteen clients.
 
 At that run's live final, vent `20a00002` has epoch 2 and owner 12. Observer motion targets have sequences 179, receipt
 silence 0.003/0.014 seconds, no pending claim and no barrier; owner spin is about 30 rad/s. This matches the fresh
-nonlinear vent-tracking residual already recorded on dev (0.531 m) in `docs/network-corrections.md`. BodySync correction
+nonlinear vent-tracking residual already recorded on dev (0.531 m) in `docs/evidence/network-corrections.md`. BodySync correction
 methods and vent-force callbacks are unchanged from dev; the existing-residual attribution is supported but remains an
 inference, not deterministic replay. Fixed map/fault seeds do not fix physical timing or effect randomness.
 
