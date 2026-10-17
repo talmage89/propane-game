@@ -47,7 +47,7 @@ public sealed class TankLedger
     public IReadOnlyList<BodyAuthority> Live() => bodies.Values.Where(b => b.State != State.Exploded).OrderBy(b => b.Body.Id).ToArray();
 
     /// <summary>Tanks that have not exploded, venting strays included.</summary>
-    public int LiveTanks => bodies.Values.Count(b => b.State != State.Exploded && b.Body.Id < BodySync.CarBase);
+    public int LiveTanks { get; private set; }
 
     /// <summary>This peer's explosion request was accepted: a causal dependency mode events may name.</summary>
     public bool Exploded(int peer, uint request) => explosions.ContainsKey((peer, request));
@@ -100,6 +100,7 @@ public sealed class TankLedger
             var current = bodies[explosion.Id];
             bodies[explosion.Id] = Grant(current, peer, current.Body, rest: true) with { State = State.Exploded, Center = explosion.Center, CauseActorId = actorId };
             explosions.Add((peer, explosion.Request), actorId);
+            LiveTanks--;
             if (explosion.Id < BodySync.DropTankBase) { MapDetonations++; }
             else { DropDetonations++; }
         }
@@ -163,8 +164,11 @@ public sealed class TankLedger
         return spawned;
     }
 
-    private void Register(BodyState body, int owner, bool rest) =>
+    private void Register(BodyState body, int owner, bool rest)
+    {
         bodies.Add(body.Id, new BodyAuthority(body, owner, State.Intact, rest, null, Vector3.Zero));
+        if (body.Id < BodySync.CarBase) { LiveTanks++; }
+    }
 
     private static BodyAuthority Grant(BodyAuthority current, int peer, BodyState pose, bool rest) => current with
     {

@@ -147,6 +147,8 @@ and string limits apply inside the plan, and starts must agree with the player a
   permanently displace a resting copy after its owner's final publication.
 - *Detonation:* whoever detonates the first tank in a chain runs the whole chain on their client and sends each explosion with its position. Other clients play those explosions and don't run chain reactions themselves for remote blasts.
 - *Scoring:* the server credits the point only for a tank in its ledger that has not already exploded. If two players claim the same tank, the first claim wins. Map tanks are registered from the plan; client-created drops are registered atomically before being relayed. Exploded ids remain reserved for the whole match.
+  The live tank count is maintained on successful registration and detonation; cars do not count. Canonical records,
+  sorted live-body snapshots and departure transfers retain their existing traversal.
 
 **Players:**
 - Each client owns its own player's movement and sends it to the others, who show it smoothed. Player snapshots
