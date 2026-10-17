@@ -11,12 +11,16 @@ using Propane.Lab;
 using Propane.Modes;
 using Propane.Player;
 using Propane.Session;
+using static Godot.GodotObject;
+using static Propane.Dev.LabCases.LabScenarioTools;
 using static Propane.Dev.UnitTests.TestRunner;
 
-namespace Propane.Dev;
+namespace Propane.Dev.LabCases;
 
-public partial class LabTest
+internal sealed partial class DissolveScenario(ILabScenarioHost host) : LabScenario(host)
 {
+    protected override Task RunCore() => DissolveRun();
+
     /// <summary>Stands still: what the player does once the scripted run stops.</summary>
     private sealed class Idle : IPlayerInputSource
     {
@@ -184,11 +188,13 @@ public partial class LabTest
             lab.AddChild(tickStart);
             var caught = -1.0;
             var chains = new List<ChainClosed>();
-            runner.Decided += command =>
+            var observe = Guard<ModeCommand>(command =>
             {
                 if (command is RunCaught) caught = runner.Elapsed;
                 if (command is ChainClosed done) chains.Add(done);
-            };
+            });
+            runner.Decided += observe;
+            using var observation = DetachOnDisposal(() => runner.Decided -= observe);
             var frames = new List<(double Time, double Wall)>();
             var physicsSteps = new List<double>();
             var rows = new List<string> { "time,x,front,gap,segments,segment_nodes,segment_bodies,tree_nodes,objects,static_mb,frame_ms_max,built,retired,score" };
@@ -348,13 +354,10 @@ public partial class LabTest
             capture.Screenshot($"dissolve_{seed}_end");
             Assert(lab.World.Paused && lab.Overlay.MenuVisible, "a finished run must pause and show its result");
             lab.Session.Dispose(); lab.Free();
+            observation.Dispose();
             await Collect().ConfigureAwait(true);
         }
     }
-
-    // Reflection lets identical instrumentation measure the immediate parent, which has no tracking owner.
-    private static int TrackingCount(PrototypeRunner runner) =>
-        (int?)typeof(PrototypeRunner).GetProperty("TrackingCount", BindingFlags.Instance | BindingFlags.NonPublic)?.GetValue(runner) ?? -1;
 
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static List<WeakReference<Tank.PropaneTank>> RetiredWrappers(List<WeakReference<Tank.PropaneTank>> wrappers, SegmentWorldSource source)
