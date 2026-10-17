@@ -10,6 +10,7 @@ internal static class LabScenarioRegistry
 {
     internal static readonly IReadOnlyList<LabScenarioRegistration> All = new LabScenarioRegistration[]
     {
+        new("dials", host => new DialsScenario(host)),
         new("lifetime", host => new LifetimeScenario(host)),
         new("tracking", host => new LifetimeScenario(host, trackingOnly: true))
     };

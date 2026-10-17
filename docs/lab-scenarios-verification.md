@@ -14,3 +14,5 @@ contain 11 lifetime pairs and 514 dial fixtures (the older 530-fixture documenta
   against `1019775` is unchanged. Frame waits and collection remain direct calls to the host's original Tasks.
   A first unit invocation raced an unfinished build and loaded the parent assembly (no matching suite); the
   post-build invocation discovers and passes the new suite. The failed log is retained.
+- Dials: warning-free build; all 514 native fixtures pass in four shards (129/129/128/128), each built and reset.
+  The complete `--list-dials` output is byte-for-byte identical to the parent, and the expression inventory is unchanged.
