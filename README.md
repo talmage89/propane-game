@@ -441,7 +441,8 @@ GODOT=$GODOT tools/dev/net_bots.sh -n 3 -l 60 -- --net-lag=120 --net-jitter=30 -
 with assertions and labeled frames), `drop-refusal` (rolling back a refused predicted drop), and `puncture-race`
 (canonical vent adoption and trajectory assertions after two simultaneous bullet contacts), and `vent-contact`
 (eight owner-started, rapidly spinning vents on clear floor, with contact and trajectory logs).
-`tools/dev/compare_vents.py` compares its logs.
+`tools/dev/compare_vents.py` compares `puncture-race` logs; `vent-contact` uses the native assertions and
+`net_bots.sh`'s tank and score checks.
 [docs/multiplayer.md](docs/multiplayer.md) lists the commands. [Network scenario ownership](docs/net-scenarios.md) describes the harness lifecycle,
 completion obligations and full scenario/option inventory.
 

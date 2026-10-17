@@ -40,7 +40,7 @@ internal sealed class VentContactScenario(INetScenarioHost host) : NetScenario(h
             {
                 var tank = tanks[i];
                 var hole = PropaneTank.LocalCenter + Vector3.Right * .15f;
-                tank.TakeShot(tank.ToGlobal(hole), tank.GlobalBasis.X, -tank.GlobalBasis.X);
+                tank.TakeShot(tank.ToGlobal(hole), tank.GlobalBasis.X, -tank.GlobalBasis.X, current.Player.ActorId);
                 var axis = DevArgs.Get("vent-contact-axis") == "mixed" && i % 2 == 1 ? Vector3.Right : Vector3.Up;
                 tank.AngularVelocity = axis * current.World.Tuning.VentMaxSpin;
             }
