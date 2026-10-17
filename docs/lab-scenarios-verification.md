@@ -1,7 +1,8 @@
 # Lab scenario extraction verification
 
 Parent: `1019775`. No production or design files, release fixtures, Make targets or checker thresholds change.
-Raw logs, capture manifests, source inventories and the runnable parent snapshot are retained under `build/rfb7a/`.
+Raw logs, capture manifests and source inventories are retained under `build/rfb7a/`. The temporary runnable
+parent snapshot is removed after the final comparisons.
 The parent source inventory was recorded before editing the harness. The independent source scan records all
 17 selections, 52 options, 146 assertions, 46 log expressions and 34 capture expressions. Parent native listings
 contain 11 lifetime pairs and 514 dial fixtures (the older 530-fixture documentation predates the current tuner set).
@@ -57,6 +58,9 @@ revision, command, exit status and elapsed time in `final-status.json` to outliv
   the live-session collection proof and detaches after fixture teardown, before the final collection.
   The existing tick probes remain attached at the same positions/priorities; scenarios add no processing nodes.
 
+The first final gate stopped at import-order lint in the moved Dissolve file before running tests. The corrected
+head reruns the gates; that failed lint log/status remain retained separately.
+
 ## Final dispatch and lifecycle proof
 
 All seventeen selections have factories. The fake-context suite has seven passing tests: pending completion,
@@ -98,7 +102,7 @@ Sizes below are source lines and bytes, excluding UID metadata. Every new script
 | `LabScenarios/BankRulesScenario.cs` | 74 | 4349 |
 | `LabScenarios/BankScenario.cs` | 96 | 5687 |
 | `LabScenarios/DialsScenario.cs` | 95 | 5235 |
-| `LabScenarios/DissolveScenario.cs` | 388 | 24168 |
+| `LabScenarios/DissolveScenario.cs` | 387 | 24167 |
 | `LabScenarios/EffectsScenario.cs` | 71 | 3136 |
 | `LabScenarios/FramesScenario.cs` | 84 | 3739 |
 | `LabScenarios/LabScenario.cs` | 94 | 3311 |

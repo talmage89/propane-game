@@ -11,10 +11,9 @@ using Propane.Lab;
 using Propane.Modes;
 using Propane.Player;
 using Propane.Session;
-using static Propane.Dev.UnitTests.TestRunner;
-
 using static Godot.GodotObject;
 using static Propane.Dev.LabCases.LabScenarioTools;
+using static Propane.Dev.UnitTests.TestRunner;
 
 namespace Propane.Dev.LabCases;
 
