@@ -277,7 +277,7 @@ $GODOT --resolution 1280x720 --fixed-fps 60 res://scenes/dev/capacity_ui_tests.t
 # Deterministic menu portraits: host/guest, classic/docked, 2/8/16 players, color/bot dialogs and focus.
 # Also checks draft/caret/focus preservation across decoded lobby packets; runs headlessly in make test.
 $GODOT --resolution 1600x900 --fixed-fps 60 res://scenes/dev/menu_composition_tests.tscn -- --capture-dir="$PWD/build/menu-composition"
-# Repeated sixteen-client acceptance and resource measurements: docs/network-soak.md.
+# Repeated sixteen-client acceptance and resource measurements: docs/runbooks/network-soak.md.
 make test-capacity
 
 # Movement resolver: gait/target speed on each transition tick, lifecycle, jump buffer and coyote time;

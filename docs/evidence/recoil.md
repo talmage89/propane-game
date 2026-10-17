@@ -1,5 +1,9 @@
 # Recoil (R19)
 
+**Status:** Dated record (R19, 2026-10-11). Partly superseded: the clip redo kept R19's logical climb and recoil but
+dropped its shot fitting and barrel alignment, so "Barrel alignment (R19, superseded)" and the rifle reach hotfix
+describe removed behavior. The current rules are in [recoil.md](../recoil.md).
+
 The owner asked for the climb of `v0.2.0` to require player correction again, and for shots to follow the visible
 barrel. R19 moves shot recoil into logical aim, retains most of it, and aligns the rifle to each sampled shot.
 The weapon and camera springs supply short presentation kick independently of the primary aim ray. Damage,

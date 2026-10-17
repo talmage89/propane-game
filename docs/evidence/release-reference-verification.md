@@ -1,5 +1,8 @@
 # Release-reference verification — October 16, 2026
 
+**Status:** Dated record (2026-10-16, refactor package P0) of the v0.4.0 reference fixtures. The current procedure and
+limits are in [release-reference.md](../release-reference.md).
+
 Production: v0.4.0, `629bf19`. Observation implementation: `f790480`. Linux x86_64, Godot
 `4.7.2.stable.mono.arch_linux.ed1daf0bf`, .NET SDK `10.0.112`, normal Debug. Commands below used a worktree-local
 `TMPDIR` under `build/`; all logs, captures and detailed traces stayed in `build/`.

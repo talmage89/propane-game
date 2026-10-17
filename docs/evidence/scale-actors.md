@@ -1,5 +1,8 @@
 # Actor scale
 
+**Status:** Dated record (2026-10-14), measured on dev `617a4f5` after tank scaling. The method is in [measuring
+scale](../runbooks/measuring-scale.md); the actor detail rules are in [motion.md](../motion.md#actor-detail).
+
 Actor CPU and rendering work on `wp/scale-actors`, measured against dev `617a4f5` after the tank package landed.
 The full grid compares candidate `8413382` with that baseline plus identical measurement-only actor timers,
 rendering counters, camera modes and feature omissions. The overlay is retained as

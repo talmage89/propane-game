@@ -1,5 +1,9 @@
 # Test gate timing
 
+**Status:** Dated record (2026-10-11 through 2026-10-14) of gate timings on specific machines. The gate has changed
+since; its structure is in [code-quality.md](../code-quality.md#fast-gate-and-deep-sweeps). The timings are not
+targets.
+
 ## Test speed 2 (October 14, 2026)
 
 | Alternating run | Wall seconds | Minutes | Initial load (1 / 5 / 15 min) | Result |

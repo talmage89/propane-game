@@ -1,5 +1,9 @@
 # Bot scale verification
 
+**Status:** Dated record (2026-10-14, extended through 2026-10-16). Not superseded, but it records limits that were
+not met, stated in the text. How navigation and the bot dials work today is in [bot-navigation.md](../bot-
+navigation.md).
+
 Sixteen in-process bots meet the frame-rate target in the final benchmark: rendered Release rises from 4.9 to
 88.5 FPS (81.8–94.9 across the three branch runs), and Debug from 3.3 to 70.4 FPS (70.1–75.3). Branch physics
 runs at approximately 120 ticks per wall second. Release rendered frame p50/p95/p99 is 10.80/14.19/19.05 ms,

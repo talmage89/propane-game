@@ -1,5 +1,9 @@
 # Crowded effect profiling
 
+**Status:** Dated record (2026-10-12). The measuring method is in [profiling effects](../runbooks/profiling-
+effects.md), the vent light budget in [world-services.md](../world-services.md), and the stack range this report
+discusses in [lab.md](../lab.md#stack-budget).
+
 The Lab measurement uses 180 idle warm-up frames and 600 sampled real frames at 1920×1080, Forward+, seed 23,
 and baked tuning. The trigger is included in the first wall sample. Opt-in `EffectProfile` timers are inclusive;
 `Blast` includes the vents created by chain hits. These timers do not alter simulation decisions.

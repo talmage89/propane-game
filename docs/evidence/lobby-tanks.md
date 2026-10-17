@@ -1,5 +1,8 @@
 # Lobby and Lab tank supply verification
 
+**Status:** Dated record (2026-10-14). Its "unreleased 0.4.0" shipped. The current rules are in
+[multiplayer.md](../multiplayer.md#networking) (tank supply) and [lab.md](../lab.md) (the Lab setup pages).
+
 The lobby and finite Lab suburb setups offer every integer from 1× to 8×. Integer steps match the existing
 TankCountMultiplier tuner and make keyboard/controller adjustments predictable. A new lobby always starts at 1×.
 The roster preview is labeled as a count at default tuning: guests do not know the creator's custom debug tuning

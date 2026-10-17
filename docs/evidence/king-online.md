@@ -1,5 +1,8 @@
 # King online verification
 
+**Status:** Dated record (2026-10-14). King online shipped in 0.4.0 (Protocol 3). The current rules are in
+[multiplayer.md](../multiplayer.md#king-online-protocol-3) and [modes.md](../modes.md#the-envelope).
+
 Linux, Godot 4.7.2 .NET/Jolt, 2026-10-14. The branch keeps Tank Bank as the default and promotes the existing King
 prototype through the mode envelope. King's rules stay server-only; peers and lobby bots consume `KingState`.
 The lobby's mint pace reaches the rules and every peer's tuning, and the Lab preserves its original suburb supply.

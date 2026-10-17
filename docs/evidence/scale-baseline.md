@@ -1,5 +1,9 @@
 # Scale baseline
 
+**Status:** Dated record (2026-10-14), the baseline before bot and tank optimization. Superseded as a performance
+baseline by [actor scale](scale-actors.md), which measures again after tank scaling. The method is in [measuring
+scale](../runbooks/measuring-scale.md).
+
 Baseline for dev `91c97bb`, before bot/tank optimization, with measurement-only commits through `c167cd6`.
 The full reports (all 40 cases, three repetitions per case, stage summaries and load readings) are not committed:
 `make bench` writes them to `build/bench/`, and `tools/dev/bench_compare.py` compares two of them.

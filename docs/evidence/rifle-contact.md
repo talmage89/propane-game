@@ -1,5 +1,9 @@
 # Rifle contact
 
+**Status:** Dated record (package 2, calibration 2026-10-10). Mostly superseded by the clip redo, which keeps this
+package's wrist frames, finger curls, reload contact path and grip proxies and retires the rest; its millimeter bounds
+no longer apply. The current rules are in [motion.md](../motion.md).
+
 The clip redo ([rifle stance](../motion.md)) keeps this package's wrist frames, finger curls, reload contact path and
 grip proxies, and retires the rest: the spine in the upper-body filter, the raised clavicle, the neck/head fit to
 `Socket_Eye`, the 25 mm reach margin and sphere projection, and the millimeter bounds. `--assert-grip` now checks

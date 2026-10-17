@@ -1,5 +1,9 @@
 # Body publication buffers (P3, October 2026)
 
+**Status:** Dated record (2026-10-16, refactor package P3). Acceptance is incomplete: the three-pair native
+performance matrix is still owed. The rules it checks are in [multiplayer.md](../multiplayer.md) (body publication)
+and [release-reference.md](../release-reference.md#limits).
+
 **Acceptance incomplete:** behavior preservation, gates, native correctness and controlled allocation measurements
 passed. The required three-pair native performance matrix still needs a reserved CPU/GPU window. Do not treat
 this report as full performance acceptance.
