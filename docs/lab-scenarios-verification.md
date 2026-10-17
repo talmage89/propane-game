@@ -16,3 +16,8 @@ contain 11 lifetime pairs and 514 dial fixtures (the older 530-fixture documenta
   post-build invocation discovers and passes the new suite. The failed log is retained.
 - Dials: warning-free build; all 514 native fixtures pass in four shards (129/129/128/128), each built and reset.
   The complete `--list-dials` output is byte-for-byte identical to the parent, and the expression inventory is unchanged.
+- Frames: warning-free build; rendered full review passes with exactly the parent's 49 capture names, 30 PNGs
+  byte-identical. Reviewed main menu, player and controller controls: remaining differences are unseeded menu
+  particles and active duel effects/HUD values. The first separate input probe collided with the ongoing gate's
+  UDP port and failed at host-browser creation; its log remains. The isolated-port repeat is recorded separately.
+  Isolated `menu_test --scenario=input --classic-lobby --port=24781`: 165 assertions, zero failures.
