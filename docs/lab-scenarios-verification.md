@@ -38,3 +38,11 @@ revision, command, exit status and elapsed time in `final-status.json` to outliv
   retains all seven parent capture labels; reviewed spectating and round transitions agree (two PNGs are identical;
   particle/debris frames vary). Observer cleanup follows each replaced runner and the seed's existing collection
   boundary. Assertion/options/log/capture inventory is unchanged.
+- Effects/stack: warning-free build; rendered eight-tank effects and maximum 512-tank stackfire pass with clean
+  engine logs. Nine effect and eight stack capture names match the parent; vent, smoke and initial stack PNGs
+  are identical. Reviewed chain/aftermath frames retain the fixture and effect presentation. Default entropy and
+  wall-clock hitstop remain enabled: stack remainder is 5 on the parent and 4 on the candidate, with different
+  final player headings and particle/debris positions. These runs are not exact or performance comparisons.
+  A first build rejected the Godot signal delegate conversion; its stale-assembly scene attempt was stopped.
+  The next native run caught a duplicate signal disconnect despite exit 0. Replacing the original unsubscribe
+  statement with idempotent registration disposal fixed it at the same boundary. All failed logs are retained.

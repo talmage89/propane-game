@@ -78,10 +78,8 @@ public partial class LabTest : Node, ILabScenarioHost
             {
                 switch (selected)
                 {
-                    case "effects": await EffectFrames().ConfigureAwait(true); break;
                     case "measure": await Measure().ConfigureAwait(true); break;
                     case "measure-play": await MeasurePlay().ConfigureAwait(true); break;
-                    case "stackfire": await StackFire().ConfigureAwait(true); break;
                     case "reference-retirement": await ReferenceRetirement().ConfigureAwait(true); break;
                     case "dissolve": await DissolveRun().ConfigureAwait(true); break;
                     default: throw new ArgumentException($"[lab] unknown scenario '{selected}'");
@@ -130,46 +128,6 @@ public partial class LabTest : Node, ILabScenarioHost
 
 
 
-    /// <summary>Real shots into the shipped maximum stack, through the whole chain, with frame times and frames.</summary>
-    private async Task StackFire()
-    {
-        template.LabStackCount = Tuning.LabStackMaximum;
-        var lab = Enter(LabScenarios.Get("stack"), LabEnvironment.Void);
-        await Frames(90).ConfigureAwait(true);
-        capture.Screenshot("stack_before");
-        var start = lab.LiveTanks.Count();
-        Assert(start == Tuning.LabStackMaximum, "stack must start at the shipped maximum");
-        var target = lab.LiveTanks.OrderBy(t => t.GlobalPosition.DistanceSquaredTo(lab.Player.GlobalPosition)).First();
-        await FireAt(lab.Player, () => target.GlobalTransform * PropaneTank.LocalCenter).ConfigureAwait(true);
-        Assert(target.State == PropaneTank.TankState.Venting, "first shot must puncture the stack tank");
-        capture.Screenshot("stack_punctured");
-        await FireAt(lab.Player, () => target.GlobalTransform * PropaneTank.LocalCenter).ConfigureAwait(true);
-        var frames = new System.Collections.Generic.List<double>();
-        var last = Time.GetTicksUsec();
-        async Task Run(int count, string shots)
-        {
-            for (var i = 0; i < count; i++)
-            {
-                await Frames(1).ConfigureAwait(true);
-                var now = Time.GetTicksUsec(); frames.Add((now - last) / 1000d); last = now;
-                if (shots.Length > 0 && i is 10 or 60 or 240) capture.Screenshot($"{shots}_{i:000}");
-            }
-        }
-        await Run(180, "stack_blast").ConfigureAwait(true);
-        Assert(lab.LiveTanks.Count() < start && lab.LiveTanks.Count() > 0, "the first blast should leave a venting stack");
-        // Shoot venting tanks until the rest go up, as a player would.
-        for (var shot = 0; shot < 12 && lab.LiveTanks.Count() > start / 4; shot++)
-        {
-            var next = lab.LiveTanks.OrderBy(t => t.GlobalPosition.DistanceSquaredTo(lab.Player.GlobalPosition)).First();
-            await FireAt(lab.Player, () => next.GlobalTransform * PropaneTank.LocalCenter).ConfigureAwait(true);
-            await Run(90, shot == 0 ? "stack_chain" : "").ConfigureAwait(true);
-        }
-        await Run(240, "stack_end").ConfigureAwait(true);
-        frames.Sort();
-        GD.Print($"[lab stackfire] tanks {start} -> {lab.LiveTanks.Count()} median_ms={frames[frames.Count / 2]:F1} p95_ms={frames[(int)(frames.Count * .95)]:F1} max_ms={frames[^1]:F1}");
-        Assert(lab.LiveTanks.Count() <= start / 4, "shooting the stack should chain most of it");
-        lab.Session.Dispose(); lab.Free();
-    }
 
 
 
@@ -177,60 +135,6 @@ public partial class LabTest : Node, ILabScenarioHost
 
 
 
-    private async Task EffectFrames()
-    {
-        var count = (int)DevArgs.GetFloat("count", 128);
-        Assert(count is >= 1 and <= 1024, "effect review count must be 1..1024");
-        template.LabStackDistance = count <= 8 ? 10 : 24;
-        var scenario = LabScenarios.Get("stack") with { Setup = lab => { lab.World.Tuning.LabStackCount = count; lab.BuildStack(); } };
-        uint particleSeed = 0;
-        void Seed(Node node)
-        {
-            if (node is GpuParticles3D particle) { particle.UseFixedSeed = true; particle.Seed = ++particleSeed; }
-        }
-        GetTree().NodeAdded += Seed;
-        var lab = Enter(scenario, LabEnvironment.Void);
-        await Frames(180).ConfigureAwait(true);
-        particleSeed = 0;
-        var tank = lab.LiveTanks.First();
-        tank.TakeShot(tank.GlobalPosition + Vector3.Up * .2f, Vector3.Back, Vector3.Forward);
-        await Frames(60).ConfigureAwait(true);
-        capture.Screenshot($"vent_{count}");
-        await Frames(120).ConfigureAwait(true);
-        capture.Screenshot($"smoke_{count}");
-        lab.Session.Dispose(); lab.Free();
-        lab = Enter(scenario, LabEnvironment.Void);
-        await Frames(180).ConfigureAwait(true);
-        particleSeed = 0;
-        foreach (var primed in lab.LiveTanks.ToArray())
-            primed.TakeShot(primed.GlobalPosition + Vector3.Up * .2f, Vector3.Back, Vector3.Forward);
-        lab.LiveTanks.First().Detonate();
-        var previous = 0;
-        foreach (var frame in new[] { 1, 6, 15, 30, 60, 120, 240 })
-        {
-            await Frames(frame - previous).ConfigureAwait(true); previous = frame;
-            capture.Screenshot($"chain_{count}_{frame:000}");
-        }
-        Assert(lab.LiveTanks.Count() < count, "effect review must detonate a tank");
-        lab.Session.Dispose(); lab.Free();
-        if (count >= 32)
-        {
-            lab = Enter(scenario, LabEnvironment.Void);
-            await Frames(180).ConfigureAwait(true);
-            particleSeed = 0;
-            var target = lab.LiveTanks.First();
-            target.TakeShot(target.GlobalPosition + Vector3.Up * .2f, Vector3.Back, Vector3.Forward);
-            target.TakeShot(target.GlobalPosition + Vector3.Up * .2f, Vector3.Back, Vector3.Forward);
-            previous = 0;
-            foreach (var frame in new[] { 60, 180, 600 })
-            {
-                await Frames(frame - previous).ConfigureAwait(true); previous = frame;
-                capture.Screenshot($"ordinary_{count}_{frame:000}");
-            }
-            lab.Session.Dispose(); lab.Free();
-        }
-        GetTree().NodeAdded -= Seed;
-    }
 
     private async Task Measure()
     {

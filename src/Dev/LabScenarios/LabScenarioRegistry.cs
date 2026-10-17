@@ -19,6 +19,8 @@ internal static class LabScenarioRegistry
         new("prototype", host => new PrototypeScenario(host)),
         new("shortfuse", host => new ShortFuseScenario(host)),
         new("shortfuse-combo", host => new ShortFuseScenario(host, combo: true)),
+        new("effects", host => new EffectsScenario(host)),
+        new("stackfire", host => new StackFireScenario(host)),
         new("lifetime", host => new LifetimeScenario(host)),
         new("tracking", host => new LifetimeScenario(host, trackingOnly: true))
     };
