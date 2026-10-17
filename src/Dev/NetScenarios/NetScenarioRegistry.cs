@@ -13,7 +13,7 @@ internal static class NetScenarioRegistry
     internal static readonly IReadOnlyList<NetScenarioRegistration> All = new NetScenarioRegistration[]
     {
         new("", null, NetScenarioCompletion.None),
-        new("watch", null, NetScenarioCompletion.None),
+        new("watch", host => new WatchScenario(host), NetScenarioCompletion.None),
         new("duel", host => new DuelScenario(host), NetScenarioCompletion.Assertions),
         new("drop-refusal", host => new DuelScenario(host), NetScenarioCompletion.Assertions),
         new("gather", host => new DuelScenario(host), NetScenarioCompletion.Assertions),

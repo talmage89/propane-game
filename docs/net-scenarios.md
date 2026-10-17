@@ -1,6 +1,6 @@
 # Network scenario ownership
 
-Duel, drop-refusal, gather and pickup currently use extracted owners. The remaining registered cases still dispatch
+Duel, drop-refusal, gather, pickup and watch currently use extracted owners. The remaining registered cases still dispatch
 through the host during the family-by-family migration described below. Inventory comparison currently reports
 one extra generic completion expression: the temporary bridge for cases still in the host.
 
@@ -89,3 +89,10 @@ The scaffold's generic completion bridge is the sole temporary source-inventory 
 passed (only the temporary completion bridge differs). The single rendered client repeated the parent's 25 s
 pickup command and passed take, exact ammo, absence and return assertions with an agreeing server audit.
 Evidence: `build/rfp4/pickup-*.log`, `build/rfp4-candidate/pickup`.
+
+### Watch migration
+
+Warning-free setup/build, inventory comparison and six lifecycle assertions passed. An added fake-context assertion
+requires a watch joiner to return its tick to ordinary bot dispatch. The rendered 15 s watch host and playing
+joiner repeated the parent command and passed complete tank/score audits with clean engine logs.
+Evidence: `build/rfp4/watch-*.log`, `build/rfp4-candidate/watch`.

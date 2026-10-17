@@ -516,10 +516,6 @@ public partial class NetTest : Node, INetScenarioHost
         {
             MovementScenario(match, dt);
         }
-        else if (DevArgs.Get("scenario") == "watch" && role == "host")
-        {
-            Watch(match, dt);
-        }
         else if (DevArgs.Get("look-at-bots") != null && match.Session.Actors.Select(a => a.Character).Where(b => b != match.Player && match.Setup.Players.Any(p => p.Player.Id == b.ActorId &&
                      p.Player.Kind == ActorKind.Bot)).OrderBy(b => b.GlobalPosition.DistanceTo(match.Player.GlobalPosition)).FirstOrDefault() is { } watched)
         {
@@ -663,35 +659,6 @@ public partial class NetTest : Node, INetScenarioHost
     private ScriptedInput duelInput = new();
     private bool scenarioPassed;
     private bool scenarioFailed;
-
-    /// <summary>The host follows another (playing) bot at a few meters and films it: running, aiming, shooting, thrown.</summary>
-    private void Watch(Match match, float dt)
-    {
-        var player = match.Player;
-        var other = match.RemoteBodies.FirstOrDefault();
-        if (!match.IsPlaying || other == null)
-        {
-            return;
-        }
-        if (duelTime < 0)
-        {
-            duelTime = 0;
-            player.InputOverride = duelInput;
-        }
-        duelTime += dt;
-        var target = other.IsRagdolled ? other.PelvisPosition : other.GlobalPosition + Vector3.Up;
-        if (player.GlobalPosition.DistanceTo(other.GlobalPosition) > 9f)
-        {
-            // Keep up: drop in a few meters behind and to the side of them.
-            var back = other.GlobalPosition + new Vector3(Mathf.Sin(other.FacingYaw), 0, Mathf.Cos(other.FacingYaw)) * 5f + new Vector3(1.5f, 0.3f, 0);
-            player.Teleport(back, player.FacingYaw);
-        }
-        AimAt(player, target);
-        if (Mathf.PosMod(duelTime, 1.5f) < dt)
-        {
-            director.Screenshot($"watch_{duelTime:000.0}");
-        }
-    }
 
     private int meleeThrows, meleeGetups;
     private bool meleeFirstDown, meleeSecondDown;

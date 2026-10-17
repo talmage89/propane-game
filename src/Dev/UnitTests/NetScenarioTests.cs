@@ -16,7 +16,7 @@ public static class NetScenarioTests
         public readonly List<string> Events = new();
         public NetClient Net => null!;
         public CaptureDirector Director => null!;
-        public string Role => "host";
+        public string Role { get; init; } = "host";
         public int Players => 2;
         public float MatchClock => 0;
         public SceneTree Tree => throw new InvalidOperationException("fake context must not touch a scene tree");
@@ -102,6 +102,14 @@ public static class NetScenarioTests
             scenario.Tick(null!, .1f);
             Assert(scenario.Ticks == 0 && host.Events.Count(e => e == "detach") == 2, "replacement/shutdown retained subscriptions or dispatched a retired callback");
             Throws<ObjectDisposedException>(() => scenario.BeginAssembly(null!));
+        });
+        runner.Run("net scenarios/watch joiners retain ordinary bot dispatch", () =>
+        {
+            var host = new Host { Role = "join" };
+            using var scenario = new WatchScenario(host);
+            scenario.BeginAssembly(null!);
+            scenario.AfterAssembly(null!);
+            Assert(!scenario.Tick(null!, .01f), "watch consumed a joiner's bot tick");
         });
         runner.Run("net scenarios/warmed dispatch allocates nothing", () =>
         {
