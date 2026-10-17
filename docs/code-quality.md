@@ -96,8 +96,9 @@ cover the rest. Add a new runtime option to `LaunchArgs`'s consumers, this table
 overrides, so an archive's own main scene hosts the test: `Main._Ready` adds `ReleaseTest` in place of the front end when
 the argument is given and `Main` is a child of the root. `ReleaseTest` then builds a nested `Main`, presses the real menu
 buttons and exits 0 on PASS and 1 on a missing button, empty suburb or stage timeout. With `--scenario=network
---connect=host:port` it creates a lobby, waits for `--players` (default 2) and plays a `--length` match with a bot. Its
-transitive dependencies in `src/Dev`:
+--connect=host:port` it creates a lobby, waits for `--players` (default 2) and plays a `--length` match with a bot.
+It opens the roaming lobby's panel with a real Tab event, or uses the classic lobby menu when presented, then
+verifies match completion and return to that lobby. Its transitive dependencies in `src/Dev`:
 
 | Class | File | Used for |
 | --- | --- | --- |
@@ -120,10 +121,10 @@ launch options and the smoke on the real binary. The clients exit 0 on success; 
 ./Propane.x86_64 --headless --quit-after 300                  # ordinary start: the front end builds and quits
 ./Propane.x86_64 --headless -- --server --port=24683          # logs "listening on UDP 24683"
 ./Propane.x86_64 -- --release-test --capture-dir=/tmp/release # main menu and single player
-# The network scenario presses the classic lobby's Start match, so it needs --classic-lobby on both sides (a lobby
-# world has no such button and the run fails with "start match button missing"), and a second player in the lobby:
-./Propane.x86_64 --headless -- --server --port=24683 --classic-lobby
-./Propane.x86_64 -- --release-test --scenario=network --connect=127.0.0.1:24683 --classic-lobby --capture-dir=/tmp/release
+# The network scenario supports the default roaming lobby and needs a second player in the lobby.
+# To check the classic path too, repeat with --classic-lobby on both server and smoke client:
+./Propane.x86_64 --headless -- --server --port=24683
+./Propane.x86_64 -- --release-test --scenario=network --connect=127.0.0.1:24683 --capture-dir=/tmp/release
 tools/dev/add_bots.sh -n 1 -S 127.0.0.1:24683                 # once the smoke has created its lobby
 ```
 
