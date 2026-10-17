@@ -1,6 +1,6 @@
 # Network scenario ownership
 
-Duel, drop-refusal and gather currently use the extracted owner. The remaining registered cases still dispatch
+Duel, drop-refusal, gather and pickup currently use extracted owners. The remaining registered cases still dispatch
 through the host during the family-by-family migration described below. Inventory comparison currently reports
 one extra generic completion expression: the temporary bridge for cases still in the host.
 
@@ -82,3 +82,10 @@ The candidate repeated the parent matrix's exact duel/refusal/gather arguments; 
 or protocol errors, complete tank coverage and agreeing server audits. Reviewed the candidate gather shimmer
 and settled-pile captures against the parent. Native output: `build/rfp4-candidate/{duel,refusal,gather}`.
 The scaffold's generic completion bridge is the sole temporary source-inventory addition.
+
+### Pickup migration
+
+`make setup`, warning-free `make build`, the five fake-context lifecycle tests and the source-inventory comparison
+passed (only the temporary completion bridge differs). The single rendered client repeated the parent's 25 s
+pickup command and passed take, exact ammo, absence and return assertions with an agreeing server audit.
+Evidence: `build/rfp4/pickup-*.log`, `build/rfp4-candidate/pickup`.
