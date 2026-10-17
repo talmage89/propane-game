@@ -22,6 +22,7 @@ public partial class ReleaseTest : Node
     private double nextStage;
     private bool network;
     private bool sawPlaying;
+    private bool roamingLobby;
     private bool finished;
     private double playingShot;
 
@@ -93,6 +94,25 @@ public partial class ReleaseTest : Node
             var net = main.GetNode<NetClient>("Net");
             if (net.Lobby is { } lobby && lobby.Members.Count >= DevArgs.GetFloat("players", 2))
             {
+                roamingLobby = net.LobbyWorlds && lobby.WorldId != 0;
+                if (roamingLobby)
+                {
+                    if (main.GetNodeOrNull<Match>("LobbyWorld") is not { IsPlaying: true } world) { return; }
+                    if (!world.PanelOpen)
+                    {
+                        // Use device delivery, as the player does, and let the panel receive a frame before pressing it.
+                        Input.ParseInputEvent(new InputEventKey { PhysicalKeycode = Key.Tab, Keycode = Key.Tab, Pressed = true });
+                        Input.ParseInputEvent(new InputEventKey { PhysicalKeycode = Key.Tab, Keycode = Key.Tab, Pressed = false });
+                        nextStage = elapsed + 0.1;
+                        return;
+                    }
+                    if (main.GetNode<Menus>("Menus") is not { Current: Menus.Screen.Lobby, Docked: true })
+                    {
+                        Fail("lobby panel did not open");
+                        return;
+                    }
+                }
+                director.Screenshot("02_network_lobby");
                 net.SetMatchLength(DevArgs.GetFloat("length", 30));
                 if (!Press("Start match"))
                 {
@@ -138,13 +158,22 @@ public partial class ReleaseTest : Node
                 }
                 return;
             }
-            if (sawPlaying && finished && main.GetNode<Menus>("Menus").Current == Menus.Screen.Lobby)
+            var returned = roamingLobby
+                ? main.GetNodeOrNull<Match>("LobbyWorld") is { IsLobby: true, IsPlaying: true } &&
+                  main.GetNode<Menus>("Menus").Current == Menus.Screen.None
+                : main.GetNode<Menus>("Menus").Current == Menus.Screen.Lobby;
+            if (sawPlaying && finished && returned && main.GetNode<NetClient>("Net").Lobby is { Phase: LobbyServer.LobbyPhase.Waiting })
             {
-                director.Screenshot("05_returned_to_lobby");
-                GD.Print("[releasetest] PASS cross-platform match finished and returned to lobby");
-                ShutdownGuard.Quit(GetTree());
-                stage = 99;
+                // Let the returned scene draw before requesting its proof screenshot.
+                Advance(5, 0.25);
             }
+        }
+        else if (stage == 4)
+        {
+            director.Screenshot("05_returned_to_lobby");
+            GD.Print("[releasetest] PASS cross-platform match finished and returned to lobby");
+            ShutdownGuard.Quit(GetTree());
+            stage = 99;
         }
     }
 
