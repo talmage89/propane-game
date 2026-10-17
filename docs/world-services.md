@@ -22,6 +22,14 @@ Full-explosion counts are scoped to the world and released on effect retirement.
 its immediate core flash/fireball while omitting the secondary layers. All physical blast and chain work remains
 synchronous, including receiver callbacks and causal network requests.
 
+`VentLightBudget` is a world service under the effects root: it outlives each suburb's content, and a retiring vent
+light only unregisters itself. It writes each source's visibility once a frame. Above `VentLightMergeThreshold` (40)
+vents, at most `VentLightClusterCount` (8) proxy lights stand in for nearby vents at energy-weighted centers, seeded
+near the camera and then spread across the sources; a source farther than `VentLightMergeRadius` (2 m) from every
+seed keeps its own light. Unmerged plus proxy energy equals the original total, and flash lights with their three
+simultaneous shadows are unaffected. At 40 vents or fewer every vent keeps its light. The three dials are shared
+tuners, so they travel in match snapshots.
+
 Each simulation lives in a viewport with rendering disabled. The application viewport shares the selected
 `World3D` to present it; camera nodes stay under the facade and query their injected world's physics space. This
 presentation bridge preserves the facades. Actors carry camera-independent logical aim; explicit local views
@@ -122,10 +130,9 @@ Shot recoil displaces logical pitch and yaw immediately. Most pitch and all side
 look input pulls them back; only a small pitch budget settles slowly. Movement, facing and melee use that logical
 yaw. Explosion/landing shake (rotation and displacement) retains its existing effect on the ray. A camera renders
 the resulting transform and adds its own short recoil spring; that extra rotation never reaches logical aim.
-Rifle/torso sway and the rifle recoil spring remain body presentation; they still affect muzzle placement and
-its obstruction ray, never the primary aim ray. Before the obstruction ray, the rig aligns a reachable rifle pose
-to the sampled endpoint; afterward the barrel rotates about the same muzzle to follow any nearer obstruction.
-The firing frame retains that pose, and intervening burst frames track logical aim. See [recoil](evidence/recoil.md).
+Rifle/torso sway and the rifle recoil spring are body presentation. They reach neither the primary aim ray nor the
+muzzle obstruction ray, which starts at a logical muzzle that the logical aim holds (`PlayerCharacter.LogicalMuzzle`,
+the `ShotMuzzle*` tuners), so no pose can change a hit and the rig fits nothing to a shot. See [recoil](recoil.md).
 FOV affects projection/crosshair only. Hitstop remains the existing
 exclusive offline-world time-scale lease: it changes simulation timing, never an aim angle.
 

@@ -3,7 +3,9 @@
 The character plays polished public clips as authored ([sources](animation-sources.md)), the way the first release
 did. Nothing plants, generates or overrides steps; a light rifle stance ([rifle stance](motion.md)) layers the arms,
 aim and hands over the legs. Movement speeds, acceleration, sprint, aim, creep and jump rules belong to the
-controller and are unchanged by presentation.
+controller and are unchanged by presentation: aimed creep is 1.6 m/s (`CreepSpeed`), the run 6 m/s (`RunSpeed`) and the
+sprint 9.5 m/s (`SprintSpeed`). The walk clip's native speed (0.98 m/s) is only a calibration value, not a limit: the
+stride clock below follows the distance travelled, so the clip plays faster or slower with the actual speed.
 
 ## Clips on one stride clock
 

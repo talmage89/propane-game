@@ -3,7 +3,7 @@
 `RifleRig` is the only layer over the locomotion clips. It runs after the animation and the get-up blend
 (`PoseBlend`), never decides anything, and costs a handful of bone rotations and two two-bone solves per frame. Shots,
 their muzzle obstruction and hits come from the logical aim only (`PlayerCharacter.LogicalMuzzle` and the shared `ShotMuzzle*` tuners; see
-[Logical muzzle](evidence/recoil.md#logical-muzzle)), so no pose can change a hit. The rifle and hands it shows are presentation.
+[Logical muzzle](recoil.md#logical-muzzle)), so no pose can change a hit. The rifle and hands it shows are presentation.
 
 ## Layers
 

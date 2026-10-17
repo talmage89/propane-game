@@ -152,7 +152,8 @@ A light rifle stance layers authored rifle poses (carry, hip ready, shouldered, 
 strike), the aim twist and pitch, and two-bone hand IK over the clips ([rifle stance](docs/motion.md)). Shots, their
 obstruction and hits come only from the logical aim, never from the animated pose. Shots climb the logical aim; the
 player pulls against the retained recoil. Short rifle and camera springs supply the visible kick. See
-[the recoil review](docs/evidence/recoil.md) for climb and bot measurements.
+[recoil](docs/recoil.md) for the climb and the logical muzzle, and the [recoil report](docs/evidence/recoil.md) for
+R19's measurements.
 A throw immediately clears weapon poses and cancels reload, so get-up cannot restore a pose from before the throw.
 
 ## Tuning
