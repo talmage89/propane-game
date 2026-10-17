@@ -1,6 +1,6 @@
 # Network scenario ownership
 
-Duel, drop-refusal, gather, pickup, watch and melee currently use extracted owners. The remaining registered cases still dispatch
+Duel, drop-refusal, gather, pickup, watch, melee and movement currently use extracted owners. The remaining registered cases still dispatch
 through the host during the family-by-family migration described below. Inventory comparison currently reports
 one extra generic completion expression: the temporary bridge for cases still in the host.
 
@@ -104,3 +104,12 @@ Setup/build (zero warnings), six lifecycle tests and the unchanged source invent
 both throws/get-ups, five/zero-bank spills, complete tank coverage and agreeing audits. Reviewed
 `melee_host_1_06.png`: the victim is thrown among five shielded drops, matching the parent presentation.
 Evidence: `build/rfp4/melee-*.log`, `build/rfp4-candidate/melee`.
+
+### Movement migration
+
+Warning-free builds, seven lifecycle tests and source-inventory preservation passed. The new fake-context check
+requires incomplete observer completion to fail on the host and imposes no observer obligation on the joiner.
+The rendered 35 s parent/candidate fixture passed remote gait/support, reload/recoil, grip, feet and motion
+checks, plus tank/score audits. Reviewed `remote_02_air.png` and `remote_06_landed_creep.png` against the parent:
+airborne and shouldered landing poses retain the same presentation. Evidence: `build/rfp4/movement-*.log`,
+`build/rfp4-candidate/movement`.

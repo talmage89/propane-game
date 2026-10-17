@@ -103,6 +103,17 @@ public static class NetScenarioTests
             Assert(scenario.Ticks == 0 && host.Events.Count(e => e == "detach") == 2, "replacement/shutdown retained subscriptions or dispatched a retired callback");
             Throws<ObjectDisposedException>(() => scenario.BeginAssembly(null!));
         });
+        runner.Run("net scenarios/movement requires completion only from its observing host", () =>
+        {
+            var host = new Host();
+            using var observer = new MovementScenario(host);
+            Assert(!observer.CheckCompletion(NetScenarioCompletion.Movement) && host.Events.SequenceEqual(new[]
+                { "FAIL [net movement] FAIL match ended before movement proof completed" }), "incomplete movement observer succeeded");
+            var join = new Host { Role = "join" };
+            using var actor = new MovementScenario(join);
+            Assert(actor.CheckCompletion(NetScenarioCompletion.Movement) && join.Events.Count == 0,
+                "movement imposed observer completion on the acting joiner");
+        });
         runner.Run("net scenarios/watch joiners retain ordinary bot dispatch", () =>
         {
             var host = new Host { Role = "join" };
