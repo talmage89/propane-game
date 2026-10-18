@@ -24,7 +24,7 @@ public partial class CapacityUiTests : Node
     public override async void _Ready()
     {
         settingsBinding = PlayerSettings.Bind(settings);
-        var net = new NetClient();
+        var net = new NetClient(PacketTransports.CreateClient(), ModeRegistry.Codec);
         var menus = new Menus { Net = net, HostingNote = "Host on this computer · UDP lobby" };
         var results = new ResultsScreen();
         var capture = new CaptureDirector();

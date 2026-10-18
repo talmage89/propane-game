@@ -18,7 +18,7 @@ public partial class ServerSeedTests : Node
             Assert(int.TryParse(DevArgs.Get("match-seed"), out var expected), "native seed fixture needs --match-seed");
             AddChild(new Main { Name = "Main" });
             var template = Tuning.LoadBaked();
-            var client = new NetClient { Name = "Client", Template = template };
+            var client = new NetClient(PacketTransports.CreateClient(), ModeRegistry.Codec) { Name = "Client", Template = template };
             AddChild(client);
             client.Connect("127.0.0.1", (int)DevArgs.GetFloat("port", Protocol.DefaultPort), "Seed", 0);
             for (var step = 0; step < 120 && client.State != NetClient.Status.Connected; step++)

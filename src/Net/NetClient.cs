@@ -27,11 +27,12 @@ public partial class NetClient : Node
     private readonly IMonotonicClock clock;
     private ConnectionHandle? server;
 
-    public NetClient() : this(PacketTransports.CreateClient()) { }
-    public NetClient(IPacketTransport transport, IMonotonicClock? clock = null, PacketCodec? codec = null)
+    // Godot script instantiation cannot select application-owned transport or codec inputs.
+    public NetClient() => throw new InvalidOperationException("NetClient requires transport and codec inputs");
+    public NetClient(IPacketTransport transport, PacketCodec codec, IMonotonicClock? clock = null)
     {
-        this.transport = transport;
-        this.codec = codec ?? PacketTransports.ClientCodec();
+        this.transport = transport ?? throw new ArgumentNullException(nameof(transport));
+        this.codec = codec ?? throw new ArgumentNullException(nameof(codec));
         this.clock = clock ?? MonotonicClock.Instance;
     }
     private double connectStarted;

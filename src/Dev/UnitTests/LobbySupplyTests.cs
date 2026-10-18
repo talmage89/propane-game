@@ -105,7 +105,7 @@ public static class LobbySupplyTests
             var listener = network.Create();
             var transport = network.Create();
             using var template = new Tuning { TankCountMultiplier = 8 };
-            var client = new NetClient(transport) { Template = template };
+            var client = new NetClient(transport, ModeRegistry.Codec) { Template = template };
             try
             {
                 var endpoint = new PacketEndpoint("", 24883);
@@ -136,7 +136,7 @@ public static class LobbySupplyTests
             foreach (var late in new[] { false, true })
             {
                 using var template = new Tuning { TankCountMultiplier = late ? 8 : 1 };
-                var client = new NetClient { Template = template };
+                var client = new NetClient(PacketTransports.CreateClient(), ModeRegistry.Codec) { Template = template };
                 Match? match = null;
                 try
                 {

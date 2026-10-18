@@ -435,8 +435,9 @@ reconnect/resume or automatic recovery of a client scene after a server run fail
 channels; simulated faults use the same neutral contract, with no dependency on the ENet adapter. Server metrics
 format plain transport/inbox samples through `TransportMetrics`; composition samples client state separately.
 
-`NetClient` and `LobbyServer` accept an `IPacketTransport` before entering the tree. `PacketTransports` selects
-ENet for production; the unit suites inject an in-memory loopback with a manual monotonic clock. Gameplay sends
+`NetClient` requires an `IPacketTransport` and `PacketCodec` before entering the tree; Main selects both production
+inputs. Its parameterless Godot constructor rejects missing inputs, as LobbyServer's does. `LobbyServer` borrows its
+transport, codec and application settings through composition. `PacketTransports` selects ENet for production; the unit suites inject an in-memory loopback with a manual monotonic clock. Gameplay sends
 `ReliableOrdered`, three `ReliableBodyStates` lanes, `UnreliablePlayerPoses` or `UnreliableBodyStates`, never backend
 channel numbers. ENet keeps control and disposable traffic on channel zero; reliable body checkpoints rotate per
 body through channels one to three, so a checkpoint retry cannot block control. Ordering is per connection and

@@ -22,7 +22,7 @@ public partial class MenuGamepadTest
         await Click("Create lobby").ConfigureAwait(true);
         await Wait(() => Net.Lobby != null, "King lobby created").ConfigureAwait(true);
         Check(Net.Lobby!.Mode == ModeSettings.Default, "Tank Bank is the default");
-        var guest = new NetClient();
+        var guest = new NetClient(PacketTransports.CreateClient(), ModeRegistry.Codec);
         AddChild(guest);
         guest.Connect("127.0.0.1", Menus.HostPort, "King guest", 1);
         await Wait(() => guest.State == NetClient.Status.Connected, "King guest connected").ConfigureAwait(true);

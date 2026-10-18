@@ -2,6 +2,7 @@ using System.Linq;
 using Godot;
 using Propane.Core;
 using Propane.Lab;
+using Propane.Modes;
 using Propane.Net;
 using Propane.ReleaseSmoke;
 using Propane.Tank;
@@ -53,7 +54,7 @@ public partial class Main : Node
             return;
         }
         InputSetup.Register();
-        net = new NetClient { Name = "Net", Template = SavedTuning };
+        net = new NetClient(PacketTransports.CreateClient(), ModeRegistry.Codec) { Name = "Net", Template = SavedTuning };
         AddChild(net);
         net.MatchStarting += OnMatchStarting;
         net.StatusChanged += OnStatusChanged;

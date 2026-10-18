@@ -28,7 +28,7 @@ public static class DispatchTransportTests
                     var raw = network.Create();
                     IPacketTransport adapter = faulted ? new FaultPacketTransport(raw, clock, 3, new PacketFaults(.01, .01)) : raw;
                     var transport = new InjectedPacketTransport(adapter);
-                    var client = new NetClient(transport, clock, ModeRegistry.Codec);
+                    var client = new NetClient(transport, ModeRegistry.Codec, clock);
                     using var log = new NetLogCapture();
                     try
                     {
@@ -142,7 +142,7 @@ public static class DispatchTransportTests
             runner.Run($"dispatch/client inbox failure (replay {replay})", () =>
             {
                 using var f = new ServerFixture();
-                var client = new NetClient();
+                var client = new NetClient(PacketTransports.CreateClient(), ModeRegistry.Codec);
                 using var log = new NetLogCapture();
                 try
                 {

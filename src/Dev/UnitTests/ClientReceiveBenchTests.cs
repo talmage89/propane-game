@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Linq;
 using Godot;
 using Propane.Dev.UnitTests.Fixtures;
+using Propane.Modes;
 using Propane.Net;
 using Propane.Player;
 
@@ -18,7 +19,7 @@ public static class ClientReceiveBenchTests
         {
             if (DevArgs.Get("client-receive-bench") == null) return;
             var clock = new ManualClock();
-            var client = new NetClient(new LoopbackNetwork().Create(), clock);
+            var client = new NetClient(new LoopbackNetwork().Create(), ModeRegistry.Codec, clock);
             try
             {
                 var setup = (MatchSetup)ProtocolTests.Fixtures().Single(m => m.Type == Msg.MatchStart).Payload;

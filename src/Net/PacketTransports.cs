@@ -11,10 +11,6 @@ public static class PacketTransports
         return new ServerTransport(WithFaults(new NetTransport(ids)), ids);
     }
 
-    // A1 moves the default client construction into the application root. Explicitly injected clients need neither
-    // this backend factory nor catalog lookup; the default remains source compatible during that parallel work.
-    internal static PacketCodec ClientCodec() => Modes.ModeRegistry.Codec;
-
     public static IPacketTransport CreateClient()
     {
         return WithFaults(new NetTransport(new ProtocolPeerMap()));

@@ -1,4 +1,3 @@
-direction	Propane.Net.NetClient	Propane.Net.PacketTransports	A1	Default client construction still selects application transport/catalog inputs; move this compatibility constructor wiring to Main. Explicit clients inject both transport and PacketCodec.
 direction	Propane.Player.ActorRuntime	Propane.Net.DropPredictions	C2	Actor runtime owns client replication state; move it to an actor-lifetime client attachment.
 direction	Propane.Player.ActorRuntime	Propane.Net.SnapshotBuffer	C2	Actor runtime owns client replication state; move it to an actor-lifetime client attachment.
 direction	Propane.Player.ActorRuntime	Propane.Player.ReplicatedIntent	C2	Actor runtime owns client replication state; move it to an actor-lifetime client attachment.

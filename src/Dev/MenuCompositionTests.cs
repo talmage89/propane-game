@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Godot;
 using Propane.Core;
 using Propane.Dev.UnitTests;
+using Propane.Modes;
 using Propane.Net;
 using Propane.ReleaseSmoke;
 using Propane.UI;
@@ -29,7 +30,7 @@ public partial class MenuCompositionTests : Node
             settings.Name = "Creator";
             settings.Server = "";
             settings.Appearance = AppearanceRecord.FromPalette(0);
-            net = new NetClient();
+            net = new NetClient(PacketTransports.CreateClient(), ModeRegistry.Codec);
             menus = new Menus { Net = net };
             capture = new CaptureDirector();
             AddChild(net);

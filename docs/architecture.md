@@ -73,7 +73,7 @@ source type to acquire that dependency. Do not broaden the map or silently regen
 | Physical actor holds replication attachments and view/device conveniences | C1 has moved identity/body contracts; C2 moves client state and narrow view binding beside actor lifetime. |
 | C1 contract placement (complete) | Shared identity/appearance/body values and ID formulas are Foundation; lobby contracts/phases are Wire; standings are Rules; metadata/coordinates/snapshots/segment values are Plans. Native capture and tuner conversion stay outside Plans. No baseline entry names C1. |
 | Lobby/run native tuning and codec catalog resolution | B3a supplies presentation-free ServerMode/ServerModes inputs. Application ServerSettings supplies template/snapshot sampling and run-owned IServerRunSettings, preserving live reads and exactly-once retirement. C1 made melee admission consume sampled plain values. N1 injects owner-scoped codec schema/eligibility/tuner validation with unchanged rejection order. No baseline entry remains assigned to B3a. |
-| N1 transport/dispatch boundaries | Wire owns independent ordered lanes, PacketCodec and plain TransportMetrics. Connection/run owners inject codec inputs; default NetClient application construction remains to be moved into Main. |
+| N1 transport/dispatch boundaries | Wire owns independent ordered lanes, PacketCodec and plain TransportMetrics. Connection/run owners inject codec inputs; Main selects and injects the client transport and codec; parameterless script construction rejects missing inputs. |
 | Application state (A1) | Main owns the Composition settings store; UI borrows IPlayerSettings through the Foundation selection contract, tests bind isolated stores. LaunchArgs is an immutable Foundation snapshot with scoped test overrides; tuning mutation stays in composition. ProcessPhysicsPolicies owns both engine-write policies. [A1 evidence](evidence/application-state.md). |
 | Client actor attachment retirement (L1) | Session-owned `ActorRegistration` detaches subscriptions and actor caches before native free; remaining attachments keep the original unsubscribe/stop/view/actor order. |
 | Lab bookkeeping and prototype live-rule reads | B4b shares local difficulty, tank facts and offline placement; semantic attribution and rule submission stay runner-owned. B3b2 supplies plain observations with explicit read-time clock and allocation-free bot reads. |
@@ -297,8 +297,8 @@ The scope owns only its overlay, with no rules, wires, native resources or timer
 captures each server's default/roaming modes and ordered lobby choices into immutable `ServerMode`/`ServerModes`
 inputs owned by Server. These contain only metadata, tuner names, schema and rules/wire factories. Supply callbacks
 retain supply factories, never a definition/HUD/bot factory, and yield plain SuburbSettings; rule tuner callbacks
-yield ModeTuners at the same read points. These bindings borrow each run's tuning only until run retirement; the
-existing ServerRun still owns/disposes that resource. IModeHost supplies plain live ModeWireTuners values, so KingWire
+yield ModeTuners at the same read points. These bindings borrow each run's tuning only until run retirement;
+ServerRun owns/disposes its application configuration adapter and native resource. IModeHost supplies plain live ModeWireTuners values, so KingWire
 and LobbyWire do not borrow a Tuning resource. Network registration remains
 Sandbox, Bank, King, Lobby; lobby choices remain Bank, King; prototype order remains Ring Out, King, Short Fuse,
 Dissolve Run. Test overlays never change lobby/prototype eligibility. No IDs, schemas, bytes or exposure change.
@@ -316,9 +316,11 @@ It attempts an internal-failure notice and lobby state; notification/retirement 
 The lobby can start another match; unrelated lobbies keep their existing tick/order. These are failure containment,
 not transaction rollback. Create/join carry a receive-local affected-lobby reference across departure and
 admission: a completed departure cannot remain the owner of a later construction/destination failure. No mutable
-dispatch context is stored on the server. Explicit clients may inject both IPacketTransport and PacketCodec; default application construction remains to be moved into Main. No baseline entry names N1. LobbyServer borrows IServerSettings from application composition. ServerSettings owns template/snapshot conversion;
-its run adapter owns and disposes each native copy, while ServerRun owns that adapter. The melee validator receives a plain timing
-sample and live contact cap. No edge is deferred to B3a.
+dispatch context is stored on the server. All NetClient construction injects both IPacketTransport and PacketCodec;
+Main selects production defaults. Parameterless script construction rejects missing inputs. No baseline entry names
+N1 or A1. LobbyServer borrows IServerSettings from application composition. ServerSettings owns template/snapshot
+conversion; its run adapter owns and disposes each native copy, while ServerRun owns that adapter. The melee
+validator receives a plain timing sample and live contact cap. No edge is deferred to B3a.
 
 **Current B4b:** `LocalBank` and `PrototypeRunner` each own a `LabTankFacts` instance for last direct contacts
 and drop membership. Existing `TankTracking` still owns subscriptions and reverse-order retirement; its forgotten

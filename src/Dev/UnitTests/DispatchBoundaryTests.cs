@@ -43,7 +43,7 @@ public static class DispatchBoundaryTests
             foreach (var afterMutation in new[] { false, true })
             {
                 using var log = new NetLogCapture();
-                var client = new NetClient();
+                var client = new NetClient(PacketTransports.CreateClient(), ModeRegistry.Codec);
                 try
                 {
                     Handshake.Welcome(client, 2);

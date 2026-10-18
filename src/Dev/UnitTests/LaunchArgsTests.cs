@@ -4,6 +4,7 @@ using System.Globalization;
 using Godot;
 using Propane.Core;
 using Propane.Dev.UnitTests.Fixtures;
+using Propane.Modes;
 using Propane.Net;
 
 namespace Propane.Dev.UnitTests;
@@ -69,7 +70,7 @@ public static class LaunchArgsTests
             var network = new LoopbackNetwork();
             var server = network.Create();
             var transport = network.Create();
-            var client = new NetClient(transport, clock);
+            var client = new NetClient(transport, ModeRegistry.Codec, clock);
             try
             {
                 Assert(server.Listen(Endpoint, 5).Success, "listen failed");
