@@ -229,7 +229,12 @@ public partial class Match
         }
         remoteMelee.Remove(actor.ActorId);
         foreach (var key in receivedActions.Keys.Where(key => key.Actor == actor.ActorId).ToArray()) receivedActions.Remove(key);
-        // Profiles/scores and retired identities are run history, not native actor attachments.
+        // Finite matches retain departed banks/profiles for standings and in-flight drops. Roaming has neither.
+        if (IsLobby)
+        {
+            profiles.Remove(actor.ActorId);
+            scores.Remove(actor.ActorId);
+        }
     }
 
     private void PreparePresentation()

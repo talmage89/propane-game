@@ -166,7 +166,8 @@ Bot invalid-target flags retain the old
 retarget/selection decisions without keeping a freed character alive. No decision clocks or random draws move.
 Whole-session unsubscription retains each actor's original position among other subscriptions, bot stopping stays
 before replication stopping, and views/actors still free in reverse order. Removal during stop and repeated removal
-are safe; attachment failures do not skip native retirement. Plain score/profile/standing history, authority
+are safe; attachment failures do not skip native retirement. Lobby profiles/scores retire too; finite-match score/profile/standing history remains for results and late drops.
+Authority
 requests keyed by numeric identities and nonrecycling identity tombstones remain run-owned.
 
 ## Clock and callback domains
