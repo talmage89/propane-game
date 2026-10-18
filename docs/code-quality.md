@@ -80,7 +80,7 @@ and the rest) go through `DevArgs`; a Debug server applies `--tune.*` too, befor
 | Option | Read by | Effect |
 | --- | --- | --- |
 | `--server`, `--port=N`, `--start-score=N` | `Main` | Run only the multiplayer server, on `N` (default `Protocol.DefaultPort`), starting scores at `N` (default 0). |
-| `--match-seed=N` | `LobbyServer` | Debug builds: the next match plan uses seed `N`. |
+| `--match-seed=N` | `ServerRun` | Debug builds: the next match plan uses seed `N`. |
 | `--connect=host[:port]`, `--name=Name` | `Main` | Open the Connect screen on that server as that name. |
 | `--windowed` | `Main` | Do not maximize a windowed game. |
 | `--release-test` | `Main` | Run the release smoke test in place of the front end ([Release smoke](#release-smoke)). |
