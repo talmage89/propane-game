@@ -45,6 +45,7 @@ public interface IServerRunSettings : IDisposable
     float PileDepthSpacing { get; }
     float PileUprightLayerHeight { get; }
     void ConfigureLobby(float mintSeconds, int tankSupply);
+    bool IsLobbyLocked(string name);
     Godot.Collections.Dictionary Snapshot();
     void Apply(Godot.Collections.Dictionary values);
     SuburbSettings Supply(int players);

@@ -499,7 +499,7 @@ internal sealed class ServerRun : IModeHost, IDisposable
                 // The original creator's debug capability is captured at start, never transferred with hosting.
                 if (peer != creatorId || !creatorDebug) { throw new InvalidDataException("tuning requires the debug creator"); }
                 // Supply belongs to the locked lobby choice, not live debug edits or Defaults.
-                if (tune.Name == "TankCountMultiplier") return;
+                if (tuning.IsLobbyLocked(tune.Name)) return;
                 tuning.Apply(new Godot.Collections.Dictionary { [tune.Name] = tune.Value });
                 modeRunner.Apply(this, new TunersChanged(tuning.ReadModeTuners()), clock.Seconds);
                 break;

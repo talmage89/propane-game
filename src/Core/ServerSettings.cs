@@ -56,6 +56,7 @@ public sealed class ServerSettings(IReadOnlyDictionary<ServerMode, Func<Tuning, 
             tuning.KingMintSeconds = mintSeconds;
             tuning.TankCountMultiplier = tankSupply;
         }
+        public bool IsLobbyLocked(string name) => name == nameof(Tuning.TankCountMultiplier);
         public Godot.Collections.Dictionary Snapshot() => tuning.Snapshot();
         public void Apply(Godot.Collections.Dictionary values) => tuning.Apply(values);
         public SuburbSettings Supply(int players) => supplies[mode](tuning, players);

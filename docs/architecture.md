@@ -415,7 +415,7 @@ See [world services](world-services.md#streamed-content-history), [the Lab](lab.
 | Instance materials/effects | Instance/world/content owners; retire at their real lifetime. |
 | Engine.TimeScale | ProcessPhysicsPolicies.Hitstop exclusive lease: one live unpaused offline world; a second world, pause or retirement releases it. |
 | Engine.MaxPhysicsStepsPerFrame | ProcessPhysicsPolicies catch-up registrations: smallest overlapping offline request, prior value restored, any registered live network tank simulation vetoes. TankSimulation registers on first tank entry, samples real-time eligibility in its existing callback, and unregisters on stopping/exit. The two policies retain independent rules. |
-| SceneTree pause / quit | No production tree-wide pause; WorldContext pauses its own root/physics space. Main owns orderly direct quit; isolated legacy/witness Dev exceptions are inventoried. |
+| SceneTree pause / quit | No production tree-wide pause; WorldContext pauses its own root/physics space. ShutdownGuard owns orderly direct quit; isolated legacy/witness Dev exceptions are inventoried. |
 | World shader state | WorldReveal instance parameters occupy slots 12–15; actor parameters use lower slots. DissolveArena still writes global `reveal_window`: one independently advancing streamed world per process until W2. Multiple cameras of that same stream are supported by the model. |
 | Mode catalog | Composition-owned immutable shipped ModeCatalog; validated ModeRegistry overlays restore exact prior entries/order on scoped disposal (B3a). |
 | Device/glyph preference | Application-level InputSetup/UiStyle today; per-view routing before multiple local users become a shipped feature. |
