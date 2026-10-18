@@ -423,6 +423,8 @@ public static class Formatting
         code, output = run(ROOT, "python3", "-B", "tools/architecture/tests.py")
         require(code == 0, "architecture checker negative fixtures failed", output)
         print(output, end="")
+        code, output = run(ROOT, "python3", "-B", "tools/dev/setup_import_tests.py")
+        require(code == 0, "setup import negative fixtures failed", output)
 
 
 if __name__ == "__main__":

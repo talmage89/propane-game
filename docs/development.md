@@ -24,6 +24,11 @@ and verification happen on Linux.
 
 ## Running from source
 
+`make setup` keeps import diagnostics in `build/setup-import.log`, compiles, then requires a clean second import
+(`build/setup-import-compiled.log`). Before the Debug assembly exists, only the exact ShutdownGuard autoload
+"not compiling" diagnostic is tolerated: Godot imports resources before C# is built. Any other import error or
+nonzero exit fails setup, including errors Godot reports with exit zero. Run setup after changing checkouts.
+
 Requires Godot 4.7.2 (.NET edition) and the .NET 10 SDK.
 
 - First: `make setup` imports the assets and compiles. Run it again after switching branches or pulling. It also
