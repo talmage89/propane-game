@@ -335,7 +335,9 @@ public static class TransportTests
             var clock = new Clock();
             var rawServer = network.Create();
             var rawClient = network.Create();
-            var server = new LobbyServer(new ServerTransport(rawServer, rawServer.PeerIds), clock) { Port = Endpoint.Port, Worlds = false };
+            var server = Propane.Modes.ModeRegistry.CreateServer(new ServerTransport(rawServer, rawServer.PeerIds), clock);
+            server.Port = Endpoint.Port;
+            server.Worlds = false;
             var client = new NetClient(rawClient, clock);
             try
             {
@@ -360,7 +362,9 @@ public static class TransportTests
             var rawClient = network.Create();
             var serverTransport = new FaultPacketTransport(rawServer, clock, 1, new PacketFaults());
             var clientTransport = new FaultPacketTransport(rawClient, clock, 2, new PacketFaults());
-            var server = new LobbyServer(new ServerTransport(serverTransport, rawServer.PeerIds), clock) { Port = Endpoint.Port, Worlds = false };
+            var server = Propane.Modes.ModeRegistry.CreateServer(new ServerTransport(serverTransport, rawServer.PeerIds), clock);
+            server.Port = Endpoint.Port;
+            server.Worlds = false;
             var client = new NetClient(clientTransport, clock);
             try
             {
@@ -426,7 +430,9 @@ public static class TransportTests
             var clock = new Clock();
             var rawServer = network.Create();
             var rawClient = network.Create();
-            var server = new LobbyServer(new ServerTransport(rawServer, rawServer.PeerIds), clock) { Port = Endpoint.Port, Worlds = false };
+            var server = Propane.Modes.ModeRegistry.CreateServer(new ServerTransport(rawServer, rawServer.PeerIds), clock);
+            server.Port = Endpoint.Port;
+            server.Worlds = false;
             var client = new NetClient(rawClient, clock);
             try
             {
@@ -510,7 +516,9 @@ public static class TransportTests
             var rawServer = network.Create();
             var rawClient = network.Create();
             var transport = new FaultPacketTransport(rawClient, clock, 123, new PacketFaults(ReliableStall: 10));
-            var server = new LobbyServer(new ServerTransport(rawServer, rawServer.PeerIds), clock) { Port = Endpoint.Port, Worlds = false };
+            var server = Propane.Modes.ModeRegistry.CreateServer(new ServerTransport(rawServer, rawServer.PeerIds), clock);
+            server.Port = Endpoint.Port;
+            server.Worlds = false;
             var client = new NetClient(transport, clock);
             try
             {

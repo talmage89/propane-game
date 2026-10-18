@@ -112,7 +112,7 @@ public static class KingOnlineTests
                 TestRunner.Throws<InvalidDataException>(() => MessageCodec.Decode(new NetWriter(Msg.SetMode).Byte(ModeRegistry.KingId).Float(pace).Int(1).ToArray(), false));
             foreach (var mode in new[] { ModeRegistry.SandboxId, ModeRegistry.RingOutId, ModeRegistry.ShortFuseId, ModeRegistry.DissolveRunId, (byte)99 })
                 TestRunner.Throws<InvalidDataException>(() => MessageCodec.Decode(new NetWriter(Msg.SetMode).Byte(mode).Float(2).Int(1).ToArray(), false));
-            using var server = new LobbyServer();
+            using var server = Propane.Modes.ModeRegistry.CreateServer();
             var sent = new System.Collections.Generic.List<(int Peer, NetMessage Message)>();
             server.SendOverride = (peer, bytes, _) => sent.Add((peer, MessageCodec.Decode(bytes, true)));
             foreach (var peer in new[] { 2, 3 })

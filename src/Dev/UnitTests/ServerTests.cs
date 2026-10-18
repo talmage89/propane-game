@@ -274,7 +274,7 @@ public static class ServerTests
         });
         runner.Run("server/legacy Hello is rejected without changing its prefix", () =>
         {
-            var server = new LobbyServer();
+            var server = Propane.Modes.ModeRegistry.CreateServer();
             try
             {
                 var sent = new List<NetMessage>();

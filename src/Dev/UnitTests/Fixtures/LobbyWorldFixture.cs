@@ -26,7 +26,8 @@ internal sealed class LobbyWorldFixture : IDisposable
 
     public LobbyWorldFixture(params int[] guests)
     {
-        Server = new LobbyServer(PacketTransports.CreateServer(), Clock) { Worlds = true };
+        Server = Propane.Modes.ModeRegistry.CreateServer(PacketTransports.CreateServer(), Clock);
+        Server.Worlds = true;
         driver = new ServerDriver(Clock, Server, keepAll: true);
         Packets = driver.Packets;
         All = driver.All!;

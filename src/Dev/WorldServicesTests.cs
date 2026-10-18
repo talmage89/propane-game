@@ -305,7 +305,8 @@ public partial class WorldServicesTests : Node
         // Production connection polling is outside world roots, so a handshake still finishes during pause.
         var network = new LoopbackNetwork();
         var rawServer = network.Create();
-        var server = new LobbyServer(new ServerTransport(rawServer, rawServer.PeerIds)) { Port = 1 };
+        var server = Propane.Modes.ModeRegistry.CreateServer(new ServerTransport(rawServer, rawServer.PeerIds));
+        server.Port = 1;
         var client = new NetClient(network.Create());
         AddChild(server); AddChild(client);
         try

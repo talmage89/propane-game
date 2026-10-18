@@ -38,7 +38,7 @@ public static class LobbySupplyTests
             foreach (var supply in new[] { int.MinValue, -1, 0, 9, int.MaxValue })
             {
                 var settings = ModeSettings.Default with { TankSupply = supply };
-                TestRunner.Assert(!settings.Valid, "invalid supply admitted");
+                TestRunner.Assert(!ModeRegistry.ValidSettings(settings), "invalid supply admitted");
                 TestRunner.Throws<InvalidDataException>(() => MessageCodec.Decode(Choice(settings), false));
                 var state = MessageCodec.Encode(new NetMessage(Msg.LobbyState, 0, 0, lobby with { Mode = settings }), true);
                 TestRunner.Throws<InvalidDataException>(() => MessageCodec.Decode(state, true));

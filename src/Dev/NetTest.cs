@@ -90,7 +90,9 @@ public partial class NetTest : Node, INetScenarioHost
         var port = (int)DevArgs.GetFloat("port", Protocol.DefaultPort);
         if (DevArgs.Get("host-server") != null)
         {
-            var server = new LobbyServer { Name = "Server", Port = port };
+            var server = Propane.Modes.ModeRegistry.CreateServer();
+            server.Name = "Server";
+            server.Port = port;
             AddChild(server);
             server.Start();
         }
@@ -195,7 +197,7 @@ public partial class NetTest : Node, INetScenarioHost
         (bot as IDisposable)?.Dispose();
         // The transmitted definition chooses the policy. The original simple benchmark remains Tank Bank only.
         bot = setup.ModeId == ModeRegistry.TankBankId && DevArgs.Get("brain") == "simple" ? new SimpleBot()
-            : new Bot(setup.Mode) { Skill = DevArgs.GetFloat("bot-skill", 1f) };
+            : new Bot(ModeRegistry.Resolve(setup)) { Skill = DevArgs.GetFloat("bot-skill", 1f) };
         match = new Match
         {
             Name = "Match",

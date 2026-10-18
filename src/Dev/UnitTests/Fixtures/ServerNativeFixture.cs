@@ -21,7 +21,10 @@ internal sealed class ServerNativeFixture : IDisposable
     public ServerNativeFixture(Func<ParticipantRoster> roster)
     {
         var port = (int)DevArgs.GetFloat("port", Protocol.DefaultPort + 1);
-        Server = new LobbyServer(PacketTransports.CreateServer(), Clock) { Port = port, Worlds = true, RosterFactory = roster };
+        Server = Propane.Modes.ModeRegistry.CreateServer(PacketTransports.CreateServer(), Clock);
+        Server.Port = port;
+        Server.Worlds = true;
+        Server.RosterFactory = roster;
         Server.RunCreated = run => Runs.Add(new ServerRunFixture.Release(Server, run));
         TestRunner.Assert(Server.Start().Success, "native retirement server failed to bind");
         for (var i = 0; i < 2; i++)

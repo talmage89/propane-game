@@ -21,7 +21,8 @@ internal sealed class ServerRunFixture : IDisposable
 
     public ServerRunFixture(bool worlds = false, Func<ParticipantRoster>? roster = null, ModeDefinition? mode = null)
     {
-        Server = new LobbyServer(PacketTransports.CreateServer(), Clock) { Worlds = worlds, LobbyMode = mode ?? ModeRegistry.TankBank };
+        Server = Propane.Modes.ModeRegistry.CreateServer(PacketTransports.CreateServer(), Clock, initialMode: mode ?? ModeRegistry.TankBank);
+        Server.Worlds = worlds;
         if (roster != null) Server.RosterFactory = roster;
         Server.RunCreated = run => Runs.Add(new Release(Server, run));
         Driver = new ServerDriver(Clock, Server);
@@ -57,7 +58,7 @@ internal sealed class ServerRunFixture : IDisposable
         public Release(LobbyServer server, ServerRun run)
         {
             Run = run;
-            Tuning = ((IModeHost)run).Tuning;
+            Tuning = run.Tuning;
             TestRunner.Assert(GodotObject.IsInstanceValid(Tuning), "run started with a disposed resource");
             run.Retired += () =>
             {
