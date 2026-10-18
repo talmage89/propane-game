@@ -83,7 +83,7 @@ and the rest) go through `DevArgs`; a Debug server applies `--tune.*` too, befor
 | Option | Read by | Effect |
 | --- | --- | --- |
 | `--server`, `--port=N`, `--start-score=N` | `Main` | Run only the multiplayer server, on `N` (default `Protocol.DefaultPort`), starting scores at `N` (default 0). |
-| `--match-seed=N` | `LobbyServer` | Debug builds: the next match plan uses seed `N`. |
+| `--match-seed=N` | `ServerRun` | Debug builds: the next match plan uses seed `N`. |
 | `--connect=host[:port]`, `--name=Name` | `Main` | Open the Connect screen on that server as that name. |
 | `--windowed` | `Main` | Do not maximize a windowed game. |
 | `--release-test` | `Main` | Run the release smoke test in place of the front end ([Release smoke](#release-smoke)). |
@@ -329,3 +329,18 @@ instrumentation on alternating parent/candidate builds, headlessly and rendered,
 godot-mono --headless --fixed-fps 60 --path . res://scenes/dev/match_player_benchmark.tscn
 godot-mono --disable-vsync --resolution 960x540 --fixed-fps 60 --path . res://scenes/dev/match_player_benchmark.tscn
 ```
+
+## Server run differential probes
+
+`tools/dev/server_equivalence.py --revision=REV --label=NAME [--observe]` builds a private runtime below
+`build/NAME/project`, using that revision's production sources and the current server proof harness. It does not
+change the checkout or release references. With `--observe`, the scratch server records every incoming/outgoing
+packet at its receive/send boundary when given `--server-transcript=ABSOLUTE_PATH`: direction, peer, traffic class
+and exact bytes, in call order. Use a fresh file and `--match-seed=23` for each ServerTests, ParticipantServerTests,
+KingOnlineTests, LobbyWorldTests and LobbySupplyTests run; compare the parent and candidate files byte for byte.
+
+Without observation, `--suite=ServerRunBenchTests --server-bench --match-seed=23` measures production receive,
+relay and whole run ticks for Bank, King and roaming. Each measured tick delivers one actor pose and eight body
+states. Time advances from the fixture clock, so match clocks and King actor sampling remain active. Packet
+preparation and 20,000 warm-up ticks are excluded; 30,000 ticks are measured per mode. Alternate at least three parent/candidate pairs. The report
+includes allocations, mean, p95/p99, packet counts and payload bytes; packet instrumentation stays off.

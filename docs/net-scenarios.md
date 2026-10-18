@@ -74,3 +74,16 @@ connection lifetime of lobby callbacks, watch joiner fallback, movement host obl
 Use the native commands above and in [multiplayer.md](multiplayer.md) for scene/transport proof.
 [The P4 verification report](evidence/net-scenarios-verification.md) records the original inventories, migrations,
 failures, native comparisons, file sizes and paired measurements.
+
+The server run's retirement probes live in the shared unit fixture owners (`ServerRunFixture` and
+`ServerNativeFixture`), alongside the existing server driver. After `make build`, run:
+
+```sh
+godot-mono --headless --path . res://scenes/dev/unit_tests.tscn -- --suite=ServerRunTests --server-native --match-seed=23 --port=24681
+```
+
+The normal headless gate checks all six retirement paths and repeated disposal. The opt-in native probes use real
+ENet sockets, two clients, manual run time and the real codec/receive/delivery path to exhaust actor lives after
+results and roster revision on a roaming departure. They assert native tuning release, detached routes and ordered
+MatchEnd/Rejected delivery; they do not construct client worlds or replace the separate-process scenario matrix.
+Use this checkout's unused server port and do not overlap another server on that port.

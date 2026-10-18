@@ -65,6 +65,7 @@ the report concludes; the contract named in each report's status line holds the 
 | [evidence/net-scenarios-verification.md](evidence/net-scenarios-verification.md) | 2026-10-16 | No | The P4 harness migration: preserved vent-contact failure, native inventories, paired measurements. |
 | [evidence/suburb-generation-verification.md](evidence/suburb-generation-verification.md) | 2026-10-17 | No | B10: stage ownership, parent plan bytes, exact references, deep sweeps and rendered comparisons. |
 | [evidence/match-player-cache.md](evidence/match-player-cache.md) | 2026-10-17 | No | M0: ordered local-player selection, empty ownership, paired frame costs and native audits. |
+| [evidence/server-run-verification.md](evidence/server-run-verification.md) | 2026-10-17 | No | B1: run ownership, exact parent packets, resource retirement, paired ticks, native matrix and capacity. |
 | [evidence/ledger-count-verification.md](evidence/ledger-count-verification.md) | 2026-10-17 | No | B1a: live tank accounting, parent operation transcripts, paired stock-tick costs and native soaks. |
 | [evidence/world-clock-verification.md](evidence/world-clock-verification.md) | 2026-10-16 | No | The B6 clock dispatch change: parent callback transcripts, allocation and burst measurements. |
 | [evidence/lab-scenarios-verification.md](evidence/lab-scenarios-verification.md) | 2026-10-17 | No | The B7a Lab harness migration: parent inventories, ordered awaits, byte-identical traces, captures. |
