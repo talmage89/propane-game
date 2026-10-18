@@ -82,6 +82,7 @@ the report concludes; the contract named in each report's status line holds the 
 | [evidence/tank-scaling.md](evidence/tank-scaling.md) | 2026-10-14 | Partly (pacing claims) | Tank scaling: baselines, paired measurements, rejected approaches (data in `tank-scaling/`). |
 | [evidence/scale-baseline.md](evidence/scale-baseline.md) | 2026-10-14 | Yes, as a baseline | The scale baseline before bot and tank optimization. |
 | [evidence/scale-actors.md](evidence/scale-actors.md) | 2026-10-14 | No | Actor CPU and rendering scale after tank scaling. |
+| [evidence/bot-tactics-verification.md](evidence/bot-tactics-verification.md) | 2026-10-17 | No | B4a: owned tactical state, parent/frozen traces, allocation and owned-bot native evidence. |
 | [evidence/bot-scale.md](evidence/bot-scale.md) | 2026-10-14 to 10-16 | No | Bot scale: 16 in-process bots, frame and brain cost, idle bots. |
 | [evidence/bot-navigation-measurements.md](evidence/bot-navigation-measurements.md) | 2026-10-10 | Yes (shared-cache navigator) | The original navigator's course sweeps and paired matches. |
 | [evidence/vent-performance.md](evidence/vent-performance.md) | 2026-10-12 | No | Crowded effect profiling and the optimizations it drove (data in `perf-vents/`). |
