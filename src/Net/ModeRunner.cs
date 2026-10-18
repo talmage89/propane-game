@@ -36,7 +36,7 @@ public interface IModeHost
 
 /// <summary>
 /// A mode's server-side wire adapter: turns its decoded events into accepted rule inputs, and the rules' commands
-/// into envelopes. Registered per mode id in <see cref="ModeWires"/>.
+/// into envelopes. Selected explicitly by the compiled mode bundle.
 /// </summary>
 public interface IModeWire
 {
@@ -46,26 +46,12 @@ public interface IModeWire
     void Failed(ModeRunner runner, IModeHost host, int peer, ModeEnvelope envelope, double now);
 }
 
-public static class ModeWires
+/// <summary>Sandbox's explicit wire: it emits and accepts no mode traffic. Never a lookup fallback.</summary>
+public sealed class SilentModeWire : IModeWire
 {
-    private sealed class Silent : IModeWire
-    {
-        public void Event(ModeRunner runner, IModeHost host, int peer, ModeEnvelope envelope, double now) { }
-        public void Execute(ModeRunner runner, IModeHost host, IReadOnlyList<ModeCommand> commands, double now) { }
-        public void Failed(ModeRunner runner, IModeHost host, int peer, ModeEnvelope envelope, double now) { }
-    }
-
-    private static readonly Dictionary<byte, Func<IModeWire>> registered = new()
-    {
-        [ModeRegistry.TankBankId] = () => new TankBankWire(),
-        [ModeRegistry.KingId] = () => new KingWire(),
-        [ModeRegistry.LobbyWorldId] = () => new LobbyWire(),
-    };
-
-    public static IModeWire For(ModeDefinition mode) => registered.TryGetValue(mode.Id, out var create) ? create() : new Silent();
-
-    /// <summary>Test seam: assertion suites register wires for synthetic modes.</summary>
-    internal static void Register(byte modeId, Func<IModeWire> create) => registered[modeId] = create;
+    public void Event(ModeRunner runner, IModeHost host, int peer, ModeEnvelope envelope, double now) { }
+    public void Execute(ModeRunner runner, IModeHost host, IReadOnlyList<ModeCommand> commands, double now) { }
+    public void Failed(ModeRunner runner, IModeHost host, int peer, ModeEnvelope envelope, double now) { }
 }
 
 /// <summary>
@@ -78,15 +64,17 @@ public sealed class ModeRunner
     public ModeDefinition Definition { get; }
     public IModeRules Rules { get; }
     public IModeWire Wire { get; }
+    public ModeSchema Schema { get; }
     public ModePhaseMachine Phases { get; } = new();
     public ModeEventGate Gate { get; } = new();
 
-    public ModeRunner(ModeDefinition definition, ModeSetup setup)
+    internal ModeRunner(ModeDefinition definition, ModeSetup setup, ModeSchema schema, Func<IModeWire> createWire)
     {
         Definition = definition;
         Rules = definition.CreateRules();
         Rules.Initialize(setup);
-        Wire = ModeWires.For(definition);
+        Schema = schema;
+        Wire = createWire() ?? throw new InvalidOperationException($"mode {definition.Id}/{definition.SchemaVersion} server wire factory returned null");
     }
 
     public ModeClock Clock(double now) => Phases.Clock(now);

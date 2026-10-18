@@ -1,9 +1,7 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using Propane.Bots;
 using Propane.Core;
-using Propane.World;
 using Propane.World.Plan;
 
 namespace Propane.Modes;
@@ -15,9 +13,9 @@ namespace Propane.Modes;
 public sealed record ModeSupply(Func<Tuning, int, SuburbSettings> Suburb, bool LimitedAmmo, bool Pickups);
 
 /// <summary>
-/// Everything that makes a mode: its rules, world source, supply, round timer, HUD presenter, bot goal policy, the
-/// tuners its rules copy and its envelope schema version. A new mode adds a definition here and its payload codecs
-/// in <c>ModeSchemas</c>; the outer messages, the runner and the factory do not change.
+/// The existing local mode factories and metadata: its rules, world source, supply, round timer, HUD presenter, bot goal policy, the
+/// tuners its rules copy and its envelope schema version. Network integration pairs this definition with its schema and server wire in the
+/// composition-owned compiled catalog; the definition itself has no networking dependency.
 /// </summary>
 public sealed record ModeDefinition(
     byte Id,
@@ -47,92 +45,5 @@ public sealed record ModeDefinition(
             values[name] = Convert.ToDouble(property.GetValue(tuning), System.Globalization.CultureInfo.InvariantCulture);
         }
         return new ModeTuners(values);
-    }
-}
-
-public static class ModeRegistry
-{
-    public const byte SandboxId = 1;
-    public const byte TankBankId = 2;
-
-    public static readonly ModeDefinition Sandbox = new(SandboxId, "Sandbox", 1, () => new SandboxRules(), ModeWorldSource.Void,
-        new ModeSupply((tuning, _) => SuburbPlans.SinglePlayer(tuning), LimitedAmmo: false, Pickups: false),
-        RoundTimer.None, () => new SandboxHud(), null, Array.Empty<string>());
-
-    public static readonly ModeDefinition TankBank = new(TankBankId, "Tank Bank", 1, () => new TankBankRules(), ModeWorldSource.SuburbPlan,
-        new ModeSupply(SuburbPlans.Match, LimitedAmmo: true, Pickups: true), RoundTimer.Countdown, () => new TankBankHud(),
-        seed => new BankingBot(seed), TankBankRules.Tuners);
-
-    public const byte RingOutId = 3;
-    public const byte KingId = 4;
-
-    /// <summary>Lab prototype: sumo on a dissolving slab. Unlimited ammo, no cans; the round counts up until one stands.</summary>
-    public static readonly ModeDefinition RingOut = new(RingOutId, "Ring Out", 1, () => new RingOutRules(), ModeWorldSource.Void,
-        new ModeSupply((tuning, _) => SuburbPlans.SinglePlayer(tuning), LimitedAmmo: false, Pickups: false), RoundTimer.CountUp,
-        () => new RingOutHud(), seed => new RingOutBot(seed), RingOutRules.Tuners);
-
-    /// <summary>
-    /// Hold a moving zone to mint banked tanks, with Tank Bank's bank and spills. A lobby can choose it; the Lab still
-    /// tries it against its bots. It plays a match's suburb, stocked for the players, with unlimited ammo and no cans.
-    /// </summary>
-    public static readonly ModeDefinition King = new(KingId, "King of the Cul-de-sac", 1, () => new KingRules(), ModeWorldSource.SuburbPlan,
-        new ModeSupply((tuning, players) => SuburbPlans.Match(tuning, players) with { AmmoSpots = 0 }, LimitedAmmo: false, Pickups: false),
-        RoundTimer.Countdown, () => new KingHud(), seed => new KingBot(seed), KingRules.Tuners)
-    { SamplesActors = true };
-
-    public const byte ShortFuseId = 5;
-
-    /// <summary>
-    /// Lab prototype: last one standing with health, a new suburb each round. Unlimited ammo, no cans; the suburb is
-    /// stocked for the players (on a Lab-sized slab), who start around its rim rather than at its spawn points.
-    /// </summary>
-    public static readonly ModeDefinition ShortFuse = new(ShortFuseId, "Short Fuse", 1, () => new ShortFuseRules(), ModeWorldSource.SuburbPlan,
-        new ModeSupply((tuning, players) => SuburbPlans.Match(tuning, players) with { MapSize = tuning.ShortFuseMapSize, PlayerSpawns = 0, AmmoSpots = 0 },
-            LimitedAmmo: false, Pickups: false),
-        RoundTimer.Countdown, () => new ShortFuseHud(), seed => new ShortFuseBot(seed), ShortFuseRules.Tuners);
-
-    public const byte DissolveRunId = 6;
-
-    /// <summary>
-    /// Lab prototype: a solo run down a street that builds itself ahead and dissolves behind. Its world is a segment
-    /// stream (<c>SegmentWorldSource</c>), not one plan; rifles carry limited ammo and the segments hold ammo cans.
-    /// </summary>
-    public static readonly ModeDefinition DissolveRun = new(DissolveRunId, "Dissolve Run", 1, () => new DissolveRunRules(), ModeWorldSource.SuburbPlan,
-        new ModeSupply((tuning, _) => SuburbPlans.SinglePlayer(tuning), LimitedAmmo: true, Pickups: true), RoundTimer.CountUp,
-        () => new DissolveRunHud(), seed => new DissolveRunBot(seed), DissolveRunRules.Tuners);
-
-    public const byte LobbyWorldId = 7;
-
-    /// <summary>
-    /// The lobby world: everyone in a waiting lobby roams the void together, shooting and throwing tanks for nothing.
-    /// No score and no end; its piles refill and rifles never run dry (both tuners). A server runs it while the lobby
-    /// waits; it is not a lobby choice. Lobby bots roam it with Tank Bank's brain.
-    /// </summary>
-    public static readonly ModeDefinition LobbyWorld = new(LobbyWorldId, "Lobby", 1, () => new LobbyRules(), ModeWorldSource.Void,
-        new ModeSupply((tuning, _) => SuburbPlans.SinglePlayer(tuning), LimitedAmmo: false, Pickups: false), RoundTimer.None,
-        () => new LobbyHud(), seed => new BankingBot(seed), LobbyRules.Tuners);
-
-    /// <summary>
-    /// Modes the Lab tries against its bots through its prototype runner. Ring Out and Short Fuse are only that: they
-    /// are not in <see cref="All"/>, so no lobby, MatchStart or envelope schema names them. King is also networked.
-    /// </summary>
-    public static IReadOnlyList<ModeDefinition> Prototypes { get; } = new[] { RingOut, King, ShortFuse, DissolveRun };
-
-    /// <summary>The modes a lobby's creator can choose, the default first.</summary>
-    public static IReadOnlyList<ModeDefinition> Lobby { get; } = new[] { TankBank, King };
-
-    public static ModeDefinition? ForLobby(byte id) => Lobby.FirstOrDefault(mode => mode.Id == id);
-
-    private static readonly List<ModeDefinition> registered = new() { Sandbox, TankBank, King, LobbyWorld };
-    public static IReadOnlyList<ModeDefinition> All => registered.AsReadOnly();
-
-    public static ModeDefinition? Find(byte id, ushort schemaVersion) =>
-        registered.FirstOrDefault(mode => mode.Id == id && mode.SchemaVersion == schemaVersion);
-
-    /// <summary>Test seam: assertion suites register synthetic modes beside the shipped ones.</summary>
-    internal static void Register(ModeDefinition mode)
-    {
-        registered.RemoveAll(m => m.Id == mode.Id && m.SchemaVersion == mode.SchemaVersion);
-        registered.Add(mode);
     }
 }

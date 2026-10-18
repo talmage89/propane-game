@@ -42,7 +42,6 @@ direction	Propane.Net.ModeSettings	Propane.Core.Tuning	B3a	Wire settings combine
 direction	Propane.Net.ModeSettings	Propane.Modes.KingRules	B3a	Wire settings combine plain values with catalog/tuning validation; move integration policy to compiled bundles.
 direction	Propane.Net.ModeSettings	Propane.Modes.ModeDefinition	B3a	Integration reads composition-owned mode catalog; pass validated compiled bundle inputs explicitly.
 direction	Propane.Net.ModeSettings	Propane.Modes.ModeRegistry	B3a	Integration reads composition-owned mode catalog; pass validated compiled bundle inputs explicitly.
-direction	Propane.Net.ModeWires	Propane.Modes.ModeDefinition	B3a	Integration reads composition-owned mode catalog; pass validated compiled bundle inputs explicitly.
 direction	Propane.Net.NetClient	Propane.Core.LaunchArgs	A1	Client handshake reads launch overrides implicitly; inject immutable launch options.
 direction	Propane.Net.NetClient	Propane.Net.LobbyServer	C1	Client phase checks use concrete server nested enum; move the plain lobby phase contract.
 direction	Propane.Net.NetClient	Propane.Net.LobbyWorldDefault	A1	Client reads application lobby launch policy through a server-side helper; pass immutable launch options.

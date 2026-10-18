@@ -49,7 +49,7 @@ stable top-level owner so compiler-generated numbering does not cause churn.
 | `src/Main.cs`, `Game*`, `Session/`, `Lab/` | Composition (physical session assembly, local adapters and runners). |
 | `Core/` | Foundation by default; world services, spawn, assets and `Tuning` are Simulation; launch/settings are Composition; device setup is Presentation. |
 | `World/Plan/` | Plans; `SegmentPlans.cs` also contains plan types. `SuburbPlans` converts live tuning in Composition; native catalog/builder/materials remain Simulation. |
-| `Modes/` | Rules by default; `ModeDefinition`/registry/supply are Composition; HUD input/presenters are Presentation; HUD values/`IModeView` remain plain rules observations. |
+| `Modes/` | Rules by default; `ModeDefinition`/`ModeBundle`/`ModeCatalog`/registry/supply are Composition; HUD input/presenters are Presentation; HUD values/`IModeView` remain plain rules observations. |
 | `Player/`, `Tank/`, `Fx/` | Simulation by default; input values and resolved state values are Foundation; cameras/views/device input and mode geometry are Presentation; `ReplicatedIntent` is Client. Profiling remains colocated pending C1. |
 | `Navigation/`, `Bots/` | Navigation and Bots. |
 | `Net/` | Wire by default; `LobbyServer`/`ServerRun`, ledger, roster, contact admission and mode wires/runner are Server; body/actor snapshot helpers, prediction, authority transactions and inbox are Client; Match/backend factory/update/diagnostics are Composition; NetClient is Client. Plain identity/appearance and selected decoded values are Foundation; `AmmoPickup` is Simulation. |
@@ -65,7 +65,7 @@ source type to acquire that dependency. Do not broaden the map or silently regen
 | Match owns transactions, world/actor replication, bots, mode policy and views | B2 extracts transactions; B3b extracts mode policy; C2 finishes independent replication/bot/view owners. Preserve synchronous ordering. |
 | Physical actor holds replication attachments and view/device conveniences | C1 moves identity/body contracts; C2 moves client state and narrow view binding beside actor lifetime. |
 | Wire/server values depend on concrete server enums, client identity helpers, physical snapshot/gather types; plans reach mixed catalog/settings factories | C1 separates plain contracts, formulas and catalog snapshot construction without changing bytes, RNG or IDs. |
-| Server constructs/looks up mode integration and samples live configuration | B3a supplies complete compiled bundles/plain inputs at composition; no new native actor dependencies. |
+| Server samples live configuration and retains definition-based run inputs | B3a completes catalog/schema/wire composition; existing server/definition and live-Tuning edges remain explicitly baselined for plain-input boundary work. |
 | Fault transport calls ENet lane helper; server diagnostics/factory cross composition | N1 supplies transport-independent lanes and injected delivery/diagnostic boundaries. |
 | Settings and launch access are implicit | A1 provides explicit application ownership and scoped test stores/overrides. |
 | Actor subscriptions/collider caches outlive departing actors | L1 introduces idempotent actor registrations; detach before character free while world survives. |
@@ -112,9 +112,10 @@ retirement clears the cache before freeing actors. Empty ownership skips local p
 still requires an actor. This cache neither retargets an existing local view nor implements multi-view selection
 ([participant contract](multiplayer.md#participants-a6-protocol-2), [M0 evidence](evidence/match-player-cache.md)).
 
-Current mode construction is split across [ModeRegistry](../src/Modes/ModeDefinition.cs),
-[ModeSchemas](../src/Net/ModeEnvelope.cs) and [ModeWires](../src/Net/ModeRunner.cs). B3a replaces that integration split
-with composition-owned compiled bundles, described below; it does not invent a second rule engine.
+[ModeRegistry](../src/Modes/ModeRegistry.cs) compiles the network integrations into one validated
+[ModeCatalog](../src/Modes/ModeCatalog.cs). Bundles pair existing definitions with schemas and explicit server wire
+factories; codecs remain in Wire. MessageCodec passes composition's schema resolver into the envelope reader, and
+ServerRun receives its runner through the registry's factory. Rule initialization still precedes wire construction.
 
 ## Scopes and ownership
 
@@ -251,11 +252,19 @@ physical/authority consequences. Current eligibility is explicit: Tank Bank and 
 Short Fuse and Dissolve Run remain Lab prototypes. Sandbox and roaming Lobby are separate noncompetitive paths.
 A type or registration does not graduate a mode ([modes](modes.md), [Lab](lab.md)).
 
-**Target B3a bundle:** composition-owned definition/metadata, rules factory, existing schema, server wire factory,
-client adapter factory, HUD/view projection, bot factory, world/source capabilities and eligibility. The shipped
-catalog is immutable; synthetic tests use scoped registration/restoration. Sandbox explicitly selects silence;
-other networked modes must fail completeness validation. Current `ModeWires.For` silently falls back to `Silent`
-and registry replacement is unscoped; B3a removes those exceptions without changing IDs, order, schemas or exposure.
+**Current B3a:** a composition-owned `ModeBundle` pairs the existing `ModeDefinition` (metadata, rules/HUD/bot
+factories, supply, world selection and tuners) with its schema and server wire factory. Catalog construction validates
+required members and matching schema identity before publication. Sandbox explicitly selects `SilentModeWire`; an
+unknown integration or missing factory fails, with no silent fallback. `ModeSchemas` supplies explicit codec schemas,
+not a registration table; `ModeWires` and all three unscoped registration seams are retired. No client adapter factory
+exists yet: Match's existing Bank/King/Lobby policy remains B3b, rather than a placeholder capability in the bundle.
+
+The process-lifetime shipped catalog and its collection containers are immutable. Main-thread synthetic tests use
+`ModeRegistry.RegisterScoped`: validated overlays replace an entry in place or append a new identity; strictly nested,
+idempotent disposal restores the exact previous catalog, including identities/order, during exception unwinding.
+The scope owns only its overlay, with no rules, wires, native resources or timers. Network registration remains
+Sandbox, Bank, King, Lobby; lobby choices remain Bank, King; prototype order remains Ring Out, King, Short Fuse,
+Dissolve Run. Test overlays never change lobby/prototype eligibility. No IDs, schemas, bytes or exposure change.
 
 **Target B3b:** Bank policy is composed into King, Lobby has its own client adapter, and prototype bots/HUDs consume
 plain observations that retain neither live rules nor delegates into rules. Read-time calculations take an explicit
@@ -316,7 +325,7 @@ are implicit asset bindings today; V1 validates them once before another asset f
 | Engine.MaxPhysicsStepsPerFrame | TankSimulation dense-chain lease: smallest overlapping offline request, prior value restored, any registered live network tank simulation vetoes. Registration timing matters. A1 consolidates discoverability of these two distinct policies. |
 | SceneTree pause / quit | No production tree-wide pause; WorldContext pauses its own root/physics space. ShutdownGuard owns orderly direct quit; isolated legacy/witness Dev exceptions are inventoried. |
 | World shader state | WorldReveal instance parameters occupy slots 12–15; actor parameters use lower slots. DissolveArena still writes global `reveal_window`: one independently advancing streamed world per process until W2. Multiple cameras of that same stream are supported by the model. |
-| Mode catalog | ModeRegistry/Schemas/Wires today; B3a immutable shipped bundles with scoped synthetic extensions. |
+| Mode catalog | Composition-owned immutable shipped ModeCatalog; validated ModeRegistry overlays restore exact prior entries/order on scoped disposal (B3a). |
 | Device/glyph preference | Application-level InputSetup/UiStyle today; per-view routing before multiple local users become a shipped feature. |
 | Diagnostics | Explicit launch/profiling switches (EffectProfile, ActorProfile, capacity/capture instrumentation); never hidden gameplay state. C1 relocates misplaced profiling utilities. |
 

@@ -62,7 +62,7 @@ public sealed record KingPilePlaced(int Zone, IReadOnlyList<Transform3D> Tanks);
 /// <summary>The server registered the pile: its tanks, owned by the world authority, for everyone to build.</summary>
 public sealed record KingPileSpawned(int Zone, int Owner, IReadOnlyList<BodyState> Tanks);
 
-/// <summary>Every schema a build understands. Unknown schemas fail explicitly instead of being skipped.</summary>
+/// <summary>Payload codecs and explicit shipped schema constructors. Composition owns schema selection.</summary>
 public static class ModeSchemas
 {
     /// <summary>Wire bound on one spill: above the largest declared drop-count tuner (20), far below a packet.</summary>
@@ -110,10 +110,11 @@ public static class ModeSchemas
     public const int MaxZone = ushort.MaxValue;
     public const float MaxZoneRadius = 1000;
 
-    private static readonly List<ModeSchema> registered = new()
-    {
-        new ModeSchema(ModeRegistry.SandboxId, 1, Array.Empty<ModeKind>()),
-        new ModeSchema(ModeRegistry.TankBankId, 1, new[]
+    private static ModeSchema Schema(byte mode, ushort version, ModeKind[] kinds) => new(mode, version, Array.AsReadOnly(kinds));
+
+    public static ModeSchema Sandbox() => Schema(ModeRegistry.SandboxId, 1, Array.Empty<ModeKind>());
+
+    public static ModeSchema TankBank() => Schema(ModeRegistry.TankBankId, 1, new[]
         {
             new ModeKind(TankBankKinds.Spill, "Spill", ModeDirection.Event, ModeReporter.ActorOwner, 2 + MaxSpill * BodyBytes, ReadSpill, WriteSpill),
             new ModeKind(TankBankKinds.Score, "Score", ModeDirection.Command, ModeReporter.Server, 8,
@@ -121,8 +122,9 @@ public static class ModeSchemas
             new ModeKind(TankBankKinds.SpillAccepted, "SpillAccepted", ModeDirection.Command, ModeReporter.Server, 2 + MaxSpill * BodyBytes, ReadSpill, WriteSpill),
             new ModeKind(TankBankKinds.SpillRefused, "SpillRefused", ModeDirection.Command, ModeReporter.Server, 1 + MaxSpill * 4, ReadRefused, WriteRefused),
             new ModeKind(TankBankKinds.Banks, "Banks", ModeDirection.Snapshot, ModeReporter.Server, 1 + Protocol.MaxWireActors * 9, ReadBanks, WriteBanks),
-        }),
-        new ModeSchema(ModeRegistry.KingId, 1, new[]
+        });
+
+    public static ModeSchema King() => Schema(ModeRegistry.KingId, 1, new[]
         {
             new ModeKind(KingKinds.Spill, "Spill", ModeDirection.Event, ModeReporter.ActorOwner, 2 + MaxSpill * BodyBytes, ReadSpill, WriteSpill),
             new ModeKind(KingKinds.PilePlaced, "PilePlaced", ModeDirection.Event, ModeReporter.WorldAuthority, 3 + MaxSpill * TransformBytes,
@@ -137,27 +139,16 @@ public static class ModeSchemas
             new ModeKind(KingKinds.Banks, "Banks", ModeDirection.Snapshot, ModeReporter.Server, 1 + Protocol.MaxWireActors * 9, ReadBanks, WriteBanks),
             new ModeKind(KingKinds.Zone, "Zone", ModeDirection.Snapshot, ModeReporter.Server,
                 2 + 2 * SpotBytes + 4 + 4 + 1 + Protocol.MaxWireActors * 4 + 16 + 1 + Protocol.MaxWireActors * 8 + 4, ReadZone, WriteZone),
-        }),
-        new ModeSchema(ModeRegistry.LobbyWorldId, 1, new[]
+        });
+
+    public static ModeSchema Lobby() => Schema(ModeRegistry.LobbyWorldId, 1, new[]
         {
             new ModeKind(LobbyKinds.PilePlaced, "PilePlaced", ModeDirection.Event, ModeReporter.WorldAuthority, 3 + MaxSpill * TransformBytes,
                 ReadPilePlaced, WritePilePlaced),
             new ModeKind(LobbyKinds.PileWanted, "PileWanted", ModeDirection.Command, ModeReporter.Server, 2 + SpotBytes + 1 + 8, ReadPileWanted, WritePileWanted),
             new ModeKind(LobbyKinds.PileSpawned, "PileSpawned", ModeDirection.Command, ModeReporter.Server, 7 + MaxSpill * BodyBytes,
                 ReadPileSpawned, WritePileSpawned),
-        }),
-    };
-
-    public static ModeSchema Find(byte modeId, ushort version) =>
-        registered.FirstOrDefault(s => s.ModeId == modeId && s.Version == version)
-        ?? throw new InvalidDataException($"unknown mode schema {modeId}/{version}");
-
-    /// <summary>Test seam: assertion suites register synthetic schemas (dependencies, oversize bounds).</summary>
-    internal static void Register(ModeSchema schema)
-    {
-        registered.RemoveAll(s => s.ModeId == schema.ModeId && s.Version == schema.Version);
-        registered.Add(schema);
-    }
+        });
 
     internal static ModeDirection Direction(Msg type) => type switch
     {
@@ -167,14 +158,14 @@ public static class ModeSchemas
         _ => throw new ArgumentOutOfRangeException(nameof(type)),
     };
 
-    internal static ModeEnvelope Read(NetReader r, Msg type)
+    internal static ModeEnvelope Read(NetReader r, Msg type, Func<byte, ushort, ModeSchema> schema)
     {
         var round = Id(r.UInt()); var revision = Id(r.UInt()); var mode = r.Byte(); var version = r.UShort();
         var actor = r.Int(); var life = r.UInt(); var eventId = Id(r.UInt()); var kindId = r.UShort(); var length = r.UShort();
         var direction = Direction(type);
         if (direction == ModeDirection.Event ? actor <= 0 || life == 0 : actor < 0 || (actor == 0) != (life == 0))
             throw new InvalidDataException("bad mode actor header");
-        var kind = Find(mode, version).Kind(kindId, direction);
+        var kind = schema(mode, version).Kind(kindId, direction);
         if (length > kind.MaxLength || length > r.Remaining) throw new InvalidDataException($"oversized or truncated {kind.Name} payload ({length} bytes)");
         var payload = new NetReader(r.Raw(length), 0);
         var value = kind.Read(payload);
@@ -182,9 +173,9 @@ public static class ModeSchemas
         return new ModeEnvelope(round, revision, mode, version, actor, life, eventId, kindId, value);
     }
 
-    internal static void Write(NetWriter w, Msg type, ModeEnvelope envelope)
+    internal static void Write(NetWriter w, Msg type, ModeEnvelope envelope, ModeSchema schema)
     {
-        var kind = Find(envelope.ModeId, envelope.SchemaVersion).Kind(envelope.Kind, Direction(type));
+        var kind = schema.Kind(envelope.Kind, Direction(type));
         var body = NetWriter.Payload();
         kind.Write(body, envelope.Payload);
         var payload = body.ToArray();

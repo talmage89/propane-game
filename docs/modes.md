@@ -13,14 +13,15 @@ and Dissolve Run the first [segment world source](#segments).
 | `src/Modes/TankBankRules.cs` | Tank Bank's bank, spill tickets, gates, standings, statistics and audit; victim-owner helpers. |
 | `src/Modes/ModePhases.cs` | The pure phase machine the server's runner drives. |
 | `src/Modes/ModeHud.cs` | Plain HUD data and the Tank Bank and Sandbox presenters. |
-| `src/Modes/ModeDefinition.cs` | `ModeDefinition`, supply policy and `ModeRegistry` (Sandbox, Tank Bank, King and Lobby; the other prototypes apart). |
+| `src/Modes/ModeDefinition.cs` | `ModeDefinition` and supply policy, with no networking dependency. |
+| `src/Modes/ModeRegistry.cs`, `ModeCatalog.cs` | Composition-owned compiled bundles, validated network catalog and scoped test overlays; lobby/prototype exposure stays explicit. |
 | `src/Modes/BodyEvents.cs` | Sampled positions, attributed throws, eliminations, `RoundOver` and a pure seeded generator. |
 | `src/Modes/Health.cs` | The optional health state: damage reports, validation, attribution, invulnerability, death, respawn. |
 | `src/Modes/RingOutRules.cs`, `KingRules.cs`, `ShortFuseRules.cs`, `DissolveRunRules.cs` | The prototypes' rules: Ring Out's slab plan, King's zone schedule, Short Fuse's rounds, Dissolve Run's front and score. |
 | `src/Modes/PrototypeHud.cs`, `ShortFuseHud.cs`, `DissolveRunHud.cs` | The prototypes' HUD presenters. |
 | `src/World/SegmentPlans.cs`, `src/Session/SegmentWorldSource.cs` | Segment plans from a run seed and index; the segment world source and its feed. |
 | `src/Lab/PrototypeRunner.cs`, `LabMatch.cs` | The offline runner that drives a prototype's rules in the Lab, and a multi-round match it carries. |
-| `src/Net/ModeEnvelope.cs` | The envelope record, schema registry, Tank Bank codecs, the causal gate and command order. |
+| `src/Net/ModeEnvelope.cs` | The envelope record, explicit schema constructors/codecs, the causal gate and command order. |
 | `src/Net/ModeRunner.cs` | One run's mode on the server, with Tank Bank and King wire adapters. |
 | `src/Bots/IBotWorld.cs` | Bot observations and the per-mode goal policy interface. |
 
@@ -37,7 +38,12 @@ unit suites and `mode_test`.
 
 `ModeDefinition` selects the rules, the world source (the transmitted `SuburbPlan` or the void), the supply and
 ammo policy (`ModeSupply`: suburb settings for a player count, limited ammo, ammo cans), the round timer, the HUD
-presenter, the bot goal policy, the tuners the rules copy and the envelope schema version. `ModeRegistry` ships:
+presenter, the bot goal policy, the tuners the rules copy and the envelope schema version. Composition pairs each
+networked definition with its existing schema and server wire factory in a validated `ModeBundle`. Sandbox selects
+an explicit silent wire; a missing integration fails before a runner starts. Client mode policy remains in Match
+until B3b. `ModeRegistry.Shipped` is immutable; tests use `RegisterScoped` overlays, disposed in reverse order to
+restore the exact prior catalog on success or exception. The codec layer has no mutable registration table.
+`ModeRegistry` ships:
 
 | Mode | Rules | World | Supply | Timer | HUD | Bots |
 | --- | --- | --- | --- | --- | --- | --- |

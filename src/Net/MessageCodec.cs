@@ -115,7 +115,7 @@ public static class MessageCodec
             Msg.Ragdoll => new RagdollMessage(Vector(r), Vector(r), Vector(r)),
             Msg.GetUp => new GetUpMessage(Vector(r), Range(r.Float(), -1_000_000, 1_000_000)),
             Msg.TuningSet => ReadTuning(r),
-            Msg.ModeEvent or Msg.ModeCommand or Msg.ModeSnapshot => ModeSchemas.Read(r, type),
+            Msg.ModeEvent or Msg.ModeCommand or Msg.ModeSnapshot => ModeSchemas.Read(r, type, Modes.ModeRegistry.Schema),
             _ => throw new InvalidDataException("unsupported message"),
         };
         // These three handshakes may gain trailing fields, even across incompatible protocols.
@@ -218,7 +218,7 @@ public static class MessageCodec
             case RagdollMessage p: w.Vec3(p.Position).Vec3(p.Velocity).Vec3(p.Spin); break;
             case GetUpMessage p: w.Vec3(p.Position).Float(p.Yaw); break;
             case TuningMessage p: w.String(p.Name).Scalar(p.Value); break;
-            case ModeEnvelope p: ModeSchemas.Write(w, message.Type, p); break;
+            case ModeEnvelope p: ModeSchemas.Write(w, message.Type, p, Modes.ModeRegistry.Schema(p.ModeId, p.SchemaVersion)); break;
             default: throw new InvalidDataException("unsupported message payload");
         }
         return w.ToArray();

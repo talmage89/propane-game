@@ -109,7 +109,7 @@ internal sealed class ServerRun : IModeHost, IDisposable
         var plan = SuburbPlans.Generate(settings, seed, () => nextRandom());
         var planBytes = PlanCodec.Encode(plan);
         tanks = new TankLedger(plan, hostId);
-        modeRunner = new ModeRunner(mode, new ModeSetup(actors.Select(a => new ModeActor(a.ActorId, a.Name, true, startScore)).ToArray(),
+        modeRunner = ModeRegistry.CreateRunner(mode, new ModeSetup(actors.Select(a => new ModeActor(a.ActorId, a.Name, true, startScore)).ToArray(),
             new ModeWorld(mode.World, 1, plan.Tanks.Count, KingRules.SpotsFrom(plan)), mode.CopyTuners(tuning), unchecked((ulong)plan.Seed)));
         for (var i = 0; i < plan.Props.Count; i++)
         {
@@ -148,7 +148,7 @@ internal sealed class ServerRun : IModeHost, IDisposable
     {
         var mode = ModeRegistry.LobbyWorld;
         tanks = new TankLedger(WorldPlan(), hostId);
-        modeRunner = new ModeRunner(mode, new ModeSetup(Array.Empty<ModeActor>(),
+        modeRunner = ModeRegistry.CreateRunner(mode, new ModeSetup(Array.Empty<ModeActor>(),
             new ModeWorld(mode.World, 1, 0, LobbyLayout.Spots(tuning.LobbyPiles, tuning.LobbyPileRing)), mode.CopyTuners(tuning), (ulong)Id));
     }
 
@@ -524,7 +524,7 @@ internal sealed class ServerRun : IModeHost, IDisposable
         var envelope = (ModeEnvelope)message.Payload;
         if (envelope.ModeId != modeRunner.Definition.Id || envelope.SchemaVersion != modeRunner.Definition.SchemaVersion)
             throw new InvalidDataException($"mode event for schema {envelope.ModeId}/{envelope.SchemaVersion} in a {modeRunner.Definition.Name} run");
-        var kind = ModeSchemas.Find(envelope.ModeId, envelope.SchemaVersion).Kind(envelope.Kind, ModeDirection.Event);
+        var kind = modeRunner.Schema.Kind(envelope.Kind, ModeDirection.Event);
         if (kind.Reporter == ModeReporter.WorldAuthority && peer != hostId) return;
         if (kind.Reporter is ModeReporter.ActorOwner or ModeReporter.WorldAuthority && !AcceptActor(peer, message)) return;
         var now = clock.Seconds;
