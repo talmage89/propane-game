@@ -24,11 +24,8 @@ internal sealed class BankingDemolition
     public void ResetTarget() { blocked = unaimed = 0; vantage = null; }
     public void ForgetVantage() => vantage = null;
 
-    public Decision Demolish(IBotWorld match, PropaneTank tank, BankingCombat combat, BotAim aimControl, float skill, float dt, RandomNumberGenerator rng, BotStatus status)
+    public Decision Demolish(IBotWorld match, PlayerCharacter player, PropaneTank tank, Vector3 here, Tuning tuning, BankingCombat combat, BotAim aimControl, float skill, float dt, RandomNumberGenerator rng, BotStatus status)
     {
-        var player = match.Player;
-        var tuning = match.World.Tuning;
-        var here = player.GlobalPosition;
         var center = tank.GlobalTransform * PropaneTank.LocalCenter;
         var distance = Flat(center - here).Length();
         // Setting a tank off needs distance: past its blast, and past the blasts of the pile it sets off. Both shots

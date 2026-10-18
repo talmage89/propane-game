@@ -147,7 +147,8 @@ public sealed class BankingBot : IBotGoalPolicy
 
         // 2. Under fire while holding more than the shooter: trading hits loses more than it wins, so break their
         //    line of sight. A shooter holding more gets shot back.
-        if (combat.UnderFireCover(match, player, here, tuning, dt) is { } hitCover)
+        if (match.MyScore > 0 && match.Now - match.LastHitTime < 2.5 &&
+            combat.UnderFireCover(match, player, here, tuning, dt) is { } hitCover)
         {
             RunTo(player, hitCover, dt);
             status.Set("taking cover {1:0.0} m away", first: Flat(hitCover - here).Length());
@@ -165,7 +166,7 @@ public sealed class BankingBot : IBotGoalPolicy
         }
         combat.ForgetCover();
 
-        if (targets.Refresh(match, ammo, tuning, dt, clock, protecting, PointsDriven, Skill))
+        if (targets.Advance(dt) && targets.Select(match, ammo, tuning, clock, protecting, PointsDriven, Skill))
         {
             demolition.ResetTarget();
             if (!navigator.Jumping) { navigator.Reset(); }
@@ -193,7 +194,7 @@ public sealed class BankingBot : IBotGoalPolicy
                 }
                 else
                 {
-                    var attack = combat.Fight(match, enemy, aimControl, Skill, clock, dt, rng, status);
+                    var attack = combat.Fight(match, player, enemy, here, tuning, aimControl, Skill, clock, dt, rng, status);
                     intent.Aim = attack.Aim;
                     intent.Sprint = attack.Sprint;
                     intent.Move = attack.Strafe;
@@ -202,7 +203,7 @@ public sealed class BankingBot : IBotGoalPolicy
                 }
                 break;
             case PropaneTank tank:
-                var action = demolition.Demolish(match, tank, combat, aimControl, Skill, dt, rng, status);
+                var action = demolition.Demolish(match, player, tank, here, tuning, combat, aimControl, Skill, dt, rng, status);
                 intent.Aim = action.Aim;
                 intent.Sprint = action.Sprint;
                 if (action.Travel is { } direction) MoveToward(player, direction);

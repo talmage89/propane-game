@@ -37,19 +37,16 @@ internal sealed class BankingCombat
 
     public Vector3? UnderFireCover(IBotWorld match, PlayerCharacter player, Vector3 here, Tuning tuning, float dt)
     {
-        if (match.MyScore > 0 && match.Now - match.LastHitTime < 2.5)
+        var shooter = Body(match, match.LastHitBy);
+        if (shooter != null && match.Scores.GetValueOrDefault(shooter.ActorId) < match.MyScore)
         {
-            var shooter = Body(match, match.LastHitBy);
-            if (shooter != null && match.Scores.GetValueOrDefault(shooter.ActorId) < match.MyScore)
+            if (shooter != shooterSeen || shooterTimer <= 0)
             {
-                if (shooter != shooterSeen || shooterTimer <= 0)
-                {
-                    shooterSeen = shooter;
-                    shooterTimer = tuning.BotSightInterval;
-                    shooterVisible = CanSee(match, shooter, here + Vector3.Up * 1.2f);
-                }
-                if (shooterVisible) return Cover(match, player, shooter, tuning, dt);
+                shooterSeen = shooter;
+                shooterTimer = tuning.BotSightInterval;
+                shooterVisible = CanSee(match, shooter, here + Vector3.Up * 1.2f);
             }
+            if (shooterVisible) return Cover(match, player, shooter, tuning, dt);
         }
         return null;
     }
@@ -208,12 +205,10 @@ internal sealed class BankingCombat
         return sightedVisible;
     }
 
-    public Attack Fight(IBotWorld match, PlayerCharacter enemy, BotAim aimControl, float skill, float clock,
+    public Attack Fight(IBotWorld match, PlayerCharacter player, PlayerCharacter enemy, Vector3 here, Tuning tuning, BotAim aimControl, float skill, float clock,
         float dt, RandomNumberGenerator rng, BotStatus status)
     {
-        var player = match.Player;
-        var tuning = match.World.Tuning;
-        var distance = enemy.GlobalPosition.DistanceTo(player.GlobalPosition);
+        var distance = enemy.GlobalPosition.DistanceTo(here);
         if (enemy != fightTarget)
         {
             fightTarget = enemy;
@@ -225,7 +220,7 @@ internal sealed class BankingCombat
             // richer opponent's actual position, rather than a short leg that may end inside a house.
             fightTime = 0;
             aimControl.Track(player, Aim(enemy), dt, skill);
-            var travel = Flat((enemy.IsRagdolled ? enemy.PelvisPosition : enemy.GlobalPosition) - player.GlobalPosition);
+            var travel = Flat((enemy.IsRagdolled ? enemy.PelvisPosition : enemy.GlobalPosition) - here);
             status.Set("closing on {0} at {1:0.0} m", enemy.ActorId, distance);
             return new Attack(Travel: travel, Sprint: distance > tuning.BotSprintDistance);
         }

@@ -33,10 +33,14 @@ internal sealed class BankingTargets
     public void Stagger(RandomNumberGenerator rng) => retarget = rng.Randf() * RetargetInterval;
 
     // Called only once the higher-priority flee/cover policies have declined the tick.
-    public bool Refresh(IBotWorld match, AmmoState ammo, Tuning tuning, float dt, float clock, bool protecting, bool pointsDriven, float skill)
+    public bool Advance(float dt)
     {
         retarget -= dt;
-        if (retarget > 0 && (target == null || IsValid(target))) return false;
+        return retarget <= 0 || target != null && !IsValid(target);
+    }
+
+    public bool Select(IBotWorld match, AmmoState ammo, Tuning tuning, float clock, bool protecting, bool pointsDriven, float skill)
+    {
         retarget = RetargetInterval;
         var chosen = Choose(match, ammo, tuning, clock, protecting, pointsDriven, skill);
         // Nearly equivalent tanks must not discard a demolition runway on each selection interval.

@@ -21,7 +21,10 @@ input-edge consumption and its existing navigator. Three plain owners live and d
 
 Owners receive observations and scalar inputs explicitly, including positions sampled at the original call sites. They borrow the brain's RNG and aim controller only for
 synchronous operations; neither is retained. Aim updates still precede the crosshair/angle queries they influence.
-The brain applies tactical decisions before its unchanged navigation/reload assembly. Demolition shares the combat
+The brain keeps the under-fire priority guard and applies tactical decisions before its unchanged navigation/reload
+assembly. The target owner advances its timer separately from selection, so the common timer-only path needs no
+selection inputs. Banking combat and demolition reuse the brain's sampled feet position: no actor position can
+change during these synchronous decisions, and aim updates only rotate the logical eye. Demolition shares the combat
 owner's sight operation, preserving the single sight cache across fights and tanks. Blacklist deadlines use the
 brain's accumulated physics seconds, including inactive/down ticks. These owners hold managed state and borrowed
 scene references; no processing nodes, registrations or native resources require separate disposal.
