@@ -520,7 +520,7 @@ Each script's header gives its exact command line.
 
 ## README media
 
-`docs/readme_still.jpg` (the hero, 1920×1080) and `docs/readme_chain.gif` (800×450, 25 fps, about 5 s) are renders of
+`docs/readme_still.jpg` (the hero, 1920×1080) and `docs/readme_chain.gif` (640×360, 25 fps, about 5 s) are renders of
 the current game, made with the `readme` and `readme-scout` scenarios of `scenes/dev/game_test.tscn`
 (`src/Dev/GameTest.Readme.cs`) and `tools/dev/readme_gif.py`. Remake them when the look of the game changes. They need
 a rendered Godot (see [Dev harnesses](#dev-harnesses)), ffmpeg, ImageMagick (`magick`) and Python with Pillow.
@@ -557,7 +557,7 @@ magick build/readme/hero/frame_0015.png -crop 2400x1350+80+30 +repage -resize 19
 $GODOT --fixed-fps 50 --resolution 1920x1080 res://scenes/dev/game_test.tscn -- --scenario=readme "${SCENE[@]}" \
   --shot-start=2.5 --shot-fps=25 --frames=135 --quit=8.2 --capture-dir="$PWD/build/readme/gif"
 python3 tools/dev/readme_gif.py build/readme/gif docs/readme_chain.gif \
-  --first 4 --last 134 --crop 24,27,1872,1053 --gate 5 --colors 192 --width 800
+  --first 4 --last 134 --crop 24,27,1872,1053 --gate 8 --colors 128 --width 640
 ```
 
 `--tune.HitstopDuration=0` matters. A blast near the player starts a hitstop (time scale 0.05), and under `--fixed-fps` the
@@ -565,7 +565,9 @@ capture director divides each fixed step by that scale, so its clock jumps and a
 frame and saves the same picture many times. With hitstop off every frame is distinct.
 
 `readme_gif.py` crops and scales the frames, keeps the previous pixel wherever a frame changed by less than `--gate` levels
-(this is what lets a still camera cost almost nothing), fades the first and last frames through white so the loop has no
-seam, and has ffmpeg build one palette for the clip. It exits nonzero over 6 MB, because the repository has no Git LFS.
+(this is what lets a still camera cost almost nothing), fades the last frames to white to soften the cut back to the start,
+and has ffmpeg build one palette for the clip. The first frame is never faded: GitHub shows it until the GIF has loaded,
+and keeps showing it to viewers with animation autoplay off. The tool exits nonzero over 4 MB: GitHub's repository page
+never loaded a 5.5 MB GIF, while 3 MB ones load.
 Look at the frames before committing: no HUD or dev text, the player and the pile in frame, no repeated or skipped
-pictures. The still is 175 KB and the GIF 5.5 MB.
+pictures. The still is 175 KB and the GIF 3.1 MB.

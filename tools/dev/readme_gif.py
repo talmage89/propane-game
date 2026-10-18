@@ -3,8 +3,9 @@
 
 Needs ffmpeg on PATH and Pillow (python3 -m pip install pillow). Frames are the PNGs the game test saves
 (`frame_0000.png`, ...). Each one is cropped and scaled, then pixels that changed by less than --gate levels keep the
-previous frame's value, which is what lets a GIF of a still camera shrink to a few megabytes. The first and last frames
-fade through white (the void's color), so the loop has no visible seam. ffmpeg builds one palette for the whole clip.
+previous frame's value, which is what lets a GIF of a still camera shrink to a few megabytes. The last frames fade to
+white (the void's color), softening the cut back to the start. The first frame is never faded: GitHub shows it until the
+GIF has loaded, and keeps showing it when a viewer has animation autoplay off. ffmpeg builds one palette for the clip.
 The full recipe, with the capture commands, is in docs/development.md.
 """
 import argparse
@@ -15,7 +16,8 @@ from pathlib import Path
 
 from PIL import Image, ImageChops
 
-MAX_BYTES = 6_000_000
+# GitHub fails to show larger README images: a 5.5 MB GIF never loaded on the repository page, 3 MB ones do.
+MAX_BYTES = 4_000_000
 
 
 def gated(frame, previous, gate):
@@ -34,11 +36,11 @@ def main():
     parser.add_argument("--first", type=int, default=0, help="number of the first frame to use (default 0)")
     parser.add_argument("--last", type=int, help="number of the last frame to use (default: the last one)")
     parser.add_argument("--fps", type=int, default=25, help="playback rate; use a divisor of 100 (default 25)")
-    parser.add_argument("--width", type=int, default=800, help="width in pixels (default 800)")
+    parser.add_argument("--width", type=int, default=640, help="width in pixels (default 640)")
     parser.add_argument("--crop", help="x,y,w,h of the source to keep, in source pixels (default: all of it)")
     parser.add_argument("--gate", type=int, default=8, help="changes below this many levels are dropped (default 8; 0 keeps all)")
     parser.add_argument("--colors", type=int, default=128, help="palette size (default 128)")
-    parser.add_argument("--fade", type=int, default=5, help="frames that fade through white at each end (default 5)")
+    parser.add_argument("--fade", type=int, default=5, help="frames at the end that fade to white (default 5)")
     args = parser.parse_args()
 
     names = sorted(args.frames.glob("frame_*.png"))
@@ -47,7 +49,7 @@ def main():
         sys.exit(f"no frame_NNNN.png in {args.frames}")
     last = args.last if args.last is not None else max(numbered)
     wanted = [number for number in range(args.first, last + 1) if number in numbered]
-    if len(wanted) != last - args.first + 1 or len(wanted) <= 2 * args.fade:
+    if len(wanted) != last - args.first + 1 or len(wanted) <= args.fade + 1:
         sys.exit(f"frames {args.first}..{last} are missing or too few for a {args.fade}-frame fade")
     box = tuple(int(v) for v in args.crop.split(",")) if args.crop else None
     if box is not None:
@@ -62,7 +64,7 @@ def main():
                 frame = frame.crop(box)
             frame = frame.resize((args.width, round(frame.height * args.width / frame.width)), Image.LANCZOS)
             frame = previous = gated(frame, previous, args.gate)
-            weight = min(index + 1, len(wanted) - index, args.fade + 1) / (args.fade + 1)
+            weight = min(len(wanted) - index, args.fade + 1) / (args.fade + 1)
             if weight < 1:
                 frame = Image.blend(Image.new("RGB", frame.size, "white"), frame, weight)
             frame.save(Path(scratch) / f"f_{index:04d}.png")
