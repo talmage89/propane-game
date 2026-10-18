@@ -30,6 +30,14 @@ public static class ActorTacticsTests
                     world.Step(tick);
                     if (tick == 90) world.RemoveEnemy(brain);
                     brain.Think(world, 1f / 120);
+                    if (tick == 89 && brain is KingBot)
+                    {
+                        // Exercise a pending points target even when zone income won this particular native tick.
+                        var prizes = ActorLifetimeFixture.Field(brain, "prizes");
+                        ActorLifetimeFixture.Set(prizes, "pointsTarget", world.Enemy);
+                        ActorLifetimeFixture.Set(prizes, "pointsTimer", .2f);
+                        TestRunner.Assert(ReferenceEquals(ActorLifetimeFixture.Field(prizes, "pointsTarget"), world.Enemy), "points departure fixture did not hold its rival");
+                    }
                     var intent = brain.Read();
                     output?.WriteLine($"{scenario} {tick} {format.Invoke(null, new object[] { intent })} {brain.Status} {brain.NavigationDiagnostics} {rng.State} {world.Services.RayLines} {world.Services.NavigationQueries}");
                 }

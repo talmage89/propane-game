@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
@@ -59,7 +60,8 @@ internal sealed class ActorLifetimeFixture : IDisposable
         else Match.Session.RemoveActor(actor.Runtime);
     }
 
-    public string Counts() => $"actors={Match.Session.Actors.Count} registry={Count(Match.Session, "registry")} unsubscribe={Count(Match.Session, "unsubscribe")} colliders={Count(Field(Match, "botServices"), "actorColliders")} bots={Count(Match, "bots")} peers={((IEnumerable)Field(Match, "bots")).Cast<object>().Sum(bot => Count(bot, "Others"))} actions={Count(Match, "receivedActions")} melee={Count(Match, "remoteMelee")} views={Count(Match.World, "views")} receivers={Match.World.BlastReceivers.Count}";
+    public string Counts() => $"actors={Match.Session.Actors.Count} registry={Count(Match.Session, "registry")} unsubscribe={Count(Match.Session, "unsubscribe")} colliders={Count(Field(Match, "botServices"), "actorColliders")} bots={Count(Match, "bots")} peers={((IEnumerable)Field(Match, "bots")).Cast<object>().Sum(bot => Count(bot, "Others"))} actions={Count(Match, "receivedActions")} melee={Count(Match, "remoteMelee")} views={Count(Match.World, "views")} receivers={Match.World.BlastReceivers.Count}" +
+        (Match.IsLobby ? $" profiles={Count(Match, "profiles")} scores={Count(Match, "scores")}" : "");
 
     [MethodImpl(MethodImplOptions.NoInlining)]
     public WeakReference[] Cycle(int id, ActorKind kind, int owner = 2)
@@ -83,16 +85,26 @@ internal sealed class ActorLifetimeFixture : IDisposable
             Set(zone, "rival", actor);
             Set(zone, "watched", actor);
         }
-        var refs = new[] { new WeakReference(actor), new WeakReference(runtime), new WeakReference(Field(Match, "bots")) };
+        var refs = new List<WeakReference> { new(actor), new(runtime) };
         // Attachments are inspected without requiring a candidate-only API on the parent.
         if (Match.Session.GetType().GetField("registrations", BindingFlags.Instance | BindingFlags.NonPublic)?.GetValue(Match.Session) is IDictionary registrations)
-            refs[2] = new WeakReference(registrations[runtime]!);
-        else refs = refs.Take(2).ToArray();
+            refs.Add(new WeakReference(registrations[runtime]!));
         actor.TreeExiting += () => TestRunner.Assert(Match.Session.Actor(id) == null, "native free preceded roster removal");
         Remove(actor);
         Match.OnMessage(new NetMessage(Msg.MeleeStart, Match.Setup.Id, owner, new MeleeStartMessage(2, Vector3.Forward), id, actor.LifeId, 2));
         TestRunner.Assert(!GodotObject.IsInstanceValid(actor), "removal left the native character alive");
-        return refs;
+        return refs.ToArray();
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    public WeakReference[] RemovePrimary()
+    {
+        var actor = Match.Player;
+        var runtime = actor.Runtime;
+        var view = actor.View!;
+        var references = new[] { new WeakReference(actor), new WeakReference(runtime), new WeakReference(view) };
+        Match.Session.RemoveActor(runtime);
+        return references;
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]

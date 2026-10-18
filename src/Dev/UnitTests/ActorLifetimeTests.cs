@@ -40,6 +40,14 @@ public static class ActorLifetimeTests
             });
         }
 
+        runner.Run("actor lifetime/primary actor and its device view collect while the world survives", () =>
+        {
+            using var f = new ActorLifetimeFixture(runner, true);
+            var references = f.RemovePrimary();
+            GC.Collect(); GC.WaitForPendingFinalizers(); GC.Collect();
+            Assert(references.All(reference => !reference.IsAlive), "primary cache or view binding retained its departing actor");
+            Assert(f.Match.Session.IsAlive && f.Match.Player.ActorId == 40, "primary removal changed the ordered owned fallback");
+        });
         runner.Run("actor lifetime/removal in a delegate snapshot suppresses the detached Match listener", () =>
         {
             using var f = new ActorLifetimeFixture(runner, true);
