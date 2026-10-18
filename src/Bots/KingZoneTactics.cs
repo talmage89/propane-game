@@ -86,9 +86,8 @@ internal sealed class KingZoneTactics
         return true;
     }
 
-    public Vector3 StepRegroup(PlayerCharacter player, Vector3 spot, float radius, Core.Tuning tuning)
+    public Vector3 StepRegroup(Vector3 here, Vector3 spot, float radius, Core.Tuning tuning)
     {
-        var here = player.GlobalPosition;
         var ring = radius + tuning.BotTankClearance * 2;
         if (BotMotor.Flat(regroupGoal - here).Length() < tuning.BotKingRegroupStep * 0.5f)
         {
@@ -101,18 +100,18 @@ internal sealed class KingZoneTactics
         return regroupGoal;
     }
 
-    public PlayerCharacter? ObserveIntruders(IBotWorld world, PlayerCharacter player, Vector3 spot, float radius, float reach, bool inZone, bool look)
+    public PlayerCharacter? ObserveIntruders(IBotWorld world, PlayerCharacter player, Vector3 here, Vector3 spot, float radius, float reach, bool inZone, bool look)
     {
-        var close = NearestIntruder(world, spot, radius, player.GlobalPosition, reach + 0.4f);
+        var close = NearestIntruder(world, spot, radius, here, reach + 0.4f);
         if (!Intruding(rival, spot, radius)) rival = null;
         if (close == null && inZone && look) rival = VisibleIntruder(world, player, spot, radius);
         return close;
     }
 
-    public PlayerCharacter? Watch(IBotWorld world, PlayerCharacter player, bool look, out bool visibleThreat)
+    public PlayerCharacter? Watch(IBotWorld world, PlayerCharacter player, Vector3 here, bool look, out bool visibleThreat)
     {
-        var watch = Nearest(world, player.GlobalPosition);
-        var threat = watch != null && watch.GlobalPosition.DistanceTo(player.GlobalPosition) < 22f && world.Scores.GetValueOrDefault(watch.ActorId) > 0;
+        var watch = Nearest(world, here);
+        var threat = watch != null && watch.GlobalPosition.DistanceTo(here) < 22f && world.Scores.GetValueOrDefault(watch.ActorId) > 0;
         if (watch != watched || look)
         {
             watched = watch;

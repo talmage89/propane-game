@@ -39,7 +39,7 @@ internal sealed class KingPrizes
     public void NavigationFailed() { pointsTarget = null; pointsTimer = 0; }
     public void RetryPoints() => pointsTimer = 0;
 
-    public bool SelectPoints(IBotWorld world, KingBotView state, Vector3 spot, PlayerCharacter player, Core.Tuning tuning, float dt, out Vector3? protectionGoal)
+    public bool SelectPoints(IBotWorld world, KingBotView state, Vector3 spot, PlayerCharacter player, Vector3 here, Core.Tuning tuning, float dt, out Vector3? protectionGoal)
     {
         protectionGoal = null;
         var changed = false;
@@ -50,7 +50,6 @@ internal sealed class KingPrizes
             pointsTimer = 0;
         }
 
-        var here = player.GlobalPosition;
         if (pointsTimer <= 0)
         {
             pointsTimer = tuning.BotPointsInterval;

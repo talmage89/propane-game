@@ -35,7 +35,7 @@ internal sealed class BankingCombat
     public void Begin(float dt) { sightTimer -= dt; watchTimer -= dt; shooterTimer -= dt; }
     public void ForgetCover() => cover = null;
 
-    public Vector3? UnderFireCover(IBotWorld match, PlayerCharacter player, Tuning tuning, float dt)
+    public Vector3? UnderFireCover(IBotWorld match, PlayerCharacter player, Vector3 here, Tuning tuning, float dt)
     {
         if (match.MyScore > 0 && match.Now - match.LastHitTime < 2.5)
         {
@@ -46,7 +46,7 @@ internal sealed class BankingCombat
                 {
                     shooterSeen = shooter;
                     shooterTimer = tuning.BotSightInterval;
-                    shooterVisible = CanSee(match, shooter, player.GlobalPosition + Vector3.Up * 1.2f);
+                    shooterVisible = CanSee(match, shooter, here + Vector3.Up * 1.2f);
                 }
                 if (shooterVisible) return Cover(match, player, shooter, tuning, dt);
             }
@@ -54,12 +54,12 @@ internal sealed class BankingCombat
         return null;
     }
 
-    public Vector3? ProtectionCover(IBotWorld match, PlayerCharacter player, Tuning tuning, float dt)
+    public Vector3? ProtectionCover(IBotWorld match, PlayerCharacter player, Vector3 here, Tuning tuning, float dt)
     {
         if (watchTimer <= 0 || watcher != null && (!GodotObject.IsInstanceValid(watcher) || watcher.IsRagdolled))
         {
             watchTimer = tuning.BotWatchInterval;
-            watcher = Watcher(match, player.GlobalPosition);
+            watcher = Watcher(match, here);
         }
         return watcher == null ? null : Cover(match, player, watcher, tuning, dt);
     }

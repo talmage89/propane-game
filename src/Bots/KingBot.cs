@@ -122,7 +122,7 @@ public sealed class KingBot : IBotGoalPolicy
         }
         var inZone = BotMotor.Flat(here - spot).Length() <= radius * 0.85f;
         var reach = BotMotor.MeleeReach(tuning);
-        var close = zonePolicy.ObserveIntruders(world, player, spot, radius, reach, inZone, look);
+        var close = zonePolicy.ObserveIntruders(world, player, here, spot, radius, reach, inZone, look);
         var rival = zonePolicy.Rival;
         if (close != null)
         {
@@ -157,7 +157,7 @@ public sealed class KingBot : IBotGoalPolicy
         else
         {
             // Holding: watch the nearest challenger and shoot one that comes close with a bank to spill.
-            var watch = zonePolicy.Watch(world, player, look, out var visibleThreat);
+            var watch = zonePolicy.Watch(world, player, here, look, out var visibleThreat);
             if (visibleThreat)
             {
                 Shoot(player, watch!, tuning, dt);
@@ -187,9 +187,9 @@ public sealed class KingBot : IBotGoalPolicy
     /// <summary>Hard compares banking and spilling in sight against the zone's time-limited mint/denial rate.</summary>
     private bool ChoosePoints(IBotWorld world, KingBotView state, Vector3 spot, PlayerCharacter player, Core.Tuning tuning, float dt)
     {
-        if (prizes.SelectPoints(world, state, spot, player, tuning, dt, out var protectionGoal)) fightTime = 0;
-        if (protectionGoal is { } goal) zonePolicy.SetProtectGoal(goal);
         var here = player.GlobalPosition;
+        if (prizes.SelectPoints(world, state, spot, player, here, tuning, dt, out var protectionGoal)) fightTime = 0;
+        if (protectionGoal is { } goal) zonePolicy.SetProtectGoal(goal);
         if (prizes.ProtectingPoints)
         {
             Regroup(world, player, spot, (float)state.Radius + tuning.BotPointsProtectDistance, tuning, dt, look: true);
@@ -227,8 +227,9 @@ public sealed class KingBot : IBotGoalPolicy
     /// <summary>Out of the zone for a while after a knockdown: fight or bank from its edge, moving around it.</summary>
     private void Regroup(IBotWorld world, PlayerCharacter player, Vector3 spot, float radius, Core.Tuning tuning, float dt, bool look, bool siege = false)
     {
-        var regroupGoal = zonePolicy.StepRegroup(player, spot, radius, tuning);
-        var watch = zonePolicy.Watch(world, player, look, out var visibleThreat);
+        var here = player.GlobalPosition;
+        var regroupGoal = zonePolicy.StepRegroup(here, spot, radius, tuning);
+        var watch = zonePolicy.Watch(world, player, here, look, out var visibleThreat);
         if (visibleThreat)
         {
             Shoot(player, watch!, tuning, dt);

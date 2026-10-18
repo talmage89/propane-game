@@ -147,7 +147,7 @@ public sealed class BankingBot : IBotGoalPolicy
 
         // 2. Under fire while holding more than the shooter: trading hits loses more than it wins, so break their
         //    line of sight. A shooter holding more gets shot back.
-        if (combat.UnderFireCover(match, player, tuning, dt) is { } hitCover)
+        if (combat.UnderFireCover(match, player, here, tuning, dt) is { } hitCover)
         {
             RunTo(player, hitCover, dt);
             status.Set("taking cover {1:0.0} m away", first: Flat(hitCover - here).Length());
@@ -156,7 +156,7 @@ public sealed class BankingBot : IBotGoalPolicy
         }
         // 3. Protect a valuable bank, retaining the watch and cover query cadence.
         protecting = BankingCombat.Protecting(match, PointsDriven);
-        if (protecting && combat.ProtectionCover(match, player, tuning, dt) is { } bankCover && Flat(bankCover - here).Length() > 0.8f)
+        if (protecting && combat.ProtectionCover(match, player, here, tuning, dt) is { } bankCover && Flat(bankCover - here).Length() > 0.8f)
         {
             RunTo(player, bankCover, dt);
             status.Set("protecting {1:0}: hiding from {0}", combat.WatcherId, match.MyScore);
