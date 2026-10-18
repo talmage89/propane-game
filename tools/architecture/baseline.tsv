@@ -1,0 +1,74 @@
+bot-live-owner	Propane.Bots.DissolveRunBot	Propane.Modes.DissolveRunRules	B3b	Prototype/King bot reads live rules; replace with plain clocked observations.
+bot-live-owner	Propane.Bots.DissolveRunBot	Propane.Modes.IModeRules	B3b	Prototype bot observation exposes live rules; replace with plain clocked values.
+bot-live-owner	Propane.Bots.IBotWorld	Propane.Modes.IModeRules	B3b	Prototype bot observation exposes live rules; replace with plain clocked values.
+bot-live-owner	Propane.Bots.IBotWorld	Propane.Modes.KingRules	B3b	Prototype/King bot reads live rules; replace with plain clocked observations.
+bot-live-owner	Propane.Bots.KingBotView	Propane.Modes.KingRules	B3b	Prototype/King bot reads live rules; replace with plain clocked observations.
+bot-live-owner	Propane.Bots.RingOutBot	Propane.Modes.IModeRules	B3b	Prototype bot observation exposes live rules; replace with plain clocked values.
+bot-live-owner	Propane.Bots.RingOutBot	Propane.Modes.RingOutRules	B3b	Prototype/King bot reads live rules; replace with plain clocked observations.
+bot-live-owner	Propane.Bots.ShortFuseBot	Propane.Modes.IModeRules	B3b	Prototype bot observation exposes live rules; replace with plain clocked values.
+bot-live-owner	Propane.Bots.ShortFuseBot	Propane.Modes.ShortFuseRules	B3b	Prototype/King bot reads live rules; replace with plain clocked observations.
+direction	Propane.Modes.KingRules	Propane.World.Plan.SuburbPlan	C1	Move misplaced plain contracts/helpers to their owning module; preserve bytes and identity arithmetic.
+direction	Propane.Modes.KingRules	Propane.World.Plan.TankPlacement	C1	Move misplaced plain contracts/helpers to their owning module; preserve bytes and identity arithmetic.
+direction	Propane.Net.AppearanceCodec	Propane.Net.NetReader	C1	Move misplaced plain contracts/helpers to their owning module; preserve bytes and identity arithmetic.
+direction	Propane.Net.AppearanceRecord	Propane.Net.Protocol	C1	Move misplaced plain contracts/helpers to their owning module; preserve bytes and identity arithmetic.
+direction	Propane.Net.BodyAuthority	Propane.Net.TankLedger	C1	Move misplaced plain contracts/helpers to their owning module; preserve bytes and identity arithmetic.
+direction	Propane.Net.BuildInfo	Propane.Core.LaunchArgs	A1	Application settings/launch access is implicit; inject scoped application state without changing precedence.
+direction	Propane.Net.GatherMessage	Propane.Tank.GatherPhase	C1	Move misplaced plain contracts/helpers to their owning module; preserve bytes and identity arithmetic.
+direction	Propane.Net.IModeHost	Propane.Core.Tuning	B3a	Server integration samples live tuning; separate bundle/resource assembly from plain run inputs.
+direction	Propane.Net.KingWire	Propane.Core.Tuning	B3a	Server integration samples live tuning; separate bundle/resource assembly from plain run inputs.
+direction	Propane.Net.LobbyInfo	Propane.Net.LobbyServer	C1	Move misplaced plain contracts/helpers to their owning module; preserve bytes and identity arithmetic.
+direction	Propane.Net.LobbyServer	Propane.Core.LaunchArgs	A1	Application settings/launch access is implicit; inject scoped application state without changing precedence.
+direction	Propane.Net.LobbyServer	Propane.Core.Tuning	B3a	Server integration samples live tuning; separate bundle/resource assembly from plain run inputs.
+direction	Propane.Net.LobbyServer	Propane.Modes.ModeDefinition	B3a	Integration reads composition-owned mode catalog; pass validated compiled bundle inputs explicitly.
+direction	Propane.Net.LobbyServer	Propane.Modes.ModeRegistry	B3a	Integration reads composition-owned mode catalog; pass validated compiled bundle inputs explicitly.
+direction	Propane.Net.LobbyServer	Propane.Modes.ModeSupply	B3a	Integration reads composition-owned mode catalog; pass validated compiled bundle inputs explicitly.
+direction	Propane.Net.LobbyServer	Propane.Net.CapacityMetrics	N1	Server diagnostics utility accepts concrete client state; split server-neutral observation sampling.
+direction	Propane.Net.LobbyServer	Propane.Net.PacketTransports	N1	Server constructs transport through application factory; inject backend-independent transport composition.
+direction	Propane.Net.LobbyServer	Propane.Player.PlayerNetState	C1	Move misplaced plain contracts/helpers to their owning module; preserve bytes and identity arithmetic.
+direction	Propane.Net.LobbyServer	Propane.World.SuburbPlans	C1	Move misplaced plain contracts/helpers to their owning module; preserve bytes and identity arithmetic.
+direction	Propane.Net.LobbySummary	Propane.Net.LobbyServer	C1	Move misplaced plain contracts/helpers to their owning module; preserve bytes and identity arithmetic.
+direction	Propane.Net.LobbyWire	Propane.Core.Tuning	B3a	Server integration samples live tuning; separate bundle/resource assembly from plain run inputs.
+direction	Propane.Net.LobbyWorldDefault	Propane.Core.LaunchArgs	A1	Application settings/launch access is implicit; inject scoped application state without changing precedence.
+direction	Propane.Net.MatchSetup	Propane.Modes.ModeDefinition	B3a	Integration reads composition-owned mode catalog; pass validated compiled bundle inputs explicitly.
+direction	Propane.Net.MatchSetup	Propane.Modes.ModeRegistry	B3a	Integration reads composition-owned mode catalog; pass validated compiled bundle inputs explicitly.
+direction	Propane.Net.MeleeValidation	Propane.Core.Tuning	C1	Server contact admission receives live tuning resource; pass the plain sampled contact configuration.
+direction	Propane.Net.MessageCodec	Propane.Core.Tuning	C1	Move misplaced plain contracts/helpers to their owning module; preserve bytes and identity arithmetic.
+direction	Propane.Net.MessageCodec	Propane.Modes.ModeDefinition	B3a	Integration reads composition-owned mode catalog; pass validated compiled bundle inputs explicitly.
+direction	Propane.Net.MessageCodec	Propane.Modes.ModeRegistry	B3a	Integration reads composition-owned mode catalog; pass validated compiled bundle inputs explicitly.
+direction	Propane.Net.MessageCodec	Propane.Net.LobbyServer	C1	Move misplaced plain contracts/helpers to their owning module; preserve bytes and identity arithmetic.
+direction	Propane.Net.MessageCodec	Propane.Net.TankLedger	C1	Move misplaced plain contracts/helpers to their owning module; preserve bytes and identity arithmetic.
+direction	Propane.Net.MessageCodec	Propane.Player.PlayerNetState	C1	Move misplaced plain contracts/helpers to their owning module; preserve bytes and identity arithmetic.
+direction	Propane.Net.MessageCodec	Propane.Tank.GatherPhase	C1	Move misplaced plain contracts/helpers to their owning module; preserve bytes and identity arithmetic.
+direction	Propane.Net.ModeRunner	Propane.Modes.ModeDefinition	B3a	Integration reads composition-owned mode catalog; pass validated compiled bundle inputs explicitly.
+direction	Propane.Net.ModeSettings	Propane.Core.Tuning	B3a	Wire settings combine plain values with catalog/tuning validation; move integration policy to compiled bundles.
+direction	Propane.Net.ModeSettings	Propane.Modes.KingRules	B3a	Wire settings combine plain values with catalog/tuning validation; move integration policy to compiled bundles.
+direction	Propane.Net.ModeSettings	Propane.Modes.ModeDefinition	B3a	Integration reads composition-owned mode catalog; pass validated compiled bundle inputs explicitly.
+direction	Propane.Net.ModeSettings	Propane.Modes.ModeRegistry	B3a	Integration reads composition-owned mode catalog; pass validated compiled bundle inputs explicitly.
+direction	Propane.Net.ModeWires	Propane.Modes.ModeDefinition	B3a	Integration reads composition-owned mode catalog; pass validated compiled bundle inputs explicitly.
+direction	Propane.Net.NetClient	Propane.Core.LaunchArgs	A1	Client handshake reads launch overrides implicitly; inject immutable launch options.
+direction	Propane.Net.NetClient	Propane.Net.LobbyServer	C1	Client phase checks use concrete server nested enum; move the plain lobby phase contract.
+direction	Propane.Net.NetClient	Propane.Net.LobbyWorldDefault	A1	Client reads application lobby launch policy through a server-side helper; pass immutable launch options.
+direction	Propane.Net.NetClient	Propane.Net.PacketTransports	N1	Connection owner constructs application backend factory; inject backend-independent transport.
+direction	Propane.Net.NetReader	Propane.Core.Tuning	C1	Move misplaced plain contracts/helpers to their owning module; preserve bytes and identity arithmetic.
+direction	Propane.Net.PlayerStateMessage	Propane.Player.PlayerNetState	C1	Move misplaced plain contracts/helpers to their owning module; preserve bytes and identity arithmetic.
+direction	Propane.Net.TankLedger	Propane.Net.BodySync	C1	Move misplaced plain contracts/helpers to their owning module; preserve bytes and identity arithmetic.
+direction	Propane.Net.TankLedger	Propane.Tank.GatherPhase	C1	Move misplaced plain contracts/helpers to their owning module; preserve bytes and identity arithmetic.
+direction	Propane.Net.TankLedger	Propane.World.Suburb	C1	Move misplaced plain contracts/helpers to their owning module; preserve bytes and identity arithmetic.
+direction	Propane.Player.ActorRuntime	Propane.Net.BodySync	C2	Actor runtime owns client replication state; move it to an actor-lifetime client attachment.
+direction	Propane.Player.ActorRuntime	Propane.Net.DropPredictions	C2	Actor runtime owns client replication state; move it to an actor-lifetime client attachment.
+direction	Propane.Player.ActorRuntime	Propane.Net.SnapshotBuffer	C2	Actor runtime owns client replication state; move it to an actor-lifetime client attachment.
+direction	Propane.Player.ActorRuntime	Propane.Player.ReplicatedIntent	C2	Actor runtime owns client replication state; move it to an actor-lifetime client attachment.
+direction	Propane.Player.PlayerCharacter	Propane.Player.CameraRig	C2	Physical actor exposes view/device conveniences; replace with narrow view feedback and input source.
+direction	Propane.Player.PlayerCharacter	Propane.Player.DeviceInput	C2	Physical actor exposes view/device conveniences; replace with narrow view feedback and input source.
+direction	Propane.Player.PlayerCharacter	Propane.Player.LocalView	C2	Physical actor exposes view/device conveniences; replace with narrow view feedback and input source.
+direction	Propane.UI.MatchHud	Propane.Core.PlayerSettings	A1	Application settings/launch access is implicit; inject scoped application state without changing precedence.
+direction	Propane.UI.MatchMenu	Propane.Core.PlayerSettings	A1	Application settings/launch access is implicit; inject scoped application state without changing precedence.
+direction	Propane.World.Plan.SuburbFurnishing	Propane.World.Catalog	C1	Plan generation/snapshot capture reaches mixed native catalog for plain model metadata; split snapshot construction and plain keys.
+direction	Propane.World.PlanCatalogSnapshot	Propane.World.Catalog	C1	Plan generation/snapshot capture reaches mixed native catalog for plain model metadata; split snapshot construction and plain keys.
+direction	Propane.World.SegmentSettings	Propane.Core.Tuning	C1	Plan settings include a live Tuning factory; move conversion to composition and retain plain settings.
+direction	Propane.World.SegmentSettings	Propane.World.SuburbPlans	C1	Plan settings include a live Tuning factory; move conversion to composition and retain plain settings.
+direction	Propane.World.Suburb	Propane.Net.BodySync	C1	Move misplaced plain contracts/helpers to their owning module; preserve bytes and identity arithmetic.
+pure-native	Propane.World.SegmentSettings	Propane.Core.Tuning	C1	Plan settings include a live Tuning factory; move conversion to composition and retain plain settings.
+server-physical	Propane.Net.LobbyServer	Propane.Player.PlayerNetState	C1	Move misplaced plain contracts/helpers to their owning module; preserve bytes and identity arithmetic.
+server-physical	Propane.Net.TankLedger	Propane.World.Suburb	C1	Ledger uses the native builder's coordinate conversion helper; move the plain formula without changing arithmetic.
+transport-backend	Propane.Net.FaultPacketTransport	Propane.Net.NetTransport	N1	Fault transport uses ENet channel helper; move lane semantics to backend-independent traffic contract.

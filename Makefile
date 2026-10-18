@@ -51,6 +51,9 @@ lint: ## Check Markdown links, C# formatting and script .uid pairs, and compile 
 	dotnet format Propane.sln --verify-no-changes
 	dotnet build Propane.sln -c Debug --no-restore --no-incremental -nologo -v quiet -warnaserror
 	dotnet build Propane.csproj -c ExportRelease --no-restore --no-incremental -nologo -v quiet -warnaserror
+	dotnet run --project tools/architecture/Architecture.csproj --no-launch-profile -- check .godot/mono/temp/bin/Debug/Propane.dll tools/architecture
+	dotnet build/architecture/bin/Debug/net10.0/Architecture.dll check .godot/mono/temp/bin/ExportRelease/Propane.dll tools/architecture
+	python3 -B tools/architecture/source_check.py
 
 # A recipe keeps lint before test, and the gate self-tests last, even when make runs with -j.
 check: lint ## Run lint, then the tests, then the gate self-tests

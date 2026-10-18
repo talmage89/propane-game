@@ -1,0 +1,115 @@
+// Compiled once as a separate plain SDK assembly; never imported by Godot.
+namespace Godot
+{
+    public static class Engine { public static float TimeScale { get; set; } }
+    public class SceneTree { public bool Paused { get; set; } }
+    public class Node { public void Touch() { } }
+    public class Node3D : Node { }
+    public class Resource { }
+    public class Camera3D : Node3D { }
+    public class ENetMultiplayerPeer : Node { }
+    public struct Vector3 { public float X; }
+    public static class GD { public static T Load<T>(string path) where T : new() => new(); }
+    public static class Time { public static long GetTicksMsec() => 0; }
+}
+namespace Propane.Dev { public class Harness { } }
+namespace Propane.ReleaseSmoke { public class ReleaseTest { } public class Other { } }
+namespace Propane.Net
+{
+    public class NetClient { }
+    public class Match { }
+    public class NetTransport { public static int Channel() => 0; }
+    public class MessageCodec { public static int Read() => 0; }
+    public class FaultPacketTransport { public int Run() => NetTransport.Channel(); }
+    public class LobbyServer { public object Run() => new Propane.Player.ActorRuntime(); }
+    public class BackendLeak { public object Run() => new Godot.ENetMultiplayerPeer(); }
+    public class ServerRun
+    {
+        public object Run() => new Godot.Camera3D();
+    }
+    public class WireGameplay { public object Run() => new Propane.Player.ActorRuntime(); }
+}
+namespace Propane.Player
+{
+    public class ActorRuntime { }
+    public class BadClock
+    {
+        private readonly System.Diagnostics.Stopwatch clock = new();
+        public object Run() => clock;
+    }
+    public class BadCodec { public int Run() => Propane.Net.MessageCodec.Read(); }
+    public class BadClient { public object Run() => new Propane.Net.NetClient(); }
+    public class BadHud { public object Run() => new Propane.UI.Hud(); }
+}
+namespace Propane.UI { public class Hud { } }
+namespace Propane.Bots
+{
+    public class Brain { }
+    public interface IObservation { }
+    public class Inherited { public object Run() => new Propane.Modes.DerivedRules(); }
+    public class RuleInterface { public Propane.Modes.IModeRules? Run() => null; }
+    public class BadMatch { public object Run() => new Propane.Net.Match(); }
+    public class BadLiveRule { public object Run() => new Propane.Modes.LiveRules(); }
+}
+namespace Propane.Modes
+{
+    using Alias = global::Propane.Net.NetClient;
+    public interface IModeRules { }
+    public class LiveRules : IModeRules { }
+    public class DerivedRules : LiveRules { }
+    public class InheritsBot : Propane.Bots.Brain { }
+    public interface IExtendsBot : Propane.Bots.IObservation { }
+    public interface IEvent { event System.Action<Propane.Bots.Brain> Value; }
+    public class Locals { public void Run() { Propane.Bots.Brain[] value = null!; System.GC.KeepAlive(value); } }
+    public class AliasReference { public object Run() => new Alias(); }
+    public class BadBot { public object Run() => new Propane.Bots.Brain(); }
+    public class Qualified { public object Run() => new global::Propane.Net.NetClient(); }
+    public class Member { public long Run() => Godot.Time.GetTicksMsec(); }
+    public class NativeBase : Godot.Node3D { public void Run() { } }
+    public class ResourceField { public Godot.Resource? Value; public void Run() { } }
+    public class Nested { public class Inner { public object Run() => new Propane.UI.Hud(); } }
+    public class Generated { public System.Func<object> Run() => () => new Propane.Net.Match(); }
+    public class GenericField { public System.Collections.Generic.List<Propane.Bots.Brain>? Value; public void Run() { } }
+    public class GenericMethod { public object Run() => System.Array.Empty<Propane.Bots.Brain>(); }
+    public class Signature { public Propane.Bots.Brain? Run(Propane.Net.Match value) => null; }
+    public interface IBad { Propane.Bots.Brain? Value { get; } }
+    public class Interface : IBad { public Propane.Bots.Brain? Value => null; }
+    public class Constraint<T> where T : Propane.Bots.Brain { public void Run() { } }
+    public class BadDelay { public object Run() => System.Threading.Tasks.Task.Delay(1); }
+}
+namespace Propane.World.Plan
+{
+    public class Clock { public long Run() => Godot.Time.GetTicksMsec(); }
+    public class Load { public object Run() => Godot.GD.Load<Godot.Resource>("asset"); }
+    public class Scene { public object Run() => new Godot.Node3D(); }
+    public class ValueOnly { public Godot.Vector3 Run(Godot.Vector3 value) => value; }
+}
+namespace Propane.Session
+{
+    public class BypassQuit { public void Run() => System.Environment.Exit(1); }
+    public class GlobalWrite { public void Run() => Godot.Engine.TimeScale = 2; }
+    public class PauseInitializer { public object Run() => new Godot.SceneTree { Paused = true }; }
+    public class BadDev { public object Run() => new Propane.Dev.Harness(); }
+    public class BadSmoke { public object Run() => new Propane.ReleaseSmoke.Other(); }
+    public class AsyncWorker
+    {
+        public object Run() => System.Threading.Tasks.Task.Run(async () =>
+        {
+            await System.Threading.Tasks.Task.Yield();
+            new Godot.Node().Touch();
+        });
+    }
+    public class FactoryWorker
+    {
+        public object Run() => System.Threading.Tasks.Task.Factory.StartNew(() => new Godot.Node().Touch());
+    }
+    public class Worker
+    {
+        public object Run() => System.Threading.Tasks.Task.Run(() => Touch());
+        private static void Touch() => new Godot.Node().Touch();
+    }
+}
+namespace Propane.ReleaseSmoke
+{
+    public class BadDev { public object Run() => new Propane.Dev.Harness(); }
+}
