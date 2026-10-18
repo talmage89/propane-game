@@ -32,6 +32,33 @@ public static class SegmentFeedTests
             Assert(rejected, "Wait on a forgotten index changed its failure contract");
         });
 
+        runner.Run("segment feed/requests in open gaps still generate", () =>
+        {
+            using var tuning = Tuning.LoadBaked();
+            using var feed = new LocalSegmentFeed(SegmentSettings.From(tuning), 23);
+            feed.Forget(4);
+            feed.Forget(2);
+            feed.Forget(0);
+            // These must use the real Request path: planting a pending task would hide an over-eager watermark.
+            foreach (var index in new[] { 1, 3, 5 })
+            {
+                feed.Request(index);
+                Assert(feed.Wait(index).Index == index, $"unforgotten gap {index} was rejected");
+                feed.Forget(index);
+                Assert(!feed.TryGet(index, out _), "completed gap survived retirement");
+            }
+            // A synthetic prefix tests the exclusive int.MaxValue boundary without billions of generations.
+            var boundary = typeof(LocalSegmentFeed).GetField("forgottenBefore", BindingFlags.Instance | BindingFlags.NonPublic);
+            if (boundary != null)
+            {
+                boundary.SetValue(feed, (long)int.MaxValue);
+                feed.Forget(int.MaxValue);
+                Assert((long)boundary.GetValue(feed)! == (long)int.MaxValue + 1, "forgotten prefix overflowed");
+                feed.Request(int.MaxValue);
+                Assert(!feed.TryGet(int.MaxValue, out _), "maximum forgotten index was admitted again");
+            }
+        });
+
         runner.Run("segment feed/out-of-order forgetting and late completion", () =>
         {
             using var tuning = Tuning.LoadBaked();
