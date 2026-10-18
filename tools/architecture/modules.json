@@ -240,6 +240,7 @@
     "src/Net/AppearanceRecord.cs": "Foundation",
     "src/Net/BodyPublisher.cs": "Client",
     "src/Net/BodySync.cs": "Client",
+    "src/Net/ClientAuthorityTransactions.cs": "Client",
     "src/Net/DropPredictions.cs": "Client",
     "src/Net/LobbyServer.World.cs": "Server",
     "src/Net/LobbyServer.cs": "Server",

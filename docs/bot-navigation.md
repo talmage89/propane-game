@@ -8,6 +8,42 @@ position/velocity/floor contact, a goal, local tuning and elapsed physics time. 
 flags. The brain projects that direction into camera-relative input. A runtime bot can use the same component
 with its own actor and world adapter.
 
+## Banking tactical ownership
+
+`BankingBot` keeps the `Think` priority order, seeded RNG, accumulated physics clock, aim controller, final intent,
+input-edge consumption and its existing navigator. Three plain owners live and die with that brain:
+
+| Owner | Mutable state and contract |
+| --- | --- |
+| `BankingTargets` | Objective, retarget timer, blacklist/deadline scratch, points estimator, Easy scouting leg and expiry. Selection retains encounter order, strict score ties and the held demolition objective. |
+| `BankingCombat` | Fight/reaction/burst/strafe progress, cover/observer, shooter/watcher caches and the shared periodic target sight cache. Its timer decrements stay at the original `Think` entry and cover/fight call sites. |
+| `BankingDemolition` | Vantage goal/search buffer, retry timer, blocked-shot progress and movement anchor. Returns steering, tap and retry decisions to the brain. |
+
+Owners receive observations and scalar inputs explicitly, including positions sampled at the original call sites. They borrow the brain's RNG and aim controller only for
+synchronous operations; neither is retained. Aim updates still precede the crosshair/angle queries they influence.
+The brain keeps the under-fire priority guard and applies tactical decisions before its unchanged navigation/reload
+assembly. The target owner advances its timer separately from selection, so the common timer-only path needs no
+selection inputs. Banking combat and demolition reuse the brain's sampled feet position: no actor position can
+change during these synchronous decisions, and aim updates only rotate the logical eye. Demolition shares the combat
+owner's sight operation, preserving the single sight cache across fights and tanks. Blacklist deadlines use the
+brain's accumulated physics seconds, including inactive/down ticks. These owners hold managed state and borrowed
+scene references; no processing nodes, registrations or native resources require separate disposal.
+
+## King tactical ownership
+
+`KingBot` retains its seeded RNG, sight cadence, firing progress, `BotMotor`, `Think` order and final intent
+assembly. `KingZoneTactics` owns standing checks/offset, rival and watcher visibility, crowd observations,
+contest/raid clocks, recovery regroup time and the rotating perimeter destination. The brain calls its operations
+at the original priority sites and lends its RNG only when a stand, raid or recovery choice is due.
+
+`KingPrizes` owns the periodic prize/blocker and points targets, scan buffers, protection decision, shot-wait
+progress and blocked-tank retries. A new protection destination is returned to the brain for its zone owner;
+selection never owns the motor or calls back into the brain. Zone and scan timers use physics delta. Points
+blacklist deadlines retain `IBotWorld.Now`, rather than Banking's accumulated clock. Waiting/down/navigation-failure
+operations preserve the original reset subsets; they do not clear retained targets or deadlines indiscriminately.
+Both owners are ordinary managed objects discarded with their brain, borrowing scene references without owning
+resources or registrations. `KingBotView`, `IBotWorld` and shared bot services remain the observation boundary.
+
 ## Routes and jumps
 
 `NavigationWorld` uses a capsule matching the actor and reusable `ShapeCast3D`/`RayCast3D` probes in the
@@ -209,3 +245,27 @@ measured brain cost. `net_test` logs `bot activity` per owned bot and a `bot idl
 and gates it ([lab.md](lab.md)). Measurements before and after the fixes above are in
 [bot-scale.md](evidence/bot-scale.md#idle-bots).
 
+
+## Tactical differential probe
+
+`BotTacticsTests` drives controlled native observations through Banking and King at all three difficulties.
+It asserts cover, demolition runway searches, sustained contests, recovery regrouping, points protection/combat,
+input-edge consumption and zero warmed-think allocation with `TestRunner.AssertNoAllocation`, refilling shared
+query/search budgets before every warmed tick. It runs in the
+ordinary unit gate. Physics and actor processing do not advance; native course and Lab runs remain necessary.
+
+After building both revisions with the same probe source, compare 960 ticks per case (24 cases):
+
+```sh
+python3 -B tools/dev/check_bot_tactics.py --baseline=build/parent --output=build/tactics-pair --bench
+```
+
+The opt-in transcript records intent, aim bits, status, semantic tactical fields, retry deadlines, RNG state,
+ray counts, navigation query counts and diagnostics. It reads state after `Think` and consumed edges; it never
+samples RNG or input sources to decide behavior. Diagnostic reflection finds each named field exactly once across
+the tactical owners, so an ownership move cannot silently drop an observation. The tool reports the first divergent
+case, tick and field. It does not update the immutable release fixtures. `--bench` adds three alternating parent and
+candidate runs without the transcript observer, recording 60,000 thinks per case after 120,000 additional warm-up ticks, allocations,
+mean/p95/p99 think and whole controlled tick cost (`BeginTick`, `Think`, `Read`), and query workload counts.
+
+The longer opt-in warm-up lets tiered JIT settle before sampling; it does not run in ordinary unit tests.

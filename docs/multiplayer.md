@@ -370,12 +370,29 @@ The server is the game itself started with `-- --server` (and `--headless`). It 
 | `src/Net/MatchInbox.cs` | Per-match buffering until scene initialization, with generation-safe cleanup. |
 | `src/Net/BuildInfo.cs`, `UpdateCheck.cs` | Versions and who plays together; the launch check for a newer release. |
 | `src/Net/Match.cs` | A peer's shared match world: actions from its owned actors and playback of other actors' events. |
+| `src/Net/ClientAuthorityTransactions.cs` | Session-owned causal requests, reservations, expected epochs, sent roots and gather request bookkeeping. |
 | `src/Net/BodySync.cs` | Ownership and corrections for tanks and cars. |
 | `src/Net/SnapshotBuffer.cs` | Smooth playback of other players, `InterpolationDelay` behind. |
 | `src/Net/PlanCodec.cs` | Packs a suburb plan for sending. |
 | `src/Net/AmmoPickup.cs` | The ammo can and its build-up reveal. |
 | `src/UI/Menus.cs`, `MatchHud.cs`, `MatchMenu.cs`, `ResultsScreen.cs` | Front end, match HUD, pause menu, results. |
 | `src/UI/StageScreen.cs`, `LobbyCard.cs`, `src/Fx/LobbyFloor.cs` | The lobby world's stage screen, its lobby card and its floor (pads, ring, title). |
+
+### Client authority ownership
+
+Match creates `ClientAuthorityTransactions` during session configuration. The existing session stop callback
+retires it after inbox detachment and event unsubscription, including failed construction. Disposal is idempotent:
+it detaches pending gather listeners, clears requests/reservations/causal roots and releases the replica collaborator.
+A replacement match gets a fresh owner and request sequence. Empty flushes allocate nothing; claim selectors
+exist only while constructing a proposal at send time. Actor action sequences and `DropPredictions` remain
+on each actor; BodySync retains correction, and Match retains physical body lookup, reconstruction and wire sends.
+
+Resolution is synchronous: finish the request and release reservations, update dependent expected epochs,
+reconcile canonical bodies, flush eligible requests, notify listeners in registration order, then remove gather
+membership. Proposals are sampled when sent. Root requests precede children; refused children retain their original
+epochs and receive explicit refusals. Gather grants keep their lease membership through notification and revalidate
+the granted epoch before moving a tank. A synchronous send can retire the session; an in-flight resolution still
+finishes its notification, while the disposed owner retains no queued work or callbacks.
 
 ### Transport contract
 

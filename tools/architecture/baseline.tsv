@@ -13,6 +13,7 @@ direction	Propane.Net.AppearanceCodec	Propane.Net.NetReader	C1	Move misplaced pl
 direction	Propane.Net.AppearanceRecord	Propane.Net.Protocol	C1	Move misplaced plain contracts/helpers to their owning module; preserve bytes and identity arithmetic.
 direction	Propane.Net.BodyAuthority	Propane.Net.TankLedger	C1	Move misplaced plain contracts/helpers to their owning module; preserve bytes and identity arithmetic.
 direction	Propane.Net.BuildInfo	Propane.Core.LaunchArgs	A1	Application settings/launch access is implicit; inject scoped application state without changing precedence.
+direction	Propane.Net.ClientAuthorityTransactions	Propane.Net.TankLedger	C1	Authority resolution reads the plain ledger state enum; move it with the other misplaced contracts without changing bytes.
 direction	Propane.Net.GatherMessage	Propane.Tank.GatherPhase	C1	Move misplaced plain contracts/helpers to their owning module; preserve bytes and identity arithmetic.
 direction	Propane.Net.IModeHost	Propane.Core.Tuning	B3a	Server integration samples live tuning; separate bundle/resource assembly from plain run inputs.
 direction	Propane.Net.KingWire	Propane.Core.Tuning	B3a	Server integration samples live tuning; separate bundle/resource assembly from plain run inputs.
