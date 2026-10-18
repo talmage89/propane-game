@@ -8,6 +8,24 @@ position/velocity/floor contact, a goal, local tuning and elapsed physics time. 
 flags. The brain projects that direction into camera-relative input. A runtime bot can use the same component
 with its own actor and world adapter.
 
+## Banking tactical ownership
+
+`BankingBot` keeps the `Think` priority order, seeded RNG, accumulated physics clock, aim controller, final intent,
+input-edge consumption and its existing navigator. Three plain owners live and die with that brain:
+
+| Owner | Mutable state and contract |
+| --- | --- |
+| `BankingTargets` | Objective, retarget timer, blacklist/deadline scratch, points estimator, Easy scouting leg and expiry. Selection retains encounter order, strict score ties and the held demolition objective. |
+| `BankingCombat` | Fight/reaction/burst/strafe progress, cover/observer, shooter/watcher caches and the shared periodic target sight cache. Its timer decrements stay at the original `Think` entry and cover/fight call sites. |
+| `BankingDemolition` | Vantage goal/search buffer, retry timer, blocked-shot progress and movement anchor. Returns steering, tap and retry decisions to the brain. |
+
+Owners receive observations and scalar inputs explicitly. They borrow the brain's RNG and aim controller only for
+synchronous operations; neither is retained. Aim updates still precede the crosshair/angle queries they influence.
+The brain applies tactical decisions before its unchanged navigation/reload assembly. Demolition shares the combat
+owner's sight operation, preserving the single sight cache across fights and tanks. Blacklist deadlines use the
+brain's accumulated physics seconds, including inactive/down ticks. These owners hold managed state and borrowed
+scene references; no processing nodes, registrations or native resources require separate disposal.
+
 ## Routes and jumps
 
 `NavigationWorld` uses a capsule matching the actor and reusable `ShapeCast3D`/`RayCast3D` probes in the
