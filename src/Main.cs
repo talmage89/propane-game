@@ -94,12 +94,10 @@ public partial class Main : Node
         // Dev admission probes need their explicit tuners before the first client connects.
         if (OS.IsDebugBuild()) { LaunchArgs.Current.ApplyTuningOverrides(); }
         var port = (int)LaunchArgs.Current.GetFloat("port", Protocol.DefaultPort);
-        var server = new LobbyServer
-        {
-            Name = "Server",
-            Port = port,
-            StartScore = (int)LaunchArgs.Current.GetFloat("start-score", 0),
-        };
+        var server = Modes.ModeRegistry.CreateServer();
+        server.Name = "Server";
+        server.Port = port;
+        server.StartScore = (int)LaunchArgs.Current.GetFloat("start-score", 0);
         AddChild(server);
         if (!server.Start().Success)
         {
@@ -239,7 +237,10 @@ public partial class Main : Node
     {
         if (hostedServer == null)
         {
-            hostedServer = new LobbyServer { Name = "HostedServer", Port = port, Worlds = net.LobbyWorlds };
+            hostedServer = Modes.ModeRegistry.CreateServer();
+            hostedServer.Name = "HostedServer";
+            hostedServer.Port = port;
+            hostedServer.Worlds = net.LobbyWorlds;
             AddChild(hostedServer);
             if (!hostedServer.Start().Success)
             {

@@ -8,7 +8,7 @@ namespace Propane.Net;
 
 /// <summary>A lobby as the lobby browser lists it, with the mode it will play.</summary>
 public sealed record LobbySummary(int Id, string CreatorName, int Players, LobbyServer.LobbyPhase Phase, int Capacity = 5,
-    byte ModeId = Modes.ModeRegistry.TankBankId);
+    byte ModeId = ModeIds.TankBank);
 
 /// <summary>
 /// The mode a lobby's creator chose, tank supply for either mode, and King's mint pace (kept while Tank Bank is
@@ -16,19 +16,12 @@ public sealed record LobbySummary(int Id, string CreatorName, int Players, Lobby
 /// </summary>
 public sealed record ModeSettings(byte ModeId, float MintSeconds, int TankSupply = 1)
 {
-    public static readonly ModeSettings Default = new(Modes.ModeRegistry.TankBankId, (float)Modes.KingRules.MintPaceDefault);
-    public Modes.ModeDefinition Mode => Modes.ModeRegistry.ForLobby(ModeId) ?? throw new InvalidOperationException($"no lobby mode {ModeId}");
+    public static readonly ModeSettings Default = new(ModeIds.TankBank, (float)LobbyModeLimits.MintPaceDefault);
 
-    /// <summary>A lobby mode, a mint pace on the lobby's steps, and integer tank supply within its range.</summary>
-    public bool Valid => Modes.ModeRegistry.ForLobby(ModeId) != null && Modes.KingRules.ValidMintPace(MintSeconds) &&
-        TankSupply is >= Tuning.TankSupplyMinimum and <= Tuning.TankSupplyMaximum;
+    /// <summary>Numeric wire bounds; eligibility is supplied by the owner's compiled mode selection.</summary>
+    public bool ValidValues => LobbyModeLimits.ValidMintPace(MintSeconds) &&
+        TankSupply is >= LobbyModeLimits.TankSupplyMinimum and <= LobbyModeLimits.TankSupplyMaximum;
 
-    /// <summary>Puts these settings into a match's tuning: they are the server's dials for it.</summary>
-    public void Apply(Tuning tuning)
-    {
-        tuning.KingMintSeconds = MintSeconds;
-        tuning.TankCountMultiplier = TankSupply;
-    }
 }
 
 /// <summary>A player in a lobby or match.</summary>
@@ -71,9 +64,8 @@ public sealed record MatchSetup(int Id, byte[] Plan, int HostId, bool CreatorDeb
     public IReadOnlyList<PeerCapabilities> Peers { get; init; } = Players.Select(p => p.Player.OwnerPeerId).Distinct()
         .Select(id => new PeerCapabilities(id, id == HostId && CreatorDebug)).ToArray();
     /// <summary>The mode the server runs, by id and envelope schema version; unknown pairs fail decoding.</summary>
-    public byte ModeId { get; init; } = Modes.ModeRegistry.TankBankId;
-    public ushort ModeSchema { get; init; } = Modes.ModeRegistry.TankBank.SchemaVersion;
-    public Modes.ModeDefinition Mode => Modes.ModeRegistry.Find(ModeId, ModeSchema) ?? throw new InvalidOperationException($"unknown mode {ModeId}/{ModeSchema}");
+    public byte ModeId { get; init; } = ModeIds.TankBank;
+    public ushort ModeSchema { get; init; } = ModeIds.TankBankSchema;
 }
 public sealed record PeerCapabilities(int PeerId, bool DebugTuning);
 
@@ -359,7 +351,11 @@ public partial class NetClient : Node
     public void StartMatch()
     {
         using var tuning = OS.IsDebugBuild() ? Template.Copy() : Tuning.LoadBaked();
-        Lobby?.Mode.Apply(tuning);
+        if (Lobby is { } lobby)
+        {
+            tuning.KingMintSeconds = lobby.Mode.MintSeconds;
+            tuning.TankCountMultiplier = lobby.Mode.TankSupply;
+        }
         Send(new NetWriter(Msg.StartMatch).Snapshot(tuning.Snapshot()));
     }
 
@@ -411,7 +407,7 @@ public partial class NetClient : Node
                 case MatchSetup setup:
                     if (State != Status.Connected || Lobby == null || setup.Id <= lastMatchId || !setup.Players.Any(p => p.Player.OwnerPeerId == MyId)) { return; }
                     lastMatchId = setup.Id;
-                    if (setup.ModeId == Modes.ModeRegistry.LobbyWorldId && !LobbyWorlds)
+                    if (setup.ModeId == ModeIds.Lobby && !LobbyWorlds)
                     {
                         // The classic menu stays put; nothing of this world is buffered, and its loading grace ends now.
                         inbox.Clear();

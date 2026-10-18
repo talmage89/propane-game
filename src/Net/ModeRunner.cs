@@ -24,8 +24,8 @@ public interface IModeHost
     uint Life(int actorId);
     /// <summary>The peer that owns everything nobody has touched: the creator, or its successor.</summary>
     int WorldAuthority { get; }
-    /// <summary>The match's tuning, for what a runner decides beside the rules (where a fresh pile may stand).</summary>
-    Core.Tuning Tuning { get; }
+    /// <summary>Plain live pile values sampled at this read, for placement/refill decisions beside the rules.</summary>
+    ModeWireTuners WireTuners { get; }
     /// <summary>Logs a line about this match, prefixed with its id.</summary>
     void Log(string text);
     /// <summary>A body as the ledger last knew it (its owner's latest report), or null when it never existed.</summary>
@@ -36,7 +36,7 @@ public interface IModeHost
 
 /// <summary>
 /// A mode's server-side wire adapter: turns its decoded events into accepted rule inputs, and the rules' commands
-/// into envelopes. Registered per mode id in <see cref="ModeWires"/>.
+/// into envelopes. Selected explicitly by the compiled mode bundle.
 /// </summary>
 public interface IModeWire
 {
@@ -46,26 +46,12 @@ public interface IModeWire
     void Failed(ModeRunner runner, IModeHost host, int peer, ModeEnvelope envelope, double now);
 }
 
-public static class ModeWires
+/// <summary>Sandbox's explicit wire: it emits and accepts no mode traffic. Never a lookup fallback.</summary>
+public sealed class SilentModeWire : IModeWire
 {
-    private sealed class Silent : IModeWire
-    {
-        public void Event(ModeRunner runner, IModeHost host, int peer, ModeEnvelope envelope, double now) { }
-        public void Execute(ModeRunner runner, IModeHost host, IReadOnlyList<ModeCommand> commands, double now) { }
-        public void Failed(ModeRunner runner, IModeHost host, int peer, ModeEnvelope envelope, double now) { }
-    }
-
-    private static readonly Dictionary<byte, Func<IModeWire>> registered = new()
-    {
-        [ModeRegistry.TankBankId] = () => new TankBankWire(),
-        [ModeRegistry.KingId] = () => new KingWire(),
-        [ModeRegistry.LobbyWorldId] = () => new LobbyWire(),
-    };
-
-    public static IModeWire For(ModeDefinition mode) => registered.TryGetValue(mode.Id, out var create) ? create() : new Silent();
-
-    /// <summary>Test seam: assertion suites register wires for synthetic modes.</summary>
-    internal static void Register(byte modeId, Func<IModeWire> create) => registered[modeId] = create;
+    public void Event(ModeRunner runner, IModeHost host, int peer, ModeEnvelope envelope, double now) { }
+    public void Execute(ModeRunner runner, IModeHost host, IReadOnlyList<ModeCommand> commands, double now) { }
+    public void Failed(ModeRunner runner, IModeHost host, int peer, ModeEnvelope envelope, double now) { }
 }
 
 /// <summary>
@@ -75,18 +61,20 @@ public static class ModeWires
 public sealed class ModeRunner
 {
     private uint nextCommand;
-    public ModeDefinition Definition { get; }
+    public ServerMode Definition { get; }
     public IModeRules Rules { get; }
     public IModeWire Wire { get; }
+    public ModeSchema Schema { get; }
     public ModePhaseMachine Phases { get; } = new();
     public ModeEventGate Gate { get; } = new();
 
-    public ModeRunner(ModeDefinition definition, ModeSetup setup)
+    internal ModeRunner(ServerMode definition, ModeSetup setup)
     {
         Definition = definition;
         Rules = definition.CreateRules();
         Rules.Initialize(setup);
-        Wire = ModeWires.For(definition);
+        Schema = definition.Schema;
+        Wire = definition.CreateWire() ?? throw new InvalidOperationException($"mode {definition.Id}/{definition.SchemaVersion} server wire factory returned null");
     }
 
     public ModeClock Clock(double now) => Phases.Clock(now);
@@ -219,7 +207,7 @@ public sealed class KingWire : IModeWire
         foreach (var command in commands)
         {
             if (command is not ZoneMoved { Zone: > 0 } moved) continue;
-            var tuning = host.Tuning;
+            var tuning = host.WireTuners;
             if (wanted is { } superseded) host.Log($"king pile for zone {superseded.Pile.Zone} never placed");
             var spot = new Godot.Vector3((float)moved.Spot.X, (float)moved.Spot.Y, (float)moved.Spot.Z);
             Ask(runner, host, new KingPileWanted(moved.Zone, spot, tuning.KingPileCount, tuning.KingPileReach, tuning.KingPileClearance));

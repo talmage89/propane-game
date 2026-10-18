@@ -347,3 +347,18 @@ relay and whole run ticks for Bank, King and roaming. Each measured tick deliver
 states. Time advances from the fixture clock, so match clocks and King actor sampling remain active. Packet
 preparation and 20,000 warm-up ticks are excluded; 30,000 ticks are measured per mode. Alternate at least three parent/candidate pairs. The report
 includes allocations, mean, p95/p99, packet counts and payload bytes; packet instrumentation stays off.
+
+## Mode integration inventory
+
+`ModeInventoryTests` asserts shipped network, lobby and prototype order. After `make build`,
+`godot-mono --headless --path . res://scenes/dev/unit_tests.tscn -- --suite=ModeInventoryTests --mode-inventory=ABSOLUTE_PATH`
+writes an immediate-parent comparison inventory: IDs, eligibility, factory types, tuner order and all supply settings
+for six actor counts and each supply multiplier. Compare parent/candidate files byte for byte; this is separate
+from the immutable release references.
+
+`ServerModeTests` additionally checks the actual compiled server projections through `Fixtures/ServerModeFixture`:
+metadata/schema, eligibility/order, 192 network supply cases against the definition policy, live rule tuner copies,
+scoped-factory capture, prototype exclusion and isolated initial overrides. A separate real-run assertion checks
+plain pile observations after native tuning changes and zero allocation over 1,000 warmed reads. The fixture
+observes the constructor-injected callbacks without generating hundreds of suburbs; ordinary server/transcript
+fixtures retain the end-to-end path.

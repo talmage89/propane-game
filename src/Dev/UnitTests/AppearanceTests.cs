@@ -127,7 +127,8 @@ public static class AppearanceTests
         {
             var appearance = new AppearanceRecord(12, 34, 56);
             var clock = new ManualClock();
-            var server = new LobbyServer(PacketTransports.CreateServer(), clock) { Worlds = false };
+            var server = Propane.Modes.ModeRegistry.CreateServer(PacketTransports.CreateServer(), clock);
+            server.Worlds = false;
             try
             {
                 var packets = new System.Collections.Generic.List<NetMessage>();

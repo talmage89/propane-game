@@ -103,7 +103,7 @@ public static class LobbyWorldTests
             using var f = new LobbyWorldFixture();
             var lobby = f.Lobby();
             var world = f.World();
-            TestRunner.Assert(lobby.WorldId == world.Id && world.Mode == ModeRegistry.LobbyWorld && world.Players.Single().Player.OwnerPeerId == 2,
+            TestRunner.Assert(lobby.WorldId == world.Id && ModeRegistry.Resolve(world) == ModeRegistry.LobbyWorld && world.Players.Single().Player.OwnerPeerId == 2,
                 "the creator's lobby state names its world, then its world start follows");
             var bodies = f.Arrived();
             using var tuning = Tuning.SavedTemplate.Copy();

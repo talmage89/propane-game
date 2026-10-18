@@ -33,7 +33,7 @@ public partial class NetTest
         world = new Match { Name = "LobbyWorld", Net = net, Setup = setup, Returning = worldsEntered > 0, CreateLocalView = DisplayServer.GetName() != "headless" };
         AddChild(world);
         worldsEntered++;
-        worldBot = new Bot(setup.Mode) { Skill = DevArgs.GetFloat("bot-skill", 1f) };
+        worldBot = new Bot(ModeRegistry.Resolve(setup)) { Skill = DevArgs.GetFloat("bot-skill", 1f) };
         world.Player.InputOverride = worldBot;
         // The harness's bot plays by its magazine, as the world's own bots do: where rifles never run dry, one whose
         // reserve stays full.

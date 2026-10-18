@@ -42,7 +42,8 @@ public partial class LobbyServer
         ServerRun? world = null;
         try
         {
-            lobby.Settings.Apply(tuning);
+            tuning.KingMintSeconds = lobby.Settings.MintSeconds;
+            tuning.TankCountMultiplier = lobby.Settings.TankSupply;
             world = NewRun(lobby, false, Math.Clamp(lobby.MatchLength, 10, 3600), true, tuning);
             RunCreated?.Invoke(world);
             world.InitializeWorld();

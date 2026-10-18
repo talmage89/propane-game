@@ -52,6 +52,10 @@ internal sealed class ServerRun : IModeHost, IDisposable
     private double nextClock;
     private readonly float length;
     private readonly Tuning tuning;
+    internal Tuning Tuning => tuning; // Native lifetime observation; this run owns and disposes it.
+    private readonly ServerMode mode;
+    private readonly Func<int, SuburbSettings> supply;
+    private readonly Func<ModeTuners> readModeTuners;
     private bool[] pickupUp = Array.Empty<bool>();
     private double[] pickupBack = Array.Empty<double>();
     /// <summary>Each actor's latest reported position, for a mode whose rules read where bodies are.</summary>
@@ -60,8 +64,8 @@ internal sealed class ServerRun : IModeHost, IDisposable
     /// <summary>A lobby world's next stock report to its rules.</summary>
     private double nextStock;
 
-    public ServerRun(int id, int lobbyId, int creator, bool creatorDebug, float length, bool isWorld, Tuning tuning,
-        IMonotonicClock clock, Action<int, byte[], TrafficClass> deliver, Action<int, bool> loading,
+    public ServerRun(int id, int lobbyId, int creator, bool creatorDebug, float length, bool isWorld, Tuning tuning, ServerMode mode,
+        Func<int, SuburbSettings> supply, Func<ModeTuners> readModeTuners, IMonotonicClock clock, Action<int, byte[], TrafficClass> deliver, Action<int, bool> loading,
         Action<LobbyPhase> phaseChanged, Action returnToLobby, Action<string> log, Action<int, AuthorityMessage> authorityPublished)
     {
         Id = id;
@@ -71,6 +75,9 @@ internal sealed class ServerRun : IModeHost, IDisposable
         this.length = length;
         IsWorld = isWorld;
         this.tuning = tuning;
+        this.mode = mode;
+        this.supply = supply;
+        this.readModeTuners = readModeTuners;
         this.clock = clock;
         this.deliver = deliver;
         this.loading = loading;
@@ -92,7 +99,7 @@ internal sealed class ServerRun : IModeHost, IDisposable
     private PhaseTimes Times => new(LoadTimeout, tuning.CountdownTime, tuning.ResultsTime);
     private void SetPhase(LobbyPhase value) { phase = value; phaseChanged(value); }
 
-    public void InitializeMatch(IReadOnlyList<ActorRecord> actors, uint revision, ModeDefinition mode, int startScore, Func<int> nextRandom)
+    public void InitializeMatch(IReadOnlyList<ActorRecord> actors, uint revision, int startScore, Func<int> nextRandom)
     {
         peers.AddRange(actors.Select(a => a.OwnerPeerId).Distinct());
         foreach (var a in actors)
@@ -105,12 +112,12 @@ internal sealed class ServerRun : IModeHost, IDisposable
         var started = Time.GetTicksMsec();
         var seed = OS.IsDebugBuild() && int.TryParse(LaunchArgs.Current.Get("match-seed"), out var requestedSeed)
             ? requestedSeed : nextRandom();
-        var settings = mode.Supply.Suburb(tuning, actors.Count);
+        var settings = supply(actors.Count);
         var plan = SuburbPlans.Generate(settings, seed, () => nextRandom());
         var planBytes = PlanCodec.Encode(plan);
         tanks = new TankLedger(plan, hostId);
         modeRunner = new ModeRunner(mode, new ModeSetup(actors.Select(a => new ModeActor(a.ActorId, a.Name, true, startScore)).ToArray(),
-            new ModeWorld(mode.World, 1, plan.Tanks.Count, KingRules.SpotsFrom(plan)), mode.CopyTuners(tuning), unchecked((ulong)plan.Seed)));
+            new ModeWorld(mode.World, 1, plan.Tanks.Count, KingRules.SpotsFrom(plan)), readModeTuners(), unchecked((ulong)plan.Seed)));
         for (var i = 0; i < plan.Props.Count; i++)
         {
             if (plan.Props[i].Body != World.Plan.PropBody.Static && !plan.Props[i].Model.StartsWith("car:")) { looseProps.Add(i); }
@@ -146,10 +153,9 @@ internal sealed class ServerRun : IModeHost, IDisposable
 
     public void InitializeWorld()
     {
-        var mode = ModeRegistry.LobbyWorld;
         tanks = new TankLedger(WorldPlan(), hostId);
         modeRunner = new ModeRunner(mode, new ModeSetup(Array.Empty<ModeActor>(),
-            new ModeWorld(mode.World, 1, 0, LobbyLayout.Spots(tuning.LobbyPiles, tuning.LobbyPileRing)), mode.CopyTuners(tuning), (ulong)Id));
+            new ModeWorld(mode.World, 1, 0, LobbyLayout.Spots(tuning.LobbyPiles, tuning.LobbyPileRing)), readModeTuners(), (ulong)Id));
     }
 
     public void StartWorld(double now)
@@ -499,7 +505,7 @@ internal sealed class ServerRun : IModeHost, IDisposable
                 // Supply belongs to the locked lobby choice, not live debug edits or Defaults.
                 if (tune.Name == nameof(Tuning.TankCountMultiplier)) return;
                 tuning.Apply(new Godot.Collections.Dictionary { [tune.Name] = tune.Value });
-                modeRunner.Apply(this, new TunersChanged(modeRunner.Definition.CopyTuners(tuning)), clock.Seconds);
+                modeRunner.Apply(this, new TunersChanged(readModeTuners()), clock.Seconds);
                 break;
         }
         var bytes = MessageCodec.Encode(message with { Sender = peer }, fromServer: true);
@@ -524,7 +530,7 @@ internal sealed class ServerRun : IModeHost, IDisposable
         var envelope = (ModeEnvelope)message.Payload;
         if (envelope.ModeId != modeRunner.Definition.Id || envelope.SchemaVersion != modeRunner.Definition.SchemaVersion)
             throw new InvalidDataException($"mode event for schema {envelope.ModeId}/{envelope.SchemaVersion} in a {modeRunner.Definition.Name} run");
-        var kind = ModeSchemas.Find(envelope.ModeId, envelope.SchemaVersion).Kind(envelope.Kind, ModeDirection.Event);
+        var kind = modeRunner.Schema.Kind(envelope.Kind, ModeDirection.Event);
         if (kind.Reporter == ModeReporter.WorldAuthority && peer != hostId) return;
         if (kind.Reporter is ModeReporter.ActorOwner or ModeReporter.WorldAuthority && !AcceptActor(peer, message)) return;
         var now = clock.Seconds;
@@ -551,7 +557,9 @@ internal sealed class ServerRun : IModeHost, IDisposable
     IReadOnlyList<BodyState> IModeHost.SpawnWorldTanks(IReadOnlyList<Transform3D> poses) => tanks.SpawnWorldTanks(hostId, poses);
     uint IModeHost.Life(int actorId) => actorsById[actorId].LifeId;
     int IModeHost.WorldAuthority => hostId;
-    Tuning IModeHost.Tuning => tuning;
+    ModeWireTuners IModeHost.WireTuners => new(tuning.KingPileCount, tuning.KingPileReach, tuning.KingPileClearance,
+        tuning.LobbyPileCount, tuning.LobbyPileReach, tuning.LobbyPileClearance,
+        new Vector3(tuning.PileSpacing, tuning.PileLayerHeight, tuning.PileDepthSpacing), tuning.PileUprightLayerHeight);
     void IModeHost.Log(string text) => log($"match {Id}: {text}");
     BodyAuthority? IModeHost.Body(uint id) => tanks.Get(id);
     int IModeHost.LiveTanks => tanks.LiveTanks;

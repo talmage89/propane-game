@@ -124,7 +124,8 @@ internal sealed class LobbySettingsPanel
         // Guests do not have the creator's debug tuning until match start. Label the default-tuning preview rather
         // than pretending their local template describes this match; generation remains the server's job.
         using var defaults = new Tuning();
-        settings.Apply(defaults);
+        defaults.KingMintSeconds = settings.MintSeconds;
+        defaults.TankCountMultiplier = settings.TankSupply;
         var count = chosen.Supply.Suburb(defaults, lobby.Members.Count).TankCount;
         layout.AddChild(UiStyle.Text($"{count} tanks at default tuning · {lobby.Members.Count} players", 15, UiStyle.SoftInk, HorizontalAlignment.Center));
         if (chosen.Id == Modes.ModeRegistry.KingId)

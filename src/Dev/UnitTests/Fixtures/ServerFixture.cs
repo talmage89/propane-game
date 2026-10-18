@@ -26,7 +26,9 @@ internal sealed class ServerFixture : IDisposable
     public ServerFixture(bool debug = true, bool playing = true, int bots = 0, Func<ParticipantRoster>? rosterFactory = null, ModeDefinition? mode = null, ModeSettings? modeSettings = null, float length = 10, int creatorTankSupply = 1)
     {
         // These fixtures count a lobby's own packets; the lobby world has its own suite.
-        Server = new LobbyServer(PacketTransports.CreateServer(), Clock) { StartScore = 4, LobbyMode = mode ?? ModeRegistry.TankBank, Worlds = false };
+        Server = Propane.Modes.ModeRegistry.CreateServer(PacketTransports.CreateServer(), Clock, initialMode: mode ?? ModeRegistry.TankBank);
+        Server.StartScore = 4;
+        Server.Worlds = false;
         if (rosterFactory != null) Server.RosterFactory = rosterFactory;
         driver = new ServerDriver(Clock, Server);
         Packets = driver.Packets;

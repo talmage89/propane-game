@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Propane.Core;
 using Propane.World;
 using Propane.World.Plan;
 
@@ -37,11 +38,11 @@ public sealed class KingRules : IModeRules
     /// The mint pace a lobby or the Lab's setup page may choose: seconds per tank, in steps. One definition for the
     /// lobby's setting, its validation on the server and the Lab dial it maps to.
     /// </summary>
-    public const double MintPaceMin = 0.5, MintPaceMax = 10, MintPaceStep = 0.5, MintPaceDefault = 2;
+    public const double MintPaceMin = LobbyModeLimits.MintPaceMin, MintPaceMax = LobbyModeLimits.MintPaceMax,
+        MintPaceStep = LobbyModeLimits.MintPaceStep, MintPaceDefault = LobbyModeLimits.MintPaceDefault;
 
     /// <summary>A mint pace on the lobby's steps: inside the range and a whole number of steps.</summary>
-    public static bool ValidMintPace(double seconds) => seconds is >= MintPaceMin and <= MintPaceMax &&
-        Math.Abs(seconds / MintPaceStep - Math.Round(seconds / MintPaceStep)) < 1e-6;
+    public static bool ValidMintPace(double seconds) => LobbyModeLimits.ValidMintPace(seconds);
 
     private readonly TankBankRules bank = new();
     private readonly List<ModeSpot> spots = new();

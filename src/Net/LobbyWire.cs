@@ -45,7 +45,7 @@ public sealed class LobbyWire : IModeWire
                     Execute(runner, host, runner.Handle(new PileFilled(spot), now), now);
                     break;
                 case RefillPile { Spot: var refill }:
-                    var tuning = host.Tuning;
+                    var tuning = host.WireTuners;
                     nextRequest = nextRequest % ModeSchemas.MaxZone + 1;
                     Ask(runner, host, nextRequest, refill, new KingPileWanted(nextRequest, Spot(runner, refill), tuning.LobbyPileCount,
                         tuning.LobbyPileReach, tuning.LobbyPileClearance));
@@ -64,7 +64,7 @@ public sealed class LobbyWire : IModeWire
     public PilesStocked Stock(ModeRunner runner, IModeHost host)
     {
         var spots = (runner.Rules as LobbyRules)?.Spots ?? Array.Empty<ModeSpot>();
-        var reach = host.Tuning.LobbyPileReach;
+        var reach = host.WireTuners.LobbyPileReach;
         var intact = new int[spots.Count];
         for (var i = 0; i < spots.Count; i++)
         {
@@ -85,9 +85,9 @@ public sealed class LobbyWire : IModeWire
     /// <summary>A square pile standing on the void's floor at a spot, as the Lab and a fresh King pile build one.</summary>
     private static Transform3D[] Pile(IModeHost host, Vector3 at)
     {
-        var tuning = host.Tuning;
+        var tuning = host.WireTuners;
         return PileBuilder.Build(PileFormation.Square, tuning.LobbyPileCount,
-                new Vector3(tuning.PileSpacing, tuning.PileLayerHeight, tuning.PileDepthSpacing), tuning.PileUprightLayerHeight)
+                tuning.PileSpacing, tuning.PileUprightLayerHeight)
             .Select(t => new Transform3D(t.Basis, t.Origin + at)).ToArray();
     }
 
