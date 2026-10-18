@@ -26,7 +26,8 @@ public static class ActorTickBenchTests
                 foreach (var actor in owned) actor.Character._PhysicsProcess(1d / 120);
             }
             const int ticks = 60000;
-            for (var i = 0; i < 20000; i++) Tick();
+            var warmup = Math.Clamp((int)DevArgs.GetFloat("actor-tick-warmup", 20000), 20000, 1000000);
+            for (var i = 0; i < warmup; i++) Tick();
             var samples = new double[ticks];
             var before = GC.GetAllocatedBytesForCurrentThread();
             for (var i = 0; i < ticks; i++)
@@ -39,7 +40,7 @@ public static class ActorTickBenchTests
             var mean = samples.Average();
             Array.Sort(samples);
             TestRunner.Assert(match.Session.IsAlive && owned.Length == 1, "physics benchmark workload changed");
-            GD.Print(FormattableString.Invariant($"[actor-tick-cost] actors={match.Session.Actors.Count} owned={owned.Length} bodies={match.Bodies.Entries.Count()} ticks={ticks} bytes={bytes} mean_us={mean:F3} p95_us={samples[(int)(ticks * .95) - 1]:F3} p99_us={samples[(int)(ticks * .99) - 1]:F3}"));
+            GD.Print(FormattableString.Invariant($"[actor-tick-cost] actors={match.Session.Actors.Count} owned={owned.Length} bodies={match.Bodies.Entries.Count()} warmup={warmup} ticks={ticks} bytes={bytes} mean_us={mean:F3} p95_us={samples[(int)(ticks * .95) - 1]:F3} p99_us={samples[(int)(ticks * .99) - 1]:F3}"));
         });
     }
 }

@@ -166,3 +166,10 @@ isolated source build with opt-in callback, packet and lifecycle observation. Ru
 `--composition-transcript=ABSOLUTE_PATH` files, then compare corresponding JSONL files exactly with `cmp`.
 Instrumentation and controlled entropy exist only in the scratch builds. These witnesses supplement the
 immutable publication references and native input/recovery/network probes; they do not replace them.
+
+Omit `--observe` for cost builds. Both receive the same `ActorTickBenchTests` probe; invoke it with
+`--suite=ActorTickBenchTests --actor-tick-bench --actor-tick-warmup=100000 --match-seed=23` to measure 60,000 complete
+Match-plus-owned-character callbacks after the longer native-input warm-up. The default remains 20,000 warm-up
+ticks. Record workload, allocations and mean/p95/p99, and alternate at least three parent/candidate pairs. Device
+interop allocation can still be warming in the shorter window; preserve those results and diagnose them before
+calling a difference steady state. The separate real-device scenes remain necessary input proof.

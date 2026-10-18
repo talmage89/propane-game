@@ -88,6 +88,8 @@ if __name__ == '__main__':
     assert args.label and '/' not in args.label and args.label not in ('.', '..')
     prepare(args.revision, args.label, False)
     project = ROOT / 'build' / args.label / 'project'
+    # Identical whole-tick instrumentation, including optional longer native-input warm-up, on either runtime.
+    shutil.copyfile(ROOT / 'src/Dev/UnitTests/ActorTickBenchTests.cs', project / 'src/Dev/UnitTests/ActorTickBenchTests.cs')
     if args.observe:
         shutil.copyfile(ROOT / 'src/Dev/UnitTests/Fixtures/MatchCompositionObservation.cs', project / 'src/Dev/UnitTests/Fixtures/MatchCompositionObservation.cs')
         observe(project)
