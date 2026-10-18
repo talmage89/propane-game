@@ -87,3 +87,22 @@ ENet sockets, two clients, manual run time and the real codec/receive/delivery p
 results and roster revision on a roaming departure. They assert native tuning release, detached routes and ordered
 MatchEnd/Rejected delivery; they do not construct client worlds or replace the separate-process scenario matrix.
 Use this checkout's unused server port and do not overlap another server on that port.
+
+## Client authority transaction probes
+
+`root-refusal` and `future-epoch` each require two clients and at least 15 seconds. Both use ordinary match assembly,
+ENet delivery and the production codec; they retain the normal final score/conservation and tank audits. They can
+repeat with `--matches=2`. `root-refusal` punctures two owned vents, sends its root explosion with the preceding
+canonical epoch, then asserts native refusal, physical reconstruction and cancellation of the already owned child's
+scheduled fuse. It invokes the captured canceled fuse to prove it cannot detonate the canonical vent.
+
+`future-epoch` holds the observer's first real epoch-2 grant in a scenario-local inbox wrapper until an actual body
+publication has reached BodySync's future-epoch slot. It then delivers that same grant and asserts that the newer
+sequence survives. The wrapper uses reflection inside this Dev owner and restores the previous receiver on
+retirement; it adds no production packet interception or scheduling path. No synthetic grant or publication is used.
+Rendered runs capture `<name>_root_refused` and `<name>_future_epoch` with the resolved tank in view.
+
+```sh
+tools/dev/net_bots.sh -n 2 -w 2 -l 15 -s --match-seed=23 -o "$PWD/build/authority-root" -- --scenario=root-refusal --net-lag=120 --net-jitter=30 --net-loss=3 --capture-dir="$PWD/build/authority-root/shots"
+tools/dev/net_bots.sh -n 2 -w 2 -l 15 -s --match-seed=23 -o "$PWD/build/authority-future" -- --scenario=future-epoch --net-lag=120 --net-jitter=30 --net-loss=3 --capture-dir="$PWD/build/authority-future/shots"
+```

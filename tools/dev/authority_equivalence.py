@@ -41,9 +41,9 @@ def observe(project):
     insert(owner, 'AuthorityRequest? finished = null;',
            f'        {CALL}(this, "resolve", Convert.ToBase64String(MessageCodec.Encode(new NetMessage(Msg.Authority, 1, 0, result), true)));')
     insert(owner, 'foreach (var next in outgoingAuthority)', f'                {CALL}(this, "released");', before=True)
-    insert(owner, 'FlushAuthority();\n        AuthorityResolved?.Invoke(result);' if owner == match else 'Flush();\n        replica.Notify(result);',
-           f'        {CALL}(this, "before-notify");', before=True)
-    insert(owner, 'if (result.Peer == me) { gatherRequests.Remove(result.Request); }', f'        {CALL}(this, "after-notify");')
+    insert(owner, 'AuthorityResolved?.Invoke(result);' if owner == match else 'replica.Notify(result);',
+           f'        {CALL}(this, "notify");', before=True)
+    insert(owner, 'if (result.Peer == me) { gatherRequests.Remove(result.Request); }', f'        {CALL}(this, "complete");')
     # Physical callback order, including no-op restoration, is observable independently of final body state.
     for needle, label in (
         ('if (entry != null && !bodies.OnAuthority(authority, out authority, Clock.Seconds))', 'adopt'),
@@ -78,7 +78,7 @@ if __name__ == '__main__':
     project = ROOT / 'build' / args.label / 'project'
     if args.observe:
         observe(project)
-    for name in ('AuthorityBenchTests.cs',):
+    for name in ('AuthorityBenchTests.cs', 'AuthorityLeaseTests.cs', 'Fixtures/AuthorityTransactions.cs'):
         source = ROOT / 'src/Dev/UnitTests' / name
         if source.exists():
             shutil.copyfile(source, project / 'src/Dev/UnitTests' / name)
