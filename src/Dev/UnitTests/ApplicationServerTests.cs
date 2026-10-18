@@ -61,7 +61,9 @@ public static class ApplicationServerTests
                         foreach (var peer in new[] { 2, 3 }) driver.Receive(new NetWriter(Msg.Loaded, setup.Id), peer);
                         driver.Advance(); driver.Advance();
                         driver.Receive(new NetWriter(Msg.TuningSet, setup.Id).String("ResultsTime").Scalar(negative ? 1f : 2f));
-                        driver.Receive(new NetWriter(Msg.TuningSet, setup.Id).String("TankCountMultiplier").Scalar(8));
+                        var beforeLockedEdit = driver.Packets.Count;
+                        driver.Receive(new NetWriter(Msg.TuningSet, setup.Id).String(nameof(Tuning.TankCountMultiplier)).Scalar(8));
+                        Assert(driver.Packets.Count == beforeLockedEdit, "locked supply edit was relayed");
                         driver.Advance(11);
                         Assert(driver.Packets.Count(p => p.Message.Type == Msg.MatchEnd) == 2, "missing terminal standings");
                         var before = retired;
