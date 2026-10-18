@@ -311,7 +311,9 @@ run even if one fails. LobbyServer detaches and disposes the affected lobby's ru
 phase to Waiting without retrying partially executed work, constructing a replacement, or disconnecting peers.
 It attempts an internal-failure notice and lobby state; notification/retirement failures are logged separately.
 The lobby can start another match; unrelated lobbies keep their existing tick/order. These are failure containment,
-not transaction rollback. A1 still owns moving NetClient's compatibility default construction into Main; explicit
+not transaction rollback. Create/join carry a receive-local affected-lobby reference across departure and
+admission: a completed departure cannot remain the owner of a later construction/destination failure. No mutable
+dispatch context is stored on the server. A1 still owns moving NetClient's compatibility default construction into Main; explicit
 clients may inject both IPacketTransport and PacketCodec. No baseline entry names N1. LobbyServer's saved-template and snapshot conversion is A1 application-state work;
 ServerRun's native tuning resource/snapshot ownership is A1 work; its melee validator now receives a plain timing
 sample and live contact cap. No edge is deferred to B3a.

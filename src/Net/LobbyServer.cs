@@ -206,7 +206,7 @@ public partial class LobbyServer : Node
             return;
         }
         catch (Exception error) { FailOwner(client.Lobby, "decode", error); return; }
-        var previousLobby = client.Lobby;
+        var affectedLobby = client.Lobby;
         try
         {
             if (!client.Welcomed && message.Type != Msg.Hello) { return; }
@@ -226,8 +226,8 @@ public partial class LobbyServer : Node
             switch (message.Type)
             {
                 case Msg.Hello: Hello(client, (HelloMessage)message.Payload); break;
-                case Msg.CreateLobby: CreateLobby(client); break;
-                case Msg.JoinLobby: JoinLobby(client, ((IntMessage)message.Payload).Value); break;
+                case Msg.CreateLobby: CreateLobby(client, ref affectedLobby); break;
+                case Msg.JoinLobby: JoinLobby(client, ((IntMessage)message.Payload).Value, ref affectedLobby); break;
                 case Msg.LeaveLobby:
                     if (client.Lobby != null) { LeaveLobby(client); }
                     break;
@@ -274,7 +274,7 @@ public partial class LobbyServer : Node
                     break;
             }
         }
-        catch (Exception error) { FailOwner(client.Lobby ?? previousLobby, $"dispatch {message.Type}", error); }
+        catch (Exception error) { FailOwner(affectedLobby, $"dispatch {message.Type}", error); }
     }
 
     /// <summary>
@@ -330,12 +330,14 @@ public partial class LobbyServer : Node
 
     // ------------------------------------------------------------------ Lobbies
 
-    private void CreateLobby(Client client)
+    private void CreateLobby(Client client, ref Lobby? affectedLobby)
     {
         if (client.Lobby != null)
         {
             LeaveLobby(client);
         }
+        // A completed departure must not remain the failure owner of a later construction.
+        affectedLobby = null;
         var lobby = new Lobby
         {
             Id = lobbyIds.Allocate(),
@@ -346,6 +348,7 @@ public partial class LobbyServer : Node
             Settings = ModeSettings.Default with { ModeId = modes.ForLobby(modes.Default.Id)?.Id ?? modes.Lobby[0].Id },
             Mode = modes.Default,
         };
+        affectedLobby = lobby;
         lobbies[lobby.Id] = lobby;
         Log($"{client.Name} created lobby {lobby.Id}");
         // With a world, its creator's first lobby state already names it.
@@ -353,7 +356,7 @@ public partial class LobbyServer : Node
         OpenWorld(lobby);
     }
 
-    private void JoinLobby(Client client, int lobbyId)
+    private void JoinLobby(Client client, int lobbyId, ref Lobby? affectedLobby)
     {
         if (!lobbies.TryGetValue(lobbyId, out var lobby))
         {
@@ -385,6 +388,7 @@ public partial class LobbyServer : Node
         {
             LeaveLobby(client);
         }
+        affectedLobby = lobby;
         AddMember(lobby, client);
     }
 

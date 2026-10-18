@@ -424,7 +424,9 @@ run disposal, staging clears and the lobby phase returns to Waiting. It attempts
 peers connected and does not automatically create another run or retry a partial transaction. The creator can
 start again. Notification failure is logged without interrupting unrelated lobbies. A transport's ordinary returned
 send failures retain their existing policy; unexpected thrown send failures inside dispatch follow owner retirement.
-This does not provide rollback, reconnect/resume or automatic recovery of a client scene after a server run failure.
+Create/join explicitly track the affected lobby through departure and admission, so a later construction or
+destination failure cannot retire the previous lobby after a successful departure. This does not provide rollback,
+reconnect/resume or automatic recovery of a client scene after a server run failure.
 
 ### Transport contract
 
