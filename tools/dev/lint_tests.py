@@ -94,7 +94,7 @@ fi
               "generator_tests.tscn -- --seeds=20 --large-seeds=3 --formation-seeds=2"]
     probes = checkers + scenes + ["--write-world-plans=", "--hash-world-plans=", "--hash-segments=", "world-diff", "world-missing", "world-partial",
                                   "world-second"]
-    for failure in ["none", "check_links.py", "format", "build", *probes]:
+    for failure in ["none", "check_links.py", "format", "build", "ExportRelease", *probes]:
         log.write_text("")
         counter.write_text("0\n")
         environment["PROBE_FAIL"] = failure
@@ -105,10 +105,13 @@ fi
         require(bool(commands) and commands[:2] == first[:len(commands[:2])],
                 "the Markdown link check and format must run first", result.stdout)
         if failure == "none":
-            require(result.returncode == 0 and len(commands) == 4 + len(checkers) + len(scenes) + 5,
+            require(result.returncode == 0 and len(commands) == 5 + len(checkers) + len(scenes) + 5,
                     "check did not run every expected tool call", result.stdout)
             require("-warnaserror" in commands[2] and "--no-incremental" in commands[2], "lint must rebuild with warnings as errors")
-            require(commands[3].startswith("dotnet build "), "tests ran before lint")
+            require(commands[3].startswith("dotnet build Propane.csproj -c ExportRelease ") and
+                    "-warnaserror" in commands[3] and "--no-incremental" in commands[3],
+                    "lint must compile the shipping configuration with warnings as errors")
+            require(commands[4].startswith("dotnet build "), "tests ran before lint")
             require(commands[-1] == "python3 -B tools/dev/lint_tests.py", "the gate self-tests must run last, after every suite")
             for checker in checkers:
                 require(commands.count(f"python3 -B tools/dev/{checker}") == 1, f"check skipped/duplicated {checker}")
@@ -120,8 +123,8 @@ fi
             require(sum("--write-world-plans=" in c for c in commands) == 1 and
                     sum("--hash-world-plans=" in c for c in commands) == 2 and sum("--hash-segments=" in c for c in commands) == 2,
                     "check skipped separate-process world builds", result.stdout)
-        elif failure in ("check_links.py", "format", "build"):
-            require(result.returncode != 0 and len(commands) == {"check_links.py": 1, "format": 2, "build": 3}[failure],
+        elif failure in ("check_links.py", "format", "build", "ExportRelease"):
+            require(result.returncode != 0 and len(commands) == {"check_links.py": 1, "format": 2, "build": 3, "ExportRelease": 4}[failure],
                     "lint failure did not stop check", result.stdout)
         else:
             require(result.returncode != 0, f"parallel check ignored failure: {failure}", result.stdout)
@@ -261,26 +264,26 @@ def check_core_wiring():
 
 
 def dev_boundary_offenders(sources):
-    """Paths whose text reaches the Propane.Dev namespace, other than Main's --release-test entry (which may use ReleaseTest)."""
-    reach = re.compile(r"\bPropane\.Dev\b|\bDev\.[A-Z]")
-    return sorted(path for path, text in sources.items() if not path.startswith("src/Dev/") and reach.search(text)
-                  and not (path == "src/Main.cs" and "DevArgs" not in text and "using Propane.Dev;" in text
-                           and not reach.search(text.replace("using Propane.Dev;", ""))))
+    """Runtime code must not reach the excluded Dev namespace, including through a qualified alias."""
+    reach = re.compile(r"\bPropane\.Dev\b|\bDev\.[A-Z]|\bDevArgs\b")
+    return sorted(path for path, text in sources.items() if not path.startswith("src/Dev/") and
+                  reach.search(re.sub(r"//[^\n]*|/\*.*?\*/", "", text, flags=re.DOTALL)))
 
 
 def check_runtime_dev_boundary():
-    # Shipped code reads launch options through LaunchArgs. Dev is compiled into release builds, so what outside it may
-    # depend on is the documented release smoke entry (docs/code-quality.md): Main creating ReleaseTest for --release-test.
     sources = {path.relative_to(ROOT).as_posix(): path.read_text() for path in (ROOT / "src").rglob("*.cs")}
-    require(not dev_boundary_offenders(sources), "runtime code depends on src/Dev beyond the release smoke entry: " +
+    require(not dev_boundary_offenders(sources), "runtime code depends on excluded src/Dev: " +
             ", ".join(dev_boundary_offenders(sources)))
-    require("new ReleaseTest()" in sources["src/Main.cs"], "Main lost the documented release smoke entry")
-    require(dev_boundary_offenders({"src/Net/Probe.cs": "var seed = Dev.DevArgs.Get(\"a\");"}) == ["src/Net/Probe.cs"] and
-            dev_boundary_offenders({"src/Net/Probe.cs": "using Propane.Dev;"}) == ["src/Net/Probe.cs"] and
-            dev_boundary_offenders({"src/Main.cs": "using Propane.Dev;\nAddChild(new ReleaseTest());"}) == [] and
-            dev_boundary_offenders({"src/Main.cs": "using Propane.Dev;\nDevArgs.Get(\"a\");"}) == ["src/Main.cs"],
-            "the Dev boundary check accepts or rejects the wrong references")
-    print("PASS: runtime code depends on src/Dev only through the release smoke entry")
+    require("new ReleaseTest()" in sources["src/Main.cs"] and "using Propane.ReleaseSmoke;" in sources["src/Main.cs"],
+            "Main lost the documented release smoke entry")
+    for path in ("src/Main.cs", "src/Net/Probe.cs", "src/ReleaseSmoke/Probe.cs"):
+        for text in ('Dev.DevArgs.Get("a");', 'using Propane.Dev;', 'using Probe = global::Propane.Dev.DevArgs;',
+                     'DevArgs.Get("a");'):
+            require(dev_boundary_offenders({path: text}) == [path], "the Dev boundary check accepted " + text)
+    require(dev_boundary_offenders({"src/Main.cs": "using Propane.ReleaseSmoke;\nAddChild(new ReleaseTest());",
+                                    "src/Dev/Probe.cs": "using Propane.Dev;"}) == [],
+            "the Dev boundary check rejected permitted references")
+    print("PASS: runtime and release smoke have no dependency on src/Dev")
 
 
 def check_ci_partitions():
@@ -381,6 +384,22 @@ public static class Formatting
         code, output = run(scratch, "dotnet", "build", "Probe.csproj", "-nologo", "-v", "quiet", "-warnaserror")
         require(code == 0, "corrected code did not pass", output)
         print("PASS: whitespace and style drift fail; corrected code passes formatting and build")
+
+        # Exercise the real project condition with a tiny coupling: only the shipping configuration omits Dev.
+        dev_probe = scratch / "src/Dev/BoundaryProbe.cs"
+        dev_probe.parent.mkdir(parents=True, exist_ok=True)
+        dev_probe.write_text("namespace Probe; public sealed class HarnessOnly {}\n")
+        source.write_text("namespace Probe; public static class Runtime { public static object Value() => new HarnessOnly(); }\n")
+        for config in ("Debug", "Release", "ExportDebug"):
+            code, output = run(scratch, "dotnet", "build", "Probe.csproj", "-c", config, "-nologo", "-v", "quiet", "-warnaserror")
+            require(code == 0, config + " lost the Dev harnesses", output)
+        code, output = run(scratch, "dotnet", "build", "Probe.csproj", "-c", "ExportRelease", "-nologo", "-v", "quiet", "-warnaserror")
+        require(code != 0 and "CS0246" in output and "HarnessOnly" in output,
+                "the shipping configuration accepted a runtime reference into Dev", output)
+        source.write_text("namespace Probe; public static class Runtime { public static int Value() => 1; }\n")
+        code, output = run(scratch, "dotnet", "build", "Probe.csproj", "-c", "ExportRelease", "-nologo", "-v", "quiet", "-warnaserror")
+        require(code == 0, "decoupled shipping compilation failed", output)
+        print("PASS: Debug/Release/ExportDebug keep Dev; ExportRelease rejects a runtime coupling and builds without it")
         code, output = run(ROOT, "python3", "-B", "tools/dev/full_engine_tests.py")
         require(code == 0, "deep engine isolation fixtures failed", output)
         code, output = run(ROOT, "python3", "-B", "tools/dev/check_lab_shards_tests.py")

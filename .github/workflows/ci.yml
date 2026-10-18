@@ -24,6 +24,7 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 10.0.x
+      # Also compiles ExportRelease without exporting: runtime references into Dev must fail here.
       - run: make lint
 
   # The gate's own self-tests (analyzer negatives, make ordering and failure propagation, deep-shard and CI wiring).

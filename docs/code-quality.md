@@ -121,7 +121,9 @@ both `scenes/dev/*` and `src/Dev/*` resources, including empty script placeholde
 Debug editor builds, ExportDebug debug exports and local optimized Release builds keep Dev; `make bench CONFIG=Release`
 and every scripted scene remain available. Local Release is not the shipping configuration.
 
-One assembly keeps
+`make lint` (also CI's lint partition) compiles ExportRelease with warnings as errors, without exporting;
+a runtime reference to an excluded Dev type fails compilation. `make test-infra` additionally checks the source
+boundary with no exception for Main or the smoke, and proves a failed shipping compile stops the gate. One assembly keeps
 Godot's scene-attached scripts and resource identity in their existing project without another assembly contract.
 
 Run these from an exported Linux build (`tools/release/build.sh` stages one in `build/package/linux`) to check the

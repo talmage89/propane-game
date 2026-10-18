@@ -32,7 +32,8 @@ Requires Godot 4.7.2 (.NET edition) and the .NET 10 SDK.
 - Command line: `make run`. `make play` runs optimized Release C# locally (`CONFIG=Debug` selects Debug); see
   [Measuring scale](runbooks/measuring-scale.md#playing-optimized-c-locally). `make` lists the other tasks (tests, a local
   server, bots, releases); they find Godot on `PATH` (`godot-mono` or `godot`) or in `/Applications`, or set `GODOT` to its binary.
-- Quality gate: `make lint` verifies C# formatting and rebuilds with warnings as errors. `make check` runs lint,
+- Quality gate: `make lint` verifies C# formatting and rebuilds Debug and the shipping ExportRelease configuration
+  with warnings as errors (no export needed). `make check` runs lint,
   then `make test`, then `make test-infra` (the gate's own self-tests, `tools/dev/lint_tests.py`: it needs no Godot,
   and CI runs it as the `infra` job). Run it before submitting a change. `tools/dev/check_world.sh` prints log tails and keeps its
   scratch directory on failure. GitHub Actions runs the same checks on pushes to `dev`
