@@ -11,7 +11,7 @@ import time
 import unittest
 import zipfile
 
-from check_artifacts import ROOT, run, unpack
+from check_artifacts import ROOT, native_entry, run, unpack
 
 
 class ArtifactTests(unittest.TestCase):
@@ -53,15 +53,36 @@ class ArtifactTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(dir=ROOT / 'build', prefix='artifact-interrupt-') as directory:
             root = Path(directory)
             child_pid = root / 'child.pid'
-            # This exercises the real process/session boundary, not a mocked wait/kill sequence.
-            code = ('import os,signal,sys\nfrom pathlib import Path\nimport check_artifacts as artifact\n'
-                    'signal.signal(signal.SIGTERM, artifact.interrupted)\n'
-                    'root=Path(sys.argv[1])\n'
-                    'artifact.run(["bash", "-c", \'echo $$ > "$1"; exec sleep 30\', "bash", str(root / "child.pid")], '
-                    'root / "child.log", root, os.environ)\n')
+            dist = root / 'dist'
+            dist.mkdir()
+            game = root / 'game'
+            (game / 'data').mkdir(parents=True)
+            (game / 'data/Propane.dll').write_bytes(b'fixture assembly')
+            (game / 'Propane.pck').write_bytes(b'fixture pack')
+            executable = game / 'Propane.x86_64'
+            executable.write_text('#!/bin/bash\necho $$ > "$CHILD_PID"\nexec sleep 30\n')
+            executable.chmod(0o755)
+            with tarfile.open(dist / 'Propane-fixture-linux-x86_64.tar.gz', 'w:gz') as archive:
+                archive.add(game, arcname='Propane-fixture-linux-x86_64')
+            for platform, prefix, entry in [('windows-x86_64', '', 'Propane.exe'),
+                                             ('macos-arm64', 'Propane.app/Contents/Resources/', 'Propane.app/Contents/MacOS/Propane')]:
+                with zipfile.ZipFile(dist / f'Propane-fixture-{platform}.zip', 'w') as archive:
+                    archive.writestr(prefix + 'data/Propane.dll', b'fixture assembly')
+                    archive.writestr(prefix + 'Propane.pck', b'fixture pack')
+                    archive.writestr(entry, b'fixture executable')
+            fake_bin = root / 'bin'
+            fake_bin.mkdir()
+            dotnet = fake_bin / 'dotnet'
+            dotnet.write_text('#!/bin/sh\nexit 0\n')
+            dotnet.chmod(0o755)
+            env = {**os.environ, 'PATH': str(fake_bin) + os.pathsep + os.environ['PATH'], 'CHILD_PID': str(child_pid)}
+            # Run the actual CLI so removing its signal registration also fails this test. Only metadata
+            # inspection is stubbed; the native executable/process/session boundary is real.
             for interrupt in (signal.SIGINT, signal.SIGTERM):
                 child_pid.unlink(missing_ok=True)
-                with subprocess.Popen([sys.executable, '-c', code, str(root)], cwd=ROOT / 'tools/release',
+                command = [sys.executable, str(ROOT / 'tools/release/check_artifacts.py'), '--dist', str(dist),
+                           '--output', str(root / f'proof-{interrupt}')]
+                with subprocess.Popen(command, cwd=root, env=env,
                                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) as owner:
                     child_needs_cleanup = False
                     try:
@@ -85,6 +106,22 @@ class ArtifactTests(unittest.TestCase):
                                 os.kill(pid, signal.SIGKILL)
                             except ProcessLookupError:
                                 pass
+
+    def test_native_entries_must_exist_and_be_nonempty(self):
+        with tempfile.TemporaryDirectory(dir=ROOT / 'build', prefix='artifact-entries-') as directory:
+            root = Path(directory)
+            for platform, pack_path, executable_path in [('linux', 'linux/Propane.pck', 'linux/Propane.x86_64'),
+                                                       ('windows', 'windows/Propane.pck', 'windows/Propane.exe'),
+                                                       ('macos', 'macos/Contents/Resources/Propane.pck', 'macos/Contents/MacOS/Propane')]:
+                pack, executable = root / pack_path, root / executable_path
+                executable.parent.mkdir(parents=True, exist_ok=True)
+                with self.assertRaisesRegex(ValueError, 'Missing or empty ' + platform):
+                    native_entry(platform, pack)
+                executable.touch()
+                with self.assertRaisesRegex(ValueError, 'Missing or empty ' + platform):
+                    native_entry(platform, pack)
+                executable.write_bytes(b'entry fixture')
+                self.assertEqual(native_entry(platform, pack), executable)
 
     def test_release_workflow_checks_artifacts_before_publication(self):
         workflow = (ROOT / '.github/workflows/release.yml').read_text()

@@ -62,6 +62,14 @@ def unpack(archive, destination):
     return assemblies[0], packs[0]
 
 
+def native_entry(platform, pack):
+    entry = {'linux': pack.parent / 'Propane.x86_64', 'windows': pack.parent / 'Propane.exe',
+             'macos': pack.parent.parent / 'MacOS/Propane'}[platform]
+    if not entry.is_file() or entry.stat().st_size == 0:
+        raise ValueError(f'Missing or empty {platform} executable: {entry}')
+    return entry
+
+
 def main():
     signal.signal(signal.SIGTERM, interrupted)
     parser = argparse.ArgumentParser(description=__doc__)
@@ -81,12 +89,11 @@ def main():
         if len(archives) != 1:
             raise ValueError(f'Expected one {platform} archive, found {len(archives)}')
         assembly, pack = unpack(archives[0], output / platform)
+        entry = native_entry(platform, pack)
         run(['dotnet', str(TOOL), 'inventory', str(assembly), str(pack), str(ROOT / 'tools/architecture')],
             output / f'{platform}-inventory.log', output, env)
         if platform == 'linux':
-            linux = pack.parent / 'Propane.x86_64'
-            if not linux.is_file():
-                raise ValueError('Missing Linux executable beside pack')
+            linux = entry
     if args.inventory_only:
         print(f'PASS three artifact inventories ({output})')
         return

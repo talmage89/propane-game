@@ -16,6 +16,7 @@ executable from outside the source project: ordinary menu startup, `--classic-lo
 `--release-test`. It rejects engine errors, nonzero exits, timeouts and a missing smoke success marker. Its inventory
 requires the reviewed smoke types, normal/server/smoke entry methods, packed main scene and autoload resources and
 their entry settings; Dev types and `src/Dev`/`scenes/dev` resources fail.
+All three archives must also contain their expected nonempty native executable.
 Child processes are terminated and reaped on timeout, Ctrl+C or SIGTERM; earlier evidence is retained.
 
 The release workflow runs this script after packaging and before publication, only in the release job. Its default is
