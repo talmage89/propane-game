@@ -97,13 +97,21 @@ is no longer a gameplay control.
 
 Reveal center, radius and glow are per-instance shader parameters owned by `WorldReveal`. Reveal uses slots 12–15
 across all compatible materials; actor parameters explicitly occupy lower slots. New geometry inherits the world's
-current state, and retiring geometry unregisters immediately. No shader global is shared between worlds.
+current state, and retiring geometry unregisters immediately. Dissolve Run's moving `reveal_window` is still a shader
+global written/reset by `DissolveArena`: only one independently advancing stream is supported per process. W2 must
+scope it before independent streams coexist; multiple views of the same stream do not require separate windows.
+See [the architecture contract](architecture.md#globals-and-budgets).
 
-The sole application-wide simulation primitive is `WorldTimeScale`: an exclusive hitstop lease. Only one live,
+One application-wide simulation policy is `WorldTimeScale`: an exclusive hitstop lease. Only one live,
 unpaused offline context can acquire it; construction of a second context, pause or retirement releases it. The
 always-processing driver expires the presentation lease in real seconds while gameplay uses simulation seconds.
 Network worlds cannot acquire it. The isolation scene also asserts actual physics pause/resume, independent reveal,
 lease restrictions and a production client/server handshake completing while a world is paused.
+
+`TankSimulation` separately arbitrates `Engine.MaxPhysicsStepsPerFrame` for dense offline chains. Overlapping leases
+use the smallest requested limit and restore the prior engine value when they end; a registered live network tank
+simulation vetoes them. Registration timing, pause and retirement behavior are part of this policy. A1 consolidates
+discoverability without merging its rules with hitstop.
 
 The driver subscribes to [scene-tree frame signals](https://docs.godotengine.org/en/stable/classes/class_scenetree.html#signals),
 which run before node processing. This keeps the native signal emitter alive while deferred navigation synchronously
@@ -123,7 +131,8 @@ seeds still vary; the test never alters the server's construction inputs or mess
 placement. `ActorRuntime` owns its intent source and logical aim. No camera, viewport or HUD is needed to move,
 shoot, strike or get up. `LocalView` explicitly attaches a `CameraRig`, HUD and optional device input to an actor;
 closing it releases input but leaves the actor alive. Bot brains and navigation use the actor's aim directly.
-The character's `CameraRig` accessor remains a convenience for existing rendered dev harnesses only.
+The character's `CameraRig` accessor remains a convenience used by production `Game` and rendered dev harnesses;
+C2 separates physical actor feedback from view implementation (see [architecture](architecture.md#simulation-and-presentation)).
 
 The aim split preserves the old ray, including its over-the-shoulder origin, wall pull-in, target smoothing,
 render-frame updates and the chest-plane projection that keeps shots from starting behind the character.

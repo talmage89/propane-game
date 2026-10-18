@@ -20,6 +20,7 @@ current and binding, and no one else edits it. Start with [VISION.md](../design/
 
 | Document | What it covers |
 | --- | --- |
+| [architecture.md](architecture.md) | Living architecture contract: modules, scopes, ordering, approved exceptions, extension boundaries and unfinished acceptance. |
 | [development.md](development.md) | The developer guide: running from source, the gate, tuning, repository layout, the scripted scenes in `scenes/dev`, versions and releases, and how the README media are made. |
 | [multiplayer.md](multiplayer.md) | Networking model, messages and protocol 3, hosting, the lobby and its world, bots and the network test tools. |
 | [net-scenarios.md](net-scenarios.md) | Network harness ownership, lifecycle, CLI inventory and completion obligations. |
