@@ -51,6 +51,8 @@ wall-clock	src/Dev/UnitTests/BodyPublicationTests.cs	Stopwatch.GetTimestamp	1	De
 wall-clock	src/Dev/UnitTests/BotTacticsTests.cs	Stopwatch.GetElapsedTime	2	Dev:BotTacticsTests	Harness orchestration/measurement domain; preserve bounded completion and shutdown assertions.
 wall-clock	src/Dev/UnitTests/BotTacticsTests.cs	Stopwatch.GetTimestamp	2	Dev:BotTacticsTests	Harness orchestration/measurement domain; preserve bounded completion and shutdown assertions.
 wall-clock	src/Dev/UnitTests/CaptureTests.cs	Stopwatch.StartNew	1	Dev:CaptureTests	Harness orchestration/measurement domain; preserve bounded completion and shutdown assertions.
+wall-clock	src/Dev/UnitTests/ClientReceiveBenchTests.cs	Stopwatch.GetElapsedTime	1	Dev:ClientReceiveBenchTests	N1 opt-in whole client network callback diagnostic; manual time drives connection behavior.
+wall-clock	src/Dev/UnitTests/ClientReceiveBenchTests.cs	Stopwatch.GetTimestamp	1	Dev:ClientReceiveBenchTests	N1 opt-in whole client network callback diagnostic; manual time drives connection behavior.
 wall-clock	src/Dev/UnitTests/ClockDispatchTests.cs	Stopwatch.GetTimestamp	3	Dev:ClockDispatchTests	Harness orchestration/measurement domain; preserve bounded completion and shutdown assertions.
 wall-clock	src/Dev/UnitTests/Fixtures/ServerNativeFixture.cs	Stopwatch.StartNew	1	Dev:ServerNativeFixture	B1 bounded native socket-poll deadline; run time remains the injected manual clock.
 wall-clock	src/Dev/UnitTests/LoopbackTransport.cs	Stopwatch.GetElapsedTime	1	Dev:LoopbackTransport	Harness orchestration/measurement domain; preserve bounded completion and shutdown assertions.

@@ -411,5 +411,7 @@ the attached receiver, and reports thread allocations and mean/p95/p99 microseco
 physical Match handling and GPU frame time are outside this connection-boundary workload. Both network benchmarks
 accept `--network-bench-long` for 300,000 measured ticks, keeping the same 20,000 warm-up ticks. `cpu_us` is
 process CPU time per tick (including runtime/GC threads), observed outside the allocation/sample loop; it helps
-separate CPU work from wall-time preemption. Pair with the server
+separate CPU work from wall-time preemption. Stopwatch measures monotonic diagnostic elapsed time; the fixture's
+manual clock alone drives network behavior. The two client benchmark sites are explicit in the source-site policy.
+Pair with the server
 workload above, alternate at least three parent/candidate pairs, and retain machine-load observations.
