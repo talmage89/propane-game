@@ -43,7 +43,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/propane-ci
-          key: tools-godot-${{ env.GODOT_VERSION }}-rcodesign-${{ env.APPLE_CODESIGN_VERSION }}
+          key: pinned-tools-godot-${{ env.GODOT_VERSION }}-rcodesign-${{ env.APPLE_CODESIGN_VERSION }}
 
       - uses: ./.github/actions/setup-godot
         with:
@@ -55,16 +55,7 @@ jobs:
           set -euo pipefail
           cache="$HOME/.cache/propane-ci"
           mkdir -p "$cache"
-          signer="apple-codesign-${APPLE_CODESIGN_VERSION}-x86_64-unknown-linux-musl"
-          if [[ ! -x "$cache/$signer/rcodesign" ]]; then
-            base="https://github.com/indygreg/apple-platform-rs/releases/download/apple-codesign%2F${APPLE_CODESIGN_VERSION}"
-            curl -fsSL --retry 3 -o "$cache/$signer.tar.gz" "$base/$signer.tar.gz"
-            curl -fsSL --retry 3 -o "$cache/$signer.tar.gz.sha256" "$base/$signer.tar.gz.sha256"
-            echo "$(cat "$cache/$signer.tar.gz.sha256")  $cache/$signer.tar.gz" | sha256sum -c -
-            tar -xzf "$cache/$signer.tar.gz" -C "$cache"
-            rm "$cache/$signer.tar.gz"
-          fi
-          echo "RCODESIGN=$cache/$signer/rcodesign" >> "$GITHUB_ENV"
+          tools/release/install_signer.sh "$APPLE_CODESIGN_VERSION" "$cache"
 
           if ! command -v llvm-lipo >/dev/null && ! ls /usr/bin/llvm-lipo-* >/dev/null 2>&1; then
             sudo apt-get update -q && sudo apt-get install -yq llvm

@@ -1,0 +1,14 @@
+# version filename algorithm digest (whitespace separated; no runtime checksum downloads).
+# Godot 4.7.2: https://github.com/godotengine/godot/releases/download/4.7.2-stable/SHA512-SUMS.txt
+4.7.2 Godot_v4.7.2-stable_mono_linux_x86_64.zip sha512 1855960b27ee3ef5e66e5e228cced69d55637b24334a7411162687dcd077d8f9f645348cdb8eae984bec8135d49ed855a1e3a16476786b8bce60774fd8402d13
+4.7.2 Godot_v4.7.2-stable_mono_export_templates.tpz sha512 bb5c41d72370ed743660361f6228006f808ab04ca33abdc545d740b044f3fe057f32ae8cb7873a1bc86ddcd82ae683b9f6dfdfe4179852f2c0f1acde2ff6bd5a
+# Notices have no individual publisher sums. Their SHA512 values below were derived from, and
+# confirmed byte-for-byte against, godot-4.7.2-stable.tar.xz from the same release above,
+# https://github.com/godotengine/godot/releases/download/4.7.2-stable/godot-4.7.2-stable.tar.xz
+# verified against its entry in SHA512-SUMS.txt:
+# 15e23f8423003f5d32da07c34a8651e43af23b050cc0dea2d4fba6944ca445d079edb52b66fdf82b6d5739bba1fe707b9e27b8836b19f09f64f313966160f8fc
+4.7.2 LICENSE.txt sha512 a76a1bc7c6651bf9e3d6c738c2d5b1568142177c5177a29f7e6a55a0429afb4dc80bfbb3e2552803fcd3c05b2e7a1099d125030717e0ab5a31a19b6bf3cd21a7
+4.7.2 COPYRIGHT.txt sha512 265ab84cd535e76bea262212bceb22fad705bfb336f99aa634db2df4453bacadcf0f4eb0b0483fb7dbbbd27f0ae6b0e3f03082616cb18f5818a1303f06f95246
+# apple-codesign 0.29.0 (publisher provides SHA256):
+# https://github.com/indygreg/apple-platform-rs/releases/download/apple-codesign%2F0.29.0/apple-codesign-0.29.0-x86_64-unknown-linux-musl.tar.gz.sha256
+0.29.0 apple-codesign-0.29.0-x86_64-unknown-linux-musl.tar.gz sha256 dbe85cedd8ee4217b64e9a0e4c2aef92ab8bcaaa41f20bde99781ff02e600002

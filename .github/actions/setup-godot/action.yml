@@ -18,8 +18,8 @@ runs:
       if: inputs.cache == 'true'
       uses: actions/cache@v4
       with:
-        path: ~/.cache/propane-ci/Godot_v${{ inputs.godot-version }}-stable_mono_linux_x86_64
-        key: godot-mono-linux-x86_64-${{ inputs.godot-version }}
+        path: ~/.cache/propane-ci/Godot_v${{ inputs.godot-version }}-stable_mono_linux_x86_64.zip
+        key: pinned-godot-mono-linux-x86_64-${{ inputs.godot-version }}
 
     - name: Install Godot
       shell: bash

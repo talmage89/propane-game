@@ -12,22 +12,14 @@ case "$(uname -s)" in
 esac
 target="$root/$version.stable.mono"
 
-# Check every installed platform: an older two-platform install must acquire Windows too.
-if [[ -f "$target/linux_release.x86_64" && -f "$target/linux_debug.x86_64" &&
-      -f "$target/windows_release_x86_64.exe" && -f "$target/windows_debug_x86_64.exe" &&
-      -f "$target/windows_release_x86_64_console.exe" && -f "$target/windows_debug_x86_64_console.exe" &&
-      -f "$target/macos.zip" ]] && unzip -l "$target/macos.zip" | grep -q 'godot_macos_release.arm64'; then
-  echo "Templates already installed in $target"
-  exit 0
-fi
-
-archive="$cache/Godot_v$version-stable_mono_export_templates.tpz"
-mkdir -p "$cache" "$target"
-if [[ ! -f "$archive" ]]; then
-  curl -fsSL --retry 3 -o "$archive.part" \
-    "https://github.com/godotengine/godot/releases/download/$version-stable/Godot_v$version-stable_mono_export_templates.tpz"
-  mv "$archive.part" "$archive"
-fi
+project="$(cd "$(dirname "$0")/../.." && pwd)"
+filename="Godot_v$version-stable_mono_export_templates.tpz"
+archive="$cache/$filename"
+python3 "$project/tools/downloads/verify.py" "$version" "$filename" "$archive" \
+  "https://github.com/godotengine/godot/releases/download/$version-stable/$filename"
+# Installed files (including thinned macOS binaries) are derived, never trusted as a cache.
+rm -rf "$target"
+mkdir -p "$target"
 
 work="$(mktemp -d "${TMPDIR:-/tmp}/propane-templates.XXXXXX")"
 trap 'rm -rf "$work"' EXIT

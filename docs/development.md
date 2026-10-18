@@ -459,6 +459,19 @@ and cheek weld. [evidence/rifle-contact.md](evidence/rifle-contact.md) records t
 
 ## Versions and releases
 
+All tooling downloads are pinned in [tools/downloads/pins.txt](../tools/downloads/pins.txt), grouped by version.
+The shared verifier checks fresh downloads and cached archives before extraction or packaging. The CI caches retain
+archives; each install recreates extracted tools/templates from verified bytes. A checksum mismatch stops the run:
+delete the rejected cache archive and retry; never update a pin just to accept an unexpected download.
+
+When upgrading Godot, update the SDK/project and workflow versions together with **all four** Godot pins (editor,
+.NET templates, LICENSE.txt, COPYRIGHT.txt). Obtain the archive hashes from the exact stable release's publisher
+`SHA512-SUMS.txt`, download the artifacts and confirm the hashes locally. For the notices, verify that release's
+source tarball against the same checksum list, then compare its root LICENSE.txt/COPYRIGHT.txt byte-for-byte with
+the raw tagged files packaging downloads and record their SHA512 hashes. Update the provenance URLs and source
+archive hash in the pin comments. A version without a matching pin fails closed. Run `make check`, both installers
+with fresh caches, and a local packaging run before submitting the upgrade.
+
 Godot's .NET exporter selects `ExportRelease` for `--export-release` and `ExportDebug` for `--export-debug`.
 `ExportRelease` excludes all `src/Dev` C# sources; the presets also omit their script resources and `scenes/dev`.
 The small exported smoke and its capture, metrics and bot helpers live in `src/ReleaseSmoke`; `--release-test`
@@ -523,6 +536,13 @@ so the macOS preset exports unsigned and [rcodesign](https://github.com/indygreg
 It runs on Linux, which keeps CI off the more expensive macOS runners. Windows exports on the same runner, with
 Godot applying `icon.svg` and the current project version to the executable; it needs no signing or resource tools.
 The release and development shell tools require a Unix environment (Linux or macOS); downloaded games do not.
+
+For a signer upgrade, change `APPLE_CODESIGN_VERSION` in the release workflow and its matching archive pin together.
+Read the exact apple-codesign release's publisher `.tar.gz.sha256` file (or a stronger published checksum if offered),
+verify the downloaded archive locally, and record the checksum source URL beside the pin. The release installer
+uses only the checked-in expected value, including for cache hits; it never fetches an expected hash at run time.
+Validate the workflow and run `make test-infra` after changing it.
+
 
 ## Assets
 
