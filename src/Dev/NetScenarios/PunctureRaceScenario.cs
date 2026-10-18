@@ -4,6 +4,7 @@ using Godot;
 using Propane.Core;
 using Propane.Net;
 using Propane.Tank;
+using Propane.World.Plan;
 
 namespace Propane.Dev.NetScenarios;
 
@@ -50,7 +51,7 @@ internal sealed class PunctureRaceScenario(INetScenarioHost host) : NetScenario(
         {
             match.Player.InputOverride = new ScriptedInput();
             var road = match.Suburb.Plan.Roads.OrderByDescending(r => r.Length).First();
-            var spot = World.Suburb.ToWorld((road.A + road.B) / 2, 8);
+            var spot = PlanCoordinates.ToWorld((road.A + road.B) / 2, 8);
             BodySync.Snap(tank, new Transform3D(Basis.Identity, spot), Vector3.Zero, Vector3.Zero);
             match.Player.Teleport(spot + new Vector3(20, -7.9f, 0), 0);
             raceCamera = new Camera3D { Current = true, Fov = 55 };

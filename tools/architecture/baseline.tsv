@@ -1,22 +1,17 @@
-direction	Propane.Modes.KingRules	Propane.World.Plan.SuburbPlan	C1	Move misplaced plain contracts/helpers to their owning module; preserve bytes and identity arithmetic.
-direction	Propane.Modes.KingRules	Propane.World.Plan.TankPlacement	C1	Move misplaced plain contracts/helpers to their owning module; preserve bytes and identity arithmetic.
 direction	Propane.Net.BuildInfo	Propane.Core.LaunchArgs	A1	Application settings/launch access is implicit; inject scoped application state without changing precedence.
 direction	Propane.Net.LobbyServer	Propane.Core.LaunchArgs	A1	Application settings/launch access is implicit; inject scoped application state without changing precedence.
 direction	Propane.Net.LobbyServer	Propane.Core.Tuning	A1	Replace implicit saved-template sampling and native snapshot conversion with application-owned tuning inputs; preserve staging, lobby defaults and failed-run ownership.
 direction	Propane.Net.LobbyServer	Propane.Net.CapacityMetrics	N1	Server diagnostics utility accepts concrete client state; split server-neutral observation sampling.
 direction	Propane.Net.LobbyWorldDefault	Propane.Core.LaunchArgs	A1	Application settings/launch access is implicit; inject scoped application state without changing precedence.
-direction	Propane.Net.MeleeValidation	Propane.Core.Tuning	C1	Server contact admission receives live tuning resource; pass the plain sampled contact configuration.
-direction	Propane.Net.MessageCodec	Propane.Core.Tuning	C1	Move misplaced plain contracts/helpers to their owning module; preserve bytes and identity arithmetic.
+direction	Propane.Net.MessageCodec	Propane.Core.Tuning	N1	Single-tuner decoding still invokes the native Tuning schema; N1 must inject owner-scoped validation with the same bounds and rejection order.
 direction	Propane.Net.MessageCodec	Propane.Modes.ModeDefinition	N1	Inject owner-scoped schema and eligibility resolution while separating decode/admission from dispatch failure; remove composition catalog lookup without changing malformed-packet rejection order.
 direction	Propane.Net.MessageCodec	Propane.Modes.ModeRegistry	N1	Inject owner-scoped schema and eligibility resolution while separating decode/admission from dispatch failure; remove composition catalog lookup without changing malformed-packet rejection order.
 direction	Propane.Net.NetClient	Propane.Core.LaunchArgs	A1	Client handshake reads launch overrides implicitly; inject immutable launch options.
 direction	Propane.Net.NetClient	Propane.Net.LobbyWorldDefault	A1	Client reads application lobby launch policy through a server-side helper; pass immutable launch options.
 direction	Propane.Net.NetClient	Propane.Net.PacketTransports	N1	Connection owner constructs application backend factory; inject backend-independent transport.
-direction	Propane.Net.NetReader	Propane.Core.Tuning	C1	Move misplaced plain contracts/helpers to their owning module; preserve bytes and identity arithmetic.
+direction	Propane.Net.NetReader	Propane.Core.Tuning	N1	Complete snapshot decoding still invokes the native Tuning schema; N1 must inject owner-scoped validation preserving complete-schema checks and rejection order.
 direction	Propane.Net.ServerRun	Propane.Core.LaunchArgs	A1	B1 moved/split this existing run reference: Application settings/launch access is implicit; inject scoped application state without changing precedence.
-direction	Propane.Net.ServerRun	Propane.Core.Tuning	C1	Separate native run tuning ownership/snapshot and melee validation from plain server values; preserve live debug edits, synchronous sampling and exactly-once disposal.
-direction	Propane.Net.ServerRun	Propane.World.SuburbPlans	C1	B1 moved/split this existing run reference: Move misplaced plain contracts/helpers to their owning module; preserve bytes and identity arithmetic.
-direction	Propane.Net.TankLedger	Propane.World.Suburb	C1	Move misplaced plain contracts/helpers to their owning module; preserve bytes and identity arithmetic.
+direction	Propane.Net.ServerRun	Propane.Core.Tuning	A1	The run still owns, mutates and disposes native Tuning for live phase/stock/snapshot reads; A1 must transfer configuration ownership with template/snapshot borrowing, preserving live debug sampling and exactly-once retirement. Melee admission now receives plain values.
 direction	Propane.Player.ActorRuntime	Propane.Net.DropPredictions	C2	Actor runtime owns client replication state; move it to an actor-lifetime client attachment.
 direction	Propane.Player.ActorRuntime	Propane.Net.SnapshotBuffer	C2	Actor runtime owns client replication state; move it to an actor-lifetime client attachment.
 direction	Propane.Player.ActorRuntime	Propane.Player.ReplicatedIntent	C2	Actor runtime owns client replication state; move it to an actor-lifetime client attachment.
@@ -25,10 +20,4 @@ direction	Propane.Player.PlayerCharacter	Propane.Player.DeviceInput	C2	Physical 
 direction	Propane.Player.PlayerCharacter	Propane.Player.LocalView	C2	Physical actor exposes view/device conveniences; replace with narrow view feedback and input source.
 direction	Propane.UI.MatchHud	Propane.Core.PlayerSettings	A1	Application settings/launch access is implicit; inject scoped application state without changing precedence.
 direction	Propane.UI.MatchMenu	Propane.Core.PlayerSettings	A1	Application settings/launch access is implicit; inject scoped application state without changing precedence.
-direction	Propane.World.Plan.SuburbFurnishing	Propane.World.Catalog	C1	Plan generation/snapshot capture reaches mixed native catalog for plain model metadata; split snapshot construction and plain keys.
-direction	Propane.World.PlanCatalogSnapshot	Propane.World.Catalog	C1	Plan generation/snapshot capture reaches mixed native catalog for plain model metadata; split snapshot construction and plain keys.
-direction	Propane.World.SegmentSettings	Propane.Core.Tuning	C1	Plan settings include a live Tuning factory; move conversion to composition and retain plain settings.
-direction	Propane.World.SegmentSettings	Propane.World.SuburbPlans	C1	Plan settings include a live Tuning factory; move conversion to composition and retain plain settings.
-pure-native	Propane.World.SegmentSettings	Propane.Core.Tuning	C1	Plan settings include a live Tuning factory; move conversion to composition and retain plain settings.
-server-physical	Propane.Net.TankLedger	Propane.World.Suburb	C1	Ledger uses the native builder's coordinate conversion helper; move the plain formula without changing arithmetic.
 transport-backend	Propane.Net.FaultPacketTransport	Propane.Net.NetTransport	N1	Fault transport uses ENet channel helper; move lane semantics to backend-independent traffic contract.

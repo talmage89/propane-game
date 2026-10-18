@@ -3,7 +3,6 @@ using System.IO;
 using System.Linq;
 using Godot;
 using Propane.Core;
-using Propane.World;
 using Propane.World.Plan;
 
 namespace Propane.Net;
@@ -26,14 +25,14 @@ public sealed class TankLedger
         {
             var tank = plan.Tanks[i];
             Register(new BodyState(BodyIds.MapTankId(i), new Transform3D(new Basis(Vector3.Up, tank.Yaw),
-                Suburb.ToWorld(tank.Position, tank.Elevation + 0.01f)), Vector3.Zero, Vector3.Zero), host, rest: true);
+                PlanCoordinates.ToWorld(tank.Position, tank.Elevation + 0.01f)), Vector3.Zero, Vector3.Zero), host, rest: true);
         }
         for (var i = 0; i < plan.Props.Count; i++)
         {
             var prop = plan.Props[i];
             if (!prop.Model.StartsWith("car:")) { continue; }
             Register(new BodyState(BodyIds.CarId(i), new Transform3D(new Basis(Vector3.Up, prop.Yaw),
-                Suburb.ToWorld(prop.Position, prop.Elevation)), Vector3.Zero, Vector3.Zero), host, rest: true);
+                PlanCoordinates.ToWorld(prop.Position, prop.Elevation)), Vector3.Zero, Vector3.Zero), host, rest: true);
         }
     }
 

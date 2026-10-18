@@ -101,15 +101,15 @@ internal sealed class SuburbFurnishing
         var carParked = Chance(0.6) && driveWidth > 2.4f;
         if (carParked)
         {
-            var model = Catalog.CarModels[r.Next(Catalog.CarModels.Length)];
+            var model = PlanModels.CarModels[r.Next(PlanModels.CarModels.Length)];
             var carYaw = Chance(0.5) ? streetYaw : YawFacing(intoLot);
             var carPos = lot.LotToMap(driveCenterX, R(3f, Mathf.Max(3.2f, setback - 1.5f)));
             AddProp($"car:{model}", carPos, carYaw, 1f, PropBody.Loose, 1200f, CarColor(r));
-            if (model == Catalog.PickupModel)
+            if (model == PlanModels.PickupModel)
             {
                 // The bed is behind the cab, toward the car's back (-Z).
                 var back = -FacingVector(carYaw);
-                tankSpots.Add((carPos + back * Catalog.PickupBedCenterBehind, carYaw, Catalog.PickupBedFloor + 0.01f, "pickup bed"));
+                tankSpots.Add((carPos + back * PlanModels.PickupBedCenterBehind, carYaw, PlanModels.PickupBedFloor + 0.01f, "pickup bed"));
             }
         }
 
@@ -146,7 +146,7 @@ internal sealed class SuburbFurnishing
         for (var i = 0; i < bushes; i++)
         {
             var x = Mathf.Lerp(houseLeft + 0.6f, houseRight - 0.6f, (float)r.NextDouble());
-            AddProp($"nature:{Catalog.BushModels[r.Next(Catalog.BushModels.Length)]}", lot.LotToMap(x, setback - 0.6f), R(0, Mathf.Tau),
+            AddProp($"nature:{PlanModels.BushModels[r.Next(PlanModels.BushModels.Length)]}", lot.LotToMap(x, setback - 0.6f), R(0, Mathf.Tau),
                 R(1.6f, 2.4f), PropBody.Static, 0f, Colors.White);
         }
 
@@ -451,12 +451,12 @@ internal sealed class SuburbFurnishing
                 var p = road.A + d * s + n * (settings.CarriagewayHalfWidth - 1.25f) * side;
                 if (SuburbLayout.IsClearOfOtherRoads(settings, plan, p, road, 4f) && rng.NextDouble() < 0.6)
                 {
-                    var model = Catalog.CarModels[rng.Next(Catalog.CarModels.Length)];
+                    var model = PlanModels.CarModels[rng.Next(PlanModels.CarModels.Length)];
                     var yaw = YawFacing(side > 0 ? -d : d);
                     AddProp($"car:{model}", p, yaw, 1f, PropBody.Loose, 1200f, CarColor(rng));
-                    if (model == Catalog.PickupModel)
+                    if (model == PlanModels.PickupModel)
                     {
-                        tankSpots.Add((p - FacingVector(yaw) * Catalog.PickupBedCenterBehind, yaw, Catalog.PickupBedFloor + 0.01f, "pickup bed"));
+                        tankSpots.Add((p - FacingVector(yaw) * PlanModels.PickupBedCenterBehind, yaw, PlanModels.PickupBedFloor + 0.01f, "pickup bed"));
                     }
                 }
             }
@@ -498,7 +498,7 @@ internal sealed class SuburbFurnishing
             }
             else
             {
-                AddProp($"nature:{Catalog.BushModels[rng.Next(Catalog.BushModels.Length)]}", p, Range(0, Mathf.Tau), Range(1.8f, 3f), PropBody.Static, 0f,
+                AddProp($"nature:{PlanModels.BushModels[rng.Next(PlanModels.BushModels.Length)]}", p, Range(0, Mathf.Tau), Range(1.8f, 3f), PropBody.Static, 0f,
                     Colors.White);
             }
         }
@@ -533,7 +533,7 @@ internal sealed class SuburbFurnishing
         {
             return;
         }
-        var model = Catalog.TreeModels[r.Next(Catalog.TreeModels.Length)];
+        var model = PlanModels.TreeModels[r.Next(PlanModels.TreeModels.Length)];
         AddProp($"nature:{model}", position, (float)r.NextDouble() * Mathf.Tau, 4.2f + (float)r.NextDouble() * 2.6f, PropBody.Static, 0f, Colors.White);
     }
 

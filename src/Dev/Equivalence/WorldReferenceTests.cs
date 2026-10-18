@@ -63,8 +63,8 @@ public static class WorldReferenceTests
         runner.Run("reference/sixty release segment plans", () =>
         {
             using var tuning = new Tuning();
-            var settings = SegmentSettings.From(tuning);
-            var catalog = new PlanCatalogSnapshot(new GameCatalog());
+            var settings = SuburbPlans.Segments(tuning);
+            var catalog = GameCatalog.Capture(new GameCatalog());
             var inventory = Enumerable.Range(1, 5).SelectMany(run => Enumerable.Range(0, 12).Reverse().Select(index =>
             {
                 var segment = SegmentPlans.Generate(settings, catalog, run, index);

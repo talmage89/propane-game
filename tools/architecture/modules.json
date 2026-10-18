@@ -180,6 +180,7 @@
     "Propane.Net.IModeHost": "Server",
     "Propane.Net.IModeWire": "Server",
     "Propane.Net.KingClientAdapter": "Client",
+    "Propane.Net.KingPlacement": "Server",
     "Propane.Net.KingWire": "Server",
     "Propane.Net.LobbyClientAdapter": "Client",
     "Propane.Net.LobbyServer": "Server",
@@ -187,6 +188,7 @@
     "Propane.Net.LobbyWorldDefault": "Server",
     "Propane.Net.Match": "Composition",
     "Propane.Net.MatchInbox": "Client",
+    "Propane.Net.MeleeTiming": "Server",
     "Propane.Net.MeleeValidation": "Server",
     "Propane.Net.ModeClientDisplay": "Client",
     "Propane.Net.ModeRunner": "Server",
@@ -238,10 +240,10 @@
     "Propane.UI.Menus": "Composition",
     "Propane.UI.StageScreen": "Composition",
     "Propane.World.AmmoPickup": "Simulation",
-    "Propane.World.PlanCatalogSnapshot": "Plans",
-    "Propane.World.SegmentPlan": "Plans",
-    "Propane.World.SegmentPlans": "Plans",
-    "Propane.World.SegmentSettings": "Plans",
+    "Propane.World.Plan.PlanCatalogSnapshot": "Plans",
+    "Propane.World.Plan.SegmentPlan": "Plans",
+    "Propane.World.Plan.SegmentPlans": "Plans",
+    "Propane.World.Plan.SegmentSettings": "Plans",
     "Propane.World.SuburbPlans": "Composition"
   },
   "Files": {
@@ -280,6 +282,7 @@
     "src/Net/DropPredictions.cs": "Client",
     "src/Net/IModeClient.cs": "Client",
     "src/Net/KingClientAdapter.cs": "Client",
+    "src/Net/KingPlacement.cs": "Server",
     "src/Net/LobbyClientAdapter.cs": "Client",
     "src/Net/LobbyServer.World.cs": "Server",
     "src/Net/LobbyServer.cs": "Server",
@@ -322,7 +325,7 @@
     "src/UI/Menus.cs": "Composition",
     "src/UI/StageScreen.cs": "Composition",
     "src/World/AmmoPickup.cs": "Simulation",
-    "src/World/SegmentPlans.cs": "Plans",
+    "src/World/Plan/SegmentPlans.cs": "Plans",
     "src/World/SuburbPlans.cs": "Composition"
   },
   "WorkerProbes": [

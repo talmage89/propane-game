@@ -86,7 +86,7 @@ public static class LobbyWorldTests
             TestRunner.Assert(decoded.StartsIn == 3.5f && decoded.WorldId == 9 && decoded.Phase == LobbyPhase.Staging, "staging fields lost");
             foreach (var bad in new[]
                      {
-                         lobby with { StartsIn = 2 }, staging with { StartsIn = LobbyServer.MaxStage + 1 }, staging with { StartsIn = -1 },
+                         lobby with { StartsIn = 2 }, staging with { StartsIn = Protocol.MaxStage + 1 }, staging with { StartsIn = -1 },
                          lobby with { Phase = LobbyPhase.Loading, WorldId = 4 }, lobby with { WorldId = -1 },
                      })
             {

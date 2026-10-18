@@ -267,7 +267,7 @@ public static class MessageCodec
         Unique(members.Select(p => p.Id).ToArray());
         if (!peers.Contains(creator) || members.Any(p => !peers.Contains(p.OwnerPeerId))) { throw new InvalidDataException("creator missing from lobby"); }
         var mode = ReadModeSettings(r);
-        var startsIn = Range(r.Float(), 0, LobbyServer.MaxStage);
+        var startsIn = Range(r.Float(), 0, Protocol.MaxStage);
         if (startsIn > 0 && phase != LobbyPhase.Staging) { throw new InvalidDataException("a start countdown outside staging"); }
         var world = Nonnegative(r.Int());
         if (world != 0 && phase is not (LobbyPhase.Waiting or LobbyPhase.Staging)) { throw new InvalidDataException("a lobby world during a match"); }

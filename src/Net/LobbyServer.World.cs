@@ -12,9 +12,6 @@ namespace Propane.Net;
 /// </summary>
 public partial class LobbyServer
 {
-    /// <summary>The longest stage a start may count down, in seconds (the tuner's ceiling; a wire bound on StartsIn).</summary>
-    public const float MaxStage = 10;
-
     /// <summary>
     /// Whether waiting lobbies run a world. Off, lobbies wait in the menu as before (and tests that count packets may
     /// turn it off).

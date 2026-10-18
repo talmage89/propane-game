@@ -6,6 +6,7 @@ using Propane.Core;
 using Propane.Net;
 using Propane.UI;
 using Propane.World;
+using Propane.World.Plan;
 using ProcessModeEnum = Godot.Node.ProcessModeEnum;
 
 namespace Propane.Dev.NetScenarios;
@@ -85,7 +86,7 @@ internal sealed class AppearanceScenario(INetScenarioHost host) : NetScenario(ho
             match.Player.InputOverride = new ScriptedInput();
             var slot = match.Setup.Players.Single(p => p.Player.OwnerPeerId == net.MyId).Spawn;
             var road = match.Suburb.Plan.Roads.OrderByDescending(r => r.Length).First();
-            var center = Suburb.ToWorld((road.A + road.B) / 2, 0.02f);
+            var center = PlanCoordinates.ToWorld((road.A + road.B) / 2, 0.02f);
             var along = new Vector3(road.Direction.X, 0, road.Direction.Y);
             var side = new Vector3(-along.Z, 0, along.X);
             var position = center + along * ((slot - (players - 1) / 2f) * 2.5f);

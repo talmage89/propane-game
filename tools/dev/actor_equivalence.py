@@ -43,6 +43,7 @@ def cycles(project):
     body = code[code.index(start):code.index(end)]
     wrapper = '''using System;
 using System.Linq;
+using Propane.Core;
 using Propane.Dev.UnitTests.Fixtures;
 using Propane.Net;
 using static Propane.Dev.UnitTests.TestRunner;

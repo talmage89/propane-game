@@ -37,7 +37,7 @@ public partial class ShortFuseArena : Node3D
         {
             var p = points[(i + (int)round - 1) % points.Count];
             var center = plan.Bounds.GetCenter();
-            spawns.Add((Suburb.ToWorld(p, 0.05f), Mathf.Atan2(p.X - center.X, p.Y - center.Y)));
+            spawns.Add((PlanCoordinates.ToWorld(p, 0.05f), Mathf.Atan2(p.X - center.X, p.Y - center.Y)));
         }
         var ledge = new StaticBody3D { Name = "SpectatorLedge", CollisionLayer = Layers.World | Layers.Floor, CollisionMask = 0, Position = Ledge };
         ledge.AddChild(new CollisionShape3D { Shape = new BoxShape3D { Size = new Vector3(60, 1, 60) }, Position = Vector3.Down * 0.5f });

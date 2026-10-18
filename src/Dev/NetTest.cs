@@ -573,7 +573,7 @@ public partial class NetTest : Node, INetScenarioHost
             var body = entry.Body;
             var p = body.GlobalPosition;
             var center = body.GlobalTransform * body.CenterOfMass;
-            var lead = (float)Math.Clamp(now - entry.TargetReceived, 0, BodySync.MaxExtrapolation);
+            var lead = (float)Math.Clamp(now - entry.TargetReceived, 0, BodyState.MaxExtrapolation);
             var sampledCenter = entry.Target * body.CenterOfMass;
             var goalCenter = entry.HasTarget ? sampledCenter + entry.TargetLinear * lead : center;
             var rotation = entry.Target.Basis.GetRotationQuaternion();

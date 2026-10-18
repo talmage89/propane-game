@@ -147,7 +147,8 @@ public static class ModeRegistry
         }
         var modes = new ServerModes(Compile(initialMode ?? TankBank), Compile(LobbyWorld), Lobby.Select(Compile));
         return new LobbyServer(modes, BindSupply(supplies),
-            (mode, tuning) => ModeDefinition.CopyTuners(tuning, mode.Tuners), transport ?? PacketTransports.CreateServer(), clock);
+            (mode, tuning) => ModeDefinition.CopyTuners(tuning, mode.Tuners),
+            SuburbPlans.Generate, transport ?? PacketTransports.CreateServer(), clock);
     }
 
     // Separate capture scope: CreateServer's local compiler also captures the full catalog. A callback created

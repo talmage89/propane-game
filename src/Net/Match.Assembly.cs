@@ -88,7 +88,7 @@ public partial class Match
         {
             var pickup = new AmmoPickup { Name = $"Ammo_{i}", Index = i };
             suburb.DynamicRoot.AddChild(pickup);
-            pickup.Position = Suburb.ToWorld(plan.AmmoSpots[i]);
+            pickup.Position = PlanCoordinates.ToWorld(plan.AmmoSpots[i]);
             pickups.Add(pickup);
         }
 
@@ -100,7 +100,7 @@ public partial class Match
         {
             leaderboardRoster.Add(new LeaderboardEntry(profile.Id, profile.Name, profile.Appearance.Color));
             var spawn = plan.Spawns.Count > 0 ? plan.Spawns[slot % plan.Spawns.Count] : new SpawnPoint(plan.Spawn, plan.SpawnYaw);
-            AddActor(profile, slot, Suburb.ToWorld(spawn.Position, 0.05f), spawn.Yaw + Mathf.Pi);
+            AddActor(profile, slot, PlanCoordinates.ToWorld(spawn.Position, 0.05f), spawn.Yaw + Mathf.Pi);
         }
         if (player == null)
         {

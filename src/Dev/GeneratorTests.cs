@@ -206,8 +206,8 @@ public partial class GeneratorTests : Node
     private void TestSegments(int first, int count, int segments, GameCatalog catalog)
     {
         var tuning = new Core.Tuning();
-        var settings = SegmentSettings.From(tuning);
-        var snapshot = new PlanCatalogSnapshot(catalog);
+        var settings = SuburbPlans.Segments(tuning);
+        var snapshot = GameCatalog.Capture(catalog);
         var timer = System.Diagnostics.Stopwatch.StartNew();
         var attempts = new List<int>();
         var tankTotals = new List<int>();
@@ -274,8 +274,8 @@ public partial class GeneratorTests : Node
     /// </summary>
     private void HashSegments(int runs)
     {
-        var settings = SegmentSettings.From(new Core.Tuning());
-        var catalog = new PlanCatalogSnapshot(new GameCatalog());
+        var settings = SuburbPlans.Segments(new Core.Tuning());
+        var catalog = GameCatalog.Capture(new GameCatalog());
         for (var run = 1; run <= runs; run++)
         {
             for (var index = 11; index >= 0; index--)

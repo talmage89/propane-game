@@ -6,6 +6,7 @@ using Propane.Core;
 using Propane.Net;
 using Propane.Player;
 using Propane.Tank;
+using Propane.World.Plan;
 using ProcessModeEnum = Godot.Node.ProcessModeEnum;
 
 namespace Propane.Dev.NetScenarios;
@@ -66,8 +67,8 @@ internal sealed class DuelScenario(INetScenarioHost host) : NetScenario(host)
         duelInput.Advance(dt);
         var road = match.Suburb.Plan.Roads.OrderByDescending(r => r.Length).First();
         var mid = (road.A + road.B) / 2f;
-        var shooterSpot = World.Suburb.ToWorld(mid - road.Direction * 7f, 0.05f);
-        var victimSpot = World.Suburb.ToWorld(mid + road.Direction * 7f, 0.05f);
+        var shooterSpot = PlanCoordinates.ToWorld(mid - road.Direction * 7f, 0.05f);
+        var victimSpot = PlanCoordinates.ToWorld(mid + road.Direction * 7f, 0.05f);
         var host = role == "host";
         var refusal = DevArgs.Get("scenario") == "drop-refusal";
         var gathering = DevArgs.Get("scenario") == "gather";
@@ -254,7 +255,7 @@ internal sealed class DuelScenario(INetScenarioHost host) : NetScenario(host)
             }
             if (duelTank == null)
             {
-                var lanes = new[] { shooterSpot, World.Suburb.ToWorld(mid + road.Direction * 21f, 0.05f) };
+                var lanes = new[] { shooterSpot, PlanCoordinates.ToWorld(mid + road.Direction * 21f, 0.05f) };
                 foreach (var dropped in match.LiveTanks.Where(IsDrop).Where(k => !k.Invulnerable)
                              .OrderBy(k => k.GlobalPosition.DistanceTo(player.GlobalPosition)))
                 {

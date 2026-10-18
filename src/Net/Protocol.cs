@@ -102,6 +102,9 @@ public static class Protocol
     public const int MaxCollection = 4096;
     public const int MaxBodyStates = 20;
 
+    /// <summary>The longest stage a start may count down, in seconds (the tuner's ceiling; a wire bound on StartsIn).</summary>
+    public const float MaxStage = 10;
+
     /// <summary>
     /// A name the server accepts exactly as sent for a roster request: 1 to <see cref="MaxNameLength"/> UTF-16 units,
     /// no surrounding spaces, and only printable letters, digits, punctuation, symbols and spaces.

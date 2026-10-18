@@ -50,7 +50,7 @@ public partial class LabSession : Node3D
     public int ResetCount { get; private set; }
     public event Action? ExitRequested;
     private readonly List<PropaneTank> tanks = new();
-    internal IEnumerable<Vector3>? AmmoPositions => suburb?.Plan.AmmoSpots.Select(p => Suburb.ToWorld(p, 0.05f));
+    internal IEnumerable<Vector3>? AmmoPositions => suburb?.Plan.AmmoSpots.Select(p => PlanCoordinates.ToWorld(p, 0.05f));
     internal List<PropaneTank> BotTanks => tanks;
     internal Rect2? BotBounds => suburb?.Plan.Bounds;
     public IEnumerable<PropaneTank> LiveTanks => tanks.Where(t => IsInstanceValid(t) && t.State != PropaneTank.TankState.Exploded);
@@ -95,7 +95,7 @@ public partial class LabSession : Node3D
             // A fixed seed, today's (the same run for everyone that day), or a fresh one each run.
             RunSeed = settings.FixedSeed != 0 ? settings.FixedSeed : settings.DissolveDaily != 0 ? SegmentPlans.DailySeed(DateTime.UtcNow)
                 : (int)(GD.Randi() % 1000000) + 1;
-            var segments = SegmentSettings.From(settings);
+            var segments = SuburbPlans.Segments(settings);
             source = new SegmentWorldSource(segments, new LocalSegmentFeed(segments, RunSeed));
         }
         else
@@ -461,12 +461,12 @@ public partial class LabSession : Node3D
             {
                 lab.suburb = generated.Suburb;
                 lab.tanks.AddRange(lab.suburb.LiveTanks);
-                lab.start = Suburb.ToWorld(lab.suburb.Plan.Spawn, 0.05f);
+                lab.start = PlanCoordinates.ToWorld(lab.suburb.Plan.Spawn, 0.05f);
                 lab.startYaw = lab.suburb.Plan.SpawnYaw + Mathf.Pi;
                 if (lab.Scenario.Banking)
                 {
                     var spawn = lab.suburb.Plan.Spawns[0];
-                    lab.start = Suburb.ToWorld(spawn.Position, 0.05f);
+                    lab.start = PlanCoordinates.ToWorld(spawn.Position, 0.05f);
                     lab.startYaw = spawn.Yaw + Mathf.Pi;
                 }
             }
@@ -506,7 +506,7 @@ public partial class LabSession : Node3D
                     if (lab.suburb != null)
                     {
                         var spawn = lab.suburb.Plan.Spawns[i];
-                        at = Suburb.ToWorld(spawn.Position, 0.05f); yaw = spawn.Yaw + Mathf.Pi;
+                        at = PlanCoordinates.ToWorld(spawn.Position, 0.05f); yaw = spawn.Yaw + Mathf.Pi;
                     }
                     bot.Teleport(at, yaw);
                 }

@@ -52,7 +52,7 @@ public static class ContractPlacementTests
         runner.Run("contracts/catalog capture order and detached values", () =>
         {
             var source = new CatalogWitness();
-            var snapshot = new PlanCatalogSnapshot(source);
+            var snapshot = GameCatalog.Capture(source);
             TestRunner.Assert(source.Reads.SequenceEqual(new[] { "houses", "palettes" }.Concat(PlanCatalogSnapshot.Keys)), "catalog read order changed");
             var houses = snapshot.HouseFootprints.ToArray();
             source.Houses[0] = Vector2.Zero;
@@ -66,7 +66,7 @@ public static class ContractPlacementTests
             TestRunner.Throws<KeyNotFoundException>(() => snapshot.PropFootprint("unknown", 1));
             transcript.Add(source.Reads);
             using var tuning = new Tuning { DissolveTanksStart = 17, DissolveTanksMin = 19, DissolvePileMin = 8, DissolvePileMax = 3 };
-            var settings = SegmentSettings.From(tuning);
+            var settings = SuburbPlans.Segments(tuning);
             TestRunner.Assert(settings.TanksMin == 17 && settings.Suburb.ClusterSizeMin == 3 && settings.Suburb.ClusterSizeMax == 3, "settings clamps changed");
             transcript.Add(settings);
         });
@@ -76,10 +76,10 @@ public static class ContractPlacementTests
             plan.Tanks.Add(new TankPlacement(new Vector2(1.25f, -2), 0.7f, 0.4f, "first", Pile: 9));
             plan.Tanks.Add(new TankPlacement(new Vector2(9, 7), 0, 0, "second", Pile: 2));
             plan.Tanks.Add(new TankPlacement(new Vector2(3, 5), 0, 0, "third", Pile: 9));
-            var spots = KingRules.SpotsFrom(plan);
+            var spots = KingPlacement.SpotsFrom(plan);
             TestRunner.Assert(spots.Count == 2 && spots[0].X == 9 && spots[0].Z == 7 &&
-                spots[1].X == 2.125 && spots[1].Z == 1.5 && spots.All(s => s.Y == Suburb.GroundHeight), "pile means/order changed");
-            TestRunner.Assert(KingRules.SpotsFrom(new SuburbPlan { Seed = 23, Bounds = new Rect2() }).Count == 0, "empty pile list changed");
+                spots[1].X == 2.125 && spots[1].Z == 1.5 && spots.All(s => s.Y == PlanCoordinates.GroundHeight), "pile means/order changed");
+            TestRunner.Assert(KingPlacement.SpotsFrom(new SuburbPlan { Seed = 23, Bounds = new Rect2() }).Count == 0, "empty pile list changed");
             transcript.Add(spots);
             foreach (var model in new[] { "car:sedan", "CAR:sedan", "prop:wheelie_bin", "car:truck", "car:", "xcar:sedan" })
                 plan.Props.Add(new PropPlacement(model, new Vector2(plan.Props.Count, 2), 0.3f, 1, PropBody.Static, 0, Colors.White));
@@ -111,23 +111,24 @@ public static class ContractPlacementTests
                 MeleeRelayGrace = 0,
                 MeleeMaxContacts = 1
             };
+            MeleeTiming Timing() => new(t.MeleeWindup, t.MeleeActive, t.MeleeRecovery, t.MeleeCooldown, t.MeleeRelayGrace);
             var validation = new MeleeValidation();
             var start = new MeleeStartMessage(1, Vector3.Forward);
             var contact = new MeleeContactMessage(1, 2, -1);
-            var first = validation.Start(start, 0, t);
+            var first = validation.Start(start, 0, Timing());
             t.MeleeWindup = 1;
-            var oldWindow = !validation.Contact(contact, .751, t);
-            var oldCooldown = !validation.Start(start with { Swing = 2 }, 1.99, t);
+            var oldWindow = !validation.Contact(contact, .751, t.MeleeMaxContacts);
+            var oldCooldown = !validation.Start(start with { Swing = 2 }, 1.99, Timing());
             t.MeleeWindup = .5f; t.MeleeActive = .5f; t.MeleeRecovery = .5f;
             t.MeleeCooldown = .75f; t.MeleeRelayGrace = .25f;
-            var second = validation.Start(start with { Swing = 2 }, 2, t);
+            var second = validation.Start(start with { Swing = 2 }, 2, Timing());
             contact = contact with { Swing = 2 };
-            var hit = validation.Contact(contact, 3.25, t);
-            var cap = !validation.Contact(contact with { Victim = 3 }, 3.25, t);
+            var hit = validation.Contact(contact, 3.25, t.MeleeMaxContacts);
+            var cap = !validation.Contact(contact with { Victim = 3 }, 3.25, t.MeleeMaxContacts);
             t.MeleeMaxContacts = 2;
-            var liveCap = validation.Contact(contact with { Victim = 3 }, 3.25, t);
+            var liveCap = validation.Contact(contact with { Victim = 3 }, 3.25, t.MeleeMaxContacts);
             t.MeleeMaxContacts = 4;
-            var late = !validation.Contact(contact with { Victim = 4 }, 3.251, t);
+            var late = !validation.Contact(contact with { Victim = 4 }, 3.251, t.MeleeMaxContacts);
             var results = new[] { first, oldWindow, oldCooldown, second, hit, cap, liveCap, late };
             TestRunner.Assert(results.All(v => v), "live contact cap or frozen swing bounds changed");
             transcript.Add(results);

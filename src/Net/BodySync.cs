@@ -19,7 +19,6 @@ namespace Propane.Net;
 public sealed class BodySync
 {
     private const double StaleAfter = 0.5;
-    internal const double MaxExtrapolation = 0.3;
 
     public sealed class Entry
     {
@@ -223,7 +222,7 @@ public sealed class BodySync
         var received = now;
         // Backdate moving targets by their estimated sampling age, bounded by our existing extrapolation limit.
         // This adjusts pose prediction only: clocks never decide which epoch or sequence wins.
-        if (!rest) { now -= System.Math.Clamp(transit, 0, MaxExtrapolation); }
+        if (!rest) { now -= System.Math.Clamp(transit, 0, BodyState.MaxExtrapolation); }
         if (state.Epoch > entry.Epoch)
         {
             // Unreliable motion can overtake the reliable grant. Retain one latest future state per body.
@@ -289,7 +288,7 @@ public sealed class BodySync
                 entry.SettledMismatchSince = null;
                 continue;
             }
-            var lead = entry.TargetRest ? 0f : (float)System.Math.Min(age, MaxExtrapolation);
+            var lead = entry.TargetRest ? 0f : (float)System.Math.Min(age, BodyState.MaxExtrapolation);
             var center = body.CenterOfMassMode == RigidBody3D.CenterOfMassModeEnum.Custom
                 ? body.CenterOfMass
                 : body.IsInsideTree()

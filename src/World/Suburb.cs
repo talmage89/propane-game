@@ -6,6 +6,7 @@ using Propane.Core;
 using Propane.Fx;
 using Propane.Tank;
 using Propane.World.Plan;
+using static Propane.World.Plan.PlanCoordinates;
 
 namespace Propane.World;
 
@@ -15,9 +16,6 @@ namespace Propane.World;
 /// </summary>
 public partial class Suburb : Node3D
 {
-    /// <summary>Height of the slab's top surface above the void floor.</summary>
-    public const float GroundHeight = 0.12f;
-
     private const float AsphaltLift = 0.004f;
     private const float SidewalkLift = 0.005f;
     private const float PavingLift = 0.006f;
@@ -230,12 +228,12 @@ public partial class Suburb : Node3D
         {
             var info = GameCatalog.Resolve(key);
             GameAssets.Instantiate(info.Path).Free();
-            if (key != $"car:{Catalog.PickupModel}" && key != "prop:patio_umbrella" && !key.StartsWith("prop:street_lamp") && key != "prop:shed")
+            if (key != $"car:{PlanModels.PickupModel}" && key != "prop:patio_umbrella" && !key.StartsWith("prop:street_lamp") && key != "prop:shed")
             {
                 Hull(info, 1f);
             }
         }
-        foreach (var name in Catalog.TreeModels.Concat(Catalog.BushModels))
+        foreach (var name in PlanModels.TreeModels.Concat(PlanModels.BushModels))
         {
             GameAssets.Instantiate(GameCatalog.Resolve($"nature:{name}").Path).Free();
         }
@@ -246,8 +244,6 @@ public partial class Suburb : Node3D
     }
 
     /// <summary>World position of a plan point on the slab.</summary>
-    public static Vector3 ToWorld(Vector2 p, float elevation = 0) => new(p.X, GroundHeight + elevation, p.Y);
-
     /// <summary>
     /// Tags every visual for the transition: 1 shows it only inside the reveal ring (the ring grows to materialize a
     /// suburb and shrinks to dissolve one), 0 shows it normally.
@@ -701,19 +697,19 @@ public partial class Suburb : Node3D
                 new CollisionShape3D { Shape = HullOf($"{info.Path}@{scale}:canopy", () => points.Where(p => p.Y > top - 0.4f * scale)) },
             };
         }
-        if (key != $"car:{Catalog.PickupModel}")
+        if (key != $"car:{PlanModels.PickupModel}")
         {
             return new[] { new CollisionShape3D { Shape = Hull(info, scale) } };
         }
         var size = info.Scale * scale;
         List<Vector3>? modelPoints = null;
         List<Vector3> Points() => modelPoints ??= ModelPoints(info, scale);
-        var floor = Catalog.PickupBedFloorModel * size;
-        var front = Catalog.PickupBedFrontModel * size;
-        var back = Catalog.PickupBedBackModel * size;
-        var halfWidth = Catalog.PickupBedHalfWidthModel * size;
-        var wall = Catalog.PickupBedWallModel * size;
-        var wallHeight = (Catalog.PickupBedWallTopModel - Catalog.PickupBedFloorModel) * size;
+        var floor = PlanModels.PickupBedFloorModel * size;
+        var front = PlanModels.PickupBedFrontModel * size;
+        var back = PlanModels.PickupBedBackModel * size;
+        var halfWidth = PlanModels.PickupBedHalfWidthModel * size;
+        var wall = PlanModels.PickupBedWallModel * size;
+        var wallHeight = (PlanModels.PickupBedWallTopModel - PlanModels.PickupBedFloorModel) * size;
         var wallY = floor + wallHeight / 2f;
         var bedLength = front - back;
         CollisionShape3D Box(Vector3 extent, Vector3 center) => new() { Shape = new BoxShape3D { Size = extent }, Position = center };

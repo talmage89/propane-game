@@ -83,16 +83,17 @@ public static class MeleeTests
         runner.Run("melee/server bounds swing identity, cooldown, window and contact rate", () =>
         {
             using var t = new Tuning { MeleeMaxContacts = 2 };
+            MeleeTiming Timing() => new(t.MeleeWindup, t.MeleeActive, t.MeleeRecovery, t.MeleeCooldown, t.MeleeRelayGrace);
             var v = new MeleeValidation();
             var start = new MeleeStartMessage(1, Vector3.Forward);
             var hit = new MeleeContactMessage(1, 3, -1);
-            TestRunner.Assert(!v.Contact(hit, 0, t), "contact without start");
-            TestRunner.Assert(v.Start(start, 0, t) && !v.Start(start with { Swing = 2 }, 0.1, t), "cooldown bypassed");
-            TestRunner.Assert(v.Contact(hit, .3, t) && !v.Contact(hit, .3, t), "duplicate accepted");
-            TestRunner.Assert(v.Contact(hit with { Victim = 4 }, .3, t) && !v.Contact(hit with { Victim = 5 }, .3, t), "rate bound failed");
-            TestRunner.Assert(v.Start(start with { Swing = 2 }, 2, t), "next start refused");
-            TestRunner.Assert(!v.Contact(hit, 2.3, t) && !v.Contact(hit with { Swing = 2 }, 3, t), "stale or late contact accepted");
-            TestRunner.Assert(!v.Start(start, 4, t), "old swing reused");
+            TestRunner.Assert(!v.Contact(hit, 0, t.MeleeMaxContacts), "contact without start");
+            TestRunner.Assert(v.Start(start, 0, Timing()) && !v.Start(start with { Swing = 2 }, 0.1, Timing()), "cooldown bypassed");
+            TestRunner.Assert(v.Contact(hit, .3, t.MeleeMaxContacts) && !v.Contact(hit, .3, t.MeleeMaxContacts), "duplicate accepted");
+            TestRunner.Assert(v.Contact(hit with { Victim = 4 }, .3, t.MeleeMaxContacts) && !v.Contact(hit with { Victim = 5 }, .3, t.MeleeMaxContacts), "rate bound failed");
+            TestRunner.Assert(v.Start(start with { Swing = 2 }, 2, Timing()), "next start refused");
+            TestRunner.Assert(!v.Contact(hit, 2.3, t.MeleeMaxContacts) && !v.Contact(hit with { Swing = 2 }, 3, t.MeleeMaxContacts), "stale or late contact accepted");
+            TestRunner.Assert(!v.Start(start, 4, Timing()), "old swing reused");
         });
         runner.Run("melee/wire rejects malformed direction and ambiguous contacts", () =>
         {

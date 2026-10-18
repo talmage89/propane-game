@@ -2,8 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Propane.Core;
-using Propane.World;
-using Propane.World.Plan;
 
 namespace Propane.Modes;
 
@@ -71,10 +69,6 @@ public sealed class KingRules : IModeRules
     public double MoveSeconds => Math.Max(1, tuners.Float(KingMoveSeconds));
     public double Radius => tuners.Float(KingZoneRadius);
     private double MintInterval => Math.Max(0.05, tuners.Float(KingMintSeconds));
-
-    /// <summary>A suburb's pile spots: each of the plan's piles at its tanks' mean position on the ground.</summary>
-    public static IReadOnlyList<ModeSpot> SpotsFrom(SuburbPlan plan) => plan.Tanks.GroupBy(t => t.Pile).OrderBy(g => g.Key)
-        .Select(g => new ModeSpot(g.Average(t => (double)t.Position.X), Suburb.GroundHeight, g.Average(t => (double)t.Position.Y))).ToArray();
 
     /// <summary>
     /// The zone as every peer should see it at this clock, or null before the round's first sample places it. This is

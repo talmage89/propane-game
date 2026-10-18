@@ -5,6 +5,7 @@ using Propane.Player;
 using Propane.Session;
 using Propane.UI;
 using Propane.World;
+using Propane.World.Plan;
 
 namespace Propane;
 
@@ -31,7 +32,7 @@ public partial class Game
             game.player = new PlayerCharacter { World = session.World, Name = "Player" };
             session.AddActor(game.player);
             var plan = game.current!.Plan;
-            game.player.Teleport(Suburb.ToWorld(plan.Spawn, .05f), plan.SpawnYaw + Mathf.Pi);
+            game.player.Teleport(PlanCoordinates.ToWorld(plan.Spawn, .05f), plan.SpawnYaw + Mathf.Pi);
         }
         public void CreateViews(SessionContext session)
         {

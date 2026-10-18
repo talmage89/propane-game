@@ -16,6 +16,16 @@ public sealed class GameCatalog : IPlanCatalog
 
     public Vector2 PropFootprint(string model, float scale) => Resolve(model).Footprint * scale;
 
+    /// <summary>Capture native catalog measurements on the main thread before worker generation.</summary>
+    public static PlanCatalogSnapshot Capture(IPlanCatalog source)
+    {
+        var footprints = new Dictionary<string, Vector2>();
+        var houses = source.HouseFootprints.ToArray();
+        var palettes = source.HousePaletteCount;
+        foreach (var key in PlanCatalogSnapshot.Keys) footprints[key] = source.PropFootprint(key, 1f);
+        return new PlanCatalogSnapshot(houses, palettes, footprints);
+    }
+
     /// <summary>Maps a plan model key ("prop:x", "car:x", "nature:x", "furniture:x") to its catalog entry.</summary>
     public static ModelInfo Resolve(string model)
     {
