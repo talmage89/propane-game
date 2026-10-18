@@ -86,8 +86,6 @@ public partial class Rifle : Node3D
         return new Transform3D(basis, muzzle - basis * muzzleLocal);
     }
 
-    public void AlignBarrel(Vector3 target) => GlobalTransform = AlignBarrel(GlobalTransform, MuzzleLocal.Origin, target);
-
     /// <summary>Where the left hand belongs in rifle space: the foregrip, or the magazine and bolt catch mid-reload.</summary>
     public Vector3 LeftHandLocal { get; private set; }
 
