@@ -35,6 +35,12 @@ def observe(project):
         raise ValueError('source already observed')
     source = ROOT / 'src/Dev/NetScenarios/VentResidualObservation.cs'
     shutil.copyfile(source, project / source.relative_to(ROOT))
+    # The controlled acceleration probe is a new Dev case; existing fixture endings stay untouched.
+    for name in ('src/Dev/NetScenarios/BallisticScenario.cs', 'src/Dev/NetScenarios/NetScenarioRegistry.cs',
+                 'src/Dev/UnitTests/NetScenarioTests.cs'):
+        target = project / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(ROOT / name, target)
     body = project / 'src/Net/BodySync.cs'
     insert(body, 'entries[id] = entry;', f'        {CALL}.Record(entry, "register");')
     insert(body, 'resolved = authority;', f'        {CALL}.Authority(this, authority);')
@@ -89,10 +95,13 @@ def main():
     observe(project)
     changes = {name: dict(before=hashlib.sha256(raw).hexdigest(), after=hashlib.sha256((project / name).read_bytes()).hexdigest())
                for name, raw in before.items() if raw != (project / name).read_bytes()}
-    expected = {'src/Net/BodySync.cs', 'src/Net/BodyPublisher.cs', 'src/Net/Match.cs', 'src/Dev/NetTest.cs'}
+    expected = {'src/Net/BodySync.cs', 'src/Net/BodyPublisher.cs', 'src/Net/Match.cs', 'src/Dev/NetTest.cs',
+                'src/Dev/NetScenarios/NetScenarioRegistry.cs', 'src/Dev/UnitTests/NetScenarioTests.cs'}
+    optional = {'src/Dev/NetScenarios/NetScenarioRegistry.cs', 'src/Dev/UnitTests/NetScenarioTests.cs'}
+    expected -= {name for name in optional if before[name] == (project / name).read_bytes()}
     if set(changes) != expected:
         raise ValueError(f'unexpected source delta: {set(changes)}')
-    (project.parent / 'observation.json').write_text(json.dumps(dict(revision=args.revision, changes=changes, observer_sha256=hashlib.sha256((project / 'src/Dev/NetScenarios/VentResidualObservation.cs').read_bytes()).hexdigest(), tuning_sha256=hashlib.sha256((project / 'tuning.tres').read_bytes()).hexdigest()), indent=2) + '\n')
+    (project.parent / 'observation.json').write_text(json.dumps(dict(revision=args.revision, changes=changes, observer_sha256=hashlib.sha256((project / 'src/Dev/NetScenarios/VentResidualObservation.cs').read_bytes()).hexdigest(), tuning_sha256=hashlib.sha256((project / 'tuning.tres').read_bytes()).hexdigest(), new_sources={str(p.relative_to(project)): hashlib.sha256(p.read_bytes()).hexdigest() for p in (project / 'src').rglob('*.cs') if str(p.relative_to(project)) not in before}), indent=2) + '\n')
     (project.parent / 'observation.patch').write_text(''.join(''.join(difflib.unified_diff(before[name].decode().splitlines(True),
         (project / name).read_text().splitlines(True), fromfile='parent/' + name, tofile='observed/' + name)) for name in sorted(changes)))
     subprocess.run(['dotnet', 'build', 'Propane.csproj', '-c', 'Debug', '-nologo', '-v', 'quiet', '-warnaserror'], cwd=project, check=True)

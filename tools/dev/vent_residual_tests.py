@@ -46,6 +46,21 @@ class VentResidualTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             alignment(logs, LIMITS)
 
+    def test_cli_retains_failed_report_and_returns_nonzero(self):
+        with tempfile.TemporaryDirectory(dir=ROOT / 'build', prefix='fu2a-cli-') as directory:
+            paths = [Path(directory) / f'{peer}.log' for peer in range(2)]
+            output = Path(directory) / 'report.json'
+            for shift in (0, 2):
+                for path, samples in zip(paths, [log(), log(shift=shift)]):
+                    path.write_text('\n'.join(
+                        f'tank-check match 1 time {s.time} phase {s.phase} final {s.final} length {s.length} n {len(s.tanks)}' +
+                        ''.join(f' {body}:{state}:{motion}:' + ','.join(map(str, point))
+                                for body, (state, motion, point) in s.tanks.items()) for s in samples[1]))
+                result = subprocess.run([sys.executable, '-B', str(ROOT / 'tools/dev/vent_residual_report.py'),
+                                         *map(str, paths), f'--output={output}'], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+                self.assertEqual(result.returncode, int(shift != 0), result.stdout)
+                self.assertEqual(bool(json.loads(output.read_text())['verdict']['failures']), shift != 0)
+
     def test_diagnostics_do_not_mutate_samples(self):
         logs = [log(), log(.025)]
         before = copy.deepcopy(logs)

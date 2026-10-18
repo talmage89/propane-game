@@ -134,6 +134,7 @@ def main():
     args.output.write_text(json.dumps(result, indent=2) + '\n')
     print(json.dumps(dict(failures=result['verdict']['failures'], final_moving=result['verdict']['final_moving_peak'],
                           grids=[m['grid'] for m in result['alignment']])))
+    raise SystemExit(1 if result['verdict']['failures'] else 0)
 
 
 if __name__ == '__main__':

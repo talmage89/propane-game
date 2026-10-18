@@ -12,7 +12,7 @@ python3 -B tools/dev/vent_residual.py --revision=HEAD --label=fu2a-observed
 ```
 
 The output project is `build/fu2a-observed/project`. `observation.json` records changed-source hashes and
-`observation.patch` records its four insertion-only source deltas. The rest of its runtime comes from the
+`observation.patch` records its insertion-only runtime/host deltas and the added Dev ballistic case/registration. The rest of its runtime comes from the
 specified revision. Asset imports are borrowed from this worktree. Do not rebuild the worktree while preparing
 an unrelated revision's asset imports. The preparer checks exact anchors and refuses double instrumentation.
 
@@ -31,6 +31,8 @@ and after the run. It preserves failures and propagates the launcher's unchanged
 observation flag for an uninstrumented parent run. The historical P5 workload uses `-n 4 -w 0 -l 90`, server
 `--match-seed=25`, and `--melee-start --net-seed=2 --net-lag=120 --net-jitter=30 --net-loss=3` as client arguments.
 Use `-w 1` for an invisible rendered client; capture with `--capture-dir="$PWD/build/fu2a-shots"`.
+Inside the agent sandbox, process visibility is restricted to that agent; absence of other worktrees' processes
+does not establish an idle machine. The load log labels this scope, and `uptime` remains machine-wide.
 
 A successful observed run writes `traces/peer-*-match-*.jsonl`. Verify these exist before classifying it as
 instrumented. The JSONL retains publication poses **after** the real sequence increment, incoming states before
@@ -49,7 +51,7 @@ python3 -B tools/dev/vent_residual_report.py build/fu2a-floor/bot*.log \
 ```
 
 This diagnostic first calls the unchanged checker. Its verdict is authoritative; the sidecar cannot turn a failure
-into a pass. It records the final common observed grid, both raw sample endpoints, interpolation span/weight,
+into a pass. It writes the report and returns nonzero for a failed verdict or invalid coverage. It records the final common observed grid, both raw sample endpoints, interpolation span/weight,
 independent final/completion times and every final pair distance. With traces it also extracts a two-second window
 around the worst final body (`--body` and `--window` override that selection). It also reports authored hull minimum world Y at each peer's nearest correction decision when configuration data
 is available. On vent-contact's y=0 clear floor this exposes impossible predicted support; it is not a general
@@ -63,3 +65,27 @@ Observation adds serialization, allocation, contact-report storage and disk work
 or deterministic replay, and fixed world/fault seeds do not fix native trajectories. Retain uninstrumented controls
 and report other-worktree load. Do not change correction until the failing case separates target prediction,
 post-correction native contact response, transport age, ownership and checker alignment.
+
+
+The separate `ballistic` scenario isolates acceleration: no contacts, damping, rotation or jet thrust. It uses
+native motion and the real puncture/authority path with a zero fixture impulse direction. Damping uses replace mode
+so world damping cannot contaminate the control. It does not reset poses
+or velocities after initialization, stop movement at the deadline, or change NetTest's results/completion rules.
+A high initial altitude keeps the entire ordinary 20-second match and results interval clear of the floor.
+`--ballistic-gravity=0` is the constant-velocity control; `1` enables ordinary engine gravity. Both require
+`--tune.VentThrust=0`. Native assertions reject missing authority, accidental contacts/spin and a gravity selection
+that did not take effect. The tank checker's verdict is separate; a diagnostic run can fail convergence after all
+fixture assertions pass. These are fixture overrides, not changed game tuners or rules.
+`--ballistic-vertical-speed=300` starts an upward arc when gravity is enabled, and a fast linear stream when it
+is disabled. The arc approaches its apex near the ordinary final observation, separating acceleration from the
+large wall-clock/physics-step alignment error possible at high speed. No velocity is reset at the apex.
+
+```sh
+# Run separately for GRAVITY=0 and GRAVITY=1, with fresh directories.
+GRAVITY=1
+python3 -B tools/dev/vent_residual_run.py --project=build/fu2a-observed/project \
+  --output="build/fu2a-ballistic-$GRAVITY" -- -p 24682 -n 2 -w 0 -l 20 -s '--match-seed=23' -- \
+  --scenario=ballistic --ballistic-gravity="$GRAVITY" --tune.VentThrust=0 \
+  --net-seed=2 --net-lag=120 --net-jitter=30 --net-loss=3 \
+  --vent-residual-dir="$PWD/build/fu2a-ballistic-$GRAVITY/traces"
+```

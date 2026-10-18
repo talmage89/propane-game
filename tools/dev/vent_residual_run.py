@@ -21,6 +21,8 @@ def interrupted(signum, _frame):
 
 def snapshot(stream, phase):
     stream.write(f'\n{phase} monotonic={time.monotonic():.6f}\n')
+    stream.write('process_visibility=agent_namespace; uptime=machine_wide\n' if os.environ.get('PROPANE_AGENT_JAIL')
+                 else 'process_visibility=host; uptime=machine_wide\n')
     stream.flush()
     subprocess.run(['uptime'], stdout=stream, check=True)
     processes = subprocess.check_output(['ps', '-eo', 'pid,ppid,pcpu,pmem,comm,args'], text=True)

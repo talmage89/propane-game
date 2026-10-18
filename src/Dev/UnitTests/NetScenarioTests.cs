@@ -151,7 +151,7 @@ public static class NetScenarioTests
         });
         runner.Run("net scenarios/registration inventory and completion obligations remain independent", () =>
         {
-            var required = new[] { "duel", "pickup", "drop-refusal", "puncture-race", "root-refusal", "future-epoch", "appearance", "gather", "melee", "body-stream", "vent-contact", "king", "king-late" };
+            var required = new[] { "duel", "pickup", "drop-refusal", "puncture-race", "root-refusal", "future-epoch", "appearance", "gather", "melee", "body-stream", "ballistic", "vent-contact", "king", "king-late" };
             var names = new[] { "", "watch", "capacity", "movement" }.Concat(required).Order(StringComparer.Ordinal).ToArray();
             Assert(NetScenarioRegistry.All.Select(r => r.Name).Order(StringComparer.Ordinal).SequenceEqual(names), "CLI scenario inventory changed");
             Assert(NetScenarioRegistry.All.Select(r => r.Name).Distinct().Count() == names.Length, "duplicate scenario registration");

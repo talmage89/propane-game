@@ -24,6 +24,7 @@ internal static class NetScenarioRegistry
         new("root-refusal", host => new AuthorityOrderScenario(host), NetScenarioCompletion.Assertions),
         new("future-epoch", host => new AuthorityOrderScenario(host), NetScenarioCompletion.Assertions),
         new("body-stream", host => new BodyStreamScenario(host), NetScenarioCompletion.Assertions),
+        new("ballistic", host => new BallisticScenario(host), NetScenarioCompletion.Assertions),
         new("vent-contact", host => new VentContactScenario(host), NetScenarioCompletion.Assertions),
         new("king", host => new KingScenario(host), NetScenarioCompletion.Assertions),
         new("king-late", host => new KingLateScenario(host), NetScenarioCompletion.Assertions),
