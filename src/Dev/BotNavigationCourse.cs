@@ -6,6 +6,7 @@ using Propane.Bots;
 using Propane.Core;
 using Propane.Navigation;
 using Propane.Player;
+using Propane.ReleaseSmoke;
 using Propane.World;
 using Propane.World.Plan;
 

@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Godot;
 using Propane.Core;
 using Propane.Lab;
+using Propane.ReleaseSmoke;
 
 namespace Propane.Dev.LabCases;
 

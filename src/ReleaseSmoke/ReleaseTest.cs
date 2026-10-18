@@ -4,7 +4,7 @@ using Propane.Core;
 using Propane.Net;
 using Propane.UI;
 
-namespace Propane.Dev;
+namespace Propane.ReleaseSmoke;
 
 /// <summary>
 /// Exercises the real release menus and single player, or joins a server and plays a match against another client.
@@ -32,7 +32,7 @@ public partial class ReleaseTest : Node
         DisplayServer.WindowSetVsyncMode(DisplayServer.VSyncMode.Disabled);
         Engine.MaxFps = 60;
         Core.PlayerSettings.UseFile("user://release_test_settings.cfg");
-        network = DevArgs.Get("scenario") == "network";
+        network = LaunchArgs.Current.Get("scenario") == "network";
         main = new Main { Name = "Main" };
         AddChild(main);
         director = new CaptureDirector();
@@ -92,7 +92,7 @@ public partial class ReleaseTest : Node
                 return;
             }
             var net = main.GetNode<NetClient>("Net");
-            if (net.Lobby is { } lobby && lobby.Members.Count >= DevArgs.GetFloat("players", 2))
+            if (net.Lobby is { } lobby && lobby.Members.Count >= LaunchArgs.Current.GetFloat("players", 2))
             {
                 roamingLobby = net.LobbyWorlds && lobby.WorldId != 0;
                 if (roamingLobby)
@@ -113,7 +113,7 @@ public partial class ReleaseTest : Node
                     }
                 }
                 director.Screenshot("02_network_lobby");
-                net.SetMatchLength(DevArgs.GetFloat("length", 30));
+                net.SetMatchLength(LaunchArgs.Current.GetFloat("length", 30));
                 if (!Press("Start match"))
                 {
                     Fail("start match button missing");
@@ -144,7 +144,7 @@ public partial class ReleaseTest : Node
             playingShot = elapsed + 12;
             director.Screenshot("03_cross_platform_match");
             GD.Print($"[releasetest] playing with {match.RemoteBodies.Count()} remote players, {match.LiveTanks.Count()} tanks");
-            Advance(DevArgs.GetFloat("length", 30) + 30);
+            Advance(LaunchArgs.Current.GetFloat("length", 30) + 30);
         }
         else if (stage == 3)
         {

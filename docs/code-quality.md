@@ -72,9 +72,9 @@ The real-device and network menu scenes remain responsible for input delivery an
 (an `=` in first place is part of the key), a later argument replaces an earlier one, and numbers use the current culture
 and fall back when absent or not numbers. `Has` means the argument was given with any value, so `--classic-lobby=false`
 still counts. `Dev.DevArgs` reads the same cache for the harnesses and keeps their `Setup`, `MarkReady` and optimized-Debug
-verification; nothing outside `src/Dev` reads `DevArgs`.
+verification; nothing outside `src/Dev` reads `DevArgs`; the shipped smoke reads `LaunchArgs.Current` directly.
 
-The shipped game reads the options below and no others. The harness options (`--scenario`, `--capture-dir`, `--tune.*`
+Normal game entry points read the options below. The harness options (`--scenario`, `--capture-dir`, `--tune.*`
 and the rest) go through `DevArgs`; a Debug server applies `--tune.*` too, before it listens.
 
 | Option | Read by | Effect |
@@ -97,27 +97,34 @@ cover the rest. Add a new runtime option to `LaunchArgs`'s consumers, this table
 
 ### Release smoke
 
-`--release-test` is the one shipped entry point that lives in `src/Dev`. Official export templates disallow scene
+`--release-test` lives in `src/ReleaseSmoke` (`Propane.ReleaseSmoke`). Official export templates disallow scene
 overrides, so an archive's own main scene hosts the test: `Main._Ready` adds `ReleaseTest` in place of the front end when
 the argument is given and `Main` is a child of the root. `ReleaseTest` then builds a nested `Main`, presses the real menu
 buttons and exits 0 on PASS and 1 on a missing button, empty suburb or stage timeout. With `--scenario=network
 --connect=host:port` it creates a lobby, waits for `--players` (default 2) and plays a `--length` match with a bot.
 It opens the roaming lobby's panel with a real Tab event, or uses the classic lobby menu when presented, then
-verifies match completion and return to that lobby. Its transitive dependencies in `src/Dev`:
+verifies match completion and return to that lobby. Its support code shares that directory and namespace:
 
 | Class | File | Used for |
 | --- | --- | --- |
 | `ReleaseTest` | `ReleaseTest.cs` | The staged smoke run, its timeouts and exit codes. |
-| `CaptureDirector`, `FrameMetrics`, `FrameEncoder` | `CaptureDirector.cs`, `FrameMetrics.cs` | `--capture-dir` screenshots, `--record` with its fps and timeout, `--frame-metrics`. |
+| `CaptureDirector`, `FrameEncoder` | `CaptureDirector.cs` | `--capture-dir` screenshots and `--record` with its fps and timeout. |
+| `FrameMetrics` | `FrameMetrics.cs` | Optional `--frame-metrics` telemetry. |
 | `Bot`, `IBotBrain` | `Bot.cs` | The bot that plays the network scenario's match for the first client. |
-| `DevArgs` | `DevArgs.cs` | The smoke's own options (`--scenario`, `--players`, `--length`, `--capture-dir`...), read through `LaunchArgs`. |
 
-Everything else it touches is ordinary game code (`Main`, `Menus`, `Game`, `Match`, `NetClient`, `PlayerSettings`).
-All of `src/Dev` stays compiled into Release builds; there is no exclusion or assembly split, and the dev scenes in
-`scenes/dev` are what the export presets leave out. Nothing else in `src/Dev` is reachable from a shipped entry point:
-`make test-infra` fails if code outside `src/Dev` names the Dev namespace, other than `Main` creating `ReleaseTest`.
-Moving the smoke or its dependencies out of `src/Dev` (for example to exclude `src/Dev` from Release) means moving this
-whole set together.
+These helpers read smoke options through `LaunchArgs.Current`; they do not apply harness tuning or optimized-Debug
+checks. Everything else they touch is ordinary game code. Dev harnesses reuse the same helpers.
+
+Godot's release exporter publishes the **ExportRelease** configuration. `Propane.csproj` removes `src/Dev/**/*.cs`
+from that configuration's compiler inputs, including Godot's generated script registration. The export presets omit
+both `scenes/dev/*` and `src/Dev/*` resources, including empty script placeholders. No Dev types ship.
+Debug editor builds, ExportDebug debug exports and local optimized Release builds keep Dev; `make bench CONFIG=Release`
+and every scripted scene remain available. Local Release is not the shipping configuration.
+
+`make lint` (also CI's lint partition) compiles ExportRelease with warnings as errors, without exporting;
+a runtime reference to an excluded Dev type fails compilation. `make test-infra` additionally checks the source
+boundary with no exception for Main or the smoke, and proves a failed shipping compile stops the gate. One assembly keeps
+Godot's scene-attached scripts and resource identity in their existing project without another assembly contract.
 
 Run these from an exported Linux build (`tools/release/build.sh` stages one in `build/package/linux`) to check the
 launch options and the smoke on the real binary. The clients exit 0 on success; a server runs until stopped:

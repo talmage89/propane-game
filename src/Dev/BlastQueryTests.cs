@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Godot;
 using Propane.Core;
+using Propane.ReleaseSmoke;
 using Propane.Tank;
 
 namespace Propane.Dev;

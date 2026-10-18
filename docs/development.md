@@ -32,7 +32,8 @@ Requires Godot 4.7.2 (.NET edition) and the .NET 10 SDK.
 - Command line: `make run`. `make play` runs optimized Release C# locally (`CONFIG=Debug` selects Debug); see
   [Measuring scale](runbooks/measuring-scale.md#playing-optimized-c-locally). `make` lists the other tasks (tests, a local
   server, bots, releases); they find Godot on `PATH` (`godot-mono` or `godot`) or in `/Applications`, or set `GODOT` to its binary.
-- Quality gate: `make lint` verifies C# formatting and rebuilds with warnings as errors. `make check` runs lint,
+- Quality gate: `make lint` verifies C# formatting and rebuilds Debug and the shipping ExportRelease configuration
+  with warnings as errors (no export needed). `make check` runs lint,
   then `make test`, then `make test-infra` (the gate's own self-tests, `tools/dev/lint_tests.py`: it needs no Godot,
   and CI runs it as the `infra` job). Run it before submitting a change. `tools/dev/check_world.sh` prints log tails and keeps its
   scratch directory on failure. GitHub Actions runs the same checks on pushes to `dev`
@@ -450,6 +451,13 @@ aimed eye more than 15 cm from the sight. These are sanity bounds; rendered view
 and cheek weld. [evidence/rifle-contact.md](evidence/rifle-contact.md) records the wrist and finger calibration.
 
 ## Versions and releases
+
+Godot's .NET exporter selects `ExportRelease` for `--export-release` and `ExportDebug` for `--export-debug`.
+`ExportRelease` excludes all `src/Dev` C# sources; the presets also omit their script resources and `scenes/dev`.
+The small exported smoke and its capture, metrics and bot helpers live in `src/ReleaseSmoke`; `--release-test`
+keeps working inside an untouched archive. Editor/`make build` Debug, debug exports and local optimized Release
+(`make play` and `make bench CONFIG=Release`) retain the harnesses. See the
+[Dev boundary](code-quality.md#release-smoke).
 
 Work happens on `dev`; `main` is what has been released. The version is `config/version` in `project.godot`,
 MAJOR.MINOR.PATCH, and it decides who plays together:

@@ -2,6 +2,7 @@ using System;
 using Godot;
 using Propane.Core;
 using Propane.Player;
+using Propane.ReleaseSmoke;
 
 namespace Propane.Dev;
 

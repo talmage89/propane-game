@@ -5,6 +5,7 @@ using Godot;
 using Propane.Core;
 using Propane.Dev.UnitTests;
 using Propane.Net;
+using Propane.ReleaseSmoke;
 using Propane.UI;
 
 namespace Propane.Dev;

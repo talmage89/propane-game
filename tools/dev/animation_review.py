@@ -15,7 +15,7 @@ import tarfile
 
 ROOT = Path(__file__).resolve().parents[2]
 FILES = ('src/Dev/AnimationReview.cs', 'src/Dev/AnimationReviewProbe.cs',
-         'scenes/dev/animation_review.tscn', 'src/Dev/CaptureDirector.cs')
+         'scenes/dev/animation_review.tscn')
 
 
 def run(args, directory, log):
@@ -34,11 +34,15 @@ def prepare(ref, projects):
         with tarfile.open(fileobj=io.BytesIO(archive)) as source:
             source.extractall(target, filter='data')
     release = sha == subprocess.check_output(['git', 'rev-parse', 'v0.2.0'], cwd=ROOT, text=True).strip()
+    modern = (target / 'src/ReleaseSmoke/CaptureDirector.cs').exists()
     for name in FILES:
         (target / name).parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(ROOT / name, target / name)
+        text = (ROOT / name).read_text()
+        (target / name).write_text(text if modern else text.replace('using Propane.ReleaseSmoke;\n', ''))
     # The release predates safe managed-render shutdown and recording. Only transplant the dev capture helper.
-    capture = (ROOT / 'src/Dev/CaptureDirector.cs').read_text()
+    capture = (ROOT / 'src/ReleaseSmoke/CaptureDirector.cs').read_text()
+    if not modern:
+        capture = capture.replace('namespace Propane.ReleaseSmoke;', 'namespace Propane.Dev;').replace('LaunchArgs.Current.', 'DevArgs.')
     if release:
         capture = capture.replace('ShutdownGuard.Quit(GetTree())', 'GetTree().Quit()')
         capture = capture.replace('ShutdownGuard.Quit(GetTree(), 1)', 'GetTree().Quit(1)')
@@ -48,7 +52,8 @@ def prepare(ref, projects):
         if 'PROPANE_REVIEW_RELEASE' not in text:
             text = text.replace('<PropertyGroup>', '<PropertyGroup>\n    <DefineConstants>$(DefineConstants);PROPANE_REVIEW_RELEASE</DefineConstants>\n    <DefaultItemExcludes>$(DefaultItemExcludes);build/**</DefaultItemExcludes>', 1)
             project.write_text(text)
-    (target / 'src/Dev/CaptureDirector.cs').write_text(capture)
+    capture_path = 'src/ReleaseSmoke/CaptureDirector.cs' if modern else 'src/Dev/CaptureDirector.cs'
+    (target / capture_path).write_text(capture)
     # Never load local/saved tuner files. The scene constructs code-default tuners, normalized aim speed on release.
     (target / 'build').mkdir(exist_ok=True)
     (target / 'build/.gdignore').touch()

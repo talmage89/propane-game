@@ -9,7 +9,7 @@ using Godot;
 using Propane.Core;
 using Thread = System.Threading.Thread;
 
-namespace Propane.Dev;
+namespace Propane.ReleaseSmoke;
 
 /// <summary>
 /// Runs a timeline of scripted actions and screenshots for automated visual checks. Pass
@@ -49,12 +49,12 @@ public partial class CaptureDirector : Node
 
     public override void _Ready()
     {
-        if (CollectFrameMetrics && DevArgs.Get("frame-metrics") != null)
+        if (CollectFrameMetrics && LaunchArgs.Current.Get("frame-metrics") != null)
             AddChild(new FrameMetrics { ProcessPriority = int.MaxValue });
         timeline.Sort((a, b) => a.Time.CompareTo(b.Time));
         ProcessMode = ProcessModeEnum.Always;
-        recordFps = DevArgs.GetFloat("record-fps", 30f);
-        recordTimeout = TimeSpan.FromSeconds(Math.Max(DevArgs.GetFloat("record-timeout", 30f), 0.1f));
+        recordFps = LaunchArgs.Current.GetFloat("record-fps", 30f);
+        recordTimeout = TimeSpan.FromSeconds(Math.Max(LaunchArgs.Current.GetFloat("record-timeout", 30f), 0.1f));
     }
 
     public override void _ExitTree()
@@ -128,7 +128,7 @@ public partial class CaptureDirector : Node
     /// </summary>
     private void Record()
     {
-        var path = DevArgs.Get("record");
+        var path = LaunchArgs.Current.Get("record");
         if (path == null || recordUnavailable || DisplayServer.GetName() == "headless")
         {
             return;
@@ -206,7 +206,7 @@ public partial class CaptureDirector : Node
     /// ExitTree drains callbacks before C# teardown.</summary>
     public void ScreenshotAsync(string name)
     {
-        var dir = DevArgs.Get("capture-dir");
+        var dir = LaunchArgs.Current.Get("capture-dir");
         if (dir == null || DisplayServer.GetName() == "headless") return;
         var made = DirAccess.MakeDirRecursiveAbsolute(dir);
         if (made != Error.Ok)
@@ -256,7 +256,7 @@ public partial class CaptureDirector : Node
 
     public void Screenshot(string name)
     {
-        var dir = DevArgs.Get("capture-dir");
+        var dir = LaunchArgs.Current.Get("capture-dir");
         if (dir == null || DisplayServer.GetName() == "headless")
         {
             return;

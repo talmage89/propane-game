@@ -3,10 +3,11 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using Godot;
+using Propane.Core;
 using Propane.Fx;
 using Propane.Player;
 
-namespace Propane.Dev;
+namespace Propane.ReleaseSmoke;
 
 /// <summary>Optional harness telemetry, rendered or headless, after 180 startup frames; each process owns its CSV.</summary>
 public partial class FrameMetrics : Node
@@ -34,7 +35,7 @@ public partial class FrameMetrics : Node
 
     public override void _Ready()
     {
-        var directory = DevArgs.Get("frame-metrics")!;
+        var directory = LaunchArgs.Current.Get("frame-metrics")!;
         Directory.CreateDirectory(directory);
         output = new StreamWriter(Path.Combine(directory, $"frames-{OS.GetProcessId()}.csv"));
         output.WriteLine("frame,wall,gpu,process,physics," + string.Join(",", systems) + ",time,blast_count,explosion_count,physics_steps,physics_tail,stage,process_callbacks,physics_callbacks,brain_calls,navigation_sweep_calls,navigation_support_calls," + string.Join(",", actorSystems.SelectMany(s => new[] { "Actor" + s, "Actor" + s + "Bytes", "Actor" + s + "Calls" })) + ",render_cpu,render_setup_cpu,visible_draw_calls,shadow_draw_calls,visible_primitives,shadow_primitives");

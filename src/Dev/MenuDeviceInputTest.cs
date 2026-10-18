@@ -6,6 +6,7 @@ using Propane.Core;
 using Propane.Lab;
 using Propane.Net;
 using Propane.Player;
+using Propane.ReleaseSmoke;
 using Propane.UI;
 
 namespace Propane.Dev;

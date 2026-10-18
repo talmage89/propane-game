@@ -9,6 +9,7 @@ using Godot;
 using Propane.Core;
 using Propane.Lab;
 using Propane.Player;
+using Propane.ReleaseSmoke;
 using Propane.Tank;
 using Propane.World;
 

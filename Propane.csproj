@@ -18,6 +18,12 @@
     <DefaultItemExcludes>$(DefaultItemExcludes);build/**</DefaultItemExcludes>
   </PropertyGroup>
 
+  <!-- Godot release export publishes ExportRelease, not the local optimized Release used by benchmarks.
+       Debug, ExportDebug and local Release retain every harness. The archive smoke lives in src/ReleaseSmoke. -->
+  <ItemGroup Condition="'$(Configuration)' == 'ExportRelease'">
+    <Compile Remove="src/Dev/**/*.cs" />
+  </ItemGroup>
+
   <!-- Tuning is one Resource declared across the partial files below, and the order of its properties is observable:
        it is the order of the F1 panel and inspector groups, of the Lab dials, of the snapshot keys and so of the
        bytes of a match's tuner snapshot. Two things set it, and neither may be left to chance:

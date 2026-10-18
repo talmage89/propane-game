@@ -6,7 +6,7 @@ using Propane.Modes;
 using Propane.Net;
 using Propane.Player;
 
-namespace Propane.Dev;
+namespace Propane.ReleaseSmoke;
 
 public interface IBotBrain : IPlayerInputSource
 {
