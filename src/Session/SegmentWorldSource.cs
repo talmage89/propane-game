@@ -34,13 +34,17 @@ public sealed class LocalSegmentFeed(SegmentSettings settings, int runSeed) : IS
 {
     private readonly PlanCatalogSnapshot catalog = new(new GameCatalog());
     private readonly Dictionary<int, Task<SegmentPlan>> plans = new();
+    // Feed-lifetime tombstones: [0, forgottenBefore) is implicit. Only forgotten indices beyond a gap need entries.
+    // Ordered streaming uses no set storage; capacity is bounded by the maximum outstanding out-of-order forgets,
+    // not total retirements. Arbitrary callers can leave arbitrarily many gaps; no request/forget history is evicted.
     private readonly HashSet<int> forgotten = new();
+    private long forgottenBefore; // long represents the exclusive boundary after forgetting int.MaxValue safely.
 
     public int RunSeed => runSeed;
 
     public void Request(int index)
     {
-        if (index < 0 || plans.ContainsKey(index) || forgotten.Contains(index)) return;
+        if (index < forgottenBefore || plans.ContainsKey(index) || forgotten.Contains(index)) return;
         plans[index] = Task.Run(() => SegmentPlans.Generate(settings, catalog, runSeed, index));
     }
 
@@ -60,7 +64,16 @@ public sealed class LocalSegmentFeed(SegmentSettings settings, int runSeed) : IS
 
     public void Forget(int index)
     {
-        forgotten.Add(index);
+        // Negative indices were never requestable. Forgetting one has no observable effect beyond removing a plan.
+        if (index == forgottenBefore)
+        {
+            forgottenBefore++;
+            while (forgottenBefore <= int.MaxValue && forgotten.Remove((int)forgottenBefore)) forgottenBefore++;
+        }
+        else if (index > forgottenBefore)
+        {
+            forgotten.Add(index);
+        }
         plans.Remove(index);
     }
 

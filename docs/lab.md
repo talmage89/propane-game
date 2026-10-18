@@ -148,8 +148,9 @@ drain in reverse registration order after world invalidation and before runner s
 runners. These are managed events, so detachment also clears callbacks on wrappers whose native bodies were freed
 first. Dissolve Run explicitly forgets tracking before starting native segment retirement; visual dissolution alone
 keeps the registration until retirement. Shooter/drop references retire with their tank. This bounds subscription roots,
-not every streaming data structure: forgotten-index history, timing lists, navigation chunks and the global reveal window
-remain separate work.
+not every streaming data structure. W1 now compacts forgotten prefixes and makes raw timing histories diagnostic
+only ([streamed content history](world-services.md#streamed-content-history)); navigation chunks and the global
+reveal window remain separate work.
 
 ## Verification
 

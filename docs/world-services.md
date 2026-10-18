@@ -195,3 +195,33 @@ protocol peer ids through `ProtocolPeerMap`.
 
 Actor lookup uses the session identity registry; retired actor ids cannot be reattached. Offline sessions allocate
 positive actor ids through the same registry. Local views allocate process-local ids, including fixture views.
+
+## Streamed content history
+
+A `SegmentWorldSource` lives with its session. It retains live segments, at most one staged build, and the queue of
+retiring content not yet drained by the existing per-step budget. Content retirement forgets the plan immediately;
+`AdvanceRetire` frees the suburb and originating effects, and releases the queue's reference. Segment tank arrays,
+pickups and duplicated floor shape live with that content. Arena dissolved-tank/pickup registries and runner tank
+subscriptions forget content at the same boundary. Their storage follows the peak live/building/retiring workload;
+this is not a guarantee that retirement can keep up with arbitrary caller demand.
+
+W1 changes two incidental histories. `LocalSegmentFeed` replaces the complete forgotten-index set with an exclusive
+nonnegative prefix watermark and a sparse set beyond gaps. The ordinary sequential stream needs no sparse entries.
+The set's capacity follows its peak outstanding out-of-order population, not total retirement count; arbitrary
+unclosed gaps can still require arbitrary storage. No identity is evicted: requests after forget remain ignored,
+including forget-before-complete and re-request. Negative requests remain ignored; `Wait` still fails for forgotten
+indices. Worker results have no completion callback into the feed: removing the task handle safely discards even a
+late result. Outstanding tasks may transiently retain their captured feed until completion. Session stopping clears
+the plan handles; forgotten identity remains until feed collection, preserving the existing post-dispose behavior.
+
+`DissolveArena` keeps no timing samples in ordinary play. Set `CollectRawTimings` before diagnostic streaming to
+retain the same ordered build-slice and retirement durations as before; the diagnostic caller bounds its recording
+window. Turning collection off stops appending without discarding already recorded evidence. Both lists retire with
+the arena. `LastStepMilliseconds` remains a scalar measured with a monotonic diagnostic clock on every physics
+callback. These clocks never drive gameplay. The `dissolve` Lab harness explicitly enables raw samples so its reports,
+CSV fields and benchmark consumers retain their evidence. The opt-in `streaming-history` harness checks storage,
+native lifetime and whole arena callback cost ([scenario contract](lab-scenarios.md)).
+
+Navigation chunk retention and ledger tombstones/causal histories have separate correctness contracts and are out
+of scope. W2 still owns the single-stream global reveal limitation above. No generated plan, RNG draw, callback
+order, request admission or retirement budget changes in W1.
