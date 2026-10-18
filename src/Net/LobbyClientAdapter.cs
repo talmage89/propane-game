@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Godot;
+using Propane.Core;
 using Propane.Modes;
 using Propane.Player;
 using Propane.Tank;

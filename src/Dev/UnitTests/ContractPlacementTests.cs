@@ -21,33 +21,33 @@ public static class ContractPlacementTests
         var transcript = new List<object>();
         runner.Run("contracts/identity arithmetic and refusal details", () =>
         {
-            foreach (var index in new[] { 0, 1, 71, BodySync.MaxWorldEntities - 1 })
+            foreach (var index in new[] { 0, 1, 71, BodyIds.MaxWorldEntities - 1 })
             {
-                var map = BodySync.MapTankId(index);
-                var car = BodySync.CarId(index);
+                var map = BodyIds.MapTankId(index);
+                var car = BodyIds.CarId(index);
                 TestRunner.Assert(map == 0x10000000u + index && car == 0x30000000u + index, "world identity arithmetic changed");
                 transcript.Add(new { index, map, car });
             }
-            foreach (var slot in new[] { 0, 1, 71, BodySync.MaxAllocationSlots - 1 })
+            foreach (var slot in new[] { 0, 1, 71, BodyIds.MaxAllocationSlots - 1 })
             {
-                foreach (var counter in new[] { 0, 1, 71, BodySync.MaxDropsPerActor - 1 })
+                foreach (var counter in new[] { 0, 1, 71, BodyIds.MaxDropsPerActor - 1 })
                 {
-                    var drop = BodySync.DropTankId(slot, counter);
+                    var drop = BodyIds.DropTankId(slot, counter);
                     TestRunner.Assert(drop == 0x20000000u + ((uint)slot << 20) + counter, "drop identity arithmetic changed");
                     transcript.Add(new { slot, counter, drop });
                 }
             }
 
-            foreach (var index in new[] { -1, BodySync.MaxWorldEntities })
+            foreach (var index in new[] { -1, BodyIds.MaxWorldEntities })
             {
-                Rejected(() => BodySync.MapTankId(index), "index", transcript);
-                Rejected(() => BodySync.CarId(index), "index", transcript);
+                Rejected(() => BodyIds.MapTankId(index), "index", transcript);
+                Rejected(() => BodyIds.CarId(index), "index", transcript);
             }
-            foreach (var pair in new[] { (-1, 0), (BodySync.MaxAllocationSlots, 0), (0, -1), (0, BodySync.MaxDropsPerActor) })
-                Rejected(() => BodySync.DropTankId(pair.Item1, pair.Item2), "counter", transcript);
-            TestRunner.Assert((int)TankLedger.State.Intact == 0 && (int)TankLedger.State.Venting == 1 &&
-                (int)TankLedger.State.Exploded == 2 && (byte)LobbyServer.LobbyPhase.Staging == 5 &&
-                (int)Propane.Tank.GatherPhase.Settled == 2, "enum values changed");
+            foreach (var pair in new[] { (-1, 0), (BodyIds.MaxAllocationSlots, 0), (0, -1), (0, BodyIds.MaxDropsPerActor) })
+                Rejected(() => BodyIds.DropTankId(pair.Item1, pair.Item2), "counter", transcript);
+            TestRunner.Assert((int)BodyState.State.Intact == 0 && (int)BodyState.State.Venting == 1 &&
+                (int)BodyState.State.Exploded == 2 && (byte)LobbyPhase.Staging == 5 &&
+                (int)GatherPhase.Settled == 2, "enum values changed");
         });
         runner.Run("contracts/catalog capture order and detached values", () =>
         {
@@ -85,8 +85,8 @@ public static class ContractPlacementTests
                 plan.Props.Add(new PropPlacement(model, new Vector2(plan.Props.Count, 2), 0.3f, 1, PropBody.Static, 0, Colors.White));
             var ledger = new TankLedger(plan, 2);
             var live = ledger.Live();
-            TestRunner.Assert(live.Select(b => b.Body.Id).SequenceEqual(new[] { BodySync.MapTankId(0), BodySync.MapTankId(1),
-                BodySync.MapTankId(2), BodySync.CarId(0), BodySync.CarId(3), BodySync.CarId(4) }), "car membership/order changed");
+            TestRunner.Assert(live.Select(b => b.Body.Id).SequenceEqual(new[] { BodyIds.MapTankId(0), BodyIds.MapTankId(1),
+                BodyIds.MapTankId(2), BodyIds.CarId(0), BodyIds.CarId(3), BodyIds.CarId(4) }), "car membership/order changed");
             transcript.Add(live.Select(b => new { b.Body.Id, x = Bits(b.Body.Transform.Origin.X), y = Bits(b.Body.Transform.Origin.Y), z = Bits(b.Body.Transform.Origin.Z) }).ToArray());
         });
         runner.Run("contracts/appearance fallback and malformed count details", () =>
@@ -94,7 +94,7 @@ public static class ContractPlacementTests
             foreach (var index in Enumerable.Range(-17, 35))
             {
                 var appearance = AppearanceRecord.FromPalette(index);
-                TestRunner.Assert(appearance == AppearanceRecord.FromColor(Protocol.PlayerColor(index)), "palette wrap changed");
+                TestRunner.Assert(appearance == AppearanceRecord.FromColor(AppearancePalette.PlayerColor(index)), "palette wrap changed");
                 transcript.Add(new { index, appearance, appearance.LegacyIndex, encoded = Convert.ToHexString(AppearanceCodec.Encode(appearance)) });
             }
             try { AppearanceCodec.Decode(new byte[] { 1, 1, 2, 3, 17 }); throw new InvalidOperationException("accepted bad count"); }

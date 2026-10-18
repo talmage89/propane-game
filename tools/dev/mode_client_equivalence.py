@@ -12,7 +12,7 @@ import shutil
 import subprocess
 
 from authority_equivalence import insert
-from server_equivalence import ROOT, prepare
+from server_equivalence import ROOT, copy_probe, prepare
 
 CALL = 'Propane.Dev.UnitTests.Fixtures.ModeClientObservation'
 
@@ -112,7 +112,7 @@ if __name__ == '__main__':
     for name in ('ModeClientBenchTests.cs', 'ModeClientTests.cs'):
         source = ROOT / 'src/Dev/UnitTests' / name
         if source.exists():
-            shutil.copyfile(source, project / 'src/Dev/UnitTests' / name)
+            copy_probe(source, project / 'src/Dev/UnitTests' / name, project)
     if args.observe:
         observe(project)
     subprocess.run(['dotnet', 'build', 'Propane.csproj', '-c', 'Debug', '-nologo', '-v', 'quiet', '-warnaserror'], cwd=project, check=True)

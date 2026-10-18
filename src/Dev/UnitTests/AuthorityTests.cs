@@ -13,12 +13,12 @@ namespace Propane.Dev.UnitTests;
 [UnitSuite]
 public static class AuthorityTests
 {
-    private static readonly uint Id = BodySync.MapTankId(0);
-    private static readonly uint Other = BodySync.MapTankId(1);
+    private static readonly uint Id = BodyIds.MapTankId(0);
+    private static readonly uint Other = BodyIds.MapTankId(1);
     private static BodyState Pose(uint id, uint epoch = 1, uint sequence = 0) =>
         new(id, new Transform3D(Basis.Identity, new Vector3(4, 2, 3)), Vector3.Right, Vector3.Up, epoch, sequence);
     private static BodyAuthority Grant(int owner, uint epoch, uint sequence = 0) =>
-        new(Pose(Id, epoch, sequence), owner, TankLedger.State.Intact, false, null, Vector3.Zero);
+        new(Pose(Id, epoch, sequence), owner, BodyState.State.Intact, false, null, Vector3.Zero);
     private static ClaimMessage Claim(uint request, params BodyState[] bodies) =>
         new(request, bodies);
     private static PunctureMessage Puncture(int contender, uint epoch = 1) =>
@@ -45,7 +45,7 @@ public static class AuthorityTests
                 victim.Runtime.GraceUntil = 0;
                 f.Match.OnMessage(new NetMessage(Msg.Shot, f.Server.Id, 3,
                     new ShotMessage(Vector3.Zero, Vector3.Up, Vector3.Forward, 0, victim.ActorId, -1), f.Server.ActorId(3), 1, 1));
-                var drops = f.Match.LiveTanks.Where(t => t.NetId >= BodySync.DropTankBase && t.NetId < BodySync.CarBase).ToArray();
+                var drops = f.Match.LiveTanks.Where(t => t.NetId >= BodyIds.DropTankBase && t.NetId < BodyIds.CarBase).ToArray();
                 TestRunner.Assert(drops.Length > 0, "production shot did not create predicted drops");
                 foreach (var drop in drops) { drop.Sleeping = sleeping; }
                 var known = f.Match.Bodies.Get(Id)!;
@@ -273,7 +273,7 @@ public static class AuthorityTests
             var target = new Transform3D(new Basis(Vector3.Up, .5f), tank.GlobalPosition);
             // This fixture's host owns the initial tank; grant the observer stream explicitly.
             f.Match.Bodies.OnAuthority(new BodyAuthority(new BodyState(Id, target, Vector3.Zero, spin, 2, 0),
-                3, TankLedger.State.Venting, false, new VentParameters(Vector3.Zero, Vector3.Right, 1), Vector3.Zero));
+                3, BodyState.State.Venting, false, new VentParameters(Vector3.Zero, Vector3.Right, 1), Vector3.Zero));
             f.Match.Bodies.OnState(3, new BodyState(Id, target, Vector3.Zero, spin, 2, 1), false, 1);
             f.Match.Bodies.Correct(1);
             var steering = tank.AngularVelocity;
@@ -284,7 +284,7 @@ public static class AuthorityTests
             tank._PhysicsProcess(1.0 / 60);
             TestRunner.Assert(tank.AngularVelocity.Length() <= spin.Length() + .001f, "stale observer escaped the ordinary spin limit");
             f.Match.Bodies.OnAuthority(new BodyAuthority(new BodyState(Id, target, Vector3.Zero, spin, 3, 0),
-                2, TankLedger.State.Venting, false, new VentParameters(Vector3.Zero, Vector3.Right, 1), Vector3.Zero));
+                2, BodyState.State.Venting, false, new VentParameters(Vector3.Zero, Vector3.Right, 1), Vector3.Zero));
             f.Match.Bodies.Correct(3);
             tank.AngularVelocity = steering;
             tank._PhysicsProcess(1.0 / 60);
@@ -297,7 +297,7 @@ public static class AuthorityTests
             var pose = tank.GlobalTransform;
             var stalled = new Transform3D(new Basis(Vector3.Forward, .45f) * pose.Basis, pose.Origin + Vector3.Up * .15f);
             f.Match.Bodies.OnAuthority(new BodyAuthority(new BodyState(Id, pose, Vector3.Zero, Vector3.Zero, 2, 0),
-                3, TankLedger.State.Intact, false, null, Vector3.Zero), 0);
+                3, BodyState.State.Intact, false, null, Vector3.Zero), 0);
             tank.GlobalTransform = stalled;
             for (var tick = 0; tick < 120; tick++)
             {
@@ -318,7 +318,7 @@ public static class AuthorityTests
             var pose = tank.GlobalTransform;
             var stalled = pose.Translated(Vector3.Up * .15f);
             f.Match.Bodies.OnAuthority(new BodyAuthority(new BodyState(Id, pose, Vector3.Zero, Vector3.Zero, 2, 0),
-                3, TankLedger.State.Intact, false, null, Vector3.Zero), 0);
+                3, BodyState.State.Intact, false, null, Vector3.Zero), 0);
             tank.GlobalTransform = stalled;
             uint sequence = 0;
             void Tick(double now, Vector3 ownerVelocity)
@@ -562,7 +562,7 @@ public static class AuthorityTests
             var latest = Pose(Id, 2, 99);
             ledger.Update(3, latest, false);
             var transferred = ledger.Transfer(3, 2).Single();
-            TestRunner.Assert(transferred is { Owner: 2, State: TankLedger.State.Venting } && transferred.Body.Epoch == 3 && transferred.Body.Sequence == 0 &&
+            TestRunner.Assert(transferred is { Owner: 2, State: BodyState.State.Venting } && transferred.Body.Epoch == 3 && transferred.Body.Sequence == 0 &&
                 transferred.Vent == puncture.Vent && transferred.Body.Transform == latest.Transform, "departure lost the canonical vent or pose");
             TestRunner.Assert(!ledger.Update(3, Pose(Id, 2, 100), true) && ledger.Update(2, Pose(Id, 3, 1), false), "handoff kept the departed stream");
         });
@@ -609,7 +609,7 @@ public static class AuthorityTests
             using var f = new ServerFixture(playing: false);
             SendActor(f, 2, Msg.Puncture, Puncture(2));
             TestRunner.Assert(f.Packets.Single().Message.Payload is AuthorityMessage { Reason: ClaimRefusal.WrongPhase } result &&
-                result.Bodies.Single().State == TankLedger.State.Intact, "loading silently discarded a predicted puncture");
+                result.Bodies.Single().State == BodyState.State.Intact, "loading silently discarded a predicted puncture");
         });
         runner.Run("authority/detonation and chain claims share ordering and initiating-peer attribution", () =>
         {
@@ -674,7 +674,7 @@ public static class AuthorityTests
             BodyAuthority? accepted = null;
             f.Match.AuthorityResolved += reply =>
             {
-                if (reply.Reason == ClaimRefusal.None && reply.Bodies.Single().State == TankLedger.State.Venting) { accepted = reply.Bodies.Single(); }
+                if (reply.Reason == ClaimRefusal.None && reply.Bodies.Single().State == BodyState.State.Venting) { accepted = reply.Bodies.Single(); }
             };
             f.Flush();
             TestRunner.Assert(accepted is { Body.Epoch: 3 } && accepted.Body.Transform.IsEqualApprox(current) &&
@@ -697,7 +697,7 @@ public static class AuthorityTests
             BodyAuthority? accepted = null;
             f.Match.AuthorityResolved += reply =>
             {
-                accepted = reply.Bodies.FirstOrDefault(b => b.Body.Id == Other && b.State == TankLedger.State.Venting) ?? accepted;
+                accepted = reply.Bodies.FirstOrDefault(b => b.Body.Id == Other && b.State == BodyState.State.Venting) ?? accepted;
             };
             f.Flush();
             TestRunner.Assert(accepted != null && accepted.Body.Linear == Vector3.One * 6 && accepted.Body.Angular == Vector3.One * 2,
@@ -852,7 +852,7 @@ public static class AuthorityTests
             f.Match.OnMessage(new NetMessage(Msg.Authority, f.Server.Id, 0,
                 new AuthorityMessage(2, 1, ClaimRefusal.WrongPhase, new[]
                 {
-                    new BodyAuthority(Pose(Id, 2, 7), 3, TankLedger.State.Venting, false, vent, Vector3.Zero),
+                    new BodyAuthority(Pose(Id, 2, 7), 3, BodyState.State.Venting, false, vent, Vector3.Zero),
                 })));
             var restored = f.Match.LiveTanks.Single(t => t.NetId == Id);
             TestRunner.Assert(restored != tank && restored.State == PropaneTank.TankState.Venting && restored.HoleLocal == vent.Hole,

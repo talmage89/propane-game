@@ -5,7 +5,7 @@ using System.Reflection;
 using System.Threading.Tasks;
 using Godot;
 using Propane.Bots;
-using Propane.Fx;
+using Propane.Diagnostics;
 using Propane.Lab;
 using static Propane.Dev.UnitTests.TestRunner;
 

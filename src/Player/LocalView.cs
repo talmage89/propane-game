@@ -7,7 +7,7 @@ namespace Propane.Player;
 /// <summary>Process-local camera, HUD and device assignment attached to a simulated actor.</summary>
 public partial class LocalView : Node
 {
-    private static readonly Net.IdentitySequence ids = new();
+    private static readonly IdentitySequence ids = new();
     public int LocalViewId { get; } = ids.Allocate();
     public required PlayerCharacter Actor { get; init; }
     private DeviceInput? input;

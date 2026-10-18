@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using Godot;
+using Propane.Core;
 using Propane.Modes;
 using Propane.Net;
 
@@ -64,8 +65,8 @@ internal sealed class KingScenario(INetScenarioHost host) : NetScenario(host)
             var center = (spot + next) / 2;
             kingCamera?.LookAtFromPosition(center + new Vector3(24, 20, 28), center + Vector3.Up);
         }
-        else if (elapsed >= 48 && elapsed < 50 && current.LiveTanks.Where(t => t.NetId >= BodySync.MapTankId(kingInitialTanks) &&
-                     t.NetId < BodySync.DropTankBase).ToArray() is { Length: > 0 } fresh)
+        else if (elapsed >= 48 && elapsed < 50 && current.LiveTanks.Where(t => t.NetId >= BodyIds.MapTankId(kingInitialTanks) &&
+                     t.NetId < BodyIds.DropTankBase).ToArray() is { Length: > 0 } fresh)
         {
             var center = fresh.Aggregate(Vector3.Zero, (sum, t) => sum + t.GlobalPosition) / fresh.Length;
             kingCamera?.LookAtFromPosition(center + new Vector3(5, 4, 6), center);
@@ -79,7 +80,7 @@ internal sealed class KingScenario(INetScenarioHost host) : NetScenario(host)
         kingContested |= state.Contested;
         kingWarned |= state.Warning;
         kingMoved |= state.Zone > 0;
-        kingPiled |= current.LiveTanks.Any(t => t.NetId >= BodySync.MapTankId(kingInitialTanks) && t.NetId < BodySync.DropTankBase);
+        kingPiled |= current.LiveTanks.Any(t => t.NetId >= BodyIds.MapTankId(kingInitialTanks) && t.NetId < BodyIds.DropTankBase);
         if (state.Holder != 0 && state.Minted.Count > 0 && state.Zone == 0) KingShot("hold");
         if (state.Contested) KingShot("contest");
         if (state.Warning) KingShot("warning");

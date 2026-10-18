@@ -25,7 +25,7 @@ contracts/plans; purity excludes native objects/resources, loading and implicit 
 
 | Logical module | Responsibility; allowed direct Propane dependencies |
 | --- | --- |
-| Foundation | Small identity, appearance, configuration, time and observation contracts; no other module. |
+| Foundation | Small shared identity, appearance, body/actor values, configuration, time and diagnostic observation contracts; no other module. |
 | Plans | Ordered generation and plan/catalog data; Foundation. |
 | Rules | Accepted facts, state machines, health, commands and plain mode observations; Foundation. |
 | Simulation | World lifetime, native builder, physical actors/tanks, assets and physical effects; Foundation, Plans. |
@@ -39,6 +39,12 @@ contracts/plans; purity excludes native objects/resources, loading and implicit 
 | Smoke | Explicit exported smoke closure; runtime modules. Only `Main → ReleaseSmoke.ReleaseTest` is an approved runtime entry. |
 | Dev | Tests, probes, scenarios and independent oracles; runtime and Smoke. Runtime and Smoke cannot reach Dev. |
 
+Foundation stays small: shared identity/appearance values, body pose/lifecycle/gather values, actor pose/input values,
+explicit configuration/time and diagnostic observation. Lobby phases/profiles/setup are Wire contracts; standings
+belong to Rules, catalog metadata to Plans, and native pickups to Simulation. Do not move resource owners or
+module-specific adapters into Foundation to avoid a dependency edge. `BodyState.State` retains the old enum's
+simple name and numeric values, which are also observed by the frozen release fixtures.
+
 The executable map is [modules.json](../tools/architecture/modules.json): namespace defaults, explicit type overrides
 for mixed namespaces, and allowed directions. Nested/compiler-generated types inherit their top-level owner's
 module. Dependencies remain visible in their actual compiled nested type in diagnostics; ratchet keys use the
@@ -50,9 +56,9 @@ stable top-level owner so compiler-generated numbering does not cause churn.
 | `Core/` | Foundation by default; world services, spawn, assets and `Tuning` are Simulation; launch/settings are Composition; device setup is Presentation. |
 | `World/Plan/` | Plans; `SegmentPlans.cs` also contains plan types. `SuburbPlans` converts live tuning in Composition; native catalog/builder/materials remain Simulation. |
 | `Modes/` | Rules by default; `ModeDefinition`/`ModeBundle`/`ModeCatalog`/registry/supply are Composition; HUD input/presenters are Presentation; HUD values/`IModeView` remain plain rules observations. |
-| `Player/`, `Tank/`, `Fx/` | Simulation by default; input values and resolved state values are Foundation; cameras/views/device input and mode geometry are Presentation; `ReplicatedIntent` is Client. Profiling remains colocated pending C1. |
+| `Player/`, `Tank/`, `Fx/` | Simulation by default; input values and resolved state values are Foundation; cameras/views/device input and mode geometry are Presentation; `ReplicatedIntent` is Client. The separate `PlayerNetState.cs` is a Foundation value; shared profiling lives in `Diagnostics/`. |
 | `Navigation/`, `Bots/` | Navigation and Bots. |
-| `Net/` | Wire by default; `LobbyServer`/`ServerRun`, ledger, roster, contact admission, ServerMode/ServerModes inputs, plain ModeWireTuners and mode wires/runner are Server; body/actor snapshot helpers, prediction, authority transactions, mode client adapters and inbox are Client; Match/backend factory/update/diagnostics are Composition; NetClient is Client. Plain identity/appearance and selected decoded values are Foundation; `AmmoPickup` is Simulation. |
+| `Net/` | Wire by default; `LobbyServer`/`ServerRun`, ledger, roster, contact admission, ServerMode/ServerModes inputs, plain ModeWireTuners and mode wires/runner are Server; body/actor snapshot helpers, prediction, authority transactions, mode client adapters and inbox are Client; Match/backend factory/update/diagnostics are Composition; NetClient is Client. Lobby/profile/setup contracts and phases are Wire; shared identity/appearance/body values live in `Core/`, standings in Rules, and `World/AmmoPickup` in Simulation. |
 | `UI/` | Presentation by default; front-end screens, their transactions and lobby/stage composition are Composition. |
 | `ReleaseSmoke/`, `Dev/` | Smoke and Dev respectively; no game dependency on the checker project under `tools/architecture/`. |
 
@@ -63,8 +69,8 @@ source type to acquire that dependency. Do not broaden the map or silently regen
 | Temporary boundary | Owner package and exit condition |
 | --- | --- |
 | Match still owns world/actor replication, bots and view binding | B2 owns transactions and B3b1 owns mode client policy. C2 finishes independent replication/bot/view owners, preserving synchronous ordering. |
-| Physical actor holds replication attachments and view/device conveniences | C1 moves identity/body contracts; C2 moves client state and narrow view binding beside actor lifetime. |
-| Wire/server values depend on concrete server enums, client identity helpers, physical snapshot/gather types; plans reach mixed catalog/settings factories | C1 separates plain contracts, formulas and catalog snapshot construction without changing bytes, RNG or IDs. |
+| Physical actor holds replication attachments and view/device conveniences | C1 has moved identity/body contracts; C2 moves client state and narrow view binding beside actor lifetime. |
+| Plans reach mixed catalog/settings factories; King setup still maps plans inside rules | C1 finishes plain metadata and main-thread conversion without changing RNG or construction. Shared identity/body values, lobby phases and actor pose contracts have moved to their owning modules. |
 | Lobby/run native tuning and codec catalog resolution | B3a supplies presentation-free ServerMode/ServerModes inputs. A1 removes LobbyServer template/snapshot sampling; C1 removes ServerRun native tuning/melee coupling; N1 injects owner-scoped codec schema/eligibility resolution. No baseline entry remains assigned to B3a. |
 | Fault transport calls ENet lane helper; server diagnostics/factory cross composition | N1 supplies transport-independent lanes and injected delivery/diagnostic boundaries. |
 | Settings and launch access are implicit | A1 provides explicit application ownership and scoped test stores/overrides. |
@@ -231,8 +237,8 @@ then distributes canonical outcomes. See [multiplayer](multiplayer.md) for exact
 
 Actor IDs differ from peer IDs: one peer can own human and bot actors. Local view IDs stay process-local. Allocation
 slots/retired actor IDs are not recycled; exhaustion fails before reuse. [Participants](../src/Net/Participants.cs)
-and [BodySync](../src/Net/BodySync.cs) currently house these contracts/formulas; C1 relocates them without changing
-ranges. Map tanks start at `0x10000000`, drops at `0x20000000`, cars at `0x30000000`; preserve allocation-slot and
+owns the server roster; [ActorIdentity](../src/Core/ActorIdentity.cs) and [BodyIds](../src/Core/BodyIds.cs) own the shared
+contracts/formulas. Map tanks start at `0x10000000`, drops at `0x20000000`, cars at `0x30000000`; preserve allocation-slot and
 counter bit arithmetic, epochs, actor lives and world revisions. An ENet backend ID is not a protocol peer ID
 ([ProtocolPeerMap](../src/Net/ProtocolPeerMap.cs)).
 
@@ -405,7 +411,7 @@ See [world services](world-services.md#streamed-content-history), [the Lab](lab.
 | World shader state | WorldReveal instance parameters occupy slots 12–15; actor parameters use lower slots. DissolveArena still writes global `reveal_window`: one independently advancing streamed world per process until W2. Multiple cameras of that same stream are supported by the model. |
 | Mode catalog | Composition-owned immutable shipped ModeCatalog; validated ModeRegistry overlays restore exact prior entries/order on scoped disposal (B3a). |
 | Device/glyph preference | Application-level InputSetup/UiStyle today; per-view routing before multiple local users become a shipped feature. |
-| Diagnostics | Explicit launch/profiling switches (EffectProfile, ActorProfile, capacity/capture instrumentation); never hidden gameplay state. C1 relocates misplaced profiling utilities. |
+| Diagnostics | Explicit launch/profiling switches (EffectProfile, ActorProfile, capacity/capture instrumentation); never hidden gameplay state. `Diagnostics.EffectProfile` owns the unchanged process-lifetime counters/scopes, with the same opt-in clock reads and drain operations. |
 
 [Protocol](../src/Net/Protocol.cs) distinguishes the tested 16-actor ceiling from wire safety bounds of 64 actors/peers;
 wire bounds are not a capacity promise. Packet size is bounded to 1 MiB and body batches to 20. Inbox, snapshot,

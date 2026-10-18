@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using Godot;
 using Propane.Core;
 
-namespace Propane.Net;
+namespace Propane.World;
 
 /// <summary>
 /// An ammo can on the sidewalk, turning slowly over a soft glowing disc. Walking into it takes it (if the server

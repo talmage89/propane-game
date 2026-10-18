@@ -20,7 +20,7 @@ internal static class MenuProfile
 
     public static AppearanceRecord DefaultAppearance()
     {
-        return PlayerSettings.Appearance ?? AppearanceRecord.FromPalette((int)(GD.Randi() % Protocol.PlayerColors.Length));
+        return PlayerSettings.Appearance ?? AppearanceRecord.FromPalette((int)(GD.Randi() % AppearancePalette.PlayerColors.Length));
     }
 
     public static void Save(string name, AppearanceRecord appearance)

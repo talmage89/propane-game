@@ -1,32 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Propane.Core;
 
 namespace Propane.Net;
-
-/// <summary>Monotonic positive identities. Exhaustion fails before mutation; retired ids are never recycled.</summary>
-public sealed class IdentitySequence(int first = 1, int ceiling = int.MaxValue)
-{
-    private long next = first > 0 && first <= ceiling ? first : throw new ArgumentOutOfRangeException(nameof(first));
-    public bool Available => next <= ceiling;
-    public int Allocate() => next <= ceiling ? (int)next++ : throw new InvalidOperationException("identity space exhausted");
-}
-
-public enum ActorKind : byte { Human, Bot }
-public enum ControllerKind : byte { Device, Bot }
-/// <summary>Versioned, bounded controller selection. A bot's difficulty selects a local brain profile on its owner.</summary>
-public sealed record ControllerConfig(byte Version, ControllerKind Kind, byte Difficulty)
-{
-    public static readonly ControllerConfig Human = new(1, ControllerKind.Device, 0);
-    public static readonly ControllerConfig Bot = new(1, ControllerKind.Bot, 1);
-    /// <summary>A bot controller at a difficulty: 0 Easy, 1 Normal, 2 Hard (<see cref="Bots.BotDifficulty"/>).</summary>
-    public static ControllerConfig ForBot(byte difficulty) => new(1, ControllerKind.Bot, difficulty);
-    public bool ValidFor(ActorKind kind) => kind is ActorKind.Human or ActorKind.Bot && Version == 1 && Difficulty <= 2 &&
-        (kind == ActorKind.Human ? Kind == ControllerKind.Device && Difficulty == 0 : Kind == ControllerKind.Bot);
-}
-
-public sealed record ActorRecord(int ActorId, int OwnerPeerId, ActorKind Kind, string Name,
-    AppearanceRecord Appearance, ControllerConfig ControllerConfig, bool Present, int AllocationSlot, uint LifeId);
 
 /// <summary>Server-owned session roster. Spawn order is assigned at match start, never used for allocation.</summary>
 public sealed class ParticipantRoster
@@ -41,7 +18,7 @@ public sealed class ParticipantRoster
         Revision = firstRevision;
         this.firstLife = firstLife > 0 ? firstLife : throw new ArgumentOutOfRangeException(nameof(firstLife));
         actors = new(firstActor, actorCeiling);
-        slots = new(firstSlot + 1, BodySync.MaxAllocationSlots);
+        slots = new(firstSlot + 1, BodyIds.MaxAllocationSlots);
     }
     public uint Revision { get; private set; }
     public bool CanAdd => actors.Available && slots.Available && Revision < uint.MaxValue;

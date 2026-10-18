@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using Godot;
+using Propane.Core;
 using Propane.Modes;
 using Propane.Player;
 using Propane.Tank;
@@ -17,7 +18,7 @@ public partial class Match
     PlayerCharacter? IClientModeReplica.Actor(int id) => Actor(id);
     PlayerProfile IClientModeReplica.Profile(int id) => profiles[id];
     PropaneTank? IClientModeReplica.RestingIntactTank(BodyAuthority body) =>
-        body.State == TankLedger.State.Intact && body.Rest && tanks.TryGetValue(body.Body.Id, out var tank) && IsInstanceValid(tank) ? tank : null;
+        body.State == BodyState.State.Intact && body.Rest && tanks.TryGetValue(body.Body.Id, out var tank) && IsInstanceValid(tank) ? tank : null;
     bool IClientModeReplica.HasTank(uint id) => tanks.ContainsKey(id);
     bool IClientModeReplica.Exploded(uint id) => exploded.Contains(id);
     void IClientModeReplica.AddTank(PropaneTank tank) => suburb.AddTank(tank);

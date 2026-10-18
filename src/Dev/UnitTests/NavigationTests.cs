@@ -10,6 +10,7 @@ using Propane.Navigation;
 using Propane.Net;
 using Propane.Player;
 using Propane.Tank;
+using Propane.World;
 
 namespace Propane.Dev.UnitTests;
 

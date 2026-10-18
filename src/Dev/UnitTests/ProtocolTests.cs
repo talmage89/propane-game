@@ -17,7 +17,7 @@ public static class ProtocolTests
     public static IReadOnlyList<NetMessage> Fixtures()
     {
         var profile = new PlayerProfile(2, "Test", AppearanceRecord.FromPalette(1));
-        var body = new BodyState(BodySync.MapTankId(0), Transform3D.Identity, new Vector3(1, 2, 3), Vector3.Zero);
+        var body = new BodyState(BodyIds.MapTankId(0), Transform3D.Identity, new Vector3(1, 2, 3), Vector3.Zero);
         using var tuning = new Tuning();
         var snapshot = tuning.Snapshot();
         return new NetMessage[]
@@ -35,8 +35,8 @@ public static class ProtocolTests
             Packet(Msg.ActorRequestResult, new ActorRequestResultMessage(3, true, 4, "")),
             Packet(Msg.Ping, new TimeMessage(1)), Packet(Msg.Welcome, new WelcomeMessage(2, BuildInfo.GameVersion)),
             Packet(Msg.Rejected, new RejectedMessage("Update", "0.3.0")),
-            Packet(Msg.LobbyList, new LobbyListMessage(5, new[] { new LobbySummary(1, "Test", 1, LobbyServer.LobbyPhase.Waiting) })),
-            Packet(Msg.LobbyState, new LobbyInfo(1, 2, 90, LobbyServer.LobbyPhase.Waiting, new[] { profile }) { WorldId = 3 }),
+            Packet(Msg.LobbyList, new LobbyListMessage(5, new[] { new LobbySummary(1, "Test", 1, LobbyPhase.Waiting) })),
+            Packet(Msg.LobbyState, new LobbyInfo(1, 2, 90, LobbyPhase.Waiting, new[] { profile }) { WorldId = 3 }),
             Packet(Msg.MatchStart, new MatchSetup(7, PlanCodec.Encode(PlanTests.Fixture()), 2, true, 90, snapshot, new[] { (profile, 0) })),
             Packet(Msg.Countdown, new FloatMessage(4)), Packet(Msg.MatchGo, new FloatMessage(90)), Packet(Msg.Clock, new FloatMessage(42)),
             Packet(Msg.Notice, new TextMessage("Test")),
@@ -47,9 +47,9 @@ public static class ProtocolTests
             Packet(Msg.ModeSnapshot, new ModeEnvelope(1, 1, ModeRegistry.TankBankId, 1, 0, 0, 4, ModeSchemas.TankBankKinds.Banks,
                 new TankBankBanks(new[] { (2, 3, true), (3, 0, false) }))),
             Packet(Msg.ModeEvent, new ModeEnvelope(1, 1, ModeRegistry.TankBankId, 1, 2, 1, 5, ModeSchemas.TankBankKinds.Spill,
-                new TankBankSpill(SpillReason.Thrown, new[] { body with { Id = BodySync.DropTankId(0, 0) } }))),
+                new TankBankSpill(SpillReason.Thrown, new[] { body with { Id = BodyIds.DropTankId(0, 0) } }))),
             Packet(Msg.Authority, new AuthorityMessage(2, 1, ClaimRefusal.None,
-                new[] { new BodyAuthority(body with { Epoch = 2 }, 2, TankLedger.State.Venting, false, new VentParameters(Vector3.One, Vector3.Up, -1), Vector3.Zero) })),
+                new[] { new BodyAuthority(body with { Epoch = 2 }, 2, BodyState.State.Venting, false, new VentParameters(Vector3.One, Vector3.Up, -1), Vector3.Zero) })),
             Packet(Msg.PlayerState, new PlayerStateMessage(1, new PlayerNetState { Position = Vector3.One, Velocity = Vector3.Zero,
                 Yaw = 1, AimTarget = Vector3.Forward, Aim = 17 / 255f, Sprint = 1, Ready = 128 / 255f, Reload = 0, Melee = 64 / 255f,
                 Grounded = true, State = PlayerNetState.Mode.GettingUp, PelvisPosition = Vector3.Up, PelvisVelocity = Vector3.Down, Staggers = 2,
@@ -152,7 +152,7 @@ public static class ProtocolTests
             var bad = new[]
             {
                 new NetWriter(Msg.Explode, 7).UInt(0).Vec3(Vector3.One).ToArray(),
-                new NetWriter(Msg.Explode, 7).UInt(BodySync.MapTankId(0)).Vec3(new Vector3(float.NaN, 0, 0)).ToArray(),
+                new NetWriter(Msg.Explode, 7).UInt(BodyIds.MapTankId(0)).Vec3(new Vector3(float.NaN, 0, 0)).ToArray(),
                 new NetWriter(Msg.GetUp, 7).Vec3(Vector3.Zero).Float(float.PositiveInfinity).ToArray(),
                 new NetWriter(Msg.PlayerState, 7).Double(double.NaN).ToArray(),
                 new NetWriter(Msg.BodyRest, 7).UInt(bodyId).Vec3(Vector3.Zero).Quat(new Quaternion(0, 0, 0, 0)).Double(1).ToArray(),
@@ -190,7 +190,7 @@ public static class ProtocolTests
         });
     }
 
-    private const uint bodyId = BodySync.MapTankBase;
+    private const uint bodyId = BodyIds.MapTankBase;
 
     private static void RoundTrip(TestRunner runner, NetMessage fixture, bool fromServer)
     {

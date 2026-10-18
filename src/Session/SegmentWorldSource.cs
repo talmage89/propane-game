@@ -88,7 +88,7 @@ public sealed class RunSegment
     public required Suburb Suburb { get; init; }
     public required CollisionShape3D Floor { get; init; }
     public required BoxShape3D FloorShape { get; init; }
-    public List<Net.AmmoPickup> Pickups { get; } = new();
+    public List<AmmoPickup> Pickups { get; } = new();
     /// <summary>World X up to which this segment's floor has been taken away.</summary>
     public float CutTo { get; set; } = float.NegativeInfinity;
     public int Index => Plan.Index;

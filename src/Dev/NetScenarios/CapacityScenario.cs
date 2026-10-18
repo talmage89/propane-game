@@ -54,7 +54,7 @@ internal sealed class CapacityScenario(INetScenarioHost host) : NetScenario(host
 
         capacitySlot = setup.Players.Single(p => p.Player.Id == current.Player.ActorId).Spawn;
         capacityCenter = new Vector3(plan.Bounds.End.X + 18, 0.05f, 0);
-        capacityTank = BodySync.MapTankId(0);
+        capacityTank = BodyIds.MapTankId(0);
         current.Player.InputOverride = new ScriptedInput();
         current.Player.Teleport(capacityCenter + Vector3.Right.Rotated(Vector3.Up, capacitySlot * Mathf.Tau / players) * 4, 0);
         var captured = Epoch;

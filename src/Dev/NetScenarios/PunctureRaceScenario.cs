@@ -23,8 +23,8 @@ internal sealed class PunctureRaceScenario(INetScenarioHost host) : NetScenario(
         void Resolved(AuthorityMessage result)
         {
             if (!IsCurrent(captured)) return;
-            var canonical = result.Bodies.FirstOrDefault(b => b.Body.Id == BodySync.MapTankId(0));
-            if (canonical?.State != TankLedger.State.Venting) return;
+            var canonical = result.Bodies.FirstOrDefault(b => b.Body.Id == BodyIds.MapTankId(0));
+            if (canonical?.State != BodyState.State.Venting) return;
             if (raceVent != null) ScenarioAssert(raceVent == canonical.Vent, "race: canonical vent changed during reconciliation");
             raceVent = canonical.Vent;
         }
@@ -42,7 +42,7 @@ internal sealed class PunctureRaceScenario(INetScenarioHost host) : NetScenario(
     {
         if (!match.IsPlaying) { return; }
         raceTick++;
-        var id = BodySync.MapTankId(0);
+        var id = BodyIds.MapTankId(0);
         var tank = match.LiveTanks.SingleOrDefault(t => t.NetId == id);
         ScenarioAssert(tank != null, "race: test tank disappeared");
         if (tank == null) { return; }

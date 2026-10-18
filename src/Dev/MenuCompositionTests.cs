@@ -51,8 +51,8 @@ public partial class MenuCompositionTests : Node
             await Shot("browser_empty").ConfigureAwait(true);
             Packet(Msg.LobbyList, new LobbyListMessage(16, new[]
             {
-                new LobbySummary(1, "Creator", 2, LobbyServer.LobbyPhase.Waiting),
-                new LobbySummary(2, "Other creator", 8, LobbyServer.LobbyPhase.Playing, 8),
+                new LobbySummary(1, "Creator", 2, LobbyPhase.Waiting),
+                new LobbySummary(2, "Other creator", 8, LobbyPhase.Playing, 8),
             }));
             await Shot("browser_list").ConfigureAwait(true);
             foreach (var docked in new[] { false, true })
@@ -69,7 +69,7 @@ public partial class MenuCompositionTests : Node
                             Kind = i > 1 && i == count - 1 ? ActorKind.Bot : ActorKind.Human,
                             AllocationSlot = i
                         }).ToArray();
-                        var lobby = new LobbyInfo(1, guest ? 3 : 2, 180, LobbyServer.LobbyPhase.Waiting, members, 16);
+                        var lobby = new LobbyInfo(1, guest ? 3 : 2, 180, LobbyPhase.Waiting, members, 16);
                         Packet(Msg.LobbyState, lobby);
                         menus.Show(Menus.Screen.Lobby, docked: docked);
                         var prefix = $"{(docked ? "docked" : "classic")}_{count}_{(guest ? "guest" : "host")}";

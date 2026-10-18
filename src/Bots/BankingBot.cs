@@ -1,10 +1,10 @@
 using Godot;
 using Propane.Core;
-using Propane.Fx;
+using Propane.Diagnostics;
 using Propane.Navigation;
-using Propane.Net;
 using Propane.Player;
 using Propane.Tank;
+using Propane.World;
 
 namespace Propane.Bots;
 

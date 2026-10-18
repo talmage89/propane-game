@@ -3,7 +3,7 @@ using System.IO;
 using System.Text;
 using Godot;
 
-namespace Propane.Net;
+namespace Propane.Core;
 
 /// <summary>
 /// Opaque sRGB bytes and optional cosmetic catalog ids. Missing or unsupported cosmetics render the base character.
@@ -15,7 +15,7 @@ public sealed record AppearanceRecord(byte Red, byte Green, byte Blue, string? M
     public Color Color => new(Red / 255f, Green / 255f, Blue / 255f, 1);
     public static AppearanceRecord FromColor(Color color) => new((byte)color.R8, (byte)color.G8, (byte)color.B8);
     public AppearanceRecord WithColor(Color color) => this with { Red = (byte)color.R8, Green = (byte)color.G8, Blue = (byte)color.B8 };
-    public static AppearanceRecord FromPalette(int index) => FromColor(Protocol.PlayerColor(index));
+    public static AppearanceRecord FromPalette(int index) => FromColor(AppearancePalette.PlayerColor(index));
 
     /// <summary>A valid old-client fallback; it does not constrain or replace the selected color.</summary>
     public int LegacyIndex
@@ -24,9 +24,9 @@ public sealed record AppearanceRecord(byte Red, byte Green, byte Blue, string? M
         {
             var best = 0;
             var distance = float.MaxValue;
-            for (var i = 0; i < Protocol.PlayerColors.Length; i++)
+            for (var i = 0; i < AppearancePalette.PlayerColors.Length; i++)
             {
-                var delta = Color - Protocol.PlayerColors[i];
+                var delta = Color - AppearancePalette.PlayerColors[i];
                 var squared = delta.R * delta.R + delta.G * delta.G + delta.B * delta.B;
                 if (squared < distance) { best = i; distance = squared; }
             }
@@ -78,7 +78,8 @@ public static class AppearanceCodec
         using var reader = new BinaryReader(stream);
         if (reader.ReadByte() != Version) { throw new InvalidDataException("unsupported appearance version"); }
         var red = reader.ReadByte(); var green = reader.ReadByte(); var blue = reader.ReadByte();
-        var count = NetReader.Count(reader.ReadByte(), MaxSlots);
+        var count = reader.ReadByte();
+        if (count > MaxSlots) { throw new InvalidDataException($"bad count {count}"); }
         var ids = new string?[5];
         var seen = new HashSet<byte>();
         for (var i = 0; i < count; i++)

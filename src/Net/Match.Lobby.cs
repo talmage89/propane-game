@@ -43,7 +43,7 @@ public partial class Match
     }
 
     /// <summary>The lobby's start is staged: everyone watches the countdown, standing still.</summary>
-    private bool Staging => Net.Lobby is { Phase: LobbyServer.LobbyPhase.Staging };
+    private bool Staging => Net.Lobby is { Phase: LobbyPhase.Staging };
 
     /// <summary>The pads, ring and title of the lobby world's floor, and the builder of its refilled piles.</summary>
     private void BuildLobbyContent()
@@ -93,7 +93,7 @@ public partial class Match
     private void OnLobbyChanged()
     {
         if (World is not { IsAlive: true } || Net.Lobby is not { } lobby) return;
-        LobbyAdapter!.LobbyChanged(lobby, lobby.Phase == LobbyServer.LobbyPhase.Staging);
+        LobbyAdapter!.LobbyChanged(lobby, lobby.Phase == LobbyPhase.Staging);
     }
 
     private void UpdateLobbyActor(PlayerCharacter character, PlayerProfile member)

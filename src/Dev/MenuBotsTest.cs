@@ -3,6 +3,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Godot;
 using Propane.Bots;
+using Propane.Core;
 using Propane.Net;
 using Propane.UI;
 

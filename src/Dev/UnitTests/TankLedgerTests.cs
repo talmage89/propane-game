@@ -8,6 +8,7 @@ using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Text;
 using Godot;
+using Propane.Core;
 using Propane.Dev.UnitTests.Fixtures;
 using Propane.Net;
 using Propane.Tank;
@@ -46,9 +47,9 @@ public static class TankLedgerTests
     {
         var sequence = new Sequence(Plan());
         var ledger = sequence.Ledger;
-        var map = BodySync.MapTankId(0);
-        var car = BodySync.CarId(1);
-        var drop = Pose(BodySync.DropTankId(0, 0));
+        var map = BodyIds.MapTankId(0);
+        var car = BodyIds.CarId(1);
+        var drop = Pose(BodyIds.DropTankId(0, 0));
         sequence.Check("constructed mixed plan", 4);
         sequence.Step("empty drops", () => ledger.RegisterDrops(0, 2, Array.Empty<BodyState>()), 4);
         sequence.Step("valid drops", () => ledger.RegisterDrops(0, 2, new[] { drop, Pose(drop.Id + 1) }), 6);
@@ -56,7 +57,7 @@ public static class TankLedgerTests
                  {
                      new[] { Pose(drop.Id + 2), drop }, // Whole batch refused after an otherwise valid first entry.
                      new[] { Pose(drop.Id + 2), Pose(drop.Id + 2) },
-                     new[] { Pose(BodySync.DropTankId(1, 0)) },
+                     new[] { Pose(BodyIds.DropTankId(1, 0)) },
                      new[] { Pose(drop.Id + 2) with { Epoch = 2 } },
                      new[] { Pose(drop.Id + 2) with { Sequence = 1 } },
                  })
@@ -97,7 +98,7 @@ public static class TankLedgerTests
                     body.Id == fresh[0].Id ? 5 : 4);
             }
         }
-        var remaining = ledger.Live().Where(b => b.Body.Id < BodySync.CarBase).ToArray();
+        var remaining = ledger.Live().Where(b => b.Body.Id < BodyIds.CarBase).ToArray();
         for (var i = 0; i < remaining.Length; i++)
         {
             var body = remaining[i].Body;
@@ -134,7 +135,7 @@ public static class TankLedgerTests
                 switch (operation)
                 {
                     case 0:
-                        var id = BodySync.DropTankId(0, random.Next(128));
+                        var id = BodyIds.DropTankId(0, random.Next(128));
                         var drops = new[] { Pose(id), Pose(id + 1) with { Sequence = random.Next(8) == 0 ? 1u : 0u } };
                         try { ledger.RegisterDrops(random.Next(8) == 0 ? 1 : 0, peer, drops); }
                         catch (InvalidDataException) { } // Count and records are still checked after the refusal.
@@ -187,10 +188,10 @@ public static class TankLedgerTests
         public void Check(string label, int? expected = null)
         {
             // Exact LiveTanks implementation from the immediate parent, over canonical records, not Live().
-            var scanned = Records.Values.Count(b => b.State != TankLedger.State.Exploded && b.Body.Id < BodySync.CarBase);
+            var scanned = Records.Values.Count(b => b.State != BodyState.State.Exploded && b.Body.Id < BodyIds.CarBase);
             TestRunner.Assert(Ledger.LiveTanks == scanned && (expected == null || scanned == expected),
                 $"{label}: counter {Ledger.LiveTanks}, parent scan {scanned}, expected {expected}");
-            var live = Records.Values.Where(b => b.State != TankLedger.State.Exploded).OrderBy(b => b.Body.Id).ToArray();
+            var live = Records.Values.Where(b => b.State != BodyState.State.Exploded).OrderBy(b => b.Body.Id).ToArray();
             TestRunner.Assert(Ledger.Live().SequenceEqual(live), $"{label}: live snapshot order/content changed");
             transcript.Append($"{operations}:{Ledger.LiveTanks}:{Ledger.MapDetonations}:{Ledger.DropDetonations}|");
             foreach (var entry in Records.Values)
@@ -204,7 +205,7 @@ public static class TankLedgerTests
     /// <summary>Reject a pile beyond identity capacity without allocating hundreds of millions of poses.</summary>
     private sealed class OversizedPile : IReadOnlyList<Transform3D>
     {
-        public int Count => BodySync.MaxWorldEntities;
+        public int Count => BodyIds.MaxWorldEntities;
         public Transform3D this[int index] => throw new InvalidOperationException("oversized pile was traversed");
         public IEnumerator<Transform3D> GetEnumerator() => throw new InvalidOperationException("oversized pile was traversed");
         System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();

@@ -214,14 +214,15 @@ release to be minor (`Protocol.Version` is 3).
 | --- | --- |
 | `src/Main.cs` | The root: menus over their backdrop, then single player, Lab, a match, or the server. |
 | `src/Game.cs` | Single player: the void, player, HUD, menus, and the suburb swap with its dissolve and materialize. |
-| `src/Net` | Multiplayer: the server, the client connection, the match world, body sync, ammo pickups, the mode runner and envelope. |
+| `src/Net` | Multiplayer: the server, the client connection, the match world, body sync, lobby contracts, the mode runner and envelope. |
 | `src/Modes` | Pure mode rules (Sandbox, Tank Bank, King and Lab prototypes), mode definitions, phases and HUD presenters ([modes](modes.md)). |
 | `src/Lab`, `src/Bots` | Shipped Lab scenarios, local bank adapter and camera-free banking brain. |
 | `src/Session` | Ordered session assembly, actors, local views and retirement. |
-| `src/Core` | Tuning, launch arguments, input map, physics and render layers, shared assets, events, spawn roots. |
-| `src/World` | The void environment, the model catalog, and the suburb builder. `Plan/` holds the pure-data generator. |
+| `src/Core` | Tuning, launch arguments, input map, physics and render layers, shared identity/appearance/body values, assets, events, spawn roots. |
+| `src/World` | The void environment, ammo pickups, the model catalog, and the suburb builder. `Plan/` holds the pure-data generator. |
 | `src/Tank` | Propane tanks, the vent jet, blasts, debris and breakaway fence panels. |
 | `src/Player` | Character controller, camera, animation, the rifle stance, ragdoll and get-up. |
+| `src/Diagnostics` | Shared opt-in effect/bot/navigation profiling; process-lifetime counters drained by diagnostic callers. |
 | `src/Fx` | Explosions, tracers, impacts, hitstop, particle helpers, and the shader warm-up. |
 | `src/UI` | HUD, menus (main, multiplayer, lobby, pause, match, results), match HUD, tuning panel. |
 | `src/Navigation` | Reusable bot routes, capsule sweeps, jump links and bounded recovery. |

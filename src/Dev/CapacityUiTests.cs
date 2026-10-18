@@ -42,7 +42,7 @@ public partial class CapacityUiTests : Node
             net.Handle(MessageCodec.Encode(new NetMessage(Msg.Welcome, 0, 0, new WelcomeMessage(2, null)), true));
             net.Handle(MessageCodec.Encode(new NetMessage(Msg.LobbyList, 0, 0, new LobbyListMessage(16, Array.Empty<LobbySummary>())), true));
             net.Handle(MessageCodec.Encode(new NetMessage(Msg.LobbyState, 0, 0, new LobbyInfo(1, 2, 180,
-                LobbyServer.LobbyPhase.Waiting, profiles, count)
+                LobbyPhase.Waiting, profiles, count)
             {
                 Mode = DevArgs.Get("mode") == "king"
                     ? new ModeSettings(Modes.ModeRegistry.KingId, 2) : ModeSettings.Default

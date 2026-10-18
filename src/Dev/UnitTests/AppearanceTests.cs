@@ -4,6 +4,7 @@ using System.Linq;
 using Godot;
 using Propane.Core;
 using Propane.Dev.UnitTests.Fixtures;
+using Propane.Modes;
 using Propane.Net;
 
 namespace Propane.Dev.UnitTests;
@@ -34,7 +35,7 @@ public static class AppearanceTests
         });
         runner.Run("appearance/contrast supports extremes without changing presets", () =>
         {
-            foreach (var preset in Protocol.PlayerColors)
+            foreach (var preset in AppearancePalette.PlayerColors)
             {
                 TestRunner.Assert(AppearanceContrast.Strength(preset, Tuning.SavedTemplate) == 0 && AppearanceContrast.ScoreOutline(preset, Tuning.SavedTemplate) != Colors.White,
                     "preset presentation changed");
@@ -79,7 +80,7 @@ public static class AppearanceTests
         });
         runner.Run("appearance/Hello preserves old prefix and falls back without extension", () =>
         {
-            for (var index = 0; index < Protocol.PlayerColors.Length; index++)
+            for (var index = 0; index < AppearancePalette.PlayerColors.Length; index++)
             {
                 var prefix = new NetWriter(Msg.Hello).Int(Protocol.Version).String(BuildInfo.GameVersion).String("test").String("Test").Int(index).Bool(true);
                 var prefixBytes = prefix.ToArray();

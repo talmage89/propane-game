@@ -16,17 +16,6 @@ namespace Propane.Net;
 /// </summary>
 public partial class LobbyServer : Node
 {
-    public enum LobbyPhase : byte
-    {
-        Waiting,
-        Loading,
-        Countdown,
-        Playing,
-        Results,
-        /// <summary>The creator started: the stage counts down in the lobby world before the match loads.</summary>
-        Staging,
-    }
-
     private const int MaxClients = 64;
 
     private sealed class Client

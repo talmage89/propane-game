@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 using Godot;
-using Propane.Net;
+using Propane.Modes;
 
 namespace Propane.UI;
 

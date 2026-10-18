@@ -7,7 +7,6 @@ using Propane.Core;
 using Propane.Modes;
 using Propane.World;
 using Propane.World.Plan;
-using LobbyPhase = Propane.Net.LobbyServer.LobbyPhase;
 
 namespace Propane.Net;
 
@@ -443,7 +442,7 @@ internal sealed class ServerRun : IModeHost, IDisposable
                 var dependency = new ModeDependency(peer, explosion.Request);
                 if (detonation.Reason == ClaimRefusal.None)
                 {
-                    modeRunner.Apply(this, new TankDetonated(actorId, explosion.Id < BodySync.DropTankBase ? TankOrigin.Map : TankOrigin.Drop), clock.Seconds);
+                    modeRunner.Apply(this, new TankDetonated(actorId, explosion.Id < BodyIds.DropTankBase ? TankOrigin.Map : TankOrigin.Drop), clock.Seconds);
                     foreach (var held in modeRunner.Gate.Release(dependency))
                         modeRunner.Wire.Event(modeRunner, this, held.Peer, (ModeEnvelope)held.Message.Payload, clock.Seconds);
                 }

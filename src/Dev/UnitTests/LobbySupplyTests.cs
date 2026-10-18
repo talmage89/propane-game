@@ -141,7 +141,7 @@ public static class LobbySupplyTests
                 try
                 {
                     client.Handle(MessageCodec.Encode(new NetMessage(Msg.Welcome, 0, 0, new WelcomeMessage(late ? 3 : 2, null)), true));
-                    var lobby = new LobbyInfo(1, fixture.Setup.CreatorId, 10, LobbyServer.LobbyPhase.Loading,
+                    var lobby = new LobbyInfo(1, fixture.Setup.CreatorId, 10, LobbyPhase.Loading,
                         fixture.Setup.Players.Select(p => p.Player).ToArray())
                     { Mode = ModeSettings.Default with { TankSupply = 4 } };
                     client.Handle(MessageCodec.Encode(new NetMessage(Msg.LobbyState, 0, 0, lobby), true));

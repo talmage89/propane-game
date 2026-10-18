@@ -4,6 +4,7 @@ using System.Globalization;
 using System.IO;
 using System.Text;
 using Godot;
+using Propane.Core;
 
 namespace Propane.Net;
 
@@ -100,23 +101,6 @@ public static class Protocol
     public const int MaxPacketBytes = 1 << 20;
     public const int MaxCollection = 4096;
     public const int MaxBodyStates = 20;
-
-    /// <summary>Quick presets and legacy Hello fallback; players may choose any opaque sRGB color.</summary>
-    public static readonly Color[] PlayerColors =
-    {
-        new(0.92f, 0.44f, 0.16f), // orange
-        new(0.2f, 0.52f, 0.95f), // blue
-        new(0.3f, 0.78f, 0.32f), // green
-        new(0.9f, 0.22f, 0.3f), // red
-        new(0.62f, 0.36f, 0.92f), // purple
-        new(0.98f, 0.8f, 0.15f), // yellow
-        new(0.15f, 0.8f, 0.78f), // teal
-        new(0.95f, 0.42f, 0.72f), // pink
-    };
-
-    public static readonly string[] ColorNames = { "Orange", "Blue", "Green", "Red", "Purple", "Yellow", "Teal", "Pink" };
-
-    public static Color PlayerColor(int index) => PlayerColors[Mathf.PosMod(index, PlayerColors.Length)];
 
     /// <summary>
     /// A name the server accepts exactly as sent for a roster request: 1 to <see cref="MaxNameLength"/> UTF-16 units,

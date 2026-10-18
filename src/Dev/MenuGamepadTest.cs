@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Godot;
 using Propane.Core;
+using Propane.Modes;
 using Propane.Net;
 using Propane.Player;
 using Propane.ReleaseSmoke;
@@ -116,7 +117,7 @@ public partial class MenuGamepadTest : Node
         await Press(JoyButton.A).ConfigureAwait(true);
         Check(MenuNavigation.Key(Focus).StartsWith("color_", StringComparison.Ordinal), "name confirmation advances to colors");
         var originalColor = Net.Appearance;
-        await Navigate($"color_{(originalColor.LegacyIndex + 1) % Protocol.PlayerColors.Length}").ConfigureAwait(true);
+        await Navigate($"color_{(originalColor.LegacyIndex + 1) % AppearancePalette.PlayerColors.Length}").ConfigureAwait(true);
         var colorKey = MenuNavigation.Key(Focus);
         await Press(JoyButton.A).ConfigureAwait(true);
         await Wait(() => Net.Lobby!.Members.Single(m => m.OwnerPeerId == Net.MyId && m.Kind == ActorKind.Human).Appearance != originalColor, "preset update acknowledged").ConfigureAwait(true);
@@ -211,7 +212,7 @@ public partial class MenuGamepadTest : Node
         }
         var fixture = new NetClient { Name = "BrowserFixture" };
         AddChild(fixture);
-        fixture.Connect("127.0.0.1", Menus.HostPort, "Menu fixture", (Net.Appearance.LegacyIndex + 1) % Protocol.PlayerColors.Length);
+        fixture.Connect("127.0.0.1", Menus.HostPort, "Menu fixture", (Net.Appearance.LegacyIndex + 1) % AppearancePalette.PlayerColors.Length);
         await Wait(() => fixture.State == NetClient.Status.Connected, "fixture connected").ConfigureAwait(true);
         fixture.CreateLobby();
         await Wait(() => fixture.Lobby != null, "fixture lobby created").ConfigureAwait(true);
@@ -232,7 +233,7 @@ public partial class MenuGamepadTest : Node
         await Wait(() => Menus.Current == Menus.Screen.Lobby && Net.Lobby!.CreatorId == fixture.MyId, "A joins selected lobby").ConfigureAwait(true);
         CheckFocus("Name");
         await Shot("10_guest_lobby").ConfigureAwait(true);
-        Check(Enumerable.Range(0, Protocol.PlayerColors.Length).All(i => Reachable().ContainsKey($"color_{i}")),
+        Check(Enumerable.Range(0, AppearancePalette.PlayerColors.Length).All(i => Reachable().ContainsKey($"color_{i}")),
             "all preset colors remain available with other players in the lobby");
         await Press(JoyButton.B).ConfigureAwait(true);
         await Wait(() => Menus.Current == Menus.Screen.Browser, "B leaves guest lobby").ConfigureAwait(true);

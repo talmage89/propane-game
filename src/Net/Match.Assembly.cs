@@ -185,7 +185,7 @@ public partial class Match
             var index = body.GetMeta(Suburb.PlanIndexMeta).AsInt32();
             if (plan.Props[index].Model.StartsWith("car:"))
             {
-                bodies.Register(BodySync.CarId(index), body, isTank: false, Setup.HostId);
+                bodies.Register(BodyIds.CarId(index), body, isTank: false, Setup.HostId);
             }
             else
             {

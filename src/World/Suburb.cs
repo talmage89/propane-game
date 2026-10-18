@@ -806,7 +806,7 @@ public partial class Suburb : Node3D
         var tank = PropaneTank.Create(world, contentSpawn);
         if (networked)
         {
-            tank.NetId = Net.BodySync.MapTankId(index);
+            tank.NetId = BodyIds.MapTankId(index);
         }
         DynamicRoot.AddChild(tank);
         tank.Position = ToWorld(placement.Position, placement.Elevation);

@@ -31,7 +31,7 @@ public partial class BotEditor : CanvasLayer
     private Button custom = null!;
     private Button save = null!;
     private Button? remove;
-    private readonly Button[] swatches = new Button[Protocol.PlayerColors.Length];
+    private readonly Button[] swatches = new Button[AppearancePalette.PlayerColors.Length];
     private readonly Button[] difficulties = new Button[BotProfile.All.Length];
     private HBoxContainer colors = null!;
     private AppearancePicker? picker;
@@ -148,9 +148,9 @@ public partial class BotEditor : CanvasLayer
         }
         for (var i = 0; i < swatches.Length; i++)
         {
-            var color = Protocol.PlayerColor(i);
+            var color = AppearancePalette.PlayerColor(i);
             var swatch = swatches[i] = UiStyle.Swatch(color, Appearance.Color == AppearanceRecord.FromPalette(i).Color, $"bot_color_{i}",
-                Protocol.ColorNames[i]);
+                AppearancePalette.ColorNames[i]);
             swatch.Pressed += () => SetAppearance(Appearance.WithColor(color));
             colors.AddChild(swatch);
         }
@@ -229,7 +229,7 @@ public partial class BotEditor : CanvasLayer
     private void OnLobbyChanged()
     {
         // A match starting, leaving the lobby, or the edited bot disappearing ends the edit.
-        if (Net.Lobby is not { Phase: LobbyServer.LobbyPhase.Waiting } || Editing != null && pending == 0 && Net.Roster.All(a => a.Id != Editing.Id))
+        if (Net.Lobby is not { Phase: LobbyPhase.Waiting } || Editing != null && pending == 0 && Net.Roster.All(a => a.Id != Editing.Id))
             Close();
     }
 

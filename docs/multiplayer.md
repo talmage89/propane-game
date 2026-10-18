@@ -73,7 +73,7 @@ through gray and black. Use color sends and saves the preview's exact sRGB bytes
 alone. Settings store the same record as the network. An old saved palette index migrates once, only when no
 appearance record exists; a corrupt saved record uses a safe preset.
 
-`AppearanceRecord` is immutable. `AppearanceCodec` is the only serializer, shared by settings, Hello, SetProfile,
+`Core.AppearanceRecord` is immutable; `Core.AppearancePalette` owns the shared presets and legacy fallback. `Core.AppearanceCodec` is the only serializer, shared by settings, Hello, SetProfile,
 LobbyState, MatchStart and MatchEnd/standings. The server accepts the requested appearance without substituting
 colors and freezes each profile at match start, including profiles retained after departure. Characters, score
 tags, lobby/results samples and dropped-tank glow use that accepted profile. Names/ranks/scores remain separate

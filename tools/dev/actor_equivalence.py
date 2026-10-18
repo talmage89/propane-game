@@ -5,7 +5,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from server_equivalence import ROOT, prepare
+from server_equivalence import ROOT, copy_probe, prepare
 
 
 def insert(path, needle, addition):
@@ -17,9 +17,9 @@ def insert(path, needle, addition):
 def observe(project):
     # These fixtures use only parent-compatible APIs; do not copy candidate-only registration tests.
     for name in ('ActorRetirementObservation.cs', 'ActorLifetimeFixture.cs'):
-        shutil.copyfile(ROOT / 'src/Dev/UnitTests/Fixtures' / name, project / 'src/Dev/UnitTests/Fixtures' / name)
+        copy_probe(ROOT / 'src/Dev/UnitTests/Fixtures' / name, project / 'src/Dev/UnitTests/Fixtures' / name, project)
     for name in ('ActorTacticsTests.cs', 'ActorTickBenchTests.cs', 'BotTacticsTests.cs', 'Fixtures/TacticalWorld.cs'):
-        shutil.copyfile(ROOT / 'src/Dev/UnitTests' / name, project / 'src/Dev/UnitTests' / name)
+        copy_probe(ROOT / 'src/Dev/UnitTests' / name, project / 'src/Dev/UnitTests' / name, project)
     cycles(project)
     call = 'Propane.Dev.UnitTests.Fixtures.ActorRetirementObservation.Record'
     session = project / 'src/Session/SessionContext.cs'

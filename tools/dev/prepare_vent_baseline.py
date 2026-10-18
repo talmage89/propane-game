@@ -28,9 +28,10 @@ def main():
     # Diagnostics only: the archived project retains its original effects, tuning and warm-up.
     for path in ("src/Dev/LabTest.cs", "src/Dev/CaptureDirector.cs", "src/Dev/FrameMetrics.cs",
                  "src/Dev/FrameMetrics.cs.uid", "src/Fx/EffectProfile.cs", "src/Fx/EffectProfile.cs.uid"):
-        source = path.replace("src/Dev/CaptureDirector", "src/ReleaseSmoke/CaptureDirector").replace(
+        source = path.replace("src/Fx/EffectProfile", "src/Diagnostics/EffectProfile").replace("src/Dev/CaptureDirector", "src/ReleaseSmoke/CaptureDirector").replace(
             "src/Dev/FrameMetrics", "src/ReleaseSmoke/FrameMetrics")
-        text = (project / source).read_text().replace("using Propane.ReleaseSmoke;\n", "").replace(
+        text = (project / source).read_text().replace("using Propane.Diagnostics;\n", "using Propane.Fx;\n").replace(
+            "namespace Propane.Diagnostics;", "namespace Propane.Fx;").replace("using Propane.ReleaseSmoke;\n", "").replace(
             "namespace Propane.ReleaseSmoke;", "namespace Propane.Dev;").replace("LaunchArgs.Current.", "DevArgs.")
         (output / path).write_text(text)
     scratch = output / "build"

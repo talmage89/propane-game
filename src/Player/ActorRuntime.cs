@@ -1,4 +1,5 @@
 using System;
+using Propane.Core;
 using Propane.Net;
 
 namespace Propane.Player;
@@ -34,7 +35,7 @@ public sealed class ActorRuntime : IDisposable
     public int DropCounter { get; set; }
     public uint AllocateDropId()
     {
-        var id = BodySync.DropTankId(AllocationSlot, DropCounter);
+        var id = BodyIds.DropTankId(AllocationSlot, DropCounter);
         DropCounter = checked(DropCounter + 1);
         return id;
     }

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Godot;
+using Propane.Core;
 using Propane.Dev.UnitTests.Fixtures;
 using Propane.Net;
 using Propane.Tank;
@@ -195,7 +196,7 @@ public static class GatherTests
             fixture.Receive(Msg.Gather, new GatherMessage(GatherPhase.Glide, new[] { state }));
             Assert(tank.Gathering, "no flight");
             match.OnMessage(new NetMessage(Msg.Authority, fixture.Id, 0, new AuthorityMessage(3, 8, ClaimRefusal.None,
-                new[] { new BodyAuthority(state with { Epoch = 2, Sequence = 0 }, 3, TankLedger.State.Intact, false, null, Vector3.Zero) })));
+                new[] { new BodyAuthority(state with { Epoch = 2, Sequence = 0 }, 3, BodyState.State.Intact, false, null, Vector3.Zero) })));
             Assert(!tank.Gathering && !tank.Freeze && entry.Epoch == 2, "handoff stranded frozen body");
             tank.GlobalTransform = pose;
             fixture.Receive(Msg.Gather, new GatherMessage(GatherPhase.Settled, new[] { state with { Sequence = 9 } }));
@@ -204,7 +205,7 @@ public static class GatherTests
         runner.Run("gather/ledger relays presentation overtaken by disposable motion", () =>
         {
             var ledger = new TankLedger(PlanTests.Fixture(), 2);
-            var state = ledger.Get(BodySync.MapTankId(0))!.Body with { Sequence = 3 };
+            var state = ledger.Get(BodyIds.MapTankId(0))!.Body with { Sequence = 3 };
             Assert(ledger.Update(2, state, false), "motion refused");
             var message = new GatherMessage(GatherPhase.Glide, new[] { state with { Sequence = 2 } });
             Assert(ledger.Gather(2, 2, message, true), "motion hid reliable start");
@@ -214,11 +215,11 @@ public static class GatherTests
         runner.Run("gather/ledger rejects stale, nonhost, venting and partial presentation", () =>
         {
             var ledger = new TankLedger(PlanTests.Fixture(), 2);
-            var state = ledger.Get(BodySync.MapTankId(0))!.Body with { Sequence = 1 };
+            var state = ledger.Get(BodyIds.MapTankId(0))!.Body with { Sequence = 1 };
             var message = new GatherMessage(GatherPhase.Glide, new[] { state });
             Assert(!ledger.Gather(3, 2, message, true), "nonhost accepted");
             Assert(!ledger.Gather(2, 2, message, false), "wrong phase accepted");
-            var unknown = state with { Id = BodySync.MapTankId(999) };
+            var unknown = state with { Id = BodyIds.MapTankId(999) };
             Assert(!ledger.Gather(2, 2, message with { Bodies = new[] { state, unknown } }, true), "partial unknown group accepted");
             Assert(ledger.Get(state.Id)!.Body.Sequence == 0, "partial group mutated");
             Assert(ledger.Gather(2, 2, message, true), "valid gather refused");

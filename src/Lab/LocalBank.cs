@@ -4,11 +4,12 @@ using System.Linq;
 using Godot;
 using Propane.Bots;
 using Propane.Core;
-using Propane.Fx;
+using Propane.Diagnostics;
 using Propane.Modes;
 using Propane.Net;
 using Propane.Player;
 using Propane.Tank;
+using Propane.World;
 
 namespace Propane.Lab;
 
