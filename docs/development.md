@@ -45,6 +45,7 @@ Requires Godot 4.7.2 (.NET edition) and the .NET 10 SDK.
   and every pull request. `make -j4 test-full` adds the deep sweeps as parallel jobs, each line prefixed with its job's
   name; plain `make test-full` runs the same jobs one at a time. Deep probes use an isolated optimized Debug
   assembly (all `DEBUG` checks and tuners retained); fast tests and the final real-time bot matches use normal Debug.
+  Its isolated view includes the project compile metadata so core tuning-order assertions work there too.
   Both generator and Lab shard coverage are checked. See [gate measurements](evidence/test-speed.md).
 
 [code-quality.md](code-quality.md) describes the formatting and analyzer baseline and its regression

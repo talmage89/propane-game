@@ -151,6 +151,16 @@ class BenchTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "replay mode"):
                 bench.load_case(directory, 2, "Debug", 0.2)
 
+    def test_local_release_keeps_source_benchmark(self):
+        with tempfile.TemporaryDirectory(prefix="bench-release-smoke-", dir=bench.ROOT / "build") as scratch:
+            path = Path(scratch) / "smoke.json"
+            subprocess.run(["make", "--no-print-directory", "bench", "BOTS=0", "TANKS=1", "RENDERED=0",
+                            "SECONDS=.5", "WARMUP=.2", "REPEATS=1", "CONFIG=Release", f"BENCH_ARGS=--output={path}"],
+                           cwd=bench.ROOT, check=True)
+            run = json.loads(path.read_text())["cases"][0]["runs"][0]
+            self.assertEqual(run["assembly_config"], "Release")
+            self.assertTrue(run["assembly_optimized"])
+
 
 if __name__ == "__main__":
     (bench.ROOT / "build").mkdir(exist_ok=True)

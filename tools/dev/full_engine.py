@@ -16,7 +16,7 @@ def prepare(godot):
     PROJECT.mkdir(parents=True, exist_ok=True)
     # This is a runtime view, not another checkout/import. C# still compiles the real sources from ROOT.
     # Keep all writable engine state private; assets and their already-imported binary resources are read-only.
-    for name in ('assets', 'scenes', 'src', 'shaders', 'icon.svg', 'icon.svg.import', 'tuning.tres'):
+    for name in ('assets', 'scenes', 'src', 'shaders', 'icon.svg', 'icon.svg.import', 'tuning.tres', 'Propane.csproj'):
         target = PROJECT / name
         if not target.is_symlink():
             target.symlink_to(ROOT / name, target_is_directory=(ROOT / name).is_dir())

@@ -401,6 +401,8 @@ public static class Formatting
         for config in ("Debug", "Release", "ExportDebug"):
             code, output = run(scratch, "dotnet", "build", "Probe.csproj", "-c", config, "-nologo", "-v", "quiet", "-warnaserror")
             require(code == 0, config + " lost the Dev harnesses", output)
+        code, output = run(scratch, "dotnet", "build", "Probe.csproj", "-c", "Debug", "-p:Optimize=true", "-nologo", "-v", "quiet", "-warnaserror")
+        require(code == 0, "optimized Debug lost the Dev harnesses", output)
         code, output = run(scratch, "dotnet", "build", "Probe.csproj", "-c", "ExportRelease", "-nologo", "-v", "quiet", "-warnaserror")
         require(code != 0 and "CS0246" in output and "HarnessOnly" in output,
                 "the shipping configuration accepted a runtime reference into Dev", output)
