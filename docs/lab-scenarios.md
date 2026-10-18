@@ -72,3 +72,10 @@ DISABLE_GAMESCOPE_WSI=1 godot-mono --disable-vsync --fixed-fps 60 --resolution 1
 
 On the invisible Linux gamescope wrapper, the per-process `DISABLE_GAMESCOPE_WSI=1` override allows VSync to
 stay disabled. Reject measurements whose logs report a VSync fallback, as the scale benchmark does.
+
+For B4b's immediate-parent checks, run `python3 -B tools/dev/check_lab_mechanics.py --baseline=PATH` after
+building/importing both projects with identical harness sources. It compares the credit/spill/RNG and difficulty/
+sampling observations, requires both unit suites' assertions to pass, and compares every detailed observation in
+Ring Out and mixed-difficulty Bank/King runs. This supplements `check_equivalence.py --baseline=PATH --detail`;
+it neither reads nor writes new release references. Live streaming remains statistical because worker/build-slice
+completion is wall-time-sensitive; use the existing controlled retirement reference for exact Dissolve comparison.

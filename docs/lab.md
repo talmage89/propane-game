@@ -162,7 +162,11 @@ The lifecycle run's first shard also runs `--scenario=tracking`: detonate/retire
 captured shooter/drop cleanup, the unchanged visual-dissolve boundary and weak-reference collection while a session
 remains alive. Discovered `TankTrackingTests` cover all six detonate/retire/shutdown orders, duplicate registration,
 reverse drain through removal/re-registration, already-freed native objects, cleanup failure and captured callback state.
-`LabCreditTests` exercise both runners' direct/chain/drop attribution and emit a parent-comparable command transcript.
+`LabCreditTests` exercise both runners' direct/chain/drop attribution and emit parent-comparable command and
+exact spill transform/velocity/spin/RNG-bit observations. `LabMechanicsTests` checks live difficulty by attachment
+slot in all five runner modes, Bank spill-time versus prototype per-tick tuning (including empty-spill guards),
+and collection of retired runners, bookkeeping and tank wrappers. Its inspection fixture supports both ownership
+layouts so the same assertions run against the immediate parent.
 It also plays a Ring Out round and a King round to their ends with shortened dials (`--scenario=prototype --quick`),
 a bot on every actor, one quick Short Fuse match (`--scenario=shortfuse --quick`: 60 s rounds, first to two), and a
 scripted Short Fuse round (`--scenario=shortfuse-combo`) through the real reports: Bot 2 shoots the player dead (the

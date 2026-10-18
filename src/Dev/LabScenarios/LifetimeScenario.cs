@@ -7,6 +7,7 @@ using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using Godot;
 using Propane.Core;
+using Propane.Dev.UnitTests.Fixtures;
 using Propane.Lab;
 using Propane.Modes;
 using Propane.Tank;
@@ -138,10 +139,8 @@ internal sealed class LifetimeScenario(ILabScenarioHost host, bool trackingOnly 
         var tank = tanks[0];
         var wrappers = tanks.Select(t => new WeakReference<PropaneTank>(t)).ToList();
         // Leave captured shooter/drop state on a tank that will retire without detonating.
-        var shots = (Dictionary<PropaneTank, int>)typeof(PrototypeRunner)
-            .GetField("directShots", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(runner)!;
-        var drops = (HashSet<PropaneTank>)typeof(PrototypeRunner)
-            .GetField("drops", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(runner)!;
+        var shots = LabRunnerInspection.Shots(runner);
+        var drops = LabRunnerInspection.Drops(runner);
         shots[tanks[1]] = lab.Player.ActorId;
         drops.Add(tanks[1]);
         if (detonateFirst)
