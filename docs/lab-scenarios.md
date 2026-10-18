@@ -111,3 +111,7 @@ corresponding rule fact. It also retains a snapshot across accepted facts, colle
 while retaining the snapshot, and collects released snapshots. King's fixture takes the first actor sample before
 requiring its zone observation. `check_lab_mechanics.py` additionally compares a complete quick Short Fuse bot match,
 including every detailed observation, beyond the scripted combo covered by the frozen references.
+The whole-match Short Fuse fixture honors `--replay-random` for per-event physics generators, as its scripted combo
+already did. Previously it accepted the option but left these generators unseeded: repeated parent runs first
+diverged on actor poses at tick 2231. This opt-in harness correction must also be present on the parent used by
+`check_lab_mechanics.py`; ordinary runs and the immutable combo reference keep their existing randomness policy.
