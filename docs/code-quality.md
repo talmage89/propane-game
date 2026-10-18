@@ -106,7 +106,10 @@ the argument is given and `Main` is a child of the root. `ReleaseTest` then buil
 buttons and exits 0 on PASS and 1 on a missing button, empty suburb or stage timeout. With `--scenario=network
 --connect=host:port` it creates a lobby, waits for `--players` (default 2) and plays a `--length` match with a bot.
 It opens the roaming lobby's panel with a real Tab event, or uses the classic lobby menu when presented, then
-verifies match completion and return to that lobby. Its support code shares that directory and namespace:
+verifies received final standings and return to that lobby. The roaming server can replace the match before its
+local results timer invokes `Finished`, so that timer is not a completion prerequisite. After returning, actual
+Tab/Escape events open and close the panel and a held W event must move the player. Stage deadlines accumulate
+process delta; no game/network deadlines change. Its support code shares that directory and namespace:
 
 | Class | File | Used for |
 | --- | --- | --- |

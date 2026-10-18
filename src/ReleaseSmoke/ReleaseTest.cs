@@ -11,6 +11,7 @@ namespace Propane.ReleaseSmoke;
 /// --scenario=network --connect=host:port creates a lobby and waits for --players (default 2).
 /// Exported archives exclude dev scenes and disallow scene overrides: use --release-test on the normal main scene.
 /// Every stage has a timeout and a failing exit code. Screenshots use --capture-dir.
+/// Stage deadlines use accumulated process delta, independent of simulation/network deadlines.
 /// </summary>
 public partial class ReleaseTest : Node
 {
@@ -25,6 +26,7 @@ public partial class ReleaseTest : Node
     private bool roamingLobby;
     private bool finished;
     private double playingShot;
+    private Vector3 returnedPosition;
 
     public override void _Ready()
     {
@@ -135,11 +137,6 @@ public partial class ReleaseTest : Node
                 return;
             }
             match.Player.InputOverride = new Bot();
-            match.Finished += () =>
-            {
-                finished = true;
-                GD.Print("[releasetest] final scores " + string.Join(" ", match.Scores.Select(s => $"{s.Key}={s.Value}")));
-            };
             sawPlaying = true;
             playingShot = elapsed + 12;
             director.Screenshot("03_cross_platform_match");
@@ -151,6 +148,13 @@ public partial class ReleaseTest : Node
             var match = main.GetNodeOrNull<Match>("Match");
             if (match != null)
             {
+                // MatchEnd is the completion fact. In a roaming lobby the server's next world can replace
+                // this scene before its local results timer invokes Finished; that callback is not required.
+                if (!finished && match.FinalStandings.Count > 0)
+                {
+                    finished = true;
+                    GD.Print("[releasetest] final scores " + string.Join(" ", match.FinalStandings.Select(s => $"{s.Id}={s.Score}")));
+                }
                 if (elapsed >= playingShot)
                 {
                     director.Screenshot("04_playing");
@@ -170,11 +174,64 @@ public partial class ReleaseTest : Node
         }
         else if (stage == 4)
         {
-            director.Screenshot("05_returned_to_lobby");
-            GD.Print("[releasetest] PASS cross-platform match finished and returned to lobby");
-            ShutdownGuard.Quit(GetTree());
-            stage = 99;
+            if (roamingLobby)
+            {
+                KeyEvent(Key.Tab, true);
+                KeyEvent(Key.Tab, false);
+                Advance(5, 0.25);
+                return;
+            }
+            PassNetwork();
         }
+        else if (stage == 5)
+        {
+            var world = main.GetNode<Match>("LobbyWorld");
+            if (!world.PanelOpen || main.GetNode<Menus>("Menus") is not { Current: Menus.Screen.Lobby, Docked: true })
+            {
+                Fail("returned lobby did not receive panel input");
+                return;
+            }
+            // Tab is UI focus navigation while the panel is open; Escape is its documented close path.
+            KeyEvent(Key.Escape, true);
+            KeyEvent(Key.Escape, false);
+            Advance(5, 0.25);
+        }
+        else if (stage == 6)
+        {
+            var world = main.GetNode<Match>("LobbyWorld");
+            if (world.PanelOpen || main.GetNode<Menus>("Menus").Current != Menus.Screen.None)
+            {
+                Fail("returned lobby panel did not close");
+                return;
+            }
+            returnedPosition = world.Player.GlobalPosition;
+            KeyEvent(Key.W, true);
+            Advance(5, 0.5);
+        }
+        else if (stage == 7)
+        {
+            KeyEvent(Key.W, false);
+            var displacement = main.GetNode<Match>("LobbyWorld").Player.GlobalPosition - returnedPosition;
+            displacement.Y = 0;
+            if (displacement.Length() < 0.1f)
+            {
+                Fail("returned lobby did not receive movement input");
+                return;
+            }
+            GD.Print($"[releasetest] returned lobby device input: Tab/Escape panel open/close, moved {displacement.Length():0.00} m");
+            PassNetwork();
+        }
+    }
+
+    private static void KeyEvent(Key key, bool pressed) =>
+        Input.ParseInputEvent(new InputEventKey { PhysicalKeycode = key, Keycode = key, Pressed = pressed });
+
+    private void PassNetwork()
+    {
+        director.Screenshot("05_returned_to_lobby");
+        GD.Print("[releasetest] PASS cross-platform match finished and returned to lobby");
+        ShutdownGuard.Quit(GetTree());
+        stage = 99;
     }
 
     public override void _PhysicsProcess(double delta)
