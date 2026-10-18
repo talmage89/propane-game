@@ -25,12 +25,13 @@ public static class AuthorityBenchTests
 
     private static void Measure(TestRunner runner, bool requests)
     {
-        const int warmup = 4000;
-        const int ticks = 10000;
+        const int warmup = 20000;
+        const int ticks = 100000;
         using var server = new ServerFixture(length: 3600);
         var sent = new Queue<byte[]>();
         using var client = new MatchClient(runner, server.Setup, server.Clock, 2, authoritySend: sent.Enqueue);
         var match = client.Match;
+        match.OnMessage(new NetMessage(Msg.MatchGo, server.Id, 0, new FloatMessage(server.Setup.Length)));
         var tank = match.LiveTanks.First();
         var packets = 0;
         var payloadBytes = 0L;
@@ -68,9 +69,9 @@ public static class AuthorityBenchTests
             samples[i] = Stopwatch.GetElapsedTime(start).TotalMicroseconds;
         }
         var bytesPerTick = (GC.GetAllocatedBytesForCurrentThread() - allocated) / (double)ticks;
-        Assert(match.Session.IsAlive && (!requests || packets == ticks && notifications == ticks), "benchmark workload changed");
+        Assert(match.Session.IsAlive && match.IsPlaying && (!requests || packets == ticks && notifications == ticks), "benchmark workload changed");
         var mean = samples.Average();
         Array.Sort(samples);
-        GD.Print(FormattableString.Invariant($"[authority-bench] requests={requests} ticks={ticks} packets={packets} payload_bytes={payloadBytes} notifications={notifications} bytes_per_tick={bytesPerTick:F2} mean_us={mean:F3} p95_us={samples[9499]:F3} p99_us={samples[9899]:F3}"));
+        GD.Print(FormattableString.Invariant($"[authority-bench] requests={requests} actors={match.Session.Actors.Count} bodies={match.Bodies.Entries.Count()} ticks={ticks} packets={packets} payload_bytes={payloadBytes} notifications={notifications} bytes_per_tick={bytesPerTick:F2} mean_us={mean:F3} p95_us={samples[(int)(ticks * .95) - 1]:F3} p99_us={samples[(int)(ticks * .99) - 1]:F3}"));
     }
 }

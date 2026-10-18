@@ -145,5 +145,5 @@ godot-mono --headless --path build/authority-parent/project res://scenes/dev/uni
 Use fresh labels and transcript paths: observations append. Omit `--observe` for measurements. The identical
 `AuthorityBenchTests --authority-bench` probe measures the complete Match physics callback with and without
 an atomic claim/reply each tick, including encoding, server admission and physical reconciliation. It reports
-allocation, whole-tick mean/p95/p99 and exact request/notification counts after 4,000 warm-up ticks. Run at least
+allocation, whole-tick mean/p95/p99 and exact request/notification counts after 20,000 warm-up ticks and 100,000 measured ticks in the playing phase. Run at least
 three alternating parent/candidate pairs; observed runs are not performance samples.
