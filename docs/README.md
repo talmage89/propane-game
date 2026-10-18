@@ -44,6 +44,7 @@ current and binding, and no one else edits it. Start with [VISION.md](../design/
 | Document | What it covers |
 | --- | --- |
 | [runbooks/measuring-scale.md](runbooks/measuring-scale.md) | `make bench`, reading its measurements, comparing optimization branches and playing optimized C# locally. |
+| [runbooks/moving-vent-residual.md](runbooks/moving-vent-residual.md) | FU2a scratch observation, correction decisions, contact traces and final-grid alignment. |
 | [runbooks/network-soak.md](runbooks/network-soak.md) | Running the multiplayer soaks, how `compare_tanks.py` judges a match, the capacity gate and the lobby-bot soaks. |
 | [runbooks/profiling-effects.md](runbooks/profiling-effects.md) | Measuring the cost of vents, smoke, blasts and chains in a crowd, alone or against a baseline build. |
 | [runbooks/animation-review.md](runbooks/animation-review.md) | The animation acceptance harness: commands, the metrics gate and external clip review. |

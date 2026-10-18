@@ -1,0 +1,65 @@
+# Moving-vent residual observation
+
+FU2a observes the immediate parent in a scratch Debug project. It changes no checkout runtime source, release
+reference, correction threshold or fixture ending. The helper lives under `src/Dev/NetScenarios` (Dev module),
+which `ExportRelease` excludes. Ordinary runs have no calls to it, even with the diagnostic flag. Scratch source
+hooks deliberately depend on Dev and are for source Debug runs only; never export that project.
+
+Run `make setup`, then prepare and **wait for the entire command to succeed** (it builds twice):
+
+```sh
+python3 -B tools/dev/vent_residual.py --revision=HEAD --label=fu2a-observed
+```
+
+The output project is `build/fu2a-observed/project`. `observation.json` records changed-source hashes and
+`observation.patch` records its four insertion-only source deltas. The rest of its runtime comes from the
+specified revision. Asset imports are borrowed from this worktree. Do not rebuild the worktree while preparing
+an unrelated revision's asset imports. The preparer checks exact anchors and refuses double instrumentation.
+
+Run the existing floor fixture, with a fresh directory for every run:
+
+```sh
+python3 -B tools/dev/vent_residual_run.py --project=build/fu2a-observed/project \
+  --output=build/fu2a-floor -- -p 24682 -n 2 -w 0 -l 30 -s '--match-seed=23' -- \
+  --scenario=vent-contact --vent-contact-axis=mixed --tune.FixedSeed=23 \
+  --net-seed=2 --net-lag=120 --net-jitter=30 --net-loss=3 \
+  --vent-residual-dir="$PWD/build/fu2a-floor/traces"
+```
+
+The wrapper records the exact command, exit status, `uptime` and Godot processes before, every five seconds during,
+and after the run. It preserves failures and propagates the launcher's unchanged verdict. Omit `--project` and the
+observation flag for an uninstrumented parent run. The historical P5 workload uses `-n 4 -w 0 -l 90`, server
+`--match-seed=25`, and `--melee-start --net-seed=2 --net-lag=120 --net-jitter=30 --net-loss=3` as client arguments.
+Use `-w 1` for an invisible rendered client; capture with `--capture-dir="$PWD/build/fu2a-shots"`.
+
+A successful observed run writes `traces/peer-*-match-*.jsonl`. Verify these exist before classifying it as
+instrumented. The JSONL retains publication poses **after** the real sequence increment, incoming states before
+admission (including rejected states), canonical authority, each vent correction decision and its reason, and
+all bodies at the checker's exact sampling boundaries (including world liveness, pause and simulation time). Rests are recorded after their reliable send and sequence increment. It records monotonic sample/receipt clocks, ownership,
+epoch, sequence, pending claim, pose/quaternion, mass-center offset, linear/angular velocities, targets, and native
+contact collider/normal/impulse, and the actual observer force-suppression flag. Contacts refer to the latest available native physics state, not a prospective
+collision proof. Reporting is capped at eight contacts per tank, enabled only in an attached observer. Each vent's
+post-correction velocity is also recorded. Writer lifetime is one match; replacement, completion and tree exit
+close it and reset its configuration marker. The first measurement records the effective correction/vent tuners and
+the actual authored convex-hull points for offline support checks. Measurement boundaries flush it; a killed process can lose its last buffered records.
+
+```sh
+python3 -B tools/dev/vent_residual_report.py build/fu2a-floor/bot*.log \
+  --traces=build/fu2a-floor/traces --output=build/fu2a-floor/alignment.json
+```
+
+This diagnostic first calls the unchanged checker. Its verdict is authoritative; the sidecar cannot turn a failure
+into a pass. It records the final common observed grid, both raw sample endpoints, interpolation span/weight,
+independent final/completion times and every final pair distance. With traces it also extracts a two-second window
+around the worst final body (`--body` and `--window` override that selection). It also reports authored hull minimum world Y at each peer's nearest correction decision when configuration data
+is available. On vent-contact's y=0 clear floor this exposes impossible predicted support; it is not a general
+collision or Jolt margin query. Full traces remain untouched. Gzipped
+JSONL is also accepted. The checker compares node origins; use the recorded mass centers and quaternions to
+separate translational drift, rotational offset and linear interpolation error. The `time` field uses the same raw Stopwatch clock as the checker; `network`, `sampled` and `updated` use each
+process's own network clock, so compute ages in that domain. An incoming future state is recorded again when
+`OnAuthority` replays it: the retained `network` receipt time distinguishes that replay from a new arrival. Physics frame counters establish order within one process only.
+
+Observation adds serialization, allocation, contact-report storage and disk work. It does not establish performance
+or deterministic replay, and fixed world/fault seeds do not fix native trajectories. Retain uninstrumented controls
+and report other-worktree load. Do not change correction until the failing case separates target prediction,
+post-correction native contact response, transport age, ownership and checker alignment.

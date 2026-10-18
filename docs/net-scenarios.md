@@ -107,3 +107,6 @@ Pending render continuations retire with their scenario.
 tools/dev/net_bots.sh -n 2 -w 2 -l 15 -s --match-seed=23 -o "$PWD/build/authority-root" -- --scenario=root-refusal --net-lag=120 --net-jitter=30 --net-loss=3 --capture-dir="$PWD/build/authority-root/shots"
 tools/dev/net_bots.sh -n 2 -w 2 -l 15 -s --match-seed=23 -o "$PWD/build/authority-future" -- --scenario=future-epoch --net-lag=120 --net-jitter=30 --net-loss=3 --capture-dir="$PWD/build/authority-future/shots"
 ```
+
+The opt-in [moving-vent observer](runbooks/moving-vent-residual.md) instruments isolated parent builds without changing
+these scenarios or their completion conditions. It retains correction decisions and the exact final comparison brackets.
