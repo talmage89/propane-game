@@ -22,6 +22,7 @@ RELEASE = ROOT / "tools" / "release"
 SHARED_PATHS = ["src/Net/Message.cs", "src/World/Suburb.cs", "src/Tank/Tank.cs", "src/Player/PlayerNet.cs",
                 "src/Core/ActorIdentity.cs", "src/Core/AppearanceRecord.cs", "src/Core/AppearancePalette.cs",
                 "src/Core/BodyIds.cs", "src/Core/BodyState.cs", "src/Player/PlayerNetState.cs",
+                "src/Core/ServerSettings.cs", "src/Core/ProcessPhysicsPolicies.cs",
                 "src/Core/Tuning.cs", "src/Core/Tuning.70.Match.cs", "src/Core/Tuning.85.Lab.cs", "src/Modes/KingRules.cs"]
 UNSHARED_PATHS = ["src/Dev/Probe.cs", "src/Core/Other.cs", "src/Player/Player.cs", "README.md"]
 

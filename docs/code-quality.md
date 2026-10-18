@@ -98,6 +98,21 @@ option above that a headless unit can reach through its real consumer. The nativ
 scenes cover Main's server entry; the exported launches (ordinary start, `--server`, `--classic-lobby`, `--release-test`)
 cover the rest. Add a new runtime option to `LaunchArgs`'s consumers, this table and that suite together.
 
+`LaunchArgs.OverrideForTests` provides strictly nested main-thread overrides and restores the previous immutable
+snapshot after exceptions. Tuning application lives in the composition-only `LaunchTuningOverrides` extension.
+`Main` owns the persistent `PlayerSettings` store, or borrows a test root's isolated store. `IPlayerSettings` and
+`PlayerPreferences` are Foundation contracts/borrowed selection; no ConfigFile owner lives there. Standalone unit,
+Lab, network, menu and benchmark roots bind their own stores and restore bindings after child tree-exit callbacks.
+`application_state_tests.tscn` runs independently of the unit runner's world: it asserts both physics-policy
+retirement orders and controlled update completion after retirement, without HTTP. `ApplicationSettingsTests`
+checks immediate persistence, independent caches, disposal and nested settings/launch restoration. The real-device
+menu input scenario also toggles leaderboard preferences with keyboard/controller events and reloads the file
+independently, while confirming that menu and HUD borrow the same store. The existing
+appearance migration cases remain isolated and unchanged. `ApplicationServerTests` records ordered exact wire
+bytes and run retirements for Bank/King with classic/roaming lobbies; `--application-transcript=ABSOLUTE_PATH`
+writes a scratch witness for parent comparison. `--a1-negative=minimum` on the native scene and
+`--a1-server-negative` on the server suite deliberately violate expectations and must exit nonzero.
+
 ### Release smoke
 
 `--release-test` lives in `src/ReleaseSmoke` (`Propane.ReleaseSmoke`). Official export templates disallow scene

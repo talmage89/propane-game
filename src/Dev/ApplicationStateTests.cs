@@ -2,8 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using Godot;
 using Propane.Core;
+using Propane.Net;
 using Propane.Tank;
 using static Propane.Dev.UnitTests.TestRunner;
 
@@ -12,19 +15,88 @@ namespace Propane.Dev;
 /// <summary>Native process-policy witness. Run alone: the unit runner itself owns a world.</summary>
 public partial class ApplicationStateTests : Node
 {
-    public override void _Ready()
+    public override async void _Ready()
     {
         try
         {
             foreach (var firstRetiresFirst in new[] { false, true }) PhysicsTranscript(firstRetiresFirst);
             if (DevArgs.Get("a1-bench") != null) Benchmark();
-            GD.Print("[application] PASS process policies");
+            await UpdateLifetime().ConfigureAwait(true);
+            GD.Print("[application] PASS process policies and update lifetime");
             CoreTests.Complete(this);
         }
         catch (Exception error)
         {
             GD.Print($"[application] FAIL {error}");
             CoreTests.Complete(this, 1);
+        }
+    }
+
+    private async Task UpdateLifetime()
+    {
+        using var launch = LaunchArgs.OverrideForTests(new LaunchArgs(new[]
+            { "--update-check", "--update-url=https://example.invalid/release", "--fake-version=0.0.1" }));
+        foreach (var outcome in new[] { "live", "not-newer", "malformed", "retired-success", "retired-failure", "detached", "unattached", "cancelled", "callback-retires" })
+        {
+            var response = new TaskCompletionSource<string>();
+            var token = CancellationToken.None;
+            var registration = default(CancellationTokenRegistration);
+            var callbacks = 0;
+            var updates = new UpdateCheck
+            {
+                Request = (url, cancellation) =>
+                {
+                    Assert(url == "https://example.invalid/release", "update URL precedence changed");
+                    token = cancellation;
+                    if (outcome == "cancelled") registration = cancellation.Register(() => response.TrySetCanceled(cancellation));
+                    return response.Task;
+                },
+            };
+            updates.Found += () =>
+            {
+                callbacks++;
+                if (outcome == "callback-retires") updates.Free();
+            };
+            if (outcome == "unattached") updates._Ready();
+            else AddChild(updates);
+            var completion = updates.Completion;
+            Assert(completion != null && !completion.IsCompleted, "request did not await its response");
+            if (outcome.StartsWith("retired-", StringComparison.Ordinal) || outcome is "cancelled" or "detached")
+            {
+                RemoveChild(updates);
+                Assert(token.IsCancellationRequested, "tree exit did not cancel request");
+                if (outcome != "detached") updates.Free();
+            }
+            if (outcome == "unattached")
+            {
+                updates.Free();
+                Assert(token.IsCancellationRequested, "predelete did not cancel an unattached request");
+            }
+            if (outcome == "retired-failure")
+            {
+                response.SetException(new InvalidOperationException("injected unavailable"));
+            }
+            else if (outcome == "cancelled")
+            {
+                Assert(response.Task.IsCanceled, "request did not observe cancellation during exit");
+            }
+            else
+            {
+                response.SetResult(outcome switch
+                {
+                    "not-newer" => "{\"tag_name\":\"v0.0.1\"}",
+                    "malformed" => "{",
+                    _ => "{\"tag_name\":\"v99.0.0\"}",
+                });
+            }
+
+            await completion!.ConfigureAwait(true);
+            registration.Dispose();
+            var delivered = outcome is "live" or "callback-retires";
+            Assert(callbacks == (delivered ? 1 : 0) && updates.Latest == (delivered ? "99.0.0" : null),
+                $"update delivery crossed lifetime: {outcome}");
+            if (GodotObject.IsInstanceValid(updates)) updates.Free();
+            GD.Print($"[application] update {outcome} callbacks={callbacks}");
         }
     }
 
