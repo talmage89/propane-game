@@ -93,6 +93,7 @@ def main():
             ('rule-clock', 'Propane.World.Plan.Clock', 'Godot.Time.GetTicksMsec'),
             ('plan-resource', 'Propane.World.Plan.Load', 'Godot.GD.Load'),
             ('pure-native', 'Propane.World.Plan.Scene', 'Godot.Node3D'),
+            ('timer-owner', 'Propane.Player.BlockingDelay', 'Godot.OS.DelayMsec'),
             ('timer-owner', 'Propane.Player.BadClock', 'System.Diagnostics.Stopwatch..ctor'),
             ('simulation-boundary', 'Propane.Player.BadClient', 'Propane.Net.NetClient'),
             ('simulation-boundary', 'Propane.Player.BadCodec', 'Propane.Net.MessageCodec'),
@@ -110,6 +111,7 @@ def main():
             ('runtime-dev', 'Propane.Session.BadDev', 'Propane.Dev.Harness'),
             ('runtime-dev', 'Propane.ReleaseSmoke.BadDev', 'Propane.Dev.Harness'),
             ('smoke-entry', 'Propane.Session.BadSmoke', 'Propane.ReleaseSmoke.Other'),
+            ('worker-native', 'Propane.Session.StaticResource', 'Godot.Node'),
             ('worker-native', 'Propane.Session.AsyncWorker', 'Godot.Node'),
             ('worker-native', 'Propane.Session.FactoryWorker', 'Godot.Node'),
             ('worker-native', 'Propane.Session.Worker', 'Godot.Node'),
@@ -143,6 +145,7 @@ def main():
         ('direct-quit', 'GetTree().Quit(1);'),
         ('timer', 'await System.Threading.Tasks.Task.Delay(2);'),
         ('timer', 'GetTree().CreateTimer(1);'),
+        ('timer', 'using static Godot.OS; DelayMsec(1);'),
         ('timer', 'using static System.Threading.Tasks.Task; await Delay(1);'),
         ('timer', 'var callback = System.Threading.Thread.Sleep;'),
         ('timer', 'new System.Threading.Timer { };'),
@@ -163,7 +166,7 @@ def main():
     require(not check(approved, counts), 'approved source site rejected')
     require(check({}, counts) and check({'src/Fixture.cs': approved['src/Fixture.cs'] * 2}, counts),
             'stale or increased source count passed')
-    print(f'PASS architecture: {len(expected)} compiled negatives, 15 source negatives, stale/increased site counts ({time.monotonic() - started:.2f}s)')
+    print(f'PASS architecture: {len(expected)} compiled negatives, 16 source negatives, stale/increased site counts ({time.monotonic() - started:.2f}s)')
 
 
 if __name__ == '__main__':

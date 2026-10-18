@@ -15,7 +15,7 @@ PATTERNS = {
     "tree-pause": r'\.\s*Paused\s*(?:\?\?=|[&|^]?=(?!=))',
     "shader-global": r'\bGlobalShaderParameter(?:Set|SetOverride|Add|Remove)\s*\(',
     "direct-quit": r'\b(?:Quit|Environment\s*\.\s*(?:Exit|FailFast))\s*\(',
-    "timer": r'\b(?:Task\s*\.\s*Delay|CreateTimer|Thread\s*\.\s*Sleep)\b|\bnew\s+(?:(?:System\.)?(?:Threading|Timers)\.|Godot\.)?(?:PeriodicTimer|Timer)\b',
+    "timer": r'\b(?:Task\s*\.\s*Delay|CreateTimer|Thread\s*\.\s*Sleep|OS\s*\.\s*Delay(?:Msec|Usec))\b|\bnew\s+(?:(?:System\.)?(?:Threading|Timers)\.|Godot\.)?(?:PeriodicTimer|Timer)\b',
     "wall-clock": r'\b(?:Time\s*\.\s*Get\w+|DateTime(?:Offset)?\s*\.\s*(?:UtcNow|Now|Today)|Stopwatch\s*\.\s*(?:GetTimestamp|GetElapsedTime|StartNew)|Environment\s*\.\s*TickCount(?:64)?|new\s+(?:System\.Diagnostics\.)?Stopwatch|TimeProvider\s*\.\s*System)\b|\bStopwatch\s+\w+\s*=',
     "worker-entry": r'\b(?:Task\s*\.\s*(?:Run|Factory\s*\.\s*StartNew)|ThreadPool\s*\.\s*(?:QueueUserWorkItem|UnsafeQueueUserWorkItem)|new\s+(?:System\.Threading\.)?Thread)\s*\(',
 }
@@ -37,7 +37,7 @@ def sites(sources):
         for alias, target in re.findall(r'\busing\s+(\w+)\s*=\s*(?:global::)?([\w.]+)\s*;', code):
             code = re.sub(r'\b' + re.escape(alias) + r'\b', target, code)
         for target in re.findall(r'\busing\s+static\s+(?:global::)?([\w.]+)\s*;', code):
-            members = {'Task': r'Delay|Run|Factory', 'Thread': r'Sleep', 'Time': r'Get\w+',
+            members = {'Task': r'Delay|Run|Factory', 'OS': r'DelayMsec|DelayUsec', 'Thread': r'Sleep', 'Time': r'Get\w+',
                        'DateTime': r'Now|UtcNow|Today', 'DateTimeOffset': r'Now|UtcNow|Today',
                        'Environment': r'TickCount|TickCount64', 'Stopwatch': r'GetTimestamp|GetElapsedTime|StartNew'}
             short = target.split('.')[-1]

@@ -255,6 +255,7 @@
     "src/Net/NetClient.cs": "Client",
     "src/Net/PacketTransports.cs": "Composition",
     "src/Net/Participants.cs": "Server",
+    "src/Net/ServerRun.cs": "Server",
     "src/Net/SnapshotBuffer.cs": "Client",
     "src/Net/TankLedger.cs": "Server",
     "src/Net/UpdateCheck.cs": "Composition",
@@ -314,6 +315,10 @@
     "System.Threading.Timer..ctor": [],
     "System.Threading.PeriodicTimer..ctor": [],
     "System.Timers.Timer..ctor": [],
-    "Godot.Timer..ctor": []
+    "Godot.Timer..ctor": [],
+    "Godot.OS.DelayMsec": [
+      "Propane.Dev.UnitTests.Fixtures.ServerNativeFixture"
+    ],
+    "Godot.OS.DelayUsec": []
   }
 }

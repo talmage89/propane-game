@@ -44,7 +44,7 @@ bench: ## Measure the bot/tank grid (BOTS, TANKS, CONFIG, RENDERED, SECONDS, REP
 build: ## Compile the C# code
 	dotnet build Propane.sln -c Debug -nologo -v quiet
 
-lint: ## Check Markdown links, C# formatting and script .uid pairs, and compile Debug/ExportRelease with warnings as errors
+lint: ## Check links, C# formatting/UIDs, warning-free builds and architecture boundaries
 	@unpaired=$$(git ls-files 'src/*.cs' 'src/*.cs.uid' | sed 's/\.uid$$//' | sort | uniq -u); \
 	if [ -n "$$unpaired" ]; then printf 'Commit each script with its Godot .uid file, and no .uid without its script:\n%s\n' "$$unpaired"; exit 1; fi
 	python3 -B tools/dev/check_links.py
@@ -66,7 +66,7 @@ test: test-core test-behavior test-generator test-world ## Run the fast headless
 # Checks the gate itself rather than the game: that lint rejects the mistakes it claims to, that check and test-full run
 # every command in the order and with the failure propagation they promise, that the deep shards add up, and that CI
 # mirrors the local partitions. Needs dotnet, make, git and python3 only (CI runs it as its own job).
-test-infra: ## Check the gate itself: analyzer negatives, make ordering and failure propagation, deep-shard and CI wiring
+test-infra: ## Check the gate: analyzer/architecture negatives, make ordering, deep-shard and CI wiring
 	python3 -B tools/dev/lint_tests.py
 
 test-core: build ## Run checker, platform, movement, unit and scripted mode-rule assertions

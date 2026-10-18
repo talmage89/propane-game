@@ -52,7 +52,7 @@ stable top-level owner so compiler-generated numbering does not cause churn.
 | `Modes/` | Rules by default; `ModeDefinition`/registry/supply are Composition; HUD input/presenters are Presentation; HUD values/`IModeView` remain plain rules observations. |
 | `Player/`, `Tank/`, `Fx/` | Simulation by default; input values and resolved state values are Foundation; cameras/views/device input and mode geometry are Presentation; `ReplicatedIntent` is Client. Profiling remains colocated pending C1. |
 | `Navigation/`, `Bots/` | Navigation and Bots. |
-| `Net/` | Wire by default; `LobbyServer`, ledger, roster, contact admission and mode wires/runner are Server; body/actor snapshot helpers, prediction and inbox are Client; Match/backend factory/update/diagnostics are Composition; NetClient is Client. Plain identity/appearance and selected decoded values are Foundation; `AmmoPickup` is Simulation. |
+| `Net/` | Wire by default; `LobbyServer`/`ServerRun`, ledger, roster, contact admission and mode wires/runner are Server; body/actor snapshot helpers, prediction and inbox are Client; Match/backend factory/update/diagnostics are Composition; NetClient is Client. Plain identity/appearance and selected decoded values are Foundation; `AmmoPickup` is Simulation. |
 | `UI/` | Presentation by default; front-end screens, their transactions and lobby/stage composition are Composition. |
 | `ReleaseSmoke/`, `Dev/` | Smoke and Dev respectively; no game dependency on the checker project under `tools/architecture/`. |
 
@@ -85,6 +85,15 @@ coverage and limits.
 `LobbyServer` uses the same ENet loopback path as a dedicated server; hosting does not bypass authority/transport.
 Main's generation/connection/run checks guard asynchronous match construction before attachment.
 
+**Current B1:** [LobbyServer](../src/Net/LobbyServer.cs) retains connections, lobbies, staging, transport, diagnostics
+and routing. A plain [ServerRun](../src/Net/ServerRun.cs) owns each match or roaming run's actors/admission, ledger,
+mode, clocks, readiness, pickups and tuning. Narrow synchronous callbacks provide delivery/loading/lobby transitions;
+it owns no transport, lobby dictionary or processing node. Finite-match membership/profiles and creator debug
+capability freeze at start; roaming membership follows roster observations. The facade detaches routing before
+idempotent disposal releases run-owned Tuning, including construction failure, empty lobby, results, staging
+replacement, identity exhaustion and server shutdown ([server contract](multiplayer.md),
+[B1 evidence](evidence/server-run-verification.md)).
+
 [Game](../src/Game.cs) assembles offline play and replaces suburb content. [Match](../src/Net/Match.Assembly.cs)
 assembles both roaming lobby worlds and network matches. [LabSession](../src/Lab/LabSession.cs) selects local sources
 and adapters; [LabMatch](../src/Lab/LabMatch.cs) can retain logical rules across replacement sessions. Most scene-tree
@@ -113,7 +122,7 @@ with composition-owned compiled bundles, described below; it does not invent a s
 | --- | --- |
 | Application | Main, application settings/template, launch snapshot, caches, optional hosted server; process exit. A1 makes mutable services explicit. |
 | Connection/lobby | NetClient and transport/inbox; disconnect/reconnect. Server connections/lobbies can span successive runs. |
-| Logical run/match | Server run state (currently inside LobbyServer); LabMatch rules; end/replacement, not necessarily a world lifetime. B1 extracts ServerRun. |
+| Logical run/match | ServerRun and LabMatch rules; end/replacement, not necessarily a world lifetime. LobbyServer retains connections/lobbies across runs. |
 | Physical session | SessionContext: world attachment, actor registry, views, cancellation and registrations; synchronous session disposal. |
 | World | WorldContext: World3D/offscreen viewport, roots, tuning copy, RNG, clock, effects, registries and presentation selection; invalidation then disposal. |
 | Content | Suburb/segment root plus originating effects/registrations; content retirement inside a surviving world. |
@@ -139,6 +148,9 @@ unsubscribes/stops adapters, retires views and actors, then frees world content/
 callback failures and reports them afterwards. Call disposal before freeing the controller. World-only owners use
 [WorldContext.Dispose](../src/Core/WorldContext.cs); content uses originating spawn/effect ownership and
 `RetireContent`, not a process-wide current-world lookup.
+
+On the server, `LobbyServer.Retire(ref routing)` clears the route before `ServerRun.Dispose` releases Tuning.
+Terminal MatchEnd delivery precedes a later Rejected message if returning to the lobby exhausts participant identity.
 
 Callbacks and sends can synchronously retire the run. Do not defer transactions into a batch or continue using
 retired state. Presentation bindings restore the newest surviving world in either disposal order. Node free alone
@@ -169,7 +181,7 @@ suppresses callbacks. A heap or batch-removal rewrite must prove those semantics
 thinking → owned actor publication → body publication → pickups. World/tank/actor native callbacks produce immediate
 local facts and authority requests; Match's render callback handles reveal/HUD/notices/deferred transitions.
 [LobbyServer](../src/Net/LobbyServer.cs) polls/decode/admission/dispatch first, then delayed disconnects/timeouts and
-run phases/stock/pickups. Preserve these domains and order through extraction.
+ServerRun phases/stock/pickups through `Tick`. Preserve these domains and order through extraction.
 
 Native skeleton/modifier order, ragdoll launch/recovery, logical muzzle and render-domain aim remain cohesive physical
 behavior ([motion](motion.md), [locomotion](locomotion.md), [recoil](recoil.md)). A camera-free bot still needs native
@@ -248,7 +260,7 @@ and registry replacement is unscoped; B3a removes those exceptions without chang
 **Target B3b:** Bank policy is composed into King, Lobby has its own client adapter, and prototype bots/HUDs consume
 plain observations that retain neither live rules nor delegates into rules. Read-time calculations take an explicit
 clock; hot reads allocate nothing. Current `IBotWorld.Rules`, King conversion and prototype presenters remain live
-couplings until then. The server's `NextRound { RebuildWorld: true }` fallback ends the match: general round-world replacement,
+couplings until then. ServerRun's `NextRound { RebuildWorld: true }` fallback ends the match: general round-world replacement,
 health/lives and online segment streaming still require end-to-end work.
 
 ## Simulation and presentation
@@ -354,13 +366,21 @@ remain unchanged. Close an entry with new linked evidence showing its condition,
 | Ordinary capacity and supply | [Tank scaling](evidence/tank-scaling.md), [network soak](evidence/network-soak.md), [network integration](evidence/network-integration.md): ordinary sixteen-process populated gameplay, startup delivery and reliable 60 FPS/100 ms bounds remain unproved; eightfold native capacity also absent in [lobby supply](evidence/lobby-tanks.md). Controlled capacity fixtures do not establish those workloads. | Owner-defined representative capacity workload plus quiet native client/server fanout/construction/physics runs; no ceiling or admission change in refactors. |
 | Bot absolute cost/allocation | [Bot scale](evidence/bot-scale.md): residual 120-byte ticks and loaded maxima above 4 ms; universal zero-allocation/4 ms claim unproved. | Bot/navigation performance follow-up isolates residual allocation and repeats representative quiet whole-tick tails; B4 tactical extraction alone is not closure. |
 | Attribution and visual limits | [Vent effects](evidence/vent-performance.md), [actor scale](evidence/scale-actors.md), [tank scaling](evidence/tank-scaling.md): exact Jolt/contact attribution and quiet-machine limits missing; sampled captures do not prove continuous animation/subjective responsiveness. | Dedicated profiling/native review under matching workload, plus human feel/animation review where the claim requires it. |
+| Loaded-unit native crash | [Unit time regression](evidence/unit-time-regression.md): one baseline signal-11/caller-thread crash was not diagnosed by the manual-clock fix. Later loaded passes do not identify its cause; [shutdown](shutdown.md) establishes a separate teardown mechanism. | Native lifetime/thread follow-up: reproduce and isolate the recorded mechanism, then retain repeated loaded proof; do not attribute it to the known shutdown race without evidence. |
 | Gate elapsed-time target | [Test speed](evidence/test-speed.md): historical under-15-minute deep target not met; later source partition/CI estimates are not an observed stock-runner timing. | Gate-performance follow-up measures full target and CI partitions without cutting assertions/depth. |
 | Platform/artifact proof | Reports above and [release-reference evidence](evidence/release-reference-verification.md) are Linux-scoped; Windows/macOS execution and cross-machine alignment remain unverified. D1 exclusion is source/export configuration, not full shipped-path runtime proof. | R1 produced-artifact inventory and Linux ordinary/server/classic/smoke execution; retain a separate Windows/macOS runtime checklist until executed/automated. |
 
 The [P4 record](evidence/net-scenarios-verification.md) also says vent-contact's shooter-ID defect is pending.
 That historical obligation is **closed**: `39eea7e` supplies the owning actor ID in
 [VentContactScenario](../src/Dev/NetScenarios/VentContactScenario.cs), and integration commit `1019775` records the
-native pass. The old failure remains in its dated report; it is not a current actor-zero fixture defect.
+native pass. The old failure remains in its dated report; it is not a current actor-zero fixture defect. B1's
+[23-case matrix](evidence/server-run-verification.md) also records a passing native vent-contact run.
+Its `f10e19d` integration records a later full deep-gate pass; that statistical pass does not erase P5's failed
+invocation or establish a fix for the FU2 residual. The B1 record's final-gates-pending status predates that integration.
+
+The older [unsharded dials timeout](evidence/test-flakes.md) remains a failed historical invocation. Later
+[sharded gate work](evidence/test-speed.md) and P5's complete offline sweep provide the subsequent workload proof;
+they do not relabel that old invocation. The elapsed-time target above remains a separate obligation.
 
 Resolved historical failures (for example corrected idle replay and generator shard issues) remain in evidence, but
 are not newly open acceptance items. [Evidence index](README.md#evidence) preserves the provenance and limitations.

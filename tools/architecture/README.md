@@ -30,12 +30,12 @@ all three gate commands to run, stop on each failure and precede game tests.
 Dependency rules enforce the declared module directions plus explicit Rules/Plans native purity, implicit rule/plan-clock
 member use (including engine/platform access and elapsed Stopwatch reads), simulation-to-client/codec/HUD boundaries, bot-to-Match/NetClient/live-rule boundaries, transport helper
 independence from NetTransport, server-to-physical actor/view/HUD boundaries, runtime/Smoke-to-Dev exclusion and the
-single exact Main-to-ReleaseTest smoke entry. Named compiled global-owner checks also cover setters (including object initializers); source-site counts prevent additional writes even inside an approved owner. Task.Delay and explicit Stopwatch/BCL timer construction require a named timer owner too, including target-typed `new()` that has no type name at its source call site. Native Godot inheritance is read from the adjacent GodotSharp assembly,
+single exact Main-to-ReleaseTest smoke entry. Named compiled global-owner checks also cover setters (including object initializers); source-site counts prevent additional writes even inside an approved owner. Task.Delay, blocking OS delays and explicit Stopwatch/BCL timer construction require a named timer owner too, including target-typed `new()` that has no type name at its source call site. Native Godot inheritance is read from the adjacent GodotSharp assembly,
 which is required for a game assembly; Godot value types stay valid. Member checks distinguish clocks from harmless
 `Environment.CurrentManagedThreadId` generated for iterators.
 
 Worker checking follows local method-definition calls from delegates created by Task.Run/Task.Factory.StartNew/Thread/ThreadPool starting
-methods (including PDB-linked async/iterator bodies) and rejects native object/resource references in that closure. The single named TestRunner._Ready probe
+methods (including local type initializers and PDB-linked async/iterator bodies) and rejects native object/resource references in that closure. The single named TestRunner._Ready probe
 intentionally tests rejected off-main calls; its worker entry count is separately pinned. This is conservative static
 reachability, not thread execution analysis. Source checks flag new worker boundaries for review.
 

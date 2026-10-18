@@ -2,7 +2,7 @@
 namespace Godot
 {
     public static class Engine { public static float TimeScale { get; set; } }
-    public static class OS { public static string GetName() => "fixture"; }
+    public static class OS { public static string GetName() => "fixture"; public static void DelayMsec(int value) { } }
     public class SceneTree { public bool Paused { get; set; } }
     public class Node { public void Touch() { } }
     public class Node3D : Node { }
@@ -34,6 +34,7 @@ namespace Propane.Net
 namespace Propane.Player
 {
     public class ActorRuntime { }
+    public class BlockingDelay { public void Run() => Godot.OS.DelayMsec(1); }
     public class BadClock
     {
         private readonly System.Diagnostics.Stopwatch clock = new();
@@ -97,6 +98,12 @@ namespace Propane.Session
     public class PauseInitializer { public object Run() => new Godot.SceneTree { Paused = true }; }
     public class BadDev { public object Run() => new Propane.Dev.Harness(); }
     public class BadSmoke { public object Run() => new Propane.ReleaseSmoke.Other(); }
+    public static class StaticResource
+    {
+        public static readonly int Value;
+        static StaticResource() { new Godot.Node().Touch(); Value = 1; }
+    }
+    public class StaticWorker { public object Run() => System.Threading.Tasks.Task.Run(() => StaticResource.Value); }
     public class AsyncWorker
     {
         public object Run() => System.Threading.Tasks.Task.Run(async () =>

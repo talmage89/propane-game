@@ -65,6 +65,7 @@ internal sealed class Scanner
     private readonly Dictionary<string, TypeDefinitionHandle> definitions = new(StringComparer.Ordinal);
     private readonly Dictionary<TypeDefinitionHandle, string> files = new();
     private readonly SignatureTypes signatures;
+    private readonly Dictionary<TypeDefinitionHandle, MethodDefinitionHandle> initializers = new();
     private string source = "";
     private string location = "";
     private string module = "";
@@ -85,7 +86,12 @@ internal sealed class Scanner
         this.policy = policy;
         this.directory = directory;
         signatures = new SignatureTypes(this);
-        foreach (var handle in reader.TypeDefinitions) definitions.Add(Name(handle), handle);
+        foreach (var handle in reader.TypeDefinitions)
+        {
+            definitions.Add(Name(handle), handle);
+            foreach (var method in reader.GetTypeDefinition(handle).GetMethods())
+                if (reader.GetString(reader.GetMethodDefinition(method).Name) == ".cctor") initializers.Add(handle, method);
+        }
     }
 
     private string Name(EntityHandle handle) => handle.Kind switch
@@ -391,6 +397,17 @@ internal sealed class Scanner
                             if (!delegates.TryGetValue(handle, out var callbacks)) delegates[handle] = callbacks = [];
                             callbacks.Add((MethodDefinitionHandle)token);
                         }
+                    }
+                    var declaring = token.Kind switch
+                    {
+                        HandleKind.MethodDefinition => reader.GetMethodDefinition((MethodDefinitionHandle)token).GetDeclaringType(),
+                        HandleKind.FieldDefinition => reader.GetFieldDefinition((FieldDefinitionHandle)token).GetDeclaringType(),
+                        _ => default
+                    };
+                    if (!declaring.IsNil && initializers.TryGetValue(declaring, out var initialize))
+                    {
+                        if (!calls.TryGetValue(handle, out var targets)) calls[handle] = targets = [];
+                        targets.Add(initialize);
                     }
                     Visit(token); break;
                 case OperandType.InlineSwitch:
