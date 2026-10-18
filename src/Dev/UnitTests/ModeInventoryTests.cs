@@ -23,12 +23,18 @@ public static class ModeInventoryTests
             using var tuning = new Tuning();
             var inventory = modes.Select(mode => new
             {
-                mode.Id, mode.Name, mode.SchemaVersion, mode.World, mode.Timer, mode.SamplesActors,
+                mode.Id,
+                mode.Name,
+                mode.SchemaVersion,
+                mode.World,
+                mode.Timer,
+                mode.SamplesActors,
                 rules = mode.CreateRules().GetType().FullName,
                 hud = mode.CreateHud().GetType().FullName,
                 bot = mode.CreateBot?.Invoke(23)?.GetType().FullName,
                 tuners = mode.Tuners.ToArray(),
-                mode.Supply.LimitedAmmo, mode.Supply.Pickups,
+                mode.Supply.LimitedAmmo,
+                mode.Supply.Pickups,
                 lobby = ReferenceEquals(ModeRegistry.ForLobby(mode.Id), mode),
                 network = ReferenceEquals(ModeRegistry.Find(mode.Id, mode.SchemaVersion), mode),
                 supply = new[] { 1, 2, 4, 8, 16, 32 }.SelectMany(players => Enumerable.Range(1, 8).Select(multiplier =>

@@ -161,17 +161,17 @@ public static class ServerRunTests
         {
             runner.Run($"server run/roaming construction failure (attached {afterAttach})", () =>
             {
-                try
+                var bundle = ModeRegistry.Shipped.Find(ModeRegistry.LobbyWorldId, 1)!;
+                using var registration = ModeRegistry.RegisterScoped(bundle with
                 {
-                    ModeWires.Register(ModeRegistry.LobbyWorldId, () => afterAttach
+                    CreateServerWire = () => afterAttach
                         ? new FailingWorldWire()
-                        : throw new InvalidOperationException("injected world initialization failure"));
-                    using var f = new ServerRunFixture(worlds: true);
-                    f.Runs.Single().AssertOnce();
-                    f.Driver.Advance(100);
-                    f.Runs.Single().AssertOnce();
-                }
-                finally { ModeWires.Register(ModeRegistry.LobbyWorldId, () => new LobbyWire()); }
+                        : throw new InvalidOperationException("injected world initialization failure"),
+                });
+                using var f = new ServerRunFixture(worlds: true);
+                f.Runs.Single().AssertOnce();
+                f.Driver.Advance(100);
+                f.Runs.Single().AssertOnce();
             });
         }
         foreach (var worlds in new[] { false, true })

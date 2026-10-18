@@ -42,15 +42,15 @@ public static class ModeEnvelopeTests
         return w.ToArray();
     }
 
-    private static void RegisterCausalMode()
+    private static IDisposable RegisterCausalMode(RecordingWire wire)
     {
-        ModeSchemas.Register(new ModeSchema(CausalMode, 1, new[]
+        var schema = new ModeSchema(CausalMode, 1, new[]
         {
             new ModeKind(1, "Report", ModeDirection.Event, ModeReporter.ActorOwner, 8, r => new Report(r.Int(), r.UInt()),
                 (w, p) => { var report = (Report)p; w.Int(report.Peer).UInt(report.Request); },
                 p => new ModeDependency(((Report)p).Peer, ((Report)p).Request)),
-        }));
-        ModeRegistry.Register(ModeRegistry.TankBank with { Id = CausalMode, Name = "Causal probe" });
+        });
+        return ModeRegistry.RegisterScoped(new ModeBundle(ModeRegistry.TankBank with { Id = CausalMode, Name = "Causal probe" }, schema, () => wire));
     }
 
     public static void Register(TestRunner runner)
@@ -206,9 +206,8 @@ public static class ModeEnvelopeTests
         });
         runner.Run("envelope/server holds a victim report until its blast is accepted", () =>
         {
-            RegisterCausalMode();
             var wire = new RecordingWire();
-            ModeWires.Register(CausalMode, () => wire);
+            using var registration = RegisterCausalMode(wire);
             using var f = new ServerFixture(mode: ModeRegistry.Find(CausalMode, 1));
             var actor = f.ActorId(2);
             byte[] Report(uint eventId, uint request) => MessageCodec.Encode(new NetMessage(Msg.ModeEvent, f.Id, 0,
