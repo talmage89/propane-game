@@ -7,6 +7,7 @@ using Godot;
 using Propane.Core;
 using Propane.Dev.LabCases;
 using Propane.Lab;
+using Propane.ReleaseSmoke;
 using static Propane.Dev.UnitTests.TestRunner;
 using LabCase = Propane.Dev.LabCases.LabScenario;
 

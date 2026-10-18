@@ -2,6 +2,7 @@ using System;
 using System.Threading.Tasks;
 using Godot;
 using Propane.Core;
+using Propane.ReleaseSmoke;
 using static Propane.Dev.UnitTests.TestRunner;
 
 namespace Propane.Dev;

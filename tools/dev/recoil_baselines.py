@@ -88,8 +88,11 @@ def instrument(destination, release):
         first = current.index('            case "bot-recoil":')
         last = current.index('            case "recoil":', first)
         recoil += current[first:last]
-        (destination / "src/Dev/BotRecoilProbe.cs").write_text((REPO / "src/Dev/BotRecoilProbe.cs").read_text())
-        bot = destination / "src/Dev/Bot.cs"
+        modern = (destination / "src/ReleaseSmoke/Bot.cs").exists()
+        probe = (REPO / "src/Dev/BotRecoilProbe.cs").read_text()
+        (destination / "src/Dev/BotRecoilProbe.cs").write_text(
+            probe if modern else probe.replace("using Propane.ReleaseSmoke;\n", ""))
+        bot = destination / ("src/ReleaseSmoke/Bot.cs" if modern else "src/Dev/Bot.cs")
         bot.write_text(bot.read_text().replace("private void Face(", "internal void Face(").replace(
             "var view = point - aim.EyeOrigin;", "tuning = player.World.Tuning;\n        var view = point - aim.EyeOrigin;"))
         simple = destination / "src/Dev/SimpleBot.cs"

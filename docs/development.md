@@ -451,6 +451,13 @@ and cheek weld. [evidence/rifle-contact.md](evidence/rifle-contact.md) records t
 
 ## Versions and releases
 
+Godot's .NET exporter selects `ExportRelease` for `--export-release` and `ExportDebug` for `--export-debug`.
+`ExportRelease` excludes all `src/Dev` C# sources; the presets also omit their script resources and `scenes/dev`.
+The small exported smoke and its capture, metrics and bot helpers live in `src/ReleaseSmoke`; `--release-test`
+keeps working inside an untouched archive. Editor/`make build` Debug, debug exports and local optimized Release
+(`make play` and `make bench CONFIG=Release`) retain the harnesses. See the
+[Dev boundary](code-quality.md#release-smoke).
+
 Work happens on `dev`; `main` is what has been released. The version is `config/version` in `project.godot`,
 MAJOR.MINOR.PATCH, and it decides who plays together:
 

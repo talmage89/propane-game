@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Godot;
 using Propane.Core;
 using Propane.Player;
+using Propane.ReleaseSmoke;
 using Propane.Session;
 using Propane.Tank;
 using Propane.World;

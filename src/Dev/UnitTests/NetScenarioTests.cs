@@ -4,6 +4,7 @@ using System.Linq;
 using Godot;
 using Propane.Dev.NetScenarios;
 using Propane.Net;
+using Propane.ReleaseSmoke;
 using static Propane.Dev.UnitTests.TestRunner;
 
 namespace Propane.Dev.UnitTests;

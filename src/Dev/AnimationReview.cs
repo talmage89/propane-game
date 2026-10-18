@@ -6,6 +6,7 @@ using System.Text.Json;
 using Godot;
 using Propane.Core;
 using Propane.Player;
+using Propane.ReleaseSmoke;
 using Propane.World;
 
 namespace Propane.Dev;
