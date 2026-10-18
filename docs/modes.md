@@ -137,8 +137,8 @@ Three fixed outer messages carry everything mode-specific: `ModeEvent` (client t
   wire. Tank Bank's spill declares none, as before.
 - **Current round.** The server refuses a spill sent for another round or world revision with its ids; clients
   ignore commands for another world revision or an older round.
-- **Purpose.** A new mode registers a definition, rules, payload codecs and a wire adapter (`IModeWire`); the outer
-  shapes, the runner and the session factory do not change.
+- **Purpose.** A networked mode adds one complete compiled bundle containing its definition, existing schema and
+  explicit server wire factory (`IModeWire`). Registration does not implement unsupported client or world behavior.
 
 Tank Bank's schema (version 1):
 
@@ -391,7 +391,8 @@ window moves for free each frame. None of this is networked yet.
 
 ## Verification
 
-`make test` runs the pure rule suites (`ModeTests`), the envelope suites (`ModeEnvelopeTests`: round trips,
+`make test` runs the catalog completeness, immutability and scoped-restoration suite (`ModeCatalogTests`), the
+registration/supply inventory (`ModeInventoryTests`), the pure rule suites (`ModeTests`), the envelope suites (`ModeEnvelopeTests`: round trips,
 malformed, oversized, truncated, duplicate, out-of-order, stale-round and unknown-schema input, the causal gate and
 a server-held victim report), the ported server, participant, lifecycle and authority suites, and
 `scenes/dev/mode_test.tscn`, which feeds the scripts in `tools/dev/modes/` into the rules and checks their state.

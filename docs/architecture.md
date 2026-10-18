@@ -265,6 +265,8 @@ idempotent disposal restores the exact previous catalog, including identities/or
 The scope owns only its overlay, with no rules, wires, native resources or timers. Network registration remains
 Sandbox, Bank, King, Lobby; lobby choices remain Bank, King; prototype order remains Ring Out, King, Short Fuse,
 Dissolve Run. Test overlays never change lobby/prototype eligibility. No IDs, schemas, bytes or exposure change.
+[B3a evidence](evidence/mode-catalog-verification.md) records completeness/restoration, exact parent inventories and
+packets, paired ticks and native audits.
 
 **Target B3b:** Bank policy is composed into King, Lobby has its own client adapter, and prototype bots/HUDs consume
 plain observations that retain neither live rules nor delegates into rules. Read-time calculations take an explicit
