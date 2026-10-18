@@ -1,6 +1,7 @@
 # Complete compiled mode catalog — B3a
 
-**Status:** Targeted verification complete. The final deep sweep is reported separately in the branch report.
+**Status:** Historical verification complete. Server-boundary and baseline claims are superseded by
+[the server-input follow-up](mode-catalog-server-inputs.md). The original final deep sweep passed in the branch report.
 
 2026-10-18. Branch `wp/rf-b3a-mode-catalog`; production `039d0e1`, proof harness `76890ab`, immediate parent
 `2ed9bb2` (inventory-only addition to `b90f360`). Linux, Godot 4.7.2 .NET, .NET SDK 10.0.113, Debug, GTX 1660.
@@ -21,11 +22,13 @@ Retired: the definition registration list, schema registration list, wire factor
 `Register` seams and `ModeWires.For`'s silent fallback. Sandbox explicitly selects `SilentModeWire`. Unknown runner
 integration fails before either factory runs. Rule creation and initialization still precede wire creation.
 
-The schema reader receives composition's resolver through MessageCodec; codecs do not look up a composition-owned
-catalog. ServerRun obtains a runner through its existing ModeRegistry edge and uses the runner's selected schema.
-No new dependency exception was added. The removed `ModeWires → ModeDefinition` exception was removed in the production
-commit. Existing definition/Tuning/server boundary exceptions remain; this package does not claim plain server inputs
-or complete the broader C1 boundary work. New runtime types/files are explicitly mapped in `modules.json`.
+At the original head, ModeSchemas received a resolver from MessageCodec, but MessageCodec itself still resolved
+schemas/eligibility through Composition. Server owners also retained catalog/definition/native-tuning dependencies.
+The original production commit removed the ModeWires → ModeDefinition exception and added none; 19 exceptions still
+named B3a. The [server-input follow-up](mode-catalog-server-inputs.md) removes the server catalog edges, removes the
+natural live-tuning edges and assigns the four remaining codec/resource edges precisely to N1/A1/C1. That record and
+the current architecture contract replace the original incomplete ownership claim. New runtime types/files are
+explicitly mapped in modules.json.
 
 ## Completeness, restoration and exact preservation
 

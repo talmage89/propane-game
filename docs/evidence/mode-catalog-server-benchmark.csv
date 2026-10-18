@@ -1,0 +1,145 @@
+runtime,display,pair,order,revision,mode,ticks,bodies,packets,payload_bytes,bytes_per_tick,mean_us,p95_us,p99_us,load_start,load_end,other_worktrees
+default,headless,1,PC,parent,Tank Bank,30000,8,60500,19024500,6868.12,20.565,29.600,32.800,11.21,10.96,dev-2
+default,headless,1,PC,parent,King of the Cul-de-sac,30000,8,60518,19025886,7070.44,23.611,28.700,34.500,11.21,10.96,dev-2
+default,headless,1,PC,parent,roaming,30000,8,60000,19020000,6813.65,20.246,24.700,34.300,11.21,10.96,dev-2
+default,headless,1,PC,candidate,Tank Bank,30000,8,60500,19024500,6868.12,22.882,25.200,30.200,10.96,10.41,"dev-2,dev-5"
+default,headless,1,PC,candidate,King of the Cul-de-sac,30000,8,60518,19025886,7070.42,17.212,24.100,27.600,10.96,10.41,"dev-2,dev-5"
+default,headless,1,PC,candidate,roaming,30000,8,60000,19020000,6813.65,23.239,25.400,36.900,10.96,10.41,"dev-2,dev-5"
+default,headless,2,PC,parent,Tank Bank,30000,8,60500,19024500,6868.12,23.734,24.600,30.500,10.41,10.30,"dev-2,dev-5"
+default,headless,2,PC,parent,King of the Cul-de-sac,30000,8,60518,19025886,7070.42,21.305,28.300,32.100,10.41,10.30,"dev-2,dev-5"
+default,headless,2,PC,parent,roaming,30000,8,60000,19020000,6813.65,20.762,25.300,36.900,10.41,10.30,"dev-2,dev-5"
+default,headless,2,PC,candidate,Tank Bank,30000,8,60500,19024500,6868.12,18.481,23.600,29.300,10.30,9.49,"dev-2,dev-5"
+default,headless,2,PC,candidate,King of the Cul-de-sac,30000,8,60518,19025886,7070.42,17.596,24.300,28.600,10.30,9.49,"dev-2,dev-5"
+default,headless,2,PC,candidate,roaming,30000,8,60000,19020000,6813.65,18.251,23.600,31.900,10.30,9.49,"dev-2,dev-5"
+default,headless,4,PC,parent,Tank Bank,30000,8,60500,19024500,6868.12,18.768,23.900,27.900,10.85,10.70,dev-2
+default,headless,4,PC,parent,King of the Cul-de-sac,30000,8,60518,19025886,7070.44,18.651,26.500,29.800,10.85,10.70,dev-2
+default,headless,4,PC,parent,roaming,30000,8,60000,19020000,6813.65,17.695,23.600,29.600,10.85,10.70,dev-2
+default,headless,4,PC,candidate,Tank Bank,30000,8,60500,19024500,6868.12,19.001,24.000,28.100,10.70,12.15,dev-2
+default,headless,4,PC,candidate,King of the Cul-de-sac,30000,8,60518,19025886,7070.42,24.287,30.000,34.800,10.70,12.15,dev-2
+default,headless,4,PC,candidate,roaming,30000,8,60000,19020000,6813.65,19.306,24.400,37.400,10.70,12.15,dev-2
+default,headless,13,CP,parent,Tank Bank,30000,8,60500,19024500,6868.12,16.419,19.900,24.300,14.29,14.83,
+default,headless,13,CP,parent,King of the Cul-de-sac,30000,8,60518,19025886,7070.44,16.209,20.700,26.300,14.29,14.83,
+default,headless,13,CP,parent,roaming,30000,8,60000,19020000,6813.65,15.234,19.200,22.600,14.29,14.83,
+default,headless,13,CP,candidate,Tank Bank,30000,8,60500,19024500,6868.12,19.621,28.700,32.800,14.49,14.29,
+default,headless,13,CP,candidate,King of the Cul-de-sac,30000,8,60518,19025886,7070.44,15.924,20.900,25.200,14.49,14.29,
+default,headless,13,CP,candidate,roaming,30000,8,60000,19020000,6813.65,15.199,20.100,22.900,14.49,14.29,
+default,headless,14,PC,parent,Tank Bank,30000,8,60500,19024500,6868.12,15.537,20.200,23.300,14.83,13.96,
+default,headless,14,PC,parent,King of the Cul-de-sac,30000,8,60518,19025886,7070.42,17.753,25.300,29.500,14.83,13.96,
+default,headless,14,PC,parent,roaming,30000,8,60000,19020000,6813.65,17.616,24.100,28.700,14.83,13.96,
+default,headless,14,PC,candidate,Tank Bank,30000,8,60500,19024500,6868.12,16.913,24.700,29.000,13.96,13.09,
+default,headless,14,PC,candidate,King of the Cul-de-sac,30000,8,60518,19025886,7070.44,15.963,20.100,24.700,13.96,13.09,
+default,headless,14,PC,candidate,roaming,30000,8,60000,19020000,6813.65,16.581,22.600,25.700,13.96,13.09,
+default,headless,15,CP,parent,Tank Bank,30000,8,60500,19024500,6868.12,16.041,22.300,23.800,11.91,11.27,
+default,headless,15,CP,parent,King of the Cul-de-sac,30000,8,60518,19025886,7070.42,16.162,20.500,25.600,11.91,11.27,
+default,headless,15,CP,parent,roaming,30000,8,60000,19020000,6813.65,16.255,22.500,24.800,11.91,11.27,
+default,headless,15,CP,candidate,Tank Bank,30000,8,60500,19024500,6868.12,17.105,20.200,26.900,12.60,11.91,
+default,headless,15,CP,candidate,King of the Cul-de-sac,30000,8,60518,19025886,7070.44,17.984,26.200,30.000,12.60,11.91,
+default,headless,15,CP,candidate,roaming,30000,8,60000,19020000,6813.65,16.567,22.700,27.500,12.60,11.91,
+default,headless,33,CP,parent,Tank Bank,30000,8,60500,19024500,6868.12,17.307,23.200,24.900,36.38,32.17,dev-2
+default,headless,33,CP,parent,King of the Cul-de-sac,30000,8,60518,19025886,7070.42,17.641,25.000,28.800,36.38,32.17,dev-2
+default,headless,33,CP,parent,roaming,30000,8,60000,19020000,6813.65,17.977,23.200,28.400,36.38,32.17,dev-2
+default,headless,33,CP,candidate,Tank Bank,30000,8,60500,19024500,6868.12,18.015,25.400,28.100,38.76,36.38,dev-2
+default,headless,33,CP,candidate,King of the Cul-de-sac,30000,8,60518,19025886,7070.44,18.329,25.800,28.900,38.76,36.38,dev-2
+default,headless,33,CP,candidate,roaming,30000,8,60000,19020000,6813.65,17.592,23.200,29.400,38.76,36.38,dev-2
+default,headless,34,PC,parent,Tank Bank,30000,8,60500,19024500,6868.12,21.595,24.500,31.300,20.07,21.87,dev-2
+default,headless,34,PC,parent,King of the Cul-de-sac,30000,8,60518,19025886,7070.42,23.218,29.300,33.400,20.07,21.87,dev-2
+default,headless,34,PC,parent,roaming,30000,8,60000,19020000,6813.65,26.743,26.800,42.500,20.07,21.87,dev-2
+default,headless,34,PC,candidate,Tank Bank,30000,8,60500,19024500,6868.12,41.756,26.100,80.500,21.87,23.86,dev-2
+default,headless,34,PC,candidate,King of the Cul-de-sac,30000,8,60518,19025886,7070.42,31.727,30.500,42.600,21.87,23.86,dev-2
+default,headless,34,PC,candidate,roaming,30000,8,60000,19020000,6813.65,45.701,30.400,286.600,21.87,23.86,dev-2
+default,headless,37,CP,parent,Tank Bank,30000,8,60500,19024500,6868.12,21.384,24.800,31.200,21.79,22.34,dev-2
+default,headless,37,CP,parent,King of the Cul-de-sac,30000,8,60518,19025886,7070.42,21.769,28.300,32.700,21.79,22.34,dev-2
+default,headless,37,CP,parent,roaming,30000,8,60000,19020000,6813.65,20.659,24.900,39.300,21.79,22.34,dev-2
+default,headless,37,CP,candidate,Tank Bank,30000,8,60500,19024500,6868.12,18.184,24.200,30.000,23.26,21.79,"dev-2,dev-5"
+default,headless,37,CP,candidate,King of the Cul-de-sac,30000,8,60518,19025886,7070.42,23.711,28.900,36.400,23.26,21.79,"dev-2,dev-5"
+default,headless,37,CP,candidate,roaming,30000,8,60000,19020000,6813.65,22.852,26.200,43.400,23.26,21.79,"dev-2,dev-5"
+default,headless,38,PC,parent,Tank Bank,30000,8,60500,19024500,6868.12,24.518,25.100,42.300,22.34,21.52,dev-2
+default,headless,38,PC,parent,King of the Cul-de-sac,30000,8,60518,19025886,7070.42,23.386,29.700,34.000,22.34,21.52,dev-2
+default,headless,38,PC,parent,roaming,30000,8,60000,19020000,6813.65,19.386,23.500,33.100,22.34,21.52,dev-2
+default,headless,38,PC,candidate,Tank Bank,30000,8,60500,19024500,6868.12,19.948,24.500,30.300,21.52,22.45,dev-2
+default,headless,38,PC,candidate,King of the Cul-de-sac,30000,8,60518,19025886,7070.44,54.198,29.700,82.800,21.52,22.45,dev-2
+default,headless,38,PC,candidate,roaming,30000,8,60000,19020000,6813.65,52.080,29.900,616.000,21.52,22.45,dev-2
+default,rendered,1,PC,parent,Tank Bank,30000,8,60500,19024500,6868.12,22.720,24.900,32.700,10.68,10.77,"dev-2,dev-3"
+default,rendered,1,PC,parent,King of the Cul-de-sac,30000,8,60518,19025886,7070.42,22.151,27.900,31.900,10.68,10.77,"dev-2,dev-3"
+default,rendered,1,PC,parent,roaming,30000,8,60000,19020000,6813.65,22.587,25.000,43.700,10.68,10.77,"dev-2,dev-3"
+default,rendered,1,PC,candidate,Tank Bank,30000,8,60500,19024500,6868.12,24.284,24.900,33.900,10.77,12.19,"dev-2,dev-3"
+default,rendered,1,PC,candidate,King of the Cul-de-sac,30000,8,60518,19025886,7070.42,24.547,28.700,36.400,10.77,12.19,"dev-2,dev-3"
+default,rendered,1,PC,candidate,roaming,30000,8,60000,19020000,6813.65,24.790,29.600,61.000,10.77,12.19,"dev-2,dev-3"
+default,rendered,2,PC,parent,Tank Bank,30000,8,60500,19024500,6868.12,26.150,25.800,48.700,12.19,18.32,"dev-2,dev-3"
+default,rendered,2,PC,parent,King of the Cul-de-sac,30000,8,60518,19025886,7070.42,26.389,29.100,49.700,12.19,18.32,"dev-2,dev-3"
+default,rendered,2,PC,parent,roaming,30000,8,60000,19020000,6813.65,24.373,27.800,48.900,12.19,18.32,"dev-2,dev-3"
+default,rendered,2,PC,candidate,Tank Bank,30000,8,60500,19024500,6868.12,25.274,25.000,43.000,18.32,21.28,"dev-2,dev-3"
+default,rendered,2,PC,candidate,King of the Cul-de-sac,30000,8,60518,19025886,7070.42,26.245,29.800,48.600,18.32,21.28,"dev-2,dev-3"
+default,rendered,2,PC,candidate,roaming,30000,8,60000,19020000,6813.65,25.229,30.900,82.500,18.32,21.28,"dev-2,dev-3"
+default,rendered,7,PC,parent,Tank Bank,30000,8,60500,19024500,6868.12,19.109,23.300,28.900,23.54,21.22,dev-2
+default,rendered,7,PC,parent,King of the Cul-de-sac,30000,8,60518,19025886,7070.42,18.697,25.600,28.600,23.54,21.22,dev-2
+default,rendered,7,PC,parent,roaming,30000,8,60000,19020000,6813.65,17.774,23.000,28.200,23.54,21.22,dev-2
+default,rendered,7,PC,candidate,Tank Bank,30000,8,60500,19024500,6868.12,19.190,23.700,29.000,21.22,19.61,dev-2
+default,rendered,7,PC,candidate,King of the Cul-de-sac,30000,8,60518,19025886,7070.42,19.225,25.800,28.700,21.22,19.61,dev-2
+default,rendered,7,PC,candidate,roaming,30000,8,60000,19020000,6813.65,18.854,23.500,32.300,21.22,19.61,dev-2
+default,rendered,8,PC,parent,Tank Bank,30000,8,60500,19024500,6868.12,18.996,24.000,28.300,19.61,20.28,dev-2
+default,rendered,8,PC,parent,King of the Cul-de-sac,30000,8,60518,19025886,7070.44,19.580,27.300,29.600,19.61,20.28,dev-2
+default,rendered,8,PC,parent,roaming,30000,8,60000,19020000,6813.65,19.583,24.700,32.300,19.61,20.28,dev-2
+default,rendered,8,PC,candidate,Tank Bank,30000,8,60500,19024500,6868.12,19.085,24.300,28.300,20.28,18.31,dev-2
+default,rendered,8,PC,candidate,King of the Cul-de-sac,30000,8,60518,19025886,7070.42,21.055,28.000,32.700,20.28,18.31,dev-2
+default,rendered,8,PC,candidate,roaming,30000,8,60000,19020000,6813.65,19.632,25.100,34.300,20.28,18.31,dev-2
+default,rendered,9,PC,parent,Tank Bank,30000,8,60500,19024500,6868.12,20.182,24.300,29.500,18.31,17.32,dev-2
+default,rendered,9,PC,parent,King of the Cul-de-sac,30000,8,60518,19025886,7070.42,19.742,26.600,29.700,18.31,17.32,dev-2
+default,rendered,9,PC,parent,roaming,30000,8,60000,19020000,6813.65,18.464,23.300,34.800,18.31,17.32,dev-2
+default,rendered,9,PC,candidate,Tank Bank,30000,8,60500,19024500,6868.12,19.602,23.800,30.100,17.32,16.36,"dev-2,dev-5"
+default,rendered,9,PC,candidate,King of the Cul-de-sac,30000,8,60518,19025886,7070.44,22.152,29.000,32.500,17.32,16.36,"dev-2,dev-5"
+default,rendered,9,PC,candidate,roaming,30000,8,60000,19020000,6813.65,20.933,24.500,34.600,17.32,16.36,"dev-2,dev-5"
+default,rendered,10,PC,parent,Tank Bank,30000,8,60500,19024500,6868.12,23.274,25.400,32.100,16.36,17.14,"dev-2,dev-5"
+default,rendered,10,PC,parent,King of the Cul-de-sac,30000,8,60518,19025886,7070.44,25.274,29.900,35.100,16.36,17.14,"dev-2,dev-5"
+default,rendered,10,PC,parent,roaming,30000,8,60000,19020000,6813.65,23.591,26.900,44.900,16.36,17.14,"dev-2,dev-5"
+default,rendered,10,PC,candidate,Tank Bank,30000,8,60500,19024500,6868.12,23.172,24.800,33.400,17.14,17.42,"dev-2,dev-5"
+default,rendered,10,PC,candidate,King of the Cul-de-sac,30000,8,60518,19025886,7070.42,23.955,27.900,32.800,17.14,17.42,"dev-2,dev-5"
+default,rendered,10,PC,candidate,roaming,30000,8,60000,19020000,6813.65,23.822,26.600,45.100,17.14,17.42,"dev-2,dev-5"
+default,rendered,11,CP,parent,Tank Bank,30000,8,60500,19024500,6868.12,25.203,25.000,34.300,18.70,20.43,dev-2
+default,rendered,11,CP,parent,King of the Cul-de-sac,30000,8,60518,19025886,7070.42,24.401,28.400,34.900,18.70,20.43,dev-2
+default,rendered,11,CP,parent,roaming,30000,8,60000,19020000,6813.65,24.088,27.400,44.100,18.70,20.43,dev-2
+default,rendered,11,CP,candidate,Tank Bank,30000,8,60500,19024500,6868.12,23.683,24.300,33.500,17.42,18.70,dev-2
+default,rendered,11,CP,candidate,King of the Cul-de-sac,30000,8,60518,19025886,7070.42,24.333,28.100,42.500,17.42,18.70,dev-2
+default,rendered,11,CP,candidate,roaming,30000,8,60000,19020000,6813.65,23.629,26.800,44.500,17.42,18.70,dev-2
+default,rendered,12,PC,parent,Tank Bank,30000,8,60500,19024500,6868.12,23.234,24.800,32.300,20.43,22.67,dev-2
+default,rendered,12,PC,parent,King of the Cul-de-sac,30000,8,60518,19025886,7070.42,25.132,29.300,42.400,20.43,22.67,dev-2
+default,rendered,12,PC,parent,roaming,30000,8,60000,19020000,6813.65,23.008,25.600,42.600,20.43,22.67,dev-2
+default,rendered,12,PC,candidate,Tank Bank,30000,8,60500,19024500,6868.12,22.234,25.400,31.200,22.67,23.57,dev-2
+default,rendered,12,PC,candidate,King of the Cul-de-sac,30000,8,60518,19025886,7070.42,24.494,29.400,33.600,22.67,23.57,dev-2
+default,rendered,12,PC,candidate,roaming,30000,8,60000,19020000,6813.65,22.565,25.100,41.700,22.67,23.57,dev-2
+default,rendered,13,CP,parent,Tank Bank,30000,8,60500,19024500,6868.12,22.654,25.100,31.400,23.78,22.35,dev-2
+default,rendered,13,CP,parent,King of the Cul-de-sac,30000,8,60518,19025886,7070.42,24.716,28.300,32.900,23.78,22.35,dev-2
+default,rendered,13,CP,parent,roaming,30000,8,60000,19020000,6813.65,21.716,25.000,42.000,23.78,22.35,dev-2
+default,rendered,13,CP,candidate,Tank Bank,30000,8,60500,19024500,6868.12,23.111,25.700,32.200,23.57,23.78,dev-2
+default,rendered,13,CP,candidate,King of the Cul-de-sac,30000,8,60518,19025886,7070.42,23.017,27.700,32.400,23.57,23.78,dev-2
+default,rendered,13,CP,candidate,roaming,30000,8,60000,19020000,6813.65,22.778,25.400,42.400,23.57,23.78,dev-2
+default,rendered,14,PC,parent,Tank Bank,30000,8,60500,19024500,6868.12,21.316,24.400,31.000,22.35,21.18,dev-2
+default,rendered,14,PC,parent,King of the Cul-de-sac,30000,8,60518,19025886,7070.42,22.733,28.100,32.200,22.35,21.18,dev-2
+default,rendered,14,PC,parent,roaming,30000,8,60000,19020000,6813.65,21.428,24.500,41.000,22.35,21.18,dev-2
+default,rendered,14,PC,candidate,Tank Bank,30000,8,60500,19024500,6868.12,22.369,24.700,32.000,21.18,21.71,dev-2
+default,rendered,14,PC,candidate,King of the Cul-de-sac,30000,8,60518,19025886,7070.42,23.749,28.200,33.200,21.18,21.71,dev-2
+default,rendered,14,PC,candidate,roaming,30000,8,60000,19020000,6813.65,22.853,25.000,42.200,21.18,21.71,dev-2
+default,rendered,15,CP,parent,Tank Bank,30000,8,60500,19024500,6868.12,17.246,23.200,24.700,20.51,18.66,dev-2
+default,rendered,15,CP,parent,King of the Cul-de-sac,30000,8,60518,19025886,7070.42,19.546,26.500,29.500,20.51,18.66,dev-2
+default,rendered,15,CP,parent,roaming,30000,8,60000,19020000,6813.65,18.366,23.500,31.900,20.51,18.66,dev-2
+default,rendered,15,CP,candidate,Tank Bank,30000,8,60500,19024500,6868.12,22.587,24.600,31.300,21.71,20.51,dev-2
+default,rendered,15,CP,candidate,King of the Cul-de-sac,30000,8,60518,19025886,7070.42,23.246,28.000,32.300,21.71,20.51,dev-2
+default,rendered,15,CP,candidate,roaming,30000,8,60000,19020000,6813.65,22.391,24.700,41.000,21.71,20.51,dev-2
+tiering-disabled,headless,3,CP,parent,Tank Bank,30000,8,60500,19024500,6868.12,20.509,28.400,31.600,20.43,19.12,dev-2
+tiering-disabled,headless,3,CP,parent,King of the Cul-de-sac,30000,8,60518,19025886,7070.42,21.491,31.700,36.000,20.43,19.12,dev-2
+tiering-disabled,headless,3,CP,parent,roaming,30000,8,60000,19020000,6813.65,21.477,30.500,36.500,20.43,19.12,dev-2
+tiering-disabled,headless,3,CP,candidate,Tank Bank,30000,8,60500,19024500,6868.12,19.775,28.000,32.200,23.32,20.43,dev-2
+tiering-disabled,headless,3,CP,candidate,King of the Cul-de-sac,30000,8,60518,19025886,7070.42,23.322,33.700,37.700,23.32,20.43,dev-2
+tiering-disabled,headless,3,CP,candidate,roaming,30000,8,60000,19020000,6813.65,23.441,31.200,42.100,23.32,20.43,dev-2
+tiering-disabled,headless,4,PC,parent,Tank Bank,30000,8,60500,19024500,6868.12,21.002,28.600,31.600,19.12,18.07,dev-2
+tiering-disabled,headless,4,PC,parent,King of the Cul-de-sac,30000,8,60518,19025886,7070.42,21.015,31.000,36.200,19.12,18.07,dev-2
+tiering-disabled,headless,4,PC,parent,roaming,30000,8,60000,19020000,6813.65,19.257,27.300,30.900,19.12,18.07,dev-2
+tiering-disabled,headless,4,PC,candidate,Tank Bank,30000,8,60500,19024500,6868.12,23.885,31.800,36.200,18.07,16.85,dev-2
+tiering-disabled,headless,4,PC,candidate,King of the Cul-de-sac,30000,8,60518,19025886,7070.42,28.957,35.500,40.700,18.07,16.85,dev-2
+tiering-disabled,headless,4,PC,candidate,roaming,30000,8,60000,19020000,6813.65,24.494,32.500,43.500,18.07,16.85,dev-2
+tiering-disabled,headless,5,CP,parent,Tank Bank,30000,8,60500,19024500,6868.12,26.363,32.500,38.300,17.84,20.23,dev-2
+tiering-disabled,headless,5,CP,parent,King of the Cul-de-sac,30000,8,60518,19025886,7070.42,55.419,40.600,676.200,17.84,20.23,dev-2
+tiering-disabled,headless,5,CP,parent,roaming,30000,8,60000,19020000,6813.65,84.776,48.700,2218.500,17.84,20.23,dev-2
+tiering-disabled,headless,5,CP,candidate,Tank Bank,30000,8,60500,19024500,6868.12,57.945,35.000,518.500,16.85,17.84,dev-2
+tiering-disabled,headless,5,CP,candidate,King of the Cul-de-sac,30000,8,60518,19025886,7070.42,30.638,37.100,44.800,16.85,17.84,dev-2
+tiering-disabled,headless,5,CP,candidate,roaming,30000,8,60000,19020000,6813.64,26.881,32.200,49.400,16.85,17.84,dev-2

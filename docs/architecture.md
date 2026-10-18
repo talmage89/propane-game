@@ -276,8 +276,8 @@ Sandbox, Bank, King, Lobby; lobby choices remain Bank, King; prototype order rem
 Dissolve Run. Test overlays never change lobby/prototype eligibility. No IDs, schemas, bytes or exposure change.
 [Original B3a evidence](evidence/mode-catalog-verification.md) records catalog completeness/restoration.
 The server-input follow-up completes that boundary; its parent inventory/packet comparison and
-remaining obligations are recorded in the final package evidence. MessageCodec's schema/eligibility lookup remains
-assigned to N1: inject each owner's resolver while separating decode/admission failure from dispatch, preserving
+remaining obligations are recorded in the [server-input evidence](evidence/mode-catalog-server-inputs.md).
+MessageCodec's schema/eligibility lookup remains assigned to N1: inject each owner's resolver while separating decode/admission failure from dispatch, preserving
 malformed-packet rejection order. LobbyServer's saved-template and snapshot conversion is A1 application-state work;
 ServerRun's native tuning/snapshot/melee inputs are C1 contract work. No edge is deferred to B3a.
 
