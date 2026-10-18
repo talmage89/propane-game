@@ -23,6 +23,8 @@ public partial class Match
         public void Configure(SessionContext session)
         {
             match.me = match.Net.MyId;
+            session.ActorsChanged += match.RefreshPlayer;
+            session.OnUnsubscribing(() => session.ActorsChanged -= match.RefreshPlayer);
             match.mode = match.Setup.Mode;
             match.hudPresenter = match.mode.CreateHud();
             match.bodies = new BodySync(session.World.Tuning, match.me, match.Setup.HostId);
@@ -96,7 +98,7 @@ public partial class Match
             var spawn = plan.Spawns.Count > 0 ? plan.Spawns[slot % plan.Spawns.Count] : new SpawnPoint(plan.Spawn, plan.SpawnYaw);
             AddActor(profile, slot, Suburb.ToWorld(spawn.Position, 0.05f), spawn.Yaw + Mathf.Pi);
         }
-        if (!Session.OwnedActors.Any())
+        if (player == null)
         {
             throw new InvalidOperationException("this player is not in the match");
         }
@@ -133,7 +135,7 @@ public partial class Match
 
     private void BuildViews()
     {
-        if (CreateLocalView)
+        if (CreateLocalView && player != null)
         {
             var view = Session.AddLocalView(player.Runtime, this, new DeviceInput(World.Tuning));
             environment.Follow = view.CameraRig.Camera;
@@ -217,7 +219,7 @@ public partial class Match
     {
         // The suburb materializes around the player, as in single player.
         suburb.SetRevealSide(1f);
-        World.Reveal.Center = player.GlobalPosition;
+        if (player != null) World.Reveal.Center = player.GlobalPosition;
         World.Reveal.Radius = 0f;
         Warmup.Run(World, World.Root, new Vector3(0, -400f, 0));
 
