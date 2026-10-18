@@ -26,6 +26,21 @@ owner's sight operation, preserving the single sight cache across fights and tan
 brain's accumulated physics seconds, including inactive/down ticks. These owners hold managed state and borrowed
 scene references; no processing nodes, registrations or native resources require separate disposal.
 
+## King tactical ownership
+
+`KingBot` retains its seeded RNG, sight cadence, firing progress, `BotMotor`, `Think` order and final intent
+assembly. `KingZoneTactics` owns standing checks/offset, rival and watcher visibility, crowd observations,
+contest/raid clocks, recovery regroup time and the rotating perimeter destination. The brain calls its operations
+at the original priority sites and lends its RNG only when a stand, raid or recovery choice is due.
+
+`KingPrizes` owns the periodic prize/blocker and points targets, scan buffers, protection decision, shot-wait
+progress and blocked-tank retries. A new protection destination is returned to the brain for its zone owner;
+selection never owns the motor or calls back into the brain. Zone and scan timers use physics delta. Points
+blacklist deadlines retain `IBotWorld.Now`, rather than Banking's accumulated clock. Waiting/down/navigation-failure
+operations preserve the original reset subsets; they do not clear retained targets or deadlines indiscriminately.
+Both owners are ordinary managed objects discarded with their brain, borrowing scene references without owning
+resources or registrations. `KingBotView`, `IBotWorld` and shared bot services remain the observation boundary.
+
 ## Routes and jumps
 
 `NavigationWorld` uses a capsule matching the actor and reusable `ShapeCast3D`/`RayCast3D` probes in the
