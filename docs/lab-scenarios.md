@@ -67,5 +67,8 @@ and candidate, alternating at least three pairs headlessly and rendered:
 
 ```sh
 godot-mono --headless --fixed-fps 60 --path . res://scenes/dev/lab_test.tscn -- --scenario=bot-cost
-godot-mono --disable-vsync --fixed-fps 60 --resolution 1280x720 --path . res://scenes/dev/lab_test.tscn -- --scenario=bot-cost --capture-dir="$PWD/build/bot-cost"
+DISABLE_GAMESCOPE_WSI=1 godot-mono --disable-vsync --fixed-fps 60 --resolution 1280x720 --path . res://scenes/dev/lab_test.tscn -- --scenario=bot-cost --capture-dir="$PWD/build/bot-cost"
 ```
+
+On the invisible Linux gamescope wrapper, the per-process `DISABLE_GAMESCOPE_WSI=1` override allows VSync to
+stay disabled. Reject measurements whose logs report a VSync fallback, as the scale benchmark does.
