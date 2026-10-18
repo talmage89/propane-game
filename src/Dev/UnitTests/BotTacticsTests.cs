@@ -70,9 +70,23 @@ internal static class BotTacticsTests
                             TestRunner.Assert(statuses.Contains("points: protecting the bank outside the zone") && statuses.Contains("points: spilling {0}"), "points fixture missed protection or combat");
                         if (scenario == "contest") TestRunner.Assert(statuses.Any(s => s.StartsWith("siege:", StringComparison.Ordinal)), "contested fixture never broke off");
                         if (scenario == "regroup") TestRunner.Assert(statuses.Contains("regrouping outside the zone"), "recovery fixture never regrouped");
-                        // The controlled world remains fixed during the allocation window; search timers still advance.
-                        for (var i = 0; i < 1200; i++) brain.Think(world, Delta);
-                        TestRunner.AssertNoAllocation(() => { for (var i = 0; i < 600; i++) { brain.Think(world, Delta); brain.Read(); } }, "warmed tactical thinks allocated");
+                        // Refill shared query/search budgets each tick: exhausted budgets must not hide allocations.
+                        // Native observations remain fixed while the tactical timers and searches keep advancing.
+                        for (var i = 0; i < 1200; i++)
+                        {
+                            world.Services.BeginTick(world.Tanks);
+                            brain.Think(world, Delta);
+                            brain.Read();
+                        }
+                        TestRunner.AssertNoAllocation(() =>
+                        {
+                            for (var i = 0; i < 600; i++)
+                            {
+                                world.Services.BeginTick(world.Tanks);
+                                brain.Think(world, Delta);
+                                brain.Read();
+                            }
+                        }, "warmed tactical thinks allocated");
                         GD.Print($"[tactics] {name} statuses={string.Join('|', statuses.Order(StringComparer.Ordinal))}");
                         if (DevArgs.Get("tactics-bench") != null) Measure(name, world, brain);
                     });

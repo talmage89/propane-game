@@ -247,7 +247,8 @@ and gates it ([lab.md](lab.md)). Measurements before and after the fixes above a
 
 `BotTacticsTests` drives controlled native observations through Banking and King at all three difficulties.
 It asserts cover, demolition runway searches, sustained contests, recovery regrouping, points protection/combat,
-input-edge consumption and zero warmed-think allocation with `TestRunner.AssertNoAllocation`. It runs in the
+input-edge consumption and zero warmed-think allocation with `TestRunner.AssertNoAllocation`, refilling shared
+query/search budgets before every warmed tick. It runs in the
 ordinary unit gate. Physics and actor processing do not advance; native course and Lab runs remain necessary.
 
 After building both revisions with the same probe source, compare 960 ticks per case (24 cases):
