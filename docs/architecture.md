@@ -52,7 +52,7 @@ stable top-level owner so compiler-generated numbering does not cause churn.
 | `Modes/` | Rules by default; `ModeDefinition`/`ModeBundle`/`ModeCatalog`/registry/supply are Composition; HUD input/presenters are Presentation; HUD values/`IModeView` remain plain rules observations. |
 | `Player/`, `Tank/`, `Fx/` | Simulation by default; input values and resolved state values are Foundation; cameras/views/device input and mode geometry are Presentation; `ReplicatedIntent` is Client. Profiling remains colocated pending C1. |
 | `Navigation/`, `Bots/` | Navigation and Bots. |
-| `Net/` | Wire by default; `LobbyServer`/`ServerRun`, ledger, roster, contact admission, ServerMode/ServerModes inputs, plain ModeWireTuners and mode wires/runner are Server; body/actor snapshot helpers, prediction, authority transactions and inbox are Client; Match/backend factory/update/diagnostics are Composition; NetClient is Client. Plain identity/appearance and selected decoded values are Foundation; `AmmoPickup` is Simulation. |
+| `Net/` | Wire by default; `LobbyServer`/`ServerRun`, ledger, roster, contact admission, ServerMode/ServerModes inputs, plain ModeWireTuners and mode wires/runner are Server; body/actor snapshot helpers, prediction, authority transactions, mode client adapters and inbox are Client; Match/backend factory/update/diagnostics are Composition; NetClient is Client. Plain identity/appearance and selected decoded values are Foundation; `AmmoPickup` is Simulation. |
 | `UI/` | Presentation by default; front-end screens, their transactions and lobby/stage composition are Composition. |
 | `ReleaseSmoke/`, `Dev/` | Smoke and Dev respectively; no game dependency on the checker project under `tools/architecture/`. |
 
@@ -62,14 +62,14 @@ source type to acquire that dependency. Do not broaden the map or silently regen
 
 | Temporary boundary | Owner package and exit condition |
 | --- | --- |
-| Match owns transactions, world/actor replication, bots, mode policy and views | B2 extracts transactions; B3b extracts mode policy; C2 finishes independent replication/bot/view owners. Preserve synchronous ordering. |
+| Match still owns world/actor replication, bots and view binding | B2 owns transactions and B3b1 owns mode client policy. C2 finishes independent replication/bot/view owners, preserving synchronous ordering. |
 | Physical actor holds replication attachments and view/device conveniences | C1 moves identity/body contracts; C2 moves client state and narrow view binding beside actor lifetime. |
 | Wire/server values depend on concrete server enums, client identity helpers, physical snapshot/gather types; plans reach mixed catalog/settings factories | C1 separates plain contracts, formulas and catalog snapshot construction without changing bytes, RNG or IDs. |
 | Lobby/run native tuning and codec catalog resolution | B3a supplies presentation-free ServerMode/ServerModes inputs. A1 removes LobbyServer template/snapshot sampling; C1 removes ServerRun native tuning/melee coupling; N1 injects owner-scoped codec schema/eligibility resolution. No baseline entry remains assigned to B3a. |
 | Fault transport calls ENet lane helper; server diagnostics/factory cross composition | N1 supplies transport-independent lanes and injected delivery/diagnostic boundaries. |
 | Settings and launch access are implicit | A1 provides explicit application ownership and scoped test stores/overrides. |
 | Client actor attachment retirement (L1) | Session-owned `ActorRegistration` detaches subscriptions and actor caches before native free; remaining attachments keep the original unsubscribe/stop/view/actor order. |
-| Prototype bots/HUDs read live rules | B3b supplies plain observations with explicit read-time clock and allocation-free bot reads. |
+| Prototype bots/HUDs read live rules | B3b2 supplies plain observations with explicit read-time clock and allocation-free bot reads. |
 | Streaming incidental history (W1 implemented) | Ordinary arena timing lists stay empty; a feed watermark compacts the retired prefix, retaining only out-of-order forgotten indices. Navigation eviction and ledger-history pruning need separate retention contracts. |
 | Global stream reveal; implicit character/weapon binding assumptions | W2 before independent streams; V1 before a second asset family. Existing single-stream/binding behavior stays intact. |
 | Cross-platform artifact runtime acceptance remains partly manual | R1 gates setup imports, inventories all packaged exports and runs the Linux artifact before publishing; Windows/macOS retain the [runtime checklist](runbooks/release-artifacts.md). |
@@ -101,7 +101,7 @@ composition is C#, not `.tscn` structure. `ShutdownGuard` is the autoload exit o
 
 **Target Match:** retain its Godot callbacks, run identity and lifetime coordination. Ordinary components separately
 own authority queues/reservations/epochs/causes/gather bookkeeping (B2), physical world replica, per-actor replication,
-mode client policy, owned bots and view binding (B3b/C2). Each extraction owns its own mutable state, inputs,
+mode client policy (B3b1 implemented), owned bots and view binding (C2). Each extraction owns its own mutable state, inputs,
 synchronous operations and retirement; a partial file or a new container for all Match fields is not an extraction.
 Action sequences and drop predictions retire with a client actor attachment, rather than becoming session-global.
 `ReplicatedIntent` belongs on the client side of the physical actor's input-source seam.
@@ -113,7 +113,7 @@ still requires an actor. This cache neither retargets an existing local view nor
 ([participant contract](multiplayer.md#participants-a6-protocol-2), [M0 evidence](evidence/match-player-cache.md)).
 
 [ModeRegistry](../src/Modes/ModeRegistry.cs) compiles the network integrations into one validated
-[ModeCatalog](../src/Modes/ModeCatalog.cs). Bundles pair existing definitions with schemas and explicit server wire
+[ModeCatalog](../src/Modes/ModeCatalog.cs). Bundles pair existing definitions with schemas and explicit server wire/client adapter
 factories; codecs remain in Wire. MessageCodec passes composition's schema resolver into the envelope reader, and
 composition constructs LobbyServer through `ModeRegistry.CreateServer`, selecting immutable ServerModes/ServerMode
 inputs (rules/schema/wire factories, metadata, tuner names and ordered eligibility) with no HUD/bot factories.
@@ -270,11 +270,11 @@ Short Fuse and Dissolve Run remain Lab prototypes. Sandbox and roaming Lobby are
 A type or registration does not graduate a mode ([modes](modes.md), [Lab](lab.md)).
 
 **Current B3a:** a composition-owned `ModeBundle` pairs the existing `ModeDefinition` (metadata, rules/HUD/bot
-factories, supply, world selection and tuners) with its schema and server wire factory. Catalog construction validates
-required members and matching schema identity before publication. Sandbox explicitly selects `SilentModeWire`; an
+factories, supply, world selection and tuners) with its schema, server wire factory and client adapter factory.
+Catalog construction validates required members and matching schema identity before publication. Sandbox explicitly selects `SilentModeWire` and `SilentClientAdapter`; an
 unknown integration or missing factory fails, with no silent fallback. `ModeSchemas` supplies explicit codec schemas,
-not a registration table; `ModeWires` and all three unscoped registration seams are retired. No client adapter factory
-exists yet: Match's existing Bank/King/Lobby policy remains B3b, rather than a placeholder capability in the bundle.
+not a registration table; `ModeWires` and all three unscoped registration seams are retired. Every network bundle must supply a client adapter factory,
+including synthetic test bundles; no fallback is inferred from payloads.
 
 The process-lifetime shipped catalog and its collection containers are immutable. Main-thread synthetic tests use
 `ModeRegistry.RegisterScoped`: validated overlays replace an entry in place or append a new identity; strictly nested,
@@ -295,10 +295,25 @@ MessageCodec's schema/eligibility lookup remains assigned to N1: inject each own
 malformed-packet rejection order. LobbyServer's saved-template and snapshot conversion is A1 application-state work;
 ServerRun's native tuning/snapshot/melee inputs are C1 contract work. No edge is deferred to B3a.
 
-**Target B3b:** Bank policy is composed into King, Lobby has its own client adapter, and prototype bots/HUDs consume
-plain observations that retain neither live rules nor delegates into rules. Read-time calculations take an explicit
-clock; hot reads allocate nothing. Current `IBotWorld.Rules`, King conversion and prototype presenters remain live
-couplings until then. ServerRun's `NextRound { RebuildWorld: true }` fallback ends the match: general round-world replacement,
+**Current B3b1:** Match creates a fresh `IModeClient` through the selected bundle during session configuration and
+retires it in the existing replication stop callback, after inbox detachment/unsubscription and before actor/world
+retirement. Adapters own scores, decoded mode state and synchronous policy; no adapter reaches into Match, owns a
+processing node or references concrete HUD/front-end types. `IClientModeReplica` supplies explicit physical, send
+and view operations. Bank owns spills and score confirmation; King composes Bank and reads its received snapshot
+at explicit elapsed round time. `ClientModePiles` supplies the unchanged synchronous placement/birth sequence to
+both King and the explicit Lobby adapter. Lobby owns departure tombstones, roster decisions, staging, stock marks,
+rifle refill and panel-input decisions; `IClientLobbyReplica` binds those decisions to actors/bots and views.
+Match retains envelope/schema/world/round/order validation, callback order, identity, assembly and presentation
+binding. It borrows the adapter's stable live score container and samples immutable display choices once at
+configuration, forwarding scores/view data to the existing HUD presenters and keeps zero-bank roster initialization and
+owner simulation-clock hit grace in the explicit silent integration. Disposal clears banks, snapshot/departures and
+both borrowed collaborators; no adapter callback survives session unsubscription. No bytes, RNG/clock domains,
+pile retries, command order, health finalization, round replacement or exposure change.
+
+**Target B3b2:** prototype bots/HUDs consume plain observations that retain neither live rules nor delegates into
+rules. Read-time calculations take an explicit clock; hot reads allocate nothing. Current `IBotWorld.Rules`, King
+conversion and prototype presenters remain live couplings assigned to B3b2.
+ServerRun's `NextRound { RebuildWorld: true }` fallback ends the match: general round-world replacement,
 health/lives and online segment streaming still require end-to-end work.
 
 ## Simulation and presentation

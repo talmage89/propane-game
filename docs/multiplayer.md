@@ -370,6 +370,7 @@ The server is the game itself started with `-- --server` (and `--headless`). It 
 | `src/Net/MatchInbox.cs` | Per-match buffering until scene initialization, with generation-safe cleanup. |
 | `src/Net/BuildInfo.cs`, `UpdateCheck.cs` | Versions and who plays together; the launch check for a newer release. |
 | `src/Net/Match.cs` | A peer's shared match world: actions from its owned actors and playback of other actors' events. |
+| `src/Net/IModeClient.cs`, `BankClientAdapter.cs`, `KingClientAdapter.cs`, `LobbyClientAdapter.cs`, `SilentClientAdapter.cs` | Session-owned mode state, envelope consequences and plain presentation feeds, selected by the compiled mode bundle. |
 | `src/Net/ClientAuthorityTransactions.cs` | Session-owned causal requests, reservations, expected epochs, sent roots and gather request bookkeeping. |
 | `src/Net/BodySync.cs` | Ownership and corrections for tanks and cars. |
 | `src/Net/SnapshotBuffer.cs` | Smooth playback of other players, `InterpolationDelay` behind. |
@@ -393,6 +394,16 @@ membership. Proposals are sampled when sent. Root requests precede children; ref
 epochs and receive explicit refusals. Gather grants keep their lease membership through notification and revalidate
 the granted epoch before moving a tank. A synchronous send can retire the session; an in-flight resolution still
 finishes its notification, while the disposed owner retains no queued work or callbacks.
+
+### Client mode ownership
+
+Match validates and sequences mode envelopes, then calls its bundle-selected `IModeClient` synchronously. Bank
+owns scores and spill confirmation/prediction policy; King composes Bank with its received zone state and shared
+pile placement/birth mechanics. Lobby explicitly owns roster/staging/refill/stock policy and panel-input decisions;
+Sandbox explicitly selects a silent adapter. HUD presenters and floor/zone nodes remain presentation bindings.
+The existing replication stop callback disposes the adapter after inbox detachment/unsubscription, clearing mode
+state and borrowed physical/view collaborators. Actor action sequences/drop predictions, clock domains, command
+order, health finalization, round replacement, protocol and mode eligibility are unchanged.
 
 ### Transport contract
 

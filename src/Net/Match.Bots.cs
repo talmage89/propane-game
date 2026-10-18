@@ -25,8 +25,8 @@ public partial class Match
         public PlayerCharacter Player => actor;
         public bool IsPlaying => match.IsPlaying;
         public float TimeLeft => match.timeLeft;
-        public int MyScore => match.scores.GetValueOrDefault(actor.ActorId);
-        public IReadOnlyDictionary<int, int> Scores => match.scores;
+        public int MyScore => match.Scores.GetValueOrDefault(actor.ActorId);
+        public IReadOnlyDictionary<int, int> Scores => match.Scores;
         public double Now => match.Clock.Seconds;
         public double LastHitTime => actor.Runtime.LastHitTime;
         public int LastHitBy => actor.Runtime.LastHitBy;
@@ -40,8 +40,8 @@ public partial class Match
 
     internal Dictionary<uint, PropaneTank>.ValueCollection BotTanks => tanks.Values;
     /// <summary>Read the received zone at this peer's clock without allocating KingState.At for each brain.</summary>
-    internal KingBotView? BotKing => kingState != null
-        ? KingBotView.Read(kingState, System.Math.Max(0, Setup.Length - timeLeft)) : null;
+    internal KingBotView? BotKing => clientMode?.KingSnapshot is { } state
+        ? KingBotView.Read(state, System.Math.Max(0, Setup.Length - timeLeft)) : null;
     private readonly List<OwnedBot> bots = new();
     private BotServices? botServices;
     private int botTurn;
