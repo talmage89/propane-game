@@ -209,3 +209,24 @@ measured brain cost. `net_test` logs `bot activity` per owned bot and a `bot idl
 and gates it ([lab.md](lab.md)). Measurements before and after the fixes above are in
 [bot-scale.md](evidence/bot-scale.md#idle-bots).
 
+
+## Tactical differential probe
+
+`BotTacticsTests` drives controlled native observations through Banking and King at all three difficulties.
+It asserts cover, demolition runway searches, sustained contests, recovery regrouping, points protection/combat,
+input-edge consumption and zero warmed-think allocation with `TestRunner.AssertNoAllocation`. It runs in the
+ordinary unit gate. Physics and actor processing do not advance; native course and Lab runs remain necessary.
+
+After building both revisions with the same probe source, compare 960 ticks per case (24 cases):
+
+```sh
+python3 -B tools/dev/check_bot_tactics.py --baseline=build/parent --output=build/tactics-pair --bench
+```
+
+The opt-in transcript records intent, aim bits, status, semantic tactical fields, retry deadlines, RNG state,
+ray counts, navigation query counts and diagnostics. It reads state after `Think` and consumed edges; it never
+samples RNG or input sources to decide behavior. Diagnostic reflection finds each named field exactly once across
+the tactical owners, so an ownership move cannot silently drop an observation. The tool reports the first divergent
+case, tick and field. It does not update the immutable release fixtures. `--bench` adds three alternating parent and
+candidate runs without the transcript observer, recording 6,000 thinks per case after warm-up, allocations,
+mean/p95/p99 think and whole controlled tick cost (`BeginTick`, `Think`, `Read`), and query workload counts.
