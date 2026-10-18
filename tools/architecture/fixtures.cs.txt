@@ -2,6 +2,7 @@
 namespace Godot
 {
     public static class Engine { public static float TimeScale { get; set; } }
+    public static class OS { public static string GetName() => "fixture"; }
     public class SceneTree { public bool Paused { get; set; } }
     public class Node { public void Touch() { } }
     public class Node3D : Node { }
@@ -19,6 +20,7 @@ namespace Propane.Net
     public class NetClient { }
     public class Match { }
     public class NetTransport { public static int Channel() => 0; }
+    public static class Varargs { public static int Write(__arglist) => 0; }
     public class MessageCodec { public static int Read() => 0; }
     public class FaultPacketTransport { public int Run() => NetTransport.Channel(); }
     public class LobbyServer { public object Run() => new Propane.Player.ActorRuntime(); }
@@ -63,7 +65,10 @@ namespace Propane.Modes
     public class Locals { public void Run() { Propane.Bots.Brain[] value = null!; System.GC.KeepAlive(value); } }
     public class AliasReference { public object Run() => new Alias(); }
     public class BadBot { public object Run() => new Propane.Bots.Brain(); }
+    public class VarargCall { public int Run() => Propane.Net.Varargs.Write(__arglist(1)); }
     public class Qualified { public object Run() => new global::Propane.Net.NetClient(); }
+    public class EngineClock { public float Run() => Godot.Engine.TimeScale; }
+    public class ElapsedClock { public long Run(System.Diagnostics.Stopwatch clock) => clock.ElapsedTicks; }
     public class Member { public long Run() => Godot.Time.GetTicksMsec(); }
     public class NativeBase : Godot.Node3D { public void Run() { } }
     public class ResourceField { public Godot.Resource? Value; public void Run() { } }
@@ -79,6 +84,7 @@ namespace Propane.Modes
 }
 namespace Propane.World.Plan
 {
+    public class Platform { public string Run() => Godot.OS.GetName(); }
     public class Clock { public long Run() => Godot.Time.GetTicksMsec(); }
     public class Load { public object Run() => Godot.GD.Load<Godot.Resource>("asset"); }
     public class Scene { public object Run() => new Godot.Node3D(); }

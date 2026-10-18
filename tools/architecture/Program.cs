@@ -212,7 +212,7 @@ internal sealed class Scanner
             }
         }
         PhysicalTypes.UnionWith(["Godot.Node3D", "Godot.Control", "Godot.CanvasItem", "Godot.Viewport", "Godot.World3D", "Godot.PhysicsServer3D"]);
-        NativeTypes.UnionWith(["Godot.Node", "Godot.Resource", "Godot.GodotObject", "Godot.ResourceLoader", "Godot.GD", "Godot.RenderingServer", "Godot.PhysicsServer3D"]);
+        NativeTypes.UnionWith(["Godot.Node", "Godot.Resource", "Godot.GodotObject", "Godot.Engine", "Godot.OS", "Godot.ResourceLoader", "Godot.GD", "Godot.RenderingServer", "Godot.PhysicsServer3D"]);
         foreach (var handle in reader.TypeDefinitions)
         {
             source = Name(handle);
@@ -323,6 +323,7 @@ internal sealed class Scanner
         return handle.Kind switch
         {
             HandleKind.TypeDefinition or HandleKind.TypeReference => [Name(handle)],
+            HandleKind.MethodDefinition => [Name(reader.GetMethodDefinition((MethodDefinitionHandle)handle).GetDeclaringType())],
             HandleKind.TypeSpecification => reader.GetTypeSpecification((TypeSpecificationHandle)handle).DecodeSignature(signatures, (object?)null),
             _ => []
         };
@@ -464,7 +465,7 @@ internal sealed class Scanner
         if (module is "Rules" or "Plans" && (owner == "Godot.Time" && name.StartsWith("Get", StringComparison.Ordinal) ||
             owner is "System.DateTime" or "System.DateTimeOffset" && name is "get_Now" or "get_UtcNow" or "get_Today" ||
             owner == "System.Environment" && name is "get_TickCount" or "get_TickCount64" ||
-            owner == "System.Diagnostics.Stopwatch" && name is "GetTimestamp" or "StartNew" or ".ctor"))
+            owner is "System.Diagnostics.Stopwatch" or "System.TimeProvider"))
         {
             Fail("rule-clock", owner + "." + name);
         }
