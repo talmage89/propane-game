@@ -32,7 +32,8 @@ def prepare(revision, label, observe):
         with tarfile.open(fileobj=io.BytesIO(archive)) as entries:
             entries.extractall(project, filter='data')
     # The same harness on both revisions, without changes to production in the checkout.
-    for name in ('Fixtures/ServerObservation.cs', 'ServerRunBenchTests.cs'):
+    for name in ('Fixtures/ServerObservation.cs', 'ServerRunBenchTests.cs',
+                 'ClientReceiveBenchTests.cs', 'DecodeTranscriptTests.cs', 'TransitionBoundaryTests.cs'):
         source = ROOT / 'src/Dev/UnitTests' / name
         if source.exists():
             target = project / 'src/Dev/UnitTests' / name
