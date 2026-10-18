@@ -5,6 +5,7 @@ origin is a local bare repository, and tools/release/build.sh against fake Godot
 Both scripts locate the project from their own path, so each test copies them into a scratch project. Nothing here
 touches this checkout, a real remote or the network. The packaging test needs zip, unzip and tar, as build.sh does.
 """
+import hashlib
 import os
 import shutil
 import stat
@@ -283,6 +284,11 @@ class PackageScript(unittest.TestCase):
         self.project = self.root / "project"
         (self.project / "tools" / "release").mkdir(parents=True)
         shutil.copy(RELEASE / "build.sh", self.project / "tools" / "release" / "build.sh")
+        (self.project / "tools/downloads").mkdir()
+        shutil.copyfile(RELEASE.parent / "downloads/verify.py", self.project / "tools/downloads/verify.py")
+        notice_hash = hashlib.sha512(b"fixture notice\n").hexdigest()
+        (self.project / "tools/downloads/pins.txt").write_text(
+            "".join(f"4.7.2 {name}.txt sha512 {notice_hash}\n" for name in ("LICENSE", "COPYRIGHT")))
         (self.project / "project.godot").write_text('[application]\nconfig/version="1.2.3"\n')
         (self.project / "CREDITS.md").write_text("credits\n")
         self.bin = self.root / "bin"
@@ -307,7 +313,7 @@ elif "--export-release" in args:
         open(path, "w").write(preset + " binary")
 ''')
         executable(self.bin / "rcodesign", '#!/usr/bin/env bash\n[[ "$1" == sign ]] && echo signed > "$2/signed.txt"\n')
-        executable(self.bin / "curl", '#!/usr/bin/env bash\nwhile [[ $# -gt 0 ]]; do [[ "$1" == -o ]] && echo "notice $2" > "$2"; shift; done\n')
+        executable(self.bin / "curl", '#!/usr/bin/env bash\nwhile [[ $# -gt 0 ]]; do [[ "$1" == -o ]] && echo "fixture notice" > "$2"; shift; done\n')
         self.env = {**os.environ, "PATH": f"{self.bin}:{os.environ['PATH']}", "RCODESIGN": str(self.bin / "rcodesign")}
         build = self.project / "build"
         self.sentinels = {"keep/evidence.log": "other verification output\n", "shots/a.png": "png",
@@ -354,6 +360,21 @@ elif "--export-release" in args:
             self.assertEqual(set(archive.namelist()), notices | {"Propane.app/", "Propane.app/Contents/", "Propane.app/Contents/MacOS/",
                                                                   "Propane.app/Contents/MacOS/Propane", "Propane.app/signed.txt"})
         self.assertFalse((self.project / "build_id.txt").exists(), "the build id file is removed again")
+
+    def test_unverified_notices_never_reach_a_package(self):
+        pins = self.project / "tools/downloads/pins.txt"
+        original = pins.read_text()
+        for content, message in (("", "Missing or duplicate pin"),
+                                 (original.replace(hashlib.sha512(b"fixture notice\n").hexdigest(), "0" * 128),
+                                  "Checksum mismatch")):
+            with self.subTest(message=message):
+                pins.write_text(content)
+                result = self.package()
+                self.assertNotEqual(result.returncode, 0, result.stdout)
+                self.assertIn(message, result.stdout)
+                self.assertIn("LICENSE.txt", result.stdout)
+                self.assertEqual(list((self.project / "build/dist").iterdir()), [])
+                self.assert_sentinels()
 
     def test_a_second_run_replaces_the_first_and_still_keeps_other_output(self):
         self.assertEqual(self.package().returncode, 0)
