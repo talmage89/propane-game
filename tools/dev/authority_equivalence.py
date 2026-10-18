@@ -23,6 +23,9 @@ def insert(source, needle, statement, before=False):
 
 def observe(project):
     match = project / 'src/Net/Match.cs'
+    physical = project / 'src/Net/ClientWorldReplica.cs'
+    if not physical.exists():
+        physical = match
     owner = project / 'src/Net/ClientAuthorityTransactions.cs'
     if not owner.exists():
         owner = match
@@ -46,7 +49,7 @@ def observe(project):
            f'        {CALL}(this, "notify");', before=True)
     insert(owner, 'if (result.Peer == me) { gatherRequests.Remove(result.Request); }', f'        {CALL}(this, "complete");')
     # Preserve the old enum spelling when observing a parent before the C1 contract move.
-    lifecycle = "BodyState.State" if "BodyState.State.Intact" in match.read_text() else "TankLedger.State"
+    lifecycle = "BodyState.State" if "BodyState.State.Intact" in physical.read_text() else "TankLedger.State"
     # Physical callback order, including no-op restoration, is observable independently of final body state.
     for needle, label in (
         ('if (entry != null && !bodies.OnAuthority(authority, out authority, Clock.Seconds))', 'adopt'),
@@ -58,15 +61,15 @@ def observe(project):
         ('if (authority.Vent is { } vent && authority.State == ' + lifecycle + '.Venting)', 'vent'),
     ):
         # Insert at the beginning of the statement's line; some needles are partial statements.
-        code = match.read_text()
+        code = physical.read_text()
         assert code.count(needle) == 1, needle
         line = next(line for line in code.splitlines() if needle in line)
-        insert(match, line, f'        {CALL}(this, "{label}", id.ToString());', before=True)
-    code = match.read_text()
+        insert(physical, line, f'        {CALL}(this, "{label}", id.ToString());', before=True)
+    code = physical.read_text()
     needle = '{ changed.Disturb(); }'
     assert code.count(needle) == 1
-    match.write_text(code.replace(needle, '{ ' + CALL + '(this, \"disturb\", id.ToString()); changed.Disturb(); }'))
-    insert(match, 'foreach (var tank in LiveTanks.Where(t => t.ChainCause == finished.Request))' if owner == match else
+    physical.write_text(code.replace(needle, '{ ' + CALL + '(this, \"disturb\", id.ToString()); changed.Disturb(); }'))
+    insert(physical, 'foreach (var tank in LiveTanks.Where(t => t.ChainCause == finished.Request))' if owner == match else
            'foreach (var tank in LiveTanks.Where(t => t.ChainCause == request))', f'        {CALL}(this, "cancel-root");', before=True)
 
 

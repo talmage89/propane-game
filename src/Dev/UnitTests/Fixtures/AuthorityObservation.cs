@@ -37,11 +37,12 @@ internal static class AuthorityObservation
     {
         if (DevArgs.Get("authority-transcript") is not { } path) return;
         var match = owner as Match ?? Field(owner, "replica") as Match;
-        var transactions = match == null ? owner : Field(match, "authority") ?? match;
+        var transactions = match == null ? Field(owner, "authority") ?? owner : Field(match, "authority") ?? match;
         var queued = Items(Field(transactions, "outgoingAuthority")).Select(Request).ToArray();
         var pending = Items(Field(transactions, "pendingAuthority")).Select(pair => Request(Property(pair, "Value")!)).ToArray();
         var gathers = Items(Field(transactions, "gatherRequests")).Select(item => Property(item, "Key") ?? item).ToArray();
-        var bodies = match != null ? match.Bodies.Entries.Select(entry => new
+        var bodySync = match?.Bodies ?? Field(owner, "bodies") as BodySync;
+        var bodies = bodySync?.Entries.Select(entry => new
         {
             id = entry.Id,
             owner = entry.Owner,
@@ -49,7 +50,7 @@ internal static class AuthorityObservation
             pending = entry.ClaimPending,
             observe = entry.ObserveWhilePending,
             sequence = entry.LastSequence
-        }).ToArray() : null;
+        }).ToArray();
         File.AppendAllText(path, JsonSerializer.Serialize(new
         {
             step,
