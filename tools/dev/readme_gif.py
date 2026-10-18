@@ -16,7 +16,7 @@ from pathlib import Path
 
 from PIL import Image, ImageChops
 
-# GitHub fails to show larger README images: a 5.5 MB GIF never loaded on the repository page, 3 MB ones do.
+# GitHub loads large README images slowly or not at all (a 5.5 MB GIF once failed to appear); 3 MB loads reliably.
 MAX_BYTES = 4_000_000
 
 

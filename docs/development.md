@@ -567,7 +567,7 @@ frame and saves the same picture many times. With hitstop off every frame is dis
 `readme_gif.py` crops and scales the frames, keeps the previous pixel wherever a frame changed by less than `--gate` levels
 (this is what lets a still camera cost almost nothing), fades the last frames to white to soften the cut back to the start,
 and has ffmpeg build one palette for the clip. The first frame is never faded: GitHub shows it until the GIF has loaded,
-and keeps showing it to viewers with animation autoplay off. The tool exits nonzero over 4 MB: GitHub's repository page
-never loaded a 5.5 MB GIF, while 3 MB ones load.
+and keeps showing it to viewers with animation autoplay off. The tool exits nonzero over 4 MB: GitHub loads large README
+images slowly or not at all (a 5.5 MB GIF once failed to appear), while 3 MB loads reliably.
 Look at the frames before committing: no HUD or dev text, the player and the pile in frame, no repeated or skipped
 pictures. The still is 175 KB and the GIF 3.1 MB.
