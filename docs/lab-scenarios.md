@@ -94,3 +94,13 @@ sampling observations, requires both unit suites' assertions to pass, and compar
 Ring Out and mixed-difficulty Bank/King runs. This supplements `check_equivalence.py --baseline=PATH --detail`;
 it neither reads nor writes new release references. Live streaming remains statistical because worker/build-slice
 completion is wall-time-sensitive; use the existing controlled retirement reference for exact Dissolve comparison.
+
+`PrototypeViewTests` compares complete serialized HUD values with independent pre-B3b2 presenters in
+`UnitTests/Fixtures/Legacy*Hud.cs`. Cases cover Ring Out warning/credit/departure, Short Fuse damage/read-time
+regeneration/spectating, Dissolve open/closed chains/catch, unknown actors, and round end/replacement. The reflection
+bridge in `PrototypePresentation` lets identical harness source exercise both the parent rule input and the new
+plain value input; it is outside production and performance measurements. The legacy presenters are oracles:
+change their expected behavior only with a separately approved rule or presentation change.
+`python3 -B tools/dev/check_prototype_views.py --baseline=PATH` additionally requires 92 complete HUD observations
+and compares their exact values with an independently built immediate parent. `runner-sampling` includes a driven
+Dissolve bot, asserts every expected thought ran, and reports shared ray/navigation workload counts.

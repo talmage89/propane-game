@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using Propane.Dev.UnitTests.Fixtures;
 using Propane.Modes;
 
 namespace Propane.Dev.UnitTests;
@@ -148,7 +149,7 @@ public static class PrototypeModeTests
             TestRunner.Assert(self.OfType<ActorEliminated>().Single().CreditedTo == 0, "nobody is credited for their own fall");
             TestRunner.Assert(replaced.OfType<ActorEliminated>().Single().CreditedTo == 0, "the last throw decides the credit");
             TestRunner.Assert(rules.Credits(1) == 1 && rules.Over && rules.Place(1) == 1, "credit count and the winner");
-            var feed = new RingOutHud().Present(new ModeHudInput(2, ModePhase.Round, 0, new Dictionary<int, int>(), [], false, rules, At(108))).Feed!;
+            var feed = new RingOutHud().Present(PrototypePresentation.Input(2, ModePhase.Round, 0, new Dictionary<int, int>(), [], false, rules, At(108))).Feed!;
             TestRunner.Assert(feed.Count == RingOutHud.FeedLength && feed[0] == "P1 knocked P2 off" && feed[^1] == "P5 fell", $"kill feed: {string.Join(" | ", feed)}");
         });
 

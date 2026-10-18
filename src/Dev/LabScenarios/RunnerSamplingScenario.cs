@@ -1,7 +1,9 @@
 using System;
 using System.Diagnostics;
+using System.Reflection;
 using System.Threading.Tasks;
 using Godot;
+using Propane.Bots;
 using Propane.Lab;
 using static Propane.Dev.UnitTests.TestRunner;
 
@@ -42,11 +44,15 @@ internal sealed class RunnerSamplingScenario(ILabScenarioHost host) : LabScenari
             try
             {
                 var runner = lab.Prototype!;
+                if (id == "dissolve") runner.AttachBot(lab.Player);
+                var services = (BotServices)typeof(PrototypeRunner).GetField("services", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(runner)!;
                 const int warmup = 2000, ticks = 10000;
                 const double delta = 1d / 120;
                 for (var i = 0; i < warmup; i++) runner._PhysicsProcess(delta);
                 var times = new double[ticks];
                 var thinks = runner.Thinks;
+                var rays = services.RayLines;
+                var queries = services.NavigationQueries;
                 var allocated = GC.GetAllocatedBytesForCurrentThread();
                 var start = Stopwatch.GetTimestamp();
                 for (var i = 0; i < ticks; i++)
@@ -58,8 +64,9 @@ internal sealed class RunnerSamplingScenario(ILabScenarioHost host) : LabScenari
                 var elapsed = Stopwatch.GetElapsedTime(start).TotalMicroseconds;
                 var bytes = GC.GetAllocatedBytesForCurrentThread() - allocated;
                 Assert(runner.IsPlaying && Math.Abs(runner.Elapsed - (warmup + ticks) * delta) < 0.001, "runner benchmark ended early");
+                Assert(runner.Thinks - thinks == ticks * (id == "dissolve" ? 1 : 2), "runner benchmark lost bot workload");
                 Array.Sort(times);
-                GD.Print(FormattableString.Invariant($"[runner sampling] mode={id} ticks={ticks} thinks={runner.Thinks - thinks} bytes_per_tick={bytes / (double)ticks:F2} mean_us={elapsed / ticks:F3} p95_us={times[(int)(ticks * .95) - 1]:F3} p99_us={times[(int)(ticks * .99) - 1]:F3}"));
+                GD.Print(FormattableString.Invariant($"[runner sampling] mode={id} ticks={ticks} thinks={runner.Thinks - thinks} rays={services.RayLines - rays} queries={services.NavigationQueries - queries} bytes_per_tick={bytes / (double)ticks:F2} mean_us={elapsed / ticks:F3} p95_us={times[(int)(ticks * .95) - 1]:F3} p99_us={times[(int)(ticks * .99) - 1]:F3}"));
             }
             finally { lab.Session.Dispose(); lab.Free(); }
         }
