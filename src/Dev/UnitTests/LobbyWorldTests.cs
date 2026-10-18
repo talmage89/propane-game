@@ -81,13 +81,13 @@ public static class LobbyWorldTests
         runner.Run("lobby world/lobby state carries the stage and the world, and refuses them out of place", () =>
         {
             var lobby = (LobbyInfo)ProtocolTests.Fixtures().Single(m => m.Type == Msg.LobbyState).Payload;
-            var staging = lobby with { Phase = LobbyServer.LobbyPhase.Staging, StartsIn = 3.5f, WorldId = 9 };
+            var staging = lobby with { Phase = LobbyPhase.Staging, StartsIn = 3.5f, WorldId = 9 };
             var decoded = (LobbyInfo)MessageCodec.Decode(MessageCodec.Encode(new NetMessage(Msg.LobbyState, 0, 0, staging), true), true).Payload;
-            TestRunner.Assert(decoded.StartsIn == 3.5f && decoded.WorldId == 9 && decoded.Phase == LobbyServer.LobbyPhase.Staging, "staging fields lost");
+            TestRunner.Assert(decoded.StartsIn == 3.5f && decoded.WorldId == 9 && decoded.Phase == LobbyPhase.Staging, "staging fields lost");
             foreach (var bad in new[]
                      {
-                         lobby with { StartsIn = 2 }, staging with { StartsIn = LobbyServer.MaxStage + 1 }, staging with { StartsIn = -1 },
-                         lobby with { Phase = LobbyServer.LobbyPhase.Loading, WorldId = 4 }, lobby with { WorldId = -1 },
+                         lobby with { StartsIn = 2 }, staging with { StartsIn = Protocol.MaxStage + 1 }, staging with { StartsIn = -1 },
+                         lobby with { Phase = LobbyPhase.Loading, WorldId = 4 }, lobby with { WorldId = -1 },
                      })
             {
                 TestRunner.Throws<InvalidDataException>(() => MessageCodec.Decode(MessageCodec.Encode(new NetMessage(Msg.LobbyState, 0, 0, bad), true), true));
@@ -108,7 +108,7 @@ public static class LobbyWorldTests
             var bodies = f.Arrived();
             using var tuning = Tuning.SavedTemplate.Copy();
             TestRunner.Assert(bodies.Count == tuning.LobbyPiles * tuning.LobbyPileCount &&
-                bodies.All(b => b.State == TankLedger.State.Intact && b.Rest && b.Owner == 2), "every pile arrives standing, owned by the creator");
+                bodies.All(b => b.State == BodyState.State.Intact && b.Rest && b.Owner == 2), "every pile arrives standing, owned by the creator");
             var order = f.Packets.Where(p => p.Peer == 2).Select(p => p.Message.Type).ToList();
             TestRunner.Assert(order.IndexOf(Msg.LobbyState) < order.IndexOf(Msg.MatchStart) && order.IndexOf(Msg.MatchStart) < order.IndexOf(Msg.Authority) &&
                 order.IndexOf(Msg.Authority) < order.IndexOf(Msg.MatchGo), "lobby state, world start, bodies, then go");
@@ -122,7 +122,7 @@ public static class LobbyWorldTests
             var world = f.World().Id;
             var tank = f.Arrived()[0];
             f.Receive(f.Act(2, world, Msg.Explode, new ExplodeMessage(tank.Body.Id, tank.Body.Transform.Origin, 1, 1)));
-            TestRunner.Assert(f.To<AuthorityMessage>(2).Last().Bodies.Single().State == TankLedger.State.Exploded, "roamers blow tanks up");
+            TestRunner.Assert(f.To<AuthorityMessage>(2).Last().Bodies.Single().State == BodyState.State.Exploded, "roamers blow tanks up");
             f.Packets.Clear();
             f.Connect(3);
             f.Join(3);
@@ -173,7 +173,7 @@ public static class LobbyWorldTests
             TestRunner.Assert(f.Packets.Count == 0, "a guest changed or started the lobby");
             f.StartMatch();
             var staged = f.Lobby(3);
-            TestRunner.Assert(staged.Phase == LobbyServer.LobbyPhase.Staging && Math.Abs(staged.StartsIn - 2) < 1e-6 && staged.WorldId == f.World().Id,
+            TestRunner.Assert(staged.Phase == LobbyPhase.Staging && Math.Abs(staged.StartsIn - 2) < 1e-6 && staged.WorldId == f.World().Id,
                 "the creator's start stages a countdown in the world");
             f.Packets.Clear();
             f.Receive(new NetWriter(Msg.CancelStart), 3);
@@ -186,7 +186,7 @@ public static class LobbyWorldTests
             f.Join(4);
             TestRunner.Assert(f.To<TextMessage>(4).Single().Value.Contains("starting", StringComparison.Ordinal), "nobody joins a starting lobby");
             f.Receive(new NetWriter(Msg.CancelStart));
-            TestRunner.Assert(f.Lobby(3).Phase == LobbyServer.LobbyPhase.Waiting && f.Lobby(3).StartsIn == 0, "the creator takes the start back");
+            TestRunner.Assert(f.Lobby(3).Phase == LobbyPhase.Waiting && f.Lobby(3).StartsIn == 0, "the creator takes the start back");
             f.Advance(5);
             TestRunner.Assert(!f.To<MatchSetup>(3).Any(s => s.ModeId != ModeRegistry.LobbyWorldId), "a canceled start never begins");
         });
@@ -202,7 +202,7 @@ public static class LobbyWorldTests
             TestRunner.Assert(f.Packets.Any(p => p.Peer == 3 && p.Message.Type == Msg.PlayerState), "the world still relays while the stage counts down");
             f.Advance(1);
             var match = f.Match(3);
-            TestRunner.Assert(match.ModeId == ModeRegistry.TankBankId && match.Id > world && f.Lobby(3) is { Phase: LobbyServer.LobbyPhase.Loading, WorldId: 0 },
+            TestRunner.Assert(match.ModeId == ModeRegistry.TankBankId && match.Id > world && f.Lobby(3) is { Phase: LobbyPhase.Loading, WorldId: 0 },
                 "the match starts and the lobby has no world");
             f.Packets.Clear();
             f.Receive(f.Pose(2, world));
@@ -229,7 +229,7 @@ public static class LobbyWorldTests
             f.Advance(2);
             var back = f.World(3);
             var lobby = f.Lobby(3);
-            TestRunner.Assert(back.Id > match.Id && lobby.Phase == LobbyServer.LobbyPhase.Waiting && lobby.WorldId == back.Id, "a new world opens after the results");
+            TestRunner.Assert(back.Id > match.Id && lobby.Phase == LobbyPhase.Waiting && lobby.WorldId == back.Id, "a new world opens after the results");
             TestRunner.Assert(back.Players.Select(p => p.Player.Id).OrderBy(id => id).SequenceEqual(lives.Keys.OrderBy(id => id)) &&
                 back.Players.All(p => p.Player.LifeId == lives[p.Player.Id] + 1), "the same actors return, each in its next life");
             TestRunner.Assert(f.World(2).Id == back.Id, "everyone is admitted to it");
@@ -252,7 +252,7 @@ public static class LobbyWorldTests
             {
                 f.StartMatch();
                 f.Receive(new NetWriter(Msg.LeaveLobby));
-                TestRunner.Assert(f.Lobby(3) is { Phase: LobbyServer.LobbyPhase.Waiting, CreatorId: 3 }, "the creator's stage ends with them");
+                TestRunner.Assert(f.Lobby(3) is { Phase: LobbyPhase.Waiting, CreatorId: 3 }, "the creator's stage ends with them");
                 f.Advance(5);
                 TestRunner.Assert(!f.To<MatchSetup>(3).Any(s => s.ModeId != ModeRegistry.LobbyWorldId), "nobody else's match starts");
             }
@@ -311,7 +311,7 @@ public static class LobbyWorldTests
             TestRunner.Assert(f.Packets.Count == 0, "another peer cannot place the pile");
             f.Receive(Placed(2, poses));
             var spawned = f.To<ModeEnvelope>(3).Select(e => e.Payload).OfType<KingPileSpawned>().Single();
-            TestRunner.Assert(spawned.Owner == 2 && spawned.Tanks.Count == wanted.Count && spawned.Tanks.All(t => t.Id < BodySync.DropTankBase) &&
+            TestRunner.Assert(spawned.Owner == 2 && spawned.Tanks.Count == wanted.Count && spawned.Tanks.All(t => t.Id < BodyIds.DropTankBase) &&
                 f.To<ModeEnvelope>(2).Select(e => e.Payload).OfType<KingPileSpawned>().Any(), "the placed pile goes to everyone as new world tanks");
             f.Packets.Clear();
             f.Advance(0.6);
@@ -366,7 +366,7 @@ public static class LobbyWorldTests
                 {
                     Members = lobby.Members.Append(recolored).ToArray(),
                     RosterRevision = lobby.RosterRevision + 3,
-                    Phase = LobbyServer.LobbyPhase.Staging,
+                    Phase = LobbyPhase.Staging,
                     StartsIn = 3,
                 }), true));
                 TestRunner.Assert(world.Player.InputLocked && client.StageLeft is > 2.9 and <= 3, "the stage holds this player still and counts down");

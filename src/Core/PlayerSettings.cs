@@ -1,6 +1,5 @@
 using System.IO;
 using Godot;
-using Propane.Net;
 
 namespace Propane.Core;
 
@@ -52,7 +51,7 @@ public static class PlayerSettings
                 catch (InvalidDataException) { return null; }
             }
             var legacy = File.GetValue("player", "color", -1);
-            if (legacy.VariantType != Variant.Type.Int || legacy.AsInt64() < 0 || legacy.AsInt64() >= Protocol.PlayerColors.Length) { return null; }
+            if (legacy.VariantType != Variant.Type.Int || legacy.AsInt64() < 0 || legacy.AsInt64() >= AppearancePalette.PlayerColors.Length) { return null; }
             var migrated = AppearanceRecord.FromPalette(legacy.AsInt32());
             Appearance = migrated;
             return migrated;

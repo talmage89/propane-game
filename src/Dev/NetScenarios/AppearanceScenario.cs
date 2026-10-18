@@ -2,9 +2,11 @@ using System;
 using System.Globalization;
 using System.Linq;
 using Godot;
+using Propane.Core;
 using Propane.Net;
 using Propane.UI;
 using Propane.World;
+using Propane.World.Plan;
 using ProcessModeEnum = Godot.Node.ProcessModeEnum;
 
 namespace Propane.Dev.NetScenarios;
@@ -24,7 +26,7 @@ internal sealed class AppearanceScenario(INetScenarioHost host) : NetScenario(ho
     }
     public override void LobbyChanged(LobbyInfo lobby)
     {
-        if (lobby.Phase == LobbyServer.LobbyPhase.Waiting && lobby.Members.Count == players)
+        if (lobby.Phase == LobbyPhase.Waiting && lobby.Members.Count == players)
         {
             CheckAppearances(lobby.Members);
             appearanceMenus!.Show(Menus.Screen.Lobby);
@@ -84,7 +86,7 @@ internal sealed class AppearanceScenario(INetScenarioHost host) : NetScenario(ho
             match.Player.InputOverride = new ScriptedInput();
             var slot = match.Setup.Players.Single(p => p.Player.OwnerPeerId == net.MyId).Spawn;
             var road = match.Suburb.Plan.Roads.OrderByDescending(r => r.Length).First();
-            var center = Suburb.ToWorld((road.A + road.B) / 2, 0.02f);
+            var center = PlanCoordinates.ToWorld((road.A + road.B) / 2, 0.02f);
             var along = new Vector3(road.Direction.X, 0, road.Direction.Y);
             var side = new Vector3(-along.Z, 0, along.X);
             var position = center + along * ((slot - (players - 1) / 2f) * 2.5f);
@@ -112,7 +114,7 @@ internal sealed class AppearanceScenario(INetScenarioHost host) : NetScenario(ho
             var toward = (match.Player.View?.CameraRig.Camera.GlobalPosition ?? match.Player.Aim.EyeOrigin) - match.Player.GlobalPosition;
             toward.Y = 0;
             var at = match.Player.GlobalPosition + toward.Normalized() * 1.3f;
-            var body = new BodyState(BodySync.DropTankId(own.Player.AllocationSlot, 900000), new Transform3D(Basis.Identity, at), Vector3.Zero, Vector3.Zero);
+            var body = new BodyState(BodyIds.DropTankId(own.Player.AllocationSlot, 900000), new Transform3D(Basis.Identity, at), Vector3.Zero, Vector3.Zero);
             net.Send(MessageCodec.Encode(new NetMessage(Msg.ModeEvent, match.Setup.Id, 0, new ModeEnvelope(1, 1, Modes.ModeRegistry.TankBankId, 1, match.Player.ActorId,
                 match.Player.LifeId, checked(++match.Player.Runtime.ActionSequence), ModeSchemas.TankBankKinds.Spill, new TankBankSpill(Modes.SpillReason.Hit, new[] { body }))), false));
         }
@@ -123,7 +125,7 @@ internal sealed class AppearanceScenario(INetScenarioHost host) : NetScenario(ho
             {
                 foreach (var (profile, slot) in match.Setup.Players)
                 {
-                    var tank = drops.Single(t => t.NetId == BodySync.DropTankId(slot, 900000));
+                    var tank = drops.Single(t => t.NetId == BodyIds.DropTankId(slot, 900000));
                     var glow = tank.GetNode<MeshInstance3D>("Mesh").GetInstanceShaderParameter("shield_color").AsColor();
                     ScenarioAssert(tank.Invulnerable && glow.A > 0 && new Color(glow, 1) == profile.Appearance.Color,
                         $"appearance: shield differs for {profile.Name}");

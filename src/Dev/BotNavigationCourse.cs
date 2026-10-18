@@ -118,10 +118,10 @@ public partial class BotNavigationCourse : Node3D, IPlayerInputSource
         AddChild(suburb);
         suburb.Rotation = new Vector3(0, (seed % 7 - 3) * 0.13f, 0);
         player.GlobalPosition = suburb.GlobalTransform * new Vector3(course == 1 ? 3 : (seed % 5 - 2) * 0.25f,
-            Suburb.GroundHeight, course == 6 ? 0.385f : 7 + seed % 3 * 0.4f);
+            PlanCoordinates.GroundHeight, course == 6 ? 0.385f : 7 + seed % 3 * 0.4f);
         player.Velocity = Vector3.Zero;
         player.Aim.SetOrientation(0, 0);
-        goal = suburb.GlobalTransform * new Vector3((seed * 7 % 5 - 2) * 0.25f, Suburb.GroundHeight, -7 - seed % 2 * 0.3f);
+        goal = suburb.GlobalTransform * new Vector3((seed * 7 % 5 - 2) * 0.25f, PlanCoordinates.GroundHeight, -7 - seed % 2 * 0.3f);
         tanks = suburb.LiveTanks.ToList();
         navigator.Reset();
         courseJumps = navigator.Jumps;
@@ -226,7 +226,7 @@ public partial class BotNavigationCourse : Node3D, IPlayerInputSource
             stuckEvents = navigator.StuckEvents;
             jumps = navigator.Jumps;
         }
-        if (!captured && here.Y > Suburb.GroundHeight + fenceHeight + 0.2f && Mathf.Abs(suburb!.ToLocal(here).Z) < 0.4f)
+        if (!captured && here.Y > PlanCoordinates.GroundHeight + fenceHeight + 0.2f && Mathf.Abs(suburb!.ToLocal(here).Z) < 0.4f)
         {
             captured = true;
             director.Screenshot($"seed{seed + 1}_course{course}_{(fenceHeight < 1.5f ? "picket" : "privacy")}_air");

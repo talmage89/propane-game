@@ -3,6 +3,7 @@ using System.Linq;
 using Godot;
 using Propane.Fx;
 using Propane.Modes;
+using Propane.Net;
 using Propane.Tank;
 using Propane.World.Plan;
 
@@ -34,7 +35,7 @@ public partial class KingArena : Node3D
         var tuning = Lab.World.Tuning;
         if (suburb != null)
         {
-            spots.AddRange(KingRules.SpotsFrom(suburb).Select(KingZone.Point));
+            spots.AddRange(KingPlacement.SpotsFrom(suburb).Select(KingZone.Point));
             return;
         }
         spots.Add(Vector3.Zero);

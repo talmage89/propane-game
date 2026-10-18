@@ -3,6 +3,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using Godot;
 using Propane.Bots;
+using Propane.Core;
 using Propane.Net;
 
 namespace Propane.UI;
@@ -47,7 +48,7 @@ internal sealed class LobbyDialogs
 
     public void OpenBotEditor(PlayerProfile? editing)
     {
-        if (botEditor != null || picker != null || net.Lobby is not { Phase: LobbyServer.LobbyPhase.Waiting } lobby) { return; }
+        if (botEditor != null || picker != null || net.Lobby is not { Phase: LobbyPhase.Waiting } lobby) { return; }
         botEditor = new BotEditor
         {
             Net = net,
@@ -75,7 +76,7 @@ internal sealed class LobbyDialogs
 
     private static AppearanceRecord DefaultBotAppearance(LobbyInfo lobby)
     {
-        for (var i = 0; i < Protocol.PlayerColors.Length; i++)
+        for (var i = 0; i < AppearancePalette.PlayerColors.Length; i++)
         {
             var preset = AppearanceRecord.FromPalette(i);
             if (!lobby.Members.Any(m => m.Appearance.Color == preset.Color)) { return preset; }

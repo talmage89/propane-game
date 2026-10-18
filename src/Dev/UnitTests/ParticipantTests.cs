@@ -1,4 +1,5 @@
 using System;
+using Propane.Core;
 using Propane.Net;
 using Propane.Player;
 
@@ -11,23 +12,23 @@ public static class ParticipantTests
     {
         runner.Run("participants/identities fail before wrapping", () =>
         {
-            foreach (var invalid in new[] { -1, BodySync.MaxWorldEntities })
+            foreach (var invalid in new[] { -1, BodyIds.MaxWorldEntities })
             {
-                TestRunner.Throws<ArgumentOutOfRangeException>(() => BodySync.MapTankId(invalid));
-                TestRunner.Throws<ArgumentOutOfRangeException>(() => BodySync.CarId(invalid));
+                TestRunner.Throws<ArgumentOutOfRangeException>(() => BodyIds.MapTankId(invalid));
+                TestRunner.Throws<ArgumentOutOfRangeException>(() => BodyIds.CarId(invalid));
             }
-            TestRunner.Assert(BodySync.MapTankId(BodySync.MaxWorldEntities - 1) == BodySync.DropTankBase - 1, "world entity spaces overlap");
+            TestRunner.Assert(BodyIds.MapTankId(BodyIds.MaxWorldEntities - 1) == BodyIds.DropTankBase - 1, "world entity spaces overlap");
             var ids = new IdentitySequence(int.MaxValue);
             TestRunner.Assert(ids.Allocate() == int.MaxValue, "last id skipped");
             TestRunner.Throws<InvalidOperationException>(() => ids.Allocate());
             TestRunner.Throws<InvalidOperationException>(() => ids.Allocate());
-            TestRunner.Throws<ArgumentOutOfRangeException>(() => BodySync.DropTankId(0, BodySync.MaxDropsPerActor));
-            TestRunner.Throws<ArgumentOutOfRangeException>(() => BodySync.DropTankId(BodySync.MaxAllocationSlots, 0));
-            TestRunner.Assert(BodySync.DropTankId(BodySync.MaxAllocationSlots - 1, BodySync.MaxDropsPerActor - 1) == BodySync.CarBase - 1,
+            TestRunner.Throws<ArgumentOutOfRangeException>(() => BodyIds.DropTankId(0, BodyIds.MaxDropsPerActor));
+            TestRunner.Throws<ArgumentOutOfRangeException>(() => BodyIds.DropTankId(BodyIds.MaxAllocationSlots, 0));
+            TestRunner.Assert(BodyIds.DropTankId(BodyIds.MaxAllocationSlots - 1, BodyIds.MaxDropsPerActor - 1) == BodyIds.CarBase - 1,
                 "drop space overlaps cars");
-            var roster = new ParticipantRoster(firstActor: int.MaxValue, firstSlot: BodySync.MaxAllocationSlots - 1);
+            var roster = new ParticipantRoster(firstActor: int.MaxValue, firstSlot: BodyIds.MaxAllocationSlots - 1);
             var last = roster.Add(2, ActorKind.Human, "Last actor", AppearanceRecord.FromPalette(0), ControllerConfig.Human);
-            TestRunner.Assert(last.ActorId == int.MaxValue && last.AllocationSlot == BodySync.MaxAllocationSlots - 1 && !roster.CanAdd,
+            TestRunner.Assert(last.ActorId == int.MaxValue && last.AllocationSlot == BodyIds.MaxAllocationSlots - 1 && !roster.CanAdd,
                 "last actor/slot was skipped or admission remained open");
             TestRunner.Throws<InvalidOperationException>(() => roster.Add(3, ActorKind.Bot, "Overflow", last.Appearance, ControllerConfig.Bot));
             TestRunner.Assert(roster.Revision == 1 && roster.Present.Count == 1, "exhaustion mutated the roster");
@@ -38,12 +39,12 @@ public static class ParticipantTests
             try
             {
                 actor.Runtime.AllocationSlot = 3;
-                actor.Runtime.DropCounter = BodySync.MaxDropsPerActor - 1;
-                TestRunner.Assert(actor.Runtime.AllocateDropId() == BodySync.DropTankId(3, BodySync.MaxDropsPerActor - 1), "last drop skipped");
+                actor.Runtime.DropCounter = BodyIds.MaxDropsPerActor - 1;
+                TestRunner.Assert(actor.Runtime.AllocateDropId() == BodyIds.DropTankId(3, BodyIds.MaxDropsPerActor - 1), "last drop skipped");
                 for (var attempt = 0; attempt < 2; attempt++)
                 {
                     TestRunner.Throws<ArgumentOutOfRangeException>(() => actor.Runtime.AllocateDropId());
-                    TestRunner.Assert(actor.Runtime.DropCounter == BodySync.MaxDropsPerActor, "exhaustion mutated counter");
+                    TestRunner.Assert(actor.Runtime.DropCounter == BodyIds.MaxDropsPerActor, "exhaustion mutated counter");
                 }
             }
             finally { actor.Runtime.Dispose(); actor.Free(); }

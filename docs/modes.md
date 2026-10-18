@@ -19,7 +19,7 @@ and Dissolve Run the first [segment world source](#segments).
 | `src/Modes/Health.cs` | The optional health state: damage reports, validation, attribution, invulnerability, death, respawn. |
 | `src/Modes/RingOutRules.cs`, `KingRules.cs`, `ShortFuseRules.cs`, `DissolveRunRules.cs` | The prototypes' rules: Ring Out's slab plan, King's zone schedule, Short Fuse's rounds, Dissolve Run's front and score. |
 | `src/Modes/PrototypeHud.cs`, `ShortFuseHud.cs`, `DissolveRunHud.cs` | The prototypes' HUD presenters. |
-| `src/World/SegmentPlans.cs`, `src/Session/SegmentWorldSource.cs` | Segment plans from a run seed and index; the segment world source and its feed. |
+| `src/World/Plan/SegmentPlans.cs`, `src/Session/SegmentWorldSource.cs` | Segment plans from a run seed and index; the segment world source and its feed. |
 | `src/Lab/PrototypeRunner.cs`, `LabMatch.cs` | The offline runner that drives a prototype's rules in the Lab, and a multi-round match it carries. |
 | `src/Net/ModeEnvelope.cs` | The envelope record, explicit schema constructors/codecs, the causal gate and command order. |
 | `src/Net/ServerModes.cs` | Server-owned presentation-free mode inputs, ordered eligibility and plain live wire tuner observations. |
@@ -249,7 +249,7 @@ first. Standings score a place as `starters - place`. There is no bank: spills a
 `TankBankRules`, which gains one input, `TankMinted`, that Tank Bank never sends (its audit is unchanged; `Expected`
 adds the minted count, always zero there). The zone is a circle of `KingZoneRadius` (and `KingZoneHeight` above or
 below the spot) on one of the world's spots (`ModeWorld.Spots`: the void's pile ring, or a suburb plan's piles,
-`KingRules.SpotsFrom`).
+`KingPlacement.SpotsFrom`).
 Zone `k` is in force from `k * KingMoveSeconds` of round time; each next spot is a seeded pick among spots
 `KingMoveMin`–`KingMoveMax` meters from the last (or the nearest miss when none is in range), so the schedule is a
 pure function of the clock, the spots and the seed. A move warns for `KingWarningSeconds`; timing dials change from the
@@ -316,7 +316,7 @@ tanks= chains= bonus= best_chain= pushes= score= caught= front=`. Its world is a
   so its definition says `SuburbPlan` and the Lab chooses the segment source by mode; a networked version would add a
   `Segments` world source. Chains had no identity: the Lab's `BlastRequest` carried the scorer, so the runner now gives a
   Dissolve Run chain its own id instead (solo, every tank is the runner's). `ModeSupply.Suburb` builds one suburb for a
-  player count; segment settings come from their own dials (`SegmentSettings.From`).
+  player count; segment settings come from their own dials (`SuburbPlans.Segments`).
 - A runner that moves on keeps tracking new tanks (`PrototypeRunner.Track`) as segments build, and the Lab forgets the
   ones the front dissolves, so the tank lists stay bounded by the live segments.
 - Death needed two small `PlayerCharacter` hooks: `Collapse()` (go limp where you stand) and `Spectating` (orbit

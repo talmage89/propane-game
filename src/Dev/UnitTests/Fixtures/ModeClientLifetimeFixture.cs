@@ -68,7 +68,7 @@ internal static class ModeClientLifetimeFixture
         Roster(original);
         var adapter = (LobbyClientAdapter)Field(client.Match, "clientMode")!;
         client.Match.PanelOpen = true;
-        Roster(original with { Phase = LobbyServer.LobbyPhase.Staging, StartsIn = 2 });
+        Roster(original with { Phase = LobbyPhase.Staging, StartsIn = 2 });
         Assert(adapter.Staged && adapter.PanelOpen && ((HashSet<int>)Field(adapter, "lobbyDeparted")!).Contains(profile.Id),
             "lifetime fixture failed to populate lobby-owned state");
     }

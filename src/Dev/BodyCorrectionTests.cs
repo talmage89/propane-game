@@ -55,11 +55,11 @@ public partial class BodyCorrectionTests : Node3D
             sync.OnState(2, new BodyState(1, observer.GlobalTransform, Vector3.Zero, Vector3.Zero, 1, 3), false, 3);
             // Resolve the prediction back to the remote owner before testing a subsequent local grant.
             sync.OnAuthority(new BodyAuthority(new BodyState(1, observer.GlobalTransform, Vector3.Zero, Vector3.Zero, 1, 3),
-                2, TankLedger.State.Venting, false, new VentParameters(observer.HoleLocal, observer.HoleNormalLocal, observer.SwirlSign), Vector3.Zero), 3);
+                2, BodyState.State.Venting, false, new VentParameters(observer.HoleLocal, observer.HoleNormalLocal, observer.SwirlSign), Vector3.Zero), 3);
             sync.Correct(3);
             Assert(observer.CorrectingMotion, "remote authority did not restore the fresh observer fixture");
             sync.OnAuthority(new BodyAuthority(new BodyState(1, observer.GlobalTransform, Vector3.Zero, Vector3.Zero, 2, 0),
-                4, TankLedger.State.Venting, false, new VentParameters(observer.HoleLocal, observer.HoleNormalLocal, observer.SwirlSign), Vector3.Zero), 3);
+                4, BodyState.State.Venting, false, new VentParameters(observer.HoleLocal, observer.HoleNormalLocal, observer.SwirlSign), Vector3.Zero), 3);
             Assert(!observer.CorrectingMotion, "local grant retained force suppression until another correction tick");
             observer.LinearVelocity = Vector3.Zero;
             sync.Correct(3);

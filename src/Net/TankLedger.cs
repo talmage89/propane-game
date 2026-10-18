@@ -2,8 +2,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Godot;
-using Propane.Tank;
-using Propane.World;
+using Propane.Core;
 using Propane.World.Plan;
 
 namespace Propane.Net;
@@ -14,7 +13,6 @@ namespace Propane.Net;
 /// </summary>
 public sealed class TankLedger
 {
-    public enum State { Intact, Venting, Exploded }
     private readonly Dictionary<uint, BodyAuthority> bodies = new();
     private readonly Dictionary<(int Peer, uint Request), int> explosions = new();
     private readonly Dictionary<uint, (uint Epoch, uint Sequence)> gathers = new();
@@ -26,15 +24,15 @@ public sealed class TankLedger
         for (var i = 0; i < plan.Tanks.Count; i++)
         {
             var tank = plan.Tanks[i];
-            Register(new BodyState(BodySync.MapTankId(i), new Transform3D(new Basis(Vector3.Up, tank.Yaw),
-                Suburb.ToWorld(tank.Position, tank.Elevation + 0.01f)), Vector3.Zero, Vector3.Zero), host, rest: true);
+            Register(new BodyState(BodyIds.MapTankId(i), new Transform3D(new Basis(Vector3.Up, tank.Yaw),
+                PlanCoordinates.ToWorld(tank.Position, tank.Elevation + 0.01f)), Vector3.Zero, Vector3.Zero), host, rest: true);
         }
         for (var i = 0; i < plan.Props.Count; i++)
         {
             var prop = plan.Props[i];
             if (!prop.Model.StartsWith("car:")) { continue; }
-            Register(new BodyState(BodySync.CarId(i), new Transform3D(new Basis(Vector3.Up, prop.Yaw),
-                Suburb.ToWorld(prop.Position, prop.Elevation)), Vector3.Zero, Vector3.Zero), host, rest: true);
+            Register(new BodyState(BodyIds.CarId(i), new Transform3D(new Basis(Vector3.Up, prop.Yaw),
+                PlanCoordinates.ToWorld(prop.Position, prop.Elevation)), Vector3.Zero, Vector3.Zero), host, rest: true);
         }
     }
 
@@ -44,7 +42,7 @@ public sealed class TankLedger
     public BodyAuthority? Get(uint id) => bodies.GetValueOrDefault(id);
 
     /// <summary>Every body that has not exploded, as last reported: what a peer arriving in a running world must build.</summary>
-    public IReadOnlyList<BodyAuthority> Live() => bodies.Values.Where(b => b.State != State.Exploded).OrderBy(b => b.Body.Id).ToArray();
+    public IReadOnlyList<BodyAuthority> Live() => bodies.Values.Where(b => b.State != BodyState.State.Exploded).OrderBy(b => b.Body.Id).ToArray();
 
     /// <summary>Tanks that have not exploded, venting strays included.</summary>
     public int LiveTanks { get; private set; }
@@ -72,7 +70,7 @@ public sealed class TankLedger
     {
         var reason = Check(peer, puncture.Cause, new[] { (puncture.Id, puncture.Epoch) }, allowed);
         if (reason == ClaimRefusal.None && puncture.Cause != 0 && explosions[(peer, puncture.Cause)] != actorId) reason = ClaimRefusal.Cause;
-        if (reason == ClaimRefusal.None && (puncture.Id >= BodySync.CarBase || bodies[puncture.Id].State != State.Intact))
+        if (reason == ClaimRefusal.None && (puncture.Id >= BodyIds.CarBase || bodies[puncture.Id].State != BodyState.State.Intact))
         {
             reason = ClaimRefusal.Lifecycle;
         }
@@ -81,7 +79,7 @@ public sealed class TankLedger
             var current = bodies[puncture.Id];
             bodies[puncture.Id] = Grant(current, peer, new BodyState(puncture.Id, puncture.Transform, puncture.Linear, puncture.Angular), rest: false) with
             {
-                State = State.Venting,
+                State = BodyState.State.Venting,
                 Vent = new VentParameters(puncture.Hole, puncture.Normal, puncture.Swirl),
                 CauseActorId = actorId,
             };
@@ -94,14 +92,14 @@ public sealed class TankLedger
         var reason = Check(peer, explosion.Cause, new[] { (explosion.Id, explosion.Epoch) }, allowed);
         if (reason == ClaimRefusal.None && explosions.ContainsKey((peer, explosion.Request))) reason = ClaimRefusal.DuplicateRequest;
         if (reason == ClaimRefusal.None && explosion.Cause != 0 && explosions[(peer, explosion.Cause)] != actorId) reason = ClaimRefusal.Cause;
-        if (reason == ClaimRefusal.None && explosion.Id >= BodySync.CarBase) { reason = ClaimRefusal.Lifecycle; }
+        if (reason == ClaimRefusal.None && explosion.Id >= BodyIds.CarBase) { reason = ClaimRefusal.Lifecycle; }
         if (reason == ClaimRefusal.None)
         {
             var current = bodies[explosion.Id];
-            bodies[explosion.Id] = Grant(current, peer, current.Body, rest: true) with { State = State.Exploded, Center = explosion.Center, CauseActorId = actorId };
+            bodies[explosion.Id] = Grant(current, peer, current.Body, rest: true) with { State = BodyState.State.Exploded, Center = explosion.Center, CauseActorId = actorId };
             explosions.Add((peer, explosion.Request), actorId);
             LiveTanks--;
-            if (explosion.Id < BodySync.DropTankBase) { MapDetonations++; }
+            if (explosion.Id < BodyIds.DropTankBase) { MapDetonations++; }
             else { DropDetonations++; }
         }
         return Result(peer, explosion.Request, reason, new[] { explosion.Id });
@@ -110,7 +108,7 @@ public sealed class TankLedger
     /// <summary>Disposable motion may arrive on either side of a reliable grant/rest. Only this owner/epoch wins.</summary>
     public bool Update(int peer, BodyState state, bool rest)
     {
-        if (!bodies.TryGetValue(state.Id, out var current) || current.State == State.Exploded || current.Owner != peer ||
+        if (!bodies.TryGetValue(state.Id, out var current) || current.State == BodyState.State.Exploded || current.Owner != peer ||
             current.Body.Epoch != state.Epoch || state.Sequence <= current.Body.Sequence) { return false; }
         bodies[state.Id] = current with { Body = state, Rest = rest };
         return true;
@@ -120,7 +118,7 @@ public sealed class TankLedger
     public bool Gather(int peer, int host, GatherMessage gather, bool allowed)
     {
         if (!allowed || peer != host || gather.Bodies.Any(b => !bodies.TryGetValue(b.Id, out var current) ||
-            current.Owner != peer || current.Body.Epoch != b.Epoch || current.State != State.Intact ||
+            current.Owner != peer || current.Body.Epoch != b.Epoch || current.State != BodyState.State.Intact ||
             gathers.TryGetValue(b.Id, out var prior) && prior.Epoch == b.Epoch && b.Sequence <= prior.Sequence)) { return false; }
         foreach (var body in gather.Bodies)
         {
@@ -133,7 +131,7 @@ public sealed class TankLedger
 
     public IReadOnlyList<BodyAuthority> Transfer(int left, int host)
     {
-        var transferred = bodies.Values.Where(b => b.Owner == left && b.State != State.Exploded)
+        var transferred = bodies.Values.Where(b => b.Owner == left && b.State != BodyState.State.Exploded)
             .Select(b => Grant(b, host, b.Body, b.Rest)).ToArray();
         foreach (var body in transferred) { bodies[body.Body.Id] = body; }
         return transferred;
@@ -141,7 +139,7 @@ public sealed class TankLedger
 
     public void RegisterDrops(int slot, int owner, IReadOnlyList<BodyState> drops)
     {
-        var prefix = BodySync.DropTankId(slot, 0);
+        var prefix = BodyIds.DropTankId(slot, 0);
         if (drops.Select(d => d.Id).Distinct().Count() != drops.Count ||
             drops.Any(d => (d.Id & 0xFFF0_0000u) != prefix || bodies.ContainsKey(d.Id) || d.Epoch != 1 || d.Sequence != 0))
         {
@@ -156,9 +154,9 @@ public sealed class TankLedger
     /// </summary>
     public IReadOnlyList<BodyState> SpawnWorldTanks(int owner, IReadOnlyList<Transform3D> poses)
     {
-        if (owner <= 0 || poses.Count > BodySync.MaxWorldEntities - worldTanks)
+        if (owner <= 0 || poses.Count > BodyIds.MaxWorldEntities - worldTanks)
             throw new InvalidDataException("world tank allocation space exhausted or invalid owner");
-        var spawned = poses.Select((pose, index) => new BodyState(BodySync.MapTankId(worldTanks + index), pose, Vector3.Zero, Vector3.Zero)).ToArray();
+        var spawned = poses.Select((pose, index) => new BodyState(BodyIds.MapTankId(worldTanks + index), pose, Vector3.Zero, Vector3.Zero)).ToArray();
         foreach (var body in spawned) { Register(body, owner, rest: true); }
         worldTanks += spawned.Length;
         return spawned;
@@ -166,8 +164,8 @@ public sealed class TankLedger
 
     private void Register(BodyState body, int owner, bool rest)
     {
-        bodies.Add(body.Id, new BodyAuthority(body, owner, State.Intact, rest, null, Vector3.Zero));
-        if (body.Id < BodySync.CarBase) { LiveTanks++; }
+        bodies.Add(body.Id, new BodyAuthority(body, owner, BodyState.State.Intact, rest, null, Vector3.Zero));
+        if (body.Id < BodyIds.CarBase) { LiveTanks++; }
     }
 
     private static BodyAuthority Grant(BodyAuthority current, int peer, BodyState pose, bool rest) => current with
@@ -183,7 +181,7 @@ public sealed class TankLedger
         if (group.Any(item => !bodies.ContainsKey(item.Id))) { return ClaimRefusal.UnknownBody; }
         if (!allowed) { return ClaimRefusal.WrongPhase; }
         if (cause != 0 && !explosions.ContainsKey((peer, cause))) { return ClaimRefusal.Cause; }
-        if (group.Any(item => bodies[item.Id].State == State.Exploded)) { return ClaimRefusal.Exploded; }
+        if (group.Any(item => bodies[item.Id].State == BodyState.State.Exploded)) { return ClaimRefusal.Exploded; }
         if (group.Any(item => bodies[item.Id].Body.Epoch != item.Epoch)) { return ClaimRefusal.StaleEpoch; }
         return ClaimRefusal.None;
     }

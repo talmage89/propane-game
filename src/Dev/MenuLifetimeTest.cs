@@ -81,11 +81,11 @@ public partial class MenuLifetimeTest : Node
                 });
             }
         }
-        var loose = Catalog.CarModels.Distinct().Select(name => $"car:{name}")
+        var loose = PlanModels.CarModels.Distinct().Select(name => $"car:{name}")
             .Concat(new[] { "table", "tableRound", "chair", "chairCushion", "loungeChair", "loungeChairRelax" }.Select(name => $"furniture:{name}"))
             .Concat(new[] { "mailbox", "wheelie_bin", "gas_grill", "patio_umbrella", "patio_heater", "kiddie_pool", "cooler", "fire_hydrant", "stop_sign" }.Select(name => $"prop:{name}"));
         foreach (var key in loose) { plan.Props.Add(new PropPlacement(key, Vector2.Zero, 0, 1, PropBody.Loose, 1, Colors.White)); }
-        var anchored = Catalog.TreeModels.Concat(Catalog.BushModels).Select(name => $"nature:{name}")
+        var anchored = PlanModels.TreeModels.Concat(PlanModels.BushModels).Select(name => $"nature:{name}")
             .Concat(new[] { "prop:shed", "prop:street_lamp" });
         foreach (var key in anchored) { plan.Props.Add(new PropPlacement(key, Vector2.Zero, 0, 1, PropBody.Static, 0, Colors.White)); }
         world.Root.AddChild(Suburb.Build(world, plan, SuburbPlans.SinglePlayer(world.Tuning)));

@@ -54,7 +54,7 @@ internal sealed class LobbyBrowserScreen
             description.AddChild(UiStyle.Text($"{lobby.CreatorName}'s lobby", 20));
             description.AddChild(UiStyle.Text(Modes.ModeRegistry.ForLobby(lobby.ModeId)!.Name, 15, UiStyle.SoftInk));
             row.AddChild(description);
-            var inMatch = lobby.Phase != LobbyServer.LobbyPhase.Waiting;
+            var inMatch = lobby.Phase != LobbyPhase.Waiting;
             row.AddChild(UiStyle.Text(inMatch ? "in a match" : $"{lobby.Players} / {lobby.Capacity}", 18, UiStyle.SoftInk));
             var join = UiStyle.Button("Join");
             join.Disabled = inMatch || lobby.Players >= lobby.Capacity;

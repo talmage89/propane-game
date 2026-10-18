@@ -2,7 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Godot;
+using Propane.Core;
 using Propane.Dev.UnitTests.Fixtures;
+using Propane.Modes;
 using Propane.Net;
 
 namespace Propane.Dev.UnitTests;
@@ -37,17 +39,17 @@ public static class LifecycleTests
             foreach (var refuseFirst in new[] { false, true })
             {
                 var pending = new DropPredictions();
-                var accepted = BodySync.DropTankId(0, 0);
-                var refused = BodySync.DropTankId(0, 1);
+                var accepted = BodyIds.DropTankId(0, 0);
+                var refused = BodyIds.DropTankId(0, 1);
                 pending.Add(accepted);
                 pending.Add(refused);
                 if (!refuseFirst) { pending.ScoreConfirmed(-1); pending.Accepted(new[] { accepted }); }
-                var removed = pending.Refused(new[] { BodySync.MapTankId(0), refused, refused });
+                var removed = pending.Refused(new[] { BodyIds.MapTankId(0), refused, refused });
                 TestRunner.Assert(removed.SequenceEqual(new[] { refused }), "refusal removed foreign or duplicate ids");
                 if (refuseFirst) { pending.ScoreConfirmed(-1); pending.Accepted(new[] { accepted }); }
                 TestRunner.Assert(pending.UnconfirmedCount == 0, "refusal permanently consumed the local bank reservation");
                 TestRunner.Assert(pending.Refused(new[] { accepted, refused }).Count == 0, "late refusal removed a confirmed tank");
-                pending.Add(BodySync.DropTankId(0, 2));
+                pending.Add(BodyIds.DropTankId(0, 2));
                 TestRunner.Assert(pending.UnconfirmedCount == 1, "subsequent spill could not reserve its bank");
             }
         });
@@ -57,11 +59,11 @@ public static class LifecycleTests
             try
             {
                 var sync = new BodySync(Core.Tuning.SavedTemplate, me: 3, host: 2);
-                var id = BodySync.MapTankId(0);
+                var id = BodyIds.MapTankId(0);
                 sync.Register(id, body, isTank: true, owner: 2);
                 var state = new BodyState(id, Transform3D.Identity, Vector3.Zero, Vector3.Zero, 1, 10);
                 sync.OnState(2, state, rest: true, 1);
-                sync.OnAuthority(new BodyAuthority(state with { Epoch = 2, Sequence = 0 }, 3, TankLedger.State.Intact, true, null, Vector3.Zero));
+                sync.OnAuthority(new BodyAuthority(state with { Epoch = 2, Sequence = 0 }, 3, BodyState.State.Intact, true, null, Vector3.Zero));
                 TestRunner.Assert(sync.Get(id) is { Owner: 3, HasTarget: false, Epoch: 2 }, "old owner still corrects the successor");
                 var moving = new List<BodySync.Entry>();
                 var rested = new List<BodySync.Entry>();

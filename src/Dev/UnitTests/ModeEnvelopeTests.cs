@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Godot;
+using Propane.Core;
 using Propane.Dev.UnitTests.Fixtures;
 using Propane.Modes;
 using Propane.Net;
@@ -25,7 +26,7 @@ public static class ModeEnvelopeTests
         public void Failed(ModeRunner runner, IModeHost host, int peer, ModeEnvelope envelope, double now) => Seen.Add($"failed {envelope.EventId}");
     }
 
-    private static readonly BodyState Body = new(BodySync.DropTankId(0, 0), Transform3D.Identity, Vector3.Up, Vector3.Zero);
+    private static readonly BodyState Body = new(BodyIds.DropTankId(0, 0), Transform3D.Identity, Vector3.Up, Vector3.Zero);
 
     private static byte[] Spill(TankBankSpill spill, uint eventId = 1) =>
         MessageCodec.Encode(ModeWireFixtures.Spill(7, 2, 1, eventId, spill.Reason, spill.Tanks), false);
@@ -57,7 +58,7 @@ public static class ModeEnvelopeTests
     {
         runner.Run("envelope/every tank bank kind round-trips through the fixed header", () =>
         {
-            var spill = new TankBankSpill(SpillReason.Thrown, new[] { Body, Body with { Id = BodySync.DropTankId(0, 1) } });
+            var spill = new TankBankSpill(SpillReason.Thrown, new[] { Body, Body with { Id = BodyIds.DropTankId(0, 1) } });
             var decoded = MessageCodec.Decode(Spill(spill, 9), false);
             TestRunner.Assert(decoded is { Type: Msg.ModeEvent, MatchId: 7, ActorId: 2, LifeId: 1, ActionId: 9 } &&
                 decoded.Payload is ModeEnvelope { RoundId: 1, WorldRevision: 1, ModeId: ModeRegistry.TankBankId, Payload: TankBankSpill back } &&
@@ -96,9 +97,9 @@ public static class ModeEnvelopeTests
         });
         runner.Run("envelope/oversized and truncated payloads are bounded per kind", () =>
         {
-            var tooMany = Enumerable.Range(0, ModeSchemas.MaxSpill + 1).Select(i => Body with { Id = BodySync.DropTankId(0, i) }).ToArray();
+            var tooMany = Enumerable.Range(0, ModeSchemas.MaxSpill + 1).Select(i => Body with { Id = BodyIds.DropTankId(0, i) }).ToArray();
             TestRunner.Throws<InvalidDataException>(() => Spill(new TankBankSpill(SpillReason.Thrown, tooMany)));
-            var full = Enumerable.Range(0, ModeSchemas.MaxSpill).Select(i => Body with { Id = BodySync.DropTankId(0, i) }).ToArray();
+            var full = Enumerable.Range(0, ModeSchemas.MaxSpill).Select(i => Body with { Id = BodyIds.DropTankId(0, i) }).ToArray();
             var payload = SpillPayload(1, full);
             TestRunner.Assert(MessageCodec.Decode(Raw(ModeRegistry.TankBankId, 1, 1, payload.Length, payload), false) != null, "largest spill rejected");
             var padded = payload.Concat(new byte[1]).ToArray();
@@ -137,16 +138,16 @@ public static class ModeEnvelopeTests
             using var f = new ServerFixture();
             var actor = f.ActorId(2);
             byte[] Ticket(uint eventId, int counter) => MessageCodec.Encode(ModeWireFixtures.Spill(f.Id, actor, 1, eventId, SpillReason.Hit,
-                new[] { Body with { Id = BodySync.DropTankId(0, counter) } }), false);
+                new[] { Body with { Id = BodyIds.DropTankId(0, counter) } }), false);
             f.Receive(Ticket(5, 0));
             f.AssertScore(2, 3, -1);
             f.Packets.Clear();
             f.Receive(Ticket(5, 0));
             f.Receive(Ticket(4, 1));
             TestRunner.Assert(f.Packets.Count == 0, "a repeated or overtaken spill reached the rules");
-            f.Receive(MessageCodec.Encode(ModeWireFixtures.Spill(f.Id, actor, 2, 6, SpillReason.Hit, new[] { Body with { Id = BodySync.DropTankId(0, 2) } }), false));
+            f.Receive(MessageCodec.Encode(ModeWireFixtures.Spill(f.Id, actor, 2, 6, SpillReason.Hit, new[] { Body with { Id = BodyIds.DropTankId(0, 2) } }), false));
             TestRunner.Assert(f.Packets.Count == 0, "a spill from another life was accepted");
-            f.Receive(MessageCodec.Encode(ModeWireFixtures.Spill(f.Id, actor, 1, 7, SpillReason.Hit, new[] { Body with { Id = BodySync.DropTankId(0, 3) } }), false), peer: 3);
+            f.Receive(MessageCodec.Encode(ModeWireFixtures.Spill(f.Id, actor, 1, 7, SpillReason.Hit, new[] { Body with { Id = BodyIds.DropTankId(0, 3) } }), false), peer: 3);
             TestRunner.Assert(f.Packets.Count == 0, "another peer reported this actor's spill");
             f.Receive(Ticket(8, 4));
             f.AssertScore(2, 2, -1);
@@ -214,7 +215,7 @@ public static class ModeEnvelopeTests
                 new ModeEnvelope(1, 1, CausalMode, 1, actor, 1, eventId, 1, new Report(3, request))), false);
             f.Receive(Report(1, 1), peer: 2);
             TestRunner.Assert(wire.Seen.Count == 0, "a report ran before its blast");
-            var explosion = new ExplodeMessage(BodySync.MapTankId(0), Vector3.One, Request: 1);
+            var explosion = new ExplodeMessage(BodyIds.MapTankId(0), Vector3.One, Request: 1);
             f.Receive(MessageCodec.Encode(new NetMessage(Msg.Explode, f.Id, 0, explosion, f.ActorId(3), 1, 1), false), peer: 3);
             TestRunner.Assert(wire.Seen.SequenceEqual(new[] { "event 1" }), "the accepted blast did not release its report");
             f.Receive(Report(2, 1), peer: 2);

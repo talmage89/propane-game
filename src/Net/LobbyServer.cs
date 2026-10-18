@@ -16,17 +16,6 @@ namespace Propane.Net;
 /// </summary>
 public partial class LobbyServer : Node
 {
-    public enum LobbyPhase : byte
-    {
-        Waiting,
-        Loading,
-        Countdown,
-        Playing,
-        Results,
-        /// <summary>The creator started: the stage counts down in the lobby world before the match loads.</summary>
-        Staging,
-    }
-
     private const int MaxClients = 64;
 
     private sealed class Client
@@ -74,15 +63,17 @@ public partial class LobbyServer : Node
     private readonly ServerModes modes;
     private readonly Func<ServerMode, Tuning, int, SuburbSettings> supply;
     private readonly Func<ServerMode, Tuning, ModeTuners> copyModeTuners;
+    private readonly Func<SuburbSettings, int, Func<int>, SuburbPlan> generate;
 
     // Parameterless script instantiation cannot supply application-owned mode inputs.
     public LobbyServer() => throw new InvalidOperationException("LobbyServer requires compiled server mode inputs");
     public LobbyServer(ServerModes modes, Func<ServerMode, Tuning, int, SuburbSettings> supply,
-        Func<ServerMode, Tuning, ModeTuners> copyModeTuners, ServerTransport services, IMonotonicClock? clock = null)
+        Func<ServerMode, Tuning, ModeTuners> copyModeTuners, Func<SuburbSettings, int, Func<int>, SuburbPlan> generate, ServerTransport services, IMonotonicClock? clock = null)
     {
         this.modes = modes ?? throw new ArgumentNullException(nameof(modes));
         this.supply = supply ?? throw new ArgumentNullException(nameof(supply));
         this.copyModeTuners = copyModeTuners ?? throw new ArgumentNullException(nameof(copyModeTuners));
+        this.generate = generate ?? throw new ArgumentNullException(nameof(generate));
         transport = services.Transport;
         peerIds = services.PeerIds;
         this.clock = clock ?? MonotonicClock.Instance;
@@ -434,7 +425,7 @@ public partial class LobbyServer : Node
         {
             Peers = lobby.Members.ToArray(),
             Mode = lobby.Settings,
-            StartsIn = lobby.Phase == LobbyPhase.Staging ? (float)Math.Clamp(lobby.StageEnds - clock.Seconds, 0, MaxStage) : 0,
+            StartsIn = lobby.Phase == LobbyPhase.Staging ? (float)Math.Clamp(lobby.StageEnds - clock.Seconds, 0, Protocol.MaxStage) : 0,
             WorldId = lobby.World?.Id ?? 0,
         };
         var bytes = MessageCodec.Encode(new NetMessage(Msg.LobbyState, 0, 0, state), true);
@@ -557,7 +548,7 @@ public partial class LobbyServer : Node
         {
             lobby.Phase = LobbyPhase.Staging;
             lobby.Staged = snapshot;
-            lobby.StageEnds = clock.Seconds + Math.Min(staged.LobbyStageTime, MaxStage);
+            lobby.StageEnds = clock.Seconds + Math.Min(staged.LobbyStageTime, Protocol.MaxStage);
             Log($"lobby {lobby.Id}: starting in {staged.LobbyStageTime:0.#} s");
             SendLobbyState(lobby);
             BroadcastLobbyList();
@@ -658,7 +649,7 @@ public partial class LobbyServer : Node
     {
         var mode = world ? modes.Roaming : lobby.Mode;
         return new ServerRun(matchIds.Allocate(), lobby.Id, lobby.CreatorId, debug, length, world, tuning, mode,
-            players => supply(mode, tuning, players), () => copyModeTuners(mode, tuning), clock,
+            players => supply(mode, tuning, players), () => copyModeTuners(mode, tuning), generate, clock,
             Send, world ? SetLoading : SetMatchLoading, phase => lobby.Phase = phase, () => ReturnToLobby(lobby), Log, TraceAuthority);
     }
 

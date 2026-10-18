@@ -2,9 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Godot;
+using Propane.Core;
 using Propane.Modes;
 using Propane.Player;
 using Propane.Tank;
+using Propane.World.Plan;
 
 namespace Propane.Net;
 
@@ -74,7 +76,7 @@ public sealed class LobbyClientAdapter : SilentClientAdapter
             }
             if (lobbyDeparted.Contains(member.Id)) continue;
             var (at, yaw) = LobbyLayout.Arrival(member.AllocationSlot, replica.World.Tuning.LobbySpawnRing);
-            lobbyReplica.AddActor(member, World.Suburb.ToWorld(new Vector2((float)at.X, (float)at.Z), 0.05f), (float)yaw);
+            lobbyReplica.AddActor(member, PlanCoordinates.ToWorld(new Vector2((float)at.X, (float)at.Z), 0.05f), (float)yaw);
             lobbyReplica.Notice($"{member.Name} joined", 3f);
             changed = true;
         }

@@ -1,7 +1,7 @@
 using System;
 using System.Diagnostics;
 
-namespace Propane.Fx;
+namespace Propane.Diagnostics;
 
 /// <summary>Opt-in dev timers; inclusive scopes accumulate until the harness drains each frame.</summary>
 public static class EffectProfile

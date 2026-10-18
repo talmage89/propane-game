@@ -54,13 +54,13 @@ internal sealed class AuthorityOrderScenario(INetScenarioHost host) : NetScenari
             {
                 if (!IsCurrent(captured)) return;
                 if (held == null && !released && message.Payload is AuthorityMessage { Reason: ClaimRefusal.None } result &&
-                    result.Bodies.Any(b => b.Body.Id == BodySync.MapTankId(0) && b.Body.Epoch == 2))
+                    result.Bodies.Any(b => b.Body.Id == BodyIds.MapTankId(0) && b.Body.Epoch == 2))
                 {
                     held = message;
                     return;
                 }
                 previous(message);
-                if (held != null && match.Bodies.Get(BodySync.MapTankId(0)) is { Epoch: 1, Future: not null } entry)
+                if (held != null && match.Bodies.Get(BodyIds.MapTankId(0)) is { Epoch: 1, Future: not null } entry)
                 {
                     var pending = held;
                     held = null;
@@ -87,7 +87,7 @@ internal sealed class AuthorityOrderScenario(INetScenarioHost host) : NetScenari
             match.AuthoritySendOverride = bytes =>
             {
                 var message = MessageCodec.Decode(bytes, false);
-                if (message.Payload is ExplodeMessage explosion && explosion.Id == BodySync.MapTankId(0))
+                if (message.Payload is ExplodeMessage explosion && explosion.Id == BodyIds.MapTankId(0))
                 {
                     ScenarioAssert(explosion.Epoch == 2, "root-refusal: root did not use its accepted puncture epoch");
                     bytes = MessageCodec.Encode(message with { Payload = explosion with { Epoch = 1 } }, false);
@@ -102,8 +102,8 @@ internal sealed class AuthorityOrderScenario(INetScenarioHost host) : NetScenari
     {
         if (!match.IsPlaying || scenarioPassed || scenarioFailed) return;
         time += dt;
-        var id = BodySync.MapTankId(0);
-        var other = BodySync.MapTankId(1);
+        var id = BodyIds.MapTankId(0);
+        var other = BodyIds.MapTankId(1);
         if (stage == 0 && time >= 2)
         {
             stage = 1;

@@ -8,6 +8,7 @@ using Godot;
 using Propane.Lab;
 using Propane.Modes;
 using Propane.Session;
+using Propane.World.Plan;
 using static Propane.Dev.UnitTests.TestRunner;
 
 namespace Propane.Dev.LabCases;
@@ -39,7 +40,7 @@ internal sealed class StreamingHistoryScenario(ILabScenarioHost host) : LabScena
         {
             var c = arena.Census();
             GD.Print($"[stream-history] at={at} built={source.Built} retired={source.Retired} live={c.Segments} nodes={c.Nodes} bodies={c.Bodies} retiring={source.Retiring} plans={Count(source.Feed, "plans")} forgotten={Count(source.Feed, "forgotten")} builds={arena.BuildSlices.Count} retires={arena.RetireMilliseconds.Count} dissolved={Count(arena, "dissolved")} pickups={arena.Pickups.Count} " +
-                $"plan_capacity={((Dictionary<int, Task<Propane.World.SegmentPlan>>)Field(source.Feed, "plans")).EnsureCapacity(0)} forgotten_capacity={((HashSet<int>)Field(source.Feed, "forgotten")).EnsureCapacity(0)} build_capacity={((List<double>)arena.BuildSlices).Capacity} retire_capacity={((List<double>)arena.RetireMilliseconds).Capacity} " +
+                $"plan_capacity={((Dictionary<int, Task<Propane.World.Plan.SegmentPlan>>)Field(source.Feed, "plans")).EnsureCapacity(0)} forgotten_capacity={((HashSet<int>)Field(source.Feed, "forgotten")).EnsureCapacity(0)} build_capacity={((List<double>)arena.BuildSlices).Capacity} retire_capacity={((List<double>)arena.RetireMilliseconds).Capacity} " +
                 $"tracked={LabScenarioTools.TrackingCount(lab.Prototype!)} lab_tanks={Count(lab, "tanks")} direct_shots={Count(lab.Prototype!, "directShots")} drops={Count(lab.Prototype!, "drops")} " +
                 $"receivers={lab.World.BlastReceivers.Count} reveal={Count(lab.World.Reveal, "geometry")} effects={Count(lab.World, "effectOrigins")} timers={lab.World.Clock.PendingCount} resources={Performance.GetMonitor(Performance.Monitor.ObjectResourceCount)}");
             Assert(c.Segments <= 4 && source.Retiring == 0 && Count(source.Feed, "plans") <= 5, "controlled stream exceeded its live window");
@@ -88,7 +89,7 @@ internal sealed class StreamingHistoryScenario(ILabScenarioHost host) : LabScena
             Assert(source.Retired == i && source.Segments.Count == 3, "controlled retirement changed its window");
             source.Feed.Request(forgottenIndex);
             Assert(!source.Feed.TryGet(forgottenIndex, out _), "retired plan became available again");
-            transcript?.Add($"forget {forgottenIndex}; request ignored; try-get false; plans={string.Join(',', ((Dictionary<int, Task<Propane.World.SegmentPlan>>)Field(source.Feed, "plans")).Keys.Order())}");
+            transcript?.Add($"forget {forgottenIndex}; request ignored; try-get false; plans={string.Join(',', ((Dictionary<int, Task<Propane.World.Plan.SegmentPlan>>)Field(source.Feed, "plans")).Keys.Order())}");
             if (i == 32) { ticks.Clear(); bytes = 0; } // Native/JIT warm-up is identical in each paired run.
             if (i % 64 == 0)
             {

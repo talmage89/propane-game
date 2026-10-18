@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Propane.Core;
 using Propane.Session;
 using Propane.World;
+using Propane.World.Plan;
 using static Propane.Dev.UnitTests.TestRunner;
 
 namespace Propane.Dev.UnitTests;
@@ -18,7 +19,7 @@ public static class SegmentFeedTests
         runner.Run("segment feed/real worker completion, repeat request and retirement", () =>
         {
             using var tuning = Tuning.LoadBaked();
-            using var feed = new LocalSegmentFeed(SegmentSettings.From(tuning), 23);
+            using var feed = new LocalSegmentFeed(SuburbPlans.Segments(tuning), 23);
             feed.Request(0);
             var first = feed.Wait(0);
             feed.Request(0);
@@ -35,7 +36,7 @@ public static class SegmentFeedTests
         runner.Run("segment feed/requests in open gaps still generate", () =>
         {
             using var tuning = Tuning.LoadBaked();
-            using var feed = new LocalSegmentFeed(SegmentSettings.From(tuning), 23);
+            using var feed = new LocalSegmentFeed(SuburbPlans.Segments(tuning), 23);
             feed.Forget(4);
             feed.Forget(2);
             feed.Forget(0);
@@ -62,7 +63,7 @@ public static class SegmentFeedTests
         runner.Run("segment feed/out-of-order forgetting and late completion", () =>
         {
             using var tuning = Tuning.LoadBaked();
-            using var feed = new LocalSegmentFeed(SegmentSettings.From(tuning), 23);
+            using var feed = new LocalSegmentFeed(SuburbPlans.Segments(tuning), 23);
             var plans = (Dictionary<int, Task<SegmentPlan>>)typeof(LocalSegmentFeed)
                 .GetField("plans", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(feed)!;
             var forgotten = new HashSet<int>(); // Independent parent semantics, including negative/extreme indices.

@@ -224,7 +224,7 @@ public partial class Game : Node3D
         current.TankDestroyed += OnTankDestroyed;
         hud?.SetTanks(current.TanksRemaining, animate: false);
 
-        var spawn = Suburb.ToWorld(plan.Spawn, 0.05f);
+        var spawn = PlanCoordinates.ToWorld(plan.Spawn, 0.05f);
         player?.Teleport(spawn, plan.SpawnYaw + Mathf.Pi);
         GD.Print($"[game] suburb seed {plan.Seed}: {plan.Lots.Count} lots, {plan.Tanks.Count} tanks");
     }

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Propane.Core;
 
 namespace Propane.Net;
 
@@ -173,7 +174,7 @@ internal sealed class ClientAuthorityTransactions : IDisposable
             if (replica.Adopt(reported, gatherGrant) is not { } adopted) { continue; }
             var authority = adopted.Authority;
             var id = authority.Body.Id;
-            if (authority.State == TankLedger.State.Exploded)
+            if (authority.State == BodyState.State.Exploded)
             {
                 foreach (var canceled in outgoingAuthority.Where(r => r.Type != Msg.Claim && r.Ids.Contains(id)).ToArray())
                 {

@@ -6,6 +6,7 @@ using Godot;
 using Propane.Bots;
 using Propane.Core;
 using Propane.Dev.UnitTests.Fixtures;
+using Propane.Modes;
 using Propane.Net;
 using Propane.Player;
 

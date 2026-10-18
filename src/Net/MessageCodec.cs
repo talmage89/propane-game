@@ -4,8 +4,8 @@ using System.IO;
 using System.Linq;
 using Godot;
 using Propane.Core;
+using Propane.Modes;
 using Propane.Player;
-using Propane.Tank;
 
 namespace Propane.Net;
 
@@ -37,10 +37,8 @@ public sealed record PunctureMessage(uint Id, Transform3D Transform, Vector3 Lin
 public sealed record ExplodeMessage(uint Id, Vector3 Center, uint Epoch = 1, uint Request = 1, uint Cause = 0);
 public sealed record ClaimMessage(uint Request, IReadOnlyList<BodyState> Bodies, uint Cause = 0);
 public enum ClaimRefusal : byte { None, StaleEpoch, Exploded, WrongPhase, Lifecycle, Cause, UnknownBody, DuplicateRequest }
-public sealed record VentParameters(Vector3 Hole, Vector3 Normal, float Swirl);
-public sealed record BodyAuthority(BodyState Body, int Owner, TankLedger.State State, bool Rest, VentParameters? Vent, Vector3 Center, int CauseActorId = 0);
+public sealed record BodyAuthority(BodyState Body, int Owner, BodyState.State State, bool Rest, VentParameters? Vent, Vector3 Center, int CauseActorId = 0);
 public sealed record AuthorityMessage(int Peer, uint Request, ClaimRefusal Reason, IReadOnlyList<BodyAuthority> Bodies);
-public sealed record BodyState(uint Id, Transform3D Transform, Vector3 Linear, Vector3 Angular, uint Epoch = 1, uint Sequence = 0);
 public sealed record BodyStatesMessage(double Time, IReadOnlyList<BodyState> Bodies);
 public sealed record BodyRestMessage(uint Id, Transform3D Transform, double Time, uint Epoch = 1, uint Sequence = 1);
 public sealed record GatherMessage(GatherPhase Phase, IReadOnlyList<BodyState> Bodies);
@@ -229,7 +227,7 @@ public static class MessageCodec
         var phase = (GatherPhase)Range(r.Byte(), 0, (int)GatherPhase.Settled);
         var bodies = ReadArray(r, r.UShort(), Protocol.MaxCollection, () => ReadBody(r), min: 1);
         Unique(bodies.Select(b => b.Id).ToArray());
-        if (bodies.Any(b => b.Id >= BodySync.CarBase || b.Sequence == 0)) { throw new InvalidDataException("invalid gather body"); }
+        if (bodies.Any(b => b.Id >= BodyIds.CarBase || b.Sequence == 0)) { throw new InvalidDataException("invalid gather body"); }
         return new GatherMessage(phase, bodies);
     }
 
@@ -269,10 +267,10 @@ public static class MessageCodec
         Unique(members.Select(p => p.Id).ToArray());
         if (!peers.Contains(creator) || members.Any(p => !peers.Contains(p.OwnerPeerId))) { throw new InvalidDataException("creator missing from lobby"); }
         var mode = ReadModeSettings(r);
-        var startsIn = Range(r.Float(), 0, LobbyServer.MaxStage);
-        if (startsIn > 0 && phase != LobbyServer.LobbyPhase.Staging) { throw new InvalidDataException("a start countdown outside staging"); }
+        var startsIn = Range(r.Float(), 0, Protocol.MaxStage);
+        if (startsIn > 0 && phase != LobbyPhase.Staging) { throw new InvalidDataException("a start countdown outside staging"); }
         var world = Nonnegative(r.Int());
-        if (world != 0 && phase is not (LobbyServer.LobbyPhase.Waiting or LobbyServer.LobbyPhase.Staging)) { throw new InvalidDataException("a lobby world during a match"); }
+        if (world != 0 && phase is not (LobbyPhase.Waiting or LobbyPhase.Staging)) { throw new InvalidDataException("a lobby world during a match"); }
         return new LobbyInfo(id, creator, length, phase, members, capacity, revision) { Peers = peers, Mode = mode, StartsIn = startsIn, WorldId = world };
     }
 
@@ -307,7 +305,7 @@ public static class MessageCodec
     {
         var actor = Positive(r.Int()); var owner = Positive(r.Int()); var kind = (ActorKind)Range(r.Byte(), 0, 1);
         var name = r.String(); var appearance = r.Appearance(); var config = ReadController(r);
-        var present = r.Bool(); var slot = Range(r.Int(), 0, BodySync.MaxAllocationSlots - 1); var life = Id(r.UInt());
+        var present = r.Bool(); var slot = Range(r.Int(), 0, BodyIds.MaxAllocationSlots - 1); var life = Id(r.UInt());
         if (!config.ValidFor(kind)) throw new InvalidDataException("controller does not match actor kind");
         return new(actor, name, appearance)
         {
@@ -431,8 +429,8 @@ public static class MessageCodec
         var value = r.Float();
         return value is -1 or 1 ? value : throw new InvalidDataException("swirl must be a sign");
     }
-    private static int ColorIndex(int n) => Range(n, 0, Protocol.PlayerColors.Length - 1);
-    private static LobbyServer.LobbyPhase Phase(byte n) => (LobbyServer.LobbyPhase)Range(n, 0, (int)LobbyServer.LobbyPhase.Staging);
+    private static int ColorIndex(int n) => Range(n, 0, AppearancePalette.PlayerColors.Length - 1);
+    private static LobbyPhase Phase(byte n) => (LobbyPhase)Range(n, 0, (int)LobbyPhase.Staging);
     private static int Range(int n, int min, int max) => n >= min && n <= max ? n : throw new InvalidDataException($"integer out of range: {n}");
     private static float Range(float n, float min, float max) => n >= min && n <= max ? n : throw new InvalidDataException($"float out of range: {n}");
     private static double Time(double n) => n is >= 0 and <= 1e12 ? n : throw new InvalidDataException("bad timestamp");
@@ -480,9 +478,9 @@ public static class MessageCodec
         var peer = Positive(r.Int()); var request = r.UInt(); var reason = (ClaimRefusal)Range(r.Byte(), 0, (int)ClaimRefusal.DuplicateRequest);
         var bodies = ReadArray(r, r.UShort(), Protocol.MaxCollection, () =>
         {
-            var body = ReadBody(r); var owner = Positive(r.Int()); var state = (TankLedger.State)Range(r.Byte(), 0, (int)TankLedger.State.Exploded);
+            var body = ReadBody(r); var owner = Positive(r.Int()); var state = (BodyState.State)Range(r.Byte(), 0, (int)BodyState.State.Exploded);
             var rest = r.Bool(); VentParameters? vent = r.Bool() ? new(Vector(r), Normal(r), Swirl(r)) : null;
-            if (state == TankLedger.State.Venting && vent == null) { throw new InvalidDataException("missing canonical vent"); }
+            if (state == BodyState.State.Venting && vent == null) { throw new InvalidDataException("missing canonical vent"); }
             return new BodyAuthority(body, owner, state, rest, vent, Vector(r), Nonnegative(r.Int()));
         });
         Unique(bodies.Select(b => b.Body.Id).ToArray());

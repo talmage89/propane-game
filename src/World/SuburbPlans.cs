@@ -35,6 +35,18 @@ public static class SuburbPlans
         RoadSpacing = tuning.MpRoadSpacing,
     };
 
+    /// <summary>Sample the live Dissolve segment dials at session construction.</summary>
+    public static SegmentSettings Segments(Tuning tuning) => new(SuburbPlans.SinglePlayer(tuning) with
+    {
+        MapSize = tuning.DissolveStreetWidth,
+        StripLength = tuning.DissolveSegmentLength,
+        ClusterSizeMin = Math.Min(tuning.DissolvePileMin, tuning.DissolvePileMax),
+        ClusterSizeMax = tuning.DissolvePileMax,
+        PlayerSpawns = 0,
+        CenterBias = 0,
+    }, tuning.DissolveSegmentLength, tuning.DissolveTanksStart, Math.Min(tuning.DissolveTanksMin, tuning.DissolveTanksStart),
+        tuning.DissolveTanksDrop, tuning.DissolveJackpotEvery, tuning.DissolveJackpotTanks, tuning.DissolveAmmoCans);
+
     private static SuburbSettings Piles(Tuning tuning) => new()
     {
         PileSiteSpacing = tuning.PileSiteSpacing,

@@ -12,7 +12,9 @@ set -euo pipefail
 # What players in one match share. A patch should leave these alone, since it must play with every other patch of
 # its minor version: messages, the suburb built from the server's plan (body ids follow it), tanks, the tuners (Tuning.cs
 # and its partials) and the mode rules. A change here is a reason to review, not proof that compatibility broke.
-shared_paths=(src/Net src/World src/Tank src/Player/PlayerNet.cs 'src/Core/Tuning*.cs' src/Modes)
+shared_paths=(src/Net src/World src/Tank src/Player/PlayerNet.cs src/Player/PlayerNetState.cs
+  src/Core/ActorIdentity.cs src/Core/AppearanceRecord.cs src/Core/AppearancePalette.cs src/Core/BodyIds.cs src/Core/BodyState.cs
+  'src/Core/Tuning*.cs' src/Modes)
 
 bump="${1:-}"
 yes=0

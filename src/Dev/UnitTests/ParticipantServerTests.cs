@@ -3,7 +3,9 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Godot;
+using Propane.Core;
 using Propane.Dev.UnitTests.Fixtures;
+using Propane.Modes;
 using Propane.Net;
 using Propane.Player;
 using Propane.Tank;
@@ -138,7 +140,7 @@ public static class ParticipantServerTests
             Assert(mapping.Spawn != mapping.Player.AllocationSlot, "spawn order remained allocation identity");
             foreach (var peer in new[] { 2, 3 }) f.Receive(new NetWriter(Msg.Loaded, setup.Id), peer);
             f.Advance(); f.Advance(); f.Packets.Clear();
-            var drop = new BodyState(BodySync.DropTankId(next.AllocationSlot, 0), Transform3D.Identity, Vector3.Zero, Vector3.Zero);
+            var drop = new BodyState(BodyIds.DropTankId(next.AllocationSlot, 0), Transform3D.Identity, Vector3.Zero, Vector3.Zero);
             f.Receive(MessageCodec.Encode(ModeWireFixtures.Spill(setup.Id, next.Id, 1, 1, Modes.SpillReason.Hit, new[] { drop }), false));
             Assert(f.Packets.Any(p => ModeWireFixtures.IsScore(p.Message, next.Id, 3)),
                 "ledger validated the spawn slot instead of the allocation slot");
@@ -149,7 +151,7 @@ public static class ParticipantServerTests
             Assert(f.Setup.Players.Count == 3 && f.Setup.Peers.Count == 2, "actor count conflated with readiness peers");
             var bot = f.Setup.Players.Single(p => p.Player.Kind == ActorKind.Bot).Player;
             var human = f.Setup.Players.Single(p => p.Player.OwnerPeerId == 2 && p.Player.Kind == ActorKind.Human).Player;
-            var explosion = new ExplodeMessage(BodySync.MapTankId(0), Vector3.Zero);
+            var explosion = new ExplodeMessage(BodyIds.MapTankId(0), Vector3.Zero);
             byte[] Packet(int actor, uint life, uint action) => MessageCodec.Encode(new NetMessage(Msg.Explode, f.Id, 0, explosion, actor, life, action), false);
             f.Reject(Packet(human.Id, 1, 1), 3);
             f.Reject(Packet(bot.Id, 2, 1));
@@ -247,7 +249,7 @@ public static class ParticipantServerTests
                 var contact = new NetMessage(Msg.MeleeContact, f.Id, 2, new MeleeContactMessage(1, bot.ActorId, -1), human.ActorId, 1, 4);
                 match.OnMessage(contact); match.OnMessage(contact);
                 Assert(bot.IsRagdolled && bot.Runtime.DropPredictions.UnconfirmedCount == 4, "same-peer melee failed or spilled twice");
-                var id = BodySync.DropTankId(human.Runtime.AllocationSlot, 899999);
+                var id = BodyIds.DropTankId(human.Runtime.AllocationSlot, 899999);
                 human.Runtime.DropPredictions.Add(id);
                 match.OnMessage(ModeWireFixtures.Score(f.Id, human.ActorId, 3, -1));
                 var dropped = new BodyState(id, Transform3D.Identity, Vector3.Zero, Vector3.Zero);
@@ -267,9 +269,9 @@ public static class ParticipantServerTests
         {
             var plan = PlanTests.Fixture();
             var ledger = new TankLedger(plan, 2);
-            var root = ledger.Detonate(2, new ExplodeMessage(BodySync.MapTankId(0), Vector3.Zero, Request: 10), 101, true);
+            var root = ledger.Detonate(2, new ExplodeMessage(BodyIds.MapTankId(0), Vector3.Zero, Request: 10), 101, true);
             Assert(root.Bodies.Single().CauseActorId == 101, "canonical blast lost attribution");
-            var child = new PunctureMessage(BodySync.MapTankId(1), Transform3D.Identity, Vector3.Zero, Vector3.Zero, Vector3.Zero, Vector3.Up, 1, Cause: 10);
+            var child = new PunctureMessage(BodyIds.MapTankId(1), Transform3D.Identity, Vector3.Zero, Vector3.Zero, Vector3.Zero, Vector3.Up, 1, Cause: 10);
             Assert(ledger.Puncture(2, child, 102, true).Reason == ClaimRefusal.Cause, "same peer borrowed another actor's chain");
             var accepted = ledger.Puncture(2, child, 101, true);
             Assert(accepted.Reason == ClaimRefusal.None && accepted.Bodies.Single().CauseActorId == 101,
@@ -283,7 +285,7 @@ public static class ParticipantServerTests
             var client = new NetClient();
             client.Handle(MessageCodec.Encode(new NetMessage(Msg.Welcome, 0, 0, new WelcomeMessage(2, null)), true));
             client.Handle(MessageCodec.Encode(new NetMessage(Msg.LobbyState, 0, 0, new LobbyInfo(1, 2, 10,
-                LobbyServer.LobbyPhase.Loading, fixture.Setup.Players.Select(p => p.Player).ToArray())), true));
+                LobbyPhase.Loading, fixture.Setup.Players.Select(p => p.Player).ToArray())), true));
             client.Handle(MessageCodec.Encode(new NetMessage(Msg.MatchStart, fixture.Id, 0, fixture.Setup), true));
             var own = fixture.Setup.Players.Single(p => p.Player.OwnerPeerId == 2).Player;
             foreach (var message in new[]
@@ -291,8 +293,8 @@ public static class ParticipantServerTests
                 new NetMessage(Msg.MatchGo, fixture.Id, 0, new FloatMessage(10)),
                 ModeWireFixtures.Score(fixture.Id, own.Id, 8, 0),
                 new NetMessage(Msg.Authority, fixture.Id, 0, new AuthorityMessage(3, 1, ClaimRefusal.None,
-                    new[] { new BodyAuthority(new BodyState(BodySync.MapTankId(0), Transform3D.Identity, Vector3.Zero, Vector3.Zero, 2),
-                        3, TankLedger.State.Exploded, true, null, new Vector3(400, .3f, 0), 2) })),
+                    new[] { new BodyAuthority(new BodyState(BodyIds.MapTankId(0), Transform3D.Identity, Vector3.Zero, Vector3.Zero, 2),
+                        3, BodyState.State.Exploded, true, null, new Vector3(400, .3f, 0), 2) })),
             })
             {
                 client.Handle(MessageCodec.Encode(message, true));

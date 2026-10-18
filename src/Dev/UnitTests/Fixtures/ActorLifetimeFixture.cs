@@ -6,6 +6,7 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 using Godot;
 using Propane.Bots;
+using Propane.Core;
 using Propane.Modes;
 using Propane.Net;
 using Propane.Player;

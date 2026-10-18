@@ -77,7 +77,7 @@ public partial class SuburbPreview : Node3D
             camera.LookAtFromPosition(new Vector3(-settings.MapSize * 0.75f, 70, settings.MapSize * 0.75f), Vector3.Zero);
         });
         director.ShotAt(1.6f, $"{seed}_01_aerial");
-        var spawn = Suburb.ToWorld(plan.Spawn, 1.6f);
+        var spawn = PlanCoordinates.ToWorld(plan.Spawn, 1.6f);
         var forward = new Vector3(Mathf.Sin(plan.SpawnYaw), 0, Mathf.Cos(plan.SpawnYaw));
         director.At(1.7f, () => camera.LookAtFromPosition(spawn - forward * 3.5f + Vector3.Up * 0.3f, spawn + forward * 20f));
         director.ShotAt(2.2f, $"{seed}_02_spawn");
@@ -85,12 +85,12 @@ public partial class SuburbPreview : Node3D
         var lot = plan.Lots.FirstOrDefault(l => l.HouseModel >= 0);
         if (lot != null)
         {
-            var yard = Suburb.ToWorld(lot.LotToMap(0, lot.Bounds.HalfExtents.Y * 2f - 3f), 0);
-            var outside = Suburb.ToWorld(lot.LotToMap(lot.Bounds.HalfExtents.X + 6f, lot.Bounds.HalfExtents.Y * 1.3f), 2.4f);
+            var yard = PlanCoordinates.ToWorld(lot.LotToMap(0, lot.Bounds.HalfExtents.Y * 2f - 3f), 0);
+            var outside = PlanCoordinates.ToWorld(lot.LotToMap(lot.Bounds.HalfExtents.X + 6f, lot.Bounds.HalfExtents.Y * 1.3f), 2.4f);
             director.At(2.3f, () => camera.LookAtFromPosition(outside, yard));
             director.ShotAt(2.8f, $"{seed}_03_backyard");
-            var front = Suburb.ToWorld(lot.FrontCenter - lot.Bounds.AxisY * 7f + lot.Bounds.AxisX * 6f, 1.7f);
-            director.At(2.9f, () => camera.LookAtFromPosition(front, Suburb.ToWorld(lot.House.Center, 2f)));
+            var front = PlanCoordinates.ToWorld(lot.FrontCenter - lot.Bounds.AxisY * 7f + lot.Bounds.AxisX * 6f, 1.7f);
+            director.At(2.9f, () => camera.LookAtFromPosition(front, PlanCoordinates.ToWorld(lot.House.Center, 2f)));
             director.ShotAt(3.4f, $"{seed}_04_front");
         }
         if (plan.Tanks.Count > 0)

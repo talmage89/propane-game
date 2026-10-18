@@ -13,7 +13,7 @@ public sealed class SessionContext : IDisposable
 {
     private readonly List<ActorRuntime> actors = new();
     private readonly List<Node> views = new();
-    private readonly Net.IdentitySequence actorIds = new();
+    private readonly IdentitySequence actorIds = new();
     private readonly Dictionary<int, ActorRuntime> registry = new();
     private readonly Dictionary<ActorRuntime, ActorRegistration> registrations = new();
     private readonly HashSet<int> retired = new();

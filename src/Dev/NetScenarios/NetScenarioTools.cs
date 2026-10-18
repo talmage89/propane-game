@@ -1,6 +1,7 @@
 using System;
 using System.Globalization;
 using Godot;
+using Propane.Core;
 using Propane.Net;
 using Propane.Player;
 using Propane.Tank;
@@ -16,7 +17,7 @@ internal static class NetScenarioTools
     // shield is transparent; converting Nil directly to Color instead fabricates opaque black.
     internal static Color ReadShieldColor(Variant value) => value.VariantType == Variant.Type.Nil ? Colors.Transparent : value.AsColor();
 
-    internal static bool IsDrop(PropaneTank tank) => tank.NetId is >= BodySync.DropTankBase and < BodySync.CarBase;
+    internal static bool IsDrop(PropaneTank tank) => tank.NetId is >= BodyIds.DropTankBase and < BodyIds.CarBase;
 
     internal static void AimAt(PlayerCharacter player, Vector3 point)
     {

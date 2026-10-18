@@ -36,7 +36,7 @@ internal sealed class LobbyWorldFixture : IDisposable
         foreach (var guest in guests) { Connect(guest); Join(guest); }
     }
 
-    public void Connect(int peer) => driver.Connect(peer, peer % Protocol.PlayerColors.Length, true);
+    public void Connect(int peer) => driver.Connect(peer, peer % AppearancePalette.PlayerColors.Length, true);
 
     public void Join(int peer) => driver.Join(peer);
     public void Receive(NetWriter packet, int peer = 2) => driver.Receive(packet, peer);

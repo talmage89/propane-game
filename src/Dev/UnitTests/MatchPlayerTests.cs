@@ -1,6 +1,8 @@
 using System;
 using System.Linq;
+using Propane.Core;
 using Propane.Dev.UnitTests.Fixtures;
+using Propane.Modes;
 using Propane.Net;
 using static Propane.Dev.UnitTests.TestRunner;
 

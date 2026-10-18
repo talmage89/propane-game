@@ -36,3 +36,9 @@ exact saved release plans, world construction and segment hashes on the referenc
 `--platform-references`; never regenerate those fixtures for a refactor. Also compare `PlanCodec.Encode` bytes
 against the immediate parent across seeds, forced formations, match sizes and strip settings. Deep generator
 shards live in `make test-full`.
+
+The plain model selection metadata lives in `World/Plan/PlanModels.cs`, with its existing ordering and duplicate
+car entries (weights) intact. `PlanCoordinates` supplies the same ground-height conversion to the builder and
+server ledger. `GameCatalog.Capture` measures a native catalog on the main thread in house/palette/key order and
+transfers its data into `PlanCatalogSnapshot`; worker generation receives only that snapshot and plain settings.
+Live Dissolve tuning conversion is `SuburbPlans.Segments`, outside the plan module.

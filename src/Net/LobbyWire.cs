@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Godot;
+using Propane.Core;
 using Propane.Modes;
 using Propane.World.Plan;
 
@@ -70,7 +71,7 @@ public sealed class LobbyWire : IModeWire
         {
             if (!stock.TryGetValue(i, out var ids)) continue;
             var spot = Spot(runner, i);
-            intact[i] = ids.Count(id => host.Body(id) is { State: TankLedger.State.Intact } body &&
+            intact[i] = ids.Count(id => host.Body(id) is { State: BodyState.State.Intact } body &&
                 new Vector2(body.Body.Transform.Origin.X - spot.X, body.Body.Transform.Origin.Z - spot.Z).Length() <= reach);
         }
         return new PilesStocked(intact, host.LiveTanks);

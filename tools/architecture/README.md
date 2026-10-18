@@ -23,7 +23,7 @@ archives; runtime smoke complements inventory because metadata presence cannot p
 - `modules.json` maps namespace prefixes (longest first), files and exact top-level types (highest precedence) to
   logical modules; it also lists allowed direct directions. Generated/nested types inherit their top-level module.
   Keep mixed namespaces explicit. Unknown Propane types/namespaces fail closed. The map describes logical ownership,
-  so `Net.AmmoPickup` is Simulation even before its file moves. Front-end screens are Composition, HUD/device views
+  so native `World.AmmoPickup` is Simulation and the separate plain `Player.PlayerNetState` is Foundation. Front-end screens are Composition, HUD/device views
   Presentation. Small value contracts can live in a namespace whose default is another module.
 - `baseline.tsv` is ordinally sorted, one line per `rule TAB source-type TAB target-type-or-member TAB removing-package
   TAB reason`. It approves individual type edges, never whole module pairs. New forbidden edges and stale entries

@@ -3,6 +3,7 @@ using Godot;
 using Propane.Core;
 using Propane.ReleaseSmoke;
 using Propane.Tank;
+using Propane.World.Plan;
 
 namespace Propane.Dev;
 
@@ -48,7 +49,7 @@ public partial class GameTest : Node
                 var front = lot.House.Center - lot.Bounds.AxisY * (lot.House.HalfExtents.Y + 9f);
                 var to = lot.House.Center - front;
                 var yaw = Mathf.Atan2(-to.X, -to.Y);
-                game.Player.Teleport(World.Suburb.ToWorld(front, 0.05f), yaw);
+                game.Player.Teleport(PlanCoordinates.ToWorld(front, 0.05f), yaw);
                 game.Player.CameraRig.SetOrientation(Mathf.RadToDeg(yaw), -2f);
             });
             for (var i = 0; i < 4; i++)
@@ -103,7 +104,7 @@ public partial class GameTest : Node
                         return;
                     }
                     var tank = tanks[index];
-                    var center = World.Suburb.ToWorld(tank.Position, tank.Elevation + 0.25f);
+                    var center = PlanCoordinates.ToWorld(tank.Position, tank.Elevation + 0.25f);
                     camera.LookAtFromPosition(center + new Vector3(2.6f, 2f, 3.2f), center);
                     GD.Print($"[spots] {index}: {tank.Reason} elevation {tank.Elevation:0.00}");
                 });
@@ -296,7 +297,7 @@ public partial class GameTest : Node
             var lot = Lot();
             var behind = lot.House.Center + lot.Bounds.AxisY * (lot.House.HalfExtents.Y + 0.9f);
             var facing = lot.Bounds.AxisY;
-            return (World.Suburb.ToWorld(behind, 0.05f), Mathf.Atan2(-facing.X, -facing.Y), -10f);
+            return (PlanCoordinates.ToWorld(behind, 0.05f), Mathf.Atan2(-facing.X, -facing.Y), -10f);
         });
         // Same spot, looking steeply up and then down.
         Stand(3.5f, "01_look_up", () =>
@@ -304,14 +305,14 @@ public partial class GameTest : Node
             var lot = Lot();
             var behind = lot.House.Center + lot.Bounds.AxisY * (lot.House.HalfExtents.Y + 0.9f);
             var facing = lot.Bounds.AxisY;
-            return (World.Suburb.ToWorld(behind, 0.05f), Mathf.Atan2(-facing.X, -facing.Y), 60f);
+            return (PlanCoordinates.ToWorld(behind, 0.05f), Mathf.Atan2(-facing.X, -facing.Y), 60f);
         });
         Stand(4.5f, "02_look_down", () =>
         {
             var lot = Lot();
             var behind = lot.House.Center + lot.Bounds.AxisY * (lot.House.HalfExtents.Y + 0.9f);
             var facing = lot.Bounds.AxisY;
-            return (World.Suburb.ToWorld(behind, 0.05f), Mathf.Atan2(-facing.X, -facing.Y), -70f);
+            return (PlanCoordinates.ToWorld(behind, 0.05f), Mathf.Atan2(-facing.X, -facing.Y), -70f);
         });
         // Hugging a fence, looking along it.
         Stand(5.5f, "03_fence", () =>
@@ -320,7 +321,7 @@ public partial class GameTest : Node
             var along = (fence.B - fence.A).Normalized();
             var side = new Vector2(-along.Y, along.X);
             var spot = (fence.A + fence.B) / 2f + side * 0.45f;
-            return (World.Suburb.ToWorld(spot, 0.05f), Mathf.Atan2(-along.X, -along.Y), -5f);
+            return (PlanCoordinates.ToWorld(spot, 0.05f), Mathf.Atan2(-along.X, -along.Y), -5f);
         });
         // Out in the void beyond the slab edge, looking back at the suburb, then looking up from the void.
         Stand(6.5f, "04_void_look_back", () =>
@@ -369,7 +370,7 @@ public partial class GameTest : Node
             var tank = suburb.MapTanks[i];
             var placement = suburb.Plan.Tanks[i];
             var expected = new Basis(Vector3.Up, placement.Yaw) * Basis.FromEuler(placement.Rotation);
-            var drift = tank.GlobalPosition.DistanceTo(World.Suburb.ToWorld(placement.Position, placement.Elevation));
+            var drift = tank.GlobalPosition.DistanceTo(PlanCoordinates.ToWorld(placement.Position, placement.Elevation));
             var angle = tank.GlobalBasis.GetRotationQuaternion().AngleTo(expected.GetRotationQuaternion());
             if (drift > 0.006f || angle > Mathf.DegToRad(0.5f))
             {
@@ -402,7 +403,7 @@ public partial class GameTest : Node
         director.At(3, () =>
         {
             var road = game.Current!.Plan.Roads.OrderByDescending(r => r.Length).First();
-            center = World.Suburb.ToWorld((road.A + road.B) / 2);
+            center = PlanCoordinates.ToWorld((road.A + road.B) / 2);
             direction = new Vector3(road.Direction.X, 0, road.Direction.Y);
             var across = direction.Cross(Vector3.Up);
             members = game.Current.LiveTanks.Take(3).ToArray();
@@ -599,7 +600,7 @@ public partial class GameTest : Node
     {
         foreach (var prop in game.Current!.Plan.Props.Where(p => p.Model.Contains("bush")))
         {
-            var p = World.Suburb.ToWorld(prop.Position, 0.5f);
+            var p = PlanCoordinates.ToWorld(prop.Position, 0.5f);
             var t = Mathf.Clamp((p - from).Dot((to - from).Normalized()), 0, from.DistanceTo(to));
             if ((from + (to - from).Normalized() * t).DistanceTo(p) < 1.2f)
             {

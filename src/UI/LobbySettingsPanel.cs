@@ -72,7 +72,7 @@ internal sealed class LobbySettingsPanel
         {
             var fewer = UiStyle.Button("−");
             fewer.SetMeta("focus_key", "capacity_down");
-            fewer.Disabled = lobby.Phase != LobbyServer.LobbyPhase.Waiting || lobby.Capacity <= Mathf.Max(2, lobby.Members.Count);
+            fewer.Disabled = lobby.Phase != LobbyPhase.Waiting || lobby.Capacity <= Mathf.Max(2, lobby.Members.Count);
             fewer.Pressed += () => net.SetCapacity(lobby.Capacity - 1);
             capacity.AddChild(fewer);
         }
@@ -81,7 +81,7 @@ internal sealed class LobbySettingsPanel
         {
             var more = UiStyle.Button("+");
             more.SetMeta("focus_key", "capacity_up");
-            more.Disabled = lobby.Phase != LobbyServer.LobbyPhase.Waiting || lobby.Capacity >= net.LobbyCapacity;
+            more.Disabled = lobby.Phase != LobbyPhase.Waiting || lobby.Capacity >= net.LobbyCapacity;
             more.Pressed += () => net.SetCapacity(lobby.Capacity + 1);
             capacity.AddChild(more);
         }
@@ -94,7 +94,7 @@ internal sealed class LobbySettingsPanel
     {
         var settings = lobby.Mode;
         var chosen = Modes.ModeRegistry.ForLobby(settings.ModeId) ?? Modes.ModeRegistry.TankBank;
-        var waiting = lobby.Phase == LobbyServer.LobbyPhase.Waiting;
+        var waiting = lobby.Phase == LobbyPhase.Waiting;
         var modes = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.Center };
         modes.AddThemeConstantOverride("separation", 10);
         modes.AddChild(UiStyle.Text("Mode", 20));
@@ -179,7 +179,7 @@ internal sealed class LobbySettingsPanel
 
     public void AdjustTankSupply(int direction)
     {
-        if (net.Lobby is not { Phase: LobbyServer.LobbyPhase.Waiting } lobby || !net.IsCreator) return;
+        if (net.Lobby is not { Phase: LobbyPhase.Waiting } lobby || !net.IsCreator) return;
         var supply = Math.Clamp(lobby.Mode.TankSupply + direction, Tuning.TankSupplyMinimum, Tuning.TankSupplyMaximum);
         if (supply != lobby.Mode.TankSupply) net.SetMode(lobby.Mode with { TankSupply = supply });
     }
@@ -187,7 +187,7 @@ internal sealed class LobbySettingsPanel
     /// <summary>Left is faster (fewer seconds per tank), right slower.</summary>
     public void AdjustMintPace(int direction)
     {
-        if (net.Lobby is not { Phase: LobbyServer.LobbyPhase.Waiting } lobby || !net.IsCreator) return;
+        if (net.Lobby is not { Phase: LobbyPhase.Waiting } lobby || !net.IsCreator) return;
         var seconds = (float)Math.Clamp(lobby.Mode.MintSeconds + direction * Modes.KingRules.MintPaceStep, Modes.KingRules.MintPaceMin, Modes.KingRules.MintPaceMax);
         if (seconds != lobby.Mode.MintSeconds) net.SetMode(lobby.Mode with { MintSeconds = seconds });
     }

@@ -5,9 +5,7 @@ using System.Linq;
 using Godot;
 using Propane.Core;
 using Propane.Modes;
-using Propane.World;
 using Propane.World.Plan;
-using LobbyPhase = Propane.Net.LobbyServer.LobbyPhase;
 
 namespace Propane.Net;
 
@@ -56,6 +54,7 @@ internal sealed class ServerRun : IModeHost, IDisposable
     private readonly ServerMode mode;
     private readonly Func<int, SuburbSettings> supply;
     private readonly Func<ModeTuners> readModeTuners;
+    private readonly Func<SuburbSettings, int, Func<int>, SuburbPlan> generate;
     private bool[] pickupUp = Array.Empty<bool>();
     private double[] pickupBack = Array.Empty<double>();
     /// <summary>Each actor's latest reported position, for a mode whose rules read where bodies are.</summary>
@@ -65,7 +64,7 @@ internal sealed class ServerRun : IModeHost, IDisposable
     private double nextStock;
 
     public ServerRun(int id, int lobbyId, int creator, bool creatorDebug, float length, bool isWorld, Tuning tuning, ServerMode mode,
-        Func<int, SuburbSettings> supply, Func<ModeTuners> readModeTuners, IMonotonicClock clock, Action<int, byte[], TrafficClass> deliver, Action<int, bool> loading,
+        Func<int, SuburbSettings> supply, Func<ModeTuners> readModeTuners, Func<SuburbSettings, int, Func<int>, SuburbPlan> generate, IMonotonicClock clock, Action<int, byte[], TrafficClass> deliver, Action<int, bool> loading,
         Action<LobbyPhase> phaseChanged, Action returnToLobby, Action<string> log, Action<int, AuthorityMessage> authorityPublished)
     {
         Id = id;
@@ -78,6 +77,7 @@ internal sealed class ServerRun : IModeHost, IDisposable
         this.mode = mode;
         this.supply = supply;
         this.readModeTuners = readModeTuners;
+        this.generate = generate;
         this.clock = clock;
         this.deliver = deliver;
         this.loading = loading;
@@ -113,11 +113,11 @@ internal sealed class ServerRun : IModeHost, IDisposable
         var seed = OS.IsDebugBuild() && int.TryParse(LaunchArgs.Current.Get("match-seed"), out var requestedSeed)
             ? requestedSeed : nextRandom();
         var settings = supply(actors.Count);
-        var plan = SuburbPlans.Generate(settings, seed, () => nextRandom());
+        var plan = generate(settings, seed, () => nextRandom());
         var planBytes = PlanCodec.Encode(plan);
         tanks = new TankLedger(plan, hostId);
         modeRunner = new ModeRunner(mode, new ModeSetup(actors.Select(a => new ModeActor(a.ActorId, a.Name, true, startScore)).ToArray(),
-            new ModeWorld(mode.World, 1, plan.Tanks.Count, KingRules.SpotsFrom(plan)), readModeTuners(), unchecked((ulong)plan.Seed)));
+            new ModeWorld(mode.World, 1, plan.Tanks.Count, KingPlacement.SpotsFrom(plan)), readModeTuners(), unchecked((ulong)plan.Seed)));
         for (var i = 0; i < plan.Props.Count; i++)
         {
             if (plan.Props[i].Body != World.Plan.PropBody.Static && !plan.Props[i].Model.StartsWith("car:")) { looseProps.Add(i); }
@@ -443,7 +443,7 @@ internal sealed class ServerRun : IModeHost, IDisposable
                 var dependency = new ModeDependency(peer, explosion.Request);
                 if (detonation.Reason == ClaimRefusal.None)
                 {
-                    modeRunner.Apply(this, new TankDetonated(actorId, explosion.Id < BodySync.DropTankBase ? TankOrigin.Map : TankOrigin.Drop), clock.Seconds);
+                    modeRunner.Apply(this, new TankDetonated(actorId, explosion.Id < BodyIds.DropTankBase ? TankOrigin.Map : TankOrigin.Drop), clock.Seconds);
                     foreach (var held in modeRunner.Gate.Release(dependency))
                         modeRunner.Wire.Event(modeRunner, this, held.Peer, (ModeEnvelope)held.Message.Payload, clock.Seconds);
                 }
@@ -470,7 +470,7 @@ internal sealed class ServerRun : IModeHost, IDisposable
                 // Zero means no ping yet: fall back to this relay's time instead of inventing a sampling age.
                 var relayedAt = clock.Seconds;
                 var sampledAt = states.Time == 0 ? relayedAt : System.Math.Clamp(states.Time,
-                    System.Math.Max(0, relayedAt - BodySync.MaxExtrapolation), relayedAt);
+                    System.Math.Max(0, relayedAt - BodyState.MaxExtrapolation), relayedAt);
                 message = message with { Payload = states with { Time = sampledAt, Bodies = accepted } };
                 break;
             case BodyRestMessage rest:
@@ -480,7 +480,7 @@ internal sealed class ServerRun : IModeHost, IDisposable
             case MeleeStartMessage strike:
                 if (!playOpen) return;
                 if (!meleeByActor.TryGetValue(actorId, out var melee)) meleeByActor[actorId] = melee = new MeleeValidation();
-                if (!melee.Start(strike, clock.Seconds, tuning)) return;
+                if (!melee.Start(strike, clock.Seconds, new MeleeTiming(tuning.MeleeWindup, tuning.MeleeActive, tuning.MeleeRecovery, tuning.MeleeCooldown, tuning.MeleeRelayGrace))) return;
                 break;
             case MeleeContactMessage contact:
                 if (!playOpen ||
@@ -490,7 +490,7 @@ internal sealed class ServerRun : IModeHost, IDisposable
                     return;
                 }
 
-                if (!meleeByActor.TryGetValue(actorId, out var swing) || !swing.Contact(contact, clock.Seconds, tuning)) return;
+                if (!meleeByActor.TryGetValue(actorId, out var swing) || !swing.Contact(contact, clock.Seconds, tuning.MeleeMaxContacts)) return;
                 break;
             case ShotMessage shot:
                 if (shot.Victim != 0 && (!ValidTarget(shot.Victim, shot.VictimLifeId) || shot.Victim == actorId) ||

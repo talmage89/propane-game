@@ -77,7 +77,7 @@ public static class PublicationReferenceTests
                     body.AngularVelocity = new Vector3(0, i % 4, 0);
                     body.Sleeping = false;
                     var isTank = i % 2 == 0 || i >= count - 2;
-                    var id = i >= count - 2 ? BodySync.DropTankId(i == count - 1 ? 0 : 1, 0) : isTank ? BodySync.MapTankId(i) : BodySync.CarId(i);
+                    var id = i >= count - 2 ? BodyIds.DropTankId(i == count - 1 ? 0 : 1, 0) : isTank ? BodyIds.MapTankId(i) : BodyIds.CarId(i);
                     sync.Register(id, body, isTank, 2);
                     // Three groups, interleaved in encounter order; each must preserve its own member order.
                     sync.Get(id)!.CheckpointTraffic = i % 3 == 0 ? TrafficClass.ReliableBodyStates3 :
@@ -136,11 +136,11 @@ public static class PublicationReferenceTests
                 Step("wake-and-reliable-checkpoints", 100.6);
                 var transferred = entries[1];
                 sync.OnAuthority(new BodyAuthority(BodySync.Capture(transferred) with { Epoch = 2, Sequence = 7 }, 3,
-                    TankLedger.State.Intact, false, null, Vector3.Zero), 100.61);
+                    BodyState.State.Intact, false, null, Vector3.Zero), 100.61);
                 sync.Claim(new[] { transferred.Body });
                 Step("foreign-owner-pending-claim", 100.7);
                 sync.OnAuthority(new BodyAuthority(BodySync.Capture(transferred) with { Epoch = 3, Sequence = 0 }, 2,
-                    TankLedger.State.Intact, false, null, Vector3.Zero), 100.71);
+                    BodyState.State.Intact, false, null, Vector3.Zero), 100.71);
                 Step("epoch-granted-sequence-reset", 100.71);
                 rawClient.BlockTraffic = TrafficClass.UnreliableBodyStates;
                 Step("disposable-send-failure", 100.8);

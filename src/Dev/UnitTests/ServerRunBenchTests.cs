@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics;
 using System.Linq;
 using Godot;
+using Propane.Core;
 using Propane.Dev.UnitTests.Fixtures;
 using Propane.Modes;
 using Propane.Net;
@@ -38,7 +39,7 @@ public static class ServerRunBenchTests
             poses[i] = ActorMessages.Encode(Msg.PlayerState, run, actor, 1, (uint)i + 1,
                 new PlayerStateMessage(0, new PlayerNetState { Position = new Vector3(2, 0, 3) }));
             bodies[i] = MessageCodec.Encode(new NetMessage(Msg.BodyStates, run, 0,
-                new BodyStatesMessage(0, Enumerable.Range(0, 8).Select(n => new BodyState(BodySync.MapTankId(n),
+                new BodyStatesMessage(0, Enumerable.Range(0, 8).Select(n => new BodyState(BodyIds.MapTankId(n),
                     new Transform3D(Basis.Identity, new Vector3(n, 1, 2)), Vector3.Right, Vector3.Zero, 1, (uint)i + 1)).ToArray())), false);
         }
         var packets = 0;

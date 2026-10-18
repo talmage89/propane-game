@@ -6,6 +6,7 @@ using System.Linq;
 using System.Reflection;
 using System.Text.Json;
 using Godot;
+using Propane.Core;
 using Propane.Dev.UnitTests.Fixtures;
 using Propane.Net;
 using Propane.World;
@@ -129,7 +130,7 @@ public static class BodyPublicationTests
                 body.LinearVelocity = new Vector3(i + 1, 2, 3);
                 body.AngularVelocity = new Vector3(0, i % 4, 0);
                 var isTank = i % 2 == 0;
-                var id = isTank ? BodySync.MapTankId(i) : BodySync.CarId(i);
+                var id = isTank ? BodyIds.MapTankId(i) : BodyIds.CarId(i);
                 Match.Bodies.Register(id, body, isTank, 2);
                 Match.Bodies.Get(id)!.CheckpointTraffic = i % 3 == 0 ? TrafficClass.ReliableBodyStates3 :
                     i % 3 == 1 ? TrafficClass.ReliableBodyStates : TrafficClass.ReliableBodyStates2;

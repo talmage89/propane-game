@@ -9,7 +9,7 @@ from pathlib import Path
 import shutil
 import subprocess
 
-from server_equivalence import ROOT, prepare
+from server_equivalence import ROOT, copy_probe, prepare
 
 CALL = 'Propane.Dev.UnitTests.Fixtures.AuthorityObservation.Record'
 
@@ -45,15 +45,17 @@ def observe(project):
     insert(owner, 'AuthorityResolved?.Invoke(result);' if owner == match else 'replica.Notify(result);',
            f'        {CALL}(this, "notify");', before=True)
     insert(owner, 'if (result.Peer == me) { gatherRequests.Remove(result.Request); }', f'        {CALL}(this, "complete");')
+    # Preserve the old enum spelling when observing a parent before the C1 contract move.
+    lifecycle = "BodyState.State" if "BodyState.State.Intact" in match.read_text() else "TankLedger.State"
     # Physical callback order, including no-op restoration, is observable independently of final body state.
     for needle, label in (
         ('if (entry != null && !bodies.OnAuthority(authority, out authority, Clock.Seconds))', 'adopt'),
         ('if (predictedExplosions.Remove(id))', 'explode'),
         ('var recreated = !tanks.TryGetValue(id, out var tank)', 'restore'),
         ('var pilePose = tank?.PilePose;', 'recreate'),
-        ('if (authority.State == TankLedger.State.Intact) { tank.RestoreIntact(); }', 'intact'),
+        ('if (authority.State == ' + lifecycle + '.Intact) { tank.RestoreIntact(); }', 'intact'),
         ('BodySync.Snap(tank, authority.Body.Transform, authority.Body.Linear, authority.Body.Angular);', 'snap'),
-        ('if (authority.Vent is { } vent && authority.State == TankLedger.State.Venting)', 'vent'),
+        ('if (authority.Vent is { } vent && authority.State == ' + lifecycle + '.Venting)', 'vent'),
     ):
         # Insert at the beginning of the statement's line; some needles are partial statements.
         code = match.read_text()
@@ -82,7 +84,7 @@ if __name__ == '__main__':
     for name in ('AuthorityBenchTests.cs', 'AuthorityLeaseTests.cs', 'Fixtures/AuthorityTransactions.cs'):
         source = ROOT / 'src/Dev/UnitTests' / name
         if source.exists():
-            shutil.copyfile(source, project / 'src/Dev/UnitTests' / name)
+            copy_probe(source, project / 'src/Dev/UnitTests' / name, project)
     subprocess.run(['dotnet', 'build', 'Propane.csproj', '-c', 'Debug', '-nologo', '-v', 'quiet', '-warnaserror'],
                    cwd=project, check=True)
     print(project)

@@ -9,6 +9,7 @@ using Propane.Net;
 using Propane.Session;
 using Propane.Tank;
 using Propane.World;
+using Propane.World.Plan;
 
 namespace Propane.Lab;
 
@@ -217,7 +218,7 @@ public partial class DissolveArena : Node3D
         }
         foreach (var spot in segment.Plan.Plan.AmmoSpots)
         {
-            var pickup = new AmmoPickup { Index = pickups.Count, Position = Suburb.ToWorld(spot, 0.05f), Name = $"Ammo_{pickups.Count}" };
+            var pickup = new AmmoPickup { Index = pickups.Count, Position = PlanCoordinates.ToWorld(spot, 0.05f), Name = $"Ammo_{pickups.Count}" };
             segment.Suburb.DynamicRoot.AddChild(pickup);
             segment.Pickups.Add(pickup);
             pickups.Add(pickup);

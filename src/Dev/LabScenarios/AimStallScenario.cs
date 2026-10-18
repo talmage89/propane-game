@@ -10,6 +10,7 @@ using Propane.Modes;
 using Propane.Net;
 using Propane.Player;
 using Propane.Tank;
+using Propane.World;
 using static Propane.Dev.LabCases.LabScenarioTools;
 using static Propane.Dev.UnitTests.TestRunner;
 

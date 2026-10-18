@@ -3,6 +3,7 @@ using System.Linq;
 using Godot;
 using Propane.Core;
 using Propane.Dev.UnitTests.Fixtures;
+using Propane.Modes;
 using Propane.Net;
 using Propane.Tank;
 
@@ -20,7 +21,7 @@ public static class ServerTests
             var traffic = new List<TrafficClass>();
             f.Server.SendOverride = (_, _, delivery) => traffic.Add(delivery);
             byte[] Packet(uint sequence) => MessageCodec.Encode(new NetMessage(Msg.BodyStates, f.Id, 0,
-                new BodyStatesMessage(0, new[] { new BodyState(BodySync.MapTankId(0), Transform3D.Identity,
+                new BodyStatesMessage(0, new[] { new BodyState(BodyIds.MapTankId(0), Transform3D.Identity,
                     Vector3.Right, Vector3.Zero, 1, sequence) })), false);
             f.Server.OnReceived(2, Packet(1), TrafficClass.ReliableOrdered);
             TestRunner.Assert(traffic.Single() == TrafficClass.ReliableOrdered, "server discarded moving checkpoint reliability");
@@ -40,7 +41,7 @@ public static class ServerTests
         runner.Run("server/loading relays the owner's final rest to clients still building", () =>
         {
             using var f = new ServerFixture(playing: false);
-            var id = BodySync.MapTankId(0);
+            var id = BodyIds.MapTankId(0);
             var pose = new Transform3D(Basis.Identity, new Vector3(1, .3f, 2));
             f.Receive(new NetWriter(Msg.BodyRest, f.Id).UInt(id).Transform(pose).Double(1).UInt(1).UInt(1));
             TestRunner.Assert(f.Packets.Single() is { Peer: 3, Message.Payload: BodyRestMessage rest } && rest.Transform == pose,
@@ -61,24 +62,24 @@ public static class ServerTests
                 f.Reject(bytes[..^1]);
             }
             // A truncated explosion must not have consumed the id or changed the bank.
-            f.Receive(Explosion(f, BodySync.MapTankId(0)));
+            f.Receive(Explosion(f, BodyIds.MapTankId(0)));
             f.AssertScore(2, 5, 1);
         });
         runner.Run("server/unknown and duplicate explosions cannot score", () =>
         {
             using var f = new ServerFixture();
             f.Reject(Explosion(f, 0x12345678).ToArray());
-            f.Reject(f.ActorWriter(Msg.Explode).UInt(BodySync.MapTankId(0)).Vec3(new Vector3(float.NaN, 0, 0)).ToArray());
-            f.Receive(Explosion(f, BodySync.MapTankId(0)));
+            f.Reject(f.ActorWriter(Msg.Explode).UInt(BodyIds.MapTankId(0)).Vec3(new Vector3(float.NaN, 0, 0)).ToArray());
+            f.Receive(Explosion(f, BodyIds.MapTankId(0)));
             f.AssertScore(2, 5, 1);
-            f.Reject(Explosion(f, BodySync.MapTankId(0), peer: 3).ToArray(), peer: 3);
+            f.Reject(Explosion(f, BodyIds.MapTankId(0), peer: 3).ToArray(), peer: 3);
         });
         runner.Run("server/drop batches are atomic and registered before scoring", () =>
         {
             using var f = new ServerFixture();
             var first = DropBody(0, 0);
             var second = DropBody(0, 1);
-            f.Reject(f.Drop(new[] { first, second with { Id = BodySync.DropTankId(1, 0) } }));
+            f.Reject(f.Drop(new[] { first, second with { Id = BodyIds.DropTankId(1, 0) } }));
             f.Reject(Explosion(f, first.Id).ToArray());
             f.Reject(f.Drop(new[] { first, first }));
             f.Receive(f.Drop(new[] { first, second }));
@@ -120,7 +121,7 @@ public static class ServerTests
         runner.Run("server/gather uses the injected clock at the play deadline", () =>
         {
             using var f = new ServerFixture();
-            var body = DropBody(0, 0) with { Id = BodySync.MapTankId(0), Sequence = 1 };
+            var body = DropBody(0, 0) with { Id = BodyIds.MapTankId(0), Sequence = 1 };
             byte[] Packet(uint sequence) => MessageCodec.Encode(new NetMessage(Msg.Gather, f.Id, 0,
                 new GatherMessage(GatherPhase.Glide, new[] { body with { Sequence = sequence } })), false);
             f.Clock.Seconds += 9;
@@ -133,12 +134,12 @@ public static class ServerTests
         {
             using var f = new ServerFixture();
             f.Reject(MessageCodec.Encode(new NetMessage(Msg.Claim, f.Id, 0, new ClaimMessage(1,
-                new[] { DropBody(0, 0) with { Id = BodySync.MapTankId(0) }, DropBody(0, 1) with { Id = 999 } })), false));
+                new[] { DropBody(0, 0) with { Id = BodyIds.MapTankId(0) }, DropBody(0, 1) with { Id = 999 } })), false));
             f.Reject(f.ActorWriter(Msg.Puncture).UInt(999).Transform(Transform3D.Identity).Vec3(Vector3.Zero)
                 .Vec3(Vector3.Zero).Vec3(Vector3.One).Vec3(Vector3.Up).Float(1).UInt(1).UInt(1).UInt(0).ToArray());
             f.Reject(new NetWriter(Msg.BodyRest, f.Id).UInt(999).Transform(Transform3D.Identity).Double(1).UInt(1).UInt(1).ToArray());
             f.Reject(MessageCodec.Encode(new NetMessage(Msg.BodyStates, f.Id, 0, new BodyStatesMessage(1,
-                new[] { DropBody(0, 0) with { Id = BodySync.MapTankId(0), Sequence = 1 }, DropBody(0, 1) with { Id = 999, Sequence = 1 } })), false));
+                new[] { DropBody(0, 0) with { Id = BodyIds.MapTankId(0), Sequence = 1 }, DropBody(0, 1) with { Id = 999, Sequence = 1 } })), false));
             f.Reject(f.ActorWriter(Msg.Shot).Vec3(Vector3.One).Vec3(Vector3.Up).Vec3(Vector3.Forward).Byte(1).Int(999).Int(-1).UInt(1).ToArray());
             f.Reject(f.ActorWriter(Msg.Shot).Vec3(Vector3.One).Vec3(Vector3.Up).Vec3(Vector3.Forward).Byte(1).Int(0).Int(int.MaxValue).UInt(1).ToArray());
         });
@@ -146,7 +147,7 @@ public static class ServerTests
         {
             using var f = new ServerFixture();
             f.Receive(MessageCodec.Encode(new NetMessage(Msg.BodyStates, f.Id, 0,
-                new BodyStatesMessage(100000, new[] { DropBody(0, 0) with { Id = BodySync.MapTankId(0), Sequence = 1 } })), false));
+                new BodyStatesMessage(100000, new[] { DropBody(0, 0) with { Id = BodyIds.MapTankId(0), Sequence = 1 } })), false));
             TestRunner.Assert(f.Packets.Single().Message.Payload is BodyStatesMessage relayed &&
                 relayed.Time == f.Clock.Seconds, "relay accepted a future sample time");
         });
@@ -154,7 +155,7 @@ public static class ServerTests
         {
             using var f = new ServerFixture();
             var sampled = f.Clock.Seconds - 0.12;
-            var body = DropBody(0, 0) with { Id = BodySync.MapTankId(0), Sequence = 1, Linear = Vector3.Right * 200 };
+            var body = DropBody(0, 0) with { Id = BodyIds.MapTankId(0), Sequence = 1, Linear = Vector3.Right * 200 };
             f.Receive(MessageCodec.Encode(new NetMessage(Msg.BodyStates, f.Id, 0,
                 new BodyStatesMessage(sampled, new[] { body })), false));
             var relayed = (BodyStatesMessage)f.Packets.Single().Message.Payload;
@@ -188,7 +189,7 @@ public static class ServerTests
             using var f = new ServerFixture();
             var dropped = DropBody(0, 0);
             var state = MessageCodec.Encode(new NetMessage(Msg.BodyStates, f.Id, 0,
-                new BodyStatesMessage(1, new[] { DropBody(0, 1) with { Id = BodySync.MapTankId(0), Sequence = 1 }, dropped with { Sequence = 1 } })), false);
+                new BodyStatesMessage(1, new[] { DropBody(0, 1) with { Id = BodyIds.MapTankId(0), Sequence = 1 }, dropped with { Sequence = 1 } })), false);
             f.Reject(state); // Unreliable can overtake Drop: refuse the whole batch, without changing the ledger.
             f.Receive(f.Drop(new[] { dropped }));
             f.Packets.Clear();
@@ -200,20 +201,20 @@ public static class ServerTests
             f.Receive(Explosion(f, dropped.Id));
             f.Packets.Clear();
             state = MessageCodec.Encode(new NetMessage(Msg.BodyStates, f.Id, 0,
-                new BodyStatesMessage(2, new[] { DropBody(0, 1) with { Id = BodySync.MapTankId(0), Sequence = 2 }, dropped with { Sequence = 3 } })), false);
+                new BodyStatesMessage(2, new[] { DropBody(0, 1) with { Id = BodyIds.MapTankId(0), Sequence = 2 }, dropped with { Sequence = 3 } })), false);
             f.Receive(state); // A late tombstone in a mixed batch must not starve the remaining moving bodies.
             TestRunner.Assert(f.Packets.Single().Message.Payload is BodyStatesMessage, "exploded id poisoned a later batch");
         });
         runner.Run("server/creator departure preserves slots, banks and the new host", () =>
         {
             using var f = new ServerFixture();
-            f.Receive(f.ActorPacket(Msg.Puncture, new PunctureMessage(BodySync.MapTankId(0),
+            f.Receive(f.ActorPacket(Msg.Puncture, new PunctureMessage(BodyIds.MapTankId(0),
                 Transform3D.Identity, Vector3.Right, Vector3.Up, Vector3.One, Vector3.Up, -1)));
             f.Packets.Clear();
             f.Server.OnDisconnected(2);
             TestRunner.Assert(f.Packets.Any(p => p.Peer == 3 && p.Message.Payload is AuthorityMessage { Request: 0 } transfer &&
-                transfer.Bodies.Any(b => b.Body.Id == BodySync.MapTankId(0) && b.Owner == 3 && b.Body.Epoch == 3 && b.Body.Sequence == 0 &&
-                    b.State == TankLedger.State.Venting && b.Vent == new VentParameters(Vector3.One, Vector3.Up, -1))), "mid-vent departure did not grant canonical authority with a fresh epoch");
+                transfer.Bodies.Any(b => b.Body.Id == BodyIds.MapTankId(0) && b.Owner == 3 && b.Body.Epoch == 3 && b.Body.Sequence == 0 &&
+                    b.State == BodyState.State.Venting && b.Vent == new VentParameters(Vector3.One, Vector3.Up, -1))), "mid-vent departure did not grant canonical authority with a fresh epoch");
             TestRunner.Assert(f.Packets.Any(p => p.Peer == 3 && p.Message.Payload is PlayerLeftMessage { Player: 2, Host: 3 }),
                 "creator departure did not identify the successor");
             f.Packets.Clear();
@@ -256,14 +257,14 @@ public static class ServerTests
         runner.Run("server/stale lifecycle and gameplay messages are ignored", () =>
         {
             using var f = new ServerFixture();
-            f.Reject(Explosion(f, BodySync.MapTankId(0), matchId: f.Id + 1).ToArray());
+            f.Reject(Explosion(f, BodyIds.MapTankId(0), matchId: f.Id + 1).ToArray());
             f.Advance(20); // End this ten-second match.
             f.Advance(10); // Results -> lobby.
             f.Receive(new NetWriter(Msg.StartMatch).Snapshot(f.Tuning.Snapshot()));
             var next = f.Packets.Select(p => p.Message.Payload).OfType<MatchSetup>().First();
             TestRunner.Assert(next.Id > f.Id, "match id was reused");
             f.Reject(new NetWriter(Msg.Loaded, f.Id).ToArray());
-            f.Reject(Explosion(f, BodySync.MapTankId(0)).ToArray());
+            f.Reject(Explosion(f, BodyIds.MapTankId(0)).ToArray());
             f.Packets.Clear();
             f.Advance();
             TestRunner.Assert(!f.Packets.Any(p => p.Message.Type == Msg.Countdown), "stale Loaded started the next match");
@@ -291,5 +292,5 @@ public static class ServerTests
     private static NetWriter Explosion(ServerFixture f, uint body, int peer = 2, int? matchId = null) =>
         f.ActorWriter(Msg.Explode, peer, matchId).UInt(body).Vec3(Vector3.One).UInt(1).UInt(1).UInt(0);
 
-    private static BodyState DropBody(int slot, int counter) => new(BodySync.DropTankId(slot, counter), Transform3D.Identity, Vector3.Up, Vector3.Zero);
+    private static BodyState DropBody(int slot, int counter) => new(BodyIds.DropTankId(slot, counter), Transform3D.Identity, Vector3.Up, Vector3.Zero);
 }

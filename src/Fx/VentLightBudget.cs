@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using Godot;
 using Propane.Core;
+using Propane.Diagnostics;
 
 namespace Propane.Fx;
 

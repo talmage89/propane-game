@@ -1,6 +1,7 @@
 using System;
 using Godot;
 using Propane.Bots;
+using Propane.Core;
 using Propane.Net;
 
 namespace Propane.UI;
@@ -38,7 +39,7 @@ internal static class LobbyRoster
                 edit.CustomMinimumSize = new Vector2(0, compact ? 26 : 30);
                 edit.AddThemeFontSizeOverride("font_size", 15);
                 edit.SetMeta("focus_key", $"bot_{member.Id}");
-                edit.Disabled = lobby.Phase != LobbyServer.LobbyPhase.Waiting;
+                edit.Disabled = lobby.Phase != LobbyPhase.Waiting;
                 var editing = member;
                 edit.Pressed += () => editBot(editing);
                 row.AddChild(edit);

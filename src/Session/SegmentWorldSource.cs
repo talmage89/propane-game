@@ -32,7 +32,7 @@ public interface ISegmentFeed : IDisposable
 /// <summary>Generates a run's segment plans locally, each on a worker thread, from a catalog snapshot.</summary>
 public sealed class LocalSegmentFeed(SegmentSettings settings, int runSeed) : ISegmentFeed
 {
-    private readonly PlanCatalogSnapshot catalog = new(new GameCatalog());
+    private readonly PlanCatalogSnapshot catalog = GameCatalog.Capture(new GameCatalog());
     private readonly Dictionary<int, Task<SegmentPlan>> plans = new();
     // Feed-lifetime tombstones: [0, forgottenBefore) is implicit. Only forgotten indices beyond a gap need entries.
     // Ordered streaming uses no set storage; capacity is bounded by the maximum outstanding out-of-order forgets,
@@ -88,7 +88,7 @@ public sealed class RunSegment
     public required Suburb Suburb { get; init; }
     public required CollisionShape3D Floor { get; init; }
     public required BoxShape3D FloorShape { get; init; }
-    public List<Net.AmmoPickup> Pickups { get; } = new();
+    public List<AmmoPickup> Pickups { get; } = new();
     /// <summary>World X up to which this segment's floor has been taken away.</summary>
     public float CutTo { get; set; } = float.NegativeInfinity;
     public int Index => Plan.Index;

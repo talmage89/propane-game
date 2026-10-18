@@ -263,7 +263,7 @@ public static class ModeSchemas
         var tanks = new BodyState[Range(r.Byte(), 1, MaxSpill)];
         for (var i = 0; i < tanks.Length; i++) tanks[i] = MessageCodec.ReadBody(r);
         if (tanks.Select(t => t.Id).Distinct().Count() != tanks.Length) throw new InvalidDataException("duplicate ids");
-        if (tanks.Any(t => t.Id < BodySync.MapTankBase || t.Id >= BodySync.DropTankBase)) throw new InvalidDataException("pile tank outside the world's ids");
+        if (tanks.Any(t => t.Id < BodyIds.MapTankBase || t.Id >= BodyIds.DropTankBase)) throw new InvalidDataException("pile tank outside the world's ids");
         return new KingPileSpawned(zone, owner, tanks);
     }
 

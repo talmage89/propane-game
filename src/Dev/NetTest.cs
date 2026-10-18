@@ -121,7 +121,7 @@ public partial class NetTest : Node, INetScenarioHost
         };
         net.LobbiesChanged += () =>
         {
-            if (role == "join" && net.Lobby == null && net.Lobbies.FirstOrDefault(l => l.Phase == LobbyServer.LobbyPhase.Waiting) is { } lobby)
+            if (role == "join" && net.Lobby == null && net.Lobbies.FirstOrDefault(l => l.Phase == LobbyPhase.Waiting) is { } lobby)
             {
                 net.JoinLobby(lobby.Id);
             }
@@ -131,13 +131,13 @@ public partial class NetTest : Node, INetScenarioHost
         {
             // The server retires replication before each client's delayed results timer ends.
             // Finish the live trajectory here; still check exact completion identities/rest poses below.
-            if (!tankCheckFinal && match?.IsOver == true && net.Lobby?.Phase == LobbyServer.LobbyPhase.Waiting)
+            if (!tankCheckFinal && match?.IsOver == true && net.Lobby?.Phase == LobbyPhase.Waiting)
             {
                 LogTankCheck(final: true);
             }
             if (net.Lobby is { } lobby)
             {
-                if (role == "host" && net.IsCreator && lobby.Phase == LobbyServer.LobbyPhase.Waiting && lobby.Capacity < players + lobbyBotsTotal)
+                if (role == "host" && net.IsCreator && lobby.Phase == LobbyPhase.Waiting && lobby.Capacity < players + lobbyBotsTotal)
                     net.SetCapacity(players + lobbyBotsTotal);
                 AddLobbyBot();
                 Log($"lobby {lobby.Id}: {string.Join(", ", lobby.Members.Select(m => $"{m.Name}/{m.Appearance.Color.ToHtml(false)}"))}, {lobby.Phase}");
@@ -382,7 +382,7 @@ public partial class NetTest : Node, INetScenarioHost
     /// <summary>Adds this client's lobby bots one request at a time; a stale revision simply retries.</summary>
     private void AddLobbyBot()
     {
-        if (lobbyBotRequest != 0 || net.Lobby is not { Phase: LobbyServer.LobbyPhase.Waiting } lobby) return;
+        if (lobbyBotRequest != 0 || net.Lobby is not { Phase: LobbyPhase.Waiting } lobby) return;
         var mine = lobby.Members.Count(m => m.OwnerPeerId == net.MyId && m.Kind == ActorKind.Bot);
         if (mine >= lobbyBots || matches > 0) return;
         var difficulty = (byte)DevArgs.GetFloat("lobby-bot-difficulty", 1);
@@ -393,7 +393,7 @@ public partial class NetTest : Node, INetScenarioHost
     private void TryStartMatch()
     {
         if (role == "host" && net.IsCreator && !started && matches < matchesWanted &&
-            net.Lobby is { Phase: LobbyServer.LobbyPhase.Waiting } lobby && lobby.Peers.Count >= players &&
+            net.Lobby is { Phase: LobbyPhase.Waiting } lobby && lobby.Peers.Count >= players &&
             lobby.Members.Count >= players + lobbyBotsTotal && Roamed)
         {
             started = true;
@@ -573,7 +573,7 @@ public partial class NetTest : Node, INetScenarioHost
             var body = entry.Body;
             var p = body.GlobalPosition;
             var center = body.GlobalTransform * body.CenterOfMass;
-            var lead = (float)Math.Clamp(now - entry.TargetReceived, 0, BodySync.MaxExtrapolation);
+            var lead = (float)Math.Clamp(now - entry.TargetReceived, 0, BodyState.MaxExtrapolation);
             var sampledCenter = entry.Target * body.CenterOfMass;
             var goalCenter = entry.HasTarget ? sampledCenter + entry.TargetLinear * lead : center;
             var rotation = entry.Target.Basis.GetRotationQuaternion();

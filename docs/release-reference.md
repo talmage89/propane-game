@@ -147,3 +147,11 @@ Use fresh labels and transcript paths: observations append. Omit `--observe` for
 an atomic claim/reply each tick, including encoding, server admission and physical reconciliation. It reports
 allocation, whole-tick mean/p95/p99 and exact request/notification counts after 20,000 warm-up ticks and 100,000 measured ticks in the playing phase. Run at least
 three alternating parent/candidate pairs; observed runs are not performance samples.
+
+## Contract placement differentials
+
+`ContractPlacementTests` supplements the frozen inventory with exact ID range/refusal details, lobby/body/gather
+enum values, catalog capture order and detached house values, segment-setting clamps, ordered pile means, car
+registration and appearance fallback/count diagnostics. It runs in `make test`. Before and after a structural move,
+run it with `--suite=ContractPlacementTests --contracts-transcript=ABSOLUTE_PATH` and compare the two JSON files
+with `cmp`. These are scratch witnesses under `build/`, never replacements for the immutable release fixtures.

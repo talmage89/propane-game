@@ -13,6 +13,14 @@ import io
 ROOT = Path(__file__).resolve().parents[2]
 
 
+def copy_probe(source, target, project):
+    # Keep the same probe compilable on either side of C1's body-contract relocation.
+    code = source.read_text()
+    if not (project / 'src/Core/BodyIds.cs').exists():
+        code = code.replace('BodyIds.', 'BodySync.').replace('BodyState.State', 'TankLedger.State')
+    target.write_text(code)
+
+
 def prepare(revision, label, observe):
     project = ROOT / 'build' / label / 'project'
     project.mkdir(parents=True, exist_ok=False)
@@ -29,7 +37,7 @@ def prepare(revision, label, observe):
         if source.exists():
             target = project / 'src/Dev/UnitTests' / name
             target.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(source, target)
+            copy_probe(source, target, project)
     if observe:
         source = project / 'src/Net/LobbyServer.cs'
         code = source.read_text()

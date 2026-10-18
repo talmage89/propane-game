@@ -4,7 +4,7 @@ using System.IO;
 using System.Linq;
 using Godot;
 using Propane.Core;
-using Propane.Fx;
+using Propane.Diagnostics;
 using Propane.Player;
 
 namespace Propane.ReleaseSmoke;

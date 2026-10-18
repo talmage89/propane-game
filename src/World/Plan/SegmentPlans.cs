@@ -2,10 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Godot;
-using Propane.Core;
-using Propane.World.Plan;
 
-namespace Propane.World;
+namespace Propane.World.Plan;
 
 /// <summary>
 /// How a run's segments are cut and stocked: each is a strip of street <see cref="Length"/> meters long, generated
@@ -14,19 +12,7 @@ namespace Propane.World;
 /// <see cref="JackpotTanks"/> in the middle of the street.
 /// </summary>
 public sealed record SegmentSettings(SuburbSettings Suburb, float Length, int TanksStart, int TanksMin, float TanksDrop,
-    int JackpotEvery, int JackpotTanks, int AmmoCans)
-{
-    public static SegmentSettings From(Tuning tuning) => new(SuburbPlans.SinglePlayer(tuning) with
-    {
-        MapSize = tuning.DissolveStreetWidth,
-        StripLength = tuning.DissolveSegmentLength,
-        ClusterSizeMin = Math.Min(tuning.DissolvePileMin, tuning.DissolvePileMax),
-        ClusterSizeMax = tuning.DissolvePileMax,
-        PlayerSpawns = 0,
-        CenterBias = 0,
-    }, tuning.DissolveSegmentLength, tuning.DissolveTanksStart, Math.Min(tuning.DissolveTanksMin, tuning.DissolveTanksStart),
-        tuning.DissolveTanksDrop, tuning.DissolveJackpotEvery, tuning.DissolveJackpotTanks, tuning.DissolveAmmoCans);
-}
+    int JackpotEvery, int JackpotTanks, int AmmoCans);
 
 /// <summary>
 /// One segment of a run: its index, the seed it was generated from, where it starts along the run (world X), how many
@@ -119,34 +105,4 @@ public static class SegmentPlans
         z ^= z >> 31;
         return (int)(z & 0x7FFFFFFF);
     }
-}
-
-/// <summary>
-/// The catalog as the generator sees it, measured once on the main thread: a worker thread can generate plans from it
-/// while the main thread keeps loading models, because nothing here touches the engine or a shared cache.
-/// </summary>
-public sealed class PlanCatalogSnapshot : IPlanCatalog
-{
-    /// <summary>Every model key the generator measures (prop, car and furniture placements).</summary>
-    public static readonly IReadOnlyList<string> Keys = Catalog.CarModels.Distinct().Select(m => $"car:{m}").Concat(new[]
-    {
-        "prop:mailbox", "prop:wheelie_bin", "prop:gas_grill", "prop:patio_umbrella", "prop:patio_heater", "prop:shed",
-        "prop:kiddie_pool", "prop:cooler", "prop:street_lamp", "prop:fire_hydrant", "prop:stop_sign", "furniture:table",
-        "furniture:tableRound", "furniture:chair", "furniture:chairCushion", "furniture:loungeChair", "furniture:loungeChairRelax",
-    }).ToArray();
-
-    private readonly Dictionary<string, Vector2> footprints = new();
-
-    public PlanCatalogSnapshot(IPlanCatalog source)
-    {
-        HouseFootprints = source.HouseFootprints.ToArray();
-        HousePaletteCount = source.HousePaletteCount;
-        foreach (var key in Keys) footprints[key] = source.PropFootprint(key, 1f);
-    }
-
-    public IReadOnlyList<Vector2> HouseFootprints { get; }
-    public int HousePaletteCount { get; }
-
-    public Vector2 PropFootprint(string model, float scale) => footprints.TryGetValue(model, out var size) ? size * scale
-        : throw new KeyNotFoundException($"{model} is not in the plan catalog snapshot; add it to {nameof(PlanCatalogSnapshot)}.{nameof(Keys)}.");
 }

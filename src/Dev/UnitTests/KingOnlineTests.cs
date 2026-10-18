@@ -46,8 +46,8 @@ public static class KingOnlineTests
     {
         runner.Run("king online/every kind round-trips, including empty placement and maximum snapshot", () =>
         {
-            var body = new BodyState(BodySync.MapTankId(25), Transform3D.Identity, Vector3.Zero, Vector3.Zero);
-            var spill = new TankBankSpill(SpillReason.Hit, new[] { body with { Id = BodySync.DropTankId(0, 0) } });
+            var body = new BodyState(BodyIds.MapTankId(25), Transform3D.Identity, Vector3.Zero, Vector3.Zero);
+            var spill = new TankBankSpill(SpillReason.Hit, new[] { body with { Id = BodyIds.DropTankId(0, 0) } });
             var packets = new[]
             {
                 Packet(Msg.ModeSnapshot, ModeSchemas.KingKinds.Zone, Zone),
@@ -89,8 +89,8 @@ public static class KingOnlineTests
                 TestRunner.Throws<InvalidDataException>(() => Decode(Packet(Msg.ModeSnapshot, ModeSchemas.KingKinds.Zone, bad)));
             }
 
-            var body = new BodyState(BodySync.MapTankId(3), Transform3D.Identity, Vector3.Zero, Vector3.Zero);
-            foreach (var bodies in new[] { new[] { body, body }, new[] { body with { Id = BodySync.DropTankId(0, 0) } }, Array.Empty<BodyState>() })
+            var body = new BodyState(BodyIds.MapTankId(3), Transform3D.Identity, Vector3.Zero, Vector3.Zero);
+            foreach (var bodies in new[] { new[] { body, body }, new[] { body with { Id = BodyIds.DropTankId(0, 0) } }, Array.Empty<BodyState>() })
                 TestRunner.Throws<InvalidDataException>(() => Decode(Packet(Msg.ModeCommand, ModeSchemas.KingKinds.PileSpawned, new KingPileSpawned(1, 2, bodies))));
             TestRunner.Throws<InvalidDataException>(() => Decode(Packet(Msg.ModeCommand, ModeSchemas.KingKinds.PileWanted, new KingPileWanted(1, Vector3.Zero, 6, float.NaN, 1))));
         });
@@ -173,7 +173,7 @@ public static class KingOnlineTests
             Place(f, wanted, sequence: 103);
             var spawned = f.Packets.Select(p => p.Message.Payload).OfType<ModeEnvelope>().Select(e => e.Payload).OfType<KingPileSpawned>().First();
             var plan = PlanCodec.Decode(f.Setup.Plan);
-            TestRunner.Assert(spawned.Tanks.Count == wanted.Count && spawned.Tanks[0].Id == BodySync.MapTankId(plan.Tanks.Count) &&
+            TestRunner.Assert(spawned.Tanks.Count == wanted.Count && spawned.Tanks[0].Id == BodyIds.MapTankId(plan.Tanks.Count) &&
                 spawned.Owner == 2 && spawned.Tanks.All(t => t.Epoch == 1 && t.Linear == Vector3.Zero), "pile ids or authority disagree");
             f.Packets.Clear(); Place(f, wanted, sequence: 104);
             TestRunner.Assert(!f.Packets.Any(p => p.Message.Payload is ModeEnvelope { Payload: KingPileSpawned }), "pile duplicated");
@@ -189,7 +189,7 @@ public static class KingOnlineTests
             using var f = new ServerFixture(mode: ModeRegistry.King, length: 100);
             f.Advance(); Pose(f, 2, KingZone.Point(Latest(f).Spot), 1); f.Advance(.1); f.Advance(4.01);
             TestRunner.Assert(Latest(f).MintedBy(f.ActorId(2)) == 2, "expected two minted tanks");
-            var drops = Enumerable.Range(0, 2).Select(i => new BodyState(BodySync.DropTankId(0, i), Transform3D.Identity, Vector3.Zero, Vector3.Zero)).ToArray();
+            var drops = Enumerable.Range(0, 2).Select(i => new BodyState(BodyIds.DropTankId(0, i), Transform3D.Identity, Vector3.Zero, Vector3.Zero)).ToArray();
             var envelope = new ModeEnvelope(1, 1, ModeRegistry.KingId, 1, f.ActorId(2), 1, 1, ModeSchemas.KingKinds.Spill,
                 new TankBankSpill(SpillReason.Thrown, drops));
             var bytes = MessageCodec.Encode(new NetMessage(Msg.ModeEvent, f.Id, 0, envelope), false);

@@ -166,7 +166,7 @@ public partial class ReleaseTest : Node
                 ? main.GetNodeOrNull<Match>("LobbyWorld") is { IsLobby: true, IsPlaying: true } &&
                   main.GetNode<Menus>("Menus").Current == Menus.Screen.None
                 : main.GetNode<Menus>("Menus").Current == Menus.Screen.Lobby;
-            if (sawPlaying && finished && returned && main.GetNode<NetClient>("Net").Lobby is { Phase: LobbyServer.LobbyPhase.Waiting })
+            if (sawPlaying && finished && returned && main.GetNode<NetClient>("Net").Lobby is { Phase: LobbyPhase.Waiting })
             {
                 // Let the returned scene draw before requesting its proof screenshot.
                 Advance(5, 0.25);

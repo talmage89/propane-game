@@ -34,7 +34,7 @@ public static class WireReferenceTests
             if (Protocol.IsRelay(message.Type) && message.Type is not (Msg.Claim or Msg.Puncture or Msg.Explode))
                 yield return new($"{message.Type}/server", true, MessageCodec.Encode(message, true));
         }
-        var body = new BodyState(BodySync.DropTankId(0, 0), Transform3D.Identity, Vector3.Up, Vector3.Zero);
+        var body = new BodyState(BodyIds.DropTankId(0, 0), Transform3D.Identity, Vector3.Up, Vector3.Zero);
         foreach (var mode in new[] { ModeRegistry.TankBankId, ModeRegistry.KingId })
         {
             foreach (var (type, kind, payload) in new (Msg, ushort, object)[]
@@ -57,7 +57,7 @@ public static class WireReferenceTests
             {
                 (Msg.ModeEvent, ModeSchemas.KingKinds.PilePlaced, new KingPilePlaced(2, new[] { Transform3D.Identity })),
                 (Msg.ModeCommand, ModeSchemas.KingKinds.PileWanted, new KingPileWanted(2, Vector3.One, 3, 4, 5)),
-                (Msg.ModeCommand, ModeSchemas.KingKinds.PileSpawned, new KingPileSpawned(2, 2, new[] { body with { Id = BodySync.MapTankId(3) } })),
+                (Msg.ModeCommand, ModeSchemas.KingKinds.PileSpawned, new KingPileSpawned(2, 2, new[] { body with { Id = BodyIds.MapTankId(3) } })),
             };
             if (mode == ModeRegistry.KingId)
             {

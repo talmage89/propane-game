@@ -1,6 +1,6 @@
 using Godot;
 using Propane.Core;
-using Propane.Fx;
+using Propane.Diagnostics;
 
 namespace Propane.Tank;
 

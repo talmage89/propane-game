@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using Godot;
+using Propane.Core;
 using Propane.Net;
 
 namespace Propane.UI;
@@ -34,7 +35,7 @@ internal sealed class LobbyScreen
         }
         var creator = lobby.Members.FirstOrDefault(m => m.OwnerPeerId == lobby.CreatorId && m.Kind == ActorKind.Human);
         layout.AddChild(UiStyle.Title($"{(creator?.Name ?? "?").ToUpperInvariant()}'S LOBBY", 34));
-        layout.AddChild(UiStyle.Text(lobby.Phase == LobbyServer.LobbyPhase.Waiting ? $"{lobby.Members.Count} of {lobby.Capacity} players" : "A match is on",
+        layout.AddChild(UiStyle.Text(lobby.Phase == LobbyPhase.Waiting ? $"{lobby.Members.Count} of {lobby.Capacity} players" : "A match is on",
             16, UiStyle.SoftInk, HorizontalAlignment.Center));
         MenuContent.AddHostingNote(layout, hostingNote);
         layout.AddChild(new HSeparator());
@@ -46,7 +47,7 @@ internal sealed class LobbyScreen
         bots.AddThemeConstantOverride("separation", 12);
         var addBot = UiStyle.Button("Add bot");
         addBot.SetMeta("focus_key", "add_bot");
-        addBot.Disabled = lobby.Phase != LobbyServer.LobbyPhase.Waiting || lobby.Members.Count >= lobby.Capacity;
+        addBot.Disabled = lobby.Phase != LobbyPhase.Waiting || lobby.Members.Count >= lobby.Capacity;
         addBot.TooltipText = "Bots play on this computer and leave with you";
         addBot.Pressed += () => dialogs.OpenBotEditor(null);
         bots.AddChild(addBot);
@@ -71,18 +72,18 @@ internal sealed class LobbyScreen
         layout.AddChild(profile);
         var colors = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.Center };
         colors.AddThemeConstantOverride("separation", 8);
-        for (var i = 0; i < Protocol.PlayerColors.Length; i++)
+        for (var i = 0; i < AppearancePalette.PlayerColors.Length; i++)
         {
             var index = i;
             var mine = net.Appearance.Color == AppearanceRecord.FromPalette(i).Color;
-            var swatch = UiStyle.Swatch(Protocol.PlayerColor(i), mine, $"color_{i}", Protocol.ColorNames[i]);
-            swatch.Pressed += () => commands.SetProfile(refresh.NameField?.Text ?? net.PlayerName, net.Appearance.WithColor(Protocol.PlayerColor(index)));
+            var swatch = UiStyle.Swatch(AppearancePalette.PlayerColor(i), mine, $"color_{i}", AppearancePalette.ColorNames[i]);
+            swatch.Pressed += () => commands.SetProfile(refresh.NameField?.Text ?? net.PlayerName, net.Appearance.WithColor(AppearancePalette.PlayerColor(index)));
             colors.AddChild(swatch);
         }
         layout.AddChild(colors);
         var custom = UiStyle.Button($"Custom color · #{net.Appearance.Color.ToHtml(false).ToUpperInvariant()}");
         custom.SetMeta("focus_key", "custom_color");
-        custom.Disabled = lobby.Phase != LobbyServer.LobbyPhase.Waiting;
+        custom.Disabled = lobby.Phase != LobbyPhase.Waiting;
         custom.Pressed += dialogs.OpenAppearance;
         layout.AddChild(custom);
         layout.AddChild(new HSeparator());
@@ -96,7 +97,7 @@ internal sealed class LobbyScreen
             // Two players make a match; a debug build may start alone, for testing.
             var needed = OS.IsDebugBuild() ? 1 : 2;
             var start = UiStyle.Button(lobby.Members.Count < needed ? "Waiting for players" : "Start match");
-            start.Disabled = lobby.Members.Count < needed || lobby.Phase != LobbyServer.LobbyPhase.Waiting;
+            start.Disabled = lobby.Members.Count < needed || lobby.Phase != LobbyPhase.Waiting;
             start.Pressed += commands.StartMatch;
             buttons.AddChild(start);
         }

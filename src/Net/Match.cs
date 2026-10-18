@@ -546,7 +546,7 @@ public partial class Match : Node3D, IClientAuthorityReplica, IClientModeReplica
     void IClientAuthorityReplica.Restore(BodyAuthority authority, BodySync.Entry? entry, ClaimRefusal reason, bool finishedPuncture)
     {
         var id = authority.Body.Id;
-        if (id >= BodySync.CarBase)
+        if (id >= BodyIds.CarBase)
         {
             if (entry != null && reason != ClaimRefusal.None)
             {
@@ -569,20 +569,20 @@ public partial class Match : Node3D, IClientAuthorityReplica, IClientModeReplica
         }
         if (reason != ClaimRefusal.None) { tank!.CancelChainFuse(); }
         var wasIntact = tank!.State == PropaneTank.TankState.Intact;
-        if (authority.State == TankLedger.State.Intact) { tank.RestoreIntact(); }
+        if (authority.State == BodyState.State.Intact) { tank.RestoreIntact(); }
         // A losing puncture changes the vent, not its current trajectory. The confirmed owner's stream
         // corrects motion normally; the later refusal must not rewind adoption to the cached claim pose.
-        var adoptingVent = finishedPuncture && !recreated && !wasIntact && authority.State == TankLedger.State.Venting;
+        var adoptingVent = finishedPuncture && !recreated && !wasIntact && authority.State == BodyState.State.Venting;
         // A remote root blast can already have pushed an intact copy before its canonical child puncture.
         // The grant's pose predates that push. Keep existing motion until the confirmed owner's stream arrives;
         // only a resting intact observer needs initialization from the puncture's pose.
-        var initializeVent = wasIntact && authority.State == TankLedger.State.Venting && tank.Sleeping;
+        var initializeVent = wasIntact && authority.State == BodyState.State.Venting && tank.Sleeping;
         if (recreated || initializeVent || reason != ClaimRefusal.None && !adoptingVent)
         {
             BodySync.Snap(tank, authority.Body.Transform, authority.Body.Linear, authority.Body.Angular);
             tank.Sleeping = authority.Rest;
         }
-        if (authority.Vent is { } vent && authority.State == TankLedger.State.Venting) { tank.PunctureRemote(vent.Hole, vent.Normal, vent.Swirl); }
+        if (authority.Vent is { } vent && authority.State == BodyState.State.Venting) { tank.PunctureRemote(vent.Hole, vent.Normal, vent.Swirl); }
         predictedExplosions.Remove(id);
     }
 

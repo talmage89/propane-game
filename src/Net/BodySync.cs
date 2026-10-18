@@ -18,12 +18,7 @@ namespace Propane.Net;
 /// </summary>
 public sealed class BodySync
 {
-    public const uint MapTankBase = 0x1000_0000;
-    public const uint DropTankBase = 0x2000_0000;
-    public const uint CarBase = 0x3000_0000;
-
     private const double StaleAfter = 0.5;
-    internal const double MaxExtrapolation = 0.3;
 
     public sealed class Entry
     {
@@ -227,7 +222,7 @@ public sealed class BodySync
         var received = now;
         // Backdate moving targets by their estimated sampling age, bounded by our existing extrapolation limit.
         // This adjusts pose prediction only: clocks never decide which epoch or sequence wins.
-        if (!rest) { now -= System.Math.Clamp(transit, 0, MaxExtrapolation); }
+        if (!rest) { now -= System.Math.Clamp(transit, 0, BodyState.MaxExtrapolation); }
         if (state.Epoch > entry.Epoch)
         {
             // Unreliable motion can overtake the reliable grant. Retain one latest future state per body.
@@ -293,7 +288,7 @@ public sealed class BodySync
                 entry.SettledMismatchSince = null;
                 continue;
             }
-            var lead = entry.TargetRest ? 0f : (float)System.Math.Min(age, MaxExtrapolation);
+            var lead = entry.TargetRest ? 0f : (float)System.Math.Min(age, BodyState.MaxExtrapolation);
             var center = body.CenterOfMassMode == RigidBody3D.CenterOfMassModeEnum.Custom
                 ? body.CenterOfMass
                 : body.IsInsideTree()
@@ -465,27 +460,5 @@ public sealed class BodySync
             }
             entry.WasAwake = awake;
         }
-    }
-
-    /// <summary>Id of a map tank by its index in the plan.</summary>
-    public const int MaxWorldEntities = 1 << 28;
-    public static uint MapTankId(int index) => WorldEntityId(MapTankBase, index);
-
-    /// <summary>Id of a car by its index in the plan's props.</summary>
-    public static uint CarId(int propIndex) => WorldEntityId(CarBase, propIndex);
-    private static uint WorldEntityId(uint prefix, int index)
-    {
-        if (index < 0 || index >= MaxWorldEntities) throw new ArgumentOutOfRangeException(nameof(index), "entity allocation space exhausted");
-        return prefix + (uint)index;
-    }
-
-    // Allocation slots belong to session actors, independently of their position in any round's spawn list.
-    public const int MaxAllocationSlots = (int)((CarBase - DropTankBase) >> 20);
-    public const int MaxDropsPerActor = 1 << 20;
-    public static uint DropTankId(int slot, int counter)
-    {
-        if (slot < 0 || slot >= MaxAllocationSlots || counter < 0 || counter >= MaxDropsPerActor)
-            throw new ArgumentOutOfRangeException(nameof(counter), "entity allocation space exhausted");
-        return DropTankBase + ((uint)slot << 20) + (uint)counter;
     }
 }

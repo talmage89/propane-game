@@ -5,8 +5,6 @@ using Godot;
 
 namespace Propane.Tank;
 
-public enum GatherPhase : byte { Cancel, Glide, Settled }
-
 /// <summary>Pure connectivity and undisturbed group clocks; the world supplies eligibility and disturbance revisions.</summary>
 public sealed class GatherGroups
 {

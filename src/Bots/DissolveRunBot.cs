@@ -3,6 +3,7 @@ using Propane.Modes;
 using Propane.Net;
 using Propane.Player;
 using Propane.Tank;
+using Propane.World;
 
 namespace Propane.Bots;
 
@@ -55,7 +56,7 @@ public sealed class DissolveRunBot : IBotGoalPolicy
         if (ammo is { Magazine: 0, CanReload: true }) motor.Intent.ReloadPressed = true;
 
         // A can close ahead when ammo runs low.
-        Net.AmmoPickup? can = null;
+        AmmoPickup? can = null;
         if (ammo != null && ammo.Magazine + ammo.Reserve < tuning.MagazineSize * 2 && gap > Flee)
         {
             var pickups = world.Pickups;

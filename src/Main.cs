@@ -317,13 +317,13 @@ public partial class Main : Node
         match.LeaveRequested += net.LeaveLobby;
         match.PanelRequested += OpenPanel;
         AddChild(match);
-        if (net.Lobby?.Phase == LobbyServer.LobbyPhase.Staging) { stage.ShowCountdown(); }
+        if (net.Lobby?.Phase == LobbyPhase.Staging) { stage.ShowCountdown(); }
     }
 
     /// <summary>The lobby menu, docked beside the world: names, colors, bots and (for the creator) the match settings.</summary>
     private void OpenPanel()
     {
-        if (match is not { IsLobby: true } world || net.Lobby is not { Phase: LobbyServer.LobbyPhase.Waiting }) return;
+        if (match is not { IsLobby: true } world || net.Lobby is not { Phase: LobbyPhase.Waiting }) return;
         menus.Show(Menus.Screen.Lobby, docked: true);
         world.PanelOpen = true;
     }
@@ -351,17 +351,17 @@ public partial class Main : Node
             }
             return;
         }
-        if (lobby.Phase == LobbyServer.LobbyPhase.Staging && match is { IsLobby: true })
+        if (lobby.Phase == LobbyPhase.Staging && match is { IsLobby: true })
         {
             ClosePanel();
             stage.ShowCountdown();
         }
-        else if (lobby.Phase == LobbyServer.LobbyPhase.Waiting && stage.Visible)
+        else if (lobby.Phase == LobbyPhase.Waiting && stage.Visible)
         {
             // The creator took the start back (or left): back to roaming.
             stage.Close();
         }
-        if (lobby is { Phase: LobbyServer.LobbyPhase.Waiting, WorldId: 0 } && match == null && menus.Current == Menus.Screen.Loading)
+        if (lobby is { Phase: LobbyPhase.Waiting, WorldId: 0 } && match == null && menus.Current == Menus.Screen.Loading)
         {
             // This server runs no lobby worlds: the lobby menu, as before.
             ShowMenus(Menus.Screen.Lobby);
@@ -385,7 +385,7 @@ public partial class Main : Node
         ClosePanel();
         EndMatch();
         stage.Close();
-        if (net.State == NetClient.Status.Connected && net.LobbyWorlds && net.Lobby is { WorldId: not 0 } or { Phase: not LobbyServer.LobbyPhase.Waiting })
+        if (net.State == NetClient.Status.Connected && net.LobbyWorlds && net.Lobby is { WorldId: not 0 } or { Phase: not LobbyPhase.Waiting })
         {
             // The lobby's next world is on its way (or already building: it would have replaced this scene).
             ShowMenus(Menus.Screen.Loading, note ?? "Back to the lobby...");
