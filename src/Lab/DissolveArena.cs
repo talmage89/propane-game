@@ -32,6 +32,8 @@ public partial class DissolveArena : Node3D
 
     private readonly HashSet<PropaneTank> dissolved = new();
     private readonly List<AmmoPickup> pickups = new();
+    // Arena-lifetime diagnostic evidence only. Ordinary play leaves both lists empty (zero backing capacity).
+    // A diagnostic caller owns the recording duration/bound; samples are released when this arena is collected.
     private readonly List<double> buildSlices = new();
     private readonly List<double> retireMilliseconds = new();
     private PrototypeRunner? runner;
@@ -51,9 +53,11 @@ public partial class DissolveArena : Node3D
     public float Horizon => horizon;
     public IReadOnlyList<AmmoPickup> Pickups => pickups;
     public IReadOnlyList<ModeSpot> Spots => new[] { new ModeSpot(Start.X, Start.Y, Start.Z) };
-    /// <summary>Time each streaming step spent building segment pieces.</summary>
+    /// <summary>Opt in before streaming to retain every raw build/retirement sample for this arena's diagnostics.</summary>
+    public bool CollectRawTimings { get; set; }
+    /// <summary>Time each recorded streaming step spent building segment pieces, in measurement order.</summary>
     public IReadOnlyList<double> BuildSlices => buildSlices;
-    /// <summary>Time each step spent freeing retired segments.</summary>
+    /// <summary>Time each recorded step spent freeing retired segments, in measurement order.</summary>
     public IReadOnlyList<double> RetireMilliseconds => retireMilliseconds;
     public int DissolvedTanks { get; private set; }
     public int BestScore { get; private set; }
@@ -156,9 +160,9 @@ public partial class DissolveArena : Node3D
         TakeAmmo(tuning);
         if (Source.Retiring > 0)
         {
-            var timer = Stopwatch.StartNew();
+            var timer = CollectRawTimings ? Stopwatch.StartNew() : null;
             Source.AdvanceRetire(RetireBudgetMilliseconds);
-            retireMilliseconds.Add(timer.Elapsed.TotalMilliseconds);
+            if (timer != null) retireMilliseconds.Add(timer.Elapsed.TotalMilliseconds);
         }
     }
 
@@ -186,9 +190,9 @@ public partial class DissolveArena : Node3D
     {
         if (Source.Pending != null)
         {
-            var timer = Stopwatch.StartNew();
+            var timer = CollectRawTimings ? Stopwatch.StartNew() : null;
             var built = Source.Advance(BuildBudgetMilliseconds);
-            buildSlices.Add(timer.Elapsed.TotalMilliseconds);
+            if (timer != null) buildSlices.Add(timer.Elapsed.TotalMilliseconds);
             if (built != null) Register(built);
             return;
         }

@@ -171,6 +171,8 @@ internal sealed partial class DissolveScenario(ILabScenarioHost host) : LabScena
             }
             var runner = lab.Prototype!;
             var arena = lab.Dissolve!;
+            // Optional reflection keeps this observation harness runnable against the immediate parent.
+            typeof(DissolveArena).GetProperty("CollectRawTimings")?.SetValue(arena, true);
             var tuning = lab.World.Tuning;
             Assert(lab.Session.Actors.Count == 1 && lab.RunSeed == seed && lab.LiveTanks.Any(), "dissolve run: solo, seeded, stocked");
             Camera3D? overview = null;

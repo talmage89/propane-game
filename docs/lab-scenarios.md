@@ -29,6 +29,7 @@ namespace to avoid colliding with the gameplay fixture registry `Propane.Lab.Lab
 | `measure`, `measure-play` | `MeasureScenario` |
 | `runner-sampling` (opt-in whole-callback benchmark) | `RunnerSamplingScenario` |
 | `bot-cost` (opt-in Banking/King brain and whole-callback benchmark) | `BotCostScenario` |
+| `streaming-history` (opt-in controlled long stream) | `StreamingHistoryScenario` |
 | `dissolve`, `reference-retirement` | `DissolveScenario`, `RetirementScenario` |
 
 Subscriptions can detach at fixture/round boundaries and are removed from the owner immediately, so cleanup does
@@ -72,3 +73,17 @@ DISABLE_GAMESCOPE_WSI=1 godot-mono --disable-vsync --fixed-fps 60 --resolution 1
 
 On the invisible Linux gamescope wrapper, the per-process `DISABLE_GAMESCOPE_WSI=1` override allows VSync to
 stay disabled. Reject measurements whose logs report a VSync fallback, as the scale benchmark does.
+
+`streaming-history --segments=512` manually calls the real arena physics callback in a paused world, builds the
+next real seeded segment and retires the oldest through the arena. Controlled actor samples advance the real
+rule window; worker readiness is awaited before timing. Begin/request, build, floor/dissolve, forget and retirement
+all run inside the measured callback. The first 32 segments warm native/JIT paths. Every 64 retirements it collects and asserts
+that segment, suburb, floor-shape and tank wrappers and native objects are released while the session survives.
+It reports live containers/resources and whole callback allocation/time mean/p95/p99. `--raw` requests timing
+histories; `--assert-bounded` additionally enforces the W1 ordinary-history bounds. It deliberately omits native
+physics from callback timing; ordinary `dissolve --tracking-metrics` retains the whole-session/native-tail probe.
+Rendered runs with `--capture-dir` save the reveal window at the initial and final live segments. This controlled
+probe supplements ordinary bot/pacer runs; it does not simulate score, navigation or long-run physics.
+
+`SegmentFeedTests --feed-transcript=<file>` records an independent parent-semantics request/forget transcript,
+including negative/extreme indices, gaps, repeated forget, unfinished/completed and discarded late workers.

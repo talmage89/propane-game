@@ -70,7 +70,7 @@ source type to acquire that dependency. Do not broaden the map or silently regen
 | Settings and launch access are implicit | A1 provides explicit application ownership and scoped test stores/overrides. |
 | Actor subscriptions/collider caches outlive departing actors | L1 introduces idempotent actor registrations; detach before character free while world survives. |
 | Prototype bots/HUDs read live rules | B3b supplies plain observations with explicit read-time clock and allocation-free bot reads. |
-| Streaming timing lists and forgotten-index history grow | W1 bounds incidental history; navigation eviction and ledger-history pruning require separate retention contracts. |
+| Streaming incidental history (W1 implemented) | Ordinary arena timing lists stay empty; a feed watermark compacts the retired prefix, retaining only out-of-order forgotten indices. Navigation eviction and ledger-history pruning need separate retention contracts. |
 | Global stream reveal; implicit character/weapon binding assumptions | W2 before independent streams; V1 before a second asset family. Existing single-stream/binding behavior stays intact. |
 | Cross-platform artifact runtime acceptance remains partly manual | R1 gates setup imports, inventories all packaged exports and runs the Linux artifact before publishing; Windows/macOS retain the [runtime checklist](runbooks/release-artifacts.md). |
 
@@ -321,11 +321,27 @@ native catalog data at construction, and `SegmentSettings.From` converts live Tu
 not start loading resources through these mixed types. C1 separates plain metadata and main-thread conversion;
 world-plan and construction hashes must remain exact.
 
-`GameAssets`, `FxLibrary`, `Catalog`, `MeshKit` and `WorldMaterials` cache borrowed meshes/models/materials on the main
-thread. Shared resources remain immutable by convention; per-instance mutable effects/material state stays owned.
+`GameAssets`, `FxLibrary`, `Catalog` and `WorldMaterials` cache borrowed meshes/models/materials on the main
+thread. `MeshKit` owns temporary per-build geometry scratch. Shared resources remain immutable by convention; per-instance mutable effects/material state stays owned.
 Do not duplicate immutable assets per world to eliminate statics. Character bones/sockets/clips and rifle calibration
 are implicit asset bindings today; V1 validates them once before another asset family is introduced
 ([animation sources](animation-sources.md), [motion](motion.md)).
+
+**Current W1:** `DissolveArena.CollectRawTimings` is false for ordinary play. Diagnostic callers opt in before
+streaming and own the recording duration; `BuildSlices` and `RetireMilliseconds` retain every measured sample in
+order until arena collection. Existing Dissolve harness reports explicitly request this evidence. Ordinary play
+retains only the last whole-step duration, with empty timing lists and zero backing capacity.
+
+`LocalSegmentFeed` owns a nonnegative exclusive forgotten-prefix watermark plus a set of forgotten indices beyond
+gaps for its lifetime. Ordered retirement uses only the watermark, including the `int.MaxValue` boundary. Sparse
+storage follows the peak number of out-of-order forgets not yet absorbed into the prefix; arbitrary callers with
+unclosed gaps have no constant bound. Negative indices remain unrequestable. Forgotten plans are removed at once;
+in-flight workers finish without publishing into the feed. Dispose clears plan handles; tombstones preserve the
+existing request contract until feed collection. Active plans follow outstanding requested/unforgotten indices.
+The arena requests one plan ahead; the source owns one staged build and the live/retiring content windows. Their
+bounds follow progression and build/retirement throughput, not elapsed run length; no eviction policy changed.
+See [world services](world-services.md#streamed-content-history), [the Lab](lab.md) and
+[W1 verification](evidence/streaming-history.md).
 
 ## Globals and budgets
 
@@ -348,7 +364,7 @@ are implicit asset bindings today; V1 validates them once before another asset f
 wire bounds are not a capacity promise. Packet size is bounded to 1 MiB and body batches to 20. Inbox, snapshot,
 causal-wait and worker queues have their own bounds; preserve overflow/refusal behavior rather than dropping checks.
 Do not prune ledger tombstones/causal history or navigation caches without an explicit retention/correctness contract.
-W1 bounds incidental stream diagnostics/forgotten indices, not those histories. Exact bounds and conservation rules
+W1 bounds ordinary incidental stream diagnostics/forgotten prefixes, not those histories. Exact bounds and conservation rules
 remain in [multiplayer](multiplayer.md), [bot-navigation](bot-navigation.md) and the owning types.
 
 [Source approvals](../tools/architecture/source-sites.tsv) name today's global writes, timers, wall-clock reads and
