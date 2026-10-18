@@ -22,7 +22,7 @@ internal sealed class ClientModePiles : IDisposable
         var actors = replica.Actors.Select(a => a.Character.GlobalPosition).ToArray();
         var site = PileSite.Find(replica.World, wanted.Spot, wanted.Count, wanted.Reach, wanted.Clearance, actors);
         if (site == null) GD.Print($"[match] no clear ground for zone {wanted.Zone}'s pile within {wanted.Reach:0.#} m");
-        replica.SendMode(reporter, checked(++reporter.Runtime.ActionSequence), ModeSchemas.KingKinds.PilePlaced,
+        replica.SendMode(reporter, checked(++replica.Replication(reporter.Runtime).ActionSequence), ModeSchemas.KingKinds.PilePlaced,
             new KingPilePlaced(wanted.Zone, site ?? Array.Empty<Transform3D>()));
     }
 

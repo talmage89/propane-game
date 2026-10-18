@@ -43,6 +43,7 @@ public partial class LabSession : Node3D
     public LabMatch? Match { get; private set; }
     /// <summary>Test seam: a prototype's runner drives the player's actor with the mode's brain too.</summary>
     internal bool DrivePlayer { get; init; }
+    private LocalView? localView;
     private MatchHud? matchHud;
     public TuningPanel TuningPanel { get; private set; } = null!;
     public LabOverlay Overlay { get; private set; } = null!;
@@ -148,6 +149,7 @@ public partial class LabSession : Node3D
         ShortFuse = null;
         Dissolve = null;
         matchHud = null;
+        localView = null;
         Assemble(tuning);
         ResetCount++;
     }
@@ -205,7 +207,7 @@ public partial class LabSession : Node3D
         TuningPanel.Visible = false;
         World.SetPaused(visible);
         Overlay.ShowMenu(visible);
-        Player.View?.Input?.Reset();
+        localView?.Input?.Reset();
         Capture(!visible);
     }
 
@@ -216,7 +218,7 @@ public partial class LabSession : Node3D
         World.SetPaused(true);
         Overlay.ShowMenu(false);
         TuningPanel.Toggle();
-        Player.View?.Input?.Reset();
+        localView?.Input?.Reset();
         Capture(false);
     }
 
@@ -231,7 +233,7 @@ public partial class LabSession : Node3D
     public override void _Process(double delta)
     {
         if (!Initialized || !Session.IsAlive || !CreateLocalView) return;
-        var view = Player.View!;
+        if (localView is not { } view) return;
         var camera = view.CameraRig.Camera;
         var radius = Mathf.Tan(Mathf.DegToRad(Player.SpreadDegrees)) / Mathf.Tan(Mathf.DegToRad(camera.Fov / 2)) *
             GetViewport().GetVisibleRect().Size.Y / 2;
@@ -521,6 +523,8 @@ public partial class LabSession : Node3D
         {
             if (!lab.CreateLocalView) return;
             var view = session.AddLocalView(lab.Player.Runtime, lab, new DeviceInput(session.World.Tuning));
+            lab.localView = view;
+            view.TreeExiting += () => lab.localView = null;
             // A prototype's counters are the mode's, on the match HUD, as in a match.
             if (lab.Scenario.Prototype) view.Hud.ShowTankCount(false);
             session.AddView(lab, new Hitstop { World = session.World, Focus = lab.Player, Name = "Hitstop" });

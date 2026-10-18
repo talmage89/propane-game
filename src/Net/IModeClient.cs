@@ -42,6 +42,7 @@ public interface IClientModeReplica
     IEnumerable<ActorRuntime> OwnedActors { get; }
     PlayerCharacter? Actor(int id);
     PlayerProfile Profile(int id);
+    ClientActorReplication Replication(ActorRuntime actor);
     PropaneTank? RestingIntactTank(BodyAuthority body);
     bool HasTank(uint id);
     bool Exploded(uint id);

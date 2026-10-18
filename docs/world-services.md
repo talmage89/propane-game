@@ -131,8 +131,10 @@ The ten-cycle sweep runs in `make test-full`. Rendered runs capture first and la
 placement. `ActorRuntime` owns its intent source and logical aim. No camera, viewport or HUD is needed to move,
 shoot, strike or get up. `LocalView` explicitly attaches a `CameraRig`, HUD and optional device input to an actor;
 closing it releases input but leaves the actor alive. Bot brains and navigation use the actor's aim directly.
-The character's `CameraRig` accessor remains a convenience used by production `Game` and rendered dev harnesses;
-C2 separates physical actor feedback from view implementation (see [architecture](architecture.md#simulation-and-presentation)).
+Composition retains its camera binding; the character has no concrete view/device/replication reference.
+LocalView subscribes primary-view recoil feedback at the original synchronous post-shot point and detaches on exit.
+The input-source boundary carries optional focus/pause resets. A plain actor flag preserves primary-view full poses;
+closing the primary view does not promote another view. See [architecture](architecture.md#simulation-and-presentation).
 
 The aim split preserves the old ray, including its over-the-shoulder origin, wall pull-in, target smoothing,
 render-frame updates and the chest-plane projection that keeps shots from starting behind the character.
@@ -169,8 +171,11 @@ uses exactly the same path. Actor/view readiness is checked explicitly because G
 If construction and cleanup both fail, the factory retains both errors. Closing a local view removes its
 camera/HUD/device source without retiring the actor.
 
-Ammo, intent, the movement resolver, resolved state, logical aim, swing/publication sequence, snapshot buffer,
-hit grace and drop predictions now belong to each actor. Match interpolation iterates the session registry.
+Ammo, intent, the movement resolver, resolved state, logical aim, physical swing sequence and hit grace belong to
+ActorRuntime. ClientActorReplication owns the actor's wire sequences, snapshot input source, publication cadence,
+relay caches and drop predictions/allocation. ActorRegistration retires that attachment synchronously before native
+free; physical actors know only their input-source contract. ClientActorSet traverses the session registry in its
+original order. ClientWorldReplica owns shared body lookup/reconstruction, correction and publication integration.
 A6 routes actor ids and lives independently of peer ids, including scoring, contact targets, snapshots and drop
 allocation. Several owned actors share one body synchronizer; views remain process-local.
 Headless `net_test` attaches no local view, so the existing smart/simple bots and network scenarios run on actors

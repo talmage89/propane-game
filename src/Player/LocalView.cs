@@ -10,6 +10,7 @@ public partial class LocalView : Node
     private static readonly IdentitySequence ids = new();
     public int LocalViewId { get; } = ids.Allocate();
     public required PlayerCharacter Actor { get; init; }
+    private bool primary;
     private DeviceInput? input;
     public DeviceInput? Input { get => input; init => input = value; }
     public CameraRig CameraRig { get; private set; } = null!;
@@ -23,7 +24,12 @@ public partial class LocalView : Node
         Actor.World.AddView(this, CameraRig, followsPause: true);
         Hud = new Hud { Name = "Hud" };
         AddChild(Hud);
-        Actor.View ??= this;
+        if (!Actor.Runtime.HasLocalView)
+        {
+            primary = true;
+            Actor.Runtime.HasLocalView = true;
+            Actor.Recoiled += OnRecoil;
+        }
         AssignDevice(Input);
         Godot.Input.JoyConnectionChanged += OnJoyConnectionChanged;
         Initialized = true;
@@ -66,8 +72,33 @@ public partial class LocalView : Node
         if (receiver != null && GodotObject.IsInstanceValid(receiver) && receiver.GetParent() != this && receiver.IsInsideTree())
             receiver.Free();
         receiver = null;
-        if (Actor.View == this) Actor.View = null;
+        if (primary)
+        {
+            Actor.Recoiled -= OnRecoil;
+            Actor.Runtime.HasLocalView = false;
+            primary = false;
+        }
         if (Input != null && ReferenceEquals(Actor.Runtime.IntentSource, Input)) Actor.Runtime.IntentSource = null;
+    }
+
+    private void OnRecoil(float scale) => CameraRig.KickPresentation(scale);
+
+    /// <summary>The designated primary view, without making a physical actor retain a concrete view.
+    /// Closing it does not promote a secondary view. Composition keeps its own binding for per-frame reads.</summary>
+    public static LocalView? Find(PlayerCharacter actor) => actor.Runtime.HasLocalView ? FindIn(actor.World.ViewRoot, actor) : null;
+    private static LocalView? FindIn(Node parent, PlayerCharacter actor)
+    {
+        for (var i = 0; i < parent.GetChildCount(); i++)
+        {
+            var child = parent.GetChild(i);
+            if (child is LocalView { primary: true } view && view.Actor == actor) return view;
+        }
+        // Facades usually attach views directly. Check siblings before descending into physical content.
+        for (var i = 0; i < parent.GetChildCount(); i++)
+        {
+            if (FindIn(parent.GetChild(i), actor) is { } found) return found;
+        }
+        return null;
     }
 
     public static LocalView Attach(PlayerCharacter actor, Node parent, bool devices = false)

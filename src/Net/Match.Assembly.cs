@@ -23,23 +23,36 @@ public partial class Match
         public void Configure(SessionContext session)
         {
             match.me = match.Net.MyId;
-            session.ActorsChanged += match.RefreshPlayer;
-            session.OnUnsubscribing(() => session.ActorsChanged -= match.RefreshPlayer);
+            match.viewBinding = new MatchViewBinding(session, match, match.Net, match.Setup, match.profiles,
+                match.CreateLocalView, match.Returning, match.me, () => match.IsPlaying, () => match.ModeView,
+                () => match.LeaveRequested?.Invoke(), match.Send);
+            session.ActorsChanged += match.viewBinding.RefreshPlayer;
+            session.OnUnsubscribing(() => session.ActorsChanged -= match.viewBinding.RefreshPlayer);
             match.mode = Modes.ModeRegistry.Resolve(match.Setup);
-            match.hudPresenter = match.mode.CreateHud();
+            match.viewBinding.Configure(match.mode);
             session.OnStopping(match.StopReplication);
             match.clientMode = Modes.ModeRegistry.CreateClient(match.Setup, match, match);
-            match.modeScores = match.clientMode.Scores;
-            match.modeDisplay = match.clientMode.Display;
-            match.bodies = new BodySync(session.World.Tuning, match.me, match.Setup.HostId);
-            match.bodyPublisher = new BodyPublisher(match.bodies, match.Setup.Id, match.Net.BodySampleTime, match.Send);
+            match.viewBinding.BindMode(match.ClientMode);
+            match.worldReplica = new ClientWorldReplica(session.World, match.Clock, match.me, match.Setup,
+                () => match.IsPlaying, id => match.Actor(id)?.LifeId ?? 0, match.Net.BodySampleTime, match.Send,
+                bytes => match.Net.Send(bytes));
             match.authority = new ClientAuthorityTransactions(match.me, match);
+            match.worldReplica.BindAuthority(match.authority);
+            match.actorReplication = new ClientActorSet(session.World, match.Clock, session.Actors, match.Actor,
+                () => match.player, () => match.IsPlaying, () => match.ClientMode, match.worldReplica, match.Setup.Id, match.me,
+                (bytes, traffic) => match.Net.Send(bytes, traffic), match.Send, match.viewBinding.HitMarker,
+                match.viewBinding.HitDirection, match.viewBinding.AmmoPopup, match.viewBinding.TuningChanged,
+                (now, time) => match.Net.PingMs > 0 ? now + match.Net.ServerClockOffset - time : 0);
         }
         public void CreateActors(SessionContext session) => match.BuildActors();
         public void CreateViews(SessionContext session)
         {
-            match.BuildViews();
-            match.AttachBots();
+            match.viewBinding.BuildViews();
+            match.ownedBots = new OwnedBotSet(session.World, session.Actors, match.profiles, match.mode.CreateBot,
+                match.plan.Bounds, match.Setup, match.Clock, () => match.IsPlaying, () => match.timeLeft, match.ClientMode, match.Scores,
+                () => match.worldReplica.BotTanks, match.worldReplica.Pickups);
+            match.ownedBots.AttachBots();
+            if (match.mode.CreateBot != null) session.OnStopping(match.ownedBots.Dispose);
             match.AttachLobby();
         }
         public void RegisterReplication(SessionContext session)
@@ -62,43 +75,25 @@ public partial class Match
 
     private void BuildContent()
     {
-        environment = new VoidEnvironment { Name = "Void" };
+        var environment = new VoidEnvironment { Name = "Void" };
         World.Root.AddChild(environment);
-        effects = World.EffectsRoot;
         plan = PlanCodec.Decode(Setup.Plan);
         var settings = Modes.ModeRegistry.Resolve(Setup).Supply.Suburb(World.Tuning, Setup.Players.Count);
         // A void world (the lobby's) has no slab: its plan's content stands on the construct's own floor.
         suburb = Suburb.Build(World, plan, settings, networked: true, ground: Modes.ModeRegistry.Resolve(Setup).World != Modes.ModeWorldSource.Void);
         World.Root.AddChild(suburb);
         World.SetContentRoot(suburb.DynamicRoot);
-        if (IsLobby) BuildLobbyContent();
+        viewBinding.AttachContent(environment, suburb);
+        if (IsLobby) viewBinding.BuildLobbyContent();
 
-        gather = new TankGather
-        {
-            World = World,
-            Name = "Gather",
-            Tanks = () => LiveTanks,
-            Enabled = () => IsPlaying && bodies.Host == me,
-            Grant = GrantGather,
-            Publish = PublishGather
-        };
-        suburb.AddChild(gather);
-
-        for (var i = 0; i < (Modes.ModeRegistry.Resolve(Setup).Supply.Pickups ? plan.AmmoSpots.Count : 0); i++)
-        {
-            var pickup = new AmmoPickup { Name = $"Ammo_{i}", Index = i };
-            suburb.DynamicRoot.AddChild(pickup);
-            pickup.Position = PlanCoordinates.ToWorld(plan.AmmoSpots[i]);
-            pickups.Add(pickup);
-        }
-
+        worldReplica.BuildPhysicalContent(suburb, plan, mode.Supply.Pickups);
     }
 
     private void BuildActors()
     {
         foreach (var (profile, slot) in Setup.Players)
         {
-            leaderboardRoster.Add(new LeaderboardEntry(profile.Id, profile.Name, profile.Appearance.Color));
+            viewBinding.AddRosterEntry(profile);
             var spawn = plan.Spawns.Count > 0 ? plan.Spawns[slot % plan.Spawns.Count] : new SpawnPoint(plan.Spawn, plan.SpawnYaw);
             AddActor(profile, slot, PlanCoordinates.ToWorld(spawn.Position, 0.05f), spawn.Yaw + Mathf.Pi);
         }
@@ -108,7 +103,7 @@ public partial class Match
         }
     }
 
-    /// <summary>One actor of the frozen roster (or, in the lobby world, one that joined it): owned here or a remote copy.</summary>
+    /// <summary>Attach one frozen-roster actor or lobby arrival before subscribing its client actions.</summary>
     private PlayerCharacter AddActor(PlayerProfile profile, int slot, Vector3 position, float yaw)
     {
         profiles[profile.Id] = profile;
@@ -128,130 +123,45 @@ public partial class Match
         };
         Session.AddActor(character);
         Session.AttachActor(character.Runtime, () => RetireActor(character));
-        character.Runtime.SpawnSlot = slot;
-        character.Runtime.AllocationSlot = profile.AllocationSlot;
+        var replica = actorReplication.Add(character);
+        replica.SpawnSlot = slot;
+        replica.AllocationSlot = profile.AllocationSlot;
         character.Teleport(position, yaw);
-        if (!owned) character.Runtime.IntentSource = new ReplicatedIntent(World.Tuning);
+        replica.AttachInput();
         return character;
     }
 
-    /// <summary>Rifles carry limited ammunition: the mode's policy, which the lobby world's tuner can switch on.</summary>
     private bool LimitedAmmo => ClientMode.LimitedAmmo(mode.Supply.LimitedAmmo);
-
-    private void BuildViews()
-    {
-        if (CreateLocalView && player != null)
-        {
-            var view = Session.AddLocalView(player.Runtime, this, new DeviceInput(World.Tuning));
-            environment.Follow = view.CameraRig.Camera;
-            hud = view.Hud;
-            hud.ShowTankCount(false);
-        }
-        matchHud = new MatchHud { World = World, Name = "MatchHud" };
-        Session.AddView(this, matchHud);
-        matchHud.Show(PresentHud(tankGroups, false));
-        BuildKingZone();
-        results = new ResultsScreen { Name = "Results" };
-        Session.AddView(this, results);
-        menu = new MatchMenu { Name = "Menu", Lobby = IsLobby };
-        menu.ResumeRequested += CloseMenu;
-        menu.LeaveRequested += () => World.Defer(() => LeaveRequested?.Invoke(), whilePaused: true);
-        Session.AddView(this, menu);
-        if (OS.IsDebugBuild() && Setup.CreatorDebug && Setup.CreatorId == me)
-        {
-            tuningPanel = new TuningPanel
-            {
-                Target = World.Tuning,
-                Name = "Tuning",
-                Note = "Changes apply to everyone in the match",
-                UseDeclaredRanges = true,
-                LockedProperties = new[] { nameof(Tuning.TankCountMultiplier) }
-            };
-            tuningPanel.ValueChanged += (name, value) => Send(new NetWriter(Msg.TuningSet, Setup.Id).String(name).Scalar(value));
-            Session.AddView(this, tuningPanel);
-        }
-
-    }
 
     private void RegisterReplication()
     {
-        var mapTanks = suburb.MapTanks;
-        for (var i = 0; i < mapTanks.Count; i++)
-        {
-            Track(mapTanks[i], Setup.HostId);
-        }
-        foreach (var body in suburb.DynamicRoot.GetChildren().OfType<RigidBody3D>().Where(b => b.HasMeta(Suburb.PlanIndexMeta)))
-        {
-            var index = body.GetMeta(Suburb.PlanIndexMeta).AsInt32();
-            if (plan.Props[index].Model.StartsWith("car:"))
-            {
-                bodies.Register(BodyIds.CarId(index), body, isTank: false, Setup.HostId);
-            }
-            else
-            {
-                looseProps[index] = body;
-            }
-        }
+        worldReplica.RegisterBodies(plan, Setup.HostId);
 
         foreach (var owned in Session.OwnedActors) SubscribeOwned(owned.Character);
         World.Events.LocalBlast += OnLocalBlast;
         Session.OnUnsubscribing(() => World.Events.LocalBlast -= OnLocalBlast);
     }
 
-    /// <summary>What an actor this peer owns does goes out to everyone: shots, throws, get-ups, strikes and pushes.</summary>
     private void SubscribeOwned(PlayerCharacter actor)
     {
-        var registration = Session.Registration(actor.Runtime);
-        void Fired(ShotReport shot) { if (registration.IsSubscribed) OnFired(actor, shot); }
-        void Ragdolled(Vector3 at, Vector3 velocity, Vector3 spin) { if (registration.IsSubscribed) OnRagdolled(actor, at, velocity, spin); }
-        void GotUp(Vector3 root, float yaw) { if (registration.IsSubscribed) Send(ActorWriter(Msg.GetUp, actor).Vec3(root).Float(yaw)); }
-        void MeleeStarted(uint swing, Vector3 direction) { if (registration.IsSubscribed) SendActor(actor, Msg.MeleeStart, new MeleeStartMessage(swing, direction), predict: true); }
-        void MeleeHit(MeleeHit hit) { if (registration.IsSubscribed) OnMeleeHit(actor, hit); }
-        void Pushed(RigidBody3D body) { if (registration.IsSubscribed) Claim(new[] { body }); }
-        actor.Fired += Fired;
-        actor.Ragdolled += Ragdolled;
-        actor.GotUp += GotUp;
-        actor.MeleeStarted += MeleeStarted;
-        actor.MeleeHit += MeleeHit;
-        actor.PushedBody += Pushed;
-        Session.SubscribeActor(actor.Runtime, () =>
-        {
-            actor.Fired -= Fired; actor.Ragdolled -= Ragdolled; actor.GotUp -= GotUp;
-            actor.MeleeStarted -= MeleeStarted; actor.MeleeHit -= MeleeHit; actor.PushedBody -= Pushed;
-        });
+        actorReplication.SubscribeOwned(actor);
+        Session.SubscribeActor(actor.Runtime, actorReplication.Get(actor.Runtime).Unsubscribe);
     }
 
     private void RetireActor(PlayerCharacter actor)
     {
-        RemoveBot(actor);
-        botServices?.RemoveActor(actor);
-        foreach (var bot in bots)
-        {
-            bot.Others.Remove(actor);
-            bot.Brain.ForgetActor(actor);
-        }
-        remoteMelee.Remove(actor.ActorId);
-        foreach (var key in receivedActions.Keys.Where(key => key.Actor == actor.ActorId).ToArray()) receivedActions.Remove(key);
-        // Finite matches retain departed banks/profiles for standings and in-flight drops. Roaming has neither.
-        if (IsLobby)
-        {
-            profiles.Remove(actor.ActorId);
-        }
+        ownedBots?.RetireActor(actor);
+        actorReplication.Remove(actor);
+        // Finite matches retain departed profiles for standings and in-flight drops; roaming does not.
+        if (IsLobby) profiles.Remove(actor.ActorId);
         clientMode?.ActorRemoved(actor.ActorId);
     }
 
     private void PreparePresentation()
     {
-        // The suburb materializes around the player, as in single player.
-        suburb.SetRevealSide(1f);
-        if (player != null) World.Reveal.Center = player.GlobalPosition;
-        World.Reveal.Radius = 0f;
-        Warmup.Run(World, World.Root, new Vector3(0, -400f, 0));
-
-        CaptureMouse(true);
-        if (modeDisplay.WaitingNotice.Length > 0) ShowNotice(modeDisplay.WaitingNotice, 30f);
+        viewBinding.Prepare();
         // Prepare loading presentation before the handoff, so buffered Countdown/Go/End remain authoritative.
         // The Ready stage schedules Loaded after replay and the first complete frame.
-        GD.Print($"[match] seed {plan.Seed}: {plan.Lots.Count} lots, {plan.Tanks.Count} tanks, {pickups.Count} pickups, {Setup.Players.Count} players, host {Setup.HostId}, me {me}");
+        GD.Print($"[match] seed {plan.Seed}: {plan.Lots.Count} lots, {plan.Tanks.Count} tanks, {Pickups.Count} pickups, {Setup.Players.Count} players, host {Setup.HostId}, me {me}");
     }
 }

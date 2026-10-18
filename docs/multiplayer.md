@@ -369,13 +369,13 @@ The server is the game itself started with `-- --server` (and `--headless`). It 
 | `src/Net/MessageCodec.cs`, `TankLedger.cs` | Complete, typed wire decoding and the server's tank existence/lifecycle ledger. |
 | `src/Net/MatchInbox.cs` | Per-match buffering until scene initialization, with generation-safe cleanup. |
 | `src/Net/BuildInfo.cs`, `UpdateCheck.cs` | Versions and who plays together; the launch check for a newer release. |
-| `src/Net/Match.cs` | A peer's shared match world: actions from its owned actors and playback of other actors' events. |
+| `src/Net/Match.cs` | Callback, inbox and lifetime coordination for one peer; the [ownership table](architecture.md#composition-roots) names its replica, actor, bot, mode and view owners. |
 | `src/Net/IModeClient.cs`, `BankClientAdapter.cs`, `KingClientAdapter.cs`, `LobbyClientAdapter.cs`, `SilentClientAdapter.cs` | Session-owned mode state, envelope consequences and plain presentation feeds, selected by the compiled mode bundle. |
 | `src/Net/ClientAuthorityTransactions.cs` | Session-owned causal requests, reservations, expected epochs, sent roots and gather request bookkeeping. |
 | `src/Net/BodySync.cs` | Ownership and corrections for tanks and cars. |
 | `src/Net/SnapshotBuffer.cs` | Smooth playback of other players, `InterpolationDelay` behind. |
 | `src/Net/PlanCodec.cs` | Packs a suburb plan for sending. |
-| `src/Net/AmmoPickup.cs` | The ammo can and its build-up reveal. |
+| `src/World/AmmoPickup.cs` | The ammo can and its build-up reveal. |
 | `src/UI/Menus.cs`, `MatchHud.cs`, `MatchMenu.cs`, `ResultsScreen.cs` | Front end, match HUD, pause menu, results. |
 | `src/UI/StageScreen.cs`, `LobbyCard.cs`, `src/Fx/LobbyFloor.cs` | The lobby world's stage screen, its lobby card and its floor (pads, ring, title). |
 
@@ -386,7 +386,8 @@ retires it after inbox detachment and event unsubscription, including failed con
 it detaches pending gather listeners, clears requests/reservations/causal roots and releases the replica collaborator.
 A replacement match gets a fresh owner and request sequence. Empty flushes allocate nothing; claim selectors
 exist only while constructing a proposal at send time. Actor action sequences and `DropPredictions` remain
-on each actor; BodySync retains correction, and Match retains physical body lookup, reconstruction and wire sends.
+in each ClientActorReplication attachment; BodySync retains correction inside ClientWorldReplica, which owns
+physical lookup/reconstruction/publication. Match supplies synchronous forwarding and wire sends.
 
 Resolution is synchronous: finish the request and release reservations, update dependent expected epochs,
 reconcile canonical bodies, flush eligible requests, notify listeners in registration order, then remove gather
@@ -625,7 +626,8 @@ roster-revision space, the server retires that lobby and rejects its peers with 
 ticks and fresh lobbies remain usable.
 Ragdoll recovery is the same life, not a respawn.
 
-Match caches its local player in session actor order: the first owned Human, otherwise the first owned actor.
+MatchViewBinding caches Match's local player in session actor order: the first owned Human, otherwise the first
+owned actor.
 Actor insertion/removal refreshes the cache synchronously before node initialization/retirement; a lobby profile
 kind replacement refreshes it before presentation changes. Session stopping clears it before actors are freed.
 Ownership is fixed on each character at construction; body-authority or lobby-creator handover does not retarget
@@ -696,7 +698,7 @@ A bot is an ordinary roster actor of kind Bot, owned by the peer that added it. 
 like its own player: the same `PlayerCharacter`, owner-authoritative physics, actor envelope, action sequences, hit
 grace, spills and pickups. The only difference is its intent, which the mode's goal policy (`ModeDefinition.CreateBot`,
 `BankingBot` for Tank Bank, `KingBot` for King) chooses each physics tick from that peer's view of the match, through the shared navigation
-and aim (`src/Net/Match.Bots.cs`). A bot has no camera, audio listener, HUD, hit marker or score popup. Other peers
+and aim (`src/Net/OwnedBotSet.cs`). A bot has no camera, audio listener, HUD, hit marker or score popup. Other peers
 receive its poses and actions like a human's and cannot tell them apart beyond the roster's kind. Each brain is seeded
 from the match and actor ids, so it never draws from the world's shared random stream.
 
