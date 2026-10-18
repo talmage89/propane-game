@@ -59,7 +59,7 @@ stable top-level owner so compiler-generated numbering does not cause churn.
 | `Modes/` | Rules by default; `ModeDefinition`/`ModeBundle`/`ModeCatalog`/registry/supply are Composition; HUD input/presenters are Presentation; HUD values/`IModeView` remain plain rules observations. |
 | `Player/`, `Tank/`, `Fx/` | Simulation by default; input values and resolved state values are Foundation; cameras/views/device input and mode geometry are Presentation; `ReplicatedIntent` is Client. The separate `PlayerNetState.cs` is a Foundation value; shared profiling lives in `Diagnostics/`. |
 | `Navigation/`, `Bots/` | Navigation and Bots. |
-| `Net/` | Wire by default; `LobbyServer`/`ServerRun`, ledger, roster, contact admission, ServerMode/ServerModes inputs, plain ModeWireTuners, KingPlacement and mode wires/runner are Server; body/actor snapshot helpers, prediction, authority transactions, mode client adapters and inbox are Client; Match/backend factory/update/diagnostics are Composition; NetClient is Client. Lobby/profile/setup contracts and phases are Wire; shared identity/appearance/body values live in `Core/`, standings in Rules, and `World/AmmoPickup` in Simulation. |
+| `Net/` | Wire by default; `LobbyServer`/`ServerRun`, ledger, roster, contact admission, ServerMode/ServerModes inputs, plain ModeWireTuners, KingPlacement and mode wires/runner are Server; body/actor snapshot helpers, prediction, authority transactions, mode client adapters and inbox are Client; Match/backend factory/update/diagnostics are Composition; NetClient is Client; MessageCodec is the composition convenience facade over Wire PacketCodec; TransportMetrics accepts plain Wire observations. Lobby/profile/setup contracts and phases are Wire; shared identity/appearance/body values live in `Core/`, standings in Rules, and `World/AmmoPickup` in Simulation. |
 | `UI/` | Presentation by default; front-end screens, their transactions and lobby/stage composition are Composition. |
 | `ReleaseSmoke/`, `Dev/` | Smoke and Dev respectively; no game dependency on the checker project under `tools/architecture/`. |
 
@@ -72,8 +72,8 @@ source type to acquire that dependency. Do not broaden the map or silently regen
 | Match still owns world/actor replication, bots and view binding | B2 owns transactions and B3b1 owns mode client policy. C2 finishes independent replication/bot/view owners, preserving synchronous ordering. |
 | Physical actor holds replication attachments and view/device conveniences | C1 has moved identity/body contracts; C2 moves client state and narrow view binding beside actor lifetime. |
 | C1 contract placement (complete) | Shared identity/appearance/body values and ID formulas are Foundation; lobby contracts/phases are Wire; standings are Rules; metadata/coordinates/snapshots/segment values are Plans. Native capture and tuner conversion stay outside Plans. No baseline entry names C1. |
-| Lobby/run native tuning and codec catalog resolution | B3a supplies presentation-free ServerMode/ServerModes inputs. A1 owns LobbyServer template/snapshot sampling and ServerRun native configuration ownership, live reads and exactly-once retirement. C1 made melee admission consume sampled plain values. N1 injects owner-scoped codec schema/eligibility/tuner validation with unchanged rejection order. No baseline entry remains assigned to B3a. |
-| Fault transport calls ENet lane helper; server diagnostics/factory cross composition | N1 supplies transport-independent lanes and injected delivery/diagnostic boundaries. |
+| Lobby/run native tuning and codec catalog resolution | B3a supplies presentation-free ServerMode/ServerModes inputs. A1 owns LobbyServer template/snapshot sampling and ServerRun native configuration ownership, live reads and exactly-once retirement. C1 made melee admission consume sampled plain values. N1 supplies owner-scoped codec schema/eligibility/tuner validation with unchanged rejection order. No baseline entry remains assigned to B3a. |
+| N1 transport/dispatch boundaries | Wire owns independent ordered lanes, PacketCodec and plain TransportMetrics. Connection/run owners inject codec inputs; default NetClient application construction remains A1 wiring. |
 | Settings and launch access are implicit | A1 provides explicit application ownership and scoped test stores/overrides. |
 | Client actor attachment retirement (L1) | Session-owned `ActorRegistration` detaches subscriptions and actor caches before native free; remaining attachments keep the original unsubscribe/stop/view/actor order. |
 | Lab bookkeeping and prototype live-rule reads | B4b shares local difficulty, tank facts and offline placement; semantic attribution and rule submission stay runner-owned. B3b2 supplies plain observations with explicit read-time clock and allocation-free bot reads. |
@@ -121,7 +121,10 @@ still requires an actor. This cache neither retargets an existing local view nor
 
 [ModeRegistry](../src/Modes/ModeRegistry.cs) compiles the network integrations into one validated
 [ModeCatalog](../src/Modes/ModeCatalog.cs). Bundles pair existing definitions with schemas and explicit server wire/client adapter
-factories; codecs remain in Wire. MessageCodec passes composition's schema resolver into the envelope reader, and
+factories; bounded parsing/encoding remains in Wire's PacketCodec. Composition's MessageCodec convenience facade
+selects the current catalog for callers without a connection owner. Connection/server owners capture immutable
+PacketCodec inputs at construction (schema resolver, lobby eligibility and native tuner validator); those inputs
+retain schemas, never catalog definitions/HUD/bot factories. The envelope reader receives that resolver, and
 composition constructs LobbyServer through `ModeRegistry.CreateServer`, selecting immutable ServerModes/ServerMode
 inputs (rules/schema/wire factories, metadata, tuner names and ordered eligibility) with no HUD/bot factories.
 ServerRun constructs its runner from those inputs. Composition supplies supply/tuner samplers and native plan
@@ -245,7 +248,8 @@ counter bit arithmetic, epochs, actor lives and world revisions. An ENet backend
 
 `IPacketTransport` distinguishes borrowed receive memory, accepted sends from delivery, per-lane ordering, handle
 invalidation and deferred disconnect notification. Six traffic classes include three independently ordered rotating
-reliable body checkpoint lanes. Keep those semantics when adding a backend ([transport contract](../src/Net/IPacketTransport.cs)).
+reliable body checkpoint lanes. TrafficReliability owns the lane index/count and reliability semantics; ENet maps
+those lane indices to channels, and FaultPacketTransport never calls an ENet helper. Keep those semantics when adding a backend ([transport contract](../src/Net/IPacketTransport.cs)).
 
 ## Replication transactions
 
@@ -298,8 +302,17 @@ Dissolve Run. Test overlays never change lobby/prototype eligibility. No IDs, sc
 [Original B3a evidence](evidence/mode-catalog-verification.md) records catalog completeness/restoration.
 The server-input follow-up completes that boundary; its parent inventory/packet comparison and
 remaining obligations are recorded in the [server-input evidence](evidence/mode-catalog-server-inputs.md).
-MessageCodec's schema/eligibility lookup remains assigned to N1: inject each owner's resolver while separating decode/admission failure from dispatch, preserving
-malformed-packet rejection order. LobbyServer's saved-template and snapshot conversion is A1 application-state work;
+N1 separates expected reader failures from dispatch. Only InvalidDataException, EndOfStreamException,
+FormatException and DecoderFallbackException thrown inside decoding are malformed input. Run admission logs
+expected rejections at their original check points, including checks after action-sequence consumption; a handler
+throwing any of those same exception types is an owner failure. Failure diagnostics retain exception type/stack.
+NetClient drops its connection/inbox through normal cleanup, including delayed inbox replay; queue overflow is an explicit admission result rather than a catch around receivers. Offline observers all
+run even if one fails. LobbyServer detaches and disposes the affected lobby's runs, clears staging and returns its
+phase to Waiting without retrying partially executed work, constructing a replacement, or disconnecting peers.
+It attempts an internal-failure notice and lobby state; notification/retirement failures are logged separately.
+The lobby can start another match; unrelated lobbies keep their existing tick/order. These are failure containment,
+not transaction rollback. A1 still owns moving NetClient's compatibility default construction into Main; explicit
+clients may inject both IPacketTransport and PacketCodec. No baseline entry names N1. LobbyServer's saved-template and snapshot conversion is A1 application-state work;
 ServerRun's native tuning resource/snapshot ownership is A1 work; its melee validator now receives a plain timing
 sample and live contact cap. No edge is deferred to B3a.
 

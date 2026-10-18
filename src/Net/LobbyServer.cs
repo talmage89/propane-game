@@ -60,6 +60,7 @@ public partial class LobbyServer : Node
     private bool subscribed;
     private double nextDiagnostics;
 
+    private readonly PacketCodec codec;
     private readonly ServerModes modes;
     private readonly Func<ServerMode, Tuning, int, SuburbSettings> supply;
     private readonly Func<ServerMode, Tuning, ModeTuners> copyModeTuners;
@@ -68,8 +69,9 @@ public partial class LobbyServer : Node
     // Parameterless script instantiation cannot supply application-owned mode inputs.
     public LobbyServer() => throw new InvalidOperationException("LobbyServer requires compiled server mode inputs");
     public LobbyServer(ServerModes modes, Func<ServerMode, Tuning, int, SuburbSettings> supply,
-        Func<ServerMode, Tuning, ModeTuners> copyModeTuners, Func<SuburbSettings, int, Func<int>, SuburbPlan> generate, ServerTransport services, IMonotonicClock? clock = null)
+        Func<ServerMode, Tuning, ModeTuners> copyModeTuners, Func<SuburbSettings, int, Func<int>, SuburbPlan> generate, ServerTransport services, PacketCodec codec, IMonotonicClock? clock = null)
     {
+        this.codec = codec ?? throw new ArgumentNullException(nameof(codec));
         this.modes = modes ?? throw new ArgumentNullException(nameof(modes));
         this.supply = supply ?? throw new ArgumentNullException(nameof(supply));
         this.copyModeTuners = copyModeTuners ?? throw new ArgumentNullException(nameof(copyModeTuners));
@@ -159,7 +161,7 @@ public partial class LobbyServer : Node
         if (now >= nextDiagnostics)
         {
             nextDiagnostics = now + (LaunchArgs.Current.Has("net-throttle-trace") ? .25 : 10);
-            if (LaunchArgs.Current.Has("capacity-metrics")) Log(CapacityMetrics.Server(clients.Keys.Select(id => peerIds.Connection(id)).Where(c => c != null).Select(c => transport.Diagnostics(c!))));
+            if (LaunchArgs.Current.Has("capacity-metrics")) Log(TransportMetrics.Server(clients.Keys.Select(id => peerIds.Connection(id)).Where(c => c != null).Select(c => transport.Diagnostics(c!))));
             foreach (var id in clients.Keys)
             {
                 if (peerIds.Connection(id) is not { } connection) { continue; }
@@ -186,7 +188,9 @@ public partial class LobbyServer : Node
         Log($"peer {id} ({client.Name}) disconnected");
         if (client.Lobby != null)
         {
-            LeaveLobby(client);
+            var lobby = client.Lobby;
+            try { LeaveLobby(client); }
+            catch (Exception error) { FailOwner(lobby, "departure", error); }
         }
     }
 
@@ -194,9 +198,17 @@ public partial class LobbyServer : Node
     {
         if (!clients.TryGetValue(from, out var client)) { return; }
         Msg? type = data.Length > 0 ? (Msg)data[0] : null;
+        NetMessage message;
+        try { message = codec.Decode(data, fromServer: false); }
+        catch (Exception error) when (PacketCodec.IsDecodeFailure(error))
+        {
+            Log($"bad {type?.ToString() ?? "empty"} message from {from}: {error.Message}");
+            return;
+        }
+        catch (Exception error) { FailOwner(client.Lobby, "decode", error); return; }
+        var previousLobby = client.Lobby;
         try
         {
-            var message = MessageCodec.Decode(data, fromServer: false);
             if (!client.Welcomed && message.Type != Msg.Hello) { return; }
             // Match traffic belongs to the lobby's current match or its current world; anything else is stale.
             var run = Protocol.IsMatch(message.Type) ? RunFor(client, message.MatchId) : null;
@@ -262,10 +274,37 @@ public partial class LobbyServer : Node
                     break;
             }
         }
-        catch (Exception e)
+        catch (Exception error) { FailOwner(client.Lobby ?? previousLobby, $"dispatch {message.Type}", error); }
+    }
+
+    /// <summary>
+    /// A partially executed handler is never rolled back or retried. Detach its lobby's routes before normal run
+    /// disposal; keep connections and other lobbies alive. No replacement run is constructed on the failure path.
+    /// </summary>
+    private void FailOwner(Lobby? lobby, string operation, Exception error)
+    {
+        Log($"owner failure in lobby {lobby?.Id.ToString() ?? "none"} during {operation}: {error}");
+        if (lobby == null) return;
+        lobby.Staged = null;
+        lobby.StageEnds = 0;
+        lobby.Phase = LobbyPhase.Waiting;
+        // Departure can fail after membership removal but before its usual creator/empty-lobby tail.
+        if (lobby.Members.Count == 0) lobbies.Remove(lobby.Id);
+        else if (!lobby.Members.Contains(lobby.CreatorId)) lobby.CreatorId = lobby.Members[0];
+        try { Retire(ref lobby.Match); }
+        catch (Exception cleanup) { Log($"match cleanup failure in lobby {lobby.Id}: {cleanup}"); }
+        try { Retire(ref lobby.World); }
+        catch (Exception cleanup) { Log($"world cleanup failure in lobby {lobby.Id}: {cleanup}"); }
+        // Keep peers connected and make the waiting lobby usable again, without re-entering the failed run.
+        // A persistent delivery failure must not interrupt another lobby's tick or cleanup.
+        try
         {
-            Log($"bad {type?.ToString() ?? "empty"} message from {from}: {e.Message}");
+            foreach (var peer in lobby.Members) SetLoading(peer, false);
+            foreach (var peer in lobby.Members)
+                Notice(clients[peer], "The server stopped this run after an internal failure. You can start another match.");
+            if (lobby.Members.Count > 0) SendLobbyState(lobby);
         }
+        catch (Exception cleanup) { Log($"failure notification in lobby {lobby.Id}: {cleanup}"); }
     }
 
     private void Hello(Client client, HelloMessage hello)
@@ -428,8 +467,8 @@ public partial class LobbyServer : Node
             StartsIn = lobby.Phase == LobbyPhase.Staging ? (float)Math.Clamp(lobby.StageEnds - clock.Seconds, 0, Protocol.MaxStage) : 0,
             WorldId = lobby.World?.Id ?? 0,
         };
-        var bytes = MessageCodec.Encode(new NetMessage(Msg.LobbyState, 0, 0, state), true);
-        var roster = MessageCodec.Encode(new NetMessage(Msg.RosterState, 0, 0,
+        var bytes = codec.Encode(new NetMessage(Msg.LobbyState, 0, 0, state), true);
+        var roster = codec.Encode(new NetMessage(Msg.RosterState, 0, 0,
             new RosterStateMessage(lobby.Id, lobby.Roster.Revision, actors)), true);
         foreach (var peer in lobby.Members) { Send(peer, bytes); Send(peer, roster); }
         SyncWorld(lobby);
@@ -447,7 +486,7 @@ public partial class LobbyServer : Node
         if (request <= client.LastActorRequest)
         {
             if (request == client.LastActorRequest && client.ActorReply != null)
-                Send(client.Id, MessageCodec.Encode(new NetMessage(Msg.ActorRequestResult, 0, 0, client.ActorReply), true));
+                Send(client.Id, codec.Encode(new NetMessage(Msg.ActorRequestResult, 0, 0, client.ActorReply), true));
             return;
         }
         var accepted = false;
@@ -462,7 +501,7 @@ public partial class LobbyServer : Node
         var result = new ActorRequestResultMessage(request, accepted, lobby?.Roster.Revision ?? 1, accepted ? "" : reason);
         client.LastActorRequest = request;
         client.ActorReply = result;
-        Send(client.Id, MessageCodec.Encode(new NetMessage(Msg.ActorRequestResult, 0, 0, result), true));
+        Send(client.Id, codec.Encode(new NetMessage(Msg.ActorRequestResult, 0, 0, result), true));
         if (accepted) { SendLobbyState(lobby!); BroadcastLobbyList(); }
     }
 
@@ -598,11 +637,15 @@ public partial class LobbyServer : Node
             lobby.Match = match;
             match.StartMatch();
         }
-        catch
+        catch (Exception failure)
         {
             if (lobby.Match == match) lobby.Match = null;
-            if (match != null) match.Dispose();
-            else tuning.Dispose();
+            try
+            {
+                if (match != null) match.Dispose();
+                else tuning.Dispose();
+            }
+            catch (Exception cleanup) { throw new AggregateException("Run construction and retirement failed", failure, cleanup); }
             throw;
         }
         SendLobbyState(lobby);
@@ -611,7 +654,11 @@ public partial class LobbyServer : Node
 
     internal void AdvanceMatches(double now)
     {
-        foreach (var lobby in lobbies.Values.ToList()) { Tick(lobby, now); }
+        foreach (var lobby in lobbies.Values.ToList())
+        {
+            try { Tick(lobby, now); }
+            catch (Exception error) { FailOwner(lobby, "tick", error); }
+        }
     }
 
     private void Tick(Lobby lobby, double now)
@@ -650,7 +697,7 @@ public partial class LobbyServer : Node
         var mode = world ? modes.Roaming : lobby.Mode;
         return new ServerRun(matchIds.Allocate(), lobby.Id, lobby.CreatorId, debug, length, world, tuning, mode,
             players => supply(mode, tuning, players), () => copyModeTuners(mode, tuning), generate, clock,
-            Send, world ? SetLoading : SetMatchLoading, phase => lobby.Phase = phase, () => ReturnToLobby(lobby), Log, TraceAuthority);
+            Send, world ? SetLoading : SetMatchLoading, phase => lobby.Phase = phase, () => ReturnToLobby(lobby), Log, TraceAuthority, codec);
     }
 
     // A frozen match roster must still name connected peers during construction. Preserve its strict lookup;

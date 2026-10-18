@@ -312,7 +312,7 @@ public sealed class NetReader
         _ => throw new InvalidDataException("unsupported tuner type"),
     };
 
-    public Godot.Collections.Dictionary Snapshot()
+    public Godot.Collections.Dictionary Snapshot(Action<Godot.Collections.Dictionary, bool> validate)
     {
         var values = new Godot.Collections.Dictionary();
         var count = Count(Int(), Protocol.MaxCollection);
@@ -322,7 +322,7 @@ public sealed class NetReader
             if (values.ContainsKey(name)) { throw new InvalidDataException("duplicate tuner"); }
             values[name] = Scalar();
         }
-        Core.Tuning.ValidateSnapshot(values, complete: true);
+        validate(values, true);
         return values;
     }
 

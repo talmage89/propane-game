@@ -7,7 +7,7 @@ using Godot;
 namespace Propane.Net;
 
 /// <summary>Engine frame cost, resident process memory and transport/inbox pressure for repeatable capacity runs.</summary>
-public static class CapacityMetrics
+public static class TransportMetrics
 {
     public static string Server(IEnumerable<TransportDiagnostics> connections)
     {
@@ -21,11 +21,17 @@ public static class CapacityMetrics
             Drops = records.Sum(d => d.Drops),
         });
     }
-    public static string Sample(string role, NetClient? net = null, TransportDiagnostics diagnostics = default)
+    public static string Sample(string role, TransportDiagnostics diagnostics = default, (int Packets, int Bytes, int Overflows) inbox = default)
     {
         using var process = Process.GetCurrentProcess();
-        var d = net?.Diagnostics ?? diagnostics;
-        var inbox = net?.InboxPressure ?? default;
+        var d = diagnostics;
         return FormattableString.Invariant($"metrics {role} process={Performance.GetMonitor(Performance.Monitor.TimeProcess) * 1000:0.000}ms physics={Performance.GetMonitor(Performance.Monitor.TimePhysicsProcess) * 1000:0.000}ms rss={process.WorkingSet64}B in={d.BytesIn}B out={d.BytesOut}B queue={d.QueuedPackets}/{d.QueuedBytes}B drops={d.Drops} inbox={inbox.Packets}/{inbox.Bytes}B overflows={inbox.Overflows}");
     }
+}
+
+/// <summary>Composition samples client-owned inbox/transport observations before invoking the neutral formatter.</summary>
+public static class CapacityMetrics
+{
+    public static string Sample(string role, NetClient? net = null, TransportDiagnostics diagnostics = default) =>
+        TransportMetrics.Sample(role, net?.Diagnostics ?? diagnostics, net?.InboxPressure ?? default);
 }

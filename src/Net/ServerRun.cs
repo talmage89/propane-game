@@ -51,6 +51,7 @@ internal sealed class ServerRun : IModeHost, IDisposable
     private readonly float length;
     private readonly Tuning tuning;
     internal Tuning Tuning => tuning; // Native lifetime observation; this run owns and disposes it.
+    private readonly PacketCodec codec;
     private readonly ServerMode mode;
     private readonly Func<int, SuburbSettings> supply;
     private readonly Func<ModeTuners> readModeTuners;
@@ -65,8 +66,9 @@ internal sealed class ServerRun : IModeHost, IDisposable
 
     public ServerRun(int id, int lobbyId, int creator, bool creatorDebug, float length, bool isWorld, Tuning tuning, ServerMode mode,
         Func<int, SuburbSettings> supply, Func<ModeTuners> readModeTuners, Func<SuburbSettings, int, Func<int>, SuburbPlan> generate, IMonotonicClock clock, Action<int, byte[], TrafficClass> deliver, Action<int, bool> loading,
-        Action<LobbyPhase> phaseChanged, Action returnToLobby, Action<string> log, Action<int, AuthorityMessage> authorityPublished)
+        Action<LobbyPhase> phaseChanged, Action returnToLobby, Action<string> log, Action<int, AuthorityMessage> authorityPublished, PacketCodec codec)
     {
+        this.codec = codec;
         Id = id;
         this.lobbyId = lobbyId;
         creatorId = hostId = creator;
@@ -92,8 +94,8 @@ internal sealed class ServerRun : IModeHost, IDisposable
         if (IsRetired) return;
         IsRetired = true;
         tuning.Dispose();
-        Retired?.Invoke();
-        Retired = null;
+        try { Retired?.Invoke(); }
+        finally { Retired = null; }
     }
 
     private PhaseTimes Times => new(LoadTimeout, tuning.CountdownTime, tuning.ResultsTime);
@@ -136,7 +138,7 @@ internal sealed class ServerRun : IModeHost, IDisposable
             ModeId = mode.Id,
             ModeSchema = mode.SchemaVersion,
         };
-        var bytes = MessageCodec.Encode(new NetMessage(Msg.MatchStart, Id, 0, setup), true);
+        var bytes = codec.Encode(new NetMessage(Msg.MatchStart, Id, 0, setup), true);
         foreach (var id in peers)
         {
             loading(id, true);
@@ -213,11 +215,11 @@ internal sealed class ServerRun : IModeHost, IDisposable
             ModeSchema = modeRunner.Definition.SchemaVersion,
         };
         loading(peer, true);
-        Send(peer, MessageCodec.Encode(new NetMessage(Msg.MatchStart, Id, 0, setup), true));
+        Send(peer, codec.Encode(new NetMessage(Msg.MatchStart, Id, 0, setup), true));
         var live = tanks.Live();
         for (var start = 0; start < live.Count; start += Protocol.MaxCollection)
         {
-            Send(peer, MessageCodec.Encode(new NetMessage(Msg.Authority, Id, 0, new AuthorityMessage(hostId, 0, ClaimRefusal.None,
+            Send(peer, codec.Encode(new NetMessage(Msg.Authority, Id, 0, new AuthorityMessage(hostId, 0, ClaimRefusal.None,
                 live.Skip(start).Take(Protocol.MaxCollection).ToArray())), fromServer: true));
         }
         Send(peer, new NetWriter(Msg.MatchGo, Id).Float(0));
@@ -256,7 +258,7 @@ internal sealed class ServerRun : IModeHost, IDisposable
         var transfers = peers.Count > 0 ? tanks.Transfer(peer, hostId) : Array.Empty<BodyAuthority>();
         foreach (var id in peers)
         {
-            Send(id, MessageCodec.Encode(new NetMessage(Msg.Authority, Id, 0,
+            Send(id, codec.Encode(new NetMessage(Msg.Authority, Id, 0,
                 new AuthorityMessage(hostId, 0, ClaimRefusal.None, transfers)), fromServer: true));
             Send(id, new NetWriter(Msg.PlayerLeft, Id).Int(peer).Int(hostId), traffic: TrafficClass.ReliableOrdered);
         }
@@ -463,7 +465,7 @@ internal sealed class ServerRun : IModeHost, IDisposable
                 if (!tanks.Gather(peer, hostId, gather, playOpen)) { return; }
                 break;
             case BodyStatesMessage states:
-                tanks.ValidateBodies(states.Bodies.Select(b => b.Id));
+                if (!KnownBodies(peer, message.Type, states.Bodies.Select(b => b.Id))) return;
                 var accepted = states.Bodies.Where(b => tanks.Update(peer, b, rest: false)).ToArray();
                 if (accepted.Length == 0) { return; }
                 // Sampling uses the owner's estimate of our clock, only for bounded pose extrapolation, never ordering.
@@ -474,7 +476,7 @@ internal sealed class ServerRun : IModeHost, IDisposable
                 message = message with { Payload = states with { Time = sampledAt, Bodies = accepted } };
                 break;
             case BodyRestMessage rest:
-                tanks.ValidateBodies(new[] { rest.Id });
+                if (!KnownBodies(peer, message.Type, new[] { rest.Id })) return;
                 if (!tanks.Update(peer, new BodyState(rest.Id, rest.Transform, Vector3.Zero, Vector3.Zero, rest.Epoch, rest.Sequence), rest: true)) { return; }
                 break;
             case MeleeStartMessage strike:
@@ -496,19 +498,20 @@ internal sealed class ServerRun : IModeHost, IDisposable
                 if (shot.Victim != 0 && (!ValidTarget(shot.Victim, shot.VictimLifeId) || shot.Victim == actorId) ||
                     shot.PropIndex >= 0 && !looseProps.Contains(shot.PropIndex))
                 {
-                    throw new InvalidDataException("unknown shot target");
+                    Reject(peer, message.Type, "unknown shot target");
+                    return;
                 }
                 break;
             case TuningMessage tune:
                 // The original creator's debug capability is captured at start, never transferred with hosting.
-                if (peer != creatorId || !creatorDebug) { throw new InvalidDataException("tuning requires the debug creator"); }
+                if (peer != creatorId || !creatorDebug) { Reject(peer, message.Type, "tuning requires the debug creator"); return; }
                 // Supply belongs to the locked lobby choice, not live debug edits or Defaults.
                 if (tune.Name == nameof(Tuning.TankCountMultiplier)) return;
                 tuning.Apply(new Godot.Collections.Dictionary { [tune.Name] = tune.Value });
                 modeRunner.Apply(this, new TunersChanged(readModeTuners()), clock.Seconds);
                 break;
         }
-        var bytes = MessageCodec.Encode(message with { Sender = peer }, fromServer: true);
+        var bytes = codec.Encode(message with { Sender = peer }, fromServer: true);
         var traffic = message.Type switch
         {
             Msg.PlayerState => TrafficClass.UnreliablePlayerPoses,
@@ -521,6 +524,14 @@ internal sealed class ServerRun : IModeHost, IDisposable
         }
     }
 
+    private bool KnownBodies(int peer, Msg type, IEnumerable<uint> ids)
+    {
+        try { tanks.ValidateBodies(ids); return true; }
+        catch (InvalidDataException error) { Reject(peer, type, error.Message); return false; }
+    }
+
+    private void Reject(int peer, Msg type, string detail) => log($"bad {type} message from {peer}: {detail}");
+
     /// <summary>
     /// A mode event: the envelope codec already checked its schema, kind, direction and bounds. The reporter must own
     /// the actor with its current life and a newer action sequence; causal dependencies wait in the run's gate.
@@ -529,7 +540,10 @@ internal sealed class ServerRun : IModeHost, IDisposable
     {
         var envelope = (ModeEnvelope)message.Payload;
         if (envelope.ModeId != modeRunner.Definition.Id || envelope.SchemaVersion != modeRunner.Definition.SchemaVersion)
-            throw new InvalidDataException($"mode event for schema {envelope.ModeId}/{envelope.SchemaVersion} in a {modeRunner.Definition.Name} run");
+        {
+            Reject(peer, message.Type, $"mode event for schema {envelope.ModeId}/{envelope.SchemaVersion} in a {modeRunner.Definition.Name} run");
+            return;
+        }
         var kind = modeRunner.Schema.Kind(envelope.Kind, ModeDirection.Event);
         if (kind.Reporter == ModeReporter.WorldAuthority && peer != hostId) return;
         if (kind.Reporter is ModeReporter.ActorOwner or ModeReporter.WorldAuthority && !AcceptActor(peer, message)) return;
@@ -544,12 +558,12 @@ internal sealed class ServerRun : IModeHost, IDisposable
 
     void IModeHost.Broadcast(Msg type, ModeEnvelope envelope)
     {
-        var bytes = MessageCodec.Encode(new NetMessage(type, Id, 0, envelope), fromServer: true);
+        var bytes = codec.Encode(new NetMessage(type, Id, 0, envelope), fromServer: true);
         foreach (var id in peers) Send(id, bytes);
     }
 
     void IModeHost.Send(int peer, Msg type, ModeEnvelope envelope) =>
-        Send(peer, MessageCodec.Encode(new NetMessage(type, Id, 0, envelope), fromServer: true));
+        Send(peer, codec.Encode(new NetMessage(type, Id, 0, envelope), fromServer: true));
 
     void IModeHost.RegisterEntities(int actorId, int peer, IReadOnlyList<BodyState> bodies) =>
         tanks.RegisterDrops(slots[actorId], peer, bodies);
@@ -584,7 +598,7 @@ internal sealed class ServerRun : IModeHost, IDisposable
     private void PublishAuthority(AuthorityMessage result)
     {
         authorityPublished(Id, result);
-        var bytes = MessageCodec.Encode(new NetMessage(Msg.Authority, Id, 0, result), fromServer: true);
+        var bytes = codec.Encode(new NetMessage(Msg.Authority, Id, 0, result), fromServer: true);
         if (result.Reason == ClaimRefusal.None)
         {
             foreach (var id in peers) { Send(id, bytes); }
