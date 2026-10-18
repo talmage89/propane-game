@@ -59,6 +59,7 @@ class DeployLogTests(unittest.TestCase):
             script = project / "tools" / "server" / "deploy.sh"
             script.parent.mkdir(parents=True)
             script.write_text((Path(__file__).parents[1] / "server" / "deploy.sh").read_text())
+            (project / "project.godot").write_text('[application]\nconfig/version="1.2.3"\n')
             commands = project / "commands"
             commands.mkdir()
             fake = commands / "godot"
@@ -70,7 +71,8 @@ class DeployLogTests(unittest.TestCase):
                 "exit 134\n"
             )
             git = commands / "git"
-            git.write_text("#!/usr/bin/env bash\necho fixture\n")
+            git.write_text('#!/usr/bin/env bash\ncase "$1" in\n'
+                           'status|merge-base) exit 0 ;;\nrev-parse) echo fixture ;;\n*) exit 2 ;;\nesac\n')
             ssh = commands / "ssh"
             ssh.write_text("#!/usr/bin/env bash\ntouch \"$TMPDIR/ssh-called\"\nexit 99\n")
             for command in (fake, git, ssh):

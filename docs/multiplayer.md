@@ -346,8 +346,11 @@ first bot package are in the [multiplayer verification records](evidence/multipl
 The server is the game itself started with `-- --server` (and `--headless`). It runs no physics and uses little CPU.
 
 - **Docker:** `tools/server/deploy.sh <ssh host> <dir>` exports the Linux build and runs it in Docker on that host,
-  in `~/<dir>` (container `propane-server`, `restart: unless-stopped`, UDP 24680). Run it from the latest release's
-  commit (`main`): it then plays with every patch of that minor version. Logs: `docker compose logs -f` in that folder.
+  in `~/<dir>` (container `propane-server`, `restart: unless-stopped`, UDP 24680). It requires a clean checkout whose
+  HEAD is the version's matching release tag (`v<config/version>`) contained in local `main`. Fetch release history and
+  use a separate release checkout; it refuses unreleased work and does not select or promise the latest remote release.
+  The exported assembly/PCK must pass inventory before SSH starts; `game/release-id.txt` records tag and commit.
+  It plays with every patch of that minor version. Logs: `docker compose logs -f` in that folder.
 - **Reaching it:** players connect to the machine's address on UDP 24680: its LAN address, its address on a VPN the
   players share, or, with UDP 24680 forwarded on the router, the public address.
 - **From source:** `godot --headless --path . -- --server [--port=24680]`.

@@ -92,7 +92,8 @@ for fault simulation, disconnect reasons and diagnostics. On Windows or macOS, t
 first time you host, allow incoming connections if the system asks.
 
 The dedicated server is the same game run headless: `./Propane.x86_64 --headless -- --server [--port=24680]`.
-`tools/server/deploy.sh <ssh host> <dir>` exports it and runs it in Docker on any machine you can reach over ssh;
+`tools/server/deploy.sh <ssh host> <dir>` exports a clean release-tag checkout contained in local `main`, inventories
+it and runs it in Docker on any machine you can reach over ssh;
 see [multiplayer.md](multiplayer.md) for hosting and reaching it. Keep a server on the latest release: it
 then plays with every patch of that minor version.
 

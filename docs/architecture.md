@@ -408,6 +408,11 @@ classic, server and single-player smoke paths before release publication. CI use
 rendered Forward+ and multiplayer remain separate local proof. Source Release and optimized Debug retain Dev and
 are checked independently of the shipping configuration. No new runtime owner, timer or cross-module edge is added.
 
+Deployment refuses a dirty checkout, a version without its matching release tag at HEAD, or a tag outside local
+`main`'s history. It inventories the exported game before contacting the host and records tag/commit in
+`game/release-id.txt`. This is a selected local release checkout, not a promise of the latest remote release.
+Three exports do not prove Windows/macOS runtime behavior: retain the
+[platform checklist and CI limits](runbooks/release-artifacts.md) until automated execution replaces them.
 
 All patches within a minor interoperate. Anything players share—messages, suburb construction, tanks, tuners—needs
 a minor release for a behavior change; bump `Protocol.Version` for message-shape changes, retaining trailing-only

@@ -84,7 +84,7 @@ Versions with the same major and minor number play together (0.4.0 with 0.4.3); 
 which version it needs.
 
 The dedicated server is the same game run headless, `./Propane.x86_64 --headless -- --server [--port=24680]`, and
-`tools/server/deploy.sh <ssh host> <dir>` runs it in Docker on any machine you can reach over ssh. See
+`tools/server/deploy.sh <ssh host> <dir>` runs it from a clean release-tag checkout in Docker on any machine you can reach over ssh. See
 [hosting the server](docs/multiplayer.md#hosting-the-server) for reaching it.
 
 ## Building from source
