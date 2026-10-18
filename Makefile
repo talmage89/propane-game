@@ -88,6 +88,7 @@ test-core: build ## Run checker, platform, movement, unit and scripted mode-rule
 	"$(GODOT)" --headless --path . res://scenes/dev/shutdown_tests.tscn -- --paused --window-close --repeat-quit
 
 test-behavior: build ## Run isolated physics, navigation, menu, grip and feet probes
+	"$(GODOT)" --headless --path . res://scenes/dev/application_state_tests.tscn
 	GODOT="$(GODOT)" python3 -B tools/dev/check_shader_capacity.py
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/rifle_reach_tests.tscn
 	"$(GODOT)" --headless --path . res://scenes/dev/server_tuning_tests.tscn -- --server --tune.MaxPlayers=6 --port=$(PORT)

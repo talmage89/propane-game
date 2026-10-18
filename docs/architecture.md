@@ -54,7 +54,7 @@ stable top-level owner so compiler-generated numbering does not cause churn.
 | Current source location | Logical mapping and qualifications |
 | --- | --- |
 | `src/Main.cs`, `Game*`, `Session/`, `Lab/` | Composition (physical session assembly, local adapters and runners). |
-| `Core/` | Foundation by default; world services, spawn, assets and `Tuning` are Simulation; launch/settings are Composition; device setup is Presentation. |
+| `Core/` | Foundation by default; world services, spawn, assets and `Tuning` are Simulation; the immutable launch snapshot and preference contract are Foundation, while persistence and launch tuning application are Composition; device setup is Presentation. |
 | `World/Plan/` | Plans: ordered generation, model metadata, coordinate frame, catalog snapshot and segment values. `SuburbPlans` converts live tuning in Composition; native `GameCatalog.Capture`, catalog/builder/materials remain Simulation. |
 | `Modes/` | Rules by default; `ModeDefinition`/`ModeBundle`/`ModeCatalog`/registry/supply are Composition; HUD input/presenters are Presentation; HUD values/`IModeView` remain plain rules observations. |
 | `Player/`, `Tank/`, `Fx/` | Simulation by default; input values and resolved state values are Foundation; cameras/views/device input and mode geometry are Presentation; `ReplicatedIntent` is Client. The separate `PlayerNetState.cs` is a Foundation value; shared profiling lives in `Diagnostics/`. |
@@ -72,9 +72,9 @@ source type to acquire that dependency. Do not broaden the map or silently regen
 | Match still owns world/actor replication, bots and view binding | B2 owns transactions and B3b1 owns mode client policy. C2 finishes independent replication/bot/view owners, preserving synchronous ordering. |
 | Physical actor holds replication attachments and view/device conveniences | C1 has moved identity/body contracts; C2 moves client state and narrow view binding beside actor lifetime. |
 | C1 contract placement (complete) | Shared identity/appearance/body values and ID formulas are Foundation; lobby contracts/phases are Wire; standings are Rules; metadata/coordinates/snapshots/segment values are Plans. Native capture and tuner conversion stay outside Plans. No baseline entry names C1. |
-| Lobby/run native tuning and codec catalog resolution | B3a supplies presentation-free ServerMode/ServerModes inputs. A1 owns LobbyServer template/snapshot sampling and ServerRun native configuration ownership, live reads and exactly-once retirement. C1 made melee admission consume sampled plain values. N1 injects owner-scoped codec schema/eligibility/tuner validation with unchanged rejection order. No baseline entry remains assigned to B3a. |
+| Lobby/run native tuning and codec catalog resolution | B3a supplies presentation-free ServerMode/ServerModes inputs. Application ServerSettings supplies template/snapshot sampling and run-owned IServerRunSettings, preserving live reads and exactly-once retirement. C1 made melee admission consume sampled plain values. N1 injects owner-scoped codec schema/eligibility/tuner validation with unchanged rejection order. No baseline entry remains assigned to B3a. |
 | Fault transport calls ENet lane helper; server diagnostics/factory cross composition | N1 supplies transport-independent lanes and injected delivery/diagnostic boundaries. |
-| Settings and launch access are implicit | A1 provides explicit application ownership and scoped test stores/overrides. |
+| Application state (A1) | Main owns the Composition settings store; UI borrows IPlayerSettings through the Foundation selection contract, tests bind isolated stores. LaunchArgs is an immutable Foundation snapshot with scoped test overrides; tuning mutation stays in composition. ProcessPhysicsPolicies owns both engine-write policies. [A1 evidence](evidence/application-state.md). |
 | Client actor attachment retirement (L1) | Session-owned `ActorRegistration` detaches subscriptions and actor caches before native free; remaining attachments keep the original unsubscribe/stop/view/actor order. |
 | Lab bookkeeping and prototype live-rule reads | B4b shares local difficulty, tank facts and offline placement; semantic attribution and rule submission stay runner-owned. B3b2 supplies plain observations with explicit read-time clock and allocation-free bot reads. |
 | Streaming incidental history (W1 implemented) | Ordinary arena timing lists stay empty; a feed watermark compacts the retired prefix, retaining only out-of-order forgotten indices. Navigation eviction and ledger-history pruning need separate retention contracts. |
@@ -131,7 +131,7 @@ generation at the original synchronous read points; rule initialization still pr
 
 | Lifetime | Current owner; retirement boundary |
 | --- | --- |
-| Application | Main, application settings/template, launch snapshot, caches, optional hosted server; process exit. A1 makes mutable services explicit. |
+| Application | Main, application settings/template, launch snapshot, caches, optional hosted server; process exit. Main binds/disposes the settings store after scene consumers retire. |
 | Connection/lobby | NetClient and transport/inbox; disconnect/reconnect. Server connections/lobbies can span successive runs. |
 | Logical run/match | ServerRun and LabMatch rules; end/replacement, not necessarily a world lifetime. LobbyServer retains connections/lobbies across runs. |
 | Physical session | SessionContext: world attachment, actor registry, views, cancellation and registrations; synchronous session disposal. |
@@ -193,7 +193,7 @@ The project configures Jolt at 120 physics ticks/s and an ordinary 12 catch-up s
 | Render delta | Presentation and some logical aim/recoil settling; LogicalAim affects shot transforms even without a camera. |
 | Unscaled monotonic network time | IMonotonicClock/MonotonicClock, authority deadlines, snapshots, publication and transport faults. Never compare to simulation seconds. |
 | Server phase time | Injected server clock and phase machine, advanced in `_Process`; no Jolt world on the dedicated server. |
-| Real-time process leases | WorldTimeScale hitstop and TankSimulation dense-chain catch-up. Expire independently of slowed simulation. |
+| Real-time process leases | ProcessPhysicsPolicies hitstop and dense-chain catch-up, with eligibility/hold polling still in TankSimulation. Expire independently of slowed simulation. |
 | Wall calendar/diagnostics | Daily seed chosen at run creation, save-status display, profiling; never substitute for gameplay timers. |
 
 [WorldClock](world-clock.md) snapshots eligible timers at entry in insertion order, keeps cancellation observable,
@@ -221,8 +221,10 @@ plain settings/catalog/seed and return plans. Worker completion order must not d
 readbacks drain before native teardown. These are approved worker boundaries, not permission to send scene objects
 to another worker.
 
-[UpdateCheck](../src/Net/UpdateCheck.cs) explicitly resumes on the Godot context after awaiting HTTP. **Current
-exception, A1:** it lacks cancellation/liveness suppression; completion after retirement must be canceled or ignored.
+[UpdateCheck](../src/Net/UpdateCheck.cs) explicitly resumes on the Godot context after awaiting HTTP. Its node
+owns one request: tree exit/predelete cancels it and clears subscribers. Completion checks retirement before parsing,
+logging or updating menus, including transports that ignore cancellation. The request disposes its cancellation
+source after completion; the HTTP timeout remains ten real seconds.
 Main already guards asynchronous world transitions by generation/run identity. New async owners state cancellation
 and late-completion behavior. The checker flags new worker entry sites and native references in the direct-call
 closure of known worker delegates; dynamic/interface/reflection dispatch still requires review. The one intentional
@@ -299,8 +301,8 @@ Dissolve Run. Test overlays never change lobby/prototype eligibility. No IDs, sc
 The server-input follow-up completes that boundary; its parent inventory/packet comparison and
 remaining obligations are recorded in the [server-input evidence](evidence/mode-catalog-server-inputs.md).
 MessageCodec's schema/eligibility lookup remains assigned to N1: inject each owner's resolver while separating decode/admission failure from dispatch, preserving
-malformed-packet rejection order. LobbyServer's saved-template and snapshot conversion is A1 application-state work;
-ServerRun's native tuning resource/snapshot ownership is A1 work; its melee validator now receives a plain timing
+malformed-packet rejection order. LobbyServer borrows IServerSettings from application composition. ServerSettings owns template/snapshot conversion;
+its run adapter owns and disposes each native copy, while ServerRun owns that adapter. The melee validator receives a plain timing
 sample and live contact cap. No edge is deferred to B3a.
 
 **Current B4b:** `LocalBank` and `PrototypeRunner` each own a `LabTankFacts` instance for last direct contacts
@@ -406,13 +408,13 @@ See [world services](world-services.md#streamed-content-history), [the Lab](lab.
 
 | Process state | Current owner; target/constraint |
 | --- | --- |
-| Launch arguments | LaunchArgs.Current lazy snapshot, internal test replacement; A1 preserves immutable application input and scoped test override. |
-| Player preferences | PlayerSettings static mutable persistence; A1 application store and isolated test stores, same format/save timing. |
-| Saved tuning | Tuning.SavedTemplate application preference; each WorldContext copies it. UI edits explicit world target. A1 formalizes borrowing. |
+| Launch arguments | LaunchArgs.Current is a lazy immutable Foundation snapshot. Main-thread test overrides nest strictly and restore the exact previous snapshot on disposal; only composition applies tuning overrides. |
+| Player preferences | Main owns/binds one disposable PlayerSettings store. Menus/MenuProfile and match UI borrow a store; isolated tests own stores and strictly nested bindings. Lazy load, format, migration and immediate save timing are unchanged. |
+| Saved tuning | Tuning.SavedTemplate application preference; each WorldContext copies it. UI edits explicit world target. The template is borrowed for composition/UI; never dispose it or use it as a mutable world target. Explicit launch overrides and successful Save update it for future worlds. |
 | Asset/catalog caches | Main-thread process caches above; borrowed immutable resources, no per-world mutation. |
 | Instance materials/effects | Instance/world/content owners; retire at their real lifetime. |
-| Engine.TimeScale | WorldTimeScale exclusive hitstop lease: one live unpaused offline world; a second world, pause or retirement releases it. |
-| Engine.MaxPhysicsStepsPerFrame | TankSimulation dense-chain lease: smallest overlapping offline request, prior value restored, any registered live network tank simulation vetoes. Registration timing matters. A1 consolidates discoverability of these two distinct policies. |
+| Engine.TimeScale | ProcessPhysicsPolicies.Hitstop exclusive lease: one live unpaused offline world; a second world, pause or retirement releases it. |
+| Engine.MaxPhysicsStepsPerFrame | ProcessPhysicsPolicies catch-up registrations: smallest overlapping offline request, prior value restored, any registered live network tank simulation vetoes. TankSimulation registers on first tank entry, samples real-time eligibility in its existing callback, and unregisters on stopping/exit. The two policies retain independent rules. |
 | SceneTree pause / quit | No production tree-wide pause; WorldContext pauses its own root/physics space. ShutdownGuard owns orderly direct quit; isolated legacy/witness Dev exceptions are inventoried. |
 | World shader state | WorldReveal instance parameters occupy slots 12–15; actor parameters use lower slots. DissolveArena still writes global `reveal_window`: one independently advancing streamed world per process until W2. Multiple cameras of that same stream are supported by the model. |
 | Mode catalog | Composition-owned immutable shipped ModeCatalog; validated ModeRegistry overlays restore exact prior entries/order on scoped disposal (B3a). |

@@ -30,6 +30,16 @@ namespace Propane.Dev;
 /// </summary>
 public partial class NetTest : Node, INetScenarioHost
 {
+    private readonly PlayerSettings applicationSettings = new("res://build/a1-nettest-settings.cfg");
+    private System.IDisposable? settingsBinding;
+
+    public override void _Notification(int what)
+    {
+        if (what != NotificationPredelete) return;
+        settingsBinding?.Dispose();
+        applicationSettings.Dispose();
+    }
+
     private NetScenarioRegistration registration = null!;
     private NetScenario? scenario;
     private IBotBrain bot = null!;
@@ -62,6 +72,7 @@ public partial class NetTest : Node, INetScenarioHost
 
     public override void _Ready()
     {
+        settingsBinding = PlayerSettings.Bind(applicationSettings);
         DevArgs.Setup();
         // Several test windows share one screen; a window the compositor is not showing would otherwise block on vsync.
         DisplayServer.WindowSetVsyncMode(DisplayServer.VSyncMode.Disabled);
@@ -346,9 +357,13 @@ public partial class NetTest : Node, INetScenarioHost
 
     public override void _ExitTree()
     {
-        (bot as IDisposable)?.Dispose();
-        worldBot?.Dispose();
-        scenario?.Dispose();
+        try
+        {
+            (bot as IDisposable)?.Dispose();
+            worldBot?.Dispose();
+            scenario?.Dispose();
+        }
+        finally { settingsBinding?.Dispose(); settingsBinding = null; }
     }
 
     /// <summary>Each owned bot's idle share and statuses, then the mean and worst share (see <see cref="BotActivity"/>).</summary>

@@ -42,7 +42,7 @@ public partial class Tuning : Resource
     /// </summary>
     public static string FilePath => OS.HasFeature("editor") ? ProjectPath : PlayerPath;
 
-    /// <summary>The application saved template, used only at composition and by application UI. Worlds own copies. Loaded on first access from <see cref="FilePath"/>, falling back to the project's.</summary>
+    /// <summary>The process-lifetime application template, borrowed only at composition and by application UI. Never dispose it; worlds own copies. Only explicit launch overrides and successful Save update this preference. Loaded on first access from <see cref="FilePath"/>, falling back to the project's.</summary>
     public static Tuning SavedTemplate
     {
         get

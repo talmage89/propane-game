@@ -18,8 +18,12 @@ namespace Propane.Dev;
 /// </summary>
 public partial class CapacityUiTests : Node
 {
+    private readonly PlayerSettings settings = new("user://capacity_ui_settings.cfg");
+    private System.IDisposable? settingsBinding;
+
     public override async void _Ready()
     {
+        settingsBinding = PlayerSettings.Bind(settings);
         var net = new NetClient();
         var menus = new Menus { Net = net, HostingNote = "Host on this computer · UDP lobby" };
         var results = new ResultsScreen();
@@ -115,8 +119,7 @@ public partial class CapacityUiTests : Node
     /// <summary>The match HUD's leaderboard over the real HUD: local inside and outside the top rows, and a climb mid-slide.</summary>
     private async Task TestLeaderboard(PlayerProfile[] profiles, CaptureDirector capture)
     {
-        PlayerSettings.UseFile("user://capacity_ui_settings.cfg");
-        PlayerSettings.ShowLeaderboard = true;
+        settings.ShowLeaderboard = true;
         using var world = new WorldContext(this, Tuning.SavedTemplate);
         var hud = new MatchHud { World = world };
         AddChild(hud);
@@ -170,7 +173,7 @@ public partial class CapacityUiTests : Node
             UnitTests.TestRunner.Assert(panel.Board.Rows[0].Entry.Id == profiles[rows - 1].Id && panel.Board.Motion(profiles[rows - 1].Id)!.Slot < 0.01f,
                 "climber did not settle first");
         }
-        PlayerSettings.ShowLeaderboard = false;
+        settings.ShowLeaderboard = false;
         await Show(inside, 30).ConfigureAwait(true);
         UnitTests.TestRunner.Assert(!panel.Visible, "the player's setting did not hide the leaderboard");
         hud.Free();
@@ -198,5 +201,17 @@ public partial class CapacityUiTests : Node
     private async Task Frames(int count)
     {
         for (var i = 0; i < count; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+    }
+    public override void _ExitTree()
+    {
+        settingsBinding?.Dispose();
+        settingsBinding = null;
+    }
+
+    public override void _Notification(int what)
+    {
+        if (what != NotificationPredelete) return;
+        settingsBinding?.Dispose();
+        settings.Dispose();
     }
 }

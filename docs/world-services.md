@@ -102,16 +102,17 @@ global written/reset by `DissolveArena`: only one independently advancing stream
 scope it before independent streams coexist; multiple views of the same stream do not require separate windows.
 See [the architecture contract](architecture.md#globals-and-budgets).
 
-One application-wide simulation policy is `WorldTimeScale`: an exclusive hitstop lease. Only one live,
+The process policy owner is `ProcessPhysicsPolicies`. Its hitstop policy is an exclusive hitstop lease. Only one live,
 unpaused offline context can acquire it; construction of a second context, pause or retirement releases it. The
 always-processing driver expires the presentation lease in real seconds while gameplay uses simulation seconds.
 Network worlds cannot acquire it. The isolation scene also asserts actual physics pause/resume, independent reveal,
 lease restrictions and a production client/server handshake completing while a world is paused.
 
-`TankSimulation` separately arbitrates `Engine.MaxPhysicsStepsPerFrame` for dense offline chains. Overlapping leases
+`TankSimulation` computes dense offline chain eligibility and hold time, then requests the separate catch-up policy
+in `ProcessPhysicsPolicies`, the sole production writer of `Engine.MaxPhysicsStepsPerFrame`. Overlapping leases
 use the smallest requested limit and restore the prior engine value when they end; a registered live network tank
-simulation vetoes them. Registration timing, pause and retirement behavior are part of this policy. A1 consolidates
-discoverability without merging its rules with hitstop.
+simulation vetoes them. Registration timing, pause and retirement behavior are part of this policy; registering the world itself does
+not veto catch-up before its first tank simulation enters. Neither policy changes the other's eligibility.
 
 The driver subscribes to [scene-tree frame signals](https://docs.godotengine.org/en/stable/classes/class_scenetree.html#signals),
 which run before node processing. This keeps the native signal emitter alive while deferred navigation synchronously

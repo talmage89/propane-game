@@ -13,6 +13,16 @@ namespace Propane.Dev;
 /// <summary>Real Lab sessions: retirement, fixture counts, session-only tuning, local banks and player-camera frames.</summary>
 public partial class LabTest : Node, ILabScenarioHost
 {
+    private readonly PlayerSettings applicationSettings = new("res://build/a1-labtest-settings.cfg");
+    private System.IDisposable? settingsBinding;
+
+    public override void _Notification(int what)
+    {
+        if (what != NotificationPredelete) return;
+        settingsBinding?.Dispose();
+        applicationSettings.Dispose();
+    }
+
     private CaptureDirector capture = null!;
     private Tuning template = null!;
     private Equivalence.LabTrace? equivalence;
@@ -30,7 +40,11 @@ public partial class LabTest : Node, ILabScenarioHost
     Task ILabScenarioHost.Collect() => Collect();
     (int, int, int) ILabScenarioHost.Counts() => Counts();
 
-    public override void _ExitTree() => activeScenario?.Dispose();
+    public override void _ExitTree()
+    {
+        try { activeScenario?.Dispose(); }
+        finally { settingsBinding?.Dispose(); settingsBinding = null; }
+    }
 
     private void AddLab(LabSession lab)
     {
@@ -47,6 +61,7 @@ public partial class LabTest : Node, ILabScenarioHost
     }
     public override async void _Ready()
     {
+        settingsBinding = PlayerSettings.Bind(applicationSettings);
         DevArgs.MarkReady();
         capture = new CaptureDirector { CollectFrameMetrics = DevArgs.Get("scenario") != "measure-play" }; AddChild(capture);
         template = Tuning.LoadBaked();

@@ -1,10 +1,11 @@
 direct-quit	src/Core/ShutdownGuard.cs	Quit(	2	ShutdownGuard	Orderly shutdown owner, including internal wrapper call and final physics-flush quit.
 direct-quit	src/Dev/AnimationReview.cs	Quit(	3	Dev:AnimationReview	Legacy release-transplant wrapper has an exact conditional direct-quit branch; current builds use ShutdownGuard.
 direct-quit	src/Dev/ShutdownWitness.cs	Quit(	1	Dev:ShutdownWitness	Negative shutdown witness deliberately bypasses orderly teardown; keep isolated from runtime.
+engine-catchup	src/Core/ProcessPhysicsPolicies.cs	MaxPhysicsStepsPerFrame=	2	ProcessPhysicsPolicies:Catchup	Real-time dense-chain catch-up arbitration; preserve overlap minimum, network veto and prior-value restoration.
+engine-catchup	src/Dev/ApplicationStateTests.cs	MaxPhysicsStepsPerFrame=	2	Dev:ApplicationStateTests	Isolated process-policy witness restores the engine setting in finally.
 engine-catchup	src/Dev/LabScenarios/MeasureScenario.cs	MaxPhysicsStepsPerFrame=	1	Dev:MeasureScenario	Harness orchestration/measurement domain; preserve bounded completion and shutdown assertions.
 engine-catchup	src/Dev/UnitTests/EffectResourceTests.cs	MaxPhysicsStepsPerFrame=	4	Dev:EffectResourceTests	Harness orchestration/measurement domain; preserve bounded completion and shutdown assertions.
-engine-catchup	src/Tank/TankSimulation.cs	MaxPhysicsStepsPerFrame=	2	A1:TankSimulation	Real-time dense-chain catch-up arbitration; preserve overlap minimum, network veto and prior-value restoration.
-engine-scale	src/Core/WorldTimeScale.cs	TimeScale=	2	A1:WorldTimeScale	Real-time exclusive offline hitstop lease; A1 consolidates ownership while preserving activation/restoration.
+engine-scale	src/Core/ProcessPhysicsPolicies.cs	TimeScale=	2	ProcessPhysicsPolicies:Hitstop	Real-time exclusive offline hitstop lease; preserve construction, pause, expiry and retirement ordering.
 shader-global	src/Lab/DissolveArena.cs	GlobalShaderParameterSet(	2	W2:DissolveArena	Single independently advancing stream per process; remove when reveal state becomes world-owned.
 timer	src/Dev/GatherRange.cs	CreateTimer	1	Dev:GatherRange	Harness orchestration/measurement domain; preserve bounded completion and shutdown assertions.
 timer	src/Dev/MenuGamepadTest.cs	CreateTimer	6	Dev:MenuGamepadTest	Harness orchestration/measurement domain; preserve bounded completion and shutdown assertions.
@@ -15,8 +16,10 @@ timer	src/Dev/NetTest.cs	CreateTimer	4	Dev:NetTest	Harness orchestration/measure
 timer	src/Dev/NetTest.cs	Thread.Sleep	2	Dev:NetTest	Harness orchestration/measurement domain; preserve bounded completion and shutdown assertions.
 timer	src/Dev/UnitTests/Fixtures/ServerNativeFixture.cs	OS.DelayMsec	1	Dev:ServerNativeFixture	B1 native fixture yields between socket polls within its real-time deadline; no gameplay wait.
 tree-pause	src/Dev/ShutdownTests.cs	.Paused=	1	Dev:ShutdownTests	Harness orchestration/measurement domain; preserve bounded completion and shutdown assertions.
-wall-clock	src/Core/WorldTimeScale.cs	Time.GetTicksUsec	2	A1:WorldTimeScale	Real-time exclusive offline hitstop lease; A1 consolidates ownership while preserving activation/restoration.
+wall-clock	src/Core/ProcessPhysicsPolicies.cs	Time.GetTicksUsec	2	ProcessPhysicsPolicies:Hitstop	Real-time exclusive offline hitstop lease; preserve construction, pause, expiry and retirement ordering.
 wall-clock	src/Dev/AnimationReview.cs	Time.GetTicksMsec	1	Dev:AnimationReview	Harness orchestration/measurement domain; preserve bounded completion and shutdown assertions.
+wall-clock	src/Dev/ApplicationStateTests.cs	Stopwatch.GetElapsedTime	1	Dev:ApplicationStateTests	Opt-in whole tank callback benchmark, real elapsed diagnostic time.
+wall-clock	src/Dev/ApplicationStateTests.cs	Stopwatch.GetTimestamp	1	Dev:ApplicationStateTests	Opt-in whole tank callback benchmark, real elapsed diagnostic time.
 wall-clock	src/Dev/CoreTests.cs	Stopwatchtimer=	1	Dev:CoreTests	Harness elapsed suite measurements only; never use this clock for gameplay.
 wall-clock	src/Dev/GeneratorTests.cs	Stopwatch.StartNew	4	Dev:GeneratorTests	Harness orchestration/measurement domain; preserve bounded completion and shutdown assertions.
 wall-clock	src/Dev/LabScenarios/BotCostScenario.cs	Stopwatch.GetElapsedTime	1	Dev:BotCostScenario	Harness orchestration/measurement domain; preserve bounded completion and shutdown assertions.
@@ -84,7 +87,7 @@ wall-clock	src/ReleaseSmoke/CaptureDirector.cs	Time.GetTicksUsec	1	CaptureDirect
 wall-clock	src/ReleaseSmoke/FrameMetrics.cs	Stopwatch.GetTimestamp	1	FrameMetrics	Diagnostic measurement only; never use this clock for gameplay deadlines.
 wall-clock	src/ReleaseSmoke/FrameMetrics.cs	Time.GetTicksUsec	6	FrameMetrics	Diagnostic measurement only; never use this clock for gameplay deadlines.
 wall-clock	src/Session/SegmentWorldSource.cs	Stopwatch.StartNew	1	SegmentWorldSource	Diagnostic measurement only; never use this clock for gameplay deadlines.
-wall-clock	src/Tank/TankSimulation.cs	Time.GetTicksUsec	1	A1:TankSimulation	Real-time dense-chain catch-up arbitration; preserve overlap minimum, network veto and prior-value restoration.
+wall-clock	src/Tank/TankSimulation.cs	Time.GetTicksUsec	1	TankSimulation:CatchupEligibility	Real-time dense-chain catch-up arbitration; preserve overlap minimum, network veto and prior-value restoration.
 wall-clock	src/UI/TuningPanel.cs	Time.GetTimeStringFromSystem	1	TuningPanel	Save-status display timestamp only; never a gameplay timer.
 wall-clock	src/World/Suburb.cs	Stopwatch.StartNew	1	Suburb	Diagnostic measurement only; never use this clock for gameplay deadlines.
 worker-entry	src/Dev/UnitTests/TestRunner.cs	newSystem.Threading.Thread(	1	Dev:TestRunner	Deliberate isolated thread-guard negatives; only this named probe entry may reach native failures.

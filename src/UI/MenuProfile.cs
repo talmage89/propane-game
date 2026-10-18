@@ -5,11 +5,13 @@ using Propane.Net;
 namespace Propane.UI;
 
 /// <summary>Local identity defaults and persistence through PlayerSettings.</summary>
-internal static class MenuProfile
+internal sealed class MenuProfile(IPlayerSettings settings)
 {
-    public static string DefaultName()
+    public string Server { get => settings.Server; set => settings.Server = value; }
+
+    public string DefaultName()
     {
-        var saved = PlayerSettings.Name;
+        var saved = settings.Name;
         if (saved.Length > 0)
         {
             return saved;
@@ -18,16 +20,16 @@ internal static class MenuProfile
         return Protocol.CleanName(user.Length > 0 ? char.ToUpperInvariant(user[0]) + user[1..] : "Player");
     }
 
-    public static AppearanceRecord DefaultAppearance()
+    public AppearanceRecord DefaultAppearance()
     {
-        return PlayerSettings.Appearance ?? AppearanceRecord.FromPalette((int)(GD.Randi() % AppearancePalette.PlayerColors.Length));
+        return settings.Appearance ?? AppearanceRecord.FromPalette((int)(GD.Randi() % AppearancePalette.PlayerColors.Length));
     }
 
-    public static void Save(string name, AppearanceRecord appearance)
+    public void Save(string name, AppearanceRecord appearance)
     {
         SaveName(name);
-        PlayerSettings.Appearance = appearance;
+        settings.Appearance = appearance;
     }
 
-    public static void SaveName(string name) => PlayerSettings.Name = Protocol.CleanName(name);
+    public void SaveName(string name) => settings.Name = Protocol.CleanName(name);
 }

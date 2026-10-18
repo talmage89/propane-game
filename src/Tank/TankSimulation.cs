@@ -13,8 +13,7 @@ public partial class TankSimulation : Node
     private static readonly ConditionalWeakTable<WorldContext, TankSimulation> worlds = new();
     private readonly List<PropaneTank> tanks = new();
     private readonly HashSet<PropaneTank> pendingFuses = new();
-    private static readonly HashSet<TankSimulation> active = new();
-    private static int? ordinaryCatchup;
+    private ProcessPhysicsPolicies.CatchupLease catchup = null!;
     private double denseUntil;
     private int limitedSteps;
     internal Func<double> CatchupClock { get; set; } = static () => Time.GetTicksUsec() / 1000000d;
@@ -30,9 +29,9 @@ public partial class TankSimulation : Node
             var node = new TankSimulation { World = owner, Name = "TankSimulation", ProcessMode = ProcessModeEnum.Always };
             owner.EffectsRoot.AddChild(node);
             node.SetProcess(!owner.Networked);
-            active.Add(node);
+            node.catchup = ProcessPhysicsPolicies.RegisterCatchup(owner);
             owner.OnStopping(node.ReleaseCatchup);
-            RefreshCatchup();
+            ProcessPhysicsPolicies.RequestCatchup(node.catchup, 0);
             return node;
         });
         simulation.tanks.Add(tank);
@@ -76,38 +75,14 @@ public partial class TankSimulation : Node
             denseUntil = 0;
         }
 
-        RefreshCatchup();
-    }
-
-    // Engine catch-up is application-wide. Any live network world vetoes an offline lease, and overlapping
-    // offline worlds take the smallest requested budget. Restore the prior engine value when the last lease ends.
-    private static void RefreshCatchup()
-    {
-        var steps = int.MaxValue;
-        foreach (var simulation in active)
-        {
-            if (!simulation.World.IsAlive) continue;
-            if (simulation.World.Networked) { steps = int.MaxValue; break; }
-            if (simulation.limitedSteps > 0) steps = Math.Min(steps, simulation.limitedSteps);
-        }
-        if (steps == int.MaxValue)
-        {
-            if (ordinaryCatchup is { } previous) Engine.MaxPhysicsStepsPerFrame = previous;
-            ordinaryCatchup = null;
-        }
-        else
-        {
-            ordinaryCatchup ??= Engine.MaxPhysicsStepsPerFrame;
-            Engine.MaxPhysicsStepsPerFrame = Math.Min(ordinaryCatchup.Value, steps);
-        }
+        ProcessPhysicsPolicies.RequestCatchup(catchup, limitedSteps);
     }
 
     private void ReleaseCatchup()
     {
-        active.Remove(this);
         pendingFuses.Clear();
         limitedSteps = 0;
-        RefreshCatchup();
+        catchup.Dispose();
     }
 
     public override void _PhysicsProcess(double delta)
