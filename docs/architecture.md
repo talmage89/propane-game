@@ -297,8 +297,8 @@ native catalog data at construction, and `SegmentSettings.From` converts live Tu
 not start loading resources through these mixed types. C1 separates plain metadata and main-thread conversion;
 world-plan and construction hashes must remain exact.
 
-`GameAssets`, `FxLibrary`, `Catalog`, `MeshKit` and `WorldMaterials` cache borrowed meshes/models/materials on the main
-thread. Shared resources remain immutable by convention; per-instance mutable effects/material state stays owned.
+`GameAssets`, `FxLibrary`, `Catalog` and `WorldMaterials` cache borrowed meshes/models/materials on the main
+thread. `MeshKit` owns temporary per-build geometry scratch. Shared resources remain immutable by convention; per-instance mutable effects/material state stays owned.
 Do not duplicate immutable assets per world to eliminate statics. Character bones/sockets/clips and rifle calibration
 are implicit asset bindings today; V1 validates them once before another asset family is introduced
 ([animation sources](animation-sources.md), [motion](motion.md)).
@@ -316,7 +316,8 @@ in-flight workers finish without publishing into the feed. Dispose clears plan h
 existing request contract until feed collection. Active plans follow outstanding requested/unforgotten indices.
 The arena requests one plan ahead; the source owns one staged build and the live/retiring content windows. Their
 bounds follow progression and build/retirement throughput, not elapsed run length; no eviction policy changed.
-See [world services](world-services.md#streamed-content-history) and [the Lab](lab.md).
+See [world services](world-services.md#streamed-content-history), [the Lab](lab.md) and
+[W1 verification](evidence/streaming-history.md).
 
 ## Globals and budgets
 
