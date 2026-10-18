@@ -134,7 +134,7 @@ public static class LabScenarioTests
         runner.Run("lab scenarios/independent registration inventory constructs every plain owner", () =>
         {
             var required = new[] { "lifetime", "frames", "rules", "duel", "soak", "effects", "measure", "measure-play",
-                "stackfire", "aimstall", "dials", "prototype", "runner-sampling", "shortfuse", "shortfuse-combo", "tracking", "reference-retirement", "dissolve" };
+                "stackfire", "aimstall", "dials", "prototype", "runner-sampling", "shortfuse", "shortfuse-combo", "tracking", "reference-retirement", "streaming-history", "dissolve" };
             Assert(LabScenarioRegistry.All.Select(r => r.Name).Order(StringComparer.Ordinal)
                 .SequenceEqual(required.Order(StringComparer.Ordinal)), "Lab case coverage changed or contains duplicates");
             foreach (var name in required)

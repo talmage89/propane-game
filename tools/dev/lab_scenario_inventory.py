@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[2]
 # Independent of the dispatch table, just like check_lab's session/shard coverage.
 CASES = ('lifetime', 'frames', 'rules', 'duel', 'soak', 'effects', 'measure', 'measure-play',
          'stackfire', 'aimstall', 'dials', 'prototype', 'runner-sampling', 'shortfuse', 'shortfuse-combo',
-         'tracking', 'reference-retirement', 'dissolve')
+         'tracking', 'reference-retirement', 'streaming-history', 'dissolve')
 
 
 def inventory(revision=None):
