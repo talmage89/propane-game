@@ -27,6 +27,8 @@ wall-clock	src/Dev/LabScenarios/RunnerSamplingScenario.cs	Stopwatch.GetElapsedTi
 wall-clock	src/Dev/LabScenarios/RunnerSamplingScenario.cs	Stopwatch.GetTimestamp	2	Dev:RunnerSamplingScenario	Harness orchestration/measurement domain; preserve bounded completion and shutdown assertions.
 wall-clock	src/Dev/LabScenarios/ShortFuseScenario.cs	Stopwatch.StartNew	1	Dev:ShortFuseScenario	Harness orchestration/measurement domain; preserve bounded completion and shutdown assertions.
 wall-clock	src/Dev/LabScenarios/StackFireScenario.cs	Time.GetTicksUsec	2	Dev:StackFireScenario	Harness orchestration/measurement domain; preserve bounded completion and shutdown assertions.
+wall-clock	src/Dev/MatchPlayerBenchmark.cs	Stopwatch.GetElapsedTime	2	Dev:MatchPlayerBenchmark	M0 opt-in complete Match presentation callback measurement; never a gameplay deadline.
+wall-clock	src/Dev/MatchPlayerBenchmark.cs	Stopwatch.GetTimestamp	2	Dev:MatchPlayerBenchmark	M0 opt-in complete Match presentation callback measurement; never a gameplay deadline.
 wall-clock	src/Dev/MenuDeviceInputTest.cs	Time.GetTicksMsec	2	Dev:MenuDeviceInputTest	Harness orchestration/measurement domain; preserve bounded completion and shutdown assertions.
 wall-clock	src/Dev/MenuGamepadTest.cs	Time.GetTicksMsec	2	Dev:MenuGamepadTest	Harness orchestration/measurement domain; preserve bounded completion and shutdown assertions.
 wall-clock	src/Dev/MenuLifetimeTest.cs	Time.GetTicksMsec	2	Dev:MenuLifetimeTest	Harness orchestration/measurement domain; preserve bounded completion and shutdown assertions.

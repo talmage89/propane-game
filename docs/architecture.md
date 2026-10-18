@@ -97,6 +97,12 @@ synchronous operations and retirement; a partial file or a new container for all
 Action sequences and drop predictions retire with a client actor attachment, rather than becoming session-global.
 `ReplicatedIntent` belongs on the client side of the physical actor's input-source seam.
 
+**Current M0:** Match refreshes its selected owned character synchronously on `SessionContext.ActorsChanged` and
+lobby profile Kind changes. It prefers the first owned Human, otherwise the first owned actor, in session order;
+retirement clears the cache before freeing actors. Empty ownership skips local presentation; public `Match.Player`
+still requires an actor. This cache neither retargets an existing local view nor implements multi-view selection
+([participant contract](multiplayer.md#participants-a6-protocol-2), [M0 evidence](evidence/match-player-cache.md)).
+
 Current mode construction is split across [ModeRegistry](../src/Modes/ModeDefinition.cs),
 [ModeSchemas](../src/Net/ModeEnvelope.cs) and [ModeWires](../src/Net/ModeRunner.cs). B3a replaces that integration split
 with composition-owned compiled bundles, described below; it does not invent a second rule engine.
@@ -250,7 +256,8 @@ health/lives and online segment streaming still require end-to-end work.
 Keep movement, logical aim, weapon pose, animation, ragdoll and recovery together where native order requires it.
 [LocalView](../src/Player/LocalView.cs) attaches camera/HUD/device input independently of actor lifetime. A physical
 actor must work without a camera/HUD. Current character view conveniences and actor-held client state are temporary
-C2 exceptions; production Game also uses its `CameraRig` accessor. Do not move render-domain LogicalAim into a
+C2 exceptions; production Game also uses its `CameraRig` accessor. D0 removed the unused instance
+`Rifle.AlignBarrel` wrapper; the static transform helper remains. Do not move render-domain LogicalAim into a
 camera-only owner or split RifleRig/recovery merely because of size.
 
 The offscreen simulation viewport does not receive application device events. View-owned device endpoints stay in
