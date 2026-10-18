@@ -81,7 +81,9 @@ public partial class Match : Node3D
     private Node3D effects = null!;
     private Suburb suburb = null!;
     private SuburbPlan plan = null!;
-    private PlayerCharacter player => Session.OwnedActors.FirstOrDefault(a => profiles[a.Character.ActorId].Kind == ActorKind.Human)?.Character ?? Session.OwnedActors.First().Character;
+    // Refreshed synchronously at actor/profile changes; never search the roster from presentation.
+    private PlayerCharacter? player;
+
     private BodySync bodies = null!;
     private BodyPublisher bodyPublisher = null!;
     private TankGather gather = null!;
@@ -117,11 +119,12 @@ public partial class Match : Node3D
     /// <summary>The player chose to leave the match.</summary>
     public event Action? LeaveRequested;
 
-    public PlayerCharacter Player => player;
+    /// <summary>The selected actor while this match has an owned roster. Requires an active owned actor.</summary>
+    public PlayerCharacter Player => player ?? throw new InvalidOperationException("match has no owned actor");
 
     public Suburb Suburb => suburb;
 
-    public int MyScore => scores.GetValueOrDefault(player.ActorId);
+    public int MyScore => player == null ? 0 : scores.GetValueOrDefault(player.ActorId);
 
     public IReadOnlyDictionary<int, int> Scores => scores;
 
@@ -152,9 +155,9 @@ public partial class Match : Node3D
     internal Action<byte[]>? AuthoritySendOverride { get; set; }
 
     /// <summary>When (on <see cref="Clock"/>) another player's shot last hit this player, and whose it was.</summary>
-    public double LastHitTime => player.Runtime.LastHitTime;
+    public double LastHitTime => player?.Runtime.LastHitTime ?? double.NegativeInfinity;
 
-    public int LastHitBy => player.Runtime.LastHitBy;
+    public int LastHitBy => player?.Runtime.LastHitBy ?? 0;
 
     public override void _Ready()
     {
@@ -166,8 +169,23 @@ public partial class Match : Node3D
 
     public override void _ExitTree() => Session?.Dispose();
 
+    private void RefreshPlayer()
+    {
+        player = null;
+        if (!Session.IsAlive) return;
+        foreach (var actor in Session.Actors)
+        {
+            if (actor.Character.IsRemote) continue;
+            player ??= actor.Character;
+            if (profiles[actor.Character.ActorId].Kind != ActorKind.Human) continue;
+            player = actor.Character;
+            break;
+        }
+    }
+
     private void StopReplication()
     {
+        RefreshPlayer();
         foreach (var tank in tanks.Values.Where(IsInstanceValid))
         {
             tank.Punctured -= OnTankPunctured;
@@ -265,7 +283,7 @@ public partial class Match : Node3D
 
     private void UpdateHud(float dt)
     {
-        if (player.View == null) return;
+        if (player?.View == null) return;
         var tuning = World.Tuning;
         var camera = player.View.CameraRig.Camera;
         var viewportHeight = GetViewport().GetVisibleRect().Size.Y;
@@ -306,7 +324,7 @@ public partial class Match : Node3D
 
     /// <summary>The mode's HUD data for this peer's view; the local view adds crosshair, ammo and feedback.</summary>
     private ModeHud PresentHud(IReadOnlyList<Vector3> objectives, bool showObjectives) =>
-        hudPresenter.Present(new ModeHudInput(player.ActorId, ModePhase, timeLeft, scores, objectives, showObjectives, View: ModeView));
+        hudPresenter.Present(new ModeHudInput(player?.ActorId ?? 0, ModePhase, timeLeft, scores, objectives, showObjectives, View: ModeView));
 
     /// <summary>Groups of live tanks (the plan's and dropped ones), for the arrows.</summary>
     private List<Vector3> TankGroups() => suburb.TankGroupCenters();
@@ -976,7 +994,7 @@ public partial class Match : Node3D
                 if (Actor(take.Player) is { IsRemote: false, Ammo: { } ammo })
                 {
                     var added = ammo.AddReserve(tuning.PickupAmount);
-                    if (take.Player == player.ActorId) matchHud.AddAmmoPopup(added);
+                    if (take.Player == player?.ActorId) matchHud.AddAmmoPopup(added);
                 }
                 break;
             case Msg.PickupRespawn:
@@ -991,7 +1009,7 @@ public partial class Match : Node3D
                 timeLeft = 0;
                 foreach (var actor in Session.OwnedActors) actor.Character.InputLocked = true;
                 endLeft = tuning.ResultsTime;
-                results.Show(standings, player.ActorId, tuning.ResultsTime, PresentHud(Array.Empty<Vector3>(), false).Columns);
+                if (player != null) results.Show(standings, player.ActorId, tuning.ResultsTime, PresentHud(Array.Empty<Vector3>(), false).Columns);
                 break;
             case Msg.PlayerLeft:
                 var left = (PlayerLeftMessage)message.Payload;
@@ -1049,7 +1067,7 @@ public partial class Match : Node3D
     private void ApplyScore(int actorId, int score, int delta)
     {
         scores[actorId] = score;
-        if (actorId == player.ActorId)
+        if (actorId == player?.ActorId)
         {
             matchHud.Show(PresentHud(tankGroups, World.Tuning.TankArrows), delta > 0);
             if (delta > 0) { matchHud.AddScorePopup(delta); }

@@ -58,10 +58,10 @@ public partial class Match
     /// </summary>
     private void PlacePile(KingPileWanted wanted)
     {
+        if (player is not { } reporter) return;
         var actors = Session.Actors.Select(a => a.Character.GlobalPosition).ToArray();
         var site = PileSite.Find(World, wanted.Spot, wanted.Count, wanted.Reach, wanted.Clearance, actors);
         if (site == null) GD.Print($"[match] no clear ground for zone {wanted.Zone}'s pile within {wanted.Reach:0.#} m");
-        var reporter = player;
         Net.Send(MessageCodec.Encode(new NetMessage(Msg.ModeEvent, Setup.Id, 0, new ModeEnvelope(round, worldRevision, mode.Id, mode.SchemaVersion,
             reporter.ActorId, reporter.LifeId, checked(++reporter.Runtime.ActionSequence), ModeSchemas.KingKinds.PilePlaced,
             new KingPilePlaced(wanted.Zone, site ?? Array.Empty<Transform3D>()))), fromServer: false));
