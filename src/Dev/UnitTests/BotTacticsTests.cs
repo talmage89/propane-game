@@ -97,7 +97,14 @@ internal static class BotTacticsTests
 
     private static void Measure(string name, TacticalWorld world, IBotGoalPolicy brain)
     {
-        const int ticks = 6000;
+        // Timing is opt-in: settle tiered JIT and sample long enough to distinguish call overhead from noise.
+        for (var i = 0; i < 120000; i++)
+        {
+            world.Services.BeginTick(world.Tanks);
+            brain.Think(world, Delta);
+            brain.Read();
+        }
+        const int ticks = 60000;
         var whole = new double[ticks];
         var think = new double[ticks];
         var rays = world.Services.RayLines;

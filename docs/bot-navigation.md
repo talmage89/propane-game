@@ -265,5 +265,7 @@ ray counts, navigation query counts and diagnostics. It reads state after `Think
 samples RNG or input sources to decide behavior. Diagnostic reflection finds each named field exactly once across
 the tactical owners, so an ownership move cannot silently drop an observation. The tool reports the first divergent
 case, tick and field. It does not update the immutable release fixtures. `--bench` adds three alternating parent and
-candidate runs without the transcript observer, recording 6,000 thinks per case after warm-up, allocations,
+candidate runs without the transcript observer, recording 60,000 thinks per case after 120,000 additional warm-up ticks, allocations,
 mean/p95/p99 think and whole controlled tick cost (`BeginTick`, `Think`, `Read`), and query workload counts.
+
+The longer opt-in warm-up lets tiered JIT settle before sampling; it does not run in ordinary unit tests.
