@@ -63,7 +63,11 @@ def observe(project):
     insert(body, 'if (error.Length() > tuning.SnapDistance)\n            {',
            decision.replace('REASON', '"distance-snap"'))
     match = project / 'src/Net/Match.cs'
-    insert(match, 'bodies.Correct(now);', f'        foreach (var observed in bodies.Entries) {{ {CALL}.Record(observed, "after-correct"); }}')
+    # Observe the same callback boundary before and after C2 moves body ownership out of Match.
+    if 'worldReplica.Correct(now);' in match.read_text():
+        insert(match, 'worldReplica.Correct(now);', f'        foreach (var observed in worldReplica.Bodies.Entries) {{ {CALL}.Record(observed, "after-correct"); }}')
+    else:
+        insert(match, 'bodies.Correct(now);', f'        foreach (var observed in bodies.Entries) {{ {CALL}.Record(observed, "after-correct"); }}')
     publisher = project / 'src/Net/BodyPublisher.cs'
     insert(publisher, 'writer.UInt(entry.Id).Transform(entry.Body.GlobalTransform).Vec3(entry.Body.LinearVelocity).Vec3(entry.Body.AngularVelocity)\n                            .UInt(entry.Epoch).UInt(checked(++entry.Sequence));',
            f'                        {CALL}.Record(entry, "publication", stream.Traffic.ToString());')

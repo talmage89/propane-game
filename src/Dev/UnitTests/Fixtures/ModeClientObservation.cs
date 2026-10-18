@@ -57,9 +57,11 @@ internal static class ModeClientObservation
         return bytes;
     }
 
-    public static ModeHud Hud(Match match, ModeHud hud)
+    public static ModeHud Hud(object owner, ModeHud hud)
     {
         if (DevArgs.Get("mode-client-transcript") is not { } path) return hud;
+        var match = owner as Match ?? (Match)owner.GetType().GetField("parent",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(owner)!;
         File.AppendAllText(path, JsonSerializer.Serialize(new
         {
             step = "hud",

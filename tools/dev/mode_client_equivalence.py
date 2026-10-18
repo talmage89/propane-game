@@ -69,13 +69,16 @@ def observe(project):
     for path in (match, project / 'src/Net/Match.King.cs', project / 'src/Net/Match.ModeBinding.cs'):
         if path.exists():
             path.write_text(path.read_text().replace('MessageCodec.Encode(', CALL + '.Encode('))
-    code = match.read_text()
+    presenter = project / 'src/Net/MatchViewBinding.cs'
+    if not presenter.exists():
+        presenter = match
+    code = presenter.read_text()
     needle = 'hudPresenter.Present(new ModeHudInput('
     assert code.count(needle) == 1
     code = code.replace(needle, CALL + '.Hud(this, ' + needle)
-    needle = 'View: ModeView));'
+    needle = 'View: modeView()));' if presenter != match else 'View: ModeView));'
     assert code.count(needle) == 1
-    match.write_text(code.replace(needle, 'View: ModeView)));'))
+    presenter.write_text(code.replace(needle, needle[:-1] + ');'))
 
 
 def compare(parent, candidate):
