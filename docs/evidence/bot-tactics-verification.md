@@ -66,7 +66,7 @@ Lab references. The final detailed traces also match the immediate production pa
 | Spill/chain | 15,530,343 | `3e8057270d0f5c4bdcbbf77a393f78b565cb31950184a420514ea5e8e0753c7e` |
 
 Raw comparisons, detail files and logs remain in `build/b4a-p0*` and `build/b4a-budget-pair`.
-The scene lifecycle suite passes seven assertions; the independent Lab inventory lists 19 CLI cases,
+The scene lifecycle suite passes seven tests; the independent Lab inventory lists 19 CLI cases,
 148 assertion expressions, 48 log expressions and 35 capture expressions. The comparator's existing six
 unit tests and Markdown link check pass. The early `make test` passes 519 unit tests and its remaining fast
 partitions. `make lint` passes formatting/UID/link checks and warning-as-error Debug/ExportRelease builds.
@@ -121,8 +121,57 @@ Early `build/b4a-costs*` attempts are diagnostic, not acceptance data: one was s
 review, a rendered run was rejected for a VSync fallback, and other windows overlapped new native jobs in other
 worktrees. The final driver monitors other project Godot/build/format processes throughout each window and
 retries whole affected pairs, retaining rejected attempts. Rendered measurements use the documented per-process
-`DISABLE_GAMESCOPE_WSI=1` override, disabled VSync and 1280x720. Final accepted data and overlap metadata are in
-`build/b4a-costs-accepted`; the submission reports those results and the final gate outcomes.
+`DISABLE_GAMESCOPE_WSI=1` override, disabled VSync and 1280x720. Those measurement windows and overlap metadata are in
+`build/b4a-costs-accepted`. The final handoff below has its own measurements; these earlier windows do not establish
+its performance acceptance.
 
 No native Windows/macOS run or whole-game frame-pacing acceptance is claimed. This package changes no rules,
 shared tuners, wire shapes/IDs, world construction or protocol version (`Protocol.Version` remains 3).
+
+## Final handoff follow-up
+
+2026-10-17. Production follow-up: `d16d781`; opt-in timing follow-up: `cc75f04`.
+
+Short paired samples showed a repeatable Banking combat cost increase despite matching decisions and zero
+allocation. A larger combat split did not improve it and was discarded. The final handoff keeps the original
+under-fire priority guard in the brain, separates the target owner's timer check from selection, and passes
+player, tuning and the already sampled feet position to combat/demolition. These synchronous operations cannot
+move the actor; logical aim only rotates the eye. No tactical state moved back into the brain.
+
+Banking now has 316 lines; its target, combat and demolition owners have 240, 262 and 186 respectively.
+King and its owners remain 296, 256 and 186 lines. The ownership contracts above still apply.
+
+The opt-in tactical benchmark now adds 120,000 warm-up ticks and measures 60,000 ticks per case, letting tiered JIT
+settle and reducing the influence of very short windows. Ordinary unit/allocation checks retain their original
+workload. Both revisions receive identical instrumentation. `build/b4a-head-instrumentation.json` records the five
+matching probe-source hashes and verifies that the parent brains still match `e718b6b` exactly. Final optimized
+source measurements use the existing `tools/dev/source_run.py` assembly context on both revisions, three alternating
+pairs each for headless Lab, rendered Lab and all 24 tactical cases. The monitor also detects exported native
+executables and compiler/publish jobs. Final costs, mean/p95/p99, allocation/workload counters and overlap metadata
+are retained under `build/b4a-costs-head-release`; the branch submission reports the results and final-head deep gate.
+
+The final production handoff passes `make build` with zero warnings and `make check`, including 519 unit tests,
+real-device input and the gate self-tests. Its Debug transcript matches all 23,040 parent observations. Repeating
+the detailed reference run with `--output=build/b4a-p0-head` reproduces the same three byte counts and SHA256 hashes
+above, including direct comparison with the saved parent detail bytes.
+
+The same rendered commands were repeated into `build/b4a-navigation-head`, `build/b4a-bank-head` and
+`build/b4a-king-head`: 35/35 courses, zero stuck events, 30 jumps; Bank idle 4.8% mean/20.5% worst; King idle
+4.4%/9.1%, four mints, two minters and 29.92% lone hold. Reviewed the new privacy-fence air/landing captures,
+Bank's `duel_soak_end.png`, and King's `king_suburb_11_010s.png`, `king_suburb_11_025s.png` and results capture.
+They show fence clearance/landing, active combat, zone warning/traversal and the expected results overlay.
+
+The same owned-bot matrix was repeated with fresh `build/b4a-net-head-*` destinations:
+
+| Mode/profile | Audited bank | Minted | Compared body pairs | Final rest/moving residual (m) | Longest above-tolerance episode (s) |
+| --- | ---: | ---: | ---: | --- | ---: |
+| Bank clean | 18 | 0 | 41,645 | 0.001 / 0.121 | 0.10 |
+| Bank faults | 34 | 0 | 19,719 | 0.001 / 0.269 | 0.45 |
+| King clean | 29 | 8 | 54,807 | 0.000 / 0.092 | 0.55 |
+| King faults | 17 | 9 | 51,405 | 0.002 / 0.212 | 0.40 |
+
+All four pass complete audits, with zero tank disagreements, unobserved grids or engine errors/warnings.
+Finally, `godot-mono --headless --export-release Linux` and the exported `--release-test` pass main-menu and
+single-player smoke checks. The launcher verifies the actual process executable. The final exported C# assembly
+SHA256 is `b798140b9a38aaa837334ac5cb8be32dd364fe5f33d6bd43d8eddd5d479d6a5f`;
+export/smoke logs and hashes remain in `build/b4a-export-head`. Windows/macOS and frame pacing remain unverified.
