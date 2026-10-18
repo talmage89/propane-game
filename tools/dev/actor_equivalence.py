@@ -18,7 +18,7 @@ def observe(project):
     # These fixtures use only parent-compatible APIs; do not copy candidate-only registration tests.
     for name in ('ActorRetirementObservation.cs', 'ActorLifetimeFixture.cs'):
         shutil.copyfile(ROOT / 'src/Dev/UnitTests/Fixtures' / name, project / 'src/Dev/UnitTests/Fixtures' / name)
-    for name in ('ActorTacticsTests.cs', 'ActorTickBenchTests.cs', 'Fixtures/TacticalWorld.cs'):
+    for name in ('ActorTacticsTests.cs', 'ActorTickBenchTests.cs', 'BotTacticsTests.cs', 'Fixtures/TacticalWorld.cs'):
         shutil.copyfile(ROOT / 'src/Dev/UnitTests' / name, project / 'src/Dev/UnitTests' / name)
     call = 'Propane.Dev.UnitTests.Fixtures.ActorRetirementObservation.Record'
     session = project / 'src/Session/SessionContext.cs'

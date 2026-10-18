@@ -28,6 +28,7 @@ internal static class BotTacticsTests
     public static void Register(TestRunner runner)
     {
         var path = DevArgs.Get("tactics-transcript");
+        var only = DevArgs.Get("tactics-only")?.Split(',').ToHashSet(StringComparer.Ordinal);
         using var transcript = path == null ? null : new StreamWriter(path);
         foreach (var king in new[] { false, true })
         {
@@ -36,6 +37,7 @@ internal static class BotTacticsTests
                 foreach (var scenario in king ? new[] { "contest", "regroup", "prize", "points" } : new[] { "cover", "combat", "demolition", "scout" })
                 {
                     var name = $"{(king ? "king" : "bank")}/{difficulty}/{scenario}";
+                    if (only != null && !only.Contains(name)) continue;
                     runner.Run($"tactics/{name} decisions, edges and warm allocation", () =>
                     {
                         using var world = new TacticalWorld(runner.World, scenario);

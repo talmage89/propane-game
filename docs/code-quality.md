@@ -353,6 +353,9 @@ status, RNG and query transcripts across a native rival departure in Banking com
 `ActorTickBenchTests --actor-tick-bench` is opt-in: 20,000 warm-up and 60,000 measured whole Match plus
 owned-character physics callbacks on stationary native bodies; it reports allocation, mean, p95/p99 and workload.
 These controlled callbacks do not advance Jolt and do not replace native network runs.
+`BotTacticsTests --tactics-only=bank/Normal/combat,bank/Normal/cover,king/Hard/points --tactics-bench`
+selects complete service/brain/read workloads for paired measurements amid shared compilation. Omit the selector
+to retain all 24 cases; an unknown/empty selection fails the discovered-suite coverage assertion.
 
 `tools/dev/actor_equivalence.py --revision=REV --label=FRESH_NAME` prepares isolated identical packet/actor
 ordering observers under `build/`. Run existing roster/departure suites with `--actor-order --match-seed=23`
