@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Reflection;
 using Propane.Core;
 using Propane.Modes;
@@ -26,5 +27,8 @@ internal sealed class ServerModeFixture : IDisposable
 
     public SuburbSettings Supply(ServerMode mode, Tuning tuning, int players) => supply(mode, tuning, players);
     public ModeTuners Tuners(ServerMode mode, Tuning tuning) => tuners(mode, tuning);
+    public bool CapturesCatalog => new Delegate[] { supply, tuners }.Any(callback => callback.Target != null &&
+        callback.Target.GetType().GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+            .Any(member => member.FieldType == typeof(ModeCatalog) || member.FieldType == typeof(ModeDefinition) || member.FieldType == typeof(ModeBundle)));
     public void Dispose() => server.Free();
 }

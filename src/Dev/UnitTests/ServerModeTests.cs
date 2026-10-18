@@ -28,6 +28,7 @@ public static class ServerModeTests
             foreach (var definition in ModeRegistry.All)
             {
                 using var f = new ServerModeFixture(definition);
+                TestRunner.Assert(!f.CapturesCatalog, "server callbacks retain the presentation catalog");
                 var mode = f.Modes.Default;
                 TestRunner.Assert(mode.Id == definition.Id && mode.Name == definition.Name && mode.SchemaVersion == definition.SchemaVersion &&
                     mode.World == definition.World && mode.Timer == definition.Timer && mode.SamplesActors == definition.SamplesActors &&
