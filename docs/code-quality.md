@@ -310,3 +310,19 @@ It records total gate time and every dotnet/Python/Godot invocation in JSON. Wit
 scenes print a marker at the start of `_Ready`: launch-to-marker is startup, marker-to-exit is work plus shutdown.
 Runtime scenes use imported assets; cold import and restored-import index rebuilds should be timed separately.
 See [the gate timing report](evidence/test-speed.md) for the measurements and the CI estimate.
+
+## Match player selection
+
+`MatchPlayerTests` uses `Fixtures/PlayerRosterFixture` to drive real actor insertion/removal and lobby profile
+replacement, checking the cache against the previous ordered LINQ rule after each mutation and during native
+character retirement. It covers Human preference, bot fallback, empty ownership, authority handover, and a rebuilt
+roster with changed actor ownership. An empty live roster is a fixture-reachable state; normal assembly rejects it.
+`scenes/dev/match_player_benchmark.tscn` instead measures 2,000 whole Match presentation callbacks with
+eight owned bots preceding the Human, after at least 180 real frames and five seconds of warm-up. Actors and
+camera stay fixed. It reports managed bytes per callback and mean/p95/p99 microseconds; run identical
+instrumentation on alternating parent/candidate builds, headlessly and rendered, for comparisons.
+
+```sh
+godot-mono --headless --fixed-fps 60 --path . res://scenes/dev/match_player_benchmark.tscn
+godot-mono --disable-vsync --resolution 960x540 --fixed-fps 60 --path . res://scenes/dev/match_player_benchmark.tscn
+```

@@ -585,6 +585,15 @@ roster-revision space, the server retires that lobby and rejects its peers with 
 ticks and fresh lobbies remain usable.
 Ragdoll recovery is the same life, not a respawn.
 
+Match caches its local player in session actor order: the first owned Human, otherwise the first owned actor.
+Actor insertion/removal refreshes the cache synchronously before node initialization/retirement; a lobby profile
+kind replacement refreshes it before presentation changes. Session stopping clears it before actors are freed.
+Ownership is fixed on each character at construction; body-authority or lobby-creator handover does not retarget
+the local view. A rebuilt match selects from its new roster. Initial construction requires an owned actor.
+An empty roster (possible through direct harness removal) has no local HUD/results feedback or King pile reporter;
+score/hit readers return neutral values. `Match.Player` requires an owned actor and rejects access outside that
+lifecycle explicitly. Lab constructs its own session rather than a Match.
+
 One peer may own several actors. Each has its own input, aim, ammo, pose/action sequence, grace and predictions;
 there is one shared world and one body synchronizer per peer. The server owns bank and standings. Attacker owners
 report bullet/melee contacts; victim owners apply grace, blast distance/throws and spills. Shared body ownership

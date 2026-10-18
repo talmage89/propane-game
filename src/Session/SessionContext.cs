@@ -43,6 +43,8 @@ public sealed class SessionContext : IDisposable
     public bool IsAlive => !stopped && World.IsAlive;
     public CancellationToken Cancellation => cancellation.Token;
     public IReadOnlyList<ActorRuntime> Actors => actors;
+    // Synchronous roster observation, before node initialization/retirement can call back into its owner.
+    internal event Action? ActorsChanged;
     public IEnumerable<ActorRuntime> OwnedActors => actors.Where(actor => !actor.Character.IsRemote);
     public IReadOnlyList<LocalView> LocalViews => views.OfType<LocalView>().ToArray();
 
@@ -63,6 +65,7 @@ public sealed class SessionContext : IDisposable
         if (id <= 0 || registry.ContainsKey(id) || retired.Contains(id)) throw new ArgumentException("actor identity is absent or reused", nameof(character));
         registry.Add(id, actor);
         actors.Add(actor);
+        ActorsChanged?.Invoke();
         World.Root.AddChild(character);
         if (!character.Initialized) throw new InvalidOperationException("actor did not complete initialization");
         return actor;
@@ -74,6 +77,7 @@ public sealed class SessionContext : IDisposable
         if (!actors.Remove(actor)) return;
         registry.Remove(actor.Character.ActorId);
         retired.Add(actor.Character.ActorId);
+        ActorsChanged?.Invoke();
         foreach (var view in LocalViews.Where(view => view.Actor == actor.Character)) CloseView(view);
         if (GodotObject.IsInstanceValid(actor.Character)) actor.Character.Free();
         actor.Dispose();

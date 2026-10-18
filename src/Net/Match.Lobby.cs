@@ -95,7 +95,7 @@ public partial class Match
     private void ReadyLobby()
     {
         if (!IsLobby) return;
-        if (lobbyFloor != null) lobbyFloor.Facing = player.FacingYaw;
+        if (lobbyFloor != null && player != null) lobbyFloor.Facing = player.FacingYaw;
         OnLobbyChanged();
     }
 
@@ -155,6 +155,7 @@ public partial class Match
     {
         var prior = profiles[member.Id];
         profiles[member.Id] = member;
+        if (prior.Kind != member.Kind) RefreshPlayer();
         if (prior.Appearance.Color != member.Appearance.Color) character.BodyColor = member.Appearance.Color;
         if (prior.ControllerConfig.Difficulty != member.ControllerConfig.Difficulty && BotBrain(member.Id) is { } brain)
             brain.Skill = BotProfile.For(member.ControllerConfig.Difficulty, World.Tuning).Skill;
