@@ -401,6 +401,8 @@ public static class Formatting
         require(code == 0, "Lab coverage negative fixtures failed", output)
         code, output = run(ROOT, "python3", "-B", "tools/dev/check_links_tests.py")
         require(code == 0, "Markdown link check fixtures failed", output)
+        code, output = run(ROOT, "python3", "-B", "tools/dev/mode_client_equivalence_tests.py")
+        require(code == 0, "client mode transcript negative fixtures failed", output)
         check_make_order(scratch)
         check_scale_knobs(scratch)
         check_installer()

@@ -45,6 +45,7 @@ def observe(project):
     # Observe accepted/rejected envelopes, and the synchronous operations at the same old call sites.
     insert(match, 'private void OnMode(ModeEnvelope envelope)\n    {',
            f'        {CALL}.Record(this, "envelope", Convert.ToBase64String(MessageCodec.Encode(new NetMessage(envelope.Payload is KingState or TankBankBanks ? Msg.ModeSnapshot : Msg.ModeCommand, Setup.Id, 0, envelope), true)));')
+    insert(match, 'round = envelope.RoundId;', f'        {CALL}.Record(this, "adapter");')
     wrap(match, 'private void OnMode(ModeEnvelope envelope)', 'this', 'apply')
     for signature, label in (
         ('private void ApplyScore(int actorId, int score, int delta)', 'score'),
@@ -62,9 +63,12 @@ def observe(project):
     for signature, label in (
         ('public void MarkStock(AuthorityMessage result)' if candidate else 'private void MarkStock(AuthorityMessage result)', 'stock'),
         ('private void ReconcileRoster(LobbyInfo lobby)', 'roster'),
-        ('public void PhysicsTick()' if candidate else 'private void RefillLobbyRifles()', 'refill'),
+        ('public override void PhysicsTick()' if candidate else 'private void RefillLobbyRifles()', 'refill'),
     ):
         wrap(lobby, signature, 'replica' if candidate else 'this', label)
+    for path in (match, project / 'src/Net/Match.King.cs', project / 'src/Net/Match.ModeBinding.cs'):
+        if path.exists():
+            path.write_text(path.read_text().replace('MessageCodec.Encode(', CALL + '.Encode('))
     code = match.read_text()
     needle = 'hudPresenter.Present(new ModeHudInput('
     assert code.count(needle) == 1
@@ -77,7 +81,7 @@ def observe(project):
 def compare(parent, candidate):
     expected = [json.loads(line) for line in Path(parent).read_text().splitlines()]
     actual = [json.loads(line) for line in Path(candidate).read_text().splitlines()]
-    required = {'case', 'hud', 'envelope', 'apply:enter', 'apply:exit', 'score:enter', 'score:exit',
+    required = {'case', 'hud', 'envelope', 'adapter', 'mode-send', 'apply:enter', 'apply:exit', 'score:enter', 'score:exit',
                 'spill:enter', 'spill:exit', 'drop:enter', 'drop:exit', 'place:enter', 'place:exit',
                 'pile:enter', 'pile:exit', 'stock:enter', 'stock:exit', 'roster:enter', 'roster:exit',
                 'refill:enter', 'refill:exit'}
@@ -85,9 +89,9 @@ def compare(parent, candidate):
         missing = required - {row['step'] for row in rows}
         assert not missing, f'{label}: missing observation coverage {sorted(missing)}'
         assert {row.get('mode') for row in rows} >= {2, 4, 7}, f'{label}: missing mode coverage'
-    assert len(expected) == len(actual), f'truncated transcript: {len(expected)} != {len(actual)}'
     for index, (before, after) in enumerate(zip(expected, actual), 1):
         assert before == after, f'first difference at row {index}:\n{before}\n{after}'
+    assert len(expected) == len(actual), f'truncated transcript: {len(expected)} != {len(actual)}'
     print(f'identical: {len(expected)} observations; all operation and mode coverage present')
 
 

@@ -11,7 +11,7 @@ namespace Propane.Dev.UnitTests;
 public static class ModeCatalogTests
 {
     private static ModeBundle Synthetic(byte id = 201) => new(ModeRegistry.TankBank with { Id = id, Name = "Catalog probe" },
-        new ModeSchema(id, 1, Array.Empty<ModeKind>()), () => new TankBankWire());
+        new ModeSchema(id, 1, Array.Empty<ModeKind>()), () => new TankBankWire(), (replica, _) => new BankClientAdapter(replica));
 
     private static void Fails(Action action, string diagnostic)
     {
@@ -72,6 +72,7 @@ public static class ModeCatalogTests
             ("tuners", complete with { Definition = complete.Definition! with { Tuners = null! } }),
             ("schema", complete with { Schema = null }),
             ("server wire factory", complete with { CreateServerWire = null }),
+            ("client adapter factory", complete with { CreateClient = null }),
             ("schema kinds", complete with { Schema = complete.Schema! with { Kinds = null! } }),
         })
         {
@@ -181,6 +182,35 @@ public static class ModeCatalogTests
             catch (InjectedFailure) { }
             using (ModeRegistry.RegisterScoped(bundle with { CreateServerWire = () => null! }))
                 Fails(() => ModeRegistry.CreateRunner(bundle.Definition!, null!), "server wire factory returned null");
+        });
+        Run("client factories are explicit, fresh and fail without a fallback", () =>
+        {
+            foreach (var bundle in shipped.Bundles)
+            {
+                using var first = bundle.CreateClient!(null!, null!);
+                using var second = bundle.CreateClient!(null!, null!);
+                TestRunner.Assert(!ReferenceEquals(first, second), "client factory shared session state");
+                var expected = bundle.Definition!.Id switch
+                {
+                    ModeRegistry.SandboxId => typeof(SilentClientAdapter),
+                    ModeRegistry.TankBankId => typeof(BankClientAdapter),
+                    ModeRegistry.KingId => typeof(KingClientAdapter),
+                    ModeRegistry.LobbyWorldId => typeof(LobbyClientAdapter),
+                    _ => throw new InvalidOperationException("unexpected shipped integration"),
+                };
+                TestRunner.Assert(first.GetType() == expected, "client factory chose the wrong adapter");
+                var display = bundle.Definition.Id == ModeRegistry.LobbyWorldId
+                    ? new ModeClientDisplay(false, true, "", "lobby")
+                    : new ModeClientDisplay(true, false, "Waiting for everyone to arrive", "match");
+                TestRunner.Assert(first.Display == display && !first.SuppressHud, "mode presentation feed changed");
+            }
+            var setup = (MatchSetup)ProtocolTests.Fixtures().First(message => message.Payload is MatchSetup).Payload;
+            setup = setup with { ModeId = complete.Definition!.Id, ModeSchema = complete.Definition.SchemaVersion };
+            using (ModeRegistry.RegisterScoped(complete with { CreateClient = (_, _) => null! }))
+                Fails(() => ModeRegistry.CreateClient(setup, null!, null!), "client adapter factory returned null");
+            using (ModeRegistry.RegisterScoped(complete with { CreateClient = (_, _) => throw new InjectedFailure() }))
+                TestRunner.Throws<InjectedFailure>(() => ModeRegistry.CreateClient(setup, null!, null!));
+            Fails(() => ModeRegistry.CreateClient(setup with { ModeId = 222 }, null!, null!), "no compiled mode bundle");
         });
         Run("out-of-order disposal fails without losing restoration; disposal is idempotent", () =>
         {

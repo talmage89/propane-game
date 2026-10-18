@@ -31,7 +31,8 @@ def observe(project):
     # Native randomness is fixed only in these isolated differential runs, before any world construction.
     world = project / 'src/Core/WorldContext.cs'
     insert(world, 'Random.Randomize();', '        Random.Seed = 23;')
-    insert(match, 'var rng = new RandomNumberGenerator();', '        rng.Seed = 23;')
+    spills = project / 'src/Net/BankClientAdapter.cs'
+    insert(spills if spills.exists() else match, 'var rng = new RandomNumberGenerator();', '        rng.Seed = 23;')
     runner = project / 'src/Dev/UnitTests/TestRunner.cs'
     insert(runner, 'tests++;', f'        {CALL}(this, "case", name);')
     insert(owner, 'outgoingAuthority.Add(request);', f'        {CALL}(this, "queued");')
