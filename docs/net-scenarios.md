@@ -107,3 +107,18 @@ Pending render continuations retire with their scenario.
 tools/dev/net_bots.sh -n 2 -w 2 -l 15 -s --match-seed=23 -o "$PWD/build/authority-root" -- --scenario=root-refusal --net-lag=120 --net-jitter=30 --net-loss=3 --capture-dir="$PWD/build/authority-root/shots"
 tools/dev/net_bots.sh -n 2 -w 2 -l 15 -s --match-seed=23 -o "$PWD/build/authority-future" -- --scenario=future-epoch --net-lag=120 --net-jitter=30 --net-loss=3 --capture-dir="$PWD/build/authority-future/shots"
 ```
+
+## Mode client preservation probes
+
+`tools/dev/mode_client_equivalence.py --revision=<commit|working> --label=<fresh-name> --observe` builds an isolated
+copy under `build/` with opt-in synchronous observations. Run `ModeEnvelopeTests`, `KingOnlineTests`, `LobbyWorldTests`
+and `ModeClientTests` there with `--match-seed=23 --mode-client-transcript=<absolute-jsonl-path>`. Compare parent and
+candidate files byte for byte. Observations include accepted/rejected envelopes, score/spill/pile/stock/roster call
+boundaries, decoded view clocks and all HUD values. The copied native RNG is fixed identically; shipping sources,
+ordinary RNG and immutable release references are untouched. Delete the JSONL before repeating a run (it appends).
+
+`ModeClientTests` asserts rule-state-to-client HUD values for Bank, King and Lobby, including singular/plural banks,
+loading/results, mint progress, contest, warning and explicit read time. `ModeClientBenchTests --mode-client-bench`
+is opt-in: it warms 3,000 complete physics/owned-character/render callbacks and measures 12,000 per mode, reporting
+allocations, mean/p95/p99 and actor/body counts. Prepare copies without `--observe` for performance. Alternate at
+least three parent/candidate pairs under the same headless/rendered workload and record machine load per pair.
