@@ -451,6 +451,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         var after = Velocity;
         Velocity = new Vector3(after.X - knockback.X, after.Y, after.Z - knockback.Z);
         PushBodies(dt);
+        if (Runtime.IsDisposed) return;
 
         if (!grounded)
         {

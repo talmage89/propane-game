@@ -65,6 +65,7 @@ public partial class PlayerCharacter
         fireCooldown = 1f / Mathf.Max(tuning.FireRate, 0.1f);
         sprintAmount = Mathf.Min(sprintAmount, tuning.ShotSprintPoseLimit);
         Fire(SpreadDegrees);
+        if (Runtime.IsDisposed) return;
         bloom += tuning.ShotBloomDegrees;
         rig.Kick();
         var recoilScale = Mathf.Lerp(1f, tuning.AimRecoilScale, aim);

@@ -160,7 +160,9 @@ Each Match actor has one idempotent `ActorRegistration`, indexed by its session.
 unsubscription entry (including the closure), detaches owned action handlers, retires its owned bot, removes
 BotServices collider entries, surviving bot peer/target/sight references and actor action/melee caches, then frees
 the character. M0 selection still refreshes at the original roster notification, and views close before character
-free. In-flight delegate snapshots suppress detached action handlers. Bot invalid-target flags retain the old
+free. In-flight delegate snapshots suppress detached action handlers. King rival/watch references retire here too; physical callback continuations stop when the emitter retired.
+King rival/watch references retire here too; physical callback continuations stop when the emitter retired.
+Bot invalid-target flags retain the old
 retarget/selection decisions without keeping a freed character alive. No decision clocks or random draws move.
 Whole-session unsubscription retains each actor's original position among other subscriptions, bot stopping stays
 before replication stopping, and views/actors still free in reverse order. Removal during stop and repeated removal

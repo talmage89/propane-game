@@ -15,6 +15,7 @@ internal sealed class KingZoneTactics
     private float standCheck;
     private PlayerCharacter? rival;
     private PlayerCharacter? watched;
+    private bool retiredWatched;
     private bool watchedVisible;
     private bool wasDown;
     private float regroupTime;
@@ -30,6 +31,12 @@ internal sealed class KingZoneTactics
     public Vector3 StandOffset => standOffset;
     public PlayerCharacter? Rival => rival;
     public void SetProtectGoal(Vector3 goal) => regroupGoal = goal;
+
+    public void ForgetActor(PlayerCharacter actor)
+    {
+        if (ReferenceEquals(rival, actor)) rival = null;
+        if (ReferenceEquals(watched, actor)) { watched = null; retiredWatched = true; }
+    }
 
     public void Waiting()
     {
@@ -112,8 +119,9 @@ internal sealed class KingZoneTactics
     {
         var watch = Nearest(world, here);
         var threat = watch != null && watch.GlobalPosition.DistanceTo(here) < 22f && world.Scores.GetValueOrDefault(watch.ActorId) > 0;
-        if (watch != watched || look)
+        if (retiredWatched || watch != watched || look)
         {
+            retiredWatched = false;
             watched = watch;
             watchedVisible = threat && BotMotor.CanSee(world, player, BotMotor.AimPoint(watch!));
         }
