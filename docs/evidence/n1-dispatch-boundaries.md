@@ -1,7 +1,8 @@
 # N1 decode, failure and transport boundary proof — 2026-10-18
 
 **Status:** Targeted correctness, immutable references, paired cost and clean/faulted native matrix proof passed.
-The final-head deep gate runs after this evidence commit; its result is in the final branch handoff, not predeclared here.
+The original final-head deep gate passed at `a431ede`; integration with landed A1 is recorded below.
+Integration final-head gate results are in the branch handoff, not predeclared here.
 
 Production parent: `5762e73` (only the initial proof harness above integrated `08d20ae`). Production candidate:
 `418ca81` (initial boundaries `354d8ea`, transition ownership `54bd5e1`); expanded proof harness `6e51c69`
@@ -21,7 +22,7 @@ TrafficReliability owns lane indices/count and reliability; NetTransport maps th
 FaultPacketTransport uses only the neutral contract. TransportMetrics formats plain observations; CapacityMetrics
 samples client observations in Composition. There is no new mutable runtime owner or generic exception framework.
 
-Six N1 baseline edges were removed. The existing NetClient → PacketTransports edge is precisely reassigned to A1:
+At the original N1 head, six N1 baseline edges were removed. The existing NetClient → PacketTransports edge is precisely reassigned to A1:
 the compatibility default constructors still select application transport/catalog inputs. Fully explicit clients inject
 both IPacketTransport and PacketCodec. Moving default creation into Main belongs to the parallel application package;
 Main and Match/partials were not edited. No new dependency baseline entry was added and none names N1. Two new Dev-only monotonic benchmark clock sites
@@ -206,7 +207,48 @@ evidence, formatting and missing diagnostic clock declarations; these were corre
 `make test-equivalence` passed (`build/n1-equivalence.log`, `build/rfp0-equivalence-18`): frozen
 wire/schema/world/publication and Bank, King, spill-chain, Short Fuse and Dissolve traces. No reference was
 regenerated. Final decode and packet files (`build/n1-accept-*-decode.txt`, `build/n1-transcripts/accept-*.txt`)
-again compare byte-identically to the parent. Final-head `make -j4 test-full` remains pending here.
+again compare byte-identically to the parent. Final-head `make -j4 test-full` passed at `a431ede`.
 No shared message shape, wire bytes, worlds, tank behavior, tuner value/classification/order or Protocol.Version
 changed (still 3). Valid traffic ordering and rejection order are compared explicitly; clocks remain monotonic network
 time and existing server phase time, with no new timers or random draws. Patch-safe failure containment only.
+
+
+## Integration with landed A1
+
+**Status:** Merge/setup and explicit-client-construction build pass with zero warnings. Final-head integration
+proof follows this record commit; the final handoff records the results, including any failed or unverified gates.
+
+Merged `dev` at `d3dac94` into this branch in `2d10562`, after reading
+[application-state.md](application-state.md). This is the new valid-traffic/decode comparison parent. The settings
+adapters preserve A1's ownership, live read points and native retirement; N1 keeps decode/admission/dispatch
+classification and affected-lobby isolation. No runtime source in Match, its partials, view binding or HUD was edited.
+
+Merge resolutions (conflicted files and relevant automatic combinations):
+
+- `src/Modes/ModeRegistry.cs`: construct ServerSettings and pass the captured catalog codec to LobbyServer.
+- `src/Net/LobbyServer.cs`: borrow IServerSettings, retain codec injection and pass both settings owner and codec to runs.
+- `src/Net/ServerRun.cs`: own IServerRunSettings and retain PacketCodec, admission rejection and retirement guards.
+- `src/Net/LobbyServer.World.cs`: use A1's CopyTemplate/ConfigureLobby inside N1's construction/cleanup boundaries.
+- `src/Net/NetClient.cs`: keep A1's direct immutable launch snapshot read and N1's receive/cleanup guards.
+- `docs/architecture.md`: describe both settings ownership and injected codec/failure boundaries.
+- `docs/multiplayer.md`: retain both disposable configuration ownership and decode/dispatch containment.
+- `tools/architecture/baseline.tsv`: remove the union of retired A1 and N1 edges; remove the remaining client factory edge below.
+- `tools/architecture/modules.json`: retain A1 state/settings policies and N1 codec/facade module mappings.
+- `tools/architecture/source-sites.tsv`: retain A1 policy clock sites and both N1 diagnostic benchmark sites.
+- `docs/README.md` and `docs/code-quality.md`: retain both evidence indexes and current owner/harness descriptions.
+
+Follow-up `d51c737` makes transport and codec required NetClient constructor inputs. Main is the only production
+construction site and now selects both. Dev callers pass explicit inputs; the release-publication harness's
+construction arguments changed without changing its assertions or immutable fixtures. Godot script registration
+retains the throwing parameterless constructor, matching LobbyServer's missing-input policy. PacketTransports no
+longer supplies a hidden client codec; no N1/A1 dependency baseline entries remain, and no exception was added.
+
+The server-equivalence helper copies the same probes to parent/candidate scratch projects. For the pre-N1 parent
+only, it adapts the client benchmark's constructor arguments to that parent's internal codec selection; workload
+logic and all assertions are identical. Both runtime projects retain A1 settings and native-resource owners.
+
+Final commands use fresh `build/n1-review-*` outputs, with `TMPDIR="$PWD/build/tmp"`:
+`make check`, `make test-equivalence`, explicit failure-isolation suites, prepared `d3dac94`/final-head decode and
+server packet transcripts plus `cmp`, and Bank/King clean/faulted native runs with one rendered client and unchanged
+full audit thresholds. Final `make -j4 test-full` runs once after the last commit. Compatibility remains patch-safe:
+no message, tuner, rule, construction/RNG, lane or wire change; Protocol.Version remains 3.
