@@ -124,6 +124,7 @@ public partial class Match
             InputLocked = owned && phase != Phase.Playing,
         };
         Session.AddActor(character);
+        Session.AttachActor(character.Runtime, () => RetireActor(character));
         character.Runtime.SpawnSlot = slot;
         character.Runtime.AllocationSlot = profile.AllocationSlot;
         character.Teleport(position, yaw);
@@ -197,23 +198,38 @@ public partial class Match
     /// <summary>What an actor this peer owns does goes out to everyone: shots, throws, get-ups, strikes and pushes.</summary>
     private void SubscribeOwned(PlayerCharacter actor)
     {
-        void Fired(ShotReport shot) => OnFired(actor, shot);
-        void Ragdolled(Vector3 at, Vector3 velocity, Vector3 spin) => OnRagdolled(actor, at, velocity, spin);
-        void GotUp(Vector3 root, float yaw) => Send(ActorWriter(Msg.GetUp, actor).Vec3(root).Float(yaw));
-        void MeleeStarted(uint swing, Vector3 direction) => SendActor(actor, Msg.MeleeStart, new MeleeStartMessage(swing, direction), predict: true);
-        void MeleeHit(MeleeHit hit) => OnMeleeHit(actor, hit);
-        void Pushed(RigidBody3D body) => Claim(new[] { body });
+        var registration = Session.Registration(actor.Runtime);
+        void Fired(ShotReport shot) { if (registration.IsSubscribed) OnFired(actor, shot); }
+        void Ragdolled(Vector3 at, Vector3 velocity, Vector3 spin) { if (registration.IsSubscribed) OnRagdolled(actor, at, velocity, spin); }
+        void GotUp(Vector3 root, float yaw) { if (registration.IsSubscribed) Send(ActorWriter(Msg.GetUp, actor).Vec3(root).Float(yaw)); }
+        void MeleeStarted(uint swing, Vector3 direction) { if (registration.IsSubscribed) SendActor(actor, Msg.MeleeStart, new MeleeStartMessage(swing, direction), predict: true); }
+        void MeleeHit(MeleeHit hit) { if (registration.IsSubscribed) OnMeleeHit(actor, hit); }
+        void Pushed(RigidBody3D body) { if (registration.IsSubscribed) Claim(new[] { body }); }
         actor.Fired += Fired;
         actor.Ragdolled += Ragdolled;
         actor.GotUp += GotUp;
         actor.MeleeStarted += MeleeStarted;
         actor.MeleeHit += MeleeHit;
         actor.PushedBody += Pushed;
-        Session.OnUnsubscribing(() =>
+        Session.SubscribeActor(actor.Runtime, () =>
         {
             actor.Fired -= Fired; actor.Ragdolled -= Ragdolled; actor.GotUp -= GotUp;
             actor.MeleeStarted -= MeleeStarted; actor.MeleeHit -= MeleeHit; actor.PushedBody -= Pushed;
         });
+    }
+
+    private void RetireActor(PlayerCharacter actor)
+    {
+        RemoveBot(actor);
+        botServices?.RemoveActor(actor);
+        foreach (var bot in bots)
+        {
+            bot.Others.Remove(actor);
+            bot.Brain.ForgetActor(actor);
+        }
+        remoteMelee.Remove(actor.ActorId);
+        foreach (var key in receivedActions.Keys.Where(key => key.Actor == actor.ActorId).ToArray()) receivedActions.Remove(key);
+        // Profiles/scores and retired identities are run history, not native actor attachments.
     }
 
     private void PreparePresentation()

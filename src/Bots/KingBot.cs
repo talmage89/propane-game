@@ -43,6 +43,8 @@ public sealed class KingBot : IBotGoalPolicy
 
     public void Dispose() => rng.Dispose();
 
+    public void ForgetActor(PlayerCharacter actor) => prizes.ForgetActor(actor);
+
     public void Prepare(IBotWorld world) => motor.Prepare(world);
 
     public PlayerIntent Read() => motor.Read();

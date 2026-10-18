@@ -62,6 +62,12 @@ public sealed class BankingBot : IBotGoalPolicy
 
     public void Dispose() => rng.Dispose();
 
+    public void ForgetActor(PlayerCharacter actor)
+    {
+        targets.ForgetActor(actor);
+        combat.ForgetActor(actor);
+    }
+
     public void Prepare(IBotWorld world)
     {
         tuning = world.World.Tuning;

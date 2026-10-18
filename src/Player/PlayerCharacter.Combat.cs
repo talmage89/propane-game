@@ -116,6 +116,7 @@ public partial class PlayerCharacter
         var collider = hit["collider"].As<GodotObject>();
         var shotDir = (end - muzzle).Normalized();
         ShotImpacting?.Invoke(new ShotReport(muzzle, end, normal, shotDir, collider, true));
+        if (Runtime.IsDisposed) return;
         switch (collider)
         {
             case PropaneTank tank:
@@ -221,8 +222,10 @@ public partial class PlayerCharacter
                 if (body is PropaneTank pushedTank) pushedTank.Disturb();
                 body!.ApplyCentralImpulse(meleeDirection * t.MeleePropImpulse);
                 PushedBody?.Invoke(body);
+                if (Runtime.IsDisposed) return;
             }
             MeleeHit?.Invoke(new MeleeHit(meleeSwing, victim ?? collider));
+            if (Runtime.IsDisposed) return;
         }
     }
 

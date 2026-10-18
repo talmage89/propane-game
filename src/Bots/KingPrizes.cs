@@ -19,6 +19,7 @@ internal sealed class KingPrizes
     private readonly BotPoints points = new();
     private float pointsTimer;
     private Node3D? pointsTarget;
+    private bool retiredPointsTarget;
     private bool protectingPoints;
     private int protectZone = -1;
     private readonly Dictionary<ulong, double> pointsBlocked = new(1024);
@@ -31,20 +32,27 @@ internal sealed class KingPrizes
     public void Waiting()
     {
         pointsTarget = pointsShot = null;
+        retiredPointsTarget = false;
         protectingPoints = false;
         pointsTimer = pointsShotWait = 0;
     }
 
     public void Down() { pointsTimer = pointsShotWait = 0; protectingPoints = false; }
-    public void NavigationFailed() { pointsTarget = null; pointsTimer = 0; }
+    public void NavigationFailed() { pointsTarget = null; retiredPointsTarget = false; pointsTimer = 0; }
     public void RetryPoints() => pointsTimer = 0;
+    public void ForgetActor(PlayerCharacter actor)
+    {
+        if (!ReferenceEquals(pointsTarget, actor)) return;
+        pointsTarget = null;
+        retiredPointsTarget = true;
+    }
 
     public bool SelectPoints(IBotWorld world, KingBotView state, Vector3 spot, PlayerCharacter player, Vector3 here, Core.Tuning tuning, float dt, out Vector3? protectionGoal)
     {
         protectionGoal = null;
         var changed = false;
         pointsTimer -= dt;
-        if (pointsTarget != null && (!GodotObject.IsInstanceValid(pointsTarget) ||
+        if (retiredPointsTarget || pointsTarget != null && (!GodotObject.IsInstanceValid(pointsTarget) ||
             pointsTarget is PropaneTank { State: PropaneTank.TankState.Exploded } or PlayerCharacter { IsRagdolled: true }))
         {
             pointsTimer = 0;
@@ -57,7 +65,7 @@ internal sealed class KingPrizes
             var zoneRate = points.Zone(world, state, spot);
             var protect = zoneRate < 0 && world.MyScore > 0;
             var best = Mathf.Max(0, zoneRate);
-            if (pointsTarget == null) best *= 1 + tuning.BotPointsHysteresis;
+            if (pointsTarget == null && !retiredPointsTarget) best *= 1 + tuning.BotPointsHysteresis;
             pointsExpired.Clear();
             foreach (var (id, until) in pointsBlocked) if (until <= world.Now) pointsExpired.Add(id);
             foreach (var id in pointsExpired) pointsBlocked.Remove(id);
@@ -90,7 +98,8 @@ internal sealed class KingPrizes
                 if (rate > best && world.Services.Ray(player.Aim.EyeOrigin, tank.GlobalTransform * PropaneTank.LocalCenter,
                     Core.Layers.ShotMask, out var hit) && hit.Collider == tank.GetRid()) { best = rate; chosen = tank; }
             }
-            if (chosen != pointsTarget) { changed = true; pointsShotWait = 0; pointsShot = null; }
+            if (chosen != pointsTarget || retiredPointsTarget) { changed = true; pointsShotWait = 0; pointsShot = null; }
+            retiredPointsTarget = false;
             pointsTarget = chosen;
             protect &= chosen == null;
             if (protect && (!protectingPoints || protectZone != state.Zone))

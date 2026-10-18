@@ -672,6 +672,7 @@ public partial class Match : Node3D, IClientAuthorityReplica
     private void OnRagdolled(PlayerCharacter actor, Vector3 at, Vector3 velocity, Vector3 spin)
     {
         Send(ActorWriter(Msg.Ragdoll, actor).Vec3(at).Vec3(velocity).Vec3(spin));
+        if (!World.IsAlive || Session.Actor(actor.ActorId) == null) return;
         // Thrown: the bank spills where the player stood, whoever's blast it was.
         DropTanks(actor, World.Tuning.RagdollDropCount, SpillReason.Thrown, at + Vector3.Up * 0.35f, Vector3.Zero);
     }

@@ -46,6 +46,16 @@ public partial class Match
     private BotServices? botServices;
     private int botTurn;
 
+    private void RemoveBot(PlayerCharacter actor)
+    {
+        foreach (var bot in bots.FindAll(bot => bot.Actor == actor))
+        {
+            bot.Brain.Dispose();
+            bots.Remove(bot);
+            bot.Others.Clear();
+        }
+    }
+
     /// <summary>
     /// Owned bot actors and their brains' cost on this peer: think calls, physics ticks with bots, seconds (in all and
     /// in the worst tick), managed bytes allocated, and the navigation physics queries and sight rays they made.

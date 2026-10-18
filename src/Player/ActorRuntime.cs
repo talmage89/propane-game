@@ -41,6 +41,7 @@ public sealed class ActorRuntime : IDisposable
     public DropPredictions DropPredictions { get; } = new();
     public SnapshotBuffer? Snapshots => (IntentSource as ReplicatedIntent)?.Snapshots;
     private bool disposed;
+    internal bool IsDisposed => disposed;
     public void Dispose()
     {
         if (disposed) return;
