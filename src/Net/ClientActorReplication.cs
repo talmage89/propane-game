@@ -9,15 +9,12 @@ namespace Propane.Net;
 /// Snapshot times are monotonic network seconds; SendTimer consumes Match's physics delta. No input reads.</summary>
 public sealed class ClientActorReplication : IDisposable
 {
-    public ClientActorReplication(PlayerCharacter actor)
-    {
-        character = actor;
-        if (actor.IsRemote) remoteIntent = new ReplicatedIntent(actor.World.Tuning);
-    }
+    public ClientActorReplication(PlayerCharacter actor) => character = actor;
     private PlayerCharacter? character;
     public PlayerCharacter Character => character ?? throw new ObjectDisposedException(nameof(ClientActorReplication));
-    private ReplicatedIntent? remoteIntent;
-    public SnapshotBuffer? Snapshots => remoteIntent?.Snapshots;
+    // A temporary override or view assignment suspends the original source, as before extraction.
+    private ReplicatedIntent? ActiveIntent => character?.Runtime.IntentSource as ReplicatedIntent;
+    public SnapshotBuffer? Snapshots => ActiveIntent?.Snapshots;
     public uint ReplicationSequence { get; set; }
     public float SendTimer { get; set; }
     public uint ActionSequence { get; set; }
@@ -31,8 +28,12 @@ public sealed class ClientActorReplication : IDisposable
     private Action? unsubscribe;
     private bool disposed;
     internal bool IsSubscribed => unsubscribe != null && !disposed;
-    internal void AttachInput() { if (remoteIntent != null) Character.Runtime.IntentSource = remoteIntent; }
-    internal void ApplySnapshot(double now) => remoteIntent?.Apply(Character, now);
+    internal void AttachInput()
+    {
+        var actor = Character;
+        if (actor.IsRemote) actor.Runtime.IntentSource = new ReplicatedIntent(actor.World.Tuning);
+    }
+    internal void ApplySnapshot(double now) => ActiveIntent?.Apply(Character, now);
     public uint AllocateDropId()
     {
         var id = BodyIds.DropTankId(AllocationSlot, DropCounter);
@@ -65,7 +66,6 @@ public sealed class ClientActorReplication : IDisposable
         Unsubscribe();
         Melee = null;
         receivedActions.Clear();
-        remoteIntent = null;
         character = null;
     }
 }

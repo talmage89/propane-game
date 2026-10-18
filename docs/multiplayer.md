@@ -388,6 +388,8 @@ A replacement match gets a fresh owner and request sequence. Empty flushes alloc
 exist only while constructing a proposal at send time. Actor action sequences and `DropPredictions` remain
 in each ClientActorReplication attachment; BodySync retains correction inside ClientWorldReplica, which owns
 physical lookup/reconstruction/publication. Match supplies synchronous forwarding and wire sends.
+Remote snapshot delivery and application follow the actor's current input source. A temporary override or absent
+source suspends the old buffer; a replacement replicated source receives and applies its own snapshots.
 
 Resolution is synchronous: finish the request and release reservations, update dependent expected epochs,
 reconcile canonical bodies, flush eligible requests, notify listeners in registration order, then remove gather
