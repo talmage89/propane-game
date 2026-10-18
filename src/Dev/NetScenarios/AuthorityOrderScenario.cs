@@ -165,7 +165,17 @@ internal sealed class AuthorityOrderScenario(INetScenarioHost host) : NetScenari
             camera.GlobalPosition = subject.GlobalPosition + new Vector3(2, 1.4f, 3);
             camera.LookAt(subject.GlobalTransform * PropaneTank.LocalCenter, Vector3.Up);
         }
-        director.Screenshot($"{net.PlayerName}_{(future ? "future_epoch" : "root_refused")}");
+        CaptureResolved($"{net.PlayerName}_{(future ? "future_epoch" : "root_refused")}");
         Log($"{(future ? "future-epoch" : "root-refusal")}: assertions passed");
     }
+
+    private async void CaptureResolved(string label)
+    {
+        if (DisplayServer.GetName() == "headless" || DevArgs.Get("capture-dir") == null) return;
+        // The scenario changes cameras during physics; the framebuffer still holds the preceding view.
+        var captured = Epoch;
+        await ToSignal(RenderingServer.Singleton, RenderingServer.SignalName.FramePostDraw);
+        if (IsCurrent(captured) && IsInsideTree()) director.ScreenshotAsync(label);
+    }
+
 }

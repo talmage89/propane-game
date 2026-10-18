@@ -100,7 +100,8 @@ scheduled fuse. It invokes the captured canceled fuse to prove it cannot detonat
 publication has reached BodySync's future-epoch slot. It then delivers that same grant and asserts that the newer
 sequence survives. The wrapper uses reflection inside this Dev owner and restores the previous receiver on
 retirement; it adds no production packet interception or scheduling path. No synthetic grant or publication is used.
-Rendered runs capture `<name>_root_refused` and `<name>_future_epoch` with the resolved tank in view.
+Rendered runs capture `<name>_root_refused` and `<name>_future_epoch` after drawing the resolved tank camera.
+Pending render continuations retire with their scenario.
 
 ```sh
 tools/dev/net_bots.sh -n 2 -w 2 -l 15 -s --match-seed=23 -o "$PWD/build/authority-root" -- --scenario=root-refusal --net-lag=120 --net-jitter=30 --net-loss=3 --capture-dir="$PWD/build/authority-root/shots"
