@@ -2,8 +2,12 @@
 """Artifact script failure propagation, archive layout, and release-only workflow wiring."""
 import os
 from pathlib import Path
+import signal
+import subprocess
+import sys
 import tarfile
 import tempfile
+import time
 import unittest
 import zipfile
 
@@ -44,6 +48,43 @@ class ArtifactTests(unittest.TestCase):
             with self.assertRaises(tarfile.FilterError):
                 unpack(archive, root / 'escape')
             self.assertFalse((root / 'escaped').exists())
+
+    def test_interruption_reaps_the_exported_child(self):
+        with tempfile.TemporaryDirectory(dir=ROOT / 'build', prefix='artifact-interrupt-') as directory:
+            root = Path(directory)
+            child_pid = root / 'child.pid'
+            # This exercises the real process/session boundary, not a mocked wait/kill sequence.
+            code = ('import os,signal,sys\nfrom pathlib import Path\nimport check_artifacts as artifact\n'
+                    'signal.signal(signal.SIGTERM, artifact.interrupted)\n'
+                    'root=Path(sys.argv[1])\n'
+                    'artifact.run(["bash", "-c", \'echo $$ > "$1"; exec sleep 30\', "bash", str(root / "child.pid")], '
+                    'root / "child.log", root, os.environ)\n')
+            for interrupt in (signal.SIGINT, signal.SIGTERM):
+                child_pid.unlink(missing_ok=True)
+                with subprocess.Popen([sys.executable, '-c', code, str(root)], cwd=ROOT / 'tools/release',
+                                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) as owner:
+                    child_needs_cleanup = False
+                    try:
+                        deadline = time.monotonic() + 10
+                        while (not child_pid.exists() or not child_pid.read_text().strip()) and owner.poll() is None and time.monotonic() < deadline:
+                            time.sleep(.01)
+                        self.assertTrue(child_pid.exists(), 'child did not start')
+                        pid = int(child_pid.read_text())
+                        child_needs_cleanup = True
+                        owner.send_signal(interrupt)
+                        self.assertNotEqual(owner.wait(timeout=15), 0)
+                        with self.assertRaises(ProcessLookupError):
+                            os.kill(pid, 0)
+                        child_needs_cleanup = False
+                    finally:
+                        if owner.poll() is None:
+                            owner.kill()
+                            owner.wait()
+                        if child_needs_cleanup:
+                            try:
+                                os.kill(pid, signal.SIGKILL)
+                            except ProcessLookupError:
+                                pass
 
     def test_release_workflow_checks_artifacts_before_publication(self):
         workflow = (ROOT / '.github/workflows/release.yml').read_text()

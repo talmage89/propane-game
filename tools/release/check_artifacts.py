@@ -24,15 +24,23 @@ def run(command, log, cwd, env, marker=None, timeout=90):
         with subprocess.Popen(command, cwd=cwd, env=env, stdout=stream, stderr=subprocess.STDOUT, start_new_session=True) as process:
             try:
                 process.wait(timeout=timeout)
-            except subprocess.TimeoutExpired:
+            except BaseException as error:
                 # Give the invisible wrapper time to stop/reap its compositor and exported child too.
-                os.killpg(process.pid, signal.SIGTERM)
+                try:
+                    os.killpg(process.pid, signal.SIGTERM)
+                except ProcessLookupError:
+                    pass
                 try:
                     process.wait(timeout=10)
                 except subprocess.TimeoutExpired:
-                    os.killpg(process.pid, signal.SIGKILL)
+                    try:
+                        os.killpg(process.pid, signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
                     process.wait()
-                raise RuntimeError(f'Artifact step timed out ({log})') from None
+                if isinstance(error, subprocess.TimeoutExpired):
+                    raise RuntimeError(f'Artifact step timed out ({log})') from None
+                raise
             status = process.returncode
     output = log.read_text(errors='replace')
     if status or re.search(r'(?m)^\s*(?:ERROR:|SCRIPT ERROR:|Unhandled exception)', output) or (marker and marker not in output):
@@ -55,6 +63,7 @@ def unpack(archive, destination):
 
 
 def main():
+    signal.signal(signal.SIGTERM, interrupted)
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--dist', type=Path, default=ROOT / 'build/dist')
     parser.add_argument('--output', type=Path, required=True)
@@ -102,6 +111,10 @@ def main():
     run([*command, '--', '--windowed', '--release-test', *capture], output / 'release-test.log', output, env,
         marker='[releasetest] PASS main menu and single player')
     print(f'PASS three inventories; Linux ordinary, classic, server and release-test ({output})')
+
+
+def interrupted(signum, _frame):
+    raise SystemExit(128 + signum)
 
 
 if __name__ == '__main__':
