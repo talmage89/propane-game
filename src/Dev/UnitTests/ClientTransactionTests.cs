@@ -16,6 +16,15 @@ public static class ClientTransactionTests
 {
     public static void Register(TestRunner runner)
     {
+        runner.Run("client authority/empty flush has no steady allocation", () =>
+        {
+            using var transactions = new ClientAuthorityTransactions(2, new RetiringReplica());
+            for (var i = 0; i < 100; i++) transactions.Flush();
+            AssertNoAllocation(() =>
+            {
+                for (var i = 0; i < 1000; i++) transactions.Flush();
+            }, "empty authority flush allocated");
+        });
         runner.Run("client authority/session retirement clears pending gathers, queues and roots", () =>
         {
             using var f = new AuthorityFixture(runner);
