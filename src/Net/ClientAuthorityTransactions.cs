@@ -113,6 +113,10 @@ internal sealed class ClientAuthorityTransactions : IDisposable
         };
     }
 
+    // Keep the selector's captures in this proposal, so even an empty flush needs no closure.
+    private static ClaimMessage ClaimProposal(ClaimMessage claim, AuthorityRequest request, IClientAuthorityReplica replica) =>
+        claim with { Bodies = claim.Bodies.Select(c => (replica.CurrentProposal(c.Id) ?? c) with { Epoch = request.Expected[c.Id] }).ToArray() };
+
     public void Flush()
     {
         var replica = this.replica;
@@ -130,7 +134,7 @@ internal sealed class ClientAuthorityTransactions : IDisposable
             {
                 PunctureMessage p => (object)PunctureProposal(p, request.Expected[p.Id]),
                 ExplodeMessage p => p with { Epoch = request.Expected[p.Id] },
-                ClaimMessage p => p with { Bodies = p.Bodies.Select(c => (replica.CurrentProposal(c.Id) ?? c) with { Epoch = request.Expected[c.Id] }).ToArray() },
+                ClaimMessage p => ClaimProposal(p, request, replica),
                 _ => throw new InvalidOperationException("unknown authority request"),
             };
             replica.SendAuthority(request.Type, payload, request.ActorId, request.LifeId);

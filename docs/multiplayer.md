@@ -380,7 +380,8 @@ The server is the game itself started with `-- --server` (and `--headless`). It 
 Match creates `ClientAuthorityTransactions` during session configuration. The existing session stop callback
 retires it after inbox detachment and event unsubscription, including failed construction. Disposal is idempotent:
 it detaches pending gather listeners, clears requests/reservations/causal roots and releases the replica collaborator.
-A replacement match gets a fresh owner and request sequence. Actor action sequences and `DropPredictions` remain
+A replacement match gets a fresh owner and request sequence. Empty flushes allocate nothing; claim selectors
+exist only while constructing a proposal at send time. Actor action sequences and `DropPredictions` remain
 on each actor; BodySync retains correction, and Match retains physical body lookup, reconstruction and wire sends.
 
 Resolution is synchronous: finish the request and release reservations, update dependent expected epochs,
