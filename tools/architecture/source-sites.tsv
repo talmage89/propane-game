@@ -40,6 +40,8 @@ wall-clock	src/Dev/NetTest.cs	Time.GetTicksMsec	1	Dev:NetTest	Harness orchestrat
 wall-clock	src/Dev/ScaleBench.cs	Stopwatch.GetElapsedTime	1	Dev:ScaleBench	Harness orchestration/measurement domain; preserve bounded completion and shutdown assertions.
 wall-clock	src/Dev/ScaleBench.cs	Stopwatch.GetTimestamp	1	Dev:ScaleBench	Harness orchestration/measurement domain; preserve bounded completion and shutdown assertions.
 wall-clock	src/Dev/SuburbPreview.cs	Stopwatch.StartNew	1	Dev:SuburbPreview	Harness orchestration/measurement domain; preserve bounded completion and shutdown assertions.
+wall-clock	src/Dev/UnitTests/ActorTickBenchTests.cs	Stopwatch.GetElapsedTime	1	Dev:ActorTickBenchTests	Opt-in L1 whole Match and character callback measurement; no gameplay clock.
+wall-clock	src/Dev/UnitTests/ActorTickBenchTests.cs	Stopwatch.GetTimestamp	1	Dev:ActorTickBenchTests	Opt-in L1 whole Match and character callback measurement; no gameplay clock.
 wall-clock	src/Dev/UnitTests/AuthorityBenchTests.cs	Stopwatch.GetElapsedTime	1	Dev:AuthorityBenchTests	Harness orchestration/measurement domain; preserve bounded completion and shutdown assertions.
 wall-clock	src/Dev/UnitTests/AuthorityBenchTests.cs	Stopwatch.GetTimestamp	1	Dev:AuthorityBenchTests	Harness orchestration/measurement domain; preserve bounded completion and shutdown assertions.
 wall-clock	src/Dev/UnitTests/BodyPublicationTests.cs	Stopwatch.GetElapsedTime	1	Dev:BodyPublicationTests	Harness orchestration/measurement domain; preserve bounded completion and shutdown assertions.

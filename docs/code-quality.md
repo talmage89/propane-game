@@ -344,3 +344,19 @@ relay and whole run ticks for Bank, King and roaming. Each measured tick deliver
 states. Time advances from the fixture clock, so match clocks and King actor sampling remain active. Packet
 preparation and 20,000 warm-up ticks are excluded; 30,000 ticks are measured per mode. Alternate at least three parent/candidate pairs. The report
 includes allocations, mean, p95/p99, packet counts and payload bytes; packet instrumentation stays off.
+
+## Actor retirement probes
+
+`ActorLifetimeTests` checks live-world registration/cache counts, character/runtime/registration collection,
+callback removal, stop-time reentrancy and cleanup failures. `ActorTacticsTests` compares complete intent,
+status, RNG and query transcripts across a native rival departure in Banking combat/cover and King points.
+`ActorTickBenchTests --actor-tick-bench` is opt-in: 20,000 warm-up and 60,000 measured whole Match plus
+owned-character physics callbacks on stationary native bodies; it reports allocation, mean, p95/p99 and workload.
+These controlled callbacks do not advance Jolt and do not replace native network runs.
+
+`tools/dev/actor_equivalence.py --revision=REV --label=FRESH_NAME` prepares isolated identical packet/actor
+ordering observers under `build/`. Run existing roster/departure suites with `--actor-order --match-seed=23`
+and `--server-transcript=ABSOLUTE_PATH`; compare packet files exactly and the `[actor-order]` lines. Native
+departure runs use the scratch project's copied `tools/dev/net_bots.sh`; peer numbers in actor-order lines are
+normalized to the initial peer order. `--actor-tactics-transcript=ABSOLUTE_PATH` writes the focused departure
+decisions. No release fixture or checkout production source is instrumented.
