@@ -137,8 +137,11 @@ public static class DispatchBoundaryTests
         });
         runner.Run("dispatch/construction preserves both original and cleanup causes", () =>
         {
-            var mode = ModeRegistry.TankBank with { Supply = ModeRegistry.TankBank.Supply with
-                { Suburb = (_, _) => throw new InvalidOperationException("injected original construction failure") } };
+            var mode = ModeRegistry.TankBank with
+            {
+                Supply = ModeRegistry.TankBank.Supply with
+                { Suburb = (_, _) => throw new InvalidOperationException("injected original construction failure") }
+            };
             using var f = new ServerRunFixture(mode: mode);
             f.Server.RunCreated += run => run.Retired += () => throw new InvalidOperationException("injected retirement callback failure");
             using var log = new NetLogCapture();
