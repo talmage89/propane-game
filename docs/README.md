@@ -44,6 +44,7 @@ current and binding, and no one else edits it. Start with [VISION.md](../design/
 | Document | What it covers |
 | --- | --- |
 | [runbooks/measuring-scale.md](runbooks/measuring-scale.md) | `make bench`, reading its measurements, comparing optimization branches and playing optimized C# locally. |
+| [runbooks/moving-vent-residual.md](runbooks/moving-vent-residual.md) | FU2a scratch observation, correction decisions, contact traces and final-grid alignment. |
 | [runbooks/network-soak.md](runbooks/network-soak.md) | Running the multiplayer soaks, how `compare_tanks.py` judges a match, the capacity gate and the lobby-bot soaks. |
 | [runbooks/profiling-effects.md](runbooks/profiling-effects.md) | Measuring the cost of vents, smoke, blasts and chains in a crowd, alone or against a baseline build. |
 | [runbooks/animation-review.md](runbooks/animation-review.md) | The animation acceptance harness: commands, the metrics gate and external clip review. |
@@ -60,6 +61,7 @@ the report concludes; the contract named in each report's status line holds the 
 | --- | --- | --- | --- |
 | [evidence/multiplayer-verification.md](evidence/multiplayer-verification.md) | 2026-10-09 to 10-11 | No | The first-bot comparison, a LAN and VPN soak and the melee package's verification, moved out of the multiplayer contract. |
 | [evidence/network-soak.md](evidence/network-soak.md) | 2026-10-11 to 10-13 | Procedures moved | Tank-agreement calibration, validation, the 16-actor capacity proof and the lobby-bot soaks. |
+| [evidence/moving-vent-residual.md](evidence/moving-vent-residual.md) | 2026-10-18 | No | FU2a: retained parent terminal failure, acceleration/contact/age/timing discrimination, commands and open correction proof (data in `moving-vent-residual/`). |
 | [evidence/network-corrections.md](evidence/network-corrections.md) | 2026-10-11 to 10-16 | No | The replication fixes that followed the soak assertion, each with its soak evidence. |
 | [evidence/network-integration.md](evidence/network-integration.md) | 2026-10-11 | No | The independent review of the network-assertion branch: disconnect latency, vent correction, capacity follow-ups. |
 | [evidence/participant-integration.md](evidence/participant-integration.md) | 2026-10-11, 10-12 | No | The participant (A6) merge review, the capacity proof and the tank-agreement tails it left open. |

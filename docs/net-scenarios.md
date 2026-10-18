@@ -48,6 +48,7 @@ network timings are not deterministic.
 | `movement` | Two clients; headless at least 18 s, rendered 35 s; `--assert-grip --assert-motion --assert-feet`; `--view=player|rifleleft|rifleright` | Host must finish observed remote gait/support/reload/recoil proof; `remote_00` through `remote_10` labels. |
 | `puncture-race` | Two or three clients; 20 s; lag/jitter/loss 120/30/3; color indices 0/1 contend | Every client requires canonical vent, lean, bounded corrections and 100 path samples; `<name>_race_<tick>`; run `compare_vents.py`. |
 | `body-stream` | Two clients; server `--net-loss=100 --net-body-stall=2000`; 20 s | Every client requires owner motion; no scenario captures. Also used with readiness stall. |
+| `ballistic` | Two clients; 20 s; `--tune.VentThrust=0 --ballistic-gravity=0` or `1`; optional residual observer | Native zero-contact/zero-spin/authority/gravity assertions; ordinary ending and tank checker. Diagnostic gravity-on runs can fail convergence. |
 | `vent-contact` | Two clients; 30 s; `--vent-contact-axis=mixed`, fixed seed 23; optional motion traces | Every client requires eight canonical vents/epochs; no scenario captures. Punctures carry the owner's actor ID (and Match resolves its life); the historical parent failure is recorded in the verification report. |
 | `king` | Two clients, `--mode=king`, at least 55 s | Every client requires hold/contest/mint/warning/move/fresh pile; `<name>_king_{hold,contest,warning,moved_pile,settled_pile,results}`. |
 | `king-late` | Three clients; `--mode=king --mint-seconds=0.5 --tune.PlayerSendRate=20 --delay-who=Bot3 --match-delay=70`; 110 s | Every client requires moved zone/holder/mints; delayed peer checks catch-up before readiness. Use `-k`, check server scores/mints, full tank coverage on undelayed peers, and all completion samples. |
@@ -107,3 +108,6 @@ Pending render continuations retire with their scenario.
 tools/dev/net_bots.sh -n 2 -w 2 -l 15 -s --match-seed=23 -o "$PWD/build/authority-root" -- --scenario=root-refusal --net-lag=120 --net-jitter=30 --net-loss=3 --capture-dir="$PWD/build/authority-root/shots"
 tools/dev/net_bots.sh -n 2 -w 2 -l 15 -s --match-seed=23 -o "$PWD/build/authority-future" -- --scenario=future-epoch --net-lag=120 --net-jitter=30 --net-loss=3 --capture-dir="$PWD/build/authority-future/shots"
 ```
+
+The opt-in [moving-vent observer](runbooks/moving-vent-residual.md) instruments isolated parent builds without changing
+these scenarios or their completion conditions. It retains correction decisions and the exact final comparison brackets.
