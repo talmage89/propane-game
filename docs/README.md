@@ -20,6 +20,7 @@ current and binding, and no one else edits it. Start with [VISION.md](../design/
 
 | Document | What it covers |
 | --- | --- |
+| [architecture.md](architecture.md) | Living architecture contract: modules, scopes, ordering, approved exceptions, extension boundaries and unfinished acceptance. |
 | [development.md](development.md) | The developer guide: running from source, the gate, tuning, repository layout, the scripted scenes in `scenes/dev`, versions and releases, and how the README media are made. |
 | [multiplayer.md](multiplayer.md) | Networking model, messages and protocol 3, hosting, the lobby and its world, bots and the network test tools. |
 | [net-scenarios.md](net-scenarios.md) | Network harness ownership, lifecycle, CLI inventory and completion obligations. |
@@ -65,6 +66,7 @@ the report concludes; the contract named in each report's status line holds the 
 | [evidence/suburb-generation-verification.md](evidence/suburb-generation-verification.md) | 2026-10-17 | No | B10: stage ownership, parent plan bytes, exact references, deep sweeps and rendered comparisons. |
 | [evidence/match-player-cache.md](evidence/match-player-cache.md) | 2026-10-17 | No | M0: ordered local-player selection, empty ownership, paired frame costs and native audits. |
 | [evidence/client-authority-transactions.md](evidence/client-authority-transactions.md) | 2026-10-17 | No | B2: exact authority transactions, session retirement, allocation correction, paired playing ticks, native audits and Linux export. |
+| [evidence/architecture-verification.md](evidence/architecture-verification.md) | 2026-10-17 | No | A0: architecture cross-check, acceptance ledger, dependency baseline, negative probes, rendered input and local gate cost. |
 | [evidence/server-run-verification.md](evidence/server-run-verification.md) | 2026-10-17 | No | B1: run ownership, exact parent packets, resource retirement, paired ticks, native matrix and capacity. |
 | [evidence/ledger-count-verification.md](evidence/ledger-count-verification.md) | 2026-10-17 | No | B1a: live tank accounting, parent operation transcripts, paired stock-tick costs and native soaks. |
 | [evidence/world-clock-verification.md](evidence/world-clock-verification.md) | 2026-10-16 | No | The B6 clock dispatch change: parent callback transcripts, allocation and burst measurements. |

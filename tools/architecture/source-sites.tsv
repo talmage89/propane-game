@@ -1,0 +1,80 @@
+direct-quit	src/Core/ShutdownGuard.cs	Quit(	2	ShutdownGuard	Orderly shutdown owner, including internal wrapper call and final physics-flush quit.
+direct-quit	src/Dev/AnimationReview.cs	Quit(	3	Dev:AnimationReview	Legacy release-transplant wrapper has an exact conditional direct-quit branch; current builds use ShutdownGuard.
+direct-quit	src/Dev/ShutdownWitness.cs	Quit(	1	Dev:ShutdownWitness	Negative shutdown witness deliberately bypasses orderly teardown; keep isolated from runtime.
+engine-catchup	src/Dev/LabScenarios/MeasureScenario.cs	MaxPhysicsStepsPerFrame=	1	Dev:MeasureScenario	Harness orchestration/measurement domain; preserve bounded completion and shutdown assertions.
+engine-catchup	src/Dev/UnitTests/EffectResourceTests.cs	MaxPhysicsStepsPerFrame=	4	Dev:EffectResourceTests	Harness orchestration/measurement domain; preserve bounded completion and shutdown assertions.
+engine-catchup	src/Tank/TankSimulation.cs	MaxPhysicsStepsPerFrame=	2	A1:TankSimulation	Real-time dense-chain catch-up arbitration; preserve overlap minimum, network veto and prior-value restoration.
+engine-scale	src/Core/WorldTimeScale.cs	TimeScale=	2	A1:WorldTimeScale	Real-time exclusive offline hitstop lease; A1 consolidates ownership while preserving activation/restoration.
+shader-global	src/Lab/DissolveArena.cs	GlobalShaderParameterSet(	2	W2:DissolveArena	Single independently advancing stream per process; remove when reveal state becomes world-owned.
+timer	src/Dev/GatherRange.cs	CreateTimer	1	Dev:GatherRange	Harness orchestration/measurement domain; preserve bounded completion and shutdown assertions.
+timer	src/Dev/MenuGamepadTest.cs	CreateTimer	6	Dev:MenuGamepadTest	Harness orchestration/measurement domain; preserve bounded completion and shutdown assertions.
+timer	src/Dev/NetScenarios/AppearanceScenario.cs	CreateTimer	2	Dev:AppearanceScenario	Harness orchestration/measurement domain; preserve bounded completion and shutdown assertions.
+timer	src/Dev/NetScenarios/DuelScenario.cs	CreateTimer	1	Dev:DuelScenario	Harness orchestration/measurement domain; preserve bounded completion and shutdown assertions.
+timer	src/Dev/NetTest.Lobby.cs	CreateTimer	1	Dev:NetTest.Lobby	Harness orchestration/measurement domain; preserve bounded completion and shutdown assertions.
+timer	src/Dev/NetTest.cs	CreateTimer	4	Dev:NetTest	Harness orchestration/measurement domain; preserve bounded completion and shutdown assertions.
+timer	src/Dev/NetTest.cs	Thread.Sleep	2	Dev:NetTest	Harness orchestration/measurement domain; preserve bounded completion and shutdown assertions.
+timer	src/Dev/UnitTests/Fixtures/ServerNativeFixture.cs	OS.DelayMsec	1	Dev:ServerNativeFixture	B1 native fixture yields between socket polls within its real-time deadline; no gameplay wait.
+tree-pause	src/Dev/ShutdownTests.cs	.Paused=	1	Dev:ShutdownTests	Harness orchestration/measurement domain; preserve bounded completion and shutdown assertions.
+wall-clock	src/Core/WorldTimeScale.cs	Time.GetTicksUsec	2	A1:WorldTimeScale	Real-time exclusive offline hitstop lease; A1 consolidates ownership while preserving activation/restoration.
+wall-clock	src/Dev/AnimationReview.cs	Time.GetTicksMsec	1	Dev:AnimationReview	Harness orchestration/measurement domain; preserve bounded completion and shutdown assertions.
+wall-clock	src/Dev/CoreTests.cs	Stopwatchtimer=	1	Dev:CoreTests	Harness elapsed suite measurements only; never use this clock for gameplay.
+wall-clock	src/Dev/GeneratorTests.cs	Stopwatch.StartNew	4	Dev:GeneratorTests	Harness orchestration/measurement domain; preserve bounded completion and shutdown assertions.
+wall-clock	src/Dev/LabScenarios/DissolveScenario.cs	Stopwatch.StartNew	1	Dev:DissolveScenario	Harness orchestration/measurement domain; preserve bounded completion and shutdown assertions.
+wall-clock	src/Dev/LabScenarios/DissolveScenario.cs	Time.GetTicksUsec	2	Dev:DissolveScenario	Harness orchestration/measurement domain; preserve bounded completion and shutdown assertions.
+wall-clock	src/Dev/LabScenarios/MeasureScenario.cs	Stopwatch.GetTimestamp	2	Dev:MeasureScenario	Harness orchestration/measurement domain; preserve bounded completion and shutdown assertions.
+wall-clock	src/Dev/LabScenarios/MeasureScenario.cs	Time.GetTicksUsec	2	Dev:MeasureScenario	Harness orchestration/measurement domain; preserve bounded completion and shutdown assertions.
+wall-clock	src/Dev/LabScenarios/PrototypeScenario.cs	Stopwatch.StartNew	1	Dev:PrototypeScenario	Harness orchestration/measurement domain; preserve bounded completion and shutdown assertions.
+wall-clock	src/Dev/LabScenarios/RunnerSamplingScenario.cs	Stopwatch.GetElapsedTime	2	Dev:RunnerSamplingScenario	Harness orchestration/measurement domain; preserve bounded completion and shutdown assertions.
+wall-clock	src/Dev/LabScenarios/RunnerSamplingScenario.cs	Stopwatch.GetTimestamp	2	Dev:RunnerSamplingScenario	Harness orchestration/measurement domain; preserve bounded completion and shutdown assertions.
+wall-clock	src/Dev/LabScenarios/ShortFuseScenario.cs	Stopwatch.StartNew	1	Dev:ShortFuseScenario	Harness orchestration/measurement domain; preserve bounded completion and shutdown assertions.
+wall-clock	src/Dev/LabScenarios/StackFireScenario.cs	Time.GetTicksUsec	2	Dev:StackFireScenario	Harness orchestration/measurement domain; preserve bounded completion and shutdown assertions.
+wall-clock	src/Dev/MatchPlayerBenchmark.cs	Stopwatch.GetElapsedTime	2	Dev:MatchPlayerBenchmark	M0 opt-in complete Match presentation callback measurement; never a gameplay deadline.
+wall-clock	src/Dev/MatchPlayerBenchmark.cs	Stopwatch.GetTimestamp	2	Dev:MatchPlayerBenchmark	M0 opt-in complete Match presentation callback measurement; never a gameplay deadline.
+wall-clock	src/Dev/MenuDeviceInputTest.cs	Time.GetTicksMsec	2	Dev:MenuDeviceInputTest	Harness orchestration/measurement domain; preserve bounded completion and shutdown assertions.
+wall-clock	src/Dev/MenuGamepadTest.cs	Time.GetTicksMsec	2	Dev:MenuGamepadTest	Harness orchestration/measurement domain; preserve bounded completion and shutdown assertions.
+wall-clock	src/Dev/MenuLifetimeTest.cs	Time.GetTicksMsec	2	Dev:MenuLifetimeTest	Harness orchestration/measurement domain; preserve bounded completion and shutdown assertions.
+wall-clock	src/Dev/NetScenarios/NetScenarioTools.cs	Stopwatch.GetTimestamp	1	Dev:NetScenarioTools	Harness orchestration/measurement domain; preserve bounded completion and shutdown assertions.
+wall-clock	src/Dev/NetTest.cs	Time.GetTicksMsec	1	Dev:NetTest	Harness orchestration/measurement domain; preserve bounded completion and shutdown assertions.
+wall-clock	src/Dev/ScaleBench.cs	Stopwatch.GetElapsedTime	1	Dev:ScaleBench	Harness orchestration/measurement domain; preserve bounded completion and shutdown assertions.
+wall-clock	src/Dev/ScaleBench.cs	Stopwatch.GetTimestamp	1	Dev:ScaleBench	Harness orchestration/measurement domain; preserve bounded completion and shutdown assertions.
+wall-clock	src/Dev/SuburbPreview.cs	Stopwatch.StartNew	1	Dev:SuburbPreview	Harness orchestration/measurement domain; preserve bounded completion and shutdown assertions.
+wall-clock	src/Dev/UnitTests/BodyPublicationTests.cs	Stopwatch.GetElapsedTime	1	Dev:BodyPublicationTests	Harness orchestration/measurement domain; preserve bounded completion and shutdown assertions.
+wall-clock	src/Dev/UnitTests/BodyPublicationTests.cs	Stopwatch.GetTimestamp	1	Dev:BodyPublicationTests	Harness orchestration/measurement domain; preserve bounded completion and shutdown assertions.
+wall-clock	src/Dev/UnitTests/CaptureTests.cs	Stopwatch.StartNew	1	Dev:CaptureTests	Harness orchestration/measurement domain; preserve bounded completion and shutdown assertions.
+wall-clock	src/Dev/UnitTests/ClockDispatchTests.cs	Stopwatch.GetTimestamp	3	Dev:ClockDispatchTests	Harness orchestration/measurement domain; preserve bounded completion and shutdown assertions.
+wall-clock	src/Dev/UnitTests/Fixtures/ServerNativeFixture.cs	Stopwatch.StartNew	1	Dev:ServerNativeFixture	B1 bounded native socket-poll deadline; run time remains the injected manual clock.
+wall-clock	src/Dev/UnitTests/LoopbackTransport.cs	Stopwatch.GetElapsedTime	1	Dev:LoopbackTransport	Harness orchestration/measurement domain; preserve bounded completion and shutdown assertions.
+wall-clock	src/Dev/UnitTests/LoopbackTransport.cs	Stopwatch.GetTimestamp	1	Dev:LoopbackTransport	Harness orchestration/measurement domain; preserve bounded completion and shutdown assertions.
+wall-clock	src/Dev/UnitTests/ServerRunBenchTests.cs	Stopwatch.GetElapsedTime	1	Dev:ServerRunBenchTests	B1 opt-in whole-run callback diagnostic; manual time drives run behavior.
+wall-clock	src/Dev/UnitTests/ServerRunBenchTests.cs	Stopwatch.GetTimestamp	1	Dev:ServerRunBenchTests	B1 opt-in whole-run callback diagnostic; manual time drives run behavior.
+wall-clock	src/Dev/UnitTests/TankLedgerTests.cs	Stopwatch.GetTimestamp	2	Dev:TankLedgerTests	Harness orchestration/measurement domain; preserve bounded completion and shutdown assertions.
+wall-clock	src/Fx/EffectProfile.cs	Stopwatch.GetElapsedTime	1	EffectProfile	Diagnostic measurement only; never use this clock for gameplay deadlines.
+wall-clock	src/Fx/EffectProfile.cs	Stopwatch.GetTimestamp	1	EffectProfile	Diagnostic measurement only; never use this clock for gameplay deadlines.
+wall-clock	src/Lab/DissolveArena.cs	Stopwatch.StartNew	3	DissolveArena	Diagnostic measurement only; never use this clock for gameplay deadlines.
+wall-clock	src/Lab/LabSession.cs	DateTime.UtcNow	1	LabSession	UTC daily seed chosen at run creation; never a gameplay timer.
+wall-clock	src/Lab/LocalBank.cs	Stopwatch.GetElapsedTime	1	LocalBank	Diagnostic measurement only; never use this clock for gameplay deadlines.
+wall-clock	src/Lab/LocalBank.cs	Stopwatch.GetTimestamp	1	LocalBank	Diagnostic measurement only; never use this clock for gameplay deadlines.
+wall-clock	src/Lab/PrototypeRunner.cs	Stopwatch.GetElapsedTime	1	PrototypeRunner	Diagnostic measurement only; never use this clock for gameplay deadlines.
+wall-clock	src/Lab/PrototypeRunner.cs	Stopwatch.GetTimestamp	1	PrototypeRunner	Diagnostic measurement only; never use this clock for gameplay deadlines.
+wall-clock	src/Net/FaultPacketTransport.cs	Stopwatch.GetElapsedTime	1	FaultPacketTransport	Diagnostic measurement only; never use this clock for gameplay deadlines.
+wall-clock	src/Net/FaultPacketTransport.cs	Stopwatch.GetTimestamp	1	FaultPacketTransport	Diagnostic measurement only; never use this clock for gameplay deadlines.
+wall-clock	src/Net/IPacketTransport.cs	Time.GetTicksUsec	1	IPacketTransport	Approved monotonic network clock; unscaled authority, publication and transport domain.
+wall-clock	src/Net/LobbyServer.cs	Stopwatch.GetTimestamp	1	LobbyServer	Diagnostic measurement only; never use this clock for gameplay deadlines.
+wall-clock	src/Net/LobbyServer.cs	Time.GetDatetimeStringFromSystem	1	LobbyServer	Diagnostic measurement only; never use this clock for gameplay deadlines.
+wall-clock	src/Net/Match.Bots.cs	Stopwatch.GetElapsedTime	1	Match.Bots	Diagnostic measurement only; never use this clock for gameplay deadlines.
+wall-clock	src/Net/Match.Bots.cs	Stopwatch.GetTimestamp	1	Match.Bots	Diagnostic measurement only; never use this clock for gameplay deadlines.
+wall-clock	src/Net/NetTransport.cs	Stopwatch.GetElapsedTime	1	NetTransport	Diagnostic measurement only; never use this clock for gameplay deadlines.
+wall-clock	src/Net/NetTransport.cs	Stopwatch.GetTimestamp	2	NetTransport	Diagnostic measurement only; never use this clock for gameplay deadlines.
+wall-clock	src/Net/ServerRun.cs	Time.GetTicksMsec	2	ServerRun	B1 moved the existing generation-duration diagnostic; never a gameplay deadline.
+wall-clock	src/Player/ActorProfile.cs	Stopwatch.GetElapsedTime	1	ActorProfile	Diagnostic measurement only; never use this clock for gameplay deadlines.
+wall-clock	src/Player/ActorProfile.cs	Stopwatch.GetTimestamp	1	ActorProfile	Diagnostic measurement only; never use this clock for gameplay deadlines.
+wall-clock	src/ReleaseSmoke/CaptureDirector.cs	Time.GetTicksUsec	1	CaptureDirector	Diagnostic measurement only; never use this clock for gameplay deadlines.
+wall-clock	src/ReleaseSmoke/FrameMetrics.cs	Stopwatch.GetTimestamp	1	FrameMetrics	Diagnostic measurement only; never use this clock for gameplay deadlines.
+wall-clock	src/ReleaseSmoke/FrameMetrics.cs	Time.GetTicksUsec	6	FrameMetrics	Diagnostic measurement only; never use this clock for gameplay deadlines.
+wall-clock	src/Session/SegmentWorldSource.cs	Stopwatch.StartNew	1	SegmentWorldSource	Diagnostic measurement only; never use this clock for gameplay deadlines.
+wall-clock	src/Tank/TankSimulation.cs	Time.GetTicksUsec	1	A1:TankSimulation	Real-time dense-chain catch-up arbitration; preserve overlap minimum, network veto and prior-value restoration.
+wall-clock	src/UI/TuningPanel.cs	Time.GetTimeStringFromSystem	1	TuningPanel	Save-status display timestamp only; never a gameplay timer.
+wall-clock	src/World/Suburb.cs	Stopwatch.StartNew	1	Suburb	Diagnostic measurement only; never use this clock for gameplay deadlines.
+worker-entry	src/Dev/UnitTests/TestRunner.cs	newSystem.Threading.Thread(	1	Dev:TestRunner	Deliberate isolated thread-guard negatives; only this named probe entry may reach native failures.
+worker-entry	src/ReleaseSmoke/CaptureDirector.cs	newSystem.Threading.Thread(	1	CaptureDirector	FrameEncoder consumes a bounded queue of managed bytes; native readback stays on main thread.
+worker-entry	src/Session/SegmentWorldSource.cs	Task.Run(	1	SegmentWorldSource	LocalSegmentFeed captures catalog on main thread; worker generates plain plans only.
