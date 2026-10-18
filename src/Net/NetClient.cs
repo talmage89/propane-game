@@ -65,7 +65,7 @@ public partial class NetClient : Node
     /// Whether this game enters its lobby's world. Off (the classic lobby menu), world starts are acknowledged and
     /// ignored: this player's character stands still at its arrival point for the others.
     /// </summary>
-    public bool LobbyWorlds { get; set; } = LobbyWorldDefault.Enabled;
+    public bool LobbyWorlds { get; set; } = !LaunchArgs.Current.Has("classic-lobby");
 
     /// <summary>While the lobby stages a start: when (on this game's clock) the match begins.</summary>
     public double StageEnds { get; private set; }

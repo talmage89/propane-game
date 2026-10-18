@@ -18,6 +18,8 @@ public readonly record struct ScoreTag(Vector2 Screen, int Score, Color Color, f
 /// </summary>
 public partial class MatchHud : CanvasLayer
 {
+    public IPlayerSettings Settings { get; init; } = PlayerPreferences.Application;
+
     public required WorldContext World { get; init; }
 
     private static readonly Color Dark = new(0.12f, 0.13f, 0.15f);
@@ -264,7 +266,7 @@ public partial class MatchHud : CanvasLayer
     /// </summary>
     public void SetStandings(IReadOnlyList<LeaderboardEntry> roster, IReadOnlyDictionary<int, int> scores, int local, bool live)
     {
-        var shown = live && scoreColumn.Length > 0 && roster.Count > 1 && PlayerSettings.ShowLeaderboard;
+        var shown = live && scoreColumn.Length > 0 && roster.Count > 1 && Settings.ShowLeaderboard;
         leaderboard.Set(roster, scores, local, shown ? World.Tuning.LeaderboardRows : 0, scoreColumn);
     }
 

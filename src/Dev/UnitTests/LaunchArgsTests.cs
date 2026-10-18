@@ -26,18 +26,16 @@ public static class LaunchArgsTests
     /// <summary>Runs <paramref name="body"/> with this process's launch arguments replaced, and restores them.</summary>
     private static void With(string[] args, Action<LaunchArgs> body)
     {
-        var saved = LaunchArgs.Current;
         var culture = CultureInfo.CurrentCulture;
         CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
         try
         {
             var parsed = new LaunchArgs(args);
-            LaunchArgs.Current = parsed;
+            using var scope = LaunchArgs.OverrideForTests(parsed);
             body(parsed);
         }
         finally
         {
-            LaunchArgs.Current = saved;
             CultureInfo.CurrentCulture = culture;
         }
     }

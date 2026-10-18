@@ -18,6 +18,9 @@ namespace Propane;
 /// </summary>
 public partial class Main : Node
 {
+    private IPlayerSettings settings = null!;
+    private PlayerSettings? ownedSettings;
+    private System.IDisposable? settingsBinding;
     public Tuning SavedTuning { get; init; } = Tuning.SavedTemplate;
     private NetClient net = null!;
     private Menus menus = null!;
@@ -34,6 +37,9 @@ public partial class Main : Node
 
     public override void _Ready()
     {
+        // Test roots bind their own isolated stores. The ordinary application owns the default store until exit.
+        settings = PlayerPreferences.Current ?? (ownedSettings = new PlayerSettings("user://settings.cfg"));
+        if (ownedSettings != null) settingsBinding = PlayerSettings.Bind(ownedSettings);
         // Official release templates disallow command-line scene overrides. Keep the same smoke test available in
         // an untouched archive; its nested Main goes through the normal front end below.
         if (LaunchArgs.Current.Has("release-test") && GetParent() == GetTree().Root)
@@ -54,7 +60,7 @@ public partial class Main : Node
         net.LobbyChanged += OnLobbyChanged;
         var updates = new UpdateCheck { Name = "UpdateCheck" };
         AddChild(updates);
-        menus = new Menus { Name = "Menus", Net = net, Updates = updates };
+        menus = new Menus { Name = "Menus", Net = net, Updates = updates, Settings = settings };
         menus.SinglePlayerRequested += StartSinglePlayer;
         menus.LabRequested += ShowLab;
         menus.HostRequested += Host;
@@ -68,12 +74,18 @@ public partial class Main : Node
         if (LaunchArgs.Current.Get("connect") is { } server)
         {
             menus.Show(Menus.Screen.Connect);
-            menus.ConnectTo(server, LaunchArgs.Current.Get("name") ?? PlayerSettings.Name);
+            menus.ConnectTo(server, LaunchArgs.Current.Get("name") ?? settings.Name);
         }
         if (DisplayServer.WindowGetMode() == DisplayServer.WindowMode.Windowed && !LaunchArgs.Current.Has("windowed"))
         {
             Callable.From(() => DisplayServer.WindowSetMode(DisplayServer.WindowMode.Maximized)).CallDeferred();
         }
+    }
+
+    public override void _ExitTree()
+    {
+        settingsBinding?.Dispose();
+        ownedSettings?.Dispose();
     }
 
     public override void _UnhandledInput(InputEvent @event)
@@ -253,7 +265,7 @@ public partial class Main : Node
         var addresses = IP.GetLocalAddresses().Where(a => a.Contains('.') && !a.StartsWith("127.") && !a.StartsWith("169.254.")).ToList();
         menus.HostingNote = $"Hosting here. Others connect to {(addresses.Count > 0 ? string.Join(" or ", addresses.Select(a => $"{a}:{port}")) : $"this computer's address, port {port}")}" +
                             " (UDP; from outside your network, forward the port).";
-        net.Connect("127.0.0.1", port, PlayerSettings.Name, PlayerSettings.Appearance ?? AppearanceRecord.FromPalette(0));
+        net.Connect("127.0.0.1", port, settings.Name, settings.Appearance ?? AppearanceRecord.FromPalette(0));
     }
 
     private async void OnMatchStarting(MatchSetup setup)

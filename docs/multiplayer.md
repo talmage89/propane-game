@@ -56,7 +56,8 @@ new queue. The inbox is capped at 4096 packets and 4 MiB of wire data; exceeding
 loading-buffer message rather than continuing with missing events.
 
 `LobbyServer` owns each lobby's current run routes. A plain `ServerRun` owns the corresponding match or roaming
-world, including its native tuning resource. Delivery, loading status and lobby transitions use synchronous callbacks;
+world, including a disposable live configuration adapter. Application-owned ServerSettings creates that adapter
+and owns its native tuning conversion; each run exclusively owns and retires the result. Delivery, loading status and lobby transitions use synchronous callbacks;
 the run cannot access the server's connection or lobby dictionaries. Match actor identities and creator debug
 capability freeze at start; roaming actors follow roster snapshots at each lobby-state broadcast. The facade detaches
 routing before retiring tuning on results return, an empty lobby, staging replacement, identity exhaustion,

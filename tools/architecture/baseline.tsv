@@ -1,17 +1,7 @@
-direction	Propane.Net.BuildInfo	Propane.Core.LaunchArgs	A1	Application settings/launch access is implicit; inject scoped application state without changing precedence.
-direction	Propane.Net.LobbyServer	Propane.Core.LaunchArgs	A1	Application settings/launch access is implicit; inject scoped application state without changing precedence.
-direction	Propane.Net.LobbyServer	Propane.Core.Tuning	A1	Replace implicit saved-template sampling and native snapshot conversion with application-owned tuning inputs; preserve staging, lobby defaults and failed-run ownership.
-direction	Propane.Net.LobbyWorldDefault	Propane.Core.LaunchArgs	A1	Application settings/launch access is implicit; inject scoped application state without changing precedence.
-direction	Propane.Net.NetClient	Propane.Core.LaunchArgs	A1	Client handshake reads launch overrides implicitly; inject immutable launch options.
-direction	Propane.Net.NetClient	Propane.Net.LobbyWorldDefault	A1	Client reads application lobby launch policy through a server-side helper; pass immutable launch options.
-direction	Propane.Net.NetClient	Propane.Net.PacketTransports	A1	Default client construction still selects application transport/catalog inputs; A1 moves this compatibility constructor wiring to Main. Explicit clients inject both transport and PacketCodec; N1 receive/dispatch no longer resolves composition.
-direction	Propane.Net.ServerRun	Propane.Core.LaunchArgs	A1	B1 moved/split this existing run reference: Application settings/launch access is implicit; inject scoped application state without changing precedence.
-direction	Propane.Net.ServerRun	Propane.Core.Tuning	A1	The run still owns, mutates and disposes native Tuning for live phase/stock/snapshot reads; A1 must transfer configuration ownership with template/snapshot borrowing, preserving live debug sampling and exactly-once retirement. Melee admission now receives plain values.
+direction	Propane.Net.NetClient	Propane.Net.PacketTransports	A1	Default client construction still selects application transport/catalog inputs; move this compatibility constructor wiring to Main. Explicit clients inject both transport and PacketCodec.
 direction	Propane.Player.ActorRuntime	Propane.Net.DropPredictions	C2	Actor runtime owns client replication state; move it to an actor-lifetime client attachment.
 direction	Propane.Player.ActorRuntime	Propane.Net.SnapshotBuffer	C2	Actor runtime owns client replication state; move it to an actor-lifetime client attachment.
 direction	Propane.Player.ActorRuntime	Propane.Player.ReplicatedIntent	C2	Actor runtime owns client replication state; move it to an actor-lifetime client attachment.
 direction	Propane.Player.PlayerCharacter	Propane.Player.CameraRig	C2	Physical actor exposes view/device conveniences; replace with narrow view feedback and input source.
 direction	Propane.Player.PlayerCharacter	Propane.Player.DeviceInput	C2	Physical actor exposes view/device conveniences; replace with narrow view feedback and input source.
 direction	Propane.Player.PlayerCharacter	Propane.Player.LocalView	C2	Physical actor exposes view/device conveniences; replace with narrow view feedback and input source.
-direction	Propane.UI.MatchHud	Propane.Core.PlayerSettings	A1	Application settings/launch access is implicit; inject scoped application state without changing precedence.
-direction	Propane.UI.MatchMenu	Propane.Core.PlayerSettings	A1	Application settings/launch access is implicit; inject scoped application state without changing precedence.

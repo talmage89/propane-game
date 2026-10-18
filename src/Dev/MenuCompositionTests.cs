@@ -17,15 +17,18 @@ public partial class MenuCompositionTests : Node
     private Menus menus = null!;
     private CaptureDirector capture = null!;
 
+    private readonly PlayerSettings settings = new("user://menu_composition_settings.cfg");
+    private System.IDisposable? settingsBinding;
+
     public override async void _Ready()
     {
         try
         {
             InputSetup.Register();
-            PlayerSettings.UseFile("user://menu_composition_settings.cfg");
-            PlayerSettings.Name = "Creator";
-            PlayerSettings.Server = "";
-            PlayerSettings.Appearance = AppearanceRecord.FromPalette(0);
+            settingsBinding = PlayerSettings.Bind(settings);
+            settings.Name = "Creator";
+            settings.Server = "";
+            settings.Appearance = AppearanceRecord.FromPalette(0);
             net = new NetClient();
             menus = new Menus { Net = net };
             capture = new CaptureDirector();
@@ -138,5 +141,17 @@ public partial class MenuCompositionTests : Node
     {
         for (var i = 0; i < 12; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
         capture.Screenshot(name);
+    }
+    public override void _ExitTree()
+    {
+        settingsBinding?.Dispose();
+        settingsBinding = null;
+    }
+
+    public override void _Notification(int what)
+    {
+        if (what != NotificationPredelete) return;
+        settingsBinding?.Dispose();
+        settings.Dispose();
     }
 }

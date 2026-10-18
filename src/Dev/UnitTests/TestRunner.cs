@@ -10,14 +10,22 @@ namespace Propane.Dev.UnitTests;
 /// <summary>Small assertion runner: suites register named actions; every failure is printed and exits nonzero.</summary>
 public partial class TestRunner : Node
 {
+    private readonly PlayerSettings settings = new("res://build/unit-settings.cfg");
+    private IDisposable? settingsBinding;
     public WorldContext World { get; private set; } = null!;
-    public override void _ExitTree() => World.Dispose();
+    public override void _ExitTree()
+    {
+        World.Dispose();
+        settingsBinding?.Dispose();
+        settings.Dispose();
+    }
 
     private int tests;
     private int failures;
 
     public override void _Ready()
     {
+        settingsBinding = PlayerSettings.Bind(settings);
         TestThreadGuard.Install();
         TestThreadGuard.AssertMainThread("unit suite setup");
         World = new WorldContext(this, Tuning.SavedTemplate, present: true);

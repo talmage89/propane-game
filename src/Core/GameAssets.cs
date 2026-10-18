@@ -7,7 +7,10 @@ namespace Propane.Core;
 /// <summary>One pre-broken piece of the tank shell.</summary>
 public sealed record DebrisPiece(string Name, Mesh Mesh, Shape3D Shape, Vector3 Centroid, float Mass);
 
-/// <summary>Loads and caches the meshes, collision shapes and materials that many nodes share.</summary>
+/// <summary>
+/// Main-thread, process-lifetime cache. Returned meshes, shapes, scenes and materials are borrowed and immutable:
+/// never dispose or edit them per world. Instance-specific mutable material/effect state belongs to its instance.
+/// </summary>
 public static class GameAssets
 {
     private const string TankScenePath = "res://assets/tank/tank.glb";
@@ -48,7 +51,7 @@ public static class GameAssets
         Shader = GD.Load<Shader>("res://shaders/debris_interior.gdshader"),
     };
 
-    /// <summary>Loads a model scene once and instantiates it on every call.</summary>
+    /// <summary>Loads a model scene once. The caller owns/frees each returned node; its shared resources remain borrowed.</summary>
     public static Node3D Instantiate(string path)
     {
         if (!Scenes.TryGetValue(path, out var scene))

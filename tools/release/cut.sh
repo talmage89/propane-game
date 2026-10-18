@@ -14,6 +14,7 @@ set -euo pipefail
 # and its partials) and the mode rules. A change here is a reason to review, not proof that compatibility broke.
 shared_paths=(src/Net src/World src/Tank src/Player/PlayerNet.cs src/Player/PlayerNetState.cs
   src/Core/ActorIdentity.cs src/Core/AppearanceRecord.cs src/Core/AppearancePalette.cs src/Core/BodyIds.cs src/Core/BodyState.cs
+  src/Core/ServerSettings.cs src/Core/ProcessPhysicsPolicies.cs
   'src/Core/Tuning*.cs' src/Modes)
 
 bump="${1:-}"
