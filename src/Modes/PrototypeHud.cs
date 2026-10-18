@@ -16,36 +16,36 @@ public sealed class RingOutHud : IModeHudPresenter
 
     public ModeHud Present(ModeHudInput input)
     {
-        if (input.Rules is not RingOutRules rules) return ModeHud.Empty;
-        var elapsed = rules.Elapsed(input.Clock);
-        var plan = rules.Plan;
+        if (input.View is not RingOutState state) return ModeHud.Empty;
+        var elapsed = state.Elapsed;
+        var plan = state.Plan;
         var next = plan.NextDissolve(elapsed);
         var band = plan.NextBand(elapsed);
-        var warning = !rules.Over && band >= 0 && elapsed >= plan.WarnsAt(band);
+        var warning = !state.Over && band >= 0 && elapsed >= plan.WarnsAt(band);
         var me = input.LocalActor;
-        var outState = rules.Place(me) is { } place && !(rules.Over && place == 1) ? $"OUT · {Ordinal(place)}" : "";
-        var banner = rules.Over ? Result(rules, me) : warning ? "THE RIM IS DISSOLVING" : "";
-        var credits = rules.Credits(me);
+        var outState = state.Place(me) is { } place && !(state.Over && place == 1) ? $"OUT · {Ordinal(place)}" : "";
+        var banner = state.Over ? Result(state, me) : warning ? "THE RIM IS DISSOLVING" : "";
+        var credits = state.Credits(me);
         return new ModeHud(
-            new[] { new HudCounter(rules.AliveCount, "STANDING"), new HudCounter(credits, credits == 1 ? "KNOCK-OFF" : "KNOCK-OFFS") },
+            new[] { new HudCounter(state.AliveCount, "STANDING"), new HudCounter(credits, credits == 1 ? "KNOCK-OFF" : "KNOCK-OFFS") },
             Columns,
-            rules.Over ? null : double.IsInfinity(next) ? new HudTimer((float)elapsed, RoundTimer.CountUp) : new HudTimer((float)(next - elapsed), RoundTimer.Countdown),
+            state.Over ? null : double.IsInfinity(next) ? new HudTimer((float)elapsed, RoundTimer.CountUp) : new HudTimer((float)(next - elapsed), RoundTimer.Countdown),
             Array.Empty<Vector3>(), false, banner, outState,
-            rules.Eliminations.TakeLast(FeedLength).Select(e => Line(rules, e)).ToArray());
+            state.Eliminations.TakeLast(FeedLength).Select(e => Line(state, e)).ToArray());
     }
 
-    public static string Line(RingOutRules rules, ActorEliminated e) => e.Cause switch
+    public static string Line(RingOutState state, ActorEliminated e) => e.Cause switch
     {
-        EliminationCause.Left => $"{rules.Name(e.ActorId)} left",
-        _ when e.CreditedTo != 0 => $"{rules.Name(e.CreditedTo)} knocked {rules.Name(e.ActorId)} off",
-        EliminationCause.Dissolved => $"{rules.Name(e.ActorId)} went down with the rim",
-        _ => $"{rules.Name(e.ActorId)} fell",
+        EliminationCause.Left => $"{state.Name(e.ActorId)} left",
+        _ when e.CreditedTo != 0 => $"{state.Name(e.CreditedTo)} knocked {state.Name(e.ActorId)} off",
+        EliminationCause.Dissolved => $"{state.Name(e.ActorId)} went down with the rim",
+        _ => $"{state.Name(e.ActorId)} fell",
     };
 
-    private static string Result(RingOutRules rules, int me)
+    private static string Result(RingOutState state, int me)
     {
-        var winners = rules.Snapshot().Standings.Where(s => rules.Place(s.ActorId) == 1).Select(s => s.Name).ToArray();
-        if (rules.Place(me) == 1) return winners.Length > 1 ? "SHARED WIN" : "LAST ONE STANDING";
+        var winners = state.Actors.Where(s => state.Place(s.ActorId) == 1).Select(s => s.Name).ToArray();
+        if (state.Place(me) == 1) return winners.Length > 1 ? "SHARED WIN" : "LAST ONE STANDING";
         return winners.Length == 0 ? "NOBODY STANDS" : $"{string.Join(" & ", winners).ToUpperInvariant()} WINS";
     }
 

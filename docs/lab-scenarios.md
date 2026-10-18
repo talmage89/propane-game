@@ -94,3 +94,24 @@ sampling observations, requires both unit suites' assertions to pass, and compar
 Ring Out and mixed-difficulty Bank/King runs. This supplements `check_equivalence.py --baseline=PATH --detail`;
 it neither reads nor writes new release references. Live streaming remains statistical because worker/build-slice
 completion is wall-time-sensitive; use the existing controlled retirement reference for exact Dissolve comparison.
+
+`PrototypeViewTests` compares complete serialized HUD values with independent pre-B3b2 presenters in
+`UnitTests/Fixtures/Legacy*Hud.cs`. Cases cover Ring Out warning/credit/departure, Short Fuse damage/read-time
+regeneration/spectating, Dissolve open/closed chains/catch, unknown actors, and round end/replacement. The reflection
+bridge in `PrototypePresentation` lets identical harness source exercise both the parent rule input and the new
+plain value input; it is outside production and performance measurements. The legacy presenters are oracles:
+change their expected behavior only with a separately approved rule or presentation change.
+`python3 -B tools/dev/check_prototype_views.py --baseline=PATH` additionally requires 92 complete HUD observations
+and compares their exact values with an independently built immediate parent. `runner-sampling` includes a driven
+Dissolve bot, asserts every expected thought ran, and reports shared ray/navigation workload counts.
+
+`PrototypeObservationTests` uses real runner `IBotWorld` adapters to assert zero managed allocation over warmed
+reads, at several explicit mode-clock times and after life/front changes. It compares each scalar/struct with the
+corresponding rule fact. It also retains a snapshot across accepted facts, collects the retired runner and rules
+while retaining the snapshot, and collects released snapshots. King's fixture takes the first actor sample before
+requiring its zone observation. `check_lab_mechanics.py` additionally compares a complete quick Short Fuse bot match,
+including every detailed observation, beyond the scripted combo covered by the frozen references.
+The whole-match Short Fuse fixture honors `--replay-random` for per-event physics generators, as its scripted combo
+already did. Previously it accepted the option but left these generators unseeded: repeated parent runs first
+diverged on actor poses at tick 2231. This opt-in harness correction must also be present on the parent used by
+`check_lab_mechanics.py`; ordinary runs and the immutable combo reference keep their existing randomness policy.

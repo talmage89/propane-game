@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Propane.Dev.UnitTests.Fixtures;
 using Propane.Modes;
 
 namespace Propane.Dev.UnitTests;
@@ -121,13 +122,13 @@ public static class DissolveRunTests
             TestRunner.Assert(rules.Meters == 42 && rules.StartX == -30, $"meters {rules.Meters}");
             rules.Handle(new RunTankDetonated(1, 1), At(1));
             rules.Handle(new RunTankDetonated(1, 1), At(1));
-            var hud = new DissolveRunHud().Present(new ModeHudInput(1, ModePhase.Round, 0, new Dictionary<int, int>(), Array.Empty<Godot.Vector3>(), false, rules, At(1)));
+            var hud = new DissolveRunHud().Present(PrototypePresentation.Input(1, ModePhase.Round, 0, new Dictionary<int, int>(), Array.Empty<Godot.Vector3>(), false, rules, At(1)));
             TestRunner.Assert(hud.Counters[0] == new HudCounter(rules.Score, "SCORE") && hud.Counters[1].Value == 42 && hud.Counters[2] == new HudCounter(2, "TANKS"),
                 "score, meters, tanks");
             TestRunner.Assert(hud.Banner == "CHAIN ×2" && hud.Bar is { Caption: var caption } && caption.StartsWith("FRONT ") && hud.Timer?.Kind == RoundTimer.CountUp,
                 $"banner {hud.Banner}, bar {hud.Bar}");
             At(rules, 3, 12.6);
-            hud = new DissolveRunHud().Present(new ModeHudInput(1, ModePhase.Round, 0, new Dictionary<int, int>(), Array.Empty<Godot.Vector3>(), false, rules, At(3)));
+            hud = new DissolveRunHud().Present(PrototypePresentation.Input(1, ModePhase.Round, 0, new Dictionary<int, int>(), Array.Empty<Godot.Vector3>(), false, rules, At(3)));
             TestRunner.Assert(hud.Banner == "" && hud.Feed!.Single() == "Chain of 2 +4", "the closed chain enters the feed");
             var report = rules.Snapshot().Report[0].Text;
             TestRunner.Assert(report.StartsWith("dissolve run meters=42 tanks=2 chains=1 bonus=4"), report);

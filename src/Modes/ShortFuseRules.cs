@@ -89,6 +89,12 @@ public sealed class ShortFuseRules : IModeRules
         return FirstAlive();
     }
 
+    /// <summary>Copy facts at read time, preserving the mode-clock domain of health regeneration and shields.</summary>
+    public ShortFuseState State(ModeClock clock) => new(Over, Round, WinsToMatch, MaxHealth, AliveCount, MatchWinner,
+        actors.Select(a => new ShortFuseActor(a.ActorId, a.Name, started.Contains(a.ActorId), IsAlive(a.ActorId),
+            Health.Health(a.ActorId, clock.Now), Health.Invulnerable(a.ActorId, clock.Now), Wins(a.ActorId), Kills(a.ActorId),
+            SpectateTarget(a.ActorId))).ToArray(), roundDeaths.ToArray(), rounds.ToArray());
+
     private int FirstAlive() => started.Where(Health.IsAlive).DefaultIfEmpty(0).Min();
 
     public void Initialize(ModeSetup setup)

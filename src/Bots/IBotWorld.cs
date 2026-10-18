@@ -32,13 +32,14 @@ public interface IBotWorld
     BotServices Services { get; }
     /// <summary>The tanks in play this tick.</summary>
     IReadOnlyList<PropaneTank> LiveTanks => Services.Tanks;
-    /// <summary>
-    /// The mode's rules as this peer runs them, for policies that read mode-specific state (a boundary), or null
-    /// where the peer does not run them. Only the Lab's prototype runner supplies them.
-    /// </summary>
-    IModeRules? Rules => null;
-    /// <summary>The mode clock to read <see cref="Rules"/> with.</summary>
+    /// <summary>Explicit mode clock for time-dependent observation reads; distinct from simulation Now.</summary>
     ModeClock Clock => default;
+    /// <summary>Prototype facts are sampled synchronously at the caller's read, without constructing HUD snapshots.</summary>
+    RingOutBotView? RingOut => null;
+    double? ShortFuseMaxHealth => null;
+    DissolveRunBotView? DissolveRun => null;
+    bool RoundAlive(int actorId) => false;
+    double ShortFuseHealth(int actorId, ModeClock clock) => 0;
     /// <summary>
     /// The mode's own state as this peer sees it now (King's zone), from the rules in the Lab or the mode's snapshot
     /// in a match; null when the mode has none or none has arrived yet.
@@ -49,7 +50,6 @@ public interface IBotWorld
     {
         get
         {
-            if (Rules is KingRules rules) return KingBotView.Read(rules, Clock);
             return View is KingState state ? KingBotView.Read(state, state.Elapsed) : null;
         }
     }

@@ -85,6 +85,10 @@ public sealed class DissolveRunRules : IModeRules
         return max + (start - max) * Math.Exp(-Math.Max(0, elapsed) / tau);
     }
 
+    /// <summary>Copy the already integrated front/score facts; only elapsed time depends on this read's clock.</summary>
+    public DissolveRunState State(ModeClock clock) => new(Score, Meters, Tanks, Bonus, BestChain, Gap, OpenChain,
+        Caught, Over, Elapsed(clock), closed.ToArray());
+
     public void Initialize(ModeSetup setup)
     {
         actors.Clear(); open.Clear(); closed.Clear();

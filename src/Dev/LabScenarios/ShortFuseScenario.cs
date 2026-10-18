@@ -50,6 +50,7 @@ internal sealed class ShortFuseScenario(ILabScenarioHost host, bool combo = fals
                 Template = template,
                 PauseOnFocusLoss = false,
                 TestRandomSeed = (ulong)seed,
+                TestSeedPhysicsRandom = DevArgs.Get("replay-random") != null,
                 DrivePlayer = DevArgs.Get("watch") == null,
                 Name = "Lab"
             };

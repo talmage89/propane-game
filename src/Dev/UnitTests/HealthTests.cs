@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Propane.Dev.UnitTests.Fixtures;
 using Propane.Modes;
 
 namespace Propane.Dev.UnitTests;
@@ -293,7 +294,7 @@ public static class HealthTests
             TestRunner.Assert(!rules.Permits(ModeGate.World, FuseAt(12.7)) && Kill(rules, 3, 3, 9, 13).Count == 0, "a decided round takes nothing more");
             var decision = rules.Handle(new PhaseEntered(ModePhase.RoundEnd, new RoundInfo(1, 1, RoundTimer.Countdown, 10, 105)), FuseAt(13));
             TestRunner.Assert(decision.SequenceEqual(new ModeCommand[] { new NextRound(RoundTimer.Countdown, 105, true) }), $"next suburb: {string.Join("; ", decision)}");
-            TestRunner.Assert(ShortFuseHud.Banner(rules, 3) == "YOU WIN THE ROUND" && ShortFuseHud.Banner(rules, 1) == "P3 WINS THE ROUND", "round banner");
+            TestRunner.Assert(PrototypePresentation.Banner(rules, 3) == "YOU WIN THE ROUND" && PrototypePresentation.Banner(rules, 1) == "P3 WINS THE ROUND", "round banner");
             for (uint round = 2; round <= 3; round++)
             {
                 var start = round * 20.0;
@@ -305,7 +306,7 @@ public static class HealthTests
                 var end = rules.Handle(new PhaseEntered(ModePhase.RoundEnd, new RoundInfo(round, round, RoundTimer.Countdown, start, 105)), FuseAt(start + 3, round));
                 TestRunner.Assert(end.OfType<EndMatch>().Any() == (round == 3) && rules.Wins(3) == round, $"round {round}: {string.Join("; ", end)}");
             }
-            TestRunner.Assert(rules.MatchOver && rules.MatchWinner == 3 && ShortFuseHud.Banner(rules, 3) == "YOU WIN THE MATCH 3–0", "match");
+            TestRunner.Assert(rules.MatchOver && rules.MatchWinner == 3 && PrototypePresentation.Banner(rules, 3) == "YOU WIN THE MATCH 3–0", "match");
             TestRunner.Assert(rules.Snapshot().Standings[0] is { ActorId: 3, Score: 3 } && rules.Kills(3) == 5 && rules.DeathsOf(1) == 3, "standings and kills");
             TestRunner.Assert(rules.Handle(new SpillRequested(new SpillTicket(1, 1, 1), SpillReason.Hit, 1), FuseAt(80)).Single() is SpillCanceled, "no bank");
         });
@@ -326,14 +327,14 @@ public static class HealthTests
             Kill(rules, 1, 2, 1, 231);
             var left = rules.Handle(new ActorLeft(3), FuseAt(232, 3));
             TestRunner.Assert(left.OfType<RoundWon>().Single() == new RoundWon(3, 1) && left.OfType<RoundOver>().Any(), $"the last opponent left: {string.Join("; ", left)}");
-            TestRunner.Assert(ShortFuseHud.Line(rules, rules.RoundDeaths[0]) == "P1 shot P2", "feed line");
+            TestRunner.Assert(PrototypePresentation.Line(rules, rules.RoundDeaths[0]) == "P1 shot P2", "feed line");
         });
 
         runner.Run("short fuse/the HUD shows health, the feed, spectating and the banner", () =>
         {
             var rules = Fuse(3);
             var hud = new ShortFuseHud();
-            ModeHud Present(int me, double now) => hud.Present(new ModeHudInput(me, rules.Over ? ModePhase.RoundEnd : ModePhase.Round, 60, new Dictionary<int, int>(),
+            ModeHud Present(int me, double now) => hud.Present(PrototypePresentation.Input(me, rules.Over ? ModePhase.RoundEnd : ModePhase.Round, 60, new Dictionary<int, int>(),
                 Array.Empty<Godot.Vector3>(), false, rules, FuseAt(now)));
             rules.Handle(new BlastAccepted(1, 1, 11), FuseAt(11));
             rules.Handle(new BlastHitReported(2, 1, 1, 0), FuseAt(11));

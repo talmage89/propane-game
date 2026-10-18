@@ -19,23 +19,23 @@ public sealed class DissolveRunHud : IModeHudPresenter
 
     public ModeHud Present(ModeHudInput input)
     {
-        if (input.Rules is not DissolveRunRules rules) return ModeHud.Empty;
-        var gap = (float)Math.Max(0, rules.Gap);
-        var chain = rules.OpenChain;
-        var banner = rules.Caught ? "CAUGHT BY THE FRONT" : chain >= 2 ? $"CHAIN ×{chain}" : "";
+        if (input.View is not DissolveRunState state) return ModeHud.Empty;
+        var gap = (float)Math.Max(0, state.Gap);
+        var chain = state.OpenChain;
+        var banner = state.Caught ? "CAUGHT BY THE FRONT" : chain >= 2 ? $"CHAIN ×{chain}" : "";
         return new ModeHud(
             new[]
             {
-                new HudCounter(rules.Score, "SCORE"),
-                new HudCounter(rules.Meters, rules.Meters == 1 ? "METER" : "METERS"),
-                new HudCounter(rules.Tanks, rules.Tanks == 1 ? "TANK" : "TANKS"),
+                new HudCounter(state.Score, "SCORE"),
+                new HudCounter(state.Meters, state.Meters == 1 ? "METER" : "METERS"),
+                new HudCounter(state.Tanks, state.Tanks == 1 ? "TANK" : "TANKS"),
             },
             Columns,
-            rules.Over ? null : new HudTimer((float)rules.Elapsed(input.Clock), RoundTimer.CountUp),
+            state.Over ? null : new HudTimer((float)state.Elapsed, RoundTimer.CountUp),
             Array.Empty<Vector3>(), false,
             banner,
-            rules.Caught ? $"RUN OVER · {rules.Score}" : "",
-            rules.Chains.Where(c => c.Bonus > 0).TakeLast(FeedLength).Select(c => $"Chain of {c.Tanks} +{c.Bonus}").ToArray(),
-            rules.Caught ? null : new HudBar(Mathf.Min(gap, BarGap), BarGap, $"FRONT {Mathf.FloorToInt(gap)} M BEHIND", gap < CloseGap));
+            state.Caught ? $"RUN OVER · {state.Score}" : "",
+            state.Chains.Where(c => c.Bonus > 0).TakeLast(FeedLength).Select(c => $"Chain of {c.Tanks} +{c.Bonus}").ToArray(),
+            state.Caught ? null : new HudBar(Mathf.Min(gap, BarGap), BarGap, $"FRONT {Mathf.FloorToInt(gap)} M BEHIND", gap < CloseGap));
     }
 }

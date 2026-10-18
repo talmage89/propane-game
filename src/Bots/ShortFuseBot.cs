@@ -10,7 +10,7 @@ namespace Propane.Bots;
 /// Short Fuse's goal policy, kept simple for the prototype. A thrown player is helpless, so: shoot a downed opponent
 /// in sight first; set off a pile beside a standing opponent from beyond its throw (a blast sets up the finish); chip
 /// at whoever else is in sight; otherwise hunt the nearest. It steps away from venting tanks, and while under fire it
-/// will not stand next to a pile, where one shot could throw it. It reads health and who is alive from the rules.
+/// will not stand next to a pile, where one shot could throw it. It reads plain health and life observations.
 /// Whether its quarry is in sight is asked a few times a second, not every tick.
 /// </summary>
 public sealed class ShortFuseBot : IBotGoalPolicy
@@ -60,7 +60,7 @@ public sealed class ShortFuseBot : IBotGoalPolicy
     {
         motor.Begin(dt);
         var player = world.Player;
-        if (!world.IsPlaying || world.Rules is not ShortFuseRules rules || !rules.IsAlive(player.ActorId) || player.IsRagdolled)
+        if (!world.IsPlaying || world.ShortFuseMaxHealth is not { } maxHealth || !world.RoundAlive(player.ActorId) || player.IsRagdolled)
         {
             motor.Reset();
             status.Set(player.IsRagdolled ? "down" : world.IsPlaying ? "dead" : "waiting");
@@ -97,7 +97,7 @@ public sealed class ShortFuseBot : IBotGoalPolicy
         // 3. Whom to fight: a downed opponent in sight first (helpless), then the weakest and nearest.
         retarget -= dt;
         var fresh = retarget <= 0;
-        if (fresh || quarry == null || !GodotObject.IsInstanceValid(quarry) || !rules.IsAlive(quarry.ActorId))
+        if (fresh || quarry == null || !GodotObject.IsInstanceValid(quarry) || !world.RoundAlive(quarry.ActorId))
         {
             retarget = RetargetInterval;
             fresh = true;
@@ -107,8 +107,8 @@ public sealed class ShortFuseBot : IBotGoalPolicy
             var bodies = world.RemoteBodies;
             for (var i = 0; i < bodies.Count; i++)
             {
-                if (!rules.IsAlive(bodies[i].ActorId)) continue;
-                var priority = Priority(rules, world, player, bodies[i]);
+                if (!world.RoundAlive(bodies[i].ActorId)) continue;
+                var priority = Priority(maxHealth, world, player, bodies[i]);
                 if (priority < best) { best = priority; quarry = bodies[i]; }
             }
             if (quarry != previous) closest = float.MaxValue;
@@ -269,10 +269,10 @@ public sealed class ShortFuseBot : IBotGoalPolicy
     }
 
     /// <summary>Lower is first: a downed body in sight, then low health, then distance.</summary>
-    private static float Priority(ShortFuseRules rules, IBotWorld world, PlayerCharacter player, PlayerCharacter body)
+    private static float Priority(double maxHealth, IBotWorld world, PlayerCharacter player, PlayerCharacter body)
     {
         var distance = player.GlobalPosition.DistanceTo(body.GlobalPosition);
-        var health = (float)(rules.Health.Health(body.ActorId, world.Clock.Now) / System.Math.Max(1, rules.MaxHealth));
+        var health = (float)(world.ShortFuseHealth(body.ActorId, world.Clock) / System.Math.Max(1, maxHealth));
         var down = body.IsRagdolled && distance < FightRange ? -100f : 0f;
         return down + distance + health * 15f;
     }
