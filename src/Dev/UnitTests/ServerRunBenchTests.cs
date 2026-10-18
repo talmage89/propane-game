@@ -30,7 +30,7 @@ public static class ServerRunBenchTests
 
     private static void Measure(string label, LobbyServer server, ManualClock clock, int run, int actor)
     {
-        const int warmup = 2000, ticks = 10000;
+        const int warmup = 20000, ticks = 30000;
         var poses = new byte[warmup + ticks][];
         var bodies = new byte[poses.Length][];
         for (var i = 0; i < poses.Length; i++)
@@ -44,9 +44,10 @@ public static class ServerRunBenchTests
         var packets = 0;
         long payload = 0;
         server.SendOverride = (_, bytes, _) => { packets++; payload += bytes.Length; };
+        var startedAt = clock.Seconds;
         void Tick(int i)
         {
-            clock.Seconds = i / 120.0;
+            clock.Seconds = startedAt + i / 120.0;
             server.OnReceived(2, poses[i], TrafficClass.UnreliablePlayerPoses);
             server.OnReceived(2, bodies[i], TrafficClass.ReliableBodyStates2);
             server.AdvanceMatches(clock.Seconds);

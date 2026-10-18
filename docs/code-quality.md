@@ -315,5 +315,6 @@ KingOnlineTests, LobbyWorldTests and LobbySupplyTests run; compare the parent an
 
 Without observation, `--suite=ServerRunBenchTests --server-bench --match-seed=23` measures production receive,
 relay and whole run ticks for Bank, King and roaming. Each measured tick delivers one actor pose and eight body
-states; warm-up and packet preparation are excluded. Alternate at least three parent/candidate pairs. The report
+states. Time advances from the fixture clock, so match clocks and King actor sampling remain active. Packet
+preparation and 20,000 warm-up ticks are excluded; 30,000 ticks are measured per mode. Alternate at least three parent/candidate pairs. The report
 includes allocations, mean, p95/p99, packet counts and payload bytes; packet instrumentation stays off.
