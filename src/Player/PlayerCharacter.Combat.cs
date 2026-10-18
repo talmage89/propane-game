@@ -65,6 +65,7 @@ public partial class PlayerCharacter
         fireCooldown = 1f / Mathf.Max(tuning.FireRate, 0.1f);
         sprintAmount = Mathf.Min(sprintAmount, tuning.ShotSprintPoseLimit);
         Fire(SpreadDegrees);
+        if (Runtime.IsDisposed) return;
         bloom += tuning.ShotBloomDegrees;
         rig.Kick();
         var recoilScale = Mathf.Lerp(1f, tuning.AimRecoilScale, aim);
@@ -116,6 +117,7 @@ public partial class PlayerCharacter
         var collider = hit["collider"].As<GodotObject>();
         var shotDir = (end - muzzle).Normalized();
         ShotImpacting?.Invoke(new ShotReport(muzzle, end, normal, shotDir, collider, true));
+        if (Runtime.IsDisposed) return;
         switch (collider)
         {
             case PropaneTank tank:
@@ -221,8 +223,10 @@ public partial class PlayerCharacter
                 if (body is PropaneTank pushedTank) pushedTank.Disturb();
                 body!.ApplyCentralImpulse(meleeDirection * t.MeleePropImpulse);
                 PushedBody?.Invoke(body);
+                if (Runtime.IsDisposed) return;
             }
             MeleeHit?.Invoke(new MeleeHit(meleeSwing, victim ?? collider));
+            if (Runtime.IsDisposed) return;
         }
     }
 

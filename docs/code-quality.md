@@ -362,3 +362,26 @@ scoped-factory capture, prototype exclusion and isolated initial overrides. A se
 plain pile observations after native tuning changes and zero allocation over 1,000 warmed reads. The fixture
 observes the constructor-injected callbacks without generating hundreds of suburbs; ordinary server/transcript
 fixtures retain the end-to-end path.
+
+## Actor retirement probes
+
+`ActorLifetimeTests` checks live-world registration/cache counts, character/runtime/registration collection,
+callback removal, stop-time reentrancy and cleanup failures. `ActorTacticsTests` compares complete intent,
+status, RNG and query transcripts across a native rival departure in Banking combat/cover and King points.
+`ActorTickBenchTests --actor-tick-bench` is opt-in: 20,000 warm-up and 60,000 measured whole Match plus
+owned-character physics callbacks on stationary native bodies; it reports allocation, mean, p95/p99 and workload.
+These controlled callbacks do not advance Jolt and do not replace native network runs.
+`BotTacticsTests --tactics-only=bank/Normal/combat,bank/Normal/cover,king/Hard/points --tactics-bench`
+selects complete service/brain/read workloads for paired measurements amid shared compilation. Omit the selector
+to retain all 24 cases; an unknown/empty selection fails the discovered-suite coverage assertion.
+
+`tools/dev/actor_equivalence.py --revision=REV --label=FRESH_NAME` prepares isolated identical packet/actor
+ordering observers under `build/`. Run existing roster/departure suites with `--actor-order --match-seed=23`
+and `--server-transcript=ABSOLUTE_PATH`; compare packet files exactly and the `[actor-order]` lines. Native
+departure runs use the scratch project's copied `tools/dev/net_bots.sh`; peer numbers in actor-order lines are
+normalized to the initial peer order. `--actor-tactics-transcript=ABSOLUTE_PATH` writes the focused departure
+decisions. No release fixture or checkout production source is instrumented.
+The prepared project's `ActorLifetimeCycleProbe` transplants the exact gate cycle block, so both revisions run
+the same human/remote/bot inputs in roaming, Bank and King. Pass `--actor-lifetime-parent` only on the parent
+to characterize its known retention and attached handlers; the candidate requires flat counts, detached handlers
+at native free and collection. Native signal observations are asserted after `Free` returns so failures exit 1.

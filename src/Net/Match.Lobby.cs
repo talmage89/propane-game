@@ -164,11 +164,7 @@ public partial class Match
     private void RemoveLobbyActor(ActorRuntime actor)
     {
         var id = actor.Character.ActorId;
-        foreach (var bot in bots.Where(b => b.Actor == actor.Character).ToArray())
-        {
-            bot.Brain.Dispose();
-            bots.Remove(bot);
-        }
+        RemoveBot(actor.Character);
         lobbyDeparted.Add(id);
         Session.RemoveActor(actor);
     }

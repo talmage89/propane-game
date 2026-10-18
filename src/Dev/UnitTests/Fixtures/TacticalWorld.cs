@@ -24,7 +24,7 @@ internal sealed class TacticalWorld : IBotWorld, IDisposable
     public double Now { get; private set; }
     public double LastHitTime { get; set; } = double.NegativeInfinity;
     public int LastHitBy => 2;
-    public IReadOnlyList<PlayerCharacter> RemoteBodies { get; }
+    public IReadOnlyList<PlayerCharacter> RemoteBodies { get; private set; }
     public IReadOnlyList<AmmoPickup> Pickups => Array.Empty<AmmoPickup>();
     public KingBotView? King { get; private set; }
     public BotServices Services { get; }
@@ -114,6 +114,15 @@ internal sealed class TacticalWorld : IBotWorld, IDisposable
         if (node == Enemy) return "enemy";
         if (node is PropaneTank tank && Tanks.IndexOf(tank) is var index && index >= 0) return $"tank{index}";
         throw new InvalidOperationException("unknown decision target");
+    }
+
+    public void RemoveEnemy(IBotGoalPolicy brain)
+    {
+        // Identical harness on the parent: its invalid cached wrapper is the behavioral oracle.
+        brain.GetType().GetMethod("ForgetActor")?.Invoke(brain, new object[] { Enemy });
+        typeof(BotServices).GetMethod("RemoveActor")?.Invoke(Services, new object[] { Enemy });
+        RemoteBodies = Array.Empty<PlayerCharacter>();
+        Enemy.Free();
     }
 
     public void Dispose()

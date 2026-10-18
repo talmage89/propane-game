@@ -368,10 +368,13 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
                     meleeSwing = checked(meleeSwing + 1);
                     meleeDirection = Forward(Mathf.DegToRad(Aim.Yaw));
                     MeleeStarted?.Invoke(meleeSwing, meleeDirection);
+                    if (Runtime.IsDisposed) return;
                 }
                 UpdateAim();
                 UpdateMovement(dt);
+                if (Runtime.IsDisposed) return;
                 if (ResolvedState.MeleePhase == MeleePhase.Active) UpdateMeleeContact();
+                if (Runtime.IsDisposed) return;
                 UpdateShooting(dt);
                 break;
             case State.Ragdoll:
@@ -387,7 +390,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
                 UpdateGettingUp(dt);
                 break;
         }
-        animator.Pose.ObservePhysics(ResolvedState, Velocity.Y);
+        if (!Runtime.IsDisposed) animator.Pose.ObservePhysics(ResolvedState, Velocity.Y);
     }
 
     // ------------------------------------------------------------------ Movement
@@ -448,6 +451,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         var after = Velocity;
         Velocity = new Vector3(after.X - knockback.X, after.Y, after.Z - knockback.Z);
         PushBodies(dt);
+        if (Runtime.IsDisposed) return;
 
         if (!grounded)
         {
@@ -527,6 +531,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
             if (body is PropaneTank tank) { tank.Disturb(); }
             body.ApplyImpulse(push, collision.GetPosition() - body.GlobalPosition);
             PushedBody?.Invoke(body);
+            if (Runtime.IsDisposed) return;
         }
     }
 
@@ -612,6 +617,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         if (!IsRemote)
         {
             Ragdolled?.Invoke(GlobalPosition, velocity, spin);
+            if (Runtime.IsDisposed) return;
         }
         Velocity = Vector3.Zero;
         knockback = Vector3.Zero;
@@ -675,6 +681,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         else if (!IsRemote)
         {
             GotUp?.Invoke(root, yaw);
+            if (Runtime.IsDisposed) return;
         }
 
         GlobalPosition = root;

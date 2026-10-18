@@ -21,6 +21,7 @@ internal sealed class BankingTargets
     private readonly List<ulong> expired = new(1024);
     private readonly BotPoints points = new();
     private Node3D? target;
+    private bool retiredTarget;
     private bool seekingRival;
     private Vector3? roamGoal;
     private float roamUntil;
@@ -36,7 +37,7 @@ internal sealed class BankingTargets
     public bool Advance(float dt)
     {
         retarget -= dt;
-        return retarget <= 0 || target != null && !IsValid(target);
+        return retarget <= 0 || retiredTarget || target != null && !IsValid(target);
     }
 
     public bool Select(IBotWorld match, AmmoState ammo, Tuning tuning, float clock, bool protecting, bool pointsDriven, float skill)
@@ -47,14 +48,21 @@ internal sealed class BankingTargets
         if (chosen is PropaneTank nextTank && target is PropaneTank current && IsValid(current) &&
             !blacklist.ContainsKey(current.GetInstanceId()) && (!pointsDriven ||
                 nextTank.GlobalPosition.DistanceTo(current.GlobalPosition) <= tuning.ChainRadius)) { chosen = target; }
-        if (chosen == target) return false;
+        if (chosen == target && !retiredTarget) return false;
+        retiredTarget = false;
         roamGoal = null;
         target = chosen;
         return true;
     }
 
     public void Retry() => retarget = 0;
-    public void Abandon() { target = null; retarget = 0; }
+    public void Abandon() { target = null; retiredTarget = false; retarget = 0; }
+    public void ForgetActor(PlayerCharacter actor)
+    {
+        if (!ReferenceEquals(target, actor)) return;
+        target = null;
+        retiredTarget = true; // The next original selection observes an invalid old target, even after collection.
+    }
     public void ForgetRoam() => roamGoal = null;
 
     private Node3D? Choose(IBotWorld match, AmmoState ammo, Tuning tuning, float clock, bool protecting, bool pointsDriven, float skill)

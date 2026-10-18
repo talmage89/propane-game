@@ -199,6 +199,9 @@ public sealed class BotServices : IDisposable
         actorColliders.Add(actor, colliders);
     }
 
+    /// <summary>Forget an actor before its native capsule and bone bodies are freed; safe to repeat.</summary>
+    public void RemoveActor(PlayerCharacter actor) => actorColliders.Remove(actor);
+
     /// <summary>The same ownership as walking collider parents, without binding new managed node wrappers.</summary>
     public bool ActorOwns(PlayerCharacter actor, Rid collider) =>
         actorColliders.TryGetValue(actor, out var colliders) && colliders.Contains(collider);

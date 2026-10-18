@@ -72,5 +72,7 @@ public interface IBotGoalPolicy : IPlayerInputSource, System.IDisposable
     bool PointsDriven { get => false; set { } }
     /// <summary>Reserves the brain and navigation buffers before the first physics tick.</summary>
     void Prepare(IBotWorld world) { }
+    /// <summary>Release cached references to a departing actor before native free, preserving decision clocks.</summary>
+    void ForgetActor(PlayerCharacter actor) { }
     void Think(IBotWorld world, float dt);
 }

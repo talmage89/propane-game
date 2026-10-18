@@ -68,7 +68,7 @@ source type to acquire that dependency. Do not broaden the map or silently regen
 | Lobby/run native tuning and codec catalog resolution | B3a supplies presentation-free ServerMode/ServerModes inputs. A1 removes LobbyServer template/snapshot sampling; C1 removes ServerRun native tuning/melee coupling; N1 injects owner-scoped codec schema/eligibility resolution. No baseline entry remains assigned to B3a. |
 | Fault transport calls ENet lane helper; server diagnostics/factory cross composition | N1 supplies transport-independent lanes and injected delivery/diagnostic boundaries. |
 | Settings and launch access are implicit | A1 provides explicit application ownership and scoped test stores/overrides. |
-| Actor subscriptions/collider caches outlive departing actors | L1 introduces idempotent actor registrations; detach before character free while world survives. |
+| Client actor attachment retirement (L1) | Session-owned `ActorRegistration` detaches subscriptions and actor caches before native free; remaining attachments keep the original unsubscribe/stop/view/actor order. |
 | Prototype bots/HUDs read live rules | B3b supplies plain observations with explicit read-time clock and allocation-free bot reads. |
 | Streaming incidental history (W1 implemented) | Ordinary arena timing lists stay empty; a feed watermark compacts the retired prefix, retaining only out-of-order forgotten indices. Navigation eviction and ledger-history pruning need separate retention contracts. |
 | Global stream reveal; implicit character/weapon binding assumptions | W2 before independent streams; V1 before a second asset family. Existing single-stream/binding behavior stays intact. |
@@ -130,7 +130,7 @@ synchronous read points; rule initialization still precedes wire construction.
 | Physical session | SessionContext: world attachment, actor registry, views, cancellation and registrations; synchronous session disposal. |
 | World | WorldContext: World3D/offscreen viewport, roots, tuning copy, RNG, clock, effects, registries and presentation selection; invalidation then disposal. |
 | Content | Suburb/segment root plus originating effects/registrations; content retirement inside a surviving world. |
-| Actor | ActorRuntime, character and attachments; roster removal or session retirement. L1 closes shorter-lived subscription/cache retention. |
+| Actor | ActorRuntime, character and client `ActorRegistration`; roster removal or session retirement. Subscriptions and actor caches detach before native free. |
 | View | LocalView camera/HUD/device attachment; detach/reassign independently of actor survival. |
 
 There is no universal application → session → match → world nesting: Game keeps its world while replacing suburbs;
@@ -159,6 +159,20 @@ Terminal MatchEnd delivery precedes a later Rejected message if returning to the
 Callbacks and sends can synchronously retire the run. Do not defer transactions into a batch or continue using
 retired state. Presentation bindings restore the newest surviving world in either disposal order. Node free alone
 is not disposal of managed subscriptions, timers, cancellation or owned native resources.
+
+Each Match actor has one idempotent `ActorRegistration`, indexed by its session. Early removal removes its
+unsubscription entry (including the closure), detaches owned action handlers, retires its owned bot, removes
+BotServices collider entries, surviving bot peer/target/sight references and actor action/melee caches, then frees
+the character. M0 selection still refreshes at the original roster notification, and views close before character
+free. In-flight delegate snapshots suppress detached action handlers. King rival/watch references retire here too; physical callback continuations stop when the emitter retired.
+King rival/watch references retire here too; physical callback continuations stop when the emitter retired.
+Bot invalid-target flags retain the old
+retarget/selection decisions without keeping a freed character alive. No decision clocks or random draws move.
+Whole-session unsubscription retains each actor's original position among other subscriptions, bot stopping stays
+before replication stopping, and views/actors still free in reverse order. Removal during stop and repeated removal
+are safe; attachment failures do not skip native retirement. Lobby profiles/scores retire too; finite-match score/profile/standing history remains for results and late drops.
+Authority
+requests keyed by numeric identities and nonrecycling identity tombstones remain run-owned.
 
 ## Clock and callback domains
 

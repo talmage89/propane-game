@@ -15,6 +15,7 @@ public sealed class SessionContext : IDisposable
     private readonly List<Node> views = new();
     private readonly Net.IdentitySequence actorIds = new();
     private readonly Dictionary<int, ActorRuntime> registry = new();
+    private readonly Dictionary<ActorRuntime, ActorRegistration> registrations = new();
     private readonly HashSet<int> retired = new();
     private readonly List<Action> detach = new();
     private readonly List<Action> unsubscribe = new();
@@ -73,14 +74,45 @@ public sealed class SessionContext : IDisposable
 
     public void RemoveActor(ActorRuntime actor)
     {
-        EnsureAlive();
         if (!actors.Remove(actor)) return;
         registry.Remove(actor.Character.ActorId);
         retired.Add(actor.Character.ActorId);
-        ActorsChanged?.Invoke();
-        foreach (var view in LocalViews.Where(view => view.Actor == actor.Character)) CloseView(view);
-        if (GodotObject.IsInstanceValid(actor.Character)) actor.Character.Free();
-        actor.Dispose();
+        List<Exception>? failures = null;
+        void Attempt(Action action)
+        {
+            try { action(); }
+            catch (Exception error) { (failures ??= new()).Add(error); }
+        }
+        Attempt(() => ActorsChanged?.Invoke());
+        foreach (var view in LocalViews.Where(view => view.Actor == actor.Character)) Attempt(() => CloseView(view));
+        Attempt(() => RetireRegistration(actor));
+        if (GodotObject.IsInstanceValid(actor.Character)) Attempt(actor.Character.Free);
+        Attempt(actor.Dispose);
+        if (failures != null) throw new AggregateException("actor retirement failed", failures);
+    }
+
+    internal void AttachActor(ActorRuntime actor, Action removing)
+    {
+        EnsureAlive();
+        if (!actors.Contains(actor)) throw new ArgumentException("actor is not in this session", nameof(actor));
+        registrations.Add(actor, new ActorRegistration(removing));
+    }
+
+    internal ActorRegistration Registration(ActorRuntime actor) => registrations[actor];
+
+    internal void SubscribeActor(ActorRuntime actor, Action detach)
+    {
+        EnsureAlive();
+        var registration = registrations[actor];
+        registration.Subscribe(detach);
+        unsubscribe.Add(registration.Unsubscribe);
+    }
+
+    private void RetireRegistration(ActorRuntime actor)
+    {
+        if (!registrations.Remove(actor, out var registration)) return;
+        unsubscribe.Remove(registration.Unsubscribe);
+        registration.Dispose();
     }
 
     public LocalView AddLocalView(ActorRuntime actor, Node parent, DeviceInput? input = null)
@@ -101,7 +133,6 @@ public sealed class SessionContext : IDisposable
 
     public void CloseView(LocalView view)
     {
-        EnsureAlive();
         if (views.Remove(view) && GodotObject.IsInstanceValid(view)) view.Free();
     }
 
@@ -112,8 +143,12 @@ public sealed class SessionContext : IDisposable
     private void Run(Action action) { try { action(); } catch (Exception error) { errors.Add(error); } }
     private void Drain(List<Action> actions)
     {
-        for (var i = actions.Count - 1; i >= 0; i--) Run(actions[i]);
-        actions.Clear();
+        while (actions.Count > 0)
+        {
+            var callback = actions[^1];
+            actions.RemoveAt(actions.Count - 1);
+            Run(callback);
+        }
     }
 
     private void Stop()
@@ -124,7 +159,7 @@ public sealed class SessionContext : IDisposable
         Drain(detach);
         Drain(unsubscribe);
         Drain(stop);
-        foreach (var actor in actors)
+        foreach (var actor in actors.ToArray())
         {
             actor.IntentSource = null;
             if (GodotObject.IsInstanceValid(actor.Character)) actor.Character.ProcessMode = Node.ProcessModeEnum.Disabled;
@@ -141,10 +176,13 @@ public sealed class SessionContext : IDisposable
         for (var i = views.Count - 1; i >= 0; i--)
             if (GodotObject.IsInstanceValid(views[i])) Run(views[i].Free);
         views.Clear();
-        for (var i = actors.Count - 1; i >= 0; i--)
+        var retiringActors = actors.ToArray();
+        for (var i = retiringActors.Length - 1; i >= 0; i--)
         {
-            if (GodotObject.IsInstanceValid(actors[i].Character)) Run(actors[i].Character.Free);
-            Run(actors[i].Dispose);
+            var actor = retiringActors[i];
+            Run(() => RetireRegistration(actor));
+            if (GodotObject.IsInstanceValid(actor.Character)) Run(actor.Character.Free);
+            Run(actor.Dispose);
         }
         actors.Clear();
         registry.Clear();

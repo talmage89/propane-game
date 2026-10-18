@@ -1,0 +1,9 @@
+run,clients_at_start,actors_at_start,matches,grids,body_pairs,unobserved_pair_grids,peak_rest_m,peak_moving_m,final_rest_m,final_moving_m,longest_episode_s,disagreements,engine_errors
+bank-clean,4,8,1,1999,410864,0,0.144,1.630,0.000,0.227,1.20,0,0
+bank-faults,4,8,1,1999,386353,0,0.128,4.597,0.001,0.138,0.65,0,0
+king-clean,4,8,1,1999,565297,0,0.124,2.921,0.005,0.102,0.50,0,0
+roaming-3,2,4,3,1499,23091,0,0.016,4.738,0.000,0.198,0.55,0,0
+roaming-final,2,4,2,999,15606,0,0.017,4.546,0.000,0.457,0.35,0,0
+departure-parent,3,6,1,900,30215,0,0.020,2.877,0.001,0.201,0.40,0,0
+departure-candidate,3,6,1,897,26890,0,0.015,4.554,0.001,0.171,0.40,0,0
+king-faults-departure,4,8,1,2001,359597,0,0.155,5.617,0.000,0.342,0.45,0,0
