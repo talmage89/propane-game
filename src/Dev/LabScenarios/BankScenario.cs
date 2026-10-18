@@ -25,7 +25,7 @@ internal sealed class BankScenario(ILabScenarioHost host, bool soak = false) : L
         var lab = Enter(LabScenarios.Get("duel"), DevArgs.Get("environment") == "suburb" ? LabEnvironment.Suburb : LabEnvironment.Void);
         Assert(lab.Session.Actors.Count == template.LabBankBots + 1, "banking roster ignored the bot count");
         Assert(lab.Session.Actors.Select(a => a.Character.GlobalPosition).Distinct().Count() == lab.Session.Actors.Count, "banking actors share a start");
-        Assert(lab.Session.Actors.Where(a => a.Character != lab.Player).All(a => a.Character.View == null && a.Character.InputOverride is IBotGoalPolicy),
+        Assert(lab.Session.Actors.Where(a => a.Character != lab.Player).All(a => ActorView.For(a.Character) == null && a.Character.InputOverride is IBotGoalPolicy),
             "banking bots need owned brains without local views");
         if (soak) lab.Bank!.AttachBot(lab.Player);
         else lab.Player.InputOverride = new ScriptedPlayer(lab);
@@ -64,7 +64,7 @@ internal sealed class BankScenario(ILabScenarioHost host, bool soak = false) : L
             Assert(lab.Overlay.ResultTitle == expected, "banking result ignored the strongest bot");
             Assert(lab.Overlay.StatusText.Contains($"  {best.Value}    ·", StringComparison.Ordinal), "banking HUD omitted the best opponent's score");
         }
-        Assert(lab.Opponent!.View == null && !lab.World.Networked, "duel needs camera/network");
+        Assert(ActorView.For(lab.Opponent!) == null && !lab.World.Networked, "duel needs camera/network");
         capture.Screenshot(soak ? "duel_soak_end" : "duel_bot_bank");
         if (!bank.IsPlaying)
         {

@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Linq;
 using Godot;
 using Propane.Core;
+using Propane.Dev.UnitTests.Fixtures;
 using Propane.Net;
 using Propane.UI;
 using Propane.World;
@@ -91,7 +92,7 @@ internal sealed class AppearanceScenario(INetScenarioHost host) : NetScenario(ho
             var side = new Vector3(-along.Z, 0, along.X);
             var position = center + along * ((slot - (players - 1) / 2f) * 2.5f);
             match.Player.Teleport(position, Mathf.Atan2(-side.X, -side.Z));
-            if (match.Player.View is { } view)
+            if (ActorView.For(match.Player) is { } view)
             {
                 var camera = view.CameraRig.Camera;
                 view.CameraRig.ProcessMode = ProcessModeEnum.Disabled;
@@ -111,12 +112,12 @@ internal sealed class AppearanceScenario(INetScenarioHost host) : NetScenario(ho
         if (!appearanceDropped && appearanceTime >= 2)
         {
             appearanceDropped = true;
-            var toward = (match.Player.View?.CameraRig.Camera.GlobalPosition ?? match.Player.Aim.EyeOrigin) - match.Player.GlobalPosition;
+            var toward = (ActorView.For(match.Player)?.CameraRig.Camera.GlobalPosition ?? match.Player.Aim.EyeOrigin) - match.Player.GlobalPosition;
             toward.Y = 0;
             var at = match.Player.GlobalPosition + toward.Normalized() * 1.3f;
             var body = new BodyState(BodyIds.DropTankId(own.Player.AllocationSlot, 900000), new Transform3D(Basis.Identity, at), Vector3.Zero, Vector3.Zero);
             net.Send(MessageCodec.Encode(new NetMessage(Msg.ModeEvent, match.Setup.Id, 0, new ModeEnvelope(1, 1, Modes.ModeRegistry.TankBankId, 1, match.Player.ActorId,
-                match.Player.LifeId, checked(++match.Player.Runtime.ActionSequence), ModeSchemas.TankBankKinds.Spill, new TankBankSpill(Modes.SpillReason.Hit, new[] { body }))), false));
+                match.Player.LifeId, checked(++ClientActorAccess.For(match.Player).ActionSequence), ModeSchemas.TankBankKinds.Spill, new TankBankSpill(Modes.SpillReason.Hit, new[] { body }))), false));
         }
         if (!appearanceGlowChecked && appearanceTime >= 2.5f)
         {

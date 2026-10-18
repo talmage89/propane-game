@@ -32,9 +32,36 @@ internal sealed class ActorLifetimeFixture : IDisposable
         SetRoster(lobby);
     }
 
-    public static object Field(object owner, string name) => owner.GetType().GetField(name, BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)!.GetValue(owner)!;
-    public static int Count(object owner, string name) => ((ICollection)Field(owner, name)).Count;
-    public static object? Call(object owner, string name, params object[] args) => owner.GetType().GetMethod(name, BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(owner, args);
+    private const BindingFlags Fields = BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public;
+    private static object Owner(object owner, string name, bool method = false)
+    {
+        if ((method ? owner.GetType().GetMethod(name, Fields) as MemberInfo : owner.GetType().GetField(name, Fields) ?? (MemberInfo?)owner.GetType().GetProperty(name, Fields)) != null) return owner;
+        foreach (var field in new[] { "ownedBots", "actorReplication", "worldReplica", "viewBinding" })
+        {
+            var nested = owner.GetType().GetField(field, Fields)?.GetValue(owner);
+            if (nested != null && (method ? nested.GetType().GetMethod(name, Fields) as MemberInfo : nested.GetType().GetField(name, Fields) ?? (MemberInfo?)nested.GetType().GetProperty(name, Fields)) != null) return nested;
+        }
+        throw new MissingMemberException(owner.GetType().Name, name);
+    }
+    public static object Field(object owner, string name)
+    {
+        owner = Owner(owner, name);
+        return owner.GetType().GetField(name, Fields) is { } field ? field.GetValue(owner)! : owner.GetType().GetProperty(name, Fields)!.GetValue(owner)!;
+    }
+    public static int Count(object owner, string name)
+    {
+        if (owner is Match && owner.GetType().GetField(name, Fields) == null && name is "receivedActions" or "remoteMelee")
+        {
+            var replicas = ((IDictionary)Field(owner, "replicas")).Values.Cast<object>();
+            return name == "receivedActions" ? replicas.Sum(replica => Count(replica, name)) : replicas.Count(replica => replica.GetType().GetProperty("Melee", Fields)!.GetValue(replica) != null);
+        }
+        return ((ICollection)Field(owner, name)).Count;
+    }
+    public static object? Call(object owner, string name, params object[] args)
+    {
+        owner = Owner(owner, name, method: true);
+        return owner.GetType().GetMethod(name, Fields)!.Invoke(owner, args);
+    }
     public static void Set(object owner, string name, object value) => owner.GetType().GetField(name, BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)!.SetValue(owner, value);
     private void SetRoster(LobbyInfo value) => client.Client.Handle(MessageCodec.Encode(new NetMessage(Msg.LobbyState, 0, 0, value), true));
 
@@ -86,19 +113,24 @@ internal sealed class ActorLifetimeFixture : IDisposable
             Set(zone, "rival", actor);
             Set(zone, "watched", actor);
         }
-        var refs = new List<WeakReference> { new(actor), new(runtime) };
+        var refs = new List<WeakReference> { new(actor), new(runtime), new(ClientActorAccess.For(actor).State) };
         // Attachments are inspected without requiring a candidate-only API on the parent.
         if (Match.Session.GetType().GetField("registrations", BindingFlags.Instance | BindingFlags.NonPublic)?.GetValue(Match.Session) is IDictionary registrations)
             refs.Add(new WeakReference(registrations[runtime]!));
         string? retirementFailure = null;
         actor.TreeExiting += () =>
         {
-            if (Match.Session.Actor(id) != null) retirementFailure = "native free preceded roster removal";
-            foreach (var name in new[] { "Fired", "Ragdolled", "GotUp", "MeleeStarted", "MeleeHit", "PushedBody" })
+            try
             {
-                var expected = DevArgs.Get("actor-lifetime-parent") != null && !actor.IsRemote;
-                if ((Field(actor, name) is Delegate) != expected) retirementFailure = $"{name} subscription at native free differs from expectation";
+                if (Match.Session.Actor(id) != null) retirementFailure = "native free preceded roster removal";
+                foreach (var name in new[] { "Fired", "Ragdolled", "GotUp", "MeleeStarted", "MeleeHit", "PushedBody" })
+                {
+                    var expected = DevArgs.Get("actor-lifetime-parent") != null && !actor.IsRemote;
+                    if ((Field(actor, name) is Delegate) != expected) retirementFailure = $"{name} subscription at native free differs from expectation";
+                }
             }
+            catch (Exception error) { retirementFailure = error.ToString(); }
+
         };
         Remove(actor);
         // Native signal callbacks do not propagate managed exceptions to Free's caller. Assert here for exit 1.
@@ -113,7 +145,7 @@ internal sealed class ActorLifetimeFixture : IDisposable
     {
         var actor = Match.Player;
         var runtime = actor.Runtime;
-        var view = actor.View!;
+        var view = ActorView.For(actor)!;
         var references = new[] { new WeakReference(actor), new WeakReference(runtime), new WeakReference(view) };
         Match.Session.RemoveActor(runtime);
         return references;

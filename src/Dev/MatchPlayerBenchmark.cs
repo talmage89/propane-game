@@ -33,7 +33,7 @@ public partial class MatchPlayerBenchmark : Node
             fixture.Match._Process(0);
             return;
         }
-        if (count == 0 && (!fixture.Match.Session.IsAlive || fixture.Match.Player.View == null))
+        if (count == 0 && (!fixture.Match.Session.IsAlive || ActorView.For(fixture.Match.Player) == null))
         {
             GD.PushError("[player-benchmark] inactive match or missing local view");
             SetProcess(false);

@@ -440,18 +440,18 @@ public partial class MenuDeviceInputTest : Node
         Check(player.GetViewport() is SubViewport && player.GetViewport().Name == "WorldSpace", $"{mode} actor is under WorldSpace");
         await Frames(12).ConfigureAwait(true);
         capture.Screenshot($"{mode}_01_before_turn");
-        var yaw = player.CameraRig.Yaw;
-        var pitch = player.CameraRig.Pitch;
+        var yaw = ActorView.For(player)!.CameraRig.Yaw;
+        var pitch = ActorView.For(player)!.CameraRig.Pitch;
         var motion = new Vector2(120, -40);
         Send(new InputEventMouseMotion { Relative = motion, ScreenRelative = motion });
         await Frames().ConfigureAwait(true);
         var sensitivity = Mathf.RadToDeg(player.World.Tuning.MouseSensitivity);
-        Check(Mathf.IsEqualApprox(player.CameraRig.Yaw, yaw - motion.X * sensitivity) &&
-            Mathf.IsEqualApprox(player.CameraRig.Pitch, pitch - motion.Y * sensitivity), $"{mode} mouse turns view exactly once");
+        Check(Mathf.IsEqualApprox(ActorView.For(player)!.CameraRig.Yaw, yaw - motion.X * sensitivity) &&
+            Mathf.IsEqualApprox(ActorView.For(player)!.CameraRig.Pitch, pitch - motion.Y * sensitivity), $"{mode} mouse turns view exactly once");
         capture.Screenshot($"{mode}_02_after_turn");
-        yaw = player.CameraRig.Yaw;
+        yaw = ActorView.For(player)!.CameraRig.Yaw;
         await Frames().ConfigureAwait(true);
-        Check(player.CameraRig.Yaw == yaw, $"{mode} mouse displacement is consumed");
+        Check(ActorView.For(player)!.CameraRig.Yaw == yaw, $"{mode} mouse displacement is consumed");
 
         Send(new InputEventJoypadMotion { Axis = JoyAxis.RightX, AxisValue = 1 });
         await Frames(8).ConfigureAwait(true);
@@ -540,7 +540,7 @@ public partial class MenuDeviceInputTest : Node
         if (!menu.Visible) { TapKey(Key.Escape); await Frames().ConfigureAwait(true); }
         Check(menu.Visible, $"{mode} pause menu is open");
         capture.Screenshot($"{mode}_04_remapped_pause");
-        var yaw = player.CameraRig.Yaw;
+        var yaw = ActorView.For(player)!.CameraRig.Yaw;
         var position = player.GlobalPosition;
         var swings = 0;
         var shots = 0;
@@ -552,12 +552,12 @@ public partial class MenuDeviceInputTest : Node
         TapKey(Key.F);
         TapKey(Key.R);
         await Frames().ConfigureAwait(true);
-        Check(player.CameraRig.Yaw == yaw && shots == 0 && swings == 0, $"{mode} menu blocks gameplay input");
+        Check(ActorView.For(player)!.CameraRig.Yaw == yaw && shots == 0 && swings == 0, $"{mode} menu blocks gameplay input");
         TapKey(Key.Escape, Key.Capslock);
         await Frames(8).ConfigureAwait(true);
         Check(!menu.Visible && (DisplayServer.GetName() == "headless" || Input.MouseMode == Input.MouseModeEnum.Captured),
             $"{mode} physical Escape resumes");
-        Check(player.CameraRig.Yaw == yaw && player.GlobalPosition.DistanceTo(position) < 0.05f && shots == 0 && swings == 0 &&
+        Check(ActorView.For(player)!.CameraRig.Yaw == yaw && player.GlobalPosition.DistanceTo(position) < 0.05f && shots == 0 && swings == 0 &&
             player.Ammo?.Reloading != true, $"{mode} resume has no queued gameplay input");
         TapKey(Key.Space);
         Send(new InputEventMouseMotion { Relative = new Vector2(80, 0), ScreenRelative = new Vector2(80, 0) });
@@ -566,7 +566,7 @@ public partial class MenuDeviceInputTest : Node
         Check(menu.Visible, $"{mode} physical Escape opens pause menu");
         TapKey(Key.Escape, Key.Capslock);
         await Frames(8).ConfigureAwait(true);
-        Check(player.CameraRig.Yaw == yaw && player.IsOnFloor(), $"{mode} pause discards pending jump and mouse motion");
+        Check(ActorView.For(player)!.CameraRig.Yaw == yaw && player.IsOnFloor(), $"{mode} pause discards pending jump and mouse motion");
         player.MeleeStarted -= Swing;
         player.Fired -= Shot;
     }
@@ -596,7 +596,7 @@ public partial class MenuDeviceInputTest : Node
         // only its existing capture predicate. Rendered runs exercise the production mouse-mode predicate.
         if (DisplayServer.GetName() == "headless")
         {
-            player.View!.AssignDevice(new DeviceInput(player.World.Tuning, () => !menu.Visible));
+            ActorView.For(player)!.AssignDevice(new DeviceInput(player.World.Tuning, () => !menu.Visible));
         }
     }
 

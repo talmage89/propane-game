@@ -99,10 +99,10 @@ internal sealed class DuelScenario(INetScenarioHost host) : NetScenario(host)
                         mesh.GetInstanceShaderParameter("gather_shimmer").AsSingle() == match.World.Tuning.GatherShimmer,
                         "gather: expired shield glow/contrast remained or shimmer missing");
                 }
-                if (host && player.View != null)
+                if (host && ActorView.For(player) is { } view)
                 {
-                    var camera = player.View.CameraRig.Camera;
-                    player.CameraRig.ProcessMode = ProcessModeEnum.Disabled;
+                    var camera = view.CameraRig.Camera;
+                    view.CameraRig.ProcessMode = ProcessModeEnum.Disabled;
                     var center = tank.GlobalTransform * PropaneTank.LocalCenter;
                     camera.LookAtFromPosition(center + new Vector3(1.5f, 1, 2), center);
                     if (gatherGlides.Count == 0)

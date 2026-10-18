@@ -202,7 +202,7 @@ public partial class SessionActorsTests : Node
         await Ticks(30).ConfigureAwait(true);
         Require(actors[1].GlobalPosition.DistanceTo(before) > 1, $"closing one view stopped the survivor: before={before} after={actors[1].GlobalPosition} velocity={actors[1].Velocity} resolved={actors[1].ResolvedState} intent={actors[1].Runtime.Intent.Move} source={actors[1].Runtime.IntentSource}");
         Send(new InputEventJoypadMotion { Device = 7, Axis = JoyAxis.LeftY, AxisValue = 0 });
-        Require(actors[2].View == null && actors[2].FindChildren("*", "Camera3D", owned: false).Count == 0, "bot has a camera");
+        Require(ActorView.For(actors[2]) == null && actors[2].FindChildren("*", "Camera3D", owned: false).Count == 0, "bot has a camera");
         props[2].GlobalPosition = new Vector3(20, .25f, 3.8f);
         props[2].LinearVelocity = Vector3.Zero;
         brain.Enabled = true;

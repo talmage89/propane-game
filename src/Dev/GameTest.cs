@@ -50,7 +50,7 @@ public partial class GameTest : Node
                 var to = lot.House.Center - front;
                 var yaw = Mathf.Atan2(-to.X, -to.Y);
                 game.Player.Teleport(PlanCoordinates.ToWorld(front, 0.05f), yaw);
-                game.Player.CameraRig.SetOrientation(Mathf.RadToDeg(yaw), -2f);
+                ActorView.For(game.Player)!.CameraRig.SetOrientation(Mathf.RadToDeg(yaw), -2f);
             });
             for (var i = 0; i < 4; i++)
             {
@@ -285,7 +285,7 @@ public partial class GameTest : Node
             {
                 var (position, yaw, pitch) = where();
                 game.Player.Teleport(position, yaw);
-                game.Player.CameraRig.SetOrientation(Mathf.RadToDeg(yaw), pitch);
+                ActorView.For(game.Player)!.CameraRig.SetOrientation(Mathf.RadToDeg(yaw), pitch);
             });
             director.ShotAt(time + 0.6f, name);
         }
@@ -341,7 +341,7 @@ public partial class GameTest : Node
         {
             var bounds = game.Current!.Plan.Bounds;
             game.Player.Teleport(new Vector3(bounds.GetCenter().X, 0.2f, bounds.End.Y - 2f), Mathf.Pi);
-            game.Player.CameraRig.SetOrientation(180f, -12f);
+            ActorView.For(game.Player)!.CameraRig.SetOrientation(180f, -12f);
             input.Hold(T(0), T(1.5f), new Player.PlayerIntent { Move = new Vector2(0, 1) });
         });
         director.ShotAt(8.9f, "06_edge_walk");
@@ -525,7 +525,7 @@ public partial class GameTest : Node
         if (target != null && IsInstanceValid(target))
         {
             // Aim exactly, like a perfect player would, from wherever the camera actually is.
-            var rig = game.Player.CameraRig;
+            var rig = ActorView.For(game.Player)!.CameraRig;
             var to = target.GlobalTransform * PropaneTank.LocalCenter - rig.Camera.GlobalPosition;
             var yaw = Mathf.RadToDeg(Mathf.Atan2(-to.X, -to.Z));
             var pitch = Mathf.RadToDeg(Mathf.Atan2(to.Y, new Vector2(to.X, to.Z).Length()));

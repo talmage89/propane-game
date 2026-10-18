@@ -1,5 +1,6 @@
 using System;
 using Propane.Core;
+using Propane.Dev.UnitTests.Fixtures;
 using Propane.Net;
 using Propane.Player;
 
@@ -38,13 +39,14 @@ public static class ParticipantTests
             var actor = new PlayerCharacter { World = runner.World };
             try
             {
-                actor.Runtime.AllocationSlot = 3;
-                actor.Runtime.DropCounter = BodyIds.MaxDropsPerActor - 1;
-                TestRunner.Assert(actor.Runtime.AllocateDropId() == BodyIds.DropTankId(3, BodyIds.MaxDropsPerActor - 1), "last drop skipped");
+                var state = ClientActorAccess.Standalone(actor);
+                state.AllocationSlot = 3;
+                state.DropCounter = BodyIds.MaxDropsPerActor - 1;
+                TestRunner.Assert(state.AllocateDropId() == BodyIds.DropTankId(3, BodyIds.MaxDropsPerActor - 1), "last drop skipped");
                 for (var attempt = 0; attempt < 2; attempt++)
                 {
-                    TestRunner.Throws<ArgumentOutOfRangeException>(() => actor.Runtime.AllocateDropId());
-                    TestRunner.Assert(actor.Runtime.DropCounter == BodyIds.MaxDropsPerActor, "exhaustion mutated counter");
+                    TestRunner.Throws<ArgumentOutOfRangeException>(() => state.AllocateDropId());
+                    TestRunner.Assert(state.DropCounter == BodyIds.MaxDropsPerActor, "exhaustion mutated counter");
                 }
             }
             finally { actor.Runtime.Dispose(); actor.Free(); }

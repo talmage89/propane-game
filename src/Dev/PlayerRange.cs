@@ -243,9 +243,9 @@ public partial class PlayerRange : Node3D
                 script.Hold(8.3f, 9.5f, new PlayerIntent { Move = Vector2.Down });
                 script.Hold(9.5f, 10.7f, new PlayerIntent { Move = Vector2.Down, Sprint = true });
                 script.Hold(10.7f, 14.8f, new PlayerIntent { Move = Vector2.Right, Aim = true });
-                director.At(11.6f, () => player.CameraRig.SetOrientation(0, -75));
-                director.At(12.8f, () => player.CameraRig.SetOrientation(0, 45));
-                director.At(14, () => player.CameraRig.SetOrientation(0, -10));
+                director.At(11.6f, () => ActorView.For(player)!.CameraRig.SetOrientation(0, -75));
+                director.At(12.8f, () => ActorView.For(player)!.CameraRig.SetOrientation(0, 45));
+                director.At(14, () => ActorView.For(player)!.CameraRig.SetOrientation(0, -10));
                 foreach (var (t, label) in new (float, string)[]
                 {
                     (0.8f, "carry"), (1.7f, "aim"), (2.04f, "fire"), (3.8f, "empty"),
@@ -272,19 +272,19 @@ public partial class PlayerRange : Node3D
                     script.Reload(29.5f);
                     foreach (var start in new[] { 15.7f, 18f, 20.5f, 23.5f, 26.5f })
                     {
-                        director.At(start, () => player.CameraRig.SetOrientation(0, -75));
-                        director.At(start + 1, () => player.CameraRig.SetOrientation(0, 45));
+                        director.At(start, () => ActorView.For(player)!.CameraRig.SetOrientation(0, -75));
+                        director.At(start + 1, () => ActorView.For(player)!.CameraRig.SetOrientation(0, 45));
                     }
-                    director.At(29, () => player.CameraRig.SetOrientation(0, -10));
+                    director.At(29, () => ActorView.For(player)!.CameraRig.SetOrientation(0, -10));
                     director.At(33.2f, () =>
                     {
-                        player.CameraRig.SetOrientation(0, -75);
+                        ActorView.For(player)!.CameraRig.SetOrientation(0, -75);
                         player.Ammo = new AmmoState { Tuning = world.Tuning, Magazine = 0, Reserve = 90 };
                     });
                     script.Reload(33.5f);
                     director.At(36.2f, () =>
                     {
-                        player.CameraRig.SetOrientation(0, 45);
+                        ActorView.For(player)!.CameraRig.SetOrientation(0, 45);
                         player.Ammo = new AmmoState { Tuning = world.Tuning, Magazine = 5, Reserve = 90 };
                     });
                     script.Reload(36.5f);
@@ -405,7 +405,7 @@ public partial class PlayerRange : Node3D
         {
             return;
         }
-        var focus = player.IsRagdolled ? player.CameraRig.Target : player.GlobalPosition + Vector3.Up * 1.0f;
+        var focus = player.IsRagdolled ? ActorView.For(player)!.CameraRig.Target : player.GlobalPosition + Vector3.Up * 1.0f;
         var offset = view switch
         {
             "front" => new Vector3(0.8f, 0.4f, -3.2f),

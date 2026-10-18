@@ -49,10 +49,10 @@ public static class MatchPlayerTests
         {
             using var f = new PlayerRosterFixture(runner, botsFirst: true, botsOnly: true);
             f.Check("bot-only assembly");
-            Assert(f.Selected!.ActorId == 40 && f.Selected.View != null, "bot-only fallback or initial view changed");
-            var view = f.Selected.View!;
+            Assert(f.Selected!.ActorId == 40 && ActorView.For(f.Selected) != null, "bot-only fallback or initial view changed");
+            var view = ActorView.For(f.Selected)!;
             f.Add(f.Profile(99, ActorKind.Human)); f.Check("human arrives after bot-only assembly");
-            Assert(f.Selected!.ActorId == 99 && f.Selected.View == null && view.Actor.ActorId == 40, "roster refresh retargeted the existing camera/input view");
+            Assert(f.Selected!.ActorId == 99 && ActorView.For(f.Selected) == null && view.Actor.ActorId == 40, "roster refresh retargeted the existing camera/input view");
         });
         runner.Run("match player/authority handover preserves selection; rebuild applies actor ownership", () =>
         {

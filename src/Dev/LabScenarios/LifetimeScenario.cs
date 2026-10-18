@@ -70,7 +70,7 @@ internal sealed class LifetimeScenario(ILabScenarioHost host, bool trackingOnly 
         Assert(!lab.World.Networked && lab.Session.Actors.Count == (scenario.Banking ? template.LabBankBots + 1 :
             scenario.Prototype && scenario.Definition != ModeRegistry.DissolveRun ? template.LabPrototypeBots + 1 : 1),
             "local actors/world");
-        Assert(lab.Opponent?.View == null, "bot acquired a camera");
+        Assert((lab.Opponent == null ? null : ActorView.For(lab.Opponent)) == null, "bot acquired a camera");
         if (scenario.Id == "stack") Assert(tankCount == template.LabStackCount && lab.LiveTanks.All(t => t.Transform.Basis.Y.Dot(Vector3.Up) > .99f), "upright stack count");
         if (scenario.Id == "range") Assert(tankCount == 12, "range fixture count");
         lab.World.Tuning.RunSpeed = 7;
