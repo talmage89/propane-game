@@ -1,6 +1,6 @@
 using System;
-using System.Linq;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using Godot;
 using Propane.Dev.UnitTests.Fixtures;
@@ -16,10 +16,11 @@ public static class ActorLifetimeTests
 {
     public static void Register(TestRunner runner)
     {
-        foreach (var roaming in new[] { true, false })
+        foreach (var (roaming, king) in new[] { (true, false), (false, false), (false, true) })
+        {
             runner.Run($"actor lifetime/{(roaming ? "roaming" : "match")} repeated removal releases actor state", () =>
             {
-                using var f = new ActorLifetimeFixture(runner, roaming);
+                using var f = new ActorLifetimeFixture(runner, roaming, king);
                 var parent = DevArgs.Get("actor-lifetime-parent") != null;
                 var before = f.Counts();
                 for (var i = 0; i < 6; i++)
@@ -37,6 +38,7 @@ public static class ActorLifetimeTests
                 Assert(remaining.All(reference => !reference.IsAlive), "session retirement retained remaining actors/runtimes");
                 Assert(f.Match.Session.Actors.Count == 0, "session retirement retained actors");
             });
+        }
 
         runner.Run("actor lifetime/removal in a delegate snapshot suppresses the detached Match listener", () =>
         {
@@ -60,6 +62,21 @@ public static class ActorLifetimeTests
             actor.Ragdolled += (_, _, _) => f.Remove(actor);
             actor.ReceiveMelee(Vector3.Forward);
             Assert(!GodotObject.IsInstanceValid(actor) && f.Match.Session.IsAlive, "damage callback did not remove its actor in the live world");
+        });
+        runner.Run("actor lifetime/removal in the actor's real firing and get-up callbacks", () =>
+        {
+            using var f = new ActorLifetimeFixture(runner, true);
+            var actor = f.Add(100, ActorKind.Human);
+            actor.InputLocked = false;
+            actor.Runtime.IntentSource = new FireInput();
+            actor.Fired += _ => f.Remove(actor);
+            actor._PhysicsProcess(1d / 120);
+            Assert(!GodotObject.IsInstanceValid(actor), "physics input did not fire/remove its actor");
+            actor = f.Add(101, ActorKind.Human);
+            actor.Collapse();
+            actor.GotUp += (_, _) => f.Remove(actor);
+            ActorLifetimeFixture.Call(actor, "BeginGetUp");
+            Assert(!GodotObject.IsInstanceValid(actor), "get-up callback did not remove its actor");
         });
         runner.Run("actor lifetime/removal while another world notification iterates", () =>
         {
@@ -103,5 +120,10 @@ public static class ActorLifetimeTests
             Assert(detached == 1 && removed == 1 && !GodotObject.IsInstanceValid(actor.Character), "cleanup repeated or skipped native free");
             Assert(session.IsAlive, "attachment error stopped the surviving world");
         });
+    }
+
+    private sealed class FireInput : IPlayerInputSource
+    {
+        public PlayerIntent Read() => new() { FirePressed = true };
     }
 }

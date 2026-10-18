@@ -3,8 +3,9 @@ using System.Collections;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
-using Propane.Bots;
 using Godot;
+using Propane.Bots;
+using Propane.Modes;
 using Propane.Net;
 using Propane.Player;
 
@@ -17,13 +18,14 @@ internal sealed class ActorLifetimeFixture : IDisposable
     private readonly MatchClient client;
     private LobbyInfo lobby;
     public Match Match => client.Match;
-    public ActorLifetimeFixture(Node runner, bool roaming)
+    public ActorLifetimeFixture(Node runner, bool roaming, bool king = false)
     {
         lobby = server.Lobby();
         var survivor = lobby.Members.First() with { Id = 40, Kind = ActorKind.Bot, AllocationSlot = 40, ControllerConfig = ControllerConfig.ForBot(0) };
         lobby = lobby with { Members = lobby.Members.Append(survivor).ToArray() };
         if (!roaming) { server.StartMatch(); server.Advance(2); }
         var setup = (roaming ? server.World() : server.Match()) with { Players = lobby.Members.Select((p, i) => (p, i)).ToArray() };
+        if (king) setup = setup with { ModeId = ModeRegistry.KingId };
         client = new MatchClient(runner, setup, server.Clock, 2);
         SetRoster(lobby);
     }
@@ -68,10 +70,19 @@ internal sealed class ActorLifetimeFixture : IDisposable
         // Populate relay caches too: late actions from a removed actor must still be ignored by registry lookup.
         Match.OnMessage(new NetMessage(Msg.MeleeStart, Match.Setup.Id, owner, new MeleeStartMessage(1, Vector3.Forward), id, actor.LifeId, 1));
         var brain = Match.BotBrain(40)!;
-        var targets = Field(brain, "targets");
-        Set(targets, "target", actor);
-        var combat = Field(brain, "combat");
-        foreach (var field in new[] { "fightTarget", "sighted", "coverObserver", "shooterSeen", "watcher" }) Set(combat, field, actor);
+        if (brain is BankingBot)
+        {
+            Set(Field(brain, "targets"), "target", actor);
+            var combat = Field(brain, "combat");
+            foreach (var field in new[] { "fightTarget", "sighted", "coverObserver", "shooterSeen", "watcher" }) Set(combat, field, actor);
+        }
+        else
+        {
+            Set(Field(brain, "prizes"), "pointsTarget", actor);
+            var zone = Field(brain, "zonePolicy");
+            Set(zone, "rival", actor);
+            Set(zone, "watched", actor);
+        }
         var refs = new[] { new WeakReference(actor), new WeakReference(runtime), new WeakReference(Field(Match, "bots")) };
         // Attachments are inspected without requiring a candidate-only API on the parent.
         if (Match.Session.GetType().GetField("registrations", BindingFlags.Instance | BindingFlags.NonPublic)?.GetValue(Match.Session) is IDictionary registrations)

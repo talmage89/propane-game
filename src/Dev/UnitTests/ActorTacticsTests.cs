@@ -15,6 +15,7 @@ public static class ActorTacticsTests
     {
         using var output = DevArgs.Get("actor-tactics-transcript") is { } path ? new StreamWriter(path) : null;
         foreach (var scenario in new[] { "combat", "cover", "points" })
+        {
             runner.Run($"actor tactics/{scenario} retains departure decisions and RNG", () =>
             {
                 using var world = new TacticalWorld(runner.World, scenario);
@@ -34,5 +35,6 @@ public static class ActorTacticsTests
                 }
                 TestRunner.Assert(world.RemoteBodies.Count == 0 && !GodotObject.IsInstanceValid(world.Enemy), "departure differential did not remove its native rival");
             });
+        }
     }
 }
