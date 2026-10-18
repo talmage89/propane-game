@@ -33,7 +33,7 @@ Requires Godot 4.7.2 (.NET edition) and the .NET 10 SDK.
   [Measuring scale](runbooks/measuring-scale.md#playing-optimized-c-locally). `make` lists the other tasks (tests, a local
   server, bots, releases); they find Godot on `PATH` (`godot-mono` or `godot`) or in `/Applications`, or set `GODOT` to its binary.
 - Quality gate: `make lint` verifies C# formatting and rebuilds Debug and the shipping ExportRelease configuration
-  with warnings as errors (no export needed). `make check` runs lint,
+  with warnings as errors (no export needed), then enforces the [architecture](architecture.md) dependency and source-site ratchets. `make check` runs lint,
   then `make test`, then `make test-infra` (the gate's own self-tests, `tools/dev/lint_tests.py`: it needs no Godot,
   and CI runs it as the `infra` job). Run it before submitting a change. `tools/dev/check_world.sh` prints log tails and keeps its
   scratch directory on failure. GitHub Actions runs the same checks on pushes to `dev`
@@ -305,8 +305,8 @@ $GODOT --headless res://scenes/dev/transport_physics_tests.tscn -- --server --po
 # Clear/replace proof: shooting sequence, finish remaining fixture tanks, assert automatic replacement.
 $GODOT --fixed-fps 60 res://scenes/dev/game_test.tscn -- --scenario=clear --quit=32 --capture-dir=/tmp/clear
 # Real menu lifetime: ten single-player and ten solo-match retirements with exact node/object/orphan counts.
-$GODOT --headless --fixed-fps 60 res://scenes/dev/menu_test.tscn -- --scenario=lifetime
-$GODOT --fixed-fps 60 res://scenes/dev/menu_test.tscn -- --scenario=lifetime --capture-dir=/tmp/menu-lifetime
+$GODOT --headless --fixed-fps 60 res://scenes/dev/menu_test.tscn -- --scenario=lifetime --classic-lobby
+$GODOT --fixed-fps 60 res://scenes/dev/menu_test.tscn -- --scenario=lifetime --classic-lobby --capture-dir=/tmp/menu-lifetime
 
 # Blast-query completeness: 1,100 rigid bodies and duplicate collision shapes; asserts every body is pushed.
 $GODOT --headless --fixed-fps 60 res://scenes/dev/blast_query_tests.tscn
@@ -322,7 +322,7 @@ $GODOT --resolution 1280x720 res://scenes/dev/release_test.tscn -- --windowed --
 # Add --scenario=network --connect=host:port --name=Tester to test against another client on a source server.
 
 # Custom color with mouse/keyboard: presets, HSV click/drag, exact hex, saved settings, preview and match.
-$GODOT res://scenes/dev/menu_test.tscn -- --scenario=mouse --capture-dir=/tmp/menu-color
+$GODOT res://scenes/dev/menu_test.tscn -- --scenario=mouse --classic-lobby --capture-dir=/tmp/menu-color
 
 # The real game with a scripted player. Scenarios: loop (default), clear (destroys every tank), ragdoll, shoot,
 # tour (camera in tight spots), spots (visits each tank), settle (fails on tank drift >6 mm or rotation >0.5 degrees),
@@ -376,7 +376,7 @@ $GODOT --fixed-fps 60 --resolution 1280x720 res://scenes/dev/player_range.tscn -
 # Ten magazines against a player capsule with the production bot aim controller.
 $GODOT --headless --fixed-fps 60 res://scenes/dev/player_range.tscn -- --scenario=bot-recoil --skill=1 --distance=20
 # Real device delivery: held mouse burst, retained climb and mouse pull-down in single and network views.
-$GODOT --headless --fixed-fps 60 res://scenes/dev/menu_test.tscn -- --scenario=input
+$GODOT --headless --fixed-fps 60 res://scenes/dev/menu_test.tscn -- --scenario=input --classic-lobby
 # Player scenarios: stances (default), reload, ragdoll, creep (two measured strides), movement (labeled gait/jump transitions),
 # sprint-repro (discovery sequence, exact-tick assertions and transition log), grip (all rifle contacts).
 # feet (all eight body-relative directions in every gait) and feet-events (local starts/stops/turns/jumps/terrain)
@@ -406,15 +406,15 @@ $GODOT --fixed-fps 30 res://scenes/dev/menu_test.tscn -- --quit-after=match --ca
 # Joypad events only: focus, text defaults, hosting/joining, color/length updates, pause/resume, results and repeat.
 # Fails with exit 1 on a missing focus target, incorrect outcome or timeout; also runs headlessly in make test.
 # --port=<port> overrides local hosting for parallel runs (make test uses this checkout's port).
-$GODOT --fixed-fps 60 res://scenes/dev/menu_test.tscn -- --scenario=gamepad --capture-dir=/tmp/pad
+$GODOT --fixed-fps 60 res://scenes/dev/menu_test.tscn -- --scenario=gamepad --classic-lobby --capture-dir=/tmp/pad
 # Switch devices while paused and verify the reference and reload hints in both directions.
-$GODOT res://scenes/dev/menu_test.tscn -- --scenario=devices --capture-dir=/tmp/devices
+$GODOT res://scenes/dev/menu_test.tscn -- --scenario=devices --classic-lobby --capture-dir=/tmp/devices
 # Real keyboard/mouse events through the root viewport in single player and a solo match: turn, jump, melee,
 # single-click fire, R/new suburb or reload, and remapped Escape. Assertions also run headlessly in make test.
-$GODOT --fixed-fps 60 --resolution 1280x720 res://scenes/dev/menu_test.tscn -- --scenario=input --port=24681 --windowed --capture-dir="$PWD/build/input"
+$GODOT --fixed-fps 60 --resolution 1280x720 res://scenes/dev/menu_test.tscn -- --scenario=input --classic-lobby --port=24681 --windowed --capture-dir="$PWD/build/input"
 # Lobby bots: add, edit, cancel and remove by keyboard, then by controller; a second client sees them and a full lobby
 # refuses one. Also runs headlessly in make test.
-$GODOT --fixed-fps 60 --resolution 1280x720 res://scenes/dev/menu_test.tscn -- --scenario=bots --port=24681 --capture-dir="$PWD/build/bots"
+$GODOT --fixed-fps 60 --resolution 1280x720 res://scenes/dev/menu_test.tscn -- --scenario=bots --classic-lobby --port=24681 --capture-dir="$PWD/build/bots"
 
 # Multiplayer: a local server and bot players under simulated lag and loss; asserts tank agreement and scores.
 # Logs go to build/net (-o picks another directory). A directory that still holds *.log files from an earlier run is

@@ -94,7 +94,8 @@ fi
               "generator_tests.tscn -- --seeds=20 --large-seeds=3 --formation-seeds=2"]
     probes = checkers + scenes + ["--write-world-plans=", "--hash-world-plans=", "--hash-segments=", "world-diff", "world-missing", "world-partial",
                                   "world-second"]
-    for failure in ["none", "check_links.py", "format", "build", "ExportRelease", *probes]:
+    architecture = ["Architecture.csproj", "Architecture.dll", "source_check.py"]
+    for failure in ["none", "check_links.py", "format", "build", "ExportRelease", *architecture, *probes]:
         log.write_text("")
         counter.write_text("0\n")
         environment["PROBE_FAIL"] = failure
@@ -105,13 +106,15 @@ fi
         require(bool(commands) and commands[:2] == first[:len(commands[:2])],
                 "the Markdown link check and format must run first", result.stdout)
         if failure == "none":
-            require(result.returncode == 0 and len(commands) == 5 + len(checkers) + len(scenes) + 5,
+            require(result.returncode == 0 and len(commands) == 8 + len(checkers) + len(scenes) + 5,
                     "check did not run every expected tool call", result.stdout)
             require("-warnaserror" in commands[2] and "--no-incremental" in commands[2], "lint must rebuild with warnings as errors")
             require(commands[3].startswith("dotnet build Propane.csproj -c ExportRelease ") and
                     "-warnaserror" in commands[3] and "--no-incremental" in commands[3],
                     "lint must compile the shipping configuration with warnings as errors")
-            require(commands[4].startswith("dotnet build "), "tests ran before lint")
+            require("Architecture.csproj" in commands[4] and "Architecture.dll" in commands[5] and
+                    commands[6] == "python3 -B tools/architecture/source_check.py", "lint lost the architecture checks")
+            require(commands[7].startswith("dotnet build "), "tests ran before lint")
             require(commands[-1] == "python3 -B tools/dev/lint_tests.py", "the gate self-tests must run last, after every suite")
             for checker in checkers:
                 require(commands.count(f"python3 -B tools/dev/{checker}") == 1, f"check skipped/duplicated {checker}")
@@ -123,8 +126,9 @@ fi
             require(sum("--write-world-plans=" in c for c in commands) == 1 and
                     sum("--hash-world-plans=" in c for c in commands) == 2 and sum("--hash-segments=" in c for c in commands) == 2,
                     "check skipped separate-process world builds", result.stdout)
-        elif failure in ("check_links.py", "format", "build", "ExportRelease"):
-            require(result.returncode != 0 and len(commands) == {"check_links.py": 1, "format": 2, "build": 3, "ExportRelease": 4}[failure],
+        elif failure in ("check_links.py", "format", "build", "ExportRelease", *architecture):
+            require(result.returncode != 0 and len(commands) == {"check_links.py": 1, "format": 2, "build": 3, "ExportRelease": 4,
+                    "Architecture.csproj": 5, "Architecture.dll": 6, "source_check.py": 7}[failure],
                     "lint failure did not stop check", result.stdout)
         else:
             require(result.returncode != 0, f"parallel check ignored failure: {failure}", result.stdout)
@@ -330,7 +334,8 @@ def check_installer(scratch):
 
 
 def main():
-    with tempfile.TemporaryDirectory(prefix="wptest-lint-") as directory:
+    (ROOT / "build").mkdir(exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="wptest-lint-", dir=ROOT / "build") as directory:
         scratch = pathlib.Path(directory)
         shutil.copyfile(ROOT / "Propane.csproj", scratch / "Probe.csproj")
         shutil.copyfile(ROOT / ".editorconfig", scratch / ".editorconfig")
@@ -338,6 +343,9 @@ def main():
         for part in re.findall(r'<TuningPart Include="([^"]+)"', (ROOT / "Propane.csproj").read_text()):
             (scratch / part).parent.mkdir(parents=True, exist_ok=True)
             (scratch / part).write_text("")
+        # Independent console tooling must never compile into the Godot game project.
+        (scratch / "tools").mkdir()
+        (scratch / "tools/CheckerOnly.cs").write_text("#error tooling leaked into the game project\n")
         source = scratch / "Probe.cs"
         source.write_text("""using System.IO;
 using System.Threading.Tasks;
@@ -383,7 +391,7 @@ public static class Formatting
         require(code == 0, "corrected formatting did not pass", output)
         code, output = run(scratch, "dotnet", "build", "Probe.csproj", "-nologo", "-v", "quiet", "-warnaserror")
         require(code == 0, "corrected code did not pass", output)
-        print("PASS: whitespace and style drift fail; corrected code passes formatting and build")
+        print("PASS: whitespace and style drift fail; corrected code builds while tools/ stays excluded")
 
         # Exercise the real project condition with a tiny coupling: only the shipping configuration omits Dev.
         dev_probe = scratch / "src/Dev/BoundaryProbe.cs"
@@ -412,6 +420,9 @@ public static class Formatting
         check_core_wiring()
         check_runtime_dev_boundary()
         check_ci_partitions()
+        code, output = run(ROOT, "python3", "-B", "tools/architecture/tests.py")
+        require(code == 0, "architecture checker negative fixtures failed", output)
+        print(output, end="")
 
 
 if __name__ == "__main__":

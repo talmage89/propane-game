@@ -5,12 +5,15 @@ namespaces, `var` locals and System usings first. Inline statements and switch-c
 layout. Long expressions are not reflowed. Expression bodies and naming remain editor suggestions rather than
 build warnings. Run `dotnet format Propane.sln` to apply the baseline.
 
-`make lint` first checks that every relative link and image in the tracked Markdown files resolves to a tracked file
-and, for a `#fragment`, to a heading in it (`tools/dev/check_links.py`, standard library only; links to other sites are
-not fetched). It then verifies formatting and performs a full build with warnings as errors. A previous incremental build
-cannot hide warnings. `make check` runs lint before the headless regression tests, including with `make -j`, and ends with
-`make test-infra`, the gate's own self-tests. It stops on a lint failure. All three tasks appear in `make`'s help listing.
-When you move or rename a document, fix its links in the same commit; the check names each broken one with its line.
+`make lint` checks script/.uid pairs and every relative link and image in tracked Markdown: each must resolve to a
+tracked file and, for a `#fragment`, to a heading in it (`tools/dev/check_links.py`, standard library only; links to
+other sites are not fetched). It verifies game C# formatting and fully rebuilds Debug and ExportRelease with
+warnings as errors; a previous incremental build cannot hide warnings. Both assemblies then pass the architecture
+ratchet, followed by source checks for global writes, clocks/timers and worker entries. [Architecture](architecture.md)
+owns the module/lifetime contract; [checker operation](../tools/architecture/README.md) describes approvals and fixtures.
+`make check` runs lint before the headless regression tests, including with `make -j`, and ends with `make test-infra`,
+the gate's own self-tests. It stops on a lint failure. All three tasks appear in `make`'s help listing. When you move
+or rename a document, fix its links in the same commit; the check names each broken one with its line.
 
 `Propane.csproj` pins analysis to .NET 10's default rules, with the recommended Reliability, Usage and Security
 sets. Nullability is enabled. CA1001 additionally checks ownership of disposable fields; CA2007 requires explicit

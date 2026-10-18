@@ -46,11 +46,11 @@ input after UI; explicit assignments also observe handled releases to keep their
 synchronously releases its endpoint and intent source. Do not broadcast input into simulation viewports.
 `Main`, the facades, `MenuNavigation` and `HsvColorSlider` live in the application viewport.
 
-`menu_test.tscn -- --scenario=input` injects mouse motion, key presses and complete mouse-button clicks through
-`Input.ParseInputEvent`, including menu navigation with Tab/Enter. It checks exact camera displacement, jump,
-melee, single-click fire, single-player suburb replacement, match reload and logical Escape on physical Caps Lock
-in both facades. Controller events also exercise primary-view look, jump, melee, complete trigger taps and
-match reload. It also checks paused input and physical/logical system shortcut bindings. This runs in
+`menu_test.tscn -- --scenario=input --classic-lobby` injects mouse motion, key presses and complete
+mouse-button clicks through `Input.ParseInputEvent`, including menu navigation with Tab/Enter. It checks exact camera
+displacement, jump, melee, single-click fire, single-player suburb replacement, match reload and logical Escape on
+physical Caps Lock in both facades. Controller events also exercise primary-view look, jump, melee, complete trigger
+taps and match reload. It also checks paused input and physical/logical system shortcut bindings. This runs in
 `make test`. Headless Godot cannot capture a pointer, so that run substitutes only `DeviceInput`'s existing
 capture predicate with menu visibility; rendered runs use the default production input source and capture frames
 before/after the turn, in the jump, and with the remapped pause menu open. Gameplay keys stay physical; pause,
@@ -97,13 +97,21 @@ is no longer a gameplay control.
 
 Reveal center, radius and glow are per-instance shader parameters owned by `WorldReveal`. Reveal uses slots 12–15
 across all compatible materials; actor parameters explicitly occupy lower slots. New geometry inherits the world's
-current state, and retiring geometry unregisters immediately. No shader global is shared between worlds.
+current state, and retiring geometry unregisters immediately. Dissolve Run's moving `reveal_window` is still a shader
+global written/reset by `DissolveArena`: only one independently advancing stream is supported per process. W2 must
+scope it before independent streams coexist; multiple views of the same stream do not require separate windows.
+See [the architecture contract](architecture.md#globals-and-budgets).
 
-The sole application-wide simulation primitive is `WorldTimeScale`: an exclusive hitstop lease. Only one live,
+One application-wide simulation policy is `WorldTimeScale`: an exclusive hitstop lease. Only one live,
 unpaused offline context can acquire it; construction of a second context, pause or retirement releases it. The
 always-processing driver expires the presentation lease in real seconds while gameplay uses simulation seconds.
 Network worlds cannot acquire it. The isolation scene also asserts actual physics pause/resume, independent reveal,
 lease restrictions and a production client/server handshake completing while a world is paused.
+
+`TankSimulation` separately arbitrates `Engine.MaxPhysicsStepsPerFrame` for dense offline chains. Overlapping leases
+use the smallest requested limit and restore the prior engine value when they end; a registered live network tank
+simulation vetoes them. Registration timing, pause and retirement behavior are part of this policy. A1 consolidates
+discoverability without merging its rules with hitstop.
 
 The driver subscribes to [scene-tree frame signals](https://docs.godotengine.org/en/stable/classes/class_scenetree.html#signals),
 which run before node processing. This keeps the native signal emitter alive while deferred navigation synchronously
@@ -111,11 +119,11 @@ retires its own world, including the driver. It unregisters both signals on exit
 until its signal returns, then cleanup completes before replacement. Invalidation also stops the remaining callbacks
 of an event currently being dispatched; a retired receiver is skipped in a blast's registration snapshot.
 
-`menu_test.tscn -- --scenario=lifetime` drives the real main/pause/lobby/match buttons through ten single-player and
-ten solo-match cycles after warming immutable catalog variants and lazy UI resources. It checks exact node, object
-and orphan counts and verifies each retired world's timers and receiver registry are empty. Server-owned match
-seeds still vary; the test never alters the server's construction inputs or messages. The ten-cycle sweep runs in
-`make test-full`. Rendered runs capture first and last entries plus the final browser.
+`menu_test.tscn -- --scenario=lifetime --classic-lobby` drives the real main/pause/lobby/match buttons
+through ten single-player and ten solo-match cycles after warming immutable catalog variants and lazy UI resources.
+It checks exact node, object and orphan counts and verifies each retired world's timers and receiver registry are
+empty. Server-owned match seeds still vary; the test never alters the server's construction inputs or messages.
+The ten-cycle sweep runs in `make test-full`. Rendered runs capture first and last entries plus the final browser.
 
 ## Actors and aim
 
@@ -123,7 +131,8 @@ seeds still vary; the test never alters the server's construction inputs or mess
 placement. `ActorRuntime` owns its intent source and logical aim. No camera, viewport or HUD is needed to move,
 shoot, strike or get up. `LocalView` explicitly attaches a `CameraRig`, HUD and optional device input to an actor;
 closing it releases input but leaves the actor alive. Bot brains and navigation use the actor's aim directly.
-The character's `CameraRig` accessor remains a convenience for existing rendered dev harnesses only.
+The character's `CameraRig` accessor remains a convenience used by production `Game` and rendered dev harnesses;
+C2 separates physical actor feedback from view implementation (see [architecture](architecture.md#simulation-and-presentation)).
 
 The aim split preserves the old ray, including its over-the-shoulder origin, wall pull-in, target smoothing,
 render-frame updates and the chest-plane projection that keeps shots from starting behind the character.
