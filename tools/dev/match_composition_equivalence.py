@@ -14,6 +14,29 @@ from server_equivalence import ROOT, prepare
 CALL = 'Propane.Dev.UnitTests.Fixtures.MatchCompositionObservation.Record'
 
 
+def owned_bot_benchmark(project):
+    """Keep actors stationary while two real owned brains run inside the complete playing client callback."""
+    source = project / 'src/Dev/UnitTests/AuthorityBenchTests.cs'
+    code = source.read_text()
+    replacements = {
+        'new ServerFixture(length: 3600)': 'new ServerFixture(length: 3600, bots: 2)',
+        'authoritySend: sent.Enqueue)': 'authoritySend: sent.Enqueue, createLocalView: false)',
+        'var match = client.Match;': 'var match = client.Match;\n        Assert(match.Session.Actors.Count == 4 && match.BotCost.Bots == 2, "owned bot benchmark workload changed");',
+        'packets = notifications = 0;': 'var botsBefore = match.BotCost;\n        packets = notifications = 0;',
+        'var bytesPerTick = (GC.GetAllocatedBytesForCurrentThread() - allocated) / (double)ticks;':
+            'var bytesPerTick = (GC.GetAllocatedBytesForCurrentThread() - allocated) / (double)ticks;\n'
+            '        var botsAfter = match.BotCost;\n'
+            '        Assert(botsAfter.Thinks - botsBefore.Thinks == 2L * ticks, "owned brains skipped a measured tick");',
+        'notifications={notifications} bytes_per_tick=':
+            'notifications={notifications} bots={botsAfter.Bots} thinks={botsAfter.Thinks - botsBefore.Thinks} '
+            'queries={botsAfter.Queries - botsBefore.Queries} rays={botsAfter.Rays - botsBefore.Rays} bytes_per_tick=',
+    }
+    for old, new in replacements.items():
+        assert code.count(old) == 1, old
+        code = code.replace(old, new)
+    source.write_text(code)
+
+
 def inject(project, paths, signature, label, detail='null'):
     found = []
     for path in paths:
@@ -84,12 +107,15 @@ if __name__ == '__main__':
     parser.add_argument('--revision', required=True)
     parser.add_argument('--label', required=True)
     parser.add_argument('--observe', action='store_true')
+    parser.add_argument('--owned-bots-bench', action='store_true', help='add two owned brains to the controlled authority benchmark')
     args = parser.parse_args()
     assert args.label and '/' not in args.label and args.label not in ('.', '..')
     prepare(args.revision, args.label, False)
     project = ROOT / 'build' / args.label / 'project'
     # Identical whole-tick instrumentation, including optional longer native-input warm-up, on either runtime.
     shutil.copyfile(ROOT / 'src/Dev/UnitTests/ActorTickBenchTests.cs', project / 'src/Dev/UnitTests/ActorTickBenchTests.cs')
+    if args.owned_bots_bench:
+        owned_bot_benchmark(project)
     if args.observe:
         shutil.copyfile(ROOT / 'src/Dev/UnitTests/Fixtures/MatchCompositionObservation.cs', project / 'src/Dev/UnitTests/Fixtures/MatchCompositionObservation.cs')
         observe(project)

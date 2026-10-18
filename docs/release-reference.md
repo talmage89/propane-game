@@ -173,3 +173,9 @@ Match-plus-owned-character callbacks after the longer native-input warm-up. The 
 ticks. Record workload, allocations and mean/p95/p99, and alternate at least three parent/candidate pairs. Device
 interop allocation can still be warming in the shorter window; preserve those results and diagnose them before
 calling a difference steady state. The separate real-device scenes remain necessary input proof.
+
+For owned-brain cost, prepare both revisions with `--owned-bots-bench` and omit `--observe`, then run
+`--suite=AuthorityBenchTests --authority-bench --match-seed=23`. The scratch-only variant asserts four actors and
+two owned brains, leaves native actors/bodies stationary, and measures the whole playing Match callback with and
+without one authority transaction per tick. Both brains must think on every measured tick; output includes their
+think/query/ray counts. The normal benchmark and production sources stay unchanged.
