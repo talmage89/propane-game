@@ -126,7 +126,7 @@ with composition-owned compiled bundles, described below; it does not invent a s
 | Physical session | SessionContext: world attachment, actor registry, views, cancellation and registrations; synchronous session disposal. |
 | World | WorldContext: World3D/offscreen viewport, roots, tuning copy, RNG, clock, effects, registries and presentation selection; invalidation then disposal. |
 | Content | Suburb/segment root plus originating effects/registrations; content retirement inside a surviving world. |
-| Actor | ActorRuntime, character and `ActorRegistration`; roster removal or session retirement. Subscriptions and actor caches detach before native free. |
+| Actor | ActorRuntime, character and client `ActorRegistration`; roster removal or session retirement. Subscriptions and actor caches detach before native free. |
 | View | LocalView camera/HUD/device attachment; detach/reassign independently of actor survival. |
 
 There is no universal application → session → match → world nesting: Game keeps its world while replacing suburbs;
