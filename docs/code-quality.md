@@ -303,3 +303,17 @@ It records total gate time and every dotnet/Python/Godot invocation in JSON. Wit
 scenes print a marker at the start of `_Ready`: launch-to-marker is startup, marker-to-exit is work plus shutdown.
 Runtime scenes use imported assets; cold import and restored-import index rebuilds should be timed separately.
 See [the gate timing report](evidence/test-speed.md) for the measurements and the CI estimate.
+
+## Server run differential probes
+
+`tools/dev/server_equivalence.py --revision=REV --label=NAME [--observe]` builds a private runtime below
+`build/NAME/project`, using that revision's production sources and the current server proof harness. It does not
+change the checkout or release references. With `--observe`, the scratch server records every incoming/outgoing
+packet at its receive/send boundary when given `--server-transcript=ABSOLUTE_PATH`: direction, peer, traffic class
+and exact bytes, in call order. Use a fresh file and `--match-seed=23` for each ServerTests, ParticipantServerTests,
+KingOnlineTests, LobbyWorldTests and LobbySupplyTests run; compare the parent and candidate files byte for byte.
+
+Without observation, `--suite=ServerRunBenchTests --server-bench --match-seed=23` measures production receive,
+relay and whole run ticks for Bank, King and roaming. Each measured tick delivers one actor pose and eight body
+states; warm-up and packet preparation are excluded. Alternate at least three parent/candidate pairs. The report
+includes allocations, mean, p95/p99, packet counts and payload bytes; packet instrumentation stays off.
