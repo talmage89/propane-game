@@ -104,3 +104,10 @@ change their expected behavior only with a separately approved rule or presentat
 `python3 -B tools/dev/check_prototype_views.py --baseline=PATH` additionally requires 92 complete HUD observations
 and compares their exact values with an independently built immediate parent. `runner-sampling` includes a driven
 Dissolve bot, asserts every expected thought ran, and reports shared ray/navigation workload counts.
+
+`PrototypeObservationTests` uses real runner `IBotWorld` adapters to assert zero managed allocation over warmed
+reads, at several explicit mode-clock times and after life/front changes. It compares each scalar/struct with the
+corresponding rule fact. It also retains a snapshot across accepted facts, collects the retired runner and rules
+while retaining the snapshot, and collects released snapshots. King's fixture takes the first actor sample before
+requiring its zone observation. `check_lab_mechanics.py` additionally compares a complete quick Short Fuse bot match,
+including every detailed observation, beyond the scripted combo covered by the frozen references.

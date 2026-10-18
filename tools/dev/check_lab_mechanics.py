@@ -6,6 +6,7 @@ from pathlib import Path
 from check_equivalence import ROOT, REPLAY, diagnose, first_difference, new_output_directory, read_json, run
 
 CASES = {
+    'shortfuse-bots': ['--scenario=shortfuse', '--quick', '--seeds=1', '--first-seed=23', '--bots=2'],
     'ringout': ['--scenario=prototype', '--mode=ringout', '--quick', '--seeds=1', '--first-seed=23'],
     'bank-mixed': ['--scenario=soak', '--environment=suburb', '--bots=4', '--seconds=40',
                    '--tune.LabHardBots=2', '--tune.LabHardOffset=1'],
