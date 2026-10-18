@@ -47,6 +47,7 @@ current and binding, and no one else edits it. Start with [VISION.md](../design/
 | [runbooks/network-soak.md](runbooks/network-soak.md) | Running the multiplayer soaks, how `compare_tanks.py` judges a match, the capacity gate and the lobby-bot soaks. |
 | [runbooks/profiling-effects.md](runbooks/profiling-effects.md) | Measuring the cost of vents, smoke, blasts and chains in a crowd, alone or against a baseline build. |
 | [runbooks/animation-review.md](runbooks/animation-review.md) | The animation acceptance harness: commands, the metrics gate and external clip review. |
+| [runbooks/release-artifacts.md](runbooks/release-artifacts.md) | Packaged export inventory, Linux smoke, CI limits and Windows/macOS runtime checklists. |
 
 ## Evidence
 
@@ -67,6 +68,7 @@ the report concludes; the contract named in each report's status line holds the 
 | [evidence/match-player-cache.md](evidence/match-player-cache.md) | 2026-10-17 | No | M0: ordered local-player selection, empty ownership, paired frame costs and native audits. |
 | [evidence/client-authority-transactions.md](evidence/client-authority-transactions.md) | 2026-10-17 | No | B2: exact authority transactions, session retirement, allocation correction, paired playing ticks, native audits and Linux export. |
 | [evidence/architecture-verification.md](evidence/architecture-verification.md) | 2026-10-17 | No | A0: architecture cross-check, acceptance ledger, dependency baseline, negative probes, rendered input and local gate cost. |
+| [evidence/artifact-verification.md](evidence/artifact-verification.md) | 2026-10-18 | No | R1: setup failures, packaged inventory, Linux/Proton smoke, source configurations and deployment identity. |
 | [evidence/server-run-verification.md](evidence/server-run-verification.md) | 2026-10-17 | No | B1: run ownership, exact parent packets, resource retirement, paired ticks, native matrix and capacity. |
 | [evidence/ledger-count-verification.md](evidence/ledger-count-verification.md) | 2026-10-17 | No | B1a: live tank accounting, parent operation transcripts, paired stock-tick costs and native soaks. |
 | [evidence/world-clock-verification.md](evidence/world-clock-verification.md) | 2026-10-16 | No | The B6 clock dispatch change: parent callback transcripts, allocation and burst measurements. |

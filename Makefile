@@ -19,8 +19,9 @@ help: ## List the tasks
 
 setup: ## Import the assets and compile: a fresh clone, or after switching branches or pulling
 	@printf '; Written by make setup: user:// for this checkout only.\n[application]\nconfig/use_custom_user_dir=true\nconfig/custom_user_dir_name="Propane-dev/%s"\n' "$(CHECKOUT)" >override.cfg
-	"$(GODOT)" --headless --path . --import >/dev/null 2>&1 || true
+	python3 -B tools/dev/setup_import.py "$(GODOT)"
 	@$(MAKE) --no-print-directory build
+	python3 -B tools/dev/setup_import.py "$(GODOT)" --strict --log build/setup-import-compiled.log
 
 run: build ## Play from source
 	"$(GODOT)" --path .

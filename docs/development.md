@@ -24,6 +24,11 @@ and verification happen on Linux.
 
 ## Running from source
 
+`make setup` keeps import diagnostics in `build/setup-import.log`, compiles, then requires a clean second import
+(`build/setup-import-compiled.log`). Before the Debug assembly exists, only the exact ShutdownGuard autoload
+"not compiling" diagnostic is tolerated: Godot imports resources before C# is built. Any other import error or
+nonzero exit fails setup, including errors Godot reports with exit zero. Run setup after changing checkouts.
+
 Requires Godot 4.7.2 (.NET edition) and the .NET 10 SDK.
 
 - First: `make setup` imports the assets and compiles. Run it again after switching branches or pulling. It also
@@ -40,6 +45,7 @@ Requires Godot 4.7.2 (.NET edition) and the .NET 10 SDK.
   and every pull request. `make -j4 test-full` adds the deep sweeps as parallel jobs, each line prefixed with its job's
   name; plain `make test-full` runs the same jobs one at a time. Deep probes use an isolated optimized Debug
   assembly (all `DEBUG` checks and tuners retained); fast tests and the final real-time bot matches use normal Debug.
+  Its isolated view includes the project compile metadata so core tuning-order assertions work there too.
   Both generator and Lab shard coverage are checked. See [gate measurements](evidence/test-speed.md).
 
 [code-quality.md](code-quality.md) describes the formatting and analyzer baseline and its regression
@@ -86,7 +92,8 @@ for fault simulation, disconnect reasons and diagnostics. On Windows or macOS, t
 first time you host, allow incoming connections if the system asks.
 
 The dedicated server is the same game run headless: `./Propane.x86_64 --headless -- --server [--port=24680]`.
-`tools/server/deploy.sh <ssh host> <dir>` exports it and runs it in Docker on any machine you can reach over ssh;
+`tools/server/deploy.sh <ssh host> <dir>` exports a clean release-tag checkout contained in local `main`, inventories
+it and runs it in Docker on any machine you can reach over ssh;
 see [multiplayer.md](multiplayer.md) for hosting and reaching it. Keep a server on the latest release: it
 then plays with every patch of that minor version.
 
@@ -458,6 +465,12 @@ The small exported smoke and its capture, metrics and bot helpers live in `src/R
 keeps working inside an untouched archive. Editor/`make build` Debug, debug exports and local optimized Release
 (`make play` and `make bench CONFIG=Release`) retain the harnesses. See the
 [Dev boundary](code-quality.md#release-smoke).
+
+After packaging, the release job inventories all three archives and runs the unpacked Linux artifact headlessly
+before publishing. Run the same check locally with
+`python3 -B tools/release/check_artifacts.py --output build/artifact-proof` (a new directory). The
+[artifact runbook](runbooks/release-artifacts.md) describes rendered/network proof, CI limits and the manual
+Windows/macOS runtime checklists. Source builds alone do not prove the packaged paths.
 
 Work happens on `dev`; `main` is what has been released. The version is `config/version` in `project.godot`,
 MAJOR.MINOR.PATCH, and it decides who plays together:

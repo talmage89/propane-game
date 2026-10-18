@@ -3,6 +3,7 @@
 import json
 import pathlib
 import shutil
+import struct
 import subprocess
 import tempfile
 import time
@@ -47,6 +48,64 @@ def main():
             require(code == 0, 'fixture compilation', output)
         def inspect(mode='check'):
             return run('dotnet', str(TOOL), mode, str(assembly), str(scratch))
+        # Independent inventory fixture: shipped assemblies have no PDB. Exercise real PCK bytes,
+        # not a precomputed path listing, and require named failures rather than any nonzero exit.
+        pack = scratch / 'game.pck'
+        (scratch / 'artifact.json').write_text(json.dumps({
+            'SmokeTypes': ['Propane.ReleaseSmoke.ReleaseTest'],
+            'EntryMethods': {'Propane.Main': ['_Ready']},
+            'Resources': ['project.binary', 'scenes/main.tscn.remap', 'src/Main.cs']}))
+        def string_setting(key, value):
+            encoded = value.encode()
+            variant = struct.pack('<II', 4, len(encoded)) + encoded + bytes((-len(encoded)) % 4)
+            return struct.pack('<I', len(key)) + key.encode() + struct.pack('<I', len(variant)) + variant
+        config = b'ECFG' + struct.pack('<I', 2) + string_setting('application/run/main_scene', 'res://scenes/main.tscn') + string_setting('autoload/ShutdownGuard', '*res://src/Core/ShutdownGuard.cs')
+        resources = {'src/Main.cs': b' ', 'main.scn': b'RSRC',
+                     'scenes/main.tscn.remap': b'[remap]\npath="res://main.scn"\n',
+                     'project.binary': config}
+        def write_pack(items):
+            data = b''.join(items.values())
+            header = struct.pack('<6I2Q', 0x43504447, 4, 4, 7, 2, 2, 112, 112 + len(data)) + bytes(72)
+            directory = struct.pack('<I', len(items))
+            offset = 0
+            for name, content in items.items():
+                encoded = name.encode() + b'\0'
+                directory += struct.pack('<I', len(encoded)) + encoded + struct.pack('<QQ', offset, len(content)) + bytes(20)
+                offset += len(content)
+            pack.write_bytes(header + data + directory)
+        def inventory():
+            return run('dotnet', str(TOOL), 'inventory', str(assembly), str(pack), str(scratch))
+        good_source = ('namespace Propane { public class Main { public void _Ready() {} } }\n'
+                       'namespace Propane.ReleaseSmoke { public class ReleaseTest {} }')
+        compile_source(good_source)
+        assembly.with_suffix('.pdb').unlink()
+        write_pack(resources)
+        code, output = inventory()
+        require(code == 0, 'shipping inventory without symbols', output)
+        for fixture_source, message in [
+            (good_source + '\nnamespace Propane.Dev { public class Hidden {} }', 'Dev type in artifact: Propane.Dev.Hidden'),
+            (good_source.replace('class ReleaseTest', 'class Missing'), 'Missing smoke type: Propane.ReleaseSmoke.ReleaseTest'),
+            (good_source.replace('_Ready', 'Other'), 'Missing entry method: Propane.Main._Ready'),
+        ]:
+            compile_source(fixture_source)
+            code, output = inventory()
+            require(code == 1 and message in output, 'inventory accepted ' + message, output)
+            print(output.strip())
+        compile_source(good_source)
+        for items, message in [
+            ({**resources, 'scenes/dev/hidden.tscn': b' '}, 'Dev resource in artifact: scenes/dev/hidden.tscn'),
+            ({**resources, 'src/Dev/hidden.cs': b' '}, 'Dev resource in artifact: src/Dev/hidden.cs'),
+            ({k: v for k, v in resources.items() if k != 'src/Main.cs'}, 'Missing artifact resource: src/Main.cs'),
+            ({k: v for k, v in resources.items() if k != 'main.scn'}, 'Missing main scene remap target'),
+            ({**resources, 'project.binary': config.replace(b'scenes/main', b'scenes/fake')}, 'Wrong or missing packed entry setting: application/run/main_scene'),
+        ]:
+            write_pack(items)
+            code, output = inventory()
+            require(code == 1 and message in output, 'inventory accepted ' + message, output)
+        pack.write_bytes(b'GDPC\x04')
+        code, output = inventory()
+        require(code != 0, 'inventory accepted truncated PCK', output)
+        print('PASS architecture: artifact Dev/missing smoke/entry/resource/remap/truncation negatives')
         compile_source('namespace Godot { public struct Vector3 { public float X; } }\n'
                        'namespace Propane.World.Plan { public class ValueOnly { public Godot.Vector3 Run(Godot.Vector3 v) => v; } }\n'
                        'namespace Propane.ReleaseSmoke { public class ReleaseTest { } }\n'

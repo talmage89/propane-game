@@ -401,6 +401,8 @@ public static class Formatting
         for config in ("Debug", "Release", "ExportDebug"):
             code, output = run(scratch, "dotnet", "build", "Probe.csproj", "-c", config, "-nologo", "-v", "quiet", "-warnaserror")
             require(code == 0, config + " lost the Dev harnesses", output)
+        code, output = run(scratch, "dotnet", "build", "Probe.csproj", "-c", "Debug", "-p:Optimize=true", "-nologo", "-v", "quiet", "-warnaserror")
+        require(code == 0, "optimized Debug lost the Dev harnesses", output)
         code, output = run(scratch, "dotnet", "build", "Probe.csproj", "-c", "ExportRelease", "-nologo", "-v", "quiet", "-warnaserror")
         require(code != 0 and "CS0246" in output and "HarnessOnly" in output,
                 "the shipping configuration accepted a runtime reference into Dev", output)
@@ -423,6 +425,12 @@ public static class Formatting
         code, output = run(ROOT, "python3", "-B", "tools/architecture/tests.py")
         require(code == 0, "architecture checker negative fixtures failed", output)
         print(output, end="")
+        code, output = run(ROOT, "python3", "-B", "tools/dev/setup_import_tests.py")
+        require(code == 0, "setup import negative fixtures failed", output)
+        code, output = run(ROOT, "python3", "-B", "tools/server/deploy_tests.py")
+        require(code == 0, "deployment identity negative fixtures failed", output)
+        code, output = run(ROOT, "python3", "-B", "tools/release/artifact_tests.py")
+        require(code == 0, "artifact script negative fixtures failed", output)
 
 
 if __name__ == "__main__":

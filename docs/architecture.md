@@ -72,7 +72,7 @@ source type to acquire that dependency. Do not broaden the map or silently regen
 | Prototype bots/HUDs read live rules | B3b supplies plain observations with explicit read-time clock and allocation-free bot reads. |
 | Streaming timing lists and forgotten-index history grow | W1 bounds incidental history; navigation eviction and ledger-history pruning require separate retention contracts. |
 | Global stream reveal; implicit character/weapon binding assumptions | W2 before independent streams; V1 before a second asset family. Existing single-stream/binding behavior stays intact. |
-| Setup suppresses import errors; export/deploy proof is incomplete | R1 recognizes bootstrap failures explicitly, verifies produced artifacts and deployment identity. |
+| Cross-platform artifact runtime acceptance remains partly manual | R1 gates setup imports, inventories all packaged exports and runs the Linux artifact before publishing; Windows/macOS retain the [runtime checklist](runbooks/release-artifacts.md). |
 
 These package labels name engineering work, not authority to change design. The exact baseline reasons and source
 approvals are reviewable alongside the contract; [checker operation](../tools/architecture/README.md) explains its
@@ -369,7 +369,7 @@ remain unchanged. Close an entry with new linked evidence showing its condition,
 | Animation visual acceptance | [Animation review](runbooks/animation-review.md#metrics-and-calibration) retains 12 of 46 pending checks (stock/head/shoulder clearance, limb separation, pelvis span and sliding); A0’s unchanged gate reproduces 34/46 passing. Data-coverage success is not visual acceptance. [Actor evidence](evidence/scale-actors.md) also does not establish continuous motion. | Owner-approved animation redo with rendered multi-view/action review and calibrated visual checks; enable strict enforcement only after acceptance. No threshold change in a structural refactor. |
 | Loaded-unit native crash | [Unit time regression](evidence/unit-time-regression.md): one baseline signal-11/caller-thread crash was not diagnosed by the manual-clock fix. Later loaded passes do not identify its cause; [shutdown](shutdown.md) establishes a separate teardown mechanism. | Native lifetime/thread follow-up: reproduce and isolate the recorded mechanism, then retain repeated loaded proof; do not attribute it to the known shutdown race without evidence. |
 | Gate elapsed-time target | [Test speed](evidence/test-speed.md): historical under-15-minute deep target not met; later source partition/CI estimates are not an observed stock-runner timing. | Gate-performance follow-up measures full target and CI partitions without cutting assertions/depth. |
-| Platform/artifact proof | Reports above and [release-reference evidence](evidence/release-reference-verification.md) are Linux-scoped; Windows/macOS execution and cross-machine alignment remain unverified. D1 exclusion is source/export configuration, not full shipped-path runtime proof. | R1 produced-artifact inventory and Linux ordinary/server/classic/smoke execution; retain a separate Windows/macOS runtime checklist until executed/automated. |
+| Platform/artifact proof | [R1 evidence](evidence/artifact-verification.md) verifies three packaged inventories, Linux ordinary/server/classic/smoke/network paths and Windows single-player smoke under Proton. Native Windows, macOS execution/signing and cross-machine alignment remain unverified. | Retain the [platform runtime checklist](runbooks/release-artifacts.md); automate native execution before claiming broader acceptance. |
 
 The [P4 record](evidence/net-scenarios-verification.md) also says vent-contact's shooter-ID defect is pending.
 That historical obligation is **closed**: `39eea7e` supplies the owning actor ID in
@@ -399,10 +399,20 @@ Main's exact smoke entry is retained. Do not exclude tests based on `Optimize=tr
 split native tests into another game assembly just to remove them from shipping. See
 [development](development.md#versions-and-releases) and [release references](release-reference.md#limits).
 
-**R1 target:** inspect the produced assembly/package (no ordinary Dev types/scenes; complete smoke closure), execute
-Linux ordinary/server/classic/smoke paths before publication, recognize setup failure explicitly, and enforce a
-validated deployment artifact identity. Current `tools/server/deploy.sh` builds the checkout without enforcing the
-documented latest-release identity. Three exports alone do not prove Windows/macOS runtime behavior.
+**R1 current:** setup rejects import errors/nonzero exits, except the exact missing-assembly ShutdownGuard bootstrap
+diagnostic before compilation; its post-build import must be clean. The architecture checker's `inventory` mode reads
+the unpacked shipping assembly without PDBs and the Godot 4.7.2 PCK v4 directory. Its reviewed `artifact.json` requires
+the smoke closure, normal/server/smoke methods, main scene/remap and autoload settings/resources, and rejects Dev
+types/resources. `tools/release/check_artifacts.py` checks all three archives and executes the packaged Linux ordinary,
+classic, server and single-player smoke paths before release publication. CI uses dummy headless display/audio;
+rendered Forward+ and multiplayer remain separate local proof. Source Release and optimized Debug retain Dev and
+are checked independently of the shipping configuration. No new runtime owner, timer or cross-module edge is added.
+
+Deployment refuses a dirty checkout, a version without its matching release tag at HEAD, or a tag outside local
+`main`'s history. It inventories the exported game before contacting the host and records tag/commit in
+`game/release-id.txt`. This is a selected local release checkout, not a promise of the latest remote release.
+Three exports do not prove Windows/macOS runtime behavior: retain the
+[platform checklist and CI limits](runbooks/release-artifacts.md) until automated execution replaces them.
 
 All patches within a minor interoperate. Anything players share—messages, suburb construction, tanks, tuners—needs
 a minor release for a behavior change; bump `Protocol.Version` for message-shape changes, retaining trailing-only

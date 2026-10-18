@@ -19,7 +19,7 @@ class FullEngineTests(unittest.TestCase):
             root = Path(directory)
             for name in ('assets', 'scenes', 'src', 'shaders', '.godot/imported'):
                 (root / name).mkdir(parents=True)
-            for name in ('icon.svg', 'icon.svg.import', 'tuning.tres', 'project.godot', 'override.cfg',
+            for name in ('icon.svg', 'icon.svg.import', 'tuning.tres', 'project.godot', 'override.cfg', 'Propane.csproj',
                          '.godot/uid_cache.bin', '.godot/global_script_class_cache.cfg'):
                 (root / name).write_text(name)
             normal = root / '.godot/mono/temp/bin/Debug/Propane.dll'
@@ -40,6 +40,7 @@ class FullEngineTests(unittest.TestCase):
                 self.assertFalse((project / '.godot/mono').is_symlink())
                 self.assertEqual((project / 'override.cfg').read_bytes(), (root / 'override.cfg').read_bytes())
                 self.assertEqual((project / '.godot/imported').resolve(), root / '.godot/imported')
+                self.assertEqual((project / 'Propane.csproj').read_bytes(), (root / 'Propane.csproj').read_bytes())
                 self.assertEqual(json.loads((project.parent / 'engine.json').read_text())['godot'], '/engine with spaces')
                 with patch.object(full_engine.os, 'execvp') as launch:
                     full_engine.run(['--headless', '--path', '.', 'res://scene.tscn', '--', '--scenario=dials'])

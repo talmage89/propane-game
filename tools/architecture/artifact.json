@@ -1,0 +1,27 @@
+{
+  "SmokeTypes": [
+    "Propane.ReleaseSmoke.IBotBrain",
+    "Propane.ReleaseSmoke.Bot",
+    "Propane.ReleaseSmoke.Bot+MatchWorld",
+    "Propane.ReleaseSmoke.CaptureDirector",
+    "Propane.ReleaseSmoke.FrameEncoder",
+    "Propane.ReleaseSmoke.FrameMetrics",
+    "Propane.ReleaseSmoke.ReleaseTest"
+  ],
+  "EntryMethods": {
+    "Propane.Main": ["_Ready", "RunServer"],
+    "Propane.Core.ShutdownGuard": ["_Ready"],
+    "Propane.Net.LobbyServer": ["Start", "_Process"],
+    "Propane.ReleaseSmoke.ReleaseTest": ["_Ready", "_Process", "_PhysicsProcess"]
+  },
+  "Resources": [
+    "project.binary",
+    "scenes/main.tscn.remap",
+    "src/Main.cs",
+    "src/Core/ShutdownGuard.cs",
+    "src/ReleaseSmoke/Bot.cs",
+    "src/ReleaseSmoke/CaptureDirector.cs",
+    "src/ReleaseSmoke/FrameMetrics.cs",
+    "src/ReleaseSmoke/ReleaseTest.cs"
+  ]
+}

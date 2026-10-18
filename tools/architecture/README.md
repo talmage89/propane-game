@@ -12,6 +12,14 @@ all three gate commands to run, stop on each failure and precede game tests.
 
 ## Policy
 
+`inventory assembly.dll game.pck tools/architecture` uses the same metadata reader and module map without requiring
+shipping symbols. `artifact.json` pins the complete authored smoke closure (nested/compiler-generated types inherit
+reviewed owners), entry methods and resources. Dev types/resources and unreviewed smoke owners fail. The standalone,
+unencrypted PCK v4 reader follows Godot 4.7.2's `PackedSourcePCK::try_open_pack`, bounds-checks its directory and
+resource spans, and requires the main scene's remapped target and packed entry settings. Unsupported formats/flags
+fail closed. The [artifact script](../release/check_artifacts.py) invokes this mode on the three unpacked release
+archives; runtime smoke complements inventory because metadata presence cannot prove execution or rendering.
+
 - `modules.json` maps namespace prefixes (longest first), files and exact top-level types (highest precedence) to
   logical modules; it also lists allowed direct directions. Generated/nested types inherit their top-level module.
   Keep mixed namespaces explicit. Unknown Propane types/namespaces fail closed. The map describes logical ownership,
