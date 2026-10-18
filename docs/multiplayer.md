@@ -55,6 +55,14 @@ clears the buffer; a new MatchStart invalidates the old queue and receiver, and 
 new queue. The inbox is capped at 4096 packets and 4 MiB of wire data; exceeding it disconnects with an explicit
 loading-buffer message rather than continuing with missing events.
 
+`LobbyServer` owns each lobby's current run routes. A plain `ServerRun` owns the corresponding match or roaming
+world, including its native tuning resource. Delivery, loading status and lobby transitions use synchronous callbacks;
+the run cannot access the server's connection or lobby dictionaries. Match actor identities and creator debug
+capability freeze at start; roaming actors follow roster snapshots at each lobby-state broadcast. The facade detaches
+routing before retiring tuning on results return, an empty lobby, staging replacement, identity exhaustion,
+construction failure or shutdown. Retirement is idempotent and preserves terminal packet order. Runs tick at the
+existing server process boundary; there is no additional node or scheduler.
+
 ## Appearance
 
 The lobby accepts any opaque sRGB color, including duplicates and near-duplicates. Eight presets remain available;
@@ -349,7 +357,8 @@ The server is the game itself started with `-- --server` (and `--headless`). It 
 | Path | Contents |
 | --- | --- |
 | `src/Main.cs` | The root scene: menus over a backdrop, single player, the match, or server mode. |
-| `src/Net/LobbyServer.cs` | The server: lobbies, match flow and clock, relaying, first-claim ties, pickups. |
+| `src/Net/LobbyServer.cs`, `LobbyServer.World.cs` | Connections, lobby admission/roster, staging, transport and application diagnostics. |
+| `src/Net/ServerRun.cs` | One match or roaming lifetime: actors, action admission, relay policy, ledger, pickups, readiness, mode and tuning. |
 | `src/Net/LobbyServer.World.cs`, `LobbyWire.cs`, `Match.Lobby.cs`, `src/Modes/LobbyRules.cs` | The lobby world: the server's run, its pile stock, a peer's world, and its pure rules. |
 | `src/Net/ModeRunner.cs`, `ModeEnvelope.cs`, `src/Modes` | The mode runner, the fixed mode envelope and pure mode rules ([modes.md](modes.md)). |
 | `src/Net/NetClient.cs`, `NetTransport.cs`, `Protocol.cs` | The client connection, the ENet adapter, the message types. |
@@ -777,7 +786,7 @@ would take the world past `LobbyTankLimit`. The server's own dials build the wor
 The lobby's title stands on the floor, turned to each arrival; the lobby card at the top left names the lobby and its
 settings, and name tags float over everyone.
 
-**The server.** `LobbyServer.World.cs` runs each world as a run like a match, with its own id from the match id
+**The server.** `LobbyServer.World.cs` opens each world as a plain `ServerRun`, like a match, with its own id from the match id
 sequence, its own ledger and its own relays; the creator is its body authority (a successor takes over, as for a
 match). Unlike a match, its membership follows the lobby's roster live. Each arrival, at creation, on joining or on
 returning from a match, gets its own world start: MatchStart (the void plan), an Authority snapshot of every live body
