@@ -20,7 +20,7 @@ namespace Propane.Net;
 /// its actors do (movement, shots, punctures, explosions, drops, the bodies they own) and plays what the others
 /// send. See docs/multiplayer.md for the rules and the networking model.
 /// </summary>
-public partial class Match : Node3D, IClientAuthorityReplica
+public partial class Match : Node3D, IClientAuthorityReplica, IClientModeReplica, IClientLobbyReplica
 {
     public SessionContext Session { get; private set; } = null!;
     public WorldContext World => Session.World;
@@ -48,10 +48,14 @@ public partial class Match : Node3D, IClientAuthorityReplica
 
     private const float RevealMaxRadius = 320f;
     private const float MaterializeShare = 0.58f;
-    private const float TagRefresh = 1f / 30f;
 
     private readonly Dictionary<int, PlayerProfile> profiles = new();
-    private readonly Dictionary<int, int> scores = new();
+    private static readonly IReadOnlyDictionary<int, int> NoScores = new Dictionary<int, int>();
+    // Borrowed live score container and immutable display choices; the adapter owns all mutations/lifetime.
+    private IReadOnlyDictionary<int, int> modeScores = NoScores;
+    private ModeClientDisplay modeDisplay;
+    private IModeClient? clientMode;
+    private IModeClient ClientMode => clientMode ?? throw new InvalidOperationException("mode client is not attached");
     /// <summary>The leaderboard's roster, in match order (ties rank in it, as in the results).</summary>
     private readonly List<LeaderboardEntry> leaderboardRoster = new();
     private ModeDefinition mode = null!;
@@ -114,9 +118,9 @@ public partial class Match : Node3D, IClientAuthorityReplica
 
     public Suburb Suburb => suburb;
 
-    public int MyScore => player == null ? 0 : scores.GetValueOrDefault(player.ActorId);
+    public int MyScore => player == null ? 0 : Scores.GetValueOrDefault(player.ActorId);
 
-    public IReadOnlyDictionary<int, int> Scores => scores;
+    public IReadOnlyDictionary<int, int> Scores => modeScores;
 
     public bool IsPlaying => phase == Phase.Playing;
 
@@ -153,7 +157,7 @@ public partial class Match : Node3D, IClientAuthorityReplica
     {
         using var tuning = Tuning.FromSnapshot(Setup.Tuning);
         tuning.CopyLocalTunersFrom(Net.Template);
-        SessionFactory.Build(this, tuning, new MatchSource(this), new TankBankMode(this), session => Session = session,
+        SessionFactory.Build(this, tuning, new MatchSource(this), new MatchMode(this), session => Session = session,
             networked: true, present: CreateLocalView);
     }
 
@@ -186,6 +190,10 @@ public partial class Match : Node3D, IClientAuthorityReplica
         looseProps.Clear();
         pickups.Clear();
         authority?.Dispose();
+        clientMode?.Dispose();
+        clientMode = null;
+        modeScores = NoScores;
+        modeDisplay = default;
     }
 
     // ------------------------------------------------------------------ Frame
@@ -254,7 +262,7 @@ public partial class Match : Node3D, IClientAuthorityReplica
             (remote.IntentSource as ReplicatedIntent)?.Apply(remote.Character, now);
         }
         bodies.Correct(now);
-        if (IsLobby) RefillLobbyRifles();
+        ClientMode.PhysicsTick();
         ThinkBots(dt);
 
         foreach (var owned in Session.OwnedActors)
@@ -276,7 +284,7 @@ public partial class Match : Node3D, IClientAuthorityReplica
         var viewportHeight = GetViewport().GetVisibleRect().Size.Y;
         var radius = Mathf.Tan(Mathf.DegToRad(player.SpreadDegrees)) / Mathf.Tan(Mathf.DegToRad(camera.Fov / 2f)) * viewportHeight / 2f;
         // The lobby world's stage screen stands in for the HUD: no tags, notices or crosshair through its lineup.
-        var menuOpen = menu.Visible || tuningPanel?.Visible == true || lobbyStaged;
+        var menuOpen = menu.Visible || tuningPanel?.Visible == true || ClientMode.SuppressHud;
         hud.SetCrosshair(radius, !player.IsRagdolled && Input.MouseMode == Input.MouseModeEnum.Captured && phase != Phase.Ended, player.AimAmount);
 
         groupRefresh -= dt;
@@ -298,7 +306,7 @@ public partial class Match : Node3D, IClientAuthorityReplica
         {
             if (leaderboardRoster[i].Present && Actor(leaderboardRoster[i].Id) == null) leaderboardRoster[i] = leaderboardRoster[i] with { Present = false };
         }
-        matchHud.SetStandings(leaderboardRoster, scores, player.ActorId, phase is Phase.Countdown or Phase.Playing);
+        matchHud.SetStandings(leaderboardRoster, Scores, player.ActorId, phase is Phase.Countdown or Phase.Playing);
     }
 
     private ModePhase ModePhase => phase switch
@@ -311,7 +319,7 @@ public partial class Match : Node3D, IClientAuthorityReplica
 
     /// <summary>The mode's HUD data for this peer's view; the local view adds crosshair, ammo and feedback.</summary>
     private ModeHud PresentHud(IReadOnlyList<Vector3> objectives, bool showObjectives) =>
-        hudPresenter.Present(new ModeHudInput(player?.ActorId ?? 0, ModePhase, timeLeft, scores, objectives, showObjectives, View: ModeView));
+        hudPresenter.Present(new ModeHudInput(player?.ActorId ?? 0, ModePhase, timeLeft, Scores, objectives, showObjectives, View: ModeView));
 
     /// <summary>Groups of live tanks (the plan's and dropped ones), for the arrows.</summary>
     private List<Vector3> TankGroups() => suburb.TankGroupCenters();
@@ -339,8 +347,8 @@ public partial class Match : Node3D, IClientAuthorityReplica
             var scale = tuning.ScoreTagScale * Mathf.Lerp(1.15f, 0.6f, Mathf.Clamp(distance / Mathf.Max(tuning.ScoreTagRange, 1f), 0, 1));
             var profile = profiles[remote.Character.ActorId];
             // The lobby world has no scores: everyone's name floats over them instead.
-            tags.Add(new ScoreTag(camera.UnprojectPosition(at), scores.GetValueOrDefault(remote.Character.ActorId), profile.Appearance.Color, scale,
-                IsLobby ? profile.Name : null));
+            tags.Add(new ScoreTag(camera.UnprojectPosition(at), Scores.GetValueOrDefault(remote.Character.ActorId), profile.Appearance.Color, scale,
+                modeDisplay.NameTags ? profile.Name : null));
         }
         return tags;
     }
@@ -673,119 +681,14 @@ public partial class Match : Node3D, IClientAuthorityReplica
     {
         Send(ActorWriter(Msg.Ragdoll, actor).Vec3(at).Vec3(velocity).Vec3(spin));
         if (!World.IsAlive || Session.Actor(actor.ActorId) == null) return;
-        // Thrown: the bank spills where the player stood, whoever's blast it was.
-        DropTanks(actor, World.Tuning.RagdollDropCount, SpillReason.Thrown, at + Vector3.Up * 0.35f, Vector3.Zero);
+        ClientMode.Thrown(actor, at);
     }
 
-    /// <summary>Another player's shot hit this player.</summary>
+    /// <summary>Another player's shot hit this player; local feedback precedes mode consequences.</summary>
     private void OnHitByShot(PlayerCharacter victim, Vector3 shooterPosition)
     {
         if (victim == player) matchHud.AddHitDirection(shooterPosition);
-        // The victim owns this gameplay grace; wire timestamps and interpolation remain monotonic.
-        var now = World.Clock.Now;
-        var tuning = World.Tuning;
-        var grace = victim.Runtime.GraceUntil;
-        if (phase != Phase.Playing || !TankBankRules.TryOpenGrace(now, ref grace, tuning.HitGraceTime))
-        {
-            return;
-        }
-        victim.Runtime.GraceUntil = grace;
-        Vector3 origin;
-        Vector3 away;
-        if (victim.IsRagdolled)
-        {
-            origin = victim.PelvisPosition + Vector3.Up * 0.3f;
-            away = Vector3.Zero;
-        }
-        else
-        {
-            var back = -new Vector3(-Mathf.Sin(victim.FacingYaw), 0, -Mathf.Cos(victim.FacingYaw));
-            origin = victim.GlobalPosition + Vector3.Up * 0.45f + back * tuning.HitDropDistance;
-            away = back;
-        }
-        DropTanks(victim, tuning.HitDropCount, SpillReason.Hit, origin, away);
-    }
-
-    /// <summary>
-    /// Spills up to <paramref name="wanted"/> banked tanks around a point (never more than this player has banked),
-    /// owned by this player and shielded for a moment. This owner chooses the placements and predicts them at once;
-    /// the spill ticket (actor, life, action id) asks the server's rules to debit the bank.
-    /// </summary>
-    private void DropTanks(PlayerCharacter actor, int wanted, SpillReason reason, Vector3 origin, Vector3 away)
-    {
-        if (phase != Phase.Playing)
-        {
-            return;
-        }
-        var count = TankBankRules.SpillCount(wanted, scores.GetValueOrDefault(actor.ActorId), actor.Runtime.DropPredictions.UnconfirmedCount);
-        if (count <= 0)
-        {
-            return;
-        }
-        var tuning = World.Tuning;
-        var rng = new RandomNumberGenerator();
-        var ticket = checked(++actor.Runtime.ActionSequence);
-        var placements = new List<BodyState>(count);
-        var start = rng.RandfRange(0, Mathf.Tau);
-        var safeFrom = actor.IsRagdolled ? actor.PelvisPosition + Vector3.Up * 0.2f : actor.GlobalPosition + Vector3.Up * 0.9f;
-        for (var i = 0; i < count; i++)
-        {
-            // Spread on a sunflower spiral, so any number lands evenly within the scatter radius.
-            var angle = start + i * 2.39996f;
-            var spread = count == 1 ? 0.15f : Mathf.Sqrt((i + 0.5f) / count);
-            var offset = new Vector3(Mathf.Cos(angle), 0, Mathf.Sin(angle)) * tuning.DropScatter * spread;
-            var position = SafeDropPoint(safeFrom, origin + offset);
-            var outward = (offset.LengthSquared() > 0.0001f ? offset.Normalized() : Vector3.Zero) + away;
-            outward = outward.LengthSquared() > 0.0001f ? outward.Normalized() : Vector3.Zero;
-            var velocity = outward * tuning.DropToss + Vector3.Up * tuning.DropToss * 0.6f;
-            var spin = new Vector3(rng.RandfRange(-1, 1), rng.RandfRange(-1, 1), rng.RandfRange(-1, 1)) * 2f;
-            var transform = new Transform3D(new Basis(Vector3.Up, rng.RandfRange(0, Mathf.Tau)), position);
-            var id = actor.Runtime.AllocateDropId();
-            actor.Runtime.DropPredictions.Add(id);
-            SpawnDroppedTank(id, actor.ActorId, transform, velocity, spin);
-            placements.Add(new BodyState(id, transform, velocity, spin, 1, 0));
-        }
-        if (World.IsAlive)
-        {
-            Net.Send(MessageCodec.Encode(new NetMessage(Msg.ModeEvent, Setup.Id, 0, new ModeEnvelope(round, worldRevision, mode.Id,
-                mode.SchemaVersion, actor.ActorId, actor.LifeId, ticket, ModeSchemas.TankBankKinds.Spill, new TankBankSpill(reason, placements))), fromServer: false));
-        }
-    }
-
-    /// <summary>Pulls a drop point back toward a known clear point if a wall or prop is in the way, and keeps it above the ground.</summary>
-    private Vector3 SafeDropPoint(Vector3 clear, Vector3 wanted)
-    {
-        var space = World.Physics.DirectSpaceState;
-        var mask = Layers.World | Layers.Props | Layers.Floor;
-        var hit = space.IntersectRay(PhysicsRayQueryParameters3D.Create(clear, wanted, mask));
-        if (hit.Count > 0)
-        {
-            var toward = (wanted - clear).Normalized();
-            wanted = hit["position"].AsVector3() - toward * 0.3f;
-        }
-        var ground = space.IntersectRay(PhysicsRayQueryParameters3D.Create(wanted + Vector3.Up * 0.5f, wanted + Vector3.Down * 3f, mask));
-        if (ground.Count > 0)
-        {
-            wanted.Y = Mathf.Max(wanted.Y, ground["position"].AsVector3().Y + 0.05f);
-        }
-        return wanted;
-    }
-
-    private void SpawnDroppedTank(uint id, int owner, Transform3D transform, Vector3 velocity, Vector3 spin)
-    {
-        if (tanks.ContainsKey(id) || exploded.Contains(id))
-        {
-            return;
-        }
-        var tank = PropaneTank.Create(World);
-        tank.NetId = id;
-        tank.Name = $"Dropped_{id:x}";
-        suburb.AddTank(tank);
-        tank.GlobalTransform = transform;
-        tank.LinearVelocity = velocity;
-        tank.AngularVelocity = spin;
-        tank.MakeInvulnerable(World.Tuning.DropInvulnerableTime, profiles[owner].Appearance.Color);
-        Track(tank, profiles[owner].OwnerPeerId);
+        ClientMode.HitByShot(victim);
     }
 
     private void CheckPickups()
@@ -878,7 +781,7 @@ public partial class Match : Node3D, IClientAuthorityReplica
                 timeLeft = ((FloatMessage)message.Payload).Value;
                 foreach (var actor in Session.OwnedActors) actor.Character.InputLocked = false;
                 // The lobby world greets arrivals with its own banner instead.
-                if (!IsLobby) matchHud.ShowCountdown("GO");
+                if (modeDisplay.ShowGo) matchHud.ShowCountdown("GO");
                 break;
             case Msg.Clock:
                 if (phase == Phase.Playing) { timeLeft = ((FloatMessage)message.Payload).Value; }
@@ -913,7 +816,7 @@ public partial class Match : Node3D, IClientAuthorityReplica
                 var left = (PlayerLeftMessage)message.Payload;
                 foreach (var departing in Session.Actors.Where(a => a.Character.OwnerPeerId == left.Player).ToArray())
                 {
-                    ShowNotice($"{profiles[departing.Character.ActorId].Name} left the {(IsLobby ? "lobby" : "match")}", 3f);
+                    ShowNotice($"{profiles[departing.Character.ActorId].Name} left the {modeDisplay.Location}", 3f);
                     Session.RemoveActor(departing);
                 }
                 RefreshBotPeers();
@@ -931,47 +834,7 @@ public partial class Match : Node3D, IClientAuthorityReplica
         if (envelope.ModeId != mode.Id || envelope.SchemaVersion != mode.SchemaVersion || envelope.WorldRevision != worldRevision ||
             envelope.RoundId < round || !commandOrder.Accept(envelope.EventId)) { return; }
         round = envelope.RoundId;
-        switch (envelope.Payload)
-        {
-            case TankBankScore score:
-                ApplyScore(envelope.ActorId, score.Score, score.Delta);
-                break;
-            case TankBankBanks banks:
-                foreach (var (actor, bank, _) in banks.Banks) ApplyScore(actor, bank, 0);
-                break;
-            case TankBankSpill spill:
-                // The committed spill reaches everyone, its owner included: confirmation clears pending ids without
-                // spawning them twice.
-                if (Actor(envelope.ActorId) is not { } source || source.LifeId != envelope.LifeId) break;
-                if (!source.IsRemote) source.Runtime.DropPredictions.Accepted(spill.Tanks.Select(t => t.Id));
-                foreach (var body in spill.Tanks) { SpawnDroppedTank(body.Id, envelope.ActorId, body.Transform, body.Linear, body.Angular); }
-                break;
-            case TankBankRefused refusedSpill:
-                foreach (var id in Session.OwnedActors.SelectMany(a => a.DropPredictions.Refused(refusedSpill.Ids)))
-                {
-                    if (!tanks.Remove(id, out var refused)) { continue; }
-                    bodies.Remove(id);
-                    refused.Punctured -= OnTankPunctured;
-                    refused.Detonated -= OnTankDetonated;
-                    refused.QueueFree();
-                }
-                break;
-            default:
-                OnKing(envelope.Payload);
-                break;
-        }
-    }
-
-    private void ApplyScore(int actorId, int score, int delta)
-    {
-        scores[actorId] = score;
-        if (actorId == player?.ActorId)
-        {
-            matchHud.Show(PresentHud(tankGroups, World.Tuning.TankArrows), delta > 0);
-            if (delta > 0) { matchHud.AddScorePopup(delta); }
-        }
-        if (delta < 0 && Actor(actorId) is { IsRemote: false } scored)
-            scored.Runtime.DropPredictions.ScoreConfirmed(delta);
+        ClientMode.Apply(envelope);
     }
 
     private PlayerCharacter? Actor(int id) => Session.Actor(id)?.Character;

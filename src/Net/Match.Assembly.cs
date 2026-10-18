@@ -18,7 +18,7 @@ public partial class Match
     {
         public void Build(SessionContext session) => match.BuildContent();
     }
-    private sealed class TankBankMode(Match match) : ISessionMode
+    private sealed class MatchMode(Match match) : ISessionMode
     {
         public void Configure(SessionContext session)
         {
@@ -27,10 +27,13 @@ public partial class Match
             session.OnUnsubscribing(() => session.ActorsChanged -= match.RefreshPlayer);
             match.mode = Modes.ModeRegistry.Resolve(match.Setup);
             match.hudPresenter = match.mode.CreateHud();
+            session.OnStopping(match.StopReplication);
+            match.clientMode = Modes.ModeRegistry.CreateClient(match.Setup, match, match);
+            match.modeScores = match.clientMode.Scores;
+            match.modeDisplay = match.clientMode.Display;
             match.bodies = new BodySync(session.World.Tuning, match.me, match.Setup.HostId);
             match.bodyPublisher = new BodyPublisher(match.bodies, match.Setup.Id, match.Net.BodySampleTime, match.Send);
             match.authority = new ClientAuthorityTransactions(match.me, match);
-            session.OnStopping(match.StopReplication);
         }
         public void CreateActors(SessionContext session) => match.BuildActors();
         public void CreateViews(SessionContext session)
@@ -109,7 +112,7 @@ public partial class Match
     private PlayerCharacter AddActor(PlayerProfile profile, int slot, Vector3 position, float yaw)
     {
         profiles[profile.Id] = profile;
-        scores[profile.Id] = 0;
+        ClientMode.ActorAdded(profile.Id);
         var owned = profile.OwnerPeerId == me;
         var character = new PlayerCharacter
         {
@@ -133,7 +136,7 @@ public partial class Match
     }
 
     /// <summary>Rifles carry limited ammunition: the mode's policy, which the lobby world's tuner can switch on.</summary>
-    private bool LimitedAmmo => mode.Supply.LimitedAmmo || IsLobby && !World.Tuning.LobbyInfiniteAmmo;
+    private bool LimitedAmmo => ClientMode.LimitedAmmo(mode.Supply.LimitedAmmo);
 
     private void BuildViews()
     {
@@ -233,8 +236,8 @@ public partial class Match
         if (IsLobby)
         {
             profiles.Remove(actor.ActorId);
-            scores.Remove(actor.ActorId);
         }
+        clientMode?.ActorRemoved(actor.ActorId);
     }
 
     private void PreparePresentation()
@@ -246,7 +249,7 @@ public partial class Match
         Warmup.Run(World, World.Root, new Vector3(0, -400f, 0));
 
         CaptureMouse(true);
-        if (!IsLobby) ShowNotice("Waiting for everyone to arrive", 30f);
+        if (modeDisplay.WaitingNotice.Length > 0) ShowNotice(modeDisplay.WaitingNotice, 30f);
         // Prepare loading presentation before the handoff, so buffered Countdown/Go/End remain authoritative.
         // The Ready stage schedules Loaded after replay and the first complete frame.
         GD.Print($"[match] seed {plan.Seed}: {plan.Lots.Count} lots, {plan.Tanks.Count} tanks, {pickups.Count} pickups, {Setup.Players.Count} players, host {Setup.HostId}, me {me}");

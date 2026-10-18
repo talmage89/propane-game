@@ -67,6 +67,7 @@ the report concludes; the contract named in each report's status line holds the 
 | [evidence/participant-integration.md](evidence/participant-integration.md) | 2026-10-11, 10-12 | No | The participant (A6) merge review, the capacity proof and the tank-agreement tails it left open. |
 | [evidence/net-scenarios-verification.md](evidence/net-scenarios-verification.md) | 2026-10-16 | No | The P4 harness migration: preserved vent-contact failure, native inventories, paired measurements. |
 | [evidence/suburb-generation-verification.md](evidence/suburb-generation-verification.md) | 2026-10-17 | No | B10: stage ownership, parent plan bytes, exact references, deep sweeps and rendered comparisons. |
+| [evidence/mode-client-adapters.md](evidence/mode-client-adapters.md) | 2026-10-18 | No | B3b1: client policy ownership, exact mode/HUD transcripts, session collection, native audits and paired callback measurements. |
 | [evidence/actor-registration-lifetime.md](evidence/actor-registration-lifetime.md) | 2026-10-18 | No | L1: actor-lived registrations, matched retention/collection controls, callback ordering, paired costs and native audits. |
 | [evidence/match-player-cache.md](evidence/match-player-cache.md) | 2026-10-17 | No | M0: ordered local-player selection, empty ownership, paired frame costs and native audits. |
 | [evidence/mode-catalog-server-inputs.md](evidence/mode-catalog-server-inputs.md) | 2026-10-18 | No | B3a follow-up: server-owned mode inputs, retired catalog dependencies and named remaining boundaries. |

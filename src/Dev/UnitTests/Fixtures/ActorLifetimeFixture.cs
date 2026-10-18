@@ -61,7 +61,7 @@ internal sealed class ActorLifetimeFixture : IDisposable
     }
 
     public string Counts() => $"actors={Match.Session.Actors.Count} registry={Count(Match.Session, "registry")} unsubscribe={Count(Match.Session, "unsubscribe")} colliders={Count(Field(Match, "botServices"), "actorColliders")} bots={Count(Match, "bots")} peers={((IEnumerable)Field(Match, "bots")).Cast<object>().Sum(bot => Count(bot, "Others"))} actions={Count(Match, "receivedActions")} melee={Count(Match, "remoteMelee")} views={Count(Match.World, "views")} receivers={Match.World.BlastReceivers.Count}" +
-        (Match.IsLobby ? $" profiles={Count(Match, "profiles")} scores={Count(Match, "scores")}" : "");
+        (Match.IsLobby ? $" profiles={Count(Match, "profiles")} scores={Match.Scores.Count}" : "");
 
     [MethodImpl(MethodImplOptions.NoInlining)]
     public WeakReference[] Cycle(int id, ActorKind kind, int owner = 2)

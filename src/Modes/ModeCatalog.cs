@@ -7,10 +7,11 @@ namespace Propane.Modes;
 
 /// <summary>
 /// Existing network integration, assembled in composition. Definition includes rules/HUD/bot factories and supply;
-/// client mode policy remains in Match until B3b. No declaration here grants a prototype online eligibility.
+/// client adapters own session policy. No declaration here grants a prototype online eligibility.
 /// Nullable inputs allow completeness validation to diagnose malformed test bundles before publication.
 /// </summary>
-public sealed record ModeBundle(ModeDefinition? Definition, ModeSchema? Schema, Func<IModeWire>? CreateServerWire)
+public sealed record ModeBundle(ModeDefinition? Definition, ModeSchema? Schema, Func<IModeWire>? CreateServerWire,
+    Func<IClientModeReplica, IClientLobbyReplica, IModeClient>? CreateClient = null)
 {
     internal void Validate()
     {
@@ -24,10 +25,11 @@ public sealed record ModeBundle(ModeDefinition? Definition, ModeSchema? Schema, 
         Require(Definition.Supply != null, "supply");
         Require(Definition.Supply!.Suburb != null, "suburb factory");
         Require(Definition.CreateHud != null, "HUD factory");
-        // No bot factory is legitimate (Sandbox); no client adapter factory exists before B3b.
+        // No bot factory is legitimate (Sandbox); its silent client adapter is still explicit.
         Require(Definition.Tuners != null, "tuners");
         Require(Schema != null, "schema");
         Require(CreateServerWire != null, "server wire factory");
+        Require(CreateClient != null, "client adapter factory");
         if (Schema!.ModeId != Definition.Id || Schema.Version != Definition.SchemaVersion)
             throw new InvalidOperationException($"{label}: schema identity {Schema.ModeId}/{Schema.Version} does not match definition");
         Require(Schema.Kinds != null, "schema kinds");

@@ -40,14 +40,20 @@ unit suites and `mode_test`.
 `ModeDefinition` selects the rules, the world source (the transmitted `SuburbPlan` or the void), the supply and
 ammo policy (`ModeSupply`: suburb settings for a player count, limited ammo, ammo cans), the round timer, the HUD
 presenter, the bot goal policy, the tuners the rules copy and the envelope schema version. Composition pairs each
-networked definition with its existing schema and server wire factory in a validated `ModeBundle`. Sandbox selects
-an explicit silent wire; a missing integration fails before a runner starts. Client mode policy remains in Match
-until B3b. `ModeRegistry.CreateServer` selects server-owned mode inputs and supplies only metadata, rules/schema/wire
+networked definition with its existing schema and server/client factories in a validated `ModeBundle`. Sandbox
+selects explicit silent wire and client adapters; a missing integration fails before a runner or client starts. `ModeRegistry.CreateServer` selects server-owned mode inputs and supplies only metadata, rules/schema/wire
 factories, tuner names, supply settings and rule tuner values. Server owners never resolve ModeRegistry or carry
 ModeDefinition/ModeSupply/HUD factories. ModeSettings and MatchSetup remain plain values; composition resolves a
 client definition with `ModeRegistry.Resolve(setup)`. Lobby setting bounds live in Foundation's LobbyModeLimits.
 `ModeRegistry.Shipped` is immutable; tests use `RegisterScoped` overlays, disposed in reverse order to
 restore the exact prior catalog on success or exception. The codec layer has no mutable registration table.
+Network client policy is selected through each validated bundle's client factory. `BankClientAdapter` owns scores
+and spills, `KingClientAdapter` composes it with zone state and pile handling, `LobbyClientAdapter` owns roaming
+roster/staging/stock/refills, and Sandbox explicitly uses `SilentClientAdapter`. They live for one physical session,
+borrow synchronous replica operations, and release those bindings on session stop. Match retains generic envelope
+validation/order and callback/lifetime coordination; concrete HUD and world visuals remain presentation bindings.
+Prototype runner/bot observation conversion is separate B3b2 work; this boundary does not enable a prototype online.
+
 `ModeRegistry` ships:
 
 | Mode | Rules | World | Supply | Timer | HUD | Bots |

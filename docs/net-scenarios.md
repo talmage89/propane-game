@@ -111,3 +111,24 @@ tools/dev/net_bots.sh -n 2 -w 2 -l 15 -s --match-seed=23 -o "$PWD/build/authorit
 
 The opt-in [moving-vent observer](runbooks/moving-vent-residual.md) instruments isolated parent builds without changing
 these scenarios or their completion conditions. It retains correction decisions and the exact final comparison brackets.
+
+## Mode client preservation probes
+
+`tools/dev/mode_client_equivalence.py --revision=<commit|working> --label=<fresh-name> --observe` builds an isolated
+copy under `build/` with opt-in synchronous observations. Run `ModeEnvelopeTests`, `KingOnlineTests`, `LobbyWorldTests`
+and `ModeClientTests` there with `--match-seed=23 --mode-client-transcript=<absolute-jsonl-path>`. Compare parent and
+candidate files byte for byte. Observations include accepted/rejected envelopes, score/spill/pile/stock/roster call
+boundaries, decoded view clocks and all HUD values. The copied native RNG is fixed identically; shipping sources,
+ordinary RNG and immutable release references are untouched. `--compare <parent-jsonl> <candidate-jsonl>` requires
+all mode/operation coverage and reports the first changed row; its negative tests run in `make test-infra`. Delete the JSONL before repeating a run (it appends).
+
+`ModeClientTests` asserts rule-state-to-client HUD values for Bank, King and Lobby, including singular/plural banks,
+loading/results, mint progress, contest, warning and explicit read time. `ModeClientBenchTests --mode-client-bench`
+is opt-in: it warms 20,000 complete physics/owned-character/render callbacks and measures 12,000 per mode by default
+(`--mode-client-bench-ticks=120000` selects longer windows). It reports whole-callback allocations, mean/p95/p99,
+component means, per-tick allocation sizes/counts and actor/body counts. Prepare copies without `--observe` for performance. Alternate at
+least three parent/candidate pairs under the same headless/rendered workload and record machine load per pair.
+
+`ModeClientLifetimeTests` repeatedly creates and retires Bank, King and roaming sessions, populating King's snapshot
+and Lobby's departure/staging/panel state. It checks empty state/released collaborators, idempotent disposal and
+collection of adapters, composed owners and snapshots while the retired Match remains reachable.

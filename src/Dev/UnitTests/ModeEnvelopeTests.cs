@@ -50,7 +50,7 @@ public static class ModeEnvelopeTests
                 (w, p) => { var report = (Report)p; w.Int(report.Peer).UInt(report.Request); },
                 p => new ModeDependency(((Report)p).Peer, ((Report)p).Request)),
         });
-        return ModeRegistry.RegisterScoped(new ModeBundle(ModeRegistry.TankBank with { Id = CausalMode, Name = "Causal probe" }, schema, () => wire));
+        return ModeRegistry.RegisterScoped(new ModeBundle(ModeRegistry.TankBank with { Id = CausalMode, Name = "Causal probe" }, schema, () => wire, (replica, _) => new BankClientAdapter(replica)));
     }
 
     public static void Register(TestRunner runner)

@@ -85,10 +85,10 @@ public static class ModeRegistry
     /// <summary>Process-lifetime compiled network integration, in registration order. Never mutated by tests.</summary>
     public static ModeCatalog Shipped { get; } = new(new[]
     {
-        new ModeBundle(Sandbox, ModeSchemas.Sandbox(), () => new SilentModeWire()),
-        new ModeBundle(TankBank, ModeSchemas.TankBank(), () => new TankBankWire()),
-        new ModeBundle(King, ModeSchemas.King(), () => new KingWire()),
-        new ModeBundle(LobbyWorld, ModeSchemas.Lobby(), () => new LobbyWire()),
+        new ModeBundle(Sandbox, ModeSchemas.Sandbox(), () => new SilentModeWire(), (replica, _) => new SilentClientAdapter(replica)),
+        new ModeBundle(TankBank, ModeSchemas.TankBank(), () => new TankBankWire(), (replica, _) => new BankClientAdapter(replica)),
+        new ModeBundle(King, ModeSchemas.King(), () => new KingWire(), (replica, _) => new KingClientAdapter(replica)),
+        new ModeBundle(LobbyWorld, ModeSchemas.Lobby(), () => new LobbyWire(), (replica, lobby) => new LobbyClientAdapter(replica, lobby)),
     });
 
     private static ModeCatalog current = Shipped;
@@ -113,6 +113,15 @@ public static class ModeRegistry
     /// <summary>Composition-only resolution for a client's physical session; MatchSetup remains a wire value.</summary>
     public static ModeDefinition Resolve(MatchSetup setup) => Find(setup.ModeId, setup.ModeSchema)
         ?? throw new InvalidOperationException($"unknown mode {setup.ModeId}/{setup.ModeSchema}");
+
+    /// <summary>Construct a fresh session client from the validated bundle; never infer a fallback from its payloads.</summary>
+    public static IModeClient CreateClient(MatchSetup setup, IClientModeReplica replica, IClientLobbyReplica lobby)
+    {
+        var bundle = current.Find(setup.ModeId, setup.ModeSchema)
+            ?? throw new InvalidOperationException($"no compiled mode bundle {setup.ModeId}/{setup.ModeSchema}");
+        return bundle.CreateClient!(replica, lobby)
+            ?? throw new InvalidOperationException($"mode {setup.ModeId}/{setup.ModeSchema}: client adapter factory returned null");
+    }
 
     public static bool ValidSettings(ModeSettings settings) => ForLobby(settings.ModeId) != null && settings.ValidValues;
 

@@ -152,8 +152,10 @@ exclusive offline-world time-scale lease: it changes simulation timing, never an
 are detached, attach the world, build its world source, add actors, add local views, register replication, attach the
 matching inbox and acknowledge readiness. Loading presentation is initialized before attaching the inbox;
 replayed Countdown/Go/End messages must not be overwritten by the ready acknowledgment.
-`ISessionWorldSource` builds content; `ISessionMode` supplies assembly policy, not a new rules engine. Sandbox and
-Tank Bank adapters retain their facade's existing gameplay. The shipped Lab uses `VoidWorldSource` and
+`ISessionWorldSource` builds content; `ISessionMode` supplies assembly policy, not a new rules engine. Match
+configuration selects a fresh session-owned client mode adapter from the compiled bundle. Its existing replication
+stop callback retires that policy after unsubscription and releases all borrowed bindings; concrete views remain in
+composition. The shipped Lab uses `VoidWorldSource` and
 `SuburbWorldSource`; a lobby or streamed source can implement those interfaces without editing the factory.
 See [the Lab](lab.md) for its registry and offline banking adapter. `WorldContext` still owns content replacement
 within a live session.
