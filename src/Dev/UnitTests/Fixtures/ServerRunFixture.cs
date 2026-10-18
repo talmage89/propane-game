@@ -64,10 +64,15 @@ internal sealed class ServerRunFixture : IDisposable
                 Count++;
                 TestRunner.Assert(run.IsRetired && !GodotObject.IsInstanceValid(Tuning), "retirement did not release its native tuning");
                 var lobbies = (IDictionary)typeof(LobbyServer).GetField("lobbies", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(server)!;
-                foreach (var lobby in lobbies.Values)
+                // Exhaustion removes the lobby dictionary entry before rejecting peers. Their lobby references
+                // must not keep a route to a released run during that interval.
+                var clients = (IDictionary)typeof(LobbyServer).GetField("clients", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(server)!;
+                var reachable = lobbies.Values.Cast<object>().Concat(clients.Values.Cast<object>()
+                    .Select(client => client.GetType().GetField("Lobby")!.GetValue(client)).OfType<object>()).Distinct();
+                foreach (var lobby in reachable)
                 {
                     foreach (var name in new[] { "Match", "World" })
-                        TestRunner.Assert(lobby!.GetType().GetField(name)!.GetValue(lobby) != run, "tuning released before routing detached");
+                        TestRunner.Assert(lobby.GetType().GetField(name)!.GetValue(lobby) != run, "tuning released before routing detached");
                 }
             };
         }
