@@ -29,6 +29,7 @@ public partial class Match
             match.hudPresenter = match.mode.CreateHud();
             match.bodies = new BodySync(session.World.Tuning, match.me, match.Setup.HostId);
             match.bodyPublisher = new BodyPublisher(match.bodies, match.Setup.Id, match.Net.BodySampleTime, match.Send);
+            match.authority = new ClientAuthorityTransactions(match.me, match);
             session.OnStopping(match.StopReplication);
         }
         public void CreateActors(SessionContext session) => match.BuildActors();
