@@ -146,16 +146,8 @@ public static class ModeRegistry
             return mode;
         }
         var modes = new ServerModes(Compile(initialMode ?? TankBank), Compile(LobbyWorld), Lobby.Select(Compile));
-        return new LobbyServer(modes, BindSupply(supplies),
-            (mode, tuning) => ModeDefinition.CopyTuners(tuning, mode.Tuners),
-            SuburbPlans.Generate, transport ?? PacketTransports.CreateServer(), clock);
+        return new LobbyServer(modes, new ServerSettings(supplies), SuburbPlans.Generate, transport ?? PacketTransports.CreateServer(), clock);
     }
-
-    // Separate capture scope: CreateServer's local compiler also captures the full catalog. A callback created
-    // in that scope would retain the catalog and its presentation factories even if it only uses supplies.
-    private static Func<ServerMode, Tuning, int, SuburbSettings> BindSupply(
-        IReadOnlyDictionary<ServerMode, Func<Tuning, int, SuburbSettings>> supplies) =>
-        (mode, tuning, players) => supplies[mode](tuning, players);
 
     /// <summary>
     /// Main-thread test seam. Validated overlays are strictly nested; disposal restores the exact previous catalog,

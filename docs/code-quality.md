@@ -70,7 +70,7 @@ The real-device and network menu scenes remain responsible for input delivery an
 
 ## Runtime launch options and the Dev boundary
 
-`LaunchArgs` (`src/Core`) parses the user arguments after `--` once per process and caches them as `LaunchArgs.Current`.
+`LaunchArgs` (Foundation, `src/Core`) parses the user arguments after `--` once per process and caches them as `LaunchArgs.Current`.
 `--key=value` is read as written and a bare `--key` is `"true"`; leading dashes are dropped, only the first `=` splits
 (an `=` in first place is part of the key), a later argument replaces an earlier one, and numbers use the current culture
 and fall back when absent or not numbers. `Has` means the argument was given with any value, so `--classic-lobby=false`
@@ -87,7 +87,7 @@ and the rest) go through `DevArgs`; a Debug server applies `--tune.*` too, befor
 | `--connect=host[:port]`, `--name=Name` | `Main` | Open the Connect screen on that server as that name. |
 | `--windowed` | `Main` | Do not maximize a windowed game. |
 | `--release-test` | `Main` | Run the release smoke test in place of the front end ([Release smoke](#release-smoke)). |
-| `--classic-lobby` | `LobbyWorldDefault` | Lobby menu over the backdrop instead of the lobby world. |
+| `--classic-lobby` | `LobbyWorldDefault`, `NetClient` | Lobby menu over the backdrop instead of the lobby world. |
 | `--update-check`, `--update-url=URL` | `UpdateCheck` | Check for a newer release when run from the editor; ask `URL` instead of GitHub. |
 | `--fake-version=X.Y.Z`, `--fake-protocol=N` | `BuildInfo`, `NetClient` | Pretend to be another game version or protocol in the Hello and in version checks. |
 | `--net-lag`, `--net-jitter`, `--net-reliable-stall`, `--net-body-stall` (ms), `--net-loss` (%), `--net-seed=N` | `PacketTransports` | Wrap the transport in `FaultPacketTransport` when any fault is positive. |

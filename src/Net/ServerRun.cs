@@ -49,11 +49,9 @@ internal sealed class ServerRun : IModeHost, IDisposable
     private double PhaseEnds => modeRunner.Phases.PhaseEnds;
     private double nextClock;
     private readonly float length;
-    private readonly Tuning tuning;
-    internal Tuning Tuning => tuning; // Native lifetime observation; this run owns and disposes it.
+    private readonly IServerRunSettings tuning;
+    internal IServerRunSettings Configuration => tuning; // Native lifetime observation; this run owns and disposes it.
     private readonly ServerMode mode;
-    private readonly Func<int, SuburbSettings> supply;
-    private readonly Func<ModeTuners> readModeTuners;
     private readonly Func<SuburbSettings, int, Func<int>, SuburbPlan> generate;
     private bool[] pickupUp = Array.Empty<bool>();
     private double[] pickupBack = Array.Empty<double>();
@@ -63,8 +61,8 @@ internal sealed class ServerRun : IModeHost, IDisposable
     /// <summary>A lobby world's next stock report to its rules.</summary>
     private double nextStock;
 
-    public ServerRun(int id, int lobbyId, int creator, bool creatorDebug, float length, bool isWorld, Tuning tuning, ServerMode mode,
-        Func<int, SuburbSettings> supply, Func<ModeTuners> readModeTuners, Func<SuburbSettings, int, Func<int>, SuburbPlan> generate, IMonotonicClock clock, Action<int, byte[], TrafficClass> deliver, Action<int, bool> loading,
+    public ServerRun(int id, int lobbyId, int creator, bool creatorDebug, float length, bool isWorld, IServerRunSettings tuning, ServerMode mode,
+        Func<SuburbSettings, int, Func<int>, SuburbPlan> generate, IMonotonicClock clock, Action<int, byte[], TrafficClass> deliver, Action<int, bool> loading,
         Action<LobbyPhase> phaseChanged, Action returnToLobby, Action<string> log, Action<int, AuthorityMessage> authorityPublished)
     {
         Id = id;
@@ -75,8 +73,6 @@ internal sealed class ServerRun : IModeHost, IDisposable
         IsWorld = isWorld;
         this.tuning = tuning;
         this.mode = mode;
-        this.supply = supply;
-        this.readModeTuners = readModeTuners;
         this.generate = generate;
         this.clock = clock;
         this.deliver = deliver;
@@ -112,12 +108,12 @@ internal sealed class ServerRun : IModeHost, IDisposable
         var started = Time.GetTicksMsec();
         var seed = OS.IsDebugBuild() && int.TryParse(LaunchArgs.Current.Get("match-seed"), out var requestedSeed)
             ? requestedSeed : nextRandom();
-        var settings = supply(actors.Count);
+        var settings = tuning.Supply(actors.Count);
         var plan = generate(settings, seed, () => nextRandom());
         var planBytes = PlanCodec.Encode(plan);
         tanks = new TankLedger(plan, hostId);
         modeRunner = new ModeRunner(mode, new ModeSetup(actors.Select(a => new ModeActor(a.ActorId, a.Name, true, startScore)).ToArray(),
-            new ModeWorld(mode.World, 1, plan.Tanks.Count, KingPlacement.SpotsFrom(plan)), readModeTuners(), unchecked((ulong)plan.Seed)));
+            new ModeWorld(mode.World, 1, plan.Tanks.Count, KingPlacement.SpotsFrom(plan)), tuning.ReadModeTuners(), unchecked((ulong)plan.Seed)));
         for (var i = 0; i < plan.Props.Count; i++)
         {
             if (plan.Props[i].Body != World.Plan.PropBody.Static && !plan.Props[i].Model.StartsWith("car:")) { looseProps.Add(i); }
@@ -155,7 +151,7 @@ internal sealed class ServerRun : IModeHost, IDisposable
     {
         tanks = new TankLedger(WorldPlan(), hostId);
         modeRunner = new ModeRunner(mode, new ModeSetup(Array.Empty<ModeActor>(),
-            new ModeWorld(mode.World, 1, 0, LobbyLayout.Spots(tuning.LobbyPiles, tuning.LobbyPileRing)), readModeTuners(), (ulong)Id));
+            new ModeWorld(mode.World, 1, 0, LobbyLayout.Spots(tuning.LobbyPiles, tuning.LobbyPileRing)), tuning.ReadModeTuners(), (ulong)Id));
     }
 
     public void StartWorld(double now)
@@ -503,9 +499,9 @@ internal sealed class ServerRun : IModeHost, IDisposable
                 // The original creator's debug capability is captured at start, never transferred with hosting.
                 if (peer != creatorId || !creatorDebug) { throw new InvalidDataException("tuning requires the debug creator"); }
                 // Supply belongs to the locked lobby choice, not live debug edits or Defaults.
-                if (tune.Name == nameof(Tuning.TankCountMultiplier)) return;
+                if (tune.Name == "TankCountMultiplier") return;
                 tuning.Apply(new Godot.Collections.Dictionary { [tune.Name] = tune.Value });
-                modeRunner.Apply(this, new TunersChanged(readModeTuners()), clock.Seconds);
+                modeRunner.Apply(this, new TunersChanged(tuning.ReadModeTuners()), clock.Seconds);
                 break;
         }
         var bytes = MessageCodec.Encode(message with { Sender = peer }, fromServer: true);

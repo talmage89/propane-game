@@ -13,22 +13,30 @@ internal sealed class ServerModeFixture : IDisposable
 {
     private readonly LobbyServer server;
     public readonly ServerModes Modes;
-    private readonly Func<ServerMode, Tuning, int, SuburbSettings> supply;
-    private readonly Func<ServerMode, Tuning, ModeTuners> tuners;
+    private readonly IServerSettings settings;
 
     public ServerModeFixture(ModeDefinition? initial = null)
     {
         server = ModeRegistry.CreateServer(initialMode: initial);
         T Field<T>(string name) => (T)typeof(LobbyServer).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(server)!;
         Modes = Field<ServerModes>("modes");
-        supply = Field<Func<ServerMode, Tuning, int, SuburbSettings>>("supply");
-        tuners = Field<Func<ServerMode, Tuning, ModeTuners>>("copyModeTuners");
+        settings = Field<IServerSettings>("settings");
     }
 
-    public SuburbSettings Supply(ServerMode mode, Tuning tuning, int players) => supply(mode, tuning, players);
-    public ModeTuners Tuners(ServerMode mode, Tuning tuning) => tuners(mode, tuning);
-    public bool CapturesCatalog => new Delegate[] { supply, tuners }.Any(callback => callback.Target != null &&
-        callback.Target.GetType().GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
-            .Any(member => member.FieldType == typeof(ModeCatalog) || member.FieldType == typeof(ModeDefinition) || member.FieldType == typeof(ModeBundle)));
+    // Exercise the composition-selected adapter with an owned copy of the caller's current values. The
+    // caller keeps its template; disposing each sample must not release it. Live reads inside a surviving
+    // adapter are separately asserted by ServerModeTests' wire observations and ApplicationServerTests.
+    public SuburbSettings Supply(ServerMode mode, Tuning tuning, int players)
+    {
+        using var sample = settings.FromSnapshot(mode, tuning.Snapshot());
+        return sample.Supply(players);
+    }
+    public ModeTuners Tuners(ServerMode mode, Tuning tuning)
+    {
+        using var sample = settings.FromSnapshot(mode, tuning.Snapshot());
+        return sample.ReadModeTuners();
+    }
+    public bool CapturesCatalog => settings.GetType().GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+        .Any(member => member.FieldType == typeof(ModeCatalog) || member.FieldType == typeof(ModeDefinition) || member.FieldType == typeof(ModeBundle));
     public void Dispose() => server.Free();
 }

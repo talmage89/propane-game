@@ -18,14 +18,17 @@ public partial class MenuTest : Node
 {
     private Main main = null!;
 
+    private readonly PlayerSettings settings = new("user://menu_test_settings.cfg");
+    private System.IDisposable? settingsBinding;
+
     public override void _Ready()
     {
         DevArgs.MarkReady();
         DevArgs.Setup();
         // A fresh settings file, so the run neither reads nor changes the player's name, color and server.
         DirAccess.RemoveAbsolute(ProjectSettings.GlobalizePath("user://menu_test_settings.cfg"));
-        Core.PlayerSettings.UseFile("user://menu_test_settings.cfg");
-        Core.PlayerSettings.Name = "Player";
+        settingsBinding = PlayerSettings.Bind(settings);
+        settings.Name = "Player";
         DisplayServer.WindowSetVsyncMode(DisplayServer.VSyncMode.Disabled);
         main = new Main { Name = "Main" };
         AddChild(main);
@@ -195,5 +198,17 @@ public partial class MenuTest : Node
     {
         Input.ParseInputEvent(new InputEventKey { PhysicalKeycode = key, Keycode = key, Pressed = true });
         Input.ParseInputEvent(new InputEventKey { PhysicalKeycode = key, Keycode = key, Pressed = false });
+    }
+    public override void _ExitTree()
+    {
+        settingsBinding?.Dispose();
+        settingsBinding = null;
+    }
+
+    public override void _Notification(int what)
+    {
+        if (what != NotificationPredelete) return;
+        settingsBinding?.Dispose();
+        settings.Dispose();
     }
 }

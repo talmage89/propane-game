@@ -15,6 +15,8 @@ namespace Propane.ReleaseSmoke;
 /// </summary>
 public partial class ReleaseTest : Node
 {
+    private readonly PlayerSettings settings = new("user://release_test_settings.cfg");
+    private System.IDisposable? settingsBinding;
     private Main main = null!;
     private CaptureDirector director = null!;
     private int stage;
@@ -33,7 +35,7 @@ public partial class ReleaseTest : Node
         ProcessMode = ProcessModeEnum.Always;
         DisplayServer.WindowSetVsyncMode(DisplayServer.VSyncMode.Disabled);
         Engine.MaxFps = 60;
-        Core.PlayerSettings.UseFile("user://release_test_settings.cfg");
+        settingsBinding = PlayerSettings.Bind(settings);
         network = LaunchArgs.Current.Get("scenario") == "network";
         main = new Main { Name = "Main" };
         AddChild(main);
@@ -264,5 +266,17 @@ public partial class ReleaseTest : Node
         GD.PushError($"[releasetest] FAIL {reason}");
         ShutdownGuard.Quit(GetTree(), 1);
         stage = 99;
+    }
+    public override void _ExitTree()
+    {
+        settingsBinding?.Dispose();
+        settingsBinding = null;
+    }
+
+    public override void _Notification(int what)
+    {
+        if (what != NotificationPredelete) return;
+        settingsBinding?.Dispose();
+        settings.Dispose();
     }
 }

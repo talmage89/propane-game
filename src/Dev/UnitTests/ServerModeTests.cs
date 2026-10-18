@@ -87,7 +87,7 @@ public static class ServerModeTests
         {
             using var fixture = new ServerRunFixture(worlds: true);
             var run = fixture.Runs.Single().Run;
-            var tuning = run.Tuning;
+            var tuning = ((ServerSettings.RunSettings)run.Configuration).Resource;
             var host = (IModeHost)run;
             ModeWireTuners Expected() => new(tuning.KingPileCount, tuning.KingPileReach, tuning.KingPileClearance,
                 tuning.LobbyPileCount, tuning.LobbyPileReach, tuning.LobbyPileClearance,

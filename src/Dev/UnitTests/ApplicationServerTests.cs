@@ -21,14 +21,12 @@ public static class ApplicationServerTests
         var transcript = new List<string>();
         var negative = DevArgs.Get("a1-server-negative") != null;
         foreach (var worlds in new[] { false, true })
-        foreach (var mode in new[] { ModeRegistry.TankBank, ModeRegistry.King })
         {
-            runner.Run($"application/server configuration {mode.Name} worlds={worlds}", () =>
+            foreach (var mode in new[] { ModeRegistry.TankBank, ModeRegistry.King })
             {
-                var previous = LaunchArgs.Current;
-                LaunchArgs.Current = new LaunchArgs(new[] { "--match-seed=23" });
-                try
+                runner.Run($"application/server configuration {mode.Name} worlds={worlds}", () =>
                 {
+                    using var launch = LaunchArgs.OverrideForTests(new LaunchArgs(new[] { "--match-seed=23" }));
                     var clock = new ManualClock();
                     var server = ModeRegistry.CreateServer(PacketTransports.CreateServer(), clock, initialMode: mode);
                     server.Worlds = worlds;
@@ -75,10 +73,10 @@ public static class ApplicationServerTests
                         Assert(starts >= 2 && retired == (worlds ? 3 : 1), "configuration witness lost run coverage");
                     }
                     finally { server.Free(); }
-                }
-                finally { LaunchArgs.Current = previous; }
-            });
+                });
+            }
         }
+
         if (DevArgs.Get("application-transcript") is { } path)
             File.WriteAllText(path, JsonSerializer.Serialize(transcript));
     }
