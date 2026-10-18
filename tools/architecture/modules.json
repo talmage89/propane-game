@@ -338,7 +338,8 @@
     "Godot.Engine.set_MaxPhysicsStepsPerFrame": [
       "Propane.Tank.TankSimulation",
       "Propane.Dev.LabCases.MeasureScenario",
-      "Propane.Dev.UnitTests.EffectResourceTests"
+      "Propane.Dev.UnitTests.EffectResourceTests",
+      "Propane.Dev.ApplicationStateTests"
     ],
     "Godot.SceneTree.set_Paused": [
       "Propane.Dev.ShutdownTests"

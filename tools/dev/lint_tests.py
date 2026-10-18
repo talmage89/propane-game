@@ -64,7 +64,7 @@ fi
                 "check_shader_capacity.py", "check_lab.py", "animation_review_tests.py", "animation_metrics.py build/animation-review-gate/metrics.csv --output build/animation-review-gate/results.json",
                 # The gate self-tests, which this very script is; stubbed here, since python3 is.
                 "lint_tests.py"]
-    scenes = ["shutdown_tests.tscn", "shutdown_tests.tscn -- --paused --window-close --repeat-quit", "core_tests.tscn", "mode_test.tscn", "blast_query_tests.tscn", "gather_range.tscn",
+    scenes = ["application_state_tests.tscn", "shutdown_tests.tscn", "shutdown_tests.tscn -- --paused --window-close --repeat-quit", "core_tests.tscn", "mode_test.tscn", "blast_query_tests.tscn", "gather_range.tscn",
               "gather_range.tscn -- --scenario=grant-races",
               "gather_range.tscn -- --scenario=appearance",
               "game_test.tscn -- --scenario=gather --tune.FixedSeed=23",

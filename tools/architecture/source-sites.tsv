@@ -1,6 +1,7 @@
 direct-quit	src/Core/ShutdownGuard.cs	Quit(	2	ShutdownGuard	Orderly shutdown owner, including internal wrapper call and final physics-flush quit.
 direct-quit	src/Dev/AnimationReview.cs	Quit(	3	Dev:AnimationReview	Legacy release-transplant wrapper has an exact conditional direct-quit branch; current builds use ShutdownGuard.
 direct-quit	src/Dev/ShutdownWitness.cs	Quit(	1	Dev:ShutdownWitness	Negative shutdown witness deliberately bypasses orderly teardown; keep isolated from runtime.
+engine-catchup	src/Dev/ApplicationStateTests.cs	MaxPhysicsStepsPerFrame=	2	Dev:ApplicationStateTests	Isolated process-policy witness restores the engine setting in finally.
 engine-catchup	src/Dev/LabScenarios/MeasureScenario.cs	MaxPhysicsStepsPerFrame=	1	Dev:MeasureScenario	Harness orchestration/measurement domain; preserve bounded completion and shutdown assertions.
 engine-catchup	src/Dev/UnitTests/EffectResourceTests.cs	MaxPhysicsStepsPerFrame=	4	Dev:EffectResourceTests	Harness orchestration/measurement domain; preserve bounded completion and shutdown assertions.
 engine-catchup	src/Tank/TankSimulation.cs	MaxPhysicsStepsPerFrame=	2	A1:TankSimulation	Real-time dense-chain catch-up arbitration; preserve overlap minimum, network veto and prior-value restoration.
@@ -17,6 +18,8 @@ timer	src/Dev/UnitTests/Fixtures/ServerNativeFixture.cs	OS.DelayMsec	1	Dev:Serve
 tree-pause	src/Dev/ShutdownTests.cs	.Paused=	1	Dev:ShutdownTests	Harness orchestration/measurement domain; preserve bounded completion and shutdown assertions.
 wall-clock	src/Core/WorldTimeScale.cs	Time.GetTicksUsec	2	A1:WorldTimeScale	Real-time exclusive offline hitstop lease; A1 consolidates ownership while preserving activation/restoration.
 wall-clock	src/Dev/AnimationReview.cs	Time.GetTicksMsec	1	Dev:AnimationReview	Harness orchestration/measurement domain; preserve bounded completion and shutdown assertions.
+wall-clock	src/Dev/ApplicationStateTests.cs	Stopwatch.GetElapsedTime	1	Dev:ApplicationStateTests	Opt-in whole tank callback benchmark, real elapsed diagnostic time.
+wall-clock	src/Dev/ApplicationStateTests.cs	Stopwatch.GetTimestamp	1	Dev:ApplicationStateTests	Opt-in whole tank callback benchmark, real elapsed diagnostic time.
 wall-clock	src/Dev/CoreTests.cs	Stopwatchtimer=	1	Dev:CoreTests	Harness elapsed suite measurements only; never use this clock for gameplay.
 wall-clock	src/Dev/GeneratorTests.cs	Stopwatch.StartNew	4	Dev:GeneratorTests	Harness orchestration/measurement domain; preserve bounded completion and shutdown assertions.
 wall-clock	src/Dev/LabScenarios/BotCostScenario.cs	Stopwatch.GetElapsedTime	1	Dev:BotCostScenario	Harness orchestration/measurement domain; preserve bounded completion and shutdown assertions.
