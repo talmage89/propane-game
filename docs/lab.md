@@ -208,7 +208,9 @@ must have one winner with the wins, round wins and kills that add up, lives that
 report the rules refused as late, early, duplicated or naming an unknown actor or blast (the Lab's reports arrive at
 once). All are wired into `make test` / `make test-full`.
 It also runs Dissolve Run for 45 s with the bot driving the player (`--scenario=dissolve --seconds=45`), then stops it:
-the front must catch it within the time it needs to cover the gap at its start speed, plus the fall, and the run must
+the run must finish within `max(0, gap at stop) / max(0.1, start speed) + fall seconds + 2` simulation seconds after
+the scheduled stop. Catching is immediate on a behind-front actor sample, but the round remains playing through
+the fall; a negative gap cannot shorten that allowance. The positive-gap bound is unchanged. The run must
 end with the player fallen below the slab, the score adding up (meters, tank points and chain bonuses, every tank in one
 chain and one push), segments built and retired, and the result paused on the controls panel. `--full` adds five-minute
 runs (`dissolve-full`: the bot on two seeds; `dissolve-pace`: a pacer that runs down the street without bot navigation,

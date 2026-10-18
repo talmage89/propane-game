@@ -127,7 +127,7 @@ internal sealed partial class DissolveScenario(ILabScenarioHost host) : LabScena
 
     /// <summary>
     /// A scripted Dissolve Run, headless: the bot drives the player down the street for --seconds (default 240), then
-    /// stops (--stop-at) and must be caught by the front within the time the front needs to cover the gap. Throughout,
+    /// stops (--stop-at) and must finish after the front covers the nonnegative gap and the caught runner falls. Throughout,
     /// segments must build ahead and retire behind, the live segments and their nodes and bodies must stay bounded, the
     /// whole tree's nodes must not grow, and the score must add up. It reports frame times (wall, per
     /// rendered frame), segment build and retire times and memory, per --report-every seconds, and with --metrics writes
@@ -237,12 +237,26 @@ internal sealed partial class DissolveScenario(ILabScenarioHost host) : LabScena
                 {
                     stopped = true;
                     lab.Player.InputOverride = new Idle();
+                    if (DevArgs.Get("stop-behind-front") != null)
+                    {
+                        // Controlled regression: deliver a real behind-front position to the next native rule sample.
+                        Assert(!lab.Player.IsRagdolled, "controlled dissolve stop needs an upright runner");
+                        lab.Player.GlobalPosition = new Vector3((float)rules.Front - DevArgs.GetFloat("stop-behind-front", 8), 1, 0);
+                        lab.Player.Velocity = Vector3.Zero;
+                        await Frames(1).ConfigureAwait(true);
+                        Assert(rules.Gap < 0 && rules.Caught && caught >= 0,
+                            "controlled dissolve stop must sample behind the front and emit RunCaught");
+                    }
                     gapAtStop = rules.Gap;
-                    GD.Print($"[lab dissolve] seed {seed}: stopped at {runner.Elapsed:F1}s, x={lab.Player.GlobalPosition.X:F1}, front {gapAtStop:F1} m behind");
+                    GD.Print($"[lab dissolve] seed {seed}: stopped at {runner.Elapsed:F1}s, x={lab.Player.GlobalPosition.X:F1}, front {gapAtStop:F1} m behind, " +
+                        $"sampled_x={rules.Position:F2}, front_x={rules.Front:F2}, caught_at={caught:F2}, over={rules.Over}");
                 }
-                // The front needs at most gap / start speed to arrive (it only speeds up), plus the fall.
-                Assert(!stopped || runner.Elapsed - stopAt < gapAtStop / Math.Max(0.1, tuning.DissolveFrontSpeed) + tuning.DissolveFallSeconds + 2,
-                    $"dissolve seed {seed}: the front never caught a player who stopped");
+                // Wait for round completion, not just RunCaught: a behind-front sample catches immediately, but
+                // IsPlaying stays true through the full fall. Negative travel time cannot shorten that allowance.
+                // For positive gaps the original bound is unchanged (the front only speeds up); the two-second
+                // margin covers sampling/stop timing. All times here use the runner's simulation clock.
+                Assert(!stopped || runner.Elapsed - stopAt < Math.Max(0, gapAtStop) / Math.Max(0.1, tuning.DissolveFrontSpeed) + tuning.DissolveFallSeconds + 2,
+                    $"dissolve seed {seed}: the stopped runner did not finish the catch and fall");
                 Assert(runner.Elapsed < seconds + 600, "dissolve run never ended");
                 if (overview != null)
                 {

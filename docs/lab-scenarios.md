@@ -115,3 +115,17 @@ The whole-match Short Fuse fixture honors `--replay-random` for per-event physic
 already did. Previously it accepted the option but left these generators unseeded: repeated parent runs first
 diverged on actor poses at tick 2231. This opt-in harness correction must also be present on the parent used by
 `check_lab_mechanics.py`; ordinary runs and the immutable combo reference keep their existing randomness policy.
+
+For the Dissolve stop-deadline regression, run after `make build`:
+
+```sh
+godot-mono --headless --fixed-fps 60 --path . res://scenes/dev/lab_test.tscn -- \
+  --scenario=dissolve --driver=pace --seconds=20 --first-seed=12 --stop-behind-front=8
+```
+
+`--stop-behind-front=M` moves the upright runner M meters behind the current front at the stop, clears velocity,
+and waits one process frame for the real runner's physics sample (use `--fixed-fps 60`). It asserts a negative
+sampled gap and an emitted `RunCaught`, then uses the ordinary completion deadline and final fall/score/stream/
+result assertions. The stop log includes sampled X, front X, catch time and round-over state. Without this option,
+the ordinary bot/pacer input and stop path are unchanged. The deadline covers nonnegative front travel, the full
+fall and the existing two-second sampling/stop margin on the runner's simulation clock.
