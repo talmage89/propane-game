@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Exports the Windows (x86_64), macOS (Apple Silicon) and Linux (x86_64) release builds and packages them in build/dist.
-# Usage: tools/release/build.sh [path to the Godot .NET editor binary]
+# Usage: tools/release/build.sh [path to the Godot .NET editor binary] [--unsigned-macos]
 # It owns only build/package (exports, notices, logs and the folders that become the archives) and build/dist (the
 # archives, which the release workflow uploads whole), and replaces both on every run. Other output under build/,
 # such as screenshots, recordings and test logs, is never touched.
@@ -14,7 +14,13 @@ cd "$project"
 version="$(sed -n 's/^config\/version="\(.*\)"$/\1/p' project.godot)"
 godot_version="$("$godot" --version | cut -d. -f1-3)"
 rcodesign="${RCODESIGN:-$(command -v rcodesign || true)}"
-if [[ -z "$rcodesign" ]]; then
+unsigned=0
+if [[ "${2:-}" == --unsigned-macos ]]; then unsigned=1; fi
+if (( $# > 2 )) || [[ -n "${2:-}" && "$2" != --unsigned-macos ]]; then
+  echo "usage: $0 [godot] [--unsigned-macos]" >&2
+  exit 2
+fi
+if [[ -z "$rcodesign" && "$unsigned" == 0 ]]; then
   echo "rcodesign not found; set RCODESIGN or put it on PATH" >&2
   exit 1
 fi
@@ -53,7 +59,12 @@ curl -fsSL -o "$stage/notices/GODOT_COPYRIGHT.txt" "https://raw.githubuserconten
 mac_dir="$stage/Propane-$version-macos-arm64"
 mkdir -p "$mac_dir"
 unzip -q "$stage/macos/Propane.zip" -d "$mac_dir"
-"$rcodesign" sign "$mac_dir/Propane.app" >"$stage/sign.log" 2>&1 || { cat "$stage/sign.log" >&2; exit 1; }
+if (( unsigned )); then
+  echo "UNSIGNED macOS verification build; do not publish." | tee "$stage/sign.log"
+  echo "UNSIGNED verification build; do not publish." >"$mac_dir/UNSIGNED.txt"
+else
+  "$rcodesign" sign "$mac_dir/Propane.app" >"$stage/sign.log" 2>&1 || { cat "$stage/sign.log" >&2; exit 1; }
+fi
 cp "$stage"/notices/* "$mac_dir/"
 (cd "$mac_dir" && zip -qry "$project/$dist/Propane-$version-macos-arm64.zip" .)
 

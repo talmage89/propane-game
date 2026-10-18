@@ -317,11 +317,11 @@ elif "--export-release" in args:
             (build / name).parent.mkdir(parents=True, exist_ok=True)
             (build / name).write_text(text)
 
-    def package(self, fault=None, environment=None):
+    def package(self, fault=None, environment=None, unsigned=False):
         (self.root / "fault").unlink(missing_ok=True)
         if fault:
             (self.root / "fault").write_text(fault)
-        return subprocess.run(["bash", "tools/release/build.sh", str(self.bin / "godot")], cwd=self.project,
+        return subprocess.run(["bash", "tools/release/build.sh", str(self.bin / "godot"), *(["--unsigned-macos"] if unsigned else [])], cwd=self.project,
                               env={**self.env, **(environment or {})}, text=True, stdout=subprocess.PIPE,
                               stderr=subprocess.STDOUT, timeout=120)
 
@@ -380,6 +380,13 @@ elif "--export-release" in args:
         self.assertIn("rcodesign not found", result.stdout)
         self.assertEqual(stale.read_text(), "kept")
         self.assert_sentinels()
+
+    def test_explicit_unsigned_macos_is_marked_for_verification_only(self):
+        result = self.package(unsigned=True)
+        self.assertEqual(result.returncode, 0, result.stdout)
+        with zipfile.ZipFile(self.project / "build/dist/Propane-1.2.3-macos-arm64.zip") as archive:
+            self.assertIn('UNSIGNED.txt', archive.namelist())
+            self.assertNotIn('Propane.app/signed.txt', archive.namelist())
 
 
 if __name__ == "__main__":

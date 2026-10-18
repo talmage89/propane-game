@@ -427,6 +427,8 @@ public static class Formatting
         print(output, end="")
         code, output = run(ROOT, "python3", "-B", "tools/dev/setup_import_tests.py")
         require(code == 0, "setup import negative fixtures failed", output)
+        code, output = run(ROOT, "python3", "-B", "tools/release/artifact_tests.py")
+        require(code == 0, "artifact script negative fixtures failed", output)
 
 
 if __name__ == "__main__":

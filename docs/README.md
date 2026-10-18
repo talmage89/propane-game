@@ -47,6 +47,7 @@ current and binding, and no one else edits it. Start with [VISION.md](../design/
 | [runbooks/network-soak.md](runbooks/network-soak.md) | Running the multiplayer soaks, how `compare_tanks.py` judges a match, the capacity gate and the lobby-bot soaks. |
 | [runbooks/profiling-effects.md](runbooks/profiling-effects.md) | Measuring the cost of vents, smoke, blasts and chains in a crowd, alone or against a baseline build. |
 | [runbooks/animation-review.md](runbooks/animation-review.md) | The animation acceptance harness: commands, the metrics gate and external clip review. |
+| [runbooks/release-artifacts.md](runbooks/release-artifacts.md) | Packaged export inventory, Linux smoke, CI limits and Windows/macOS runtime checklists. |
 
 ## Evidence
 

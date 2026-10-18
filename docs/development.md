@@ -465,6 +465,12 @@ keeps working inside an untouched archive. Editor/`make build` Debug, debug expo
 (`make play` and `make bench CONFIG=Release`) retain the harnesses. See the
 [Dev boundary](code-quality.md#release-smoke).
 
+After packaging, the release job inventories all three archives and runs the unpacked Linux artifact headlessly
+before publishing. Run the same check locally with
+`python3 -B tools/release/check_artifacts.py --output build/artifact-proof` (a new directory). The
+[artifact runbook](runbooks/release-artifacts.md) describes rendered/network proof, CI limits and the manual
+Windows/macOS runtime checklists. Source builds alone do not prove the packaged paths.
+
 Work happens on `dev`; `main` is what has been released. The version is `config/version` in `project.godot`,
 MAJOR.MINOR.PATCH, and it decides who plays together:
 

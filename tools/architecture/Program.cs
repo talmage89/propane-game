@@ -7,16 +7,22 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 
 // Read metadata without loading Godot or executing any code from the inspected assembly.
-if (args.Length != 3 || args[0] is not ("check" or "candidate"))
+if (!(args.Length == 3 && args[0] is "check" or "candidate") && !(args.Length == 4 && args[0] == "inventory"))
 {
-    Console.Error.WriteLine("usage: Architecture check|candidate assembly.dll policy-directory");
+    Console.Error.WriteLine("usage: Architecture check|candidate assembly.dll policy-directory | inventory assembly.dll game.pck policy-directory");
     return 2;
 }
 try
 {
-    var policy = JsonSerializer.Deserialize<Policy>(File.ReadAllText(Path.Combine(args[2], "modules.json")))!;
+    var policyDirectory = args[^1];
+    var policy = JsonSerializer.Deserialize<Policy>(File.ReadAllText(Path.Combine(policyDirectory, "modules.json")))!;
     using var assembly = File.OpenRead(args[1]);
     using var pe = new PEReader(assembly);
+    if (args[0] == "inventory")
+    {
+        return new Scanner(pe, default, policy, Path.GetDirectoryName(Path.GetFullPath(args[1]))!)
+            .Inventory(args[2], Path.Combine(policyDirectory, "artifact.json"));
+    }
     using var symbols = File.OpenRead(Path.ChangeExtension(args[1], ".pdb"));
     using var pdb = MetadataReaderProvider.FromPortablePdbStream(symbols);
     var scanner = new Scanner(pe, pdb.GetMetadataReader(), policy, Path.GetDirectoryName(Path.GetFullPath(args[1]))!);
@@ -54,11 +60,11 @@ catch (Exception error) when (error is IOException or BadImageFormatException or
 internal sealed record Policy(Dictionary<string, string[]> Allowed, Dictionary<string, string> Namespaces,
     Dictionary<string, string> Types, Dictionary<string, string> Files, string[] WorkerProbes, Dictionary<string, string[]> GlobalOwners, Dictionary<string, string[]> TimerOwners);
 
-internal sealed class Scanner
+internal sealed partial class Scanner
 {
     private readonly PEReader pe;
     private readonly MetadataReader reader;
-    private readonly MetadataReader pdb;
+    private readonly MetadataReader? pdb;
     private readonly Policy policy;
     private readonly string directory;
     private readonly Dictionary<string, string> violations = new(StringComparer.Ordinal);
@@ -78,7 +84,7 @@ internal sealed class Scanner
     private static readonly Dictionary<short, OpCode> Opcodes = typeof(OpCodes).GetFields()
         .Where(f => f.FieldType == typeof(OpCode)).Select(f => (OpCode)f.GetValue(null)!).ToDictionary(op => op.Value);
 
-    public Scanner(PEReader pe, MetadataReader pdb, Policy policy, string directory)
+    public Scanner(PEReader pe, MetadataReader? pdb, Policy policy, string directory)
     {
         this.pe = pe;
         reader = pe.GetMetadataReader();
@@ -119,6 +125,7 @@ internal sealed class Scanner
 
     private string FileOf(TypeDefinitionHandle handle)
     {
+        if (pdb is null) return "(export; no symbols)";
         if (files.TryGetValue(handle, out var found)) return found;
         var type = reader.GetTypeDefinition(handle);
         foreach (var method in type.GetMethods())
@@ -254,7 +261,7 @@ internal sealed class Scanner
         // Portable PDBs identify generated async/iterator MoveNext bodies without guessing compiler names.
         foreach (var method in reader.MethodDefinitions)
         {
-            var kickoff = pdb.GetMethodDebugInformation(method).GetStateMachineKickoffMethod();
+            var kickoff = pdb!.GetMethodDebugInformation(method).GetStateMachineKickoffMethod();
             if (kickoff.IsNil) continue;
             if (!calls.TryGetValue(kickoff, out var targets)) calls[kickoff] = targets = [];
             targets.Add(method);
