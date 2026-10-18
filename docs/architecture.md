@@ -69,7 +69,7 @@ source type to acquire that dependency. Do not broaden the map or silently regen
 | Fault transport calls ENet lane helper; server diagnostics/factory cross composition | N1 supplies transport-independent lanes and injected delivery/diagnostic boundaries. |
 | Settings and launch access are implicit | A1 provides explicit application ownership and scoped test stores/overrides. |
 | Client actor attachment retirement (L1) | Session-owned `ActorRegistration` detaches subscriptions and actor caches before native free; remaining attachments keep the original unsubscribe/stop/view/actor order. |
-| Lab bookkeeping and prototype live-rule reads | B4b shares local difficulty, tank facts and offline placement; semantic attribution and rule submission stay runner-owned. B3b supplies plain observations with explicit read-time clock and allocation-free bot reads. |
+| Lab bookkeeping and prototype live-rule reads | B4b shares local difficulty, tank facts and offline placement; semantic attribution and rule submission stay runner-owned. B3b2 supplies plain observations with explicit read-time clock and allocation-free bot reads. |
 | Streaming incidental history (W1 implemented) | Ordinary arena timing lists stay empty; a feed watermark compacts the retired prefix, retaining only out-of-order forgotten indices. Navigation eviction and ledger-history pruning need separate retention contracts. |
 | Global stream reveal; implicit character/weapon binding assumptions | W2 before independent streams; V1 before a second asset family. Existing single-stream/binding behavior stays intact. |
 | Cross-platform artifact runtime acceptance remains partly manual | R1 gates setup imports, inventories all packaged exports and runs the Linux artifact before publishing; Windows/macOS retain the [runtime checklist](runbooks/release-artifacts.md). |
@@ -302,14 +302,21 @@ callbacks, clocks or rules and retires with that runner, including every replace
 `LabBotDifficulty` and `LabSpill` are stateless Composition helpers: live attachment-slot difficulty, identical hit
 geometry and the already-shared offline spill algorithm. Online placement is separate. Rule submission, scores,
 tickets, grace, Short Fuse's frame-local blast cause and Dissolve's chain IDs remain in their runners, as do Bank's
-spill-time and prototypes' per-tick tuner sampling. B4b changes no bot/HUD/view/observation contract; the live reads
-below remain B3b's work. No dependency baseline entry is assigned to B4b.
+spill-time and prototypes' per-tick tuner sampling. B4b changes no bot/HUD/view/observation contract; the observation boundary below is supplied by B3b2.
+No dependency baseline entry is assigned to B4b.
 [B4b evidence](evidence/lab-mechanics-verification.md) records exact traces, retirement, captures and runner costs.
 
-**Target B3b:** Bank policy is composed into King, Lobby has its own client adapter, and prototype bots/HUDs consume
-plain observations that retain neither live rules nor delegates into rules. Read-time calculations take an explicit
-clock; hot reads allocate nothing. Current `IBotWorld.Rules`, King conversion and prototype presenters remain live
-couplings until then. ServerRun's `NextRound { RebuildWorld: true }` fallback ends the match: general round-world replacement,
+**Current B3b2:** Prototype HUDs and the Lab overlay consume copied `RingOutState`, `ShortFuseState` and
+`DissolveRunState` observations; `ModeHudInput` and `IBotWorld` expose no live rules. Snapshot producers receive an
+explicit `ModeClock`, including health regeneration/shields and elapsed round time, and retain no rules or callbacks.
+Snapshots own copied actor/event arrays and may outlive their runner; Ring Out borrows its immutable slab plan.
+No cached mutable observation owner or processing node is added. Hot bot observations return scalar/struct values
+synchronously at the original reads, without constructing presentation snapshots. `RoundAlive` returns a life fact;
+`ShortFuseHealth` takes the explicit mode clock. King retains its existing value API, now mapped to Rules, with local
+conversion supplied by the runner and received-state conversion on network peers. Arena mutation, accepted-fact
+submission, command application and runner retirement keep their original ownership and order.
+
+**Target B3b1:** Bank policy is composed into King and Lobby has its own client adapter. ServerRun's `NextRound { RebuildWorld: true }` fallback ends the match: general round-world replacement,
 health/lives and online segment streaming still require end-to-end work.
 
 ## Simulation and presentation

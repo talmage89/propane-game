@@ -88,9 +88,9 @@ public partial class LabOverlay : CanvasLayer
     {
         var me = Lab.Player.ActorId;
         string Name(int actor) => actor == me ? "You" : prototype.Roster.First(a => a.ActorId == actor).Name;
-        switch (prototype.Rules)
+        switch (prototype.View)
         {
-            case Modes.RingOutRules ring:
+            case Modes.RingOutState ring:
             {
                 var plan = ring.Plan;
                 var next = plan.NextDissolve(prototype.Elapsed) - prototype.Elapsed;
@@ -102,7 +102,7 @@ public partial class LabOverlay : CanvasLayer
                 var summary = string.Join("  ·  ", order.Select(a => $"{Modes.RingOutHud.Ordinal(ring.Place(a) ?? 0).ToLowerInvariant()} {Name(a)}"));
                 return (line, winner, summary);
             }
-            case Modes.DissolveRunRules run:
+            case Modes.DissolveRunState run:
             {
                 var line = $"{run.Meters} m · {run.Tanks} tanks · score {run.Score}" + (run.Caught ? "" : $" · front {Mathf.FloorToInt((float)run.Gap)} m behind");
                 var dissolve = Lab.Dissolve!;
@@ -111,7 +111,7 @@ public partial class LabOverlay : CanvasLayer
                 var summary = $"{run.Meters} m + {run.Tanks} tanks × {Lab.World.Tuning.DissolveTankPoints} + chains {run.Bonus} · best chain {run.BestChain}\n{best} · {seed}";
                 return (line, $"RUN OVER · {run.Score}", summary);
             }
-            case Modes.ShortFuseRules fuse:
+            case Modes.ShortFuseState fuse:
             {
                 var line = $"Round {fuse.Round} · {fuse.AliveCount} standing · " +
                     string.Join("  ·  ", prototype.Roster.Select(a => $"{Name(a.ActorId)} {fuse.Wins(a.ActorId)}"));

@@ -41,12 +41,11 @@ public sealed record ModeHud(
 public interface IModeView;
 
 /// <summary>
-/// What a presenter reads: mode state as the local peer knows it, plus the world facts it may point at. Where the
-/// peer runs the rules itself (the Lab), <paramref name="Rules"/> and <paramref name="Clock"/> let a presenter read
-/// mode-specific state such as a boundary. <paramref name="View"/> is the mode's own state, on any peer.
+/// What a presenter reads: copied mode observations plus local world facts. Producers sample read-time values
+/// against an explicit mode clock before handing the input to a presenter. No live rules cross this boundary.
 /// </summary>
 public sealed record ModeHudInput(int LocalActor, ModePhase Phase, float TimeLeft, IReadOnlyDictionary<int, int> Scores,
-    IReadOnlyList<Vector3> Objectives, bool ShowObjectives, IModeRules? Rules = null, ModeClock Clock = default, IModeView? View = null);
+    IReadOnlyList<Vector3> Objectives, bool ShowObjectives, ModeClock Clock = default, IModeView? View = null);
 
 public interface IModeHudPresenter
 {

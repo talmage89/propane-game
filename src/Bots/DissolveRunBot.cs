@@ -9,8 +9,8 @@ namespace Propane.Bots;
 /// <summary>
 /// Dissolve Run's goal policy, kept simple for the prototype and its scripted runs: keep heading down the street
 /// (world +X), never stopping while the front is close; on the way, shoot tanks ahead that stand outside a blast's
-/// throw, finishing the ones it punctured, and take ammo cans it passes when it runs low. It reads the front from the
-/// rules, as a pure function of the clock.
+/// throw, finishing the ones it punctured, and take ammo cans it passes when it runs low. It reads the already
+/// integrated front from a plain observation of the latest accepted step.
 /// </summary>
 public sealed class DissolveRunBot : IBotGoalPolicy
 {
@@ -40,15 +40,15 @@ public sealed class DissolveRunBot : IBotGoalPolicy
     {
         motor.Begin(dt);
         var player = world.Player;
-        if (!world.IsPlaying || world.Rules is not DissolveRunRules rules || rules.Caught || player.IsRagdolled)
+        if (!world.IsPlaying || world.DissolveRun is not { } observation || observation.Caught || player.IsRagdolled)
         {
             motor.Reset();
-            status.Set(world.Rules is DissolveRunRules { Caught: true } ? "caught" : player.IsRagdolled ? "down" : "waiting");
+            status.Set(world.DissolveRun is { Caught: true } ? "caught" : player.IsRagdolled ? "down" : "waiting");
             return;
         }
         var tuning = world.World.Tuning;
         var here = player.GlobalPosition;
-        var gap = here.X - rules.Front;
+        var gap = here.X - observation.Front;
         // Down the street, drifting back to its crown so parked cars and yards do not trap it.
         var ahead = new Vector3(here.X + 14f, here.Y, here.Z * 0.4f);
         var ammo = player.Ammo;

@@ -11,7 +11,7 @@ namespace Propane.Bots;
 /// Ring Out's goal policy, kept simple for the prototype: stay on ground that is not about to dissolve, keeping to
 /// the middle; pick the opponent nearest the edge (and near this bot); get to the side away from their nearest edge and
 /// shove them toward it with melee; and when that opponent stands by a pile, set the pile off from a safe distance to throw
-/// them. It reads the boundary from the rules, as a pure function of round time, and never routes over a lot that has
+/// them. It reads the boundary from plain observations at round time, and never routes over a lot that has
 /// gone (the shared navigation lattice remembers the ground as it was).
 /// </summary>
 public sealed class RingOutBot : IBotGoalPolicy, INavigationArea
@@ -57,19 +57,19 @@ public sealed class RingOutBot : IBotGoalPolicy, INavigationArea
     {
         motor.Begin(dt);
         var player = world.Player;
-        if (!world.IsPlaying || world.Rules is not RingOutRules rules || !rules.IsAlive(player.ActorId) || player.IsRagdolled)
+        if (!world.IsPlaying || world.RingOut is not { } observation || !world.RoundAlive(player.ActorId) || player.IsRagdolled)
         {
             motor.Reset();
             status.Set(player.IsRagdolled ? "down" : "out");
             return;
         }
-        if (plan != rules.Plan)
+        if (plan != observation.Plan)
         {
-            plan = rules.Plan;
+            plan = observation.Plan;
             lots.Clear();
             lots.AddRange(plan.Lots);
         }
-        elapsed = rules.Elapsed(world.Clock);
+        elapsed = observation.Elapsed;
         var tuning = world.World.Tuning;
         var here = player.GlobalPosition;
 
@@ -102,7 +102,7 @@ public sealed class RingOutBot : IBotGoalPolicy, INavigationArea
         // 3. Choose whom to push: near the edge and near this bot.
         retarget -= dt;
         var fresh = retarget <= 0;
-        if (fresh || quarry == null || !GodotObject.IsInstanceValid(quarry) || !rules.IsAlive(quarry.ActorId))
+        if (fresh || quarry == null || !GodotObject.IsInstanceValid(quarry) || !world.RoundAlive(quarry.ActorId))
         {
             retarget = RetargetInterval;
             quarry = null;
@@ -111,7 +111,7 @@ public sealed class RingOutBot : IBotGoalPolicy, INavigationArea
             for (var i = 0; i < bodies.Count; i++)
             {
                 var body = bodies[i];
-                if (!rules.IsAlive(body.ActorId)) continue;
+                if (!world.RoundAlive(body.ActorId)) continue;
                 var score = body.GlobalPosition.DistanceTo(here) + 1.5f * Edge(plan, elapsed, body.GlobalPosition).Distance;
                 if (score < best) { best = score; quarry = body; }
             }

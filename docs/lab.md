@@ -124,6 +124,15 @@ prototype runner callback (including brains and King's internal retuning), with 
 fixture: runner clocks advance, but Jolt, arena processing and other scene nodes do not. Run identical probe
 sources on parent and candidate in alternating pairs; ordinary rendered scenarios still verify play and appearance.
 
+Prototype presentation reads copied mode observations (`RingOutState`, `KingState`, `ShortFuseState`,
+`DissolveRunState`) through `PrototypeRunner.View`. Producers sample time-dependent values with the runner's explicit
+mode clock. Snapshots retain copied actor/event values and the immutable Ring Out plan, never live rules or native
+objects. They need no disposal and are collected when their consumers release them. HUD inputs and bot contracts
+expose no rules. Bots use allocation-free scalar/struct observations at their original synchronous read points;
+Short Fuse health still uses the explicit mode clock, and Dissolve's front remains the already integrated rule fact.
+Rules, arenas and runners keep mutation, command order, tuning sampling and round replacement. The independent
+presenter oracles and parent comparisons are described in [Lab scenarios](lab-scenarios.md).
+
 `VoidWorldSource`, `SuburbWorldSource` and `SegmentWorldSource` implement the existing `ISessionWorldSource` seam. The
 factory needs no source-specific branches. The segment source is the streaming one: each segment is its own suburb (its
 own content root, effects and physics bodies) under a run root, built from a `SegmentPlan` that an `ISegmentFeed`

@@ -147,6 +147,11 @@ public sealed class RingOutRules : IModeRules
     /// <summary>Round time on this clock, or zero before the round starts.</summary>
     public double Elapsed(ModeClock clock) => roundStart is { } start ? Math.Max(0, clock.Now - start) : 0;
 
+    /// <summary>Plain presentation values at this mode clock; no rule-owned collection escapes.</summary>
+    public RingOutState State(ModeClock clock) => new(Plan, Over, AliveCount, Elapsed(clock),
+        actors.Select(a => new RingOutActor(a.ActorId, a.Name, IsAlive(a.ActorId), Place(a.ActorId), Credits(a.ActorId))).ToArray(),
+        eliminations.ToArray());
+
     public void Initialize(ModeSetup setup)
     {
         actors.Clear(); alive.Clear(); started.Clear(); places.Clear(); credits.Clear(); lastThrow.Clear(); eliminations.Clear();

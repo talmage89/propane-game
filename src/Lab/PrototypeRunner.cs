@@ -68,8 +68,15 @@ public partial class PrototypeRunner : Node
     public ModeClock Clock => new(Phase, round, offset + elapsed,
         IsPlaying ? (Mode.Timer == RoundTimer.Countdown ? offset + length : double.PositiveInfinity) : offset + elapsed);
     public bool Spectating(int actorId) => spectating.Contains(actorId);
-    /// <summary>The mode's own state for its HUD, bots and arena, from the rules this runner holds (King's zone).</summary>
-    public IModeView? View => (Rules as KingRules)?.State(Clock);
+    /// <summary>Plain presentation snapshots, copied at the caller's mode-clock read; never used by hot bot reads.</summary>
+    public IModeView? View => Rules switch
+    {
+        RingOutRules ring => ring.State(Clock),
+        KingRules king => king.State(Clock),
+        ShortFuseRules fuse => fuse.State(Clock),
+        DissolveRunRules run => run.State(Clock),
+        _ => null,
+    };
     private readonly Dictionary<int, BotActivity> activity = new();
     /// <summary>Whether a bot actor makes progress (<see cref="BotActivity"/>), kept across rounds.</summary>
     public BotActivity ActivityOf(int actorId) => activity.TryGetValue(actorId, out var known) ? known : activity[actorId] = new BotActivity();
@@ -360,7 +367,7 @@ public partial class PrototypeRunner : Node
 
     /// <summary>The HUD data for the local player, from the rules this runner holds.</summary>
     public ModeHud Present(IReadOnlyList<Vector3> objectives) => Hud.Present(new ModeHudInput(Lab.Player.ActorId, Phase, TimeLeft, scores,
-        objectives, true, Rules, Clock, View));
+        objectives, true, Clock, View));
 
     private sealed class BotWorld(PrototypeRunner runner, PlayerCharacter actor) : IBotWorld
     {
@@ -388,7 +395,18 @@ public partial class PrototypeRunner : Node
             }
         }
         public IReadOnlyList<AmmoPickup> Pickups => runner.Lab.Dissolve?.Pickups ?? Array.Empty<AmmoPickup>();
-        public IModeRules? Rules => runner.Rules;
+        public RingOutBotView? RingOut => runner.Rules is RingOutRules ring ? new(ring.Plan, ring.Elapsed(Clock)) : null;
+        public double? ShortFuseMaxHealth => (runner.Rules as ShortFuseRules)?.MaxHealth;
+        public DissolveRunBotView? DissolveRun => runner.Rules is DissolveRunRules run ? new(run.Caught, run.Front) : null;
+        public bool RoundAlive(int actorId) => runner.Rules switch
+        {
+            RingOutRules ring => ring.IsAlive(actorId),
+            ShortFuseRules fuse => fuse.IsAlive(actorId),
+            _ => false,
+        };
+        public double ShortFuseHealth(int actorId, ModeClock clock) =>
+            runner.Rules is ShortFuseRules fuse ? fuse.Health.Health(actorId, clock.Now) : 0;
+        public KingBotView? King => runner.Rules is KingRules king ? KingBotView.Read(king, Clock) : null;
         public ModeClock Clock => runner.Clock;
         public IModeView? View => runner.View;
     }

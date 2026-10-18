@@ -1,12 +1,3 @@
-bot-live-owner	Propane.Bots.DissolveRunBot	Propane.Modes.DissolveRunRules	B3b	Prototype/King bot reads live rules; replace with plain clocked observations.
-bot-live-owner	Propane.Bots.DissolveRunBot	Propane.Modes.IModeRules	B3b	Prototype bot observation exposes live rules; replace with plain clocked values.
-bot-live-owner	Propane.Bots.IBotWorld	Propane.Modes.IModeRules	B3b	Prototype bot observation exposes live rules; replace with plain clocked values.
-bot-live-owner	Propane.Bots.IBotWorld	Propane.Modes.KingRules	B3b	Prototype/King bot reads live rules; replace with plain clocked observations.
-bot-live-owner	Propane.Bots.KingBotView	Propane.Modes.KingRules	B3b	Prototype/King bot reads live rules; replace with plain clocked observations.
-bot-live-owner	Propane.Bots.RingOutBot	Propane.Modes.IModeRules	B3b	Prototype bot observation exposes live rules; replace with plain clocked values.
-bot-live-owner	Propane.Bots.RingOutBot	Propane.Modes.RingOutRules	B3b	Prototype/King bot reads live rules; replace with plain clocked observations.
-bot-live-owner	Propane.Bots.ShortFuseBot	Propane.Modes.IModeRules	B3b	Prototype bot observation exposes live rules; replace with plain clocked values.
-bot-live-owner	Propane.Bots.ShortFuseBot	Propane.Modes.ShortFuseRules	B3b	Prototype/King bot reads live rules; replace with plain clocked observations.
 direction	Propane.Modes.KingRules	Propane.World.Plan.SuburbPlan	C1	Move misplaced plain contracts/helpers to their owning module; preserve bytes and identity arithmetic.
 direction	Propane.Modes.KingRules	Propane.World.Plan.TankPlacement	C1	Move misplaced plain contracts/helpers to their owning module; preserve bytes and identity arithmetic.
 direction	Propane.Net.AppearanceCodec	Propane.Net.NetReader	C1	Move misplaced plain contracts/helpers to their owning module; preserve bytes and identity arithmetic.
