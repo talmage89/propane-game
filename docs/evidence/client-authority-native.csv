@@ -1,0 +1,12 @@
+run,profile,clients,audits,grids,body_pairs,final_rest_m,final_moving_m,longest_episode_s,disagreements
+root-repeat,faults,2,2,998,27924,0.000,0.147,0.30,0
+gather,faults,2,1,1100,32903,0.000,0.000,0.25,0
+puncture-race,faults,2,1,599,16772,0.000,0.033,0.15,0
+drop-refusal,faults,2,1,599,17333,0.000,0.000,0.25,0
+departure,faults,2,1,900,22328,0.000,0.436,0.40,0
+repeat,faults,4,2,1198,177456,0.001,0.174,0.55,0
+bank-clean,clean,4,1,2000,182593,0.001,0.177,1.45,0
+bank-faults,faults,4,1,1999,140033,0.000,0.344,0.45,0
+king-clean,clean,4,1,1999,419478,0.000,0.101,0.25,0
+king-faults,faults,4,1,1999,343369,0.000,0.246,0.95,0
+future-repeat,faults,2,2,998,27944,0.000,0.000,0.00,0

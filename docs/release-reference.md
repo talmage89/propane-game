@@ -125,3 +125,25 @@ retirement fixture covers lifecycle boundaries, not the full run's navigation or
 network delivery and worker completion are not assumed deterministic. Publication transcripts prove controlled
 send behavior, not native convergence. Real-device input checks, rendered scene review and statistical soaks remain
 necessary; idle percentages alone do not prove bot equivalence.
+
+## Client authority differentials
+
+`tools/dev/authority_equivalence.py` prepares isolated source builds under `build/` with the same opt-in observer.
+It records request sends (exact bytes), queues, reservations, expected epochs, sent roots, gather membership,
+physical restoration boundaries and notification order. It never edits production sources in the checkout or the
+frozen release fixtures. Fixed world/drop RNG seeds apply only in observed scratch builds, so controlled suites
+are repeatable without changing ordinary tests or gameplay.
+
+```sh
+python3 -B tools/dev/authority_equivalence.py --revision=PARENT --label=authority-parent --observe
+python3 -B tools/dev/authority_equivalence.py --revision=working --label=authority-candidate --observe
+godot-mono --headless --path build/authority-parent/project res://scenes/dev/unit_tests.tscn -- --suite=AuthorityTests --match-seed=23 --authority-transcript="$PWD/build/authority-parent.jsonl"
+# Repeat on the candidate project with a fresh transcript path, then compare with cmp.
+# Run GatherTests on both projects too, with separate transcript paths.
+```
+
+Use fresh labels and transcript paths: observations append. Omit `--observe` for measurements. The identical
+`AuthorityBenchTests --authority-bench` probe measures the complete Match physics callback with and without
+an atomic claim/reply each tick, including encoding, server admission and physical reconciliation. It reports
+allocation, whole-tick mean/p95/p99 and exact request/notification counts after 20,000 warm-up ticks and 100,000 measured ticks in the playing phase. Run at least
+three alternating parent/candidate pairs; observed runs are not performance samples.

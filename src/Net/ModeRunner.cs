@@ -70,7 +70,7 @@ public static class ModeWires
 
 /// <summary>
 /// One run's mode on the server: its definition, rules instance, phase machine, monotonic command ids and causal
-/// gate. The lobby server owns transport and the ledger; everything mode-specific passes through here.
+/// gate. The lobby server owns transport; its run owns the ledger; everything mode-specific passes through here.
 /// </summary>
 public sealed class ModeRunner
 {

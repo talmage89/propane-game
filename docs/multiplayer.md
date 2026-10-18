@@ -55,6 +55,14 @@ clears the buffer; a new MatchStart invalidates the old queue and receiver, and 
 new queue. The inbox is capped at 4096 packets and 4 MiB of wire data; exceeding it disconnects with an explicit
 loading-buffer message rather than continuing with missing events.
 
+`LobbyServer` owns each lobby's current run routes. A plain `ServerRun` owns the corresponding match or roaming
+world, including its native tuning resource. Delivery, loading status and lobby transitions use synchronous callbacks;
+the run cannot access the server's connection or lobby dictionaries. Match actor identities and creator debug
+capability freeze at start; roaming actors follow roster snapshots at each lobby-state broadcast. The facade detaches
+routing before retiring tuning on results return, an empty lobby, staging replacement, identity exhaustion,
+construction failure or shutdown. Retirement is idempotent and preserves terminal packet order. Runs tick at the
+existing server process boundary; there is no additional node or scheduler.
+
 ## Appearance
 
 The lobby accepts any opaque sRGB color, including duplicates and near-duplicates. Eight presets remain available;
@@ -349,7 +357,8 @@ The server is the game itself started with `-- --server` (and `--headless`). It 
 | Path | Contents |
 | --- | --- |
 | `src/Main.cs` | The root scene: menus over a backdrop, single player, the match, or server mode. |
-| `src/Net/LobbyServer.cs` | The server: lobbies, match flow and clock, relaying, first-claim ties, pickups. |
+| `src/Net/LobbyServer.cs`, `LobbyServer.World.cs` | Connections, lobby admission/roster, staging, transport and application diagnostics. |
+| `src/Net/ServerRun.cs` | One match or roaming lifetime: actors, action admission, relay policy, ledger, pickups, readiness, mode and tuning. |
 | `src/Net/LobbyServer.World.cs`, `LobbyWire.cs`, `Match.Lobby.cs`, `src/Modes/LobbyRules.cs` | The lobby world: the server's run, its pile stock, a peer's world, and its pure rules. |
 | `src/Net/ModeRunner.cs`, `ModeEnvelope.cs`, `src/Modes` | The mode runner, the fixed mode envelope and pure mode rules ([modes.md](modes.md)). |
 | `src/Net/NetClient.cs`, `NetTransport.cs`, `Protocol.cs` | The client connection, the ENet adapter, the message types. |
@@ -358,12 +367,29 @@ The server is the game itself started with `-- --server` (and `--headless`). It 
 | `src/Net/MatchInbox.cs` | Per-match buffering until scene initialization, with generation-safe cleanup. |
 | `src/Net/BuildInfo.cs`, `UpdateCheck.cs` | Versions and who plays together; the launch check for a newer release. |
 | `src/Net/Match.cs` | A peer's shared match world: actions from its owned actors and playback of other actors' events. |
+| `src/Net/ClientAuthorityTransactions.cs` | Session-owned causal requests, reservations, expected epochs, sent roots and gather request bookkeeping. |
 | `src/Net/BodySync.cs` | Ownership and corrections for tanks and cars. |
 | `src/Net/SnapshotBuffer.cs` | Smooth playback of other players, `InterpolationDelay` behind. |
 | `src/Net/PlanCodec.cs` | Packs a suburb plan for sending. |
 | `src/Net/AmmoPickup.cs` | The ammo can and its build-up reveal. |
 | `src/UI/Menus.cs`, `MatchHud.cs`, `MatchMenu.cs`, `ResultsScreen.cs` | Front end, match HUD, pause menu, results. |
 | `src/UI/StageScreen.cs`, `LobbyCard.cs`, `src/Fx/LobbyFloor.cs` | The lobby world's stage screen, its lobby card and its floor (pads, ring, title). |
+
+### Client authority ownership
+
+Match creates `ClientAuthorityTransactions` during session configuration. The existing session stop callback
+retires it after inbox detachment and event unsubscription, including failed construction. Disposal is idempotent:
+it detaches pending gather listeners, clears requests/reservations/causal roots and releases the replica collaborator.
+A replacement match gets a fresh owner and request sequence. Empty flushes allocate nothing; claim selectors
+exist only while constructing a proposal at send time. Actor action sequences and `DropPredictions` remain
+on each actor; BodySync retains correction, and Match retains physical body lookup, reconstruction and wire sends.
+
+Resolution is synchronous: finish the request and release reservations, update dependent expected epochs,
+reconcile canonical bodies, flush eligible requests, notify listeners in registration order, then remove gather
+membership. Proposals are sampled when sent. Root requests precede children; refused children retain their original
+epochs and receive explicit refusals. Gather grants keep their lease membership through notification and revalidate
+the granted epoch before moving a tank. A synchronous send can retire the session; an in-flight resolution still
+finishes its notification, while the disposed owner retains no queued work or callbacks.
 
 ### Transport contract
 
@@ -777,7 +803,7 @@ would take the world past `LobbyTankLimit`. The server's own dials build the wor
 The lobby's title stands on the floor, turned to each arrival; the lobby card at the top left names the lobby and its
 settings, and name tags float over everyone.
 
-**The server.** `LobbyServer.World.cs` runs each world as a run like a match, with its own id from the match id
+**The server.** `LobbyServer.World.cs` opens each world as a plain `ServerRun`, like a match, with its own id from the match id
 sequence, its own ledger and its own relays; the creator is its body authority (a successor takes over, as for a
 match). Unlike a match, its membership follows the lobby's roster live. Each arrival, at creation, on joining or on
 returning from a match, gets its own world start: MatchStart (the void plan), an Authority snapshot of every live body

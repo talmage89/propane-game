@@ -5,12 +5,15 @@ namespaces, `var` locals and System usings first. Inline statements and switch-c
 layout. Long expressions are not reflowed. Expression bodies and naming remain editor suggestions rather than
 build warnings. Run `dotnet format Propane.sln` to apply the baseline.
 
-`make lint` first checks that every relative link and image in the tracked Markdown files resolves to a tracked file
-and, for a `#fragment`, to a heading in it (`tools/dev/check_links.py`, standard library only; links to other sites are
-not fetched). It then verifies formatting and performs a full build with warnings as errors. A previous incremental build
-cannot hide warnings. `make check` runs lint before the headless regression tests, including with `make -j`, and ends with
-`make test-infra`, the gate's own self-tests. It stops on a lint failure. All three tasks appear in `make`'s help listing.
-When you move or rename a document, fix its links in the same commit; the check names each broken one with its line.
+`make lint` checks script/.uid pairs and every relative link and image in tracked Markdown: each must resolve to a
+tracked file and, for a `#fragment`, to a heading in it (`tools/dev/check_links.py`, standard library only; links to
+other sites are not fetched). It verifies game C# formatting and fully rebuilds Debug and ExportRelease with
+warnings as errors; a previous incremental build cannot hide warnings. Both assemblies then pass the architecture
+ratchet, followed by source checks for global writes, clocks/timers and worker entries. [Architecture](architecture.md)
+owns the module/lifetime contract; [checker operation](../tools/architecture/README.md) describes approvals and fixtures.
+`make check` runs lint before the headless regression tests, including with `make -j`, and ends with `make test-infra`,
+the gate's own self-tests. It stops on a lint failure. All three tasks appear in `make`'s help listing. When you move
+or rename a document, fix its links in the same commit; the check names each broken one with its line.
 
 `Propane.csproj` pins analysis to .NET 10's default rules, with the recommended Reliability, Usage and Security
 sets. Nullability is enabled. CA1001 additionally checks ownership of disposable fields; CA2007 requires explicit
@@ -80,7 +83,7 @@ and the rest) go through `DevArgs`; a Debug server applies `--tune.*` too, befor
 | Option | Read by | Effect |
 | --- | --- | --- |
 | `--server`, `--port=N`, `--start-score=N` | `Main` | Run only the multiplayer server, on `N` (default `Protocol.DefaultPort`), starting scores at `N` (default 0). |
-| `--match-seed=N` | `LobbyServer` | Debug builds: the next match plan uses seed `N`. |
+| `--match-seed=N` | `ServerRun` | Debug builds: the next match plan uses seed `N`. |
 | `--connect=host[:port]`, `--name=Name` | `Main` | Open the Connect screen on that server as that name. |
 | `--windowed` | `Main` | Do not maximize a windowed game. |
 | `--release-test` | `Main` | Run the release smoke test in place of the front end ([Release smoke](#release-smoke)). |
@@ -326,3 +329,18 @@ instrumentation on alternating parent/candidate builds, headlessly and rendered,
 godot-mono --headless --fixed-fps 60 --path . res://scenes/dev/match_player_benchmark.tscn
 godot-mono --disable-vsync --resolution 960x540 --fixed-fps 60 --path . res://scenes/dev/match_player_benchmark.tscn
 ```
+
+## Server run differential probes
+
+`tools/dev/server_equivalence.py --revision=REV --label=NAME [--observe]` builds a private runtime below
+`build/NAME/project`, using that revision's production sources and the current server proof harness. It does not
+change the checkout or release references. With `--observe`, the scratch server records every incoming/outgoing
+packet at its receive/send boundary when given `--server-transcript=ABSOLUTE_PATH`: direction, peer, traffic class
+and exact bytes, in call order. Use a fresh file and `--match-seed=23` for each ServerTests, ParticipantServerTests,
+KingOnlineTests, LobbyWorldTests and LobbySupplyTests run; compare the parent and candidate files byte for byte.
+
+Without observation, `--suite=ServerRunBenchTests --server-bench --match-seed=23` measures production receive,
+relay and whole run ticks for Bank, King and roaming. Each measured tick delivers one actor pose and eight body
+states. Time advances from the fixture clock, so match clocks and King actor sampling remain active. Packet
+preparation and 20,000 warm-up ticks are excluded; 30,000 ticks are measured per mode. Alternate at least three parent/candidate pairs. The report
+includes allocations, mean, p95/p99, packet counts and payload bytes; packet instrumentation stays off.

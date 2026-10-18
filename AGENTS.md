@@ -2,9 +2,9 @@
 
 Keep this file lean: only what an agent can't learn from the code and the other docs, in as few words as possible.
 
-Propane: a Godot 4.7.2 .NET (C#, Jolt) game. Read README.md, design/ and docs/development.md first, and
-docs/multiplayer.md for network work. Windows, macOS (Apple Silicon) and Linux are all targets; development and
-verification happen on Linux.
+Propane: a Godot 4.7.2 .NET (C#, Jolt) game. Read README.md, design/ and docs/development.md first;
+read and obey docs/architecture.md. Read docs/multiplayer.md for network work. Windows, macOS (Apple Silicon) and
+Linux are targets; development and verification happen on Linux.
 
 ## Rules
 
@@ -18,6 +18,12 @@ verification happen on Linux.
   suburb is built, tanks, tuners) needs a minor release. Bump `Protocol.Version` when a message changes shape; Hello,
   Welcome and Rejected may only gain trailing fields.
 - Public repo: no personal hosts, IPs or paths.
+- New mutable owners state lifetime/disposal; timers state clock domain; cross-module edges follow the architecture
+  map or receive explicit review. Extractions preserve callbacks and synchronous order. Shared behavior changes land
+  separately with release classification. Update contracts and record incomplete/inherited proof honestly.
+- Package reports name moved state, retirement, removed dependencies and ordering/RNG/clock/compatibility proof.
+  Hot paths need paired allocations, whole-tick cost, tails and workload counts. Land production and harness changes
+  separately; prove harness assertions/coverage first. Reserve CPU/GPU time for native performance.
 
 ## Working
 

@@ -14,8 +14,8 @@
     <AnalysisLevelUsage>10.0-recommended</AnalysisLevelUsage>
     <AnalysisLevelSecurity>10.0-recommended</AnalysisLevelSecurity>
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
-    <!-- build/ holds release output, logs and scratch copies of the project; never compile them. -->
-    <DefaultItemExcludes>$(DefaultItemExcludes);build/**</DefaultItemExcludes>
+    <!-- Keep scratch output and independent tooling projects out of the game assembly/export. -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);build/**;tools/**</DefaultItemExcludes>
   </PropertyGroup>
 
   <!-- Godot release export publishes ExportRelease, not the local optimized Release used by benchmarks.
