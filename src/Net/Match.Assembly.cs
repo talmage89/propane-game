@@ -25,7 +25,7 @@ public partial class Match
             match.me = match.Net.MyId;
             session.ActorsChanged += match.RefreshPlayer;
             session.OnUnsubscribing(() => session.ActorsChanged -= match.RefreshPlayer);
-            match.mode = match.Setup.Mode;
+            match.mode = Modes.ModeRegistry.Resolve(match.Setup);
             match.hudPresenter = match.mode.CreateHud();
             match.bodies = new BodySync(session.World.Tuning, match.me, match.Setup.HostId);
             match.bodyPublisher = new BodyPublisher(match.bodies, match.Setup.Id, match.Net.BodySampleTime, match.Send);
@@ -63,9 +63,9 @@ public partial class Match
         World.Root.AddChild(environment);
         effects = World.EffectsRoot;
         plan = PlanCodec.Decode(Setup.Plan);
-        var settings = Setup.Mode.Supply.Suburb(World.Tuning, Setup.Players.Count);
+        var settings = Modes.ModeRegistry.Resolve(Setup).Supply.Suburb(World.Tuning, Setup.Players.Count);
         // A void world (the lobby's) has no slab: its plan's content stands on the construct's own floor.
-        suburb = Suburb.Build(World, plan, settings, networked: true, ground: Setup.Mode.World != Modes.ModeWorldSource.Void);
+        suburb = Suburb.Build(World, plan, settings, networked: true, ground: Modes.ModeRegistry.Resolve(Setup).World != Modes.ModeWorldSource.Void);
         World.Root.AddChild(suburb);
         World.SetContentRoot(suburb.DynamicRoot);
         if (IsLobby) BuildLobbyContent();
@@ -81,7 +81,7 @@ public partial class Match
         };
         suburb.AddChild(gather);
 
-        for (var i = 0; i < (Setup.Mode.Supply.Pickups ? plan.AmmoSpots.Count : 0); i++)
+        for (var i = 0; i < (Modes.ModeRegistry.Resolve(Setup).Supply.Pickups ? plan.AmmoSpots.Count : 0); i++)
         {
             var pickup = new AmmoPickup { Name = $"Ammo_{i}", Index = i };
             suburb.DynamicRoot.AddChild(pickup);

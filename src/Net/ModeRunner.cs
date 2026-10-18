@@ -24,8 +24,8 @@ public interface IModeHost
     uint Life(int actorId);
     /// <summary>The peer that owns everything nobody has touched: the creator, or its successor.</summary>
     int WorldAuthority { get; }
-    /// <summary>The match's tuning, for what a runner decides beside the rules (where a fresh pile may stand).</summary>
-    Core.Tuning Tuning { get; }
+    /// <summary>Plain live pile values sampled at this read, for placement/refill decisions beside the rules.</summary>
+    ModeWireTuners WireTuners { get; }
     /// <summary>Logs a line about this match, prefixed with its id.</summary>
     void Log(string text);
     /// <summary>A body as the ledger last knew it (its owner's latest report), or null when it never existed.</summary>
@@ -61,20 +61,20 @@ public sealed class SilentModeWire : IModeWire
 public sealed class ModeRunner
 {
     private uint nextCommand;
-    public ModeDefinition Definition { get; }
+    public ServerMode Definition { get; }
     public IModeRules Rules { get; }
     public IModeWire Wire { get; }
     public ModeSchema Schema { get; }
     public ModePhaseMachine Phases { get; } = new();
     public ModeEventGate Gate { get; } = new();
 
-    internal ModeRunner(ModeDefinition definition, ModeSetup setup, ModeSchema schema, Func<IModeWire> createWire)
+    internal ModeRunner(ServerMode definition, ModeSetup setup)
     {
         Definition = definition;
         Rules = definition.CreateRules();
         Rules.Initialize(setup);
-        Schema = schema;
-        Wire = createWire() ?? throw new InvalidOperationException($"mode {definition.Id}/{definition.SchemaVersion} server wire factory returned null");
+        Schema = definition.Schema;
+        Wire = definition.CreateWire() ?? throw new InvalidOperationException($"mode {definition.Id}/{definition.SchemaVersion} server wire factory returned null");
     }
 
     public ModeClock Clock(double now) => Phases.Clock(now);
@@ -207,7 +207,7 @@ public sealed class KingWire : IModeWire
         foreach (var command in commands)
         {
             if (command is not ZoneMoved { Zone: > 0 } moved) continue;
-            var tuning = host.Tuning;
+            var tuning = host.WireTuners;
             if (wanted is { } superseded) host.Log($"king pile for zone {superseded.Pile.Zone} never placed");
             var spot = new Godot.Vector3((float)moved.Spot.X, (float)moved.Spot.Y, (float)moved.Spot.Z);
             Ask(runner, host, new KingPileWanted(moved.Zone, spot, tuning.KingPileCount, tuning.KingPileReach, tuning.KingPileClearance));

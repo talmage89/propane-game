@@ -254,7 +254,7 @@ public static class MessageCodec
     private static ModeSettings ReadModeSettings(NetReader r)
     {
         var settings = new ModeSettings(LobbyMode(r.Byte()), r.Float(), r.Int());
-        if (!settings.Valid) { throw new InvalidDataException($"invalid lobby settings: mint pace {settings.MintSeconds}, tank supply {settings.TankSupply}"); }
+        if (!settings.ValidValues) { throw new InvalidDataException($"invalid lobby settings: mint pace {settings.MintSeconds}, tank supply {settings.TankSupply}"); }
         return settings;
     }
 

@@ -22,6 +22,7 @@ and Dissolve Run the first [segment world source](#segments).
 | `src/World/SegmentPlans.cs`, `src/Session/SegmentWorldSource.cs` | Segment plans from a run seed and index; the segment world source and its feed. |
 | `src/Lab/PrototypeRunner.cs`, `LabMatch.cs` | The offline runner that drives a prototype's rules in the Lab, and a multi-round match it carries. |
 | `src/Net/ModeEnvelope.cs` | The envelope record, explicit schema constructors/codecs, the causal gate and command order. |
+| `src/Net/ServerModes.cs` | Server-owned presentation-free mode inputs, ordered eligibility and plain live wire tuner observations. |
 | `src/Net/ModeRunner.cs` | One run's mode on the server, with Tank Bank and King wire adapters. |
 | `src/Bots/IBotWorld.cs` | Bot observations and the per-mode goal policy interface. |
 
@@ -41,7 +42,11 @@ ammo policy (`ModeSupply`: suburb settings for a player count, limited ammo, amm
 presenter, the bot goal policy, the tuners the rules copy and the envelope schema version. Composition pairs each
 networked definition with its existing schema and server wire factory in a validated `ModeBundle`. Sandbox selects
 an explicit silent wire; a missing integration fails before a runner starts. Client mode policy remains in Match
-until B3b. `ModeRegistry.Shipped` is immutable; tests use `RegisterScoped` overlays, disposed in reverse order to
+until B3b. `ModeRegistry.CreateServer` selects server-owned mode inputs and supplies only metadata, rules/schema/wire
+factories, tuner names, supply settings and rule tuner values. Server owners never resolve ModeRegistry or carry
+ModeDefinition/ModeSupply/HUD factories. ModeSettings and MatchSetup remain plain values; composition resolves a
+client definition with `ModeRegistry.Resolve(setup)`. Lobby setting bounds live in Foundation's LobbyModeLimits.
+`ModeRegistry.Shipped` is immutable; tests use `RegisterScoped` overlays, disposed in reverse order to
 restore the exact prior catalog on success or exception. The codec layer has no mutable registration table.
 `ModeRegistry` ships:
 

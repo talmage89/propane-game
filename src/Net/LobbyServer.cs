@@ -5,6 +5,7 @@ using System.Linq;
 using Godot;
 using Propane.Core;
 using Propane.Modes;
+using Propane.World.Plan;
 
 namespace Propane.Net;
 
@@ -56,7 +57,7 @@ public partial class LobbyServer : Node
         /// <summary>The mode and settings its creator chose, as every member sees them.</summary>
         public ModeSettings Settings = ModeSettings.Default;
         /// <summary>The mode its next match plays: the creator's choice, or a test's synthetic mode.</summary>
-        public ModeDefinition Mode = ModeRegistry.TankBank;
+        public ServerMode Mode = null!;
         /// <summary>The world its members roam while it waits (and while the stage counts down); null otherwise.</summary>
         public ServerRun? World;
         /// <summary>While staging: the creator's start snapshot, and when the match begins.</summary>
@@ -70,9 +71,18 @@ public partial class LobbyServer : Node
     private bool subscribed;
     private double nextDiagnostics;
 
-    public LobbyServer() : this(PacketTransports.CreateServer()) { }
-    public LobbyServer(ServerTransport services, IMonotonicClock? clock = null)
+    private readonly ServerModes modes;
+    private readonly Func<ServerMode, Tuning, int, SuburbSettings> supply;
+    private readonly Func<ServerMode, Tuning, ModeTuners> copyModeTuners;
+
+    // Parameterless script instantiation cannot supply application-owned mode inputs.
+    public LobbyServer() => throw new InvalidOperationException("LobbyServer requires compiled server mode inputs");
+    public LobbyServer(ServerModes modes, Func<ServerMode, Tuning, int, SuburbSettings> supply,
+        Func<ServerMode, Tuning, ModeTuners> copyModeTuners, ServerTransport services, IMonotonicClock? clock = null)
     {
+        this.modes = modes ?? throw new ArgumentNullException(nameof(modes));
+        this.supply = supply ?? throw new ArgumentNullException(nameof(supply));
+        this.copyModeTuners = copyModeTuners ?? throw new ArgumentNullException(nameof(copyModeTuners));
         transport = services.Transport;
         peerIds = services.PeerIds;
         this.clock = clock ?? MonotonicClock.Instance;
@@ -89,12 +99,6 @@ public partial class LobbyServer : Node
     internal Func<ParticipantRoster> RosterFactory { get; set; } = () => new();
     /// <summary>The roster revision of a peer's lobby (0 outside one), for request fixtures.</summary>
     internal uint RosterRevision(int peer) => clients.GetValueOrDefault(peer)?.Lobby?.Roster.Revision ?? 0;
-    /// <summary>
-    /// The mode new lobbies start in (Tank Bank). Tests may start them in any lobby mode, or play a synthetic one, which
-    /// lobbies then advertise as Tank Bank.
-    /// </summary>
-    internal ModeDefinition LobbyMode { get; set; } = ModeRegistry.TankBank;
-
     public int Port { get; set; } = Protocol.DefaultPort;
 
     public bool Running { get; private set; }
@@ -240,7 +244,7 @@ public partial class LobbyServer : Node
                     if (client.Lobby is { Phase: LobbyPhase.Waiting } modeLobby && modeLobby.CreatorId == client.Id)
                     {
                         modeLobby.Settings = (ModeSettings)message.Payload;
-                        modeLobby.Mode = modeLobby.Settings.Mode;
+                        modeLobby.Mode = modes.ForLobby(modeLobby.Settings.ModeId)!;
                         Log($"lobby {modeLobby.Id}: {modeLobby.Mode.Name}, {modeLobby.Settings.TankSupply}× tank supply, a tank every {modeLobby.Settings.MintSeconds:0.0} s in the zone");
                         SendLobbyState(modeLobby);
                         BroadcastLobbyList();
@@ -309,8 +313,8 @@ public partial class LobbyServer : Node
             MatchLength = Tuning.SavedTemplate.MatchLengthDefault,
             Capacity = Math.Clamp(Tuning.SavedTemplate.MaxPlayers, 2, Protocol.TestedActorCeiling),
             Roster = RosterFactory(),
-            Settings = ModeSettings.Default with { ModeId = ModeRegistry.ForLobby(LobbyMode.Id)?.Id ?? ModeRegistry.TankBankId },
-            Mode = LobbyMode,
+            Settings = ModeSettings.Default with { ModeId = modes.ForLobby(modes.Default.Id)?.Id ?? modes.Lobby[0].Id },
+            Mode = modes.Default,
         };
         lobbies[lobby.Id] = lobby;
         Log($"{client.Name} created lobby {lobby.Id}");
@@ -595,10 +599,11 @@ public partial class LobbyServer : Node
         ServerRun? match = null;
         try
         {
-            lobby.Settings.Apply(tuning);
+            tuning.KingMintSeconds = lobby.Settings.MintSeconds;
+            tuning.TankCountMultiplier = lobby.Settings.TankSupply;
             match = NewRun(lobby, client.Debug, lobby.MatchLength, false, tuning);
             RunCreated?.Invoke(match);
-            match.InitializeMatch(lobby.Roster.Present, lobby.Roster.Revision, lobby.Mode, StartScore, random.Next);
+            match.InitializeMatch(lobby.Roster.Present, lobby.Roster.Revision, StartScore, random.Next);
             lobby.Match = match;
             match.StartMatch();
         }
@@ -649,9 +654,13 @@ public partial class LobbyServer : Node
         BroadcastLobbyList();
     }
 
-    private ServerRun NewRun(Lobby lobby, bool debug, float length, bool world, Tuning tuning) =>
-        new(matchIds.Allocate(), lobby.Id, lobby.CreatorId, debug, length, world, tuning, clock,
+    private ServerRun NewRun(Lobby lobby, bool debug, float length, bool world, Tuning tuning)
+    {
+        var mode = world ? modes.Roaming : lobby.Mode;
+        return new ServerRun(matchIds.Allocate(), lobby.Id, lobby.CreatorId, debug, length, world, tuning, mode,
+            players => supply(mode, tuning, players), () => copyModeTuners(mode, tuning), clock,
             Send, world ? SetLoading : SetMatchLoading, phase => lobby.Phase = phase, () => ReturnToLobby(lobby), Log, TraceAuthority);
+    }
 
     // A frozen match roster must still name connected peers during construction. Preserve its strict lookup;
     // roaming admission uses the tolerant connection lookup below.

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Godot;
+using Propane.Core;
 using Propane.Modes;
 
 namespace Propane.Net;
@@ -112,9 +113,9 @@ public static class ModeSchemas
 
     private static ModeSchema Schema(byte mode, ushort version, ModeKind[] kinds) => new(mode, version, Array.AsReadOnly(kinds));
 
-    public static ModeSchema Sandbox() => Schema(ModeRegistry.SandboxId, 1, Array.Empty<ModeKind>());
+    public static ModeSchema Sandbox() => Schema(ModeIds.Sandbox, 1, Array.Empty<ModeKind>());
 
-    public static ModeSchema TankBank() => Schema(ModeRegistry.TankBankId, 1, new[]
+    public static ModeSchema TankBank() => Schema(ModeIds.TankBank, ModeIds.TankBankSchema, new[]
         {
             new ModeKind(TankBankKinds.Spill, "Spill", ModeDirection.Event, ModeReporter.ActorOwner, 2 + MaxSpill * BodyBytes, ReadSpill, WriteSpill),
             new ModeKind(TankBankKinds.Score, "Score", ModeDirection.Command, ModeReporter.Server, 8,
@@ -124,7 +125,7 @@ public static class ModeSchemas
             new ModeKind(TankBankKinds.Banks, "Banks", ModeDirection.Snapshot, ModeReporter.Server, 1 + Protocol.MaxWireActors * 9, ReadBanks, WriteBanks),
         });
 
-    public static ModeSchema King() => Schema(ModeRegistry.KingId, 1, new[]
+    public static ModeSchema King() => Schema(ModeIds.King, 1, new[]
         {
             new ModeKind(KingKinds.Spill, "Spill", ModeDirection.Event, ModeReporter.ActorOwner, 2 + MaxSpill * BodyBytes, ReadSpill, WriteSpill),
             new ModeKind(KingKinds.PilePlaced, "PilePlaced", ModeDirection.Event, ModeReporter.WorldAuthority, 3 + MaxSpill * TransformBytes,
@@ -141,7 +142,7 @@ public static class ModeSchemas
                 2 + 2 * SpotBytes + 4 + 4 + 1 + Protocol.MaxWireActors * 4 + 16 + 1 + Protocol.MaxWireActors * 8 + 4, ReadZone, WriteZone),
         });
 
-    public static ModeSchema Lobby() => Schema(ModeRegistry.LobbyWorldId, 1, new[]
+    public static ModeSchema Lobby() => Schema(ModeIds.Lobby, 1, new[]
         {
             new ModeKind(LobbyKinds.PilePlaced, "PilePlaced", ModeDirection.Event, ModeReporter.WorldAuthority, 3 + MaxSpill * TransformBytes,
                 ReadPilePlaced, WritePilePlaced),

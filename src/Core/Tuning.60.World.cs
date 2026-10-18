@@ -4,8 +4,8 @@ namespace Propane.Core;
 
 public partial class Tuning
 {
-    public const int TankSupplyMinimum = 1;
-    public const int TankSupplyMaximum = 8;
+    public const int TankSupplyMinimum = LobbyModeLimits.TankSupplyMinimum;
+    public const int TankSupplyMaximum = LobbyModeLimits.TankSupplyMaximum;
 
     // ---------------------------------------------------------------- World
     [ExportGroup("World")]

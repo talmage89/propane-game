@@ -36,10 +36,12 @@ public sealed record ModeDefinition(
     public bool SamplesActors { get; init; }
 
     /// <summary>Copies the tuners the rules read from a live tuning instance; rules never see the resource.</summary>
-    public ModeTuners CopyTuners(Tuning tuning)
+    public ModeTuners CopyTuners(Tuning tuning) => CopyTuners(tuning, Tuners);
+
+    internal static ModeTuners CopyTuners(Tuning tuning, IReadOnlyList<string> tuners)
     {
         var values = new Dictionary<string, double>();
-        foreach (var name in Tuners)
+        foreach (var name in tuners)
         {
             var property = typeof(Tuning).GetProperty(name) ?? throw new InvalidOperationException($"no tuner {name}");
             values[name] = Convert.ToDouble(property.GetValue(tuning), System.Globalization.CultureInfo.InvariantCulture);

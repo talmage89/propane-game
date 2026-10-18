@@ -11,19 +11,19 @@ namespace Propane.Modes;
 
 public static class ModeRegistry
 {
-    public const byte SandboxId = 1;
-    public const byte TankBankId = 2;
+    public const byte SandboxId = ModeIds.Sandbox;
+    public const byte TankBankId = ModeIds.TankBank;
 
     public static readonly ModeDefinition Sandbox = new(SandboxId, "Sandbox", 1, () => new SandboxRules(), ModeWorldSource.Void,
         new ModeSupply((tuning, _) => SuburbPlans.SinglePlayer(tuning), LimitedAmmo: false, Pickups: false),
         RoundTimer.None, () => new SandboxHud(), null, Array.Empty<string>());
 
-    public static readonly ModeDefinition TankBank = new(TankBankId, "Tank Bank", 1, () => new TankBankRules(), ModeWorldSource.SuburbPlan,
+    public static readonly ModeDefinition TankBank = new(TankBankId, "Tank Bank", ModeIds.TankBankSchema, () => new TankBankRules(), ModeWorldSource.SuburbPlan,
         new ModeSupply(SuburbPlans.Match, LimitedAmmo: true, Pickups: true), RoundTimer.Countdown, () => new TankBankHud(),
         seed => new BankingBot(seed), Array.AsReadOnly(TankBankRules.Tuners.ToArray()));
 
-    public const byte RingOutId = 3;
-    public const byte KingId = 4;
+    public const byte RingOutId = ModeIds.RingOut;
+    public const byte KingId = ModeIds.King;
 
     /// <summary>Lab prototype: sumo on a dissolving slab. Unlimited ammo, no cans; the round counts up until one stands.</summary>
     public static readonly ModeDefinition RingOut = new(RingOutId, "Ring Out", 1, () => new RingOutRules(), ModeWorldSource.Void,
@@ -39,7 +39,7 @@ public static class ModeRegistry
         RoundTimer.Countdown, () => new KingHud(), seed => new KingBot(seed), Array.AsReadOnly(KingRules.Tuners.ToArray()))
     { SamplesActors = true };
 
-    public const byte ShortFuseId = 5;
+    public const byte ShortFuseId = ModeIds.ShortFuse;
 
     /// <summary>
     /// Lab prototype: last one standing with health, a new suburb each round. Unlimited ammo, no cans; the suburb is
@@ -50,7 +50,7 @@ public static class ModeRegistry
             LimitedAmmo: false, Pickups: false),
         RoundTimer.Countdown, () => new ShortFuseHud(), seed => new ShortFuseBot(seed), Array.AsReadOnly(ShortFuseRules.Tuners.ToArray()));
 
-    public const byte DissolveRunId = 6;
+    public const byte DissolveRunId = ModeIds.DissolveRun;
 
     /// <summary>
     /// Lab prototype: a solo run down a street that builds itself ahead and dissolves behind. Its world is a segment
@@ -60,7 +60,7 @@ public static class ModeRegistry
         new ModeSupply((tuning, _) => SuburbPlans.SinglePlayer(tuning), LimitedAmmo: true, Pickups: true), RoundTimer.CountUp,
         () => new DissolveRunHud(), seed => new DissolveRunBot(seed), Array.AsReadOnly(DissolveRunRules.Tuners.ToArray()));
 
-    public const byte LobbyWorldId = 7;
+    public const byte LobbyWorldId = ModeIds.Lobby;
 
     /// <summary>
     /// The lobby world: everyone in a waiting lobby roams the void together, shooting and throwing tanks for nothing.
@@ -107,7 +107,38 @@ public static class ModeRegistry
     {
         var bundle = current.Find(definition.Id, definition.SchemaVersion)
             ?? throw new InvalidOperationException($"no compiled mode bundle {definition.Id}/{definition.SchemaVersion} ({definition.Name})");
-        return new ModeRunner(definition, setup, bundle.Schema!, bundle.CreateServerWire!);
+        return new ModeRunner(ServerMode(definition, bundle), setup);
+    }
+
+    /// <summary>Composition-only resolution for a client's physical session; MatchSetup remains a wire value.</summary>
+    public static ModeDefinition Resolve(MatchSetup setup) => Find(setup.ModeId, setup.ModeSchema)
+        ?? throw new InvalidOperationException($"unknown mode {setup.ModeId}/{setup.ModeSchema}");
+
+    public static bool ValidSettings(ModeSettings settings) => ForLobby(settings.ModeId) != null && settings.ValidValues;
+
+    private static ServerMode ServerMode(ModeDefinition definition, ModeBundle bundle) => new(definition.Id, definition.Name,
+        definition.World, definition.Timer, definition.SamplesActors, definition.Tuners, bundle.Schema!, definition.CreateRules, bundle.CreateServerWire!);
+
+    /// <summary>
+    /// Compile one server's mode inputs from the current catalog. Supply callbacks retain only the supply factory;
+    /// tuner sampling uses plain names. Neither callback captures a definition or its HUD/bot factories. The server
+    /// borrows these bindings until retirement; each run still owns and releases its native tuning.
+    /// </summary>
+    public static LobbyServer CreateServer(ServerTransport? transport = null, IMonotonicClock? clock = null, ModeDefinition? initialMode = null)
+    {
+        var catalog = current;
+        var supplies = new Dictionary<ServerMode, Func<Tuning, int, SuburbSettings>>();
+        ServerMode Compile(ModeDefinition definition)
+        {
+            var bundle = catalog.Find(definition.Id, definition.SchemaVersion)
+                ?? throw new InvalidOperationException($"no compiled mode bundle {definition.Id}/{definition.SchemaVersion} ({definition.Name})");
+            var mode = ServerMode(definition, bundle);
+            supplies.Add(mode, definition.Supply.Suburb);
+            return mode;
+        }
+        var modes = new ServerModes(Compile(initialMode ?? TankBank), Compile(LobbyWorld), Lobby.Select(Compile));
+        return new LobbyServer(modes, (mode, tuning, players) => supplies[mode](tuning, players),
+            (mode, tuning) => ModeDefinition.CopyTuners(tuning, mode.Tuners), transport ?? PacketTransports.CreateServer(), clock);
     }
 
     /// <summary>
