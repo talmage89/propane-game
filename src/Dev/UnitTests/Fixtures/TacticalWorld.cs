@@ -48,10 +48,11 @@ internal sealed class TacticalWorld : IBotWorld, IDisposable
         if (scenario == "cover") Box(new Vector3(4, 1.5f, 4), new Vector3(2, 3, 5));
         if (scenario is "demolition" or "prize")
         {
-            for (var i = 0; i < 3; i++)
+            for (var i = 0; i < (scenario == "prize" ? 2 : 3); i++)
             {
                 var tank = PropaneTank.Create(world);
-                tank.Position = new Vector3(16 + i * 2, 0.5f, -8);
+                // Equal-distance prizes exercise encounter-order ties; demolition retains its close pile.
+                tank.Position = scenario == "prize" ? new Vector3(16, 0.5f, i == 0 ? -8 : 8) : new Vector3(16 + i * 2, 0.5f, -8);
                 tank.Freeze = true;
                 root.AddChild(tank);
                 Tanks.Add(tank);

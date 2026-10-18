@@ -28,6 +28,7 @@ namespace to avoid colliding with the gameplay fixture registry `Propane.Lab.Lab
 | `effects`, `stackfire` | `EffectsScenario`, `StackFireScenario` |
 | `measure`, `measure-play` | `MeasureScenario` |
 | `runner-sampling` (opt-in whole-callback benchmark) | `RunnerSamplingScenario` |
+| `bot-cost` (opt-in Banking/King brain and whole-callback benchmark) | `BotCostScenario` |
 | `dissolve`, `reference-retirement` | `DissolveScenario`, `RetirementScenario` |
 
 Subscriptions can detach at fixture/round boundaries and are removed from the owner immediately, so cleanup does
@@ -53,3 +54,18 @@ The comparison checks executable expressions; caller context is retained for rev
 naturally adds references. Numeric telemetry and native streaming completion are compared separately.
 
 [Verification record](evidence/lab-scenarios-verification.md) includes migration proofs, failed attempts and native capture comparisons.
+
+The opt-in `bot-cost` case builds seeded eight-brain Bank and King suburbs, settles 120 process frames, then
+calls the existing runner callback synchronously for 2,000 warm-up and 6,000 measured 120 Hz ticks. It reports
+allocations, ray/navigation workload counts and mean/p95/p99 brain and whole-callback microseconds. Banking uses
+its existing inclusive `BotBrain` scopes; King's existing `ThinkSeconds` includes shared services and the rotating
+brain loop. These columns have different scope and should be compared only within a mode. Both whole-callback
+columns include shared services, activity sampling and rule work. During synchronous windows Jolt and the world
+clock do not advance; runner-owned elapsed clocks and query budgets do. This is controlled callback cost, not
+frame pacing. The regular native Lab/course/online runs cover actual motion. Run identical source on the parent
+and candidate, alternating at least three pairs headlessly and rendered:
+
+```sh
+godot-mono --headless --fixed-fps 60 --path . res://scenes/dev/lab_test.tscn -- --scenario=bot-cost
+godot-mono --disable-vsync --fixed-fps 60 --resolution 1280x720 --path . res://scenes/dev/lab_test.tscn -- --scenario=bot-cost --capture-dir="$PWD/build/bot-cost"
+```

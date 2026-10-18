@@ -48,6 +48,12 @@ internal static class BotTacticsTests
                         {
                             world.Step(tick);
                             brain.Think(world, Delta);
+                            if (scenario == "prize" && tick == 0)
+                            {
+                                // Hard can prefer zone income and use the ordinary prize fallback on this tick.
+                                var selected = (difficulty == BotDifficulty.Hard ? Field(brain, "pointsTarget") : null) ?? Field(brain, "prize");
+                                TestRunner.Assert(ReferenceEquals(selected, world.Tanks[0]), "equal prizes changed their encounter-order tie");
+                            }
                             var intent = brain.Read();
                             var consumed = brain.Read();
                             TestRunner.Assert(!consumed.FirePressed && !consumed.JumpPressed && !consumed.ReloadPressed && !consumed.MeleePressed,
