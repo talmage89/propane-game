@@ -385,3 +385,12 @@ The prepared project's `ActorLifetimeCycleProbe` transplants the exact gate cycl
 the same human/remote/bot inputs in roaming, Bank and King. Pass `--actor-lifetime-parent` only on the parent
 to characterize its known retention and attached handlers; the candidate requires flat counts, detached handlers
 at native free and collection. Native signal observations are asserted after `Free` returns so failures exit 1.
+
+## Decode and dispatch probes
+
+`DispatchBoundaryTests` sends malformed bytes through the real server receive boundary and observes native
+run resources, peer survival and the actual Godot log through a scoped `Fixtures/NetLogCapture`. Before N1,
+`--dispatch-parent` explicitly characterizes the inherited defect: handler exceptions are logged as malformed
+packets and the mutated owner remains live. `--dispatch-proof` asserts the corrected retirement/classification
+instead. The ordinary suite keeps the malformed corpus active without running the parent characterization.
+Neither mode changes release references or substitutes a mock dispatcher.
