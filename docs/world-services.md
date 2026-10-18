@@ -46,11 +46,11 @@ input after UI; explicit assignments also observe handled releases to keep their
 synchronously releases its endpoint and intent source. Do not broadcast input into simulation viewports.
 `Main`, the facades, `MenuNavigation` and `HsvColorSlider` live in the application viewport.
 
-`menu_test.tscn -- --scenario=input` injects mouse motion, key presses and complete mouse-button clicks through
-`Input.ParseInputEvent`, including menu navigation with Tab/Enter. It checks exact camera displacement, jump,
-melee, single-click fire, single-player suburb replacement, match reload and logical Escape on physical Caps Lock
-in both facades. Controller events also exercise primary-view look, jump, melee, complete trigger taps and
-match reload. It also checks paused input and physical/logical system shortcut bindings. This runs in
+`menu_test.tscn -- --scenario=input --classic-lobby` injects mouse motion, key presses and complete
+mouse-button clicks through `Input.ParseInputEvent`, including menu navigation with Tab/Enter. It checks exact camera
+displacement, jump, melee, single-click fire, single-player suburb replacement, match reload and logical Escape on
+physical Caps Lock in both facades. Controller events also exercise primary-view look, jump, melee, complete trigger
+taps and match reload. It also checks paused input and physical/logical system shortcut bindings. This runs in
 `make test`. Headless Godot cannot capture a pointer, so that run substitutes only `DeviceInput`'s existing
 capture predicate with menu visibility; rendered runs use the default production input source and capture frames
 before/after the turn, in the jump, and with the remapped pause menu open. Gameplay keys stay physical; pause,
@@ -119,11 +119,11 @@ retires its own world, including the driver. It unregisters both signals on exit
 until its signal returns, then cleanup completes before replacement. Invalidation also stops the remaining callbacks
 of an event currently being dispatched; a retired receiver is skipped in a blast's registration snapshot.
 
-`menu_test.tscn -- --scenario=lifetime` drives the real main/pause/lobby/match buttons through ten single-player and
-ten solo-match cycles after warming immutable catalog variants and lazy UI resources. It checks exact node, object
-and orphan counts and verifies each retired world's timers and receiver registry are empty. Server-owned match
-seeds still vary; the test never alters the server's construction inputs or messages. The ten-cycle sweep runs in
-`make test-full`. Rendered runs capture first and last entries plus the final browser.
+`menu_test.tscn -- --scenario=lifetime --classic-lobby` drives the real main/pause/lobby/match buttons
+through ten single-player and ten solo-match cycles after warming immutable catalog variants and lazy UI resources.
+It checks exact node, object and orphan counts and verifies each retired world's timers and receiver registry are
+empty. Server-owned match seeds still vary; the test never alters the server's construction inputs or messages.
+The ten-cycle sweep runs in `make test-full`. Rendered runs capture first and last entries plus the final browser.
 
 ## Actors and aim
 
