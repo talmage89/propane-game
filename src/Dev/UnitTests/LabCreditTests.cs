@@ -2,12 +2,14 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Text.Json;
 using Godot;
 using Propane.Core;
 using Propane.Lab;
 using Propane.Modes;
 using Propane.Player;
 using Propane.Tank;
+using static Propane.Dev.UnitTests.Fixtures.LabRunnerInspection;
 using static Propane.Dev.UnitTests.TestRunner;
 
 namespace Propane.Dev.UnitTests;
@@ -79,6 +81,16 @@ public static class LabCreditTests
                 .Invoke(adapter, new object[] { actors[1], SpillReason.Hit, 1, new Vector3(200, 0.1f, -200), Vector3.Zero });
             Assert(scores[2] == 0 && rules.Spilled == 1, "the spill was not committed");
             var drop = lab.LiveTanks.Single(t => !tanks.Contains(t) && Drops(adapter).Contains(t));
+            GD.Print($"[lab spill] {scenario}: " + JsonSerializer.Serialize(new
+            {
+                Position = Bits(drop.GlobalPosition),
+                BasisX = Bits(drop.GlobalBasis.X),
+                BasisY = Bits(drop.GlobalBasis.Y),
+                BasisZ = Bits(drop.GlobalBasis.Z),
+                Velocity = Bits(drop.LinearVelocity),
+                Spin = Bits(drop.AngularVelocity),
+                RandomState = lab.World.Random.State,
+            }));
             drop.Freeze = true;
             lab.World.Clock.Advance(lab.World.Tuning.DropInvulnerableTime + 0.1);
             Shot(actors[0], drop);
@@ -96,10 +108,8 @@ public static class LabCreditTests
         finally { lab.Session.Dispose(); lab.Free(); }
     }
 
-    private static Dictionary<PropaneTank, int> Shots(Node adapter) =>
-        (Dictionary<PropaneTank, int>)adapter.GetType().GetField("directShots", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(adapter)!;
-    private static HashSet<PropaneTank> Drops(Node adapter) =>
-        (HashSet<PropaneTank>)adapter.GetType().GetField("drops", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(adapter)!;
+    private static int[] Bits(Vector3 value) => new[]
+        { BitConverter.SingleToInt32Bits(value.X), BitConverter.SingleToInt32Bits(value.Y), BitConverter.SingleToInt32Bits(value.Z) };
     private static void Impact(PlayerCharacter actor, PropaneTank tank) =>
         ((Action<ShotReport>?)typeof(PlayerCharacter).GetField("ShotImpacting", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(actor))!
             (new ShotReport(Vector3.Zero, Vector3.Zero, Vector3.Up, Vector3.Forward, tank, true));

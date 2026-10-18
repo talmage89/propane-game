@@ -87,3 +87,10 @@ probe supplements ordinary bot/pacer runs; it does not simulate score, navigatio
 
 `SegmentFeedTests --feed-transcript=<file>` records an independent parent-semantics request/forget transcript,
 including negative/extreme indices, gaps, repeated forget, unfinished/completed and discarded late workers.
+
+For B4b's immediate-parent checks, run `python3 -B tools/dev/check_lab_mechanics.py --baseline=PATH` after
+building/importing both projects with identical harness sources. It compares the credit/spill/RNG and difficulty/
+sampling observations, requires both unit suites' assertions to pass, and compares every detailed observation in
+Ring Out and mixed-difficulty Bank/King runs. This supplements `check_equivalence.py --baseline=PATH --detail`;
+it neither reads nor writes new release references. Live streaming remains statistical because worker/build-slice
+completion is wall-time-sensitive; use the existing controlled retirement reference for exact Dissolve comparison.

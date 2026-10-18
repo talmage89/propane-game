@@ -69,7 +69,7 @@ source type to acquire that dependency. Do not broaden the map or silently regen
 | Fault transport calls ENet lane helper; server diagnostics/factory cross composition | N1 supplies transport-independent lanes and injected delivery/diagnostic boundaries. |
 | Settings and launch access are implicit | A1 provides explicit application ownership and scoped test stores/overrides. |
 | Client actor attachment retirement (L1) | Session-owned `ActorRegistration` detaches subscriptions and actor caches before native free; remaining attachments keep the original unsubscribe/stop/view/actor order. |
-| Prototype bots/HUDs read live rules | B3b supplies plain observations with explicit read-time clock and allocation-free bot reads. |
+| Lab bookkeeping and prototype live-rule reads | B4b shares local difficulty, tank facts and offline placement; semantic attribution and rule submission stay runner-owned. B3b supplies plain observations with explicit read-time clock and allocation-free bot reads. |
 | Streaming incidental history (W1 implemented) | Ordinary arena timing lists stay empty; a feed watermark compacts the retired prefix, retaining only out-of-order forgotten indices. Navigation eviction and ledger-history pruning need separate retention contracts. |
 | Global stream reveal; implicit character/weapon binding assumptions | W2 before independent streams; V1 before a second asset family. Existing single-stream/binding behavior stays intact. |
 | Cross-platform artifact runtime acceptance remains partly manual | R1 gates setup imports, inventories all packaged exports and runs the Linux artifact before publishing; Windows/macOS retain the [runtime checklist](runbooks/release-artifacts.md). |
@@ -294,6 +294,17 @@ remaining obligations are recorded in the [server-input evidence](evidence/mode-
 MessageCodec's schema/eligibility lookup remains assigned to N1: inject each owner's resolver while separating decode/admission failure from dispatch, preserving
 malformed-packet rejection order. LobbyServer's saved-template and snapshot conversion is A1 application-state work;
 ServerRun's native tuning/snapshot/melee inputs are C1 contract work. No edge is deferred to B3a.
+
+**Current B4b:** `LocalBank` and `PrototypeRunner` each own a `LabTankFacts` instance for last direct contacts
+and drop membership. Existing `TankTracking` still owns subscriptions and reverse-order retirement; its forgotten
+callback removes the tank's facts. Runner stop clears remaining facts after subscriptions drain. This owner has no
+callbacks, clocks or rules and retires with that runner, including every replacement Short Fuse session.
+`LabBotDifficulty` and `LabSpill` are stateless Composition helpers: live attachment-slot difficulty, identical hit
+geometry and the already-shared offline spill algorithm. Online placement is separate. Rule submission, scores,
+tickets, grace, Short Fuse's frame-local blast cause and Dissolve's chain IDs remain in their runners, as do Bank's
+spill-time and prototypes' per-tick tuner sampling. B4b changes no bot/HUD/view/observation contract; the live reads
+below remain B3b's work. No dependency baseline entry is assigned to B4b.
+[B4b evidence](evidence/lab-mechanics-verification.md) records exact traces, retirement, captures and runner costs.
 
 **Target B3b:** Bank policy is composed into King, Lobby has its own client adapter, and prototype bots/HUDs consume
 plain observations that retain neither live rules nor delegates into rules. Read-time calculations take an explicit

@@ -25,8 +25,7 @@ public partial class LocalBank : Node
     private readonly TankBankRules rules = new();
     private readonly Dictionary<int, int> scores = new();
     public IReadOnlyDictionary<int, int> Earned => scores.Keys.ToDictionary(id => id, id => rules.StatsFor(id).Gained);
-    private readonly Dictionary<PropaneTank, int> directShots = new();
-    private readonly HashSet<PropaneTank> drops = new();
+    private readonly LabTankFacts tankState = new();
     private TankTracking tracking = null!;
     internal int TrackingCount => tracking.Count;
     private readonly List<AmmoPickup> pickups = new();
@@ -66,7 +65,7 @@ public partial class LocalBank : Node
         rules.Initialize(new ModeSetup(roster,
             new ModeWorld(Lab.EnvironmentKind == LabEnvironment.Void ? ModeWorldSource.Void : ModeWorldSource.SuburbPlan, 1, InitialSupply),
             tunerSampler.Sample(World.Tuning), 0));
-        tracking = new TankTracking(tank => { directShots.Remove(tank); drops.Remove(tank); });
+        tracking = new TankTracking(tankState.Forget);
         Lab.Session.OnUnsubscribing(tracking.Dispose);
         foreach (var tank in Lab.LiveTanks) Track(tank);
         foreach (var actor in Lab.Session.Actors.Select(a => a.Character))
@@ -75,7 +74,7 @@ public partial class LocalBank : Node
             {
                 if (!IsPlaying) return;
                 if (shot.Collider is PropaneTank { Invulnerable: false } tank && tank.State != PropaneTank.TankState.Exploded)
-                    directShots[tank] = actor.ActorId;
+                    tankState.Shot(tank, actor.ActorId);
                 else if (PlayerCharacter.Owning(shot.Collider) is { } victim && victim != actor) Hit(actor, victim);
             }
             void Thrown(Vector3 at, Vector3 velocity, Vector3 spin) => Spill(actor, SpillReason.Thrown, World.Tuning.RagdollDropCount,
@@ -100,7 +99,7 @@ public partial class LocalBank : Node
             services.Dispose();
             if (profiled)
                 GD.Print(FormattableString.Invariant($"[bank bot cost] bots={brains.Count} warm_ticks={warmTicks} mean_ms={warmSeconds * 1000 / Math.Max(1, warmTicks):F3} p50_ms={TickPercentile(0.5):F2} p95_ms={TickPercentile(0.95):F2} p99_ms={TickPercentile(0.99):F2} worst_ms={worstSeconds * 1000:F3} bytes={warmBytes} allocating_ticks={allocatingTicks}"));
-            brains.Clear(); directShots.Clear(); drops.Clear(); pickups.Clear();
+            brains.Clear(); tankState.Clear(); pickups.Clear();
         });
     }
 
@@ -109,19 +108,11 @@ public partial class LocalBank : Node
         if (!Lab.Session.Actors.Any(a => a.Character == actor) || brains.Any(b => b.Actor == actor))
             throw new ArgumentException("Bot must control an unassigned actor in this session", nameof(actor));
         var brain = mode.CreateBot!(World.Random.Randi());
-        ConfigureBrain(brain, brains.Count);
+        LabBotDifficulty.Configure(brain, brains.Count, World.Tuning);
         actor.InputOverride = brain;
         var view = new BotWorld(this, actor);
         brain.Prepare(view);
         brains.Add((brain, actor, view));
-    }
-
-    private void ConfigureBrain(IBotGoalPolicy brain, int index)
-    {
-        var selected = index >= World.Tuning.LabHardOffset && index < World.Tuning.LabHardOffset + World.Tuning.LabHardBots;
-        var hard = selected || BotProfile.Nearest(World.Tuning.LabBotSkill, World.Tuning) == BotDifficulty.Hard;
-        brain.Skill = selected ? World.Tuning.BotHardSkill : World.Tuning.LabBotSkill;
-        brain.PointsDriven = hard && World.Tuning.BotHardChasesPoints;
     }
 
     public override void _PhysicsProcess(double delta)
@@ -140,7 +131,7 @@ public partial class LocalBank : Node
         {
             var (brain, _, view) = brains[(botTurn + i) % brains.Count];
             view.Refresh();
-            ConfigureBrain(brain, (botTurn + i) % brains.Count);
+            LabBotDifficulty.Configure(brain, (botTurn + i) % brains.Count, World.Tuning);
             brain.Think(view, (float)delta);
         }
         if (measuring)
@@ -204,14 +195,14 @@ public partial class LocalBank : Node
     private void Track(PropaneTank tank)
     {
         Lab.TestObserveTank?.Invoke(tank);
-        void Punctured(PropaneTank changed) => directShots.Remove(changed);
+        void Punctured(PropaneTank changed) => tankState.ForgetShot(changed);
         void Detonated(PropaneTank changed)
         {
-            var scorer = changed.ChainCause != 0 ? (int)changed.ChainCause : directShots.GetValueOrDefault(changed);
-            directShots.Remove(changed);
+            var scorer = changed.ChainCause != 0 ? (int)changed.ChainCause : tankState.LastShooter(changed);
+            tankState.ForgetShot(changed);
             changed.BlastRequest = (uint)scorer;
             if (IsPlaying && scores.ContainsKey(scorer))
-                Apply(rules.Handle(new TankDetonated(scorer, drops.Remove(changed) ? TankOrigin.Drop : TankOrigin.Map), Clock));
+                Apply(rules.Handle(new TankDetonated(scorer, tankState.TakeDrop(changed) ? TankOrigin.Drop : TankOrigin.Map), Clock));
             tracking.Forget(changed);
         }
         tracking.Track(tank, Punctured, Detonated);
@@ -225,10 +216,8 @@ public partial class LocalBank : Node
         if (!TankBankRules.TryOpenGrace(World.Clock.Now, ref grace, World.Tuning.HitGraceTime)) return;
         victim.Runtime.GraceUntil = grace;
         Hits++;
-        var back = new Vector3(Mathf.Sin(victim.FacingYaw), 0, Mathf.Cos(victim.FacingYaw));
-        var origin = victim.IsRagdolled ? victim.PelvisPosition + Vector3.Up * 0.3f :
-            victim.GlobalPosition + Vector3.Up * 0.45f + back * World.Tuning.HitDropDistance;
-        Spill(victim, SpillReason.Hit, World.Tuning.HitDropCount, origin, victim.IsRagdolled ? Vector3.Zero : back);
+        var (origin, away) = LabSpill.HitPlacement(victim, World.Tuning);
+        Spill(victim, SpillReason.Hit, World.Tuning.HitDropCount, origin, away);
     }
 
     /// <summary>The rules' clock: one round that is open while the duel's time remains.</summary>
@@ -252,49 +241,8 @@ public partial class LocalBank : Node
         rules.Handle(new TunersChanged(tunerSampler.Sample(World.Tuning)), Clock); // Session tuning is live.
         var ticket = new SpillTicket(actor.ActorId, actor.LifeId, ++nextTicket);
         if (!rules.Handle(new SpillRequested(ticket, reason, count), Clock).OfType<SpillReserved>().Any()) return;
-        SpawnDrops(Lab, actor, count, origin, away, tank => { drops.Add(tank); Track(tank); });
+        LabSpill.SpawnDrops(Lab, actor, count, origin, away, tank => { tankState.Drop(tank); Track(tank); });
         Apply(rules.Handle(new SpillRegistered(ticket), Clock));
-    }
-
-    /// <summary>
-    /// Spawns a spill's tanks around the victim: scattered on a spiral, kept clear of walls and on the ground, tossed
-    /// outward, invulnerable for a moment and tinted with the victim's color. Shared by the Lab's banking runners.
-    /// </summary>
-    internal static void SpawnDrops(LabSession lab, PlayerCharacter actor, int count, Vector3 origin, Vector3 away, Action<PropaneTank> track)
-    {
-        var world = lab.World;
-        var tuning = world.Tuning;
-        var rng = world.Random;
-        var start = rng.RandfRange(0, Mathf.Tau);
-        var clear = actor.IsRagdolled ? actor.PelvisPosition + Vector3.Up * 0.2f : actor.GlobalPosition + Vector3.Up * 0.9f;
-        for (var i = 0; i < count; i++)
-        {
-            var angle = start + i * 2.39996f;
-            var spread = count == 1 ? 0.15f : Mathf.Sqrt((i + 0.5f) / count);
-            var offset = new Vector3(Mathf.Cos(angle), 0, Mathf.Sin(angle)) * tuning.DropScatter * spread;
-            var position = SafeDropPoint(world, clear, origin + offset);
-            var outward = (offset.LengthSquared() > 0.0001f ? offset.Normalized() : Vector3.Zero) + away;
-            outward = outward.LengthSquared() > 0.0001f ? outward.Normalized() : Vector3.Zero;
-            var tank = PropaneTank.Create(world);
-            tank.Transform = new Transform3D(new Basis(Vector3.Up, rng.RandfRange(0, Mathf.Tau)), position);
-            tank.LinearVelocity = outward * tuning.DropToss + Vector3.Up * tuning.DropToss * 0.6f;
-            tank.AngularVelocity = new Vector3(rng.RandfRange(-1, 1), rng.RandfRange(-1, 1), rng.RandfRange(-1, 1)) * 2;
-            world.ContentRoot.AddChild(tank);
-            tank.MakeInvulnerable(tuning.DropInvulnerableTime, actor.BodyColor);
-            lab.TrackDrop(tank);
-            track(tank);
-        }
-    }
-
-    private static Vector3 SafeDropPoint(WorldContext world, Vector3 clear, Vector3 wanted)
-    {
-        var space = world.Physics.DirectSpaceState;
-        var mask = Layers.World | Layers.Props | Layers.Floor;
-        var hit = space.IntersectRay(PhysicsRayQueryParameters3D.Create(clear, wanted, mask));
-        if (hit.Count > 0) wanted = hit["position"].AsVector3() - (wanted - clear).Normalized() * 0.3f;
-        var ground = space.IntersectRay(PhysicsRayQueryParameters3D.Create(wanted + Vector3.Up * 0.5f, wanted + Vector3.Down * 3, mask));
-        if (ground.Count > 0) wanted.Y = Mathf.Max(wanted.Y, ground["position"].AsVector3().Y + 0.05f);
-        return wanted;
     }
 
     private sealed class BotWorld(LocalBank bank, PlayerCharacter actor) : IBotWorld

@@ -32,8 +32,7 @@ public partial class PrototypeRunner : Node
     public event Action<ModeCommand>? Decided;
 
     private readonly Dictionary<int, int> scores = new();
-    private readonly Dictionary<PropaneTank, int> directShots = new();
-    private readonly HashSet<PropaneTank> drops = new();
+    private readonly LabTankFacts tankState = new();
     private TankTracking tracking = null!;
     internal int TrackingCount => tracking.Count;
     private readonly List<(IBotGoalPolicy Brain, PlayerCharacter Actor, BotWorld View)> brains = new();
@@ -111,7 +110,7 @@ public partial class PrototypeRunner : Node
         {
             foreach (var actor in roster) scores[actor.ActorId] = fuse.Wins(actor.ActorId);
         }
-        tracking = new TankTracking(tank => { directShots.Remove(tank); drops.Remove(tank); });
+        tracking = new TankTracking(tankState.Forget);
         Lab.Session.OnUnsubscribing(tracking.Dispose);
         foreach (var tank in Lab.LiveTanks) Track(tank);
         foreach (var actor in Lab.Session.Actors.Select(a => a.Character)) Watch(actor);
@@ -122,7 +121,7 @@ public partial class PrototypeRunner : Node
         {
             foreach (var (brain, actor, _) in brains) { actor.InputOverride = null; brain.Dispose(); }
             services.Dispose();
-            brains.Clear(); directShots.Clear(); drops.Clear();
+            brains.Clear(); tankState.Clear();
             Decided = null;
         });
     }
@@ -131,19 +130,11 @@ public partial class PrototypeRunner : Node
     internal void AttachBot(PlayerCharacter actor)
     {
         var brain = Mode.CreateBot!(World.Random.Randi());
-        ConfigureBrain(brain, brains.Count);
+        LabBotDifficulty.Configure(brain, brains.Count, World.Tuning);
         actor.InputOverride = brain;
         var view = new BotWorld(this, actor);
         brain.Prepare(view);
         brains.Add((brain, actor, view));
-    }
-
-    private void ConfigureBrain(IBotGoalPolicy brain, int index)
-    {
-        var selected = index >= World.Tuning.LabHardOffset && index < World.Tuning.LabHardOffset + World.Tuning.LabHardBots;
-        var hard = selected || BotProfile.Nearest(World.Tuning.LabBotSkill, World.Tuning) == BotDifficulty.Hard;
-        brain.Skill = selected ? World.Tuning.BotHardSkill : World.Tuning.LabBotSkill;
-        brain.PointsDriven = hard && World.Tuning.BotHardChasesPoints;
     }
 
     public override void _PhysicsProcess(double delta)
@@ -157,7 +148,7 @@ public partial class PrototypeRunner : Node
         {
             var (brain, _, view) = brains[(botTurn + i) % brains.Count];
             view.Refresh();
-            ConfigureBrain(brain, (botTurn + i) % brains.Count);
+            LabBotDifficulty.Configure(brain, (botTurn + i) % brains.Count, World.Tuning);
             brain.Think(view, (float)delta);
             Thinks++;
         }
@@ -253,7 +244,7 @@ public partial class PrototypeRunner : Node
         {
             if (!IsPlaying) return;
             if (shot.Collider is PropaneTank { Invulnerable: false } tank && tank.State != PropaneTank.TankState.Exploded)
-                directShots[tank] = actor.ActorId;
+                tankState.Shot(tank, actor.ActorId);
             else if (PlayerCharacter.Owning(shot.Collider) is { } victim && victim != actor) Hit(actor, victim);
         }
         void Thrown(Vector3 at, Vector3 velocity, Vector3 spin)
@@ -280,7 +271,7 @@ public partial class PrototypeRunner : Node
     internal void Track(PropaneTank tank)
     {
         Lab.TestObserveTank?.Invoke(tank);
-        void Punctured(PropaneTank changed) => directShots.Remove(changed);
+        void Punctured(PropaneTank changed) => tankState.ForgetShot(changed);
         void Detonated(PropaneTank changed)
         {
             if (Run)
@@ -289,13 +280,13 @@ public partial class PrototypeRunner : Node
                 tracking.Forget(changed);
                 return;
             }
-            var scorer = changed.ChainCause != 0 ? (int)changed.ChainCause : directShots.GetValueOrDefault(changed);
-            directShots.Remove(changed);
+            var scorer = changed.ChainCause != 0 ? (int)changed.ChainCause : tankState.LastShooter(changed);
+            tankState.ForgetShot(changed);
             changed.BlastRequest = (uint)scorer;
             blastCause = (scorer, Engine.GetPhysicsFrames());
             if (IsPlaying && Health) Blast(changed, scorer);
             if (IsPlaying && Banking && scores.ContainsKey(scorer))
-                Apply(Rules.Handle(new TankDetonated(scorer, drops.Remove(changed) ? TankOrigin.Drop : TankOrigin.Map), Clock));
+                Apply(Rules.Handle(new TankDetonated(scorer, tankState.TakeDrop(changed) ? TankOrigin.Drop : TankOrigin.Map), Clock));
             tracking.Forget(changed);
         }
         tracking.Track(tank, Punctured, Detonated);
@@ -310,7 +301,7 @@ public partial class PrototypeRunner : Node
     /// </summary>
     private void RunDetonated(PropaneTank tank)
     {
-        directShots.Remove(tank);
+        tankState.ForgetShot(tank);
         if (Lab.Dissolve?.Dissolved(tank) == true) return;
         var chain = tank.ChainCause != 0 ? tank.ChainCause : ++nextChain;
         tank.BlastRequest = chain;
@@ -351,10 +342,8 @@ public partial class PrototypeRunner : Node
         var grace = victim.Runtime.GraceUntil;
         if (!TankBankRules.TryOpenGrace(World.Clock.Now, ref grace, World.Tuning.HitGraceTime)) return;
         victim.Runtime.GraceUntil = grace;
-        var back = new Vector3(Mathf.Sin(victim.FacingYaw), 0, Mathf.Cos(victim.FacingYaw));
-        var origin = victim.IsRagdolled ? victim.PelvisPosition + Vector3.Up * 0.3f :
-            victim.GlobalPosition + Vector3.Up * 0.45f + back * World.Tuning.HitDropDistance;
-        Spill(victim, SpillReason.Hit, World.Tuning.HitDropCount, origin, victim.IsRagdolled ? Vector3.Zero : back);
+        var (origin, away) = LabSpill.HitPlacement(victim, World.Tuning);
+        Spill(victim, SpillReason.Hit, World.Tuning.HitDropCount, origin, away);
     }
 
     /// <summary>A spill ticket, as in the Lab duel: the rules reserve the bank, the tanks appear, then the debit commits.</summary>
@@ -365,7 +354,7 @@ public partial class PrototypeRunner : Node
         if (count <= 0) return;
         var ticket = new SpillTicket(actor.ActorId, actor.LifeId, ++nextTicket);
         if (!Rules.Handle(new SpillRequested(ticket, reason, count), Clock).OfType<SpillReserved>().Any()) return;
-        LocalBank.SpawnDrops(Lab, actor, count, origin, away, tank => { drops.Add(tank); Track(tank); });
+        LabSpill.SpawnDrops(Lab, actor, count, origin, away, tank => { tankState.Drop(tank); Track(tank); });
         Apply(Rules.Handle(new SpillRegistered(ticket), Clock));
     }
 
