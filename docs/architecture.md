@@ -123,6 +123,7 @@ The physics callback order remains remote snapshots → body correction → mode
 publication → body publication → pickup checks. Actor and body publication use monotonic network timestamps;
 actor send cadence consumes physics delta. Reveal/notices/objective refresh consume render delta. BodyPublisher
 still samples later batches after earlier synchronous sends. No source reads intent on Match's behalf.
+[C2 evidence](evidence/match-composition.md) records the parent/candidate witnesses, lifetime proof and paired costs.
 
 **Current M0:** Match refreshes its selected owned character synchronously on `SessionContext.ActorsChanged` and
 lobby profile Kind changes. It prefers the first owned Human, otherwise the first owned actor, in session order;

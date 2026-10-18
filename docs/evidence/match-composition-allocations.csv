@@ -1,0 +1,9 @@
+warmup_ticks,measured_ticks,case,revision,whole_tick_bytes,brain_bytes,nonzero_brain_ticks,brain_bursts,raw_file
+20000,100000,idle,parent,267732384,0,0,,build/c2-bot-allocation-parent-idle.tsv
+20000,100000,idle,candidate,267732384,0,0,,build/c2-bot-allocation-candidate-idle.tsv
+20000,100000,claims,parent,968348224,0,0,,build/c2-bot-allocation-parent-claims.tsv
+20000,100000,claims,candidate,968354440,5640,1,76483:5640,build/c2-bot-allocation-candidate-claims.tsv
+100000,100000,idle,parent,267732384,0,0,,build/c2-bot-allocation-warm-parent-idle.tsv
+100000,100000,idle,candidate,267732384,0,0,,build/c2-bot-allocation-warm-candidate-idle.tsv
+100000,100000,claims,parent,968349840,0,0,,build/c2-bot-allocation-warm-parent-claims.tsv
+100000,100000,claims,candidate,968349840,0,0,,build/c2-bot-allocation-warm-candidate-claims.tsv
