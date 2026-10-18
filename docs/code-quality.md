@@ -363,3 +363,7 @@ and `--server-transcript=ABSOLUTE_PATH`; compare packet files exactly and the `[
 departure runs use the scratch project's copied `tools/dev/net_bots.sh`; peer numbers in actor-order lines are
 normalized to the initial peer order. `--actor-tactics-transcript=ABSOLUTE_PATH` writes the focused departure
 decisions. No release fixture or checkout production source is instrumented.
+The prepared project's `ActorLifetimeCycleProbe` transplants the exact gate cycle block, so both revisions run
+the same human/remote/bot inputs in roaming, Bank and King. Pass `--actor-lifetime-parent` only on the parent
+to characterize its known retention and attached handlers; the candidate requires flat counts, detached handlers
+at native free and collection. Native signal observations are asserted after `Free` returns so failures exit 1.

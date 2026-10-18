@@ -89,8 +89,19 @@ internal sealed class ActorLifetimeFixture : IDisposable
         // Attachments are inspected without requiring a candidate-only API on the parent.
         if (Match.Session.GetType().GetField("registrations", BindingFlags.Instance | BindingFlags.NonPublic)?.GetValue(Match.Session) is IDictionary registrations)
             refs.Add(new WeakReference(registrations[runtime]!));
-        actor.TreeExiting += () => TestRunner.Assert(Match.Session.Actor(id) == null, "native free preceded roster removal");
+        string? retirementFailure = null;
+        actor.TreeExiting += () =>
+        {
+            if (Match.Session.Actor(id) != null) retirementFailure = "native free preceded roster removal";
+            foreach (var name in new[] { "Fired", "Ragdolled", "GotUp", "MeleeStarted", "MeleeHit", "PushedBody" })
+            {
+                var expected = DevArgs.Get("actor-lifetime-parent") != null && !actor.IsRemote;
+                if ((Field(actor, name) is Delegate) != expected) retirementFailure = $"{name} subscription at native free differs from expectation";
+            }
+        };
         Remove(actor);
+        // Native signal callbacks do not propagate managed exceptions to Free's caller. Assert here for exit 1.
+        TestRunner.Assert(retirementFailure == null, retirementFailure ?? "actor retirement failed");
         Match.OnMessage(new NetMessage(Msg.MeleeStart, Match.Setup.Id, owner, new MeleeStartMessage(2, Vector3.Forward), id, actor.LifeId, 2));
         TestRunner.Assert(!GodotObject.IsInstanceValid(actor), "removal left the native character alive");
         return refs.ToArray();

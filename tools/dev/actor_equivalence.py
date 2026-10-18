@@ -20,6 +20,7 @@ def observe(project):
         shutil.copyfile(ROOT / 'src/Dev/UnitTests/Fixtures' / name, project / 'src/Dev/UnitTests/Fixtures' / name)
     for name in ('ActorTacticsTests.cs', 'ActorTickBenchTests.cs', 'BotTacticsTests.cs', 'Fixtures/TacticalWorld.cs'):
         shutil.copyfile(ROOT / 'src/Dev/UnitTests' / name, project / 'src/Dev/UnitTests' / name)
+    cycles(project)
     call = 'Propane.Dev.UnitTests.Fixtures.ActorRetirementObservation.Record'
     session = project / 'src/Session/SessionContext.cs'
     insert(session, 'retired.Add(actor.Character.ActorId);',
@@ -31,6 +32,30 @@ def observe(project):
     assembly = project / 'src/Net/Match.Assembly.cs'
     insert(assembly, 'World.Events.LocalBlast += OnLocalBlast;', f'        {call}(this, "attached");')
     shutil.copytree(ROOT / 'tools/dev', project / 'tools/dev', dirs_exist_ok=True)
+
+
+def cycles(project):
+    # Transplant the exact gate assertions without the candidate-only attachment API used by its other cases.
+    code = (ROOT / 'src/Dev/UnitTests/ActorLifetimeTests.cs').read_text()
+    start = '        foreach (var (roaming, king)'
+    end = '        runner.Run("actor lifetime/primary actor'
+    assert code.count(start) == code.count(end) == 1
+    body = code[code.index(start):code.index(end)]
+    wrapper = '''using System;
+using System.Linq;
+using Propane.Dev.UnitTests.Fixtures;
+using Propane.Net;
+using static Propane.Dev.UnitTests.TestRunner;
+namespace Propane.Dev.UnitTests;
+[UnitSuite]
+public static class ActorLifetimeCycleProbe
+{
+    public static void Register(TestRunner runner)
+    {
+''' + body + '''    }
+}
+'''
+    (project / 'src/Dev/UnitTests/ActorLifetimeCycleProbe.cs').write_text(wrapper)
 
 
 if __name__ == '__main__':
