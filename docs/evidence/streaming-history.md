@@ -1,9 +1,8 @@
 # W1 streaming history verification
 
-**Status:** Storage, lifetime, feed differential, sampled visual checks and fast/reference gates verified on Linux.
-This record covers that focused proof and the measurement protocol. The submission report records the subsequent
-final-head deep gate and remaining monitored performance pairs; their logs remain under `build/w1/`. Current contracts: [architecture](../architecture.md) and
-[streamed content history](../world-services.md#streamed-content-history).
+**Status:** Storage, lifetime, feed differential, visual checks, shared-load paired performance and fast/reference/deep
+gates verified on Linux. The completed performance table below supersedes the earlier quiet-window attempts.
+Current contracts: [architecture](../architecture.md) and [streamed content history](../world-services.md#streamed-content-history).
 
 ## Scope and versions
 
@@ -160,14 +159,67 @@ No frame-time/capacity claim is inferred from it. These are managed current-thre
 retention is checked separately above. Parent and candidate run the same probe, seed/settings and warm-up, using
 `--segments=128 --fixed-fps 60 --disable-vsync --resolution 1280x720` (with `--headless` for headless cases).
 
-The runner waits for five quiet seconds before each measured run and checks other worktrees' Godot, Blender,
-game, make and dotnet build/format/run/test processes every 250 ms while it runs. Overlapped samples are retained
-and excluded. No scheduling reservation was confirmed; the evidence is monitored quiet intervals rather than a
-hardware-isolated benchmark. The first clean headless pair measured 1,206/1,192 callbacks (parent/candidate),
-83,105,600/83,050,680 bytes, mean 2.301227/2.293226 ms, p95 3.3779/3.3522 ms and p99 11.8117/11.7178 ms.
-Both versions used exactly 166,400 bytes over the additional 1,200 settled callbacks (138.67 bytes/tick).
-A fresh complete manifest of accepted pairs is accumulated at `build/w1/pairs-monitored/manifest.json`; the
-submission report gives the completed table and interpretation. Failed overlap trials remain alongside it.
+The lead explicitly accepted measurements under shared load; no CPU/GPU reservation was available. The final runner
+uses strictly alternating parent/candidate legs in this worktree only, three retained pairs per mode. Both versions
+were built warning-free once with the identical final harness; their complete Debug binary directories were cached
+under `build/w1/shared-load-cached/`. Between legs the runner copies the chosen binary set into this worktree's normal
+Godot output directory, checks its DLL SHA256, and launches `godot-mono` with identical flags. Sources are restored to
+the candidate before measurements; no compilation runs in this worktree during a sample. The final restoration build
+reproduced the candidate DLL hash. Caches were removed after the measurements; hashes/build logs remain:
+
+- Parent DLL SHA256: `7bad5fe9dc1dc7dd4d3c26c0ff120b783d894250c28b70d9320b9760a3cbef37`.
+- Candidate DLL SHA256: `2d0620ccd5ac5b8b878b105a763cde6d03a5c96b26f9c1c6144b2637dd2807b6`.
+
+Every leg records literal `uptime` and `pgrep -af godot` output immediately before and after the native process.
+The process monitor samples `/proc` every 200 ms: any dotnet build/format driver rejects the pair; MSBuild, csc and
+Roslyn compiler processes, including the SDK's native `VBCSCompiler` executable, reject it when consuming more than
+25% of one CPU over an interval. Resident idle compiler servers do not reject it. Admission waits for one second
+without compiler activity, **not** for native/GPU quiet. Any overlap during either leg discards the **entire pair**;
+its replacement starts again with parent, then candidate. Timing or allocation results never cause exclusions.
+
+The final monitor completed 12 pair attempts: six retained, six discarded and retaken. All 24 native legs passed
+the probe. Retained samples span 2026-10-18 07:50:53–07:56:55 UTC. Around retained headless legs, one-minute load
+averages were 18.39–37.82 with 8–19 confirmed native Godot processes from other worktrees; rendered legs had
+22.10–32.07 load and 10–17 such processes. These are **shared-load comparisons**, not isolated frame benchmarks.
+The process count includes only actual native engines whose command names another worktree, excluding wrappers,
+our engine and shell commands that merely contain the word Godot. Complete unfiltered `pgrep` output is retained.
+These samples completed before the subsequent sandbox change to private process namespaces; later `pgrep` calls
+can see only this sandbox, while `uptime` remains machine-wide. The saved pre-change snapshots are the evidence
+for other-worktree activity; no process visibility is inferred from the new namespace.
+
+`build/w1/shared-load-final/manifest.json` identifies all retained logs; `attempts.json` identifies every complete
+attempt, and each leg has a `*-context.json`. `observed-compilers.json` proves the corrected monitor saw native
+Roslyn activity. `summary.csv`, `table.md` and `assessment.txt` contain parsed counts, allocations, tails, normalized
+segment work and the paired assessment; the scratch runner/parser are `build/w1/run_shared_final.py` and
+`build/w1/summarize_shared_final.py`. Both arena-history and forgotten counts also independently distinguish the
+parent/candidate binaries at the final census. The final candidate source/harness is unchanged from the deep gate.
+
+Each leg built 131 and retired 128 segments; the measured portion covers the same 96 post-warm-up segment lifetimes.
+Values below are parent/candidate. Every leg additionally used exactly **166,400 bytes / 1,200 settled ticks =
+138.6667 bytes/tick**. There is no new steady allocation.
+
+| Mode/pair | Ticks P/C | Bytes/segment P/C | Bytes/tick P/C | Mean ms P/C | p95 ms P/C | p99 ms P/C | ms/segment P/C |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| headless-1 | 1936/2203 | 866883.33/866073.67 | 42985.95/37740.84 | 3.0042/3.3390 | 4.9733/5.6960 | 17.0551/20.5463 | 60.5846/76.6233 |
+| headless-2 | 2146/1976 | 867255.92/865746.58 | 38796.16/42060.56 | 3.2653/2.9983 | 5.5490/4.8018 | 18.3397/16.9273 | 72.9934/61.7148 |
+| headless-3 | 1795/1726 | 866549.67/865472.33 | 46344.72/48137.51 | 2.8298/2.7372 | 4.1238/4.0775 | 16.1709/13.8993 | 52.9107/49.2122 |
+| rendered-1 | 2038/2000 | 867127.00/865753.17 | 40846.02/41556.15 | 3.1747/3.1617 | 5.5148/5.4579 | 18.2157/18.2016 | 67.3963/65.8686 |
+| rendered-2 | 1931/2050 | 866888.00/865895.33 | 43097.49/40549.24 | 3.0516/3.2149 | 5.0692/5.6083 | 17.2397/18.9927 | 61.3814/68.6515 |
+| rendered-3 | 2015/2120 | 867007.83/866038.17 | 41306.58/39216.82 | 3.2268/3.4224 | 5.5953/6.1076 | 18.5424/21.3467 | 67.7284/75.5774 |
+
+Candidate allocation per segment is lower in every pair, by 809.67–1,509.33 bytes. Bytes per active tick can rise
+when fewer slices do the same segment work; allocation per segment and settled bytes/tick are the acceptance metrics.
+Whole-callback mean/p95/p99 and normalized total time per segment have signed paired differences in both directions.
+Compare the largest absolute paired difference with the larger observed within-version range across the three pairs:
+
+| Mode | Mean: paired max / run range ms | p95: paired max / run range ms | p99: paired max / run range ms | ms/segment: paired max / run range |
+| --- | ---: | ---: | ---: | ---: |
+| Headless | 0.3348 / 0.6018 | 0.7472 / 1.6185 | 3.4912 / 6.6470 | 16.0388 / 27.4111 |
+| Rendered | 0.1956 / 0.2607 | 0.5391 / 0.6497 | 2.8043 / 3.1451 | 7.8490 / 9.7088 |
+
+All paired timing differences fall inside the observed run spread. This supports no repeatable regression under
+this load; it does not establish a speedup or a hardware-isolated upper bound. No production or harness source was
+changed in response to these measurements.
 
 Wall-time slicing means callback counts and work per callback can differ. Report bytes/tick and whole-callback
 mean/p95/p99 with actual tick counts, and normalize total bytes/time by the fixed 96 measured segment lifetimes.
@@ -176,7 +228,7 @@ Do not mistake a lower tick count or larger average slice for different generate
 ## Gates, retained failures and limits
 
 - `make setup`, `make build`: warning-free.
-- Parent `SegmentFeedTests` (2 cases), `LabScenarioTests` (7 cases): pass. No previous Lab assertion/log/capture/option
+- Parent and candidate `SegmentFeedTests` (3 cases), `LabScenarioTests` (7 cases): pass. No previous Lab assertion/log/capture/option
   expression was removed; independent registry coverage includes the new opt-in selection.
 - `streaming-history --segments=64 --assert-bounded` against the parent: expected exit 1, “incidental history grew”.
   This proves the new bound assertion detects the original defect; it is not a candidate failure.
@@ -192,15 +244,32 @@ Do not mistake a lower tick count or larger average slice for different generate
   against both runtime versions; final lint/deep results below cover that final harness source.
 - `make test-equivalence`: pass (`build/w1/equivalence.log`): frozen wire/schema/world/publication plus Bank, King,
   spill-chain, Short Fuse and controlled Dissolve retirement traces. No reference was regenerated.
-- The first performance attempt produced one clean headless pair, then the monitor rejected the second parent
-  sample because another worktree started a dotnet build mid-run. The native probe itself passed. All attempt logs
-  remain in `build/w1/pairs/` and `build/w1/pairs.log`; only monitored quiet samples supply the final paired table. A second attempt also rejected an overlapped
-  candidate sample (`build/w1/pairs-quiet2/`); the monitored runner retains accepted legs and retries overlap-only
-  failures. It was deliberately interrupted/restored while waiting so the deep gate could run before resuming it.
+- Earlier quiet-only runners were interrupted/restored while waiting for other worktrees; their logs remain in
+  `build/w1/pairs*`. They do not supply the final table. The first shared-load runner discarded four complete pairs
+  with compiler overlap (`build/w1/shared-load/`), then was stopped at a child-free boundary to cache the builds.
+  The cached runner completed 21 pairs, including four provisional accepts, before inspection found its compiler
+  filter covered the managed DLL form but missed the SDK's native `VBCSCompiler` executable. **Its entire set was
+  excluded**, the runner stopped at a child-free boundary, and the corrected monitor reran both modes from scratch.
+  No provisional timing result supplies acceptance evidence. A missing scratch output directory caused an earlier
+  cached-runner initialization failure; no sample ran, sources were restored, and the failure log remains at
+  `build/w1/shared-load-cached-init-failure.log`. Final accepted/excluded pairs follow the complete monitor above.
 - Final `make lint`: pass (`build/w1/lint-final.log`), including the three-case feed suite's source; both build
   configurations warning-free, dependency/source gates unchanged and all 67 Markdown documents linked.
-- `make -j4 test-full` is executed after this evidence commit on the final head. Its complete outcome is recorded
-  in the submission report and `build/w1/test-full-final.log`; this focused record does not pre-claim its result.
+- `make -j4 test-full`: pass, exit 0 (`build/w1/test-full-final.log`). All final runtime/harness sources were tested;
+  a docs-only MeshKit wording correction amended the evidence commit while it ran (both head IDs are retained in
+  `build/w1/test-full-head.txt`). No runtime/harness change followed. Deep generator/navigation/dials/lifecycle/input/
+  player/Lab suites passed, including full Dissolve seeds 11/12 and the 300-second pacer. The pacer built 32/retired
+  30 segments, freed 366 of 374 historically observed tanks, retained no retired tanks in the surviving session,
+  and reported 425 raw build samples. The seed-12 bot built 23/retired 20, freed 290 of 307 historical tanks and
+  retained no retired tanks. Diagnostic report fields remained populated. All final network audits passed: four-bot
+  melee faults, two-bot blocked-duel faults and loading-readiness faults, with zero engine errors/disagreements.
+- The process-namespace sandbox restart terminated the first post-performance `make check` during
+  `test-behavior`; the incomplete log is retained at `build/w1/check-post-performance-interrupted.log`. It had
+  passed its earlier stages, with one Jolt job-capacity warning in the passing body-correction case. The complete
+  command was restarted in the new sandbox and **passed, exit 0** (`build/w1/check-post-performance.log` and
+  `.exit`). Debug and ExportRelease builds had zero compiler warnings; body correction passed without the Jolt
+  warning. All fast suites, real-device input checks, generation/world hashes and gate self-tests passed, including
+  51 compiled architecture negatives and 16 source negatives. No runtime or harness source changed for this rerun.
 
 Linux only. W1 does not resolve the architecture ledger's inherited network convergence/capacity, navigation,
 causal-history, independent-stream, platform or continuous-animation obligations.
