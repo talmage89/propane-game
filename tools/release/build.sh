@@ -51,8 +51,10 @@ run windows --export-release Windows "$stage/windows/Propane.exe"
 
 # Godot is MIT licensed and asks games to ship its notices.
 cp CREDITS.md "$stage/notices/CREDITS.md"
-curl -fsSL -o "$stage/notices/GODOT_LICENSE.txt" "https://raw.githubusercontent.com/godotengine/godot/$godot_version-stable/LICENSE.txt"
-curl -fsSL -o "$stage/notices/GODOT_COPYRIGHT.txt" "https://raw.githubusercontent.com/godotengine/godot/$godot_version-stable/COPYRIGHT.txt"
+for notice in LICENSE COPYRIGHT; do
+  python3 tools/downloads/verify.py "$godot_version" "$notice.txt" "$stage/notices/GODOT_$notice.txt" \
+    "https://raw.githubusercontent.com/godotengine/godot/$godot_version-stable/$notice.txt"
+done
 
 # Godot's built-in ad-hoc signature carries entitlement data that current macOS rejects, killing the app at launch,
 # so the preset exports unsigned and rcodesign applies a plain ad-hoc signature here. It runs on Linux too.

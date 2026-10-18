@@ -312,25 +312,10 @@ def check_ci_partitions():
     print("PASS: CI runs the local partitions and the gate self-tests, and requires every result")
 
 
-def check_installer(scratch):
-    # A download failure must propagate; a valid cache must not attempt a download.
-    curl = scratch / "curl"
-    curl.write_text("#!/usr/bin/env bash\nexit 23\n")
-    curl.chmod(0o755)
-    cache = scratch / "editor-cache"
-    binary = cache / "Godot_v4.7.2-stable_mono_linux_x86_64" / "Godot_v4.7.2-stable_mono_linux.x86_64"
-    binary.parent.mkdir(parents=True)
-    binary.write_text("#!/usr/bin/env bash\nexit 0\n")
-    binary.chmod(0o755)
-    exports = scratch / "github-env"
-    environment = dict(os.environ, PATH=f"{scratch}:{os.environ['PATH']}", GITHUB_ENV=str(exports))
-    installer = ROOT / ".github/actions/setup-godot/install.sh"
-    code, output = run(scratch, "bash", str(installer), "4.7.2", str(cache), environment=environment)
-    require(code == 0 and exports.read_text() == f"GODOT={binary}\n", "cached editor setup failed", output)
-    environment["GITHUB_ENV"] = str(scratch / "failed-env")
-    code, output = run(scratch, "bash", str(installer), "4.7.2", str(scratch / "empty-cache"), environment=environment)
-    require(code == 23 and not pathlib.Path(environment["GITHUB_ENV"]).exists(), "failed download was ignored", output)
-    print("PASS: Godot setup exports a cached editor and propagates download failures")
+def check_installer():
+    code, output = run(ROOT, "python3", "-B", "tools/downloads/tests.py")
+    require(code == 0, "download verification fixtures failed", output)
+    print(output, end="")
 
 
 def main():
@@ -418,7 +403,7 @@ public static class Formatting
         require(code == 0, "Markdown link check fixtures failed", output)
         check_make_order(scratch)
         check_scale_knobs(scratch)
-        check_installer(scratch)
+        check_installer()
         check_core_wiring()
         check_runtime_dev_boundary()
         check_ci_partitions()
