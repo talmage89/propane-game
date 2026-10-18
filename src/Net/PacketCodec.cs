@@ -232,8 +232,11 @@ public sealed class PacketCodec
         var lobbies = new LobbySummary[count];
         // The owner resolver must not add a receiver-capturing closure to each list decode.
         for (var i = 0; i < count; i++)
+        {
             lobbies[i] = new LobbySummary(Positive(r.Int()), r.String(), Range(r.Int(), 0, Protocol.MaxWireActors), Phase(r.Byte()),
                 Range(r.Int(), 2, Protocol.TestedActorCeiling), LobbyMode(r.Byte()));
+        }
+
         return new LobbyListMessage(capacity, lobbies);
     }
 

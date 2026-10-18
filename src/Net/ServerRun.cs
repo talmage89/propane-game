@@ -465,7 +465,8 @@ internal sealed class ServerRun : IModeHost, IDisposable
                 if (!tanks.Gather(peer, hostId, gather, playOpen)) { return; }
                 break;
             case BodyStatesMessage states:
-                if (!KnownBodies(peer, message.Type, states.Bodies.Select(b => b.Id))) return;
+                try { tanks.ValidateBodies(states.Bodies.Select(b => b.Id)); }
+                catch (InvalidDataException error) { Reject(peer, message.Type, error.Message); return; }
                 var accepted = states.Bodies.Where(b => tanks.Update(peer, b, rest: false)).ToArray();
                 if (accepted.Length == 0) { return; }
                 // Sampling uses the owner's estimate of our clock, only for bounded pose extrapolation, never ordering.
@@ -476,7 +477,8 @@ internal sealed class ServerRun : IModeHost, IDisposable
                 message = message with { Payload = states with { Time = sampledAt, Bodies = accepted } };
                 break;
             case BodyRestMessage rest:
-                if (!KnownBodies(peer, message.Type, new[] { rest.Id })) return;
+                try { tanks.ValidateBodies(new[] { rest.Id }); }
+                catch (InvalidDataException error) { Reject(peer, message.Type, error.Message); return; }
                 if (!tanks.Update(peer, new BodyState(rest.Id, rest.Transform, Vector3.Zero, Vector3.Zero, rest.Epoch, rest.Sequence), rest: true)) { return; }
                 break;
             case MeleeStartMessage strike:
@@ -522,12 +524,6 @@ internal sealed class ServerRun : IModeHost, IDisposable
         {
             if (id != peer || includeSender) { Send(id, bytes, traffic); }
         }
-    }
-
-    private bool KnownBodies(int peer, Msg type, IEnumerable<uint> ids)
-    {
-        try { tanks.ValidateBodies(ids); return true; }
-        catch (InvalidDataException error) { Reject(peer, type, error.Message); return false; }
     }
 
     private void Reject(int peer, Msg type, string detail) => log($"bad {type} message from {peer}: {detail}");

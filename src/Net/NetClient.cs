@@ -198,23 +198,21 @@ public partial class NetClient : Node
 
     private void PollNetwork()
     {
-        try { PollConnection(); }
+        try
+        {
+            transport.Poll();
+            var now = clock.Seconds;
+            if (State == Status.Connecting && now - connectStarted > ConnectTimeout)
+            {
+                Drop(new DisconnectReason(DisconnectKind.Timeout, "The server did not answer. Check the address, the port and that the server is running."));
+            }
+            if (State == Status.Connected && now >= nextPing)
+            {
+                nextPing = now + PingInterval;
+                Send(new NetWriter(Msg.Ping).Double(now), TrafficClass.UnreliablePlayerPoses);
+            }
+        }
         catch (Exception error) { Fail("transport poll", error); }
-    }
-
-    private void PollConnection()
-    {
-        transport.Poll();
-        var now = clock.Seconds;
-        if (State == Status.Connecting && now - connectStarted > ConnectTimeout)
-        {
-            Drop(new DisconnectReason(DisconnectKind.Timeout, "The server did not answer. Check the address, the port and that the server is running."));
-        }
-        if (State == Status.Connected && now >= nextPing)
-        {
-            nextPing = now + PingInterval;
-            Send(new NetWriter(Msg.Ping).Double(now), TrafficClass.UnreliablePlayerPoses);
-        }
     }
 
     public SendResult Send(NetWriter message, TrafficClass traffic = TrafficClass.ReliableOrdered) => Send(message.ToArray(), traffic);

@@ -209,7 +209,8 @@ suppresses callbacks. A heap or batch-removal rewrite must prove those semantics
 thinking → owned actor publication → body publication → pickups. World/tank/actor native callbacks produce immediate
 local facts and authority requests; Match's render callback handles reveal/HUD/notices/deferred transitions.
 [LobbyServer](../src/Net/LobbyServer.cs) polls/decode/admission/dispatch first, then delayed disconnects/timeouts and
-ServerRun phases/stock/pickups through `Tick`. Preserve these domains and order through extraction.
+ServerRun phases/stock/pickups through `Tick`. Failure guards stay inside the existing poll/relay methods, avoiding
+extra wrapper calls on each healthy tick. Preserve these domains and order through extraction.
 
 Native skeleton/modifier order, ragdoll launch/recovery, logical muzzle and render-domain aim remain cohesive physical
 behavior ([motion](motion.md), [locomotion](locomotion.md), [recoil](recoil.md)). A camera-free bot still needs native
