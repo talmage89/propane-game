@@ -257,7 +257,7 @@
     "Propane.World.Plan.SegmentPlans": "Plans",
     "Propane.World.Plan.SegmentSettings": "Plans",
     "Propane.World.SuburbPlans": "Composition",
-    "Propane.Net.MessageCodec": "Composition",
+    "Propane.Dev.MessageCodec": "Dev",
     "Propane.Net.PacketCodec": "Wire",
     "Propane.Net.TransportMetrics": "Wire"
   },

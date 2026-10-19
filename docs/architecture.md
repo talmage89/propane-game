@@ -59,7 +59,7 @@ stable top-level owner so compiler-generated numbering does not cause churn.
 | `Modes/` | Rules by default; `ModeDefinition`/`ModeBundle`/`ModeCatalog`/registry/supply are Composition; HUD input/presenters are Presentation; HUD values/`IModeView` remain plain rules observations. |
 | `Player/`, `Tank/`, `Fx/` | Simulation by default; input values and resolved state values are Foundation; cameras/views/device input and mode geometry are Presentation; `ReplicatedIntent` is Client. The separate `PlayerNetState.cs` is a Foundation value; shared profiling lives in `Diagnostics/`. |
 | `Navigation/`, `Bots/` | Navigation and Bots. |
-| `Net/` | Wire by default; `LobbyServer`/`ServerRun`, ledger, roster, contact admission, ServerMode/ServerModes inputs, plain ModeWireTuners, KingPlacement and mode wires/runner are Server; body/actor snapshot helpers, prediction, authority transactions, mode client adapters and inbox are Client; Match/backend factory/update/diagnostics are Composition; NetClient is Client; MessageCodec is the Dev convenience facade in Composition over Wire PacketCodec; TransportMetrics accepts plain Wire observations. Lobby/profile/setup contracts and phases are Wire; shared identity/appearance/body values live in `Core/`, standings in Rules, and `World/AmmoPickup` in Simulation. |
+| `Net/` | Wire by default; `LobbyServer`/`ServerRun`, ledger, roster, contact admission, ServerMode/ServerModes inputs, plain ModeWireTuners, KingPlacement and mode wires/runner are Server; body/actor snapshot helpers, prediction, authority transactions, mode client adapters and inbox are Client; Match/backend factory/update/diagnostics are Composition; NetClient is Client; the Dev-only MessageCodec facade is excluded from release exports; TransportMetrics accepts plain Wire observations. Lobby/profile/setup contracts and phases are Wire; shared identity/appearance/body values live in `Core/`, standings in Rules, and `World/AmmoPickup` in Simulation. |
 | `UI/` | Presentation by default; front-end screens, their transactions and lobby/stage composition are Composition. |
 | `ReleaseSmoke/`, `Dev/` | Smoke and Dev respectively; no game dependency on the checker project under `tools/architecture/`. |
 
@@ -133,8 +133,9 @@ still requires an actor. This cache neither retargets an existing local view nor
 
 [ModeRegistry](../src/Modes/ModeRegistry.cs) compiles the network integrations into one validated
 [ModeCatalog](../src/Modes/ModeCatalog.cs). Bundles pair existing definitions with schemas and explicit server wire/client adapter
-factories; bounded parsing/encoding remains in Wire's PacketCodec. Composition's MessageCodec convenience facade
-selects the current catalog only for Dev fixtures and release-reference probes without a connection owner. Match
+factories; bounded parsing/encoding remains in Wire's PacketCodec. The [Dev-only MessageCodec facade](../src/Dev/MessageCodec.cs)
+selects the current catalog for fixtures and release-reference probes without a connection owner; ExportRelease
+excludes it and the runtime-to-Dev gate rejects production callers. Match
 uses its connection's captured codec for authority/mode sends and lends it to ClientWorldReplica and ClientActorSet
 for gather, pose and action sends. Connection/server owners capture immutable
 PacketCodec inputs at construction (schema resolver, lobby eligibility and native tuner validator); those inputs

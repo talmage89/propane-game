@@ -42,15 +42,3 @@ public sealed record GatherMessage(GatherPhase Phase, IReadOnlyList<BodyState> B
 public sealed record RagdollMessage(Vector3 Position, Vector3 Velocity, Vector3 Spin);
 public sealed record GetUpMessage(Vector3 Position, float Yaw);
 public sealed record TuningMessage(string Name, Variant Value);
-
-/// <summary>
-/// Composition convenience for Dev fixtures and release-reference probes without a connection owner. Production
-/// send/receive paths borrow an owner-scoped PacketCodec; schema selection and native tuner validation never run
-/// implicitly inside Wire.
-/// </summary>
-public static class MessageCodec
-{
-    public static NetMessage Decode(byte[] data, bool fromServer) => Modes.ModeRegistry.Codec.Decode(data, fromServer);
-    public static byte[] Encode(NetMessage message, bool fromServer) => Modes.ModeRegistry.Codec.Encode(message, fromServer);
-    internal static void WriteBody(NetWriter writer, BodyState body) => PacketCodec.WriteBody(writer, body);
-}
