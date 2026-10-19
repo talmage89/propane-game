@@ -291,7 +291,7 @@ it to eligible free-flight vents in both COM prediction and velocity feed-forwar
 reporting limit is restored before local authority/prediction and on retirement. Its reusable ray query and single-RID
 exclusion array have registry lifetime and are disposed by clearing/final removal. Network sample intervals and
 publication deadlines remain monotonic; contact evidence is the latest native physics synchronization. The owner
-selects reliable checkpoints at the shared 0.125 s interval without adding publications or changing traversal/order.
+selects reliable checkpoints at the shared 0.05 s interval without adding publications or changing traversal/order.
 [BodyPublisher](../src/Net/BodyPublisher.cs) preserves grouping, encounter/batch order, sequence advancement and
 rotating checkpoints. Later batches sample after earlier synchronous sends; pre-capturing all batches changes
 behavior. The C2 integration retains the publication and retirement boundaries pinned by

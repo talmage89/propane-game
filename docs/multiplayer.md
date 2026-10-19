@@ -191,11 +191,11 @@ positions. Those remain decisions of the distributed client authorities.
 The ledger also owns each body's peer and monotonically increasing epoch. Every accepted ownership or lifecycle
 claim increments that body's epoch, including another grant to the same peer; departure transfers get new epochs.
 Moving publications use monotonic network time for send rates and checkpoint deadlines, so slow or catch-up
-physics cannot stretch freshness intervals or burst old samples. They include a reliable checkpoint every 0.125 s
+physics cannot stretch freshness intervals or burst old samples. They include a reliable checkpoint every 0.05 s
 (`BodyCheckpointInterval`) plus up to one normal send interval, and immediately when publication is required.
-The server preserves its delivery class on the second leg; other moving samples
-remain disposable. Native ENet throttling can suppress those samples beyond injected loss. Checkpoints and
-reliable rests carry the same per-body sequence within the epoch. Neither side compares owner clocks:
+The server preserves delivery class on the second leg. At the normal 15 Hz tank and 6 Hz car rates, every moving
+publication is therefore reliable; higher tuned rates can still include disposable samples, which native ENet
+throttling can suppress beyond injected loss. Checkpoints and reliable rests carry the same per-body sequence within the epoch. Neither side compares owner clocks:
 old epochs and duplicate/older sequences cannot replace a newer state or wake a completed rest. A client retains
 one newest future state per body when a motion publication overtakes its reliable grant.
 Moving batches use sampling timestamps on the sender's ping-estimated server clock. The server bounds these to
@@ -213,10 +213,10 @@ and steers that center, rotates the local offset, and converts back to a node tr
 alone must not translate an already aligned mass center. Custom tank centers and native automatic centers use
 the same model; captures still compare the original node positions.
 
-Low-spin remote vents also estimate linear acceleration from two accepted moving publications in the same epoch.
+Remote vents also estimate linear acceleration from two accepted moving publications in the same epoch.
 The sample interval uses monotonic network seconds and cannot exceed the existing 0.3 s prediction window.
 `CorrectionMaxAcceleration` bounds the estimate (30 m/s²; zero disables it), and
-`CorrectionAccelerationMaxSpin` limits eligibility (6 rad/s). Where eligible and free of native contact, correction
+`CorrectionAccelerationMaxSpin` limits eligibility (6 rad/s, covering ordinary vent spin). Where eligible and free of native contact, correction
 advances both COM position by half acceleration times lead squared and feed-forward velocity by acceleration times
 lead. Large discontinuities, rest, authority boundaries, predicted claims and body replacement discard the model.
 The lead cap, silence deadline, blend time, snap distance and rest anchors are unchanged.
