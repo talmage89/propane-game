@@ -191,11 +191,12 @@ positions. Those remain decisions of the distributed client authorities.
 The ledger also owns each body's peer and monotonically increasing epoch. Every accepted ownership or lifecycle
 claim increments that body's epoch, including another grant to the same peer; departure transfers get new epochs.
 Moving publications use monotonic network time for send rates and checkpoint deadlines, so slow or catch-up
-physics cannot stretch freshness intervals or burst old samples. They include a reliable checkpoint every 0.25 s
-plus up to one normal send interval, and immediately
-when publication is required. The server preserves its delivery class on the second leg; other moving samples
-remain disposable. Native ENet throttling can suppress those samples beyond injected loss. Checkpoints and
-reliable rests carry the same per-body sequence within the epoch. Neither side compares owner clocks:
+physics cannot stretch freshness intervals or burst old samples. They include a reliable checkpoint every 0.05 s
+(`BodyCheckpointInterval`) plus up to one normal send interval, and immediately when publication is required.
+The server preserves delivery class on the second leg. At the normal 15 Hz tank and 6 Hz car rates, every moving
+publication is therefore reliable; higher tuned rates can still include disposable samples, which native ENet
+throttling can suppress beyond injected loss. Checkpoints and reliable rests carry the same per-body sequence within
+the epoch. Neither side compares owner clocks:
 old epochs and duplicate/older sequences cannot replace a newer state or wake a completed rest. A client retains
 one newest future state per body when a motion publication overtakes its reliable grant.
 Moving batches use sampling timestamps on the sender's ping-estimated server clock. The server bounds these to
@@ -212,6 +213,33 @@ Linear velocity describes a body's mass center, which can differ from its node o
 and steers that center, rotates the local offset, and converts back to a node transform for a snap. Rotation error
 alone must not translate an already aligned mass center. Custom tank centers and native automatic centers use
 the same model; captures still compare the original node positions.
+
+Remote vents estimate linear acceleration from two accepted moving publications in the same epoch.
+The sample interval uses monotonic network seconds and cannot exceed the existing 0.3 s prediction window.
+`CorrectionMaxAcceleration` bounds both the estimate and the predicted vector (30 m/s²; zero disables prediction).
+At source spin up to `CorrectionAccelerationMaxSpin` (6 rad/s), free-flight correction advances both COM position
+by half acceleration times lead squared and feed-forward velocity by acceleration times lead. At spin at least
+`CorrectionSpinAverageMin` (20 rad/s; zero disables this branch), the rotating transverse jet is averaged away:
+native gravity plus the existing authored jet force along the sampled spin axis replaces the velocity estimate.
+This avoids extending a measured contact impulse as sustained thrust. The tank exposes its simulation vent age
+read-only for the existing thrust ramp; owner force, flutter, spin limits and clocks are unchanged. Intermediate
+spin uses constant velocity. Large discontinuities, rest, authority boundaries, predicted claims and body
+replacement discard the model.
+
+Moving vents use `CorrectionVentBlendTime` (0.1 physics seconds) to close the additional steering lag.
+Intact bodies, gathers and reliable rests retain `CorrectionBlendTime` (0.25 s), including the rest deadline.
+The 0.3 s lead cap, 0.5 s receipt-silence deadline and snap distance are unchanged.
+
+Eligible observers temporarily report one native contact without enabling contact signals. The first reporting
+step uses constant velocity; subsequent correction reads the contact count from the same native synchronization as
+the body's pose and velocity. Contact disables acceleration prediction. The original reporting limit is restored
+before local prediction or an authority change, and on ineligibility, rest, stale fallback, replacement or retirement.
+The borrowed body-owned native gravity view is dropped at the same boundaries and is never disposed by BodySync.
+This changes the observer's Jolt contact policy only while acceleration correction can run; owner physics keeps its
+original policy. BodySync owns one reusable obstruction-ray parameter and exclusion array for its registry, disposed
+on clearing or final body removal; query endpoints, mask, exclusion and order are unchanged.
+These correction and shared-tuner changes require a **minor release**; message shapes and `Protocol.Version` (3)
+are unchanged. [FU2b evidence](evidence/moving-vent-fix.md) retains the experiments and verification.
 
 `Claim` requests carry expected epochs and proposed poses for the complete group. The server validates every member
 before granting any, so later grouped interactions can include bodies already owned without a partial handoff.

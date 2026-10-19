@@ -19,6 +19,7 @@ internal static class VentResidualObservation
     private static Match? match;
     private static StreamWriter? writer;
     private static bool configurationWritten;
+    private static bool preserveContacts;
 
     internal static void Attach(Match current)
     {
@@ -26,8 +27,9 @@ internal static class VentResidualObservation
         if (DevArgs.Get("vent-residual-dir") is not { } directory) { return; }
         Directory.CreateDirectory(directory);
         match = current;
+        preserveContacts = DevArgs.Get("vent-residual-preserve-contacts") != null;
         writer = new StreamWriter(Path.Combine(directory, $"peer-{current.Net.MyId}-match-{current.Setup.Id}.jsonl"), false, new System.Text.UTF8Encoding(false), 65536);
-        Write(new { kind = "start", time = NetScenarioTools.TankCheckTime(), network = current.Clock.Seconds, peer = current.Net.MyId, name = current.Net.PlayerName, match = current.Setup.Id, schema = 3 });
+        Write(new { kind = "start", time = NetScenarioTools.TankCheckTime(), network = current.Clock.Seconds, peer = current.Net.MyId, name = current.Net.PlayerName, match = current.Setup.Id, schema = 4, preserveContacts });
         GD.Print($"[vent-residual] enabled peer {current.Net.MyId} match {current.Setup.Id}");
     }
 
@@ -37,6 +39,7 @@ internal static class VentResidualObservation
         writer = null;
         match = null;
         configurationWritten = false;
+        preserveContacts = false;
     }
 
     private static float[] V(Vector3 v) => new[] { v.X, v.Y, v.Z };
@@ -69,7 +72,7 @@ internal static class VentResidualObservation
     {
         if (writer == null || match == null || !entry.IsTank || !GodotObject.IsInstanceValid(entry.Body)) { return; }
         var body = entry.Body;
-        if (reason == "register") { body.MaxContactsReported = 8; }
+        if (reason == "register" && !preserveContacts) { body.MaxContactsReported = 8; }
         if ((reason.StartsWith("decision-", StringComparison.Ordinal) || reason == "after-correct") &&
             body is not PropaneTank { State: PropaneTank.TankState.Venting }) { return; }
         var direct = body.IsInsideTree() ? PhysicsServer3D.BodyGetDirectState(body.GetRid()) : null;
@@ -99,6 +102,7 @@ internal static class VentResidualObservation
             v = V(body.LinearVelocity),
             w = V(body.AngularVelocity),
             contacts,
+            contactLimit = body.MaxContactsReported,
             hasTarget = entry.HasTarget,
             rest = entry.TargetRest,
             sampled = entry.TargetReceived,
@@ -122,6 +126,18 @@ internal static class VentResidualObservation
         if (!configurationWritten)
         {
             var tuning = current.World.Tuning;
+            foreach (var (name, flag) in new[] { ("BodyCheckpointInterval", "expect-checkpoint"), ("CorrectionAccelerationMaxSpin", "expect-acceleration-spin"), ("CorrectionVentBlendTime", "expect-vent-blend"), ("CorrectionSpinAverageMin", "expect-spin-average") })
+            {
+                if (DevArgs.Get(flag) == null) { continue; }
+                var expected = DevArgs.GetFloat(flag, float.NaN);
+                var actual = typeof(Tuning).GetProperty(name)?.GetValue(tuning) is float value ? value : float.NaN;
+                if (!float.IsFinite(expected) || !Mathf.IsEqualApprox(actual, expected))
+                {
+                    GD.PushError($"effective {name}={actual} differs from requested {expected}");
+                    ShutdownGuard.Quit(current.GetTree(), 1);
+                    return;
+                }
+            }
             Write(new
             {
                 kind = "configuration",
@@ -133,6 +149,11 @@ internal static class VentResidualObservation
                 tuning.TankSendRate,
                 tuning.VentThrust,
                 tuning.VentMaxSpin,
+                checkpointInterval = typeof(Tuning).GetProperty("BodyCheckpointInterval")?.GetValue(tuning),
+                maxAcceleration = typeof(Tuning).GetProperty("CorrectionMaxAcceleration")?.GetValue(tuning),
+                accelerationMaxSpin = typeof(Tuning).GetProperty("CorrectionAccelerationMaxSpin")?.GetValue(tuning),
+                ventBlend = typeof(Tuning).GetProperty("CorrectionVentBlendTime")?.GetValue(tuning),
+                spinAverageMin = typeof(Tuning).GetProperty("CorrectionSpinAverageMin")?.GetValue(tuning),
                 hull = (GameAssets.TankShape as ConvexPolygonShape3D)?.Points.Select(V).ToArray()
             });
             configurationWritten = true;

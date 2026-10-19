@@ -303,6 +303,15 @@ not reconnect/resume or arbitrary mid-match join.
 [SnapshotBuffer](../src/Net/SnapshotBuffer.cs) owns bounded actor history and offset/interpolation/extrapolation;
 [BodySync](../src/Net/BodySync.cs) separates sample age from receipt freshness, preserves rest anchors, suppresses
 fresh remote vent thrust/spin and applies geometry/contact-aware correction.
+It retains one bounded acceleration estimate per body, reset at authority/rest/prediction boundaries, and applies
+it to eligible free-flight vents in both COM prediction and velocity feed-forward. Fast spin uses native gravity
+and the existing authored axial jet force rather than extending measured collision impulses. Its borrowed native
+gravity view is dropped before rebind/authority/retirement and never disposed here; the native body owns it.
+Moving vents use their own 0.1 s blend; intact bodies, gathers and rests retain the original 0.25 s timing.
+Its temporary observer contact reporting limit is restored before local authority/prediction and on retirement. Its reusable ray query and single-RID
+exclusion array have registry lifetime and are disposed by clearing/final removal. Network sample intervals and
+publication deadlines remain monotonic; contact evidence is the latest native physics synchronization. The owner
+selects reliable checkpoints at the shared 0.05 s interval without adding publications or changing traversal/order.
 [BodyPublisher](../src/Net/BodyPublisher.cs) preserves grouping, encounter/batch order, sequence advancement and
 rotating checkpoints. Later batches sample after earlier synchronous sends; pre-capturing all batches changes
 behavior. The C2 integration retains the publication and retirement boundaries pinned by
@@ -516,6 +525,13 @@ allocations and the whole relevant callback/tick with p95/p99 and workload count
 Native performance needs a reserved CPU/GPU window. Preserve failed samples and distinguish complete, incomplete and
 inherited evidence; a later passing rerun does not erase a failed gate.
 
+FU2b supplies the separately classified moving-vent correction proof: controlled before/after acceleration and
+spin cases, a 16-case native matrix, ten alternating parent/candidate repeats, 4/8-bot clean/faulted crowds,
+paired whole-client callback cost and an unchanged full deep-gate pass. This closes the P5 moving-vent deep-gate
+and FU2 correction proof conditions; [the FU2b record](evidence/moving-vent-fix.md) retains the failed variants,
+rare-event interval, two earlier offline full-sweep failures and the limits of retrospective causality. Those
+failed invocations remain failed; their unresolved FX/lifetime and Dissolve causes are follow-ups.
+
 ### Unfinished acceptance ledger
 
 These are open acceptance obligations, not claims that an inherited refactor caused the failure. Historical reports
@@ -525,8 +541,6 @@ remain unchanged. Close an entry with new linked evidence showing its condition,
 | --- | --- | --- |
 | P2 tracking performance | [Tracking](evidence/lab-tracking-verification.md): three uncontended rendered bot pairs and three rendered pacer pairs; full allocation/whole-tick/frame mean/p95/p99 conclusion still owed. Headless tails alone are inconclusive. | P2 acceptance follow-up, reserved CPU/GPU window and complete paired analysis. |
 | P3 native performance | [Publication](evidence/body-publication-verification.md): one further valid 16-client headless pair and three pairs each at four clients headless/rendered remain (load below 4); controlled callback allocation/bytes and native correctness passed. | P3 acceptance follow-up: matched whole-tick native allocation/timing matrix, not another microbenchmark. |
-| P5 deep gate | [Tuner sampling](evidence/lab-tuner-sampling.md): four-client faulted final moving vent drift 0.710/0.639/0.672 m versus 0.50 m. Later component passes do not complete that failed invocation. | FU2a diagnosis, FU2b separately classified correction, then complete unchanged deep gate. |
-| FU2 moving-vent residual | [Corrections](evidence/network-corrections.md): fault 7 final 0.531 m versus 0.50 m with fresh traffic, high spin and floor contact. Contact/spin is an inference; original fault-9 alignment/mechanism was not retrospectively established. [FU2a](evidence/moving-vent-residual.md) reproduces a parent final at 0.557 m, isolates repeatable acceleration lag, and records contact/age/timing controls; the ordinary failure’s full mechanism remains unknown. [Participant integration](evidence/participant-integration.md) and [King crowd](evidence/king-crowd.md) also retain moving-vent failures. | FU2a separates sample age/receipt freshness/ownership/contact/spin/measurement alignment; FU2b proves clean/faulted stationary/moving/vent/contact matrix without threshold changes. |
 | Stock-soak resting variability | [Lobby supply](evidence/lobby-tanks.md): seed-25/net-seed-2 failed resting pair up to 3.90 s at 0.152 m; unchanged retry passed. | Native convergence investigation covering the retained resting case, unchanged limits and complete deep runs; FU2 moving-vent diagnosis alone does not close it. |
 | Ordinary capacity and supply | [Tank scaling](evidence/tank-scaling.md), [network soak](evidence/network-soak.md), [network integration](evidence/network-integration.md): ordinary sixteen-process populated gameplay, startup delivery and reliable 60 FPS/100 ms bounds remain unproved; eightfold native capacity also absent in [lobby supply](evidence/lobby-tanks.md). Controlled capacity fixtures do not establish those workloads. | Owner-defined representative capacity workload plus quiet native client/server fanout/construction/physics runs; no ceiling or admission change in refactors. |
 | Bot absolute cost/allocation | [Bot scale](evidence/bot-scale.md): residual 120-byte ticks and loaded maxima above 4 ms; universal zero-allocation/4 ms claim unproved. | Bot/navigation performance follow-up isolates residual allocation and repeats representative quiet whole-tick tails; B4 tactical extraction alone is not closure. |

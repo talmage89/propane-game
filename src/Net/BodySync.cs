@@ -34,6 +34,12 @@ public sealed class BodySync
         public bool HasTarget;
         public bool TargetRest;
         internal bool CheckTargetGeometry;
+        // Two accepted moving samples in one epoch; never retain a model across an authority boundary.
+        internal bool HasMotionSample;
+        internal Vector3 TargetAcceleration;
+        // Borrowed body-owned physics view; RestoreContacts drops it before rebind or retirement.
+        internal PhysicsDirectBodyState3D? GravityState;
+        internal int? ContactLimitBeforeCorrection;
         public Transform3D Target;
         public Vector3 TargetLinear;
         public Vector3 TargetAngular;
@@ -59,6 +65,9 @@ public sealed class BodySync
     private double? lastCollection;
     private double tankTimer;
     private double carTimer;
+    // Registry-owned query scratch; retired by Clear or final removal.
+    private PhysicsRayQueryParameters3D? correctionRay;
+    private Godot.Collections.Array<Rid>? correctionExcluded;
 
     public BodySync(Tuning tuning, int me, int host)
     {
@@ -67,7 +76,13 @@ public sealed class BodySync
         Host = host;
     }
 
-    public void Clear() { entries.Clear(); byInstance.Clear(); }
+    public void Clear()
+    {
+        foreach (var entry in entries.Values) { RestoreContacts(entry); }
+        entries.Clear();
+        byInstance.Clear();
+        ClearGeometry();
+    }
 
     public int Me { get; }
 
@@ -89,6 +104,9 @@ public sealed class BodySync
     internal static void MarkPending(Entry entry, bool predictMotion = true)
     {
         entry.SettledMismatchSince = null;
+        RestoreContacts(entry);
+        entry.HasMotionSample = false;
+        entry.TargetAcceleration = Vector3.Zero;
         entry.ClaimPending = true;
         entry.ObserveWhilePending = !predictMotion;
         if (predictMotion)
@@ -110,7 +128,9 @@ public sealed class BodySync
     {
         if (entries.Remove(id, out var entry))
         {
+            RestoreContacts(entry);
             byInstance.Remove(entry.InstanceId);
+            if (entries.Count == 0) { ClearGeometry(); }
         }
     }
 
@@ -119,6 +139,9 @@ public sealed class BodySync
     {
         var entry = entries[id];
         byInstance.Remove(entry.InstanceId);
+        RestoreContacts(entry);
+        entry.HasMotionSample = false;
+        entry.TargetAcceleration = Vector3.Zero;
         entry.Body = body;
         entry.InstanceId = body.GetInstanceId();
         byInstance[entry.InstanceId] = entry;
@@ -174,6 +197,9 @@ public sealed class BodySync
         resolved = authority;
         // A publication orders motion, not lifecycle. A newer same-epoch pose must not hide a refusal.
         if (!entries.TryGetValue(authority.Body.Id, out var entry) || authority.Body.Epoch < entry.Epoch) { return false; }
+        RestoreContacts(entry);
+        entry.HasMotionSample = false;
+        entry.TargetAcceleration = Vector3.Zero;
         var newEpoch = authority.Body.Epoch > entry.Epoch;
         var priorSequence = entry.LastSequence;
         if (newEpoch)
@@ -236,12 +262,25 @@ public sealed class BodySync
         if (entry.Owner != sender || sender == Me || state.Sequence <= entry.LastSequence) { return; }
         entry.LastSequence = state.Sequence;
         entry.Latest = (state, rest);
-        SetTarget(entry, state, rest, now, received);
+        SetTarget(entry, state, rest, now, received, motionSample: !rest);
         Trace?.Invoke(entry, $"receive sender={sender} epoch={state.Epoch} sequence={state.Sequence} rest={rest} transit={transit:0.000}");
     }
 
-    private static void SetTarget(Entry entry, BodyState state, bool rest, double sampled, double received)
+    private void SetTarget(Entry entry, BodyState state, bool rest, double sampled, double received, bool motionSample = false)
     {
+        var acceleration = Vector3.Zero;
+        var interval = (float)(sampled - entry.TargetReceived);
+        if (entry.HasTarget && entry.HasMotionSample && motionSample && !entry.TargetRest && !rest && interval > 0 &&
+            interval <= BodyState.MaxExtrapolation)
+        {
+            var estimate = (state.Linear - entry.TargetLinear) / interval;
+            if (estimate.LengthSquared() <= settings.CorrectionMaxAcceleration * settings.CorrectionMaxAcceleration)
+            {
+                acceleration = estimate;
+            }
+        }
+        entry.TargetAcceleration = acceleration;
+        entry.HasMotionSample = motionSample && !rest;
         entry.HasTarget = true;
         entry.TargetRest = rest;
         entry.CheckTargetGeometry = !rest;
@@ -265,15 +304,29 @@ public sealed class BodySync
     public void Correct(double now)
     {
         var tuning = settings;
-        var blend = Mathf.Max(tuning.CorrectionBlendTime, 0.02f);
+        var defaultBlend = Mathf.Max(tuning.CorrectionBlendTime, 0.02f);
+        var ventBlend = Mathf.Max(tuning.CorrectionVentBlendTime, 0.02f);
+        var fullSpinSquared = tuning.CorrectionAccelerationMaxSpin * tuning.CorrectionAccelerationMaxSpin;
+        var averageSpin = tuning.CorrectionSpinAverageMin;
+        var averageSpinSquared = averageSpin * averageSpin;
+        var maxAccelerationSquared = tuning.CorrectionMaxAcceleration * tuning.CorrectionMaxAcceleration;
         foreach (var entry in entries.Values)
         {
-            if (GodotObject.IsInstanceValid(entry.Body) && entry.Body is Tank.PropaneTank tank)
+            var contactsReady = true;
+            var accelerationEligible = false;
+            var valid = GodotObject.IsInstanceValid(entry.Body);
+            var observes = ObservesOwner(entry);
+            if (valid && entry.Body is Tank.PropaneTank tank)
             {
-                tank.CorrectingMotion = entry.HasTarget && ObservesOwner(entry) &&
+                tank.CorrectingMotion = entry.HasTarget && observes &&
                     (entry.TargetRest || now - entry.TargetUpdated <= StaleAfter);
+                accelerationEligible = tank.CorrectingMotion && !entry.TargetRest &&
+                    tank.State == Tank.PropaneTank.TankState.Venting && tuning.CorrectionMaxAcceleration > 0 &&
+                    (entry.TargetAngular.LengthSquared() <= fullSpinSquared ||
+                        averageSpin > 0 && entry.TargetAngular.LengthSquared() >= averageSpinSquared);
+                contactsReady = PrepareContacts(entry, accelerationEligible);
             }
-            if (!entry.HasTarget || !ObservesOwner(entry) || !GodotObject.IsInstanceValid(entry.Body))
+            if (!entry.HasTarget || !observes || !valid)
             {
                 entry.SettledMismatchSince = null;
                 continue;
@@ -288,6 +341,8 @@ public sealed class BodySync
                 entry.SettledMismatchSince = null;
                 continue;
             }
+            var blend = !entry.TargetRest && body is Tank.PropaneTank { State: Tank.PropaneTank.TankState.Venting, Gathering: false }
+                ? ventBlend : defaultBlend;
             var lead = entry.TargetRest ? 0f : (float)System.Math.Min(age, BodyState.MaxExtrapolation);
             var center = body.CenterOfMassMode == RigidBody3D.CenterOfMassModeEnum.Custom
                 ? body.CenterOfMass
@@ -303,8 +358,38 @@ public sealed class BodySync
             {
                 targetRotation = new Quaternion(entry.TargetAngular.Normalized(), entry.TargetAngular.Length() * lead) * targetRotation;
             }
-            var targetPosition = targetCenter - new Basis(targetRotation) * center;
             var current = body.GlobalTransform;
+            var targetLinear = entry.TargetLinear;
+            if (lead > 0 && entry.TargetAcceleration.LengthSquared() > 0 &&
+                accelerationEligible && contactsReady && body.GetContactCount() == 0)
+            {
+                var acceleration = entry.TargetAcceleration;
+                if (entry.TargetAngular.LengthSquared() > fullSpinSquared)
+                {
+                    // Over rapid spin, transverse jet force averages toward zero. Use the authored axial
+                    // force and native gravity; measured axial acceleration may include a contact impulse.
+                    var nativeState = entry.GravityState;
+                    if (nativeState == null && body.IsInsideTree())
+                    {
+                        nativeState = entry.GravityState = PhysicsServer3D.BodyGetDirectState(body.GetRid());
+                    }
+                    if (nativeState == null) { acceleration = Vector3.Zero; }
+                    else
+                    {
+                        var gravity = nativeState.TotalGravity;
+                        var axisOfSpin = entry.TargetAngular.Normalized();
+                        var sourceTank = (Tank.PropaneTank)body;
+                        var ramp = tuning.VentThrustRampTime > 0
+                            ? Mathf.Clamp(sourceTank.PredictionVentAge / tuning.VentThrustRampTime, 0, 1) : 1f;
+                        var jet = entry.Target.Basis * sourceTank.JetDirectionLocal;
+                        acceleration = gravity - axisOfSpin * (jet.Dot(axisOfSpin) * tuning.VentThrust * ramp / body.Mass);
+                        if (acceleration.LengthSquared() > maxAccelerationSquared) { acceleration = Vector3.Zero; }
+                    }
+                }
+                targetCenter += acceleration * (lead * lead / 2);
+                targetLinear += acceleration * lead;
+            }
+            var targetPosition = targetCenter - new Basis(targetRotation) * center;
             var currentCenter = current * center;
             var error = targetCenter - currentCenter;
             var rotationError = (targetRotation * current.Basis.Orthonormalized().GetRotationQuaternion().Inverse()).Normalized();
@@ -331,9 +416,14 @@ public sealed class BodySync
                 // per accepted snapshot; ordinary free-space corrections retain their smoothing.
                 if (body.IsInsideTree() && currentCenter.DistanceSquaredTo(sampledCenter) > .0001f)
                 {
-                    using var ray = PhysicsRayQueryParameters3D.Create(currentCenter, sampledCenter,
-                        Layers.World | Layers.Props | Layers.Floor, new Godot.Collections.Array<Rid> { body.GetRid() });
-                    if (body.GetWorld3D().DirectSpaceState.IntersectRay(ray).Count > 0)
+                    var excluded = correctionExcluded ??= new Godot.Collections.Array<Rid> { default };
+                    excluded[0] = body.GetRid();
+                    var ray = correctionRay ??= new PhysicsRayQueryParameters3D { CollisionMask = Layers.World | Layers.Props | Layers.Floor };
+                    ray.From = currentCenter;
+                    ray.To = sampledCenter;
+                    ray.Exclude = excluded;
+                    using var hit = body.GetWorld3D().DirectSpaceState.IntersectRay(ray);
+                    if (hit.Count > 0)
                     {
                         Snap(body, entry.Target, entry.TargetLinear, entry.TargetAngular);
                         Trace?.Invoke(entry, $"obstructed-snap age={age:0.000} error={error.Length():0.000}");
@@ -364,7 +454,7 @@ public sealed class BodySync
             }
             if (error.Length() > tuning.SnapDistance)
             {
-                Snap(body, new Transform3D(new Basis(targetRotation), targetPosition), entry.TargetLinear, entry.TargetAngular);
+                Snap(body, new Transform3D(new Basis(targetRotation), targetPosition), targetLinear, entry.TargetAngular);
                 Trace?.Invoke(entry, $"snap age={age:0.000} lead={lead:0.000} error={error.Length():0.000}");
             }
             else if (entry.TargetRest && (error.Length() < 0.01f && Mathf.Abs(angle) < 0.01f || age > blend * 3))
@@ -385,10 +475,37 @@ public sealed class BodySync
             else
             {
                 body.Sleeping = false;
-                body.LinearVelocity = entry.TargetLinear + error / blend;
+                body.LinearVelocity = targetLinear + error / blend;
                 body.AngularVelocity = entry.TargetAngular + axis * (angle / blend);
             }
         }
+    }
+
+    private void ClearGeometry()
+    {
+        correctionRay?.Dispose();
+        correctionRay = null;
+        ((Godot.Collections.Array?)correctionExcluded)?.Dispose();
+        correctionExcluded = null;
+    }
+
+    // A contact-existence bit for eligible remote vents; owners/local predictions retain their original Jolt policy.
+    // The first enabled step uses constant velocity: contact reporting becomes available after native integration.
+    private static bool PrepareContacts(Entry entry, bool active)
+    {
+        if (!active) { RestoreContacts(entry); return true; }
+        if (entry.ContactLimitBeforeCorrection != null || entry.Body.MaxContactsReported > 0) { return true; }
+        entry.ContactLimitBeforeCorrection = entry.Body.MaxContactsReported;
+        entry.Body.MaxContactsReported = 1;
+        return false;
+    }
+
+    private static void RestoreContacts(Entry entry)
+    {
+        entry.GravityState = null;
+        if (entry.ContactLimitBeforeCorrection is not { } original) { return; }
+        if (GodotObject.IsInstanceValid(entry.Body)) { entry.Body.MaxContactsReported = original; }
+        entry.ContactLimitBeforeCorrection = null;
     }
 
     /// <summary>
@@ -437,8 +554,8 @@ public sealed class BodySync
                 {
                     // ENet can throttle disposable packets to zero after RTT variance. Checkpoints
                     // share the existing state/sequence stream and survive that suppression. No extra
-                    // samples: reserve an ordinary publication at half the correction silence bound.
-                    entry.PublishReliably = entry.PublishRequired || now - entry.LastReliablePublication >= StaleAfter / 2;
+                    // samples: reserve an ordinary publication at the shared checkpoint interval.
+                    entry.PublishReliably = entry.PublishRequired || now - entry.LastReliablePublication >= tuning.BodyCheckpointInterval;
                     if (entry.PublishReliably)
                     {
                         entry.LastReliablePublication = now;

@@ -1,10 +1,10 @@
 {
   "format": 1,
-  "production_revision": "629bf19efa4d325c092f1cd9aaeb4c98481b84ad",
-  "instrumentation_revision": "f790480fb097da6346cb7015ddf1b3432b8e78f6",
-  "instrumentation_sources_sha256": "ffe5edd2ae5d860cbcc498e4b4f02dbac58802a1bfc57652b708ac58e8fcbfb9",
+  "production_revision": "8580fbebae2595d59b5ea31710d799de9148b247",
+  "instrumentation_revision": "35f76175f5ae84a87f3a2a6146d24f156522fb6e",
+  "instrumentation_sources_sha256": "ac611e305128d437cb88a30ed5ca38c230ffb61482fce4dcfef037fee28d3eaa",
   "engine": "4.7.2.stable.mono.arch_linux.ed1daf0bf",
-  "dotnet": "10.0.112",
+  "dotnet": "10.0.113",
   "configuration": "Debug, Linux x86_64, headless, physics 120 Hz, process fixed 60 FPS",
   "tuners": "Baked release defaults; full shared/local schema in tuners.json.gz; overrides below",
   "world": "seed 23, four forced formations, four actors; segment runs 1..5, indices 11..0",
@@ -54,6 +54,7 @@
       "res://scenes/dev/unit_tests.tscn",
       "--",
       "--suite=ReferenceTests",
+      "--platform-references",
       "--write-reference=$CHECKOUT/src/Dev/Equivalence/Fixtures"
     ],
     [
@@ -73,7 +74,7 @@
       "--max-idle-worst=0.3",
       "--replay-random",
       "--tune.HitstopDuration=0",
-      "--equivalence-trace=$CHECKOUT/build/rfp0-final-provenance/run-1/bank.json"
+      "--equivalence-trace=$CHECKOUT/build/fu2b-v3-reference-refresh/run-1/bank.json"
     ],
     [
       "godot-mono",
@@ -96,7 +97,7 @@
       "--max-idle-worst=0.4",
       "--replay-random",
       "--tune.HitstopDuration=0",
-      "--equivalence-trace=$CHECKOUT/build/rfp0-final-provenance/run-1/king.json"
+      "--equivalence-trace=$CHECKOUT/build/fu2b-v3-reference-refresh/run-1/king.json"
     ],
     [
       "godot-mono",
@@ -110,7 +111,7 @@
       "--scenario=rules",
       "--replay-random",
       "--tune.HitstopDuration=0",
-      "--equivalence-trace=$CHECKOUT/build/rfp0-final-provenance/run-1/spill-chain.json"
+      "--equivalence-trace=$CHECKOUT/build/fu2b-v3-reference-refresh/run-1/spill-chain.json"
     ],
     [
       "godot-mono",
@@ -124,7 +125,7 @@
       "--scenario=shortfuse-combo",
       "--replay-random",
       "--tune.HitstopDuration=0",
-      "--equivalence-trace=$CHECKOUT/build/rfp0-final-provenance/run-1/shortfuse.json"
+      "--equivalence-trace=$CHECKOUT/build/fu2b-v3-reference-refresh/run-1/shortfuse.json"
     ],
     [
       "godot-mono",
@@ -138,7 +139,7 @@
       "--scenario=reference-retirement",
       "--replay-random",
       "--tune.HitstopDuration=0",
-      "--equivalence-trace=$CHECKOUT/build/rfp0-final-provenance/run-1/dissolve.json"
+      "--equivalence-trace=$CHECKOUT/build/fu2b-v3-reference-refresh/run-1/dissolve.json"
     ]
   ]
 }

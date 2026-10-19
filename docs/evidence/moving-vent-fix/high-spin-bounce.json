@@ -1,0 +1,1095 @@
+{
+  "status": "Rejected experiment; 0.05 s checkpoints with 100 rad/s acceleration eligibility",
+  "run": "fu2b-wide-spin-pilot-26",
+  "source_runtime": "b953856",
+  "note": "Source owner uses contact limit zero; missing contacts are unknown. Native trajectory is evidence of a near-floor bounce, not an observed owner contact count.",
+  "rows": [
+    {
+      "kind": "publication",
+      "time": 93740.584095757,
+      "network": 109.568451,
+      "frame": 12861,
+      "peer": 2,
+      "match": 2,
+      "id": "2010000d",
+      "owner": 2,
+      "epoch": 4,
+      "sequence": 148,
+      "last": 4,
+      "pending": false,
+      "observePending": false,
+      "state": "Venting",
+      "sleeping": false,
+      "gathering": false,
+      "correcting": false,
+      "pose": {
+        "p": [
+          -28.847881,
+          0.27051973,
+          -22.019424
+        ],
+        "q": [
+          -0.14903125,
+          -0.74643785,
+          -0.4044255,
+          0.50701106
+        ]
+      },
+      "center": [
+        2.2351742e-08,
+        0.18999928,
+        5.8300793e-07
+      ],
+      "v": [
+        -0.5817715,
+        -0.51388544,
+        3.0951126
+      ],
+      "w": [
+        23.08708,
+        19.504969,
+        5.7476077
+      ],
+      "contacts": [],
+      "contactLimit": 0,
+      "hasTarget": false,
+      "rest": false,
+      "sampled": 99.46574100000001,
+      "updated": 99.616518,
+      "target": null,
+      "tv": [
+        0.050650667,
+        0.003194808,
+        -0.05826962
+      ],
+      "tw": [
+        -0.37379098,
+        1.8610266e-06,
+        -0.32512158
+      ],
+      "detail": "ReliableBodyStates3"
+    },
+    {
+      "kind": "publication",
+      "time": 93740.650814441,
+      "network": 109.63517,
+      "frame": 12869,
+      "peer": 2,
+      "match": 2,
+      "id": "2010000d",
+      "owner": 2,
+      "epoch": 4,
+      "sequence": 149,
+      "last": 4,
+      "pending": false,
+      "observePending": false,
+      "state": "Venting",
+      "sleeping": false,
+      "gathering": false,
+      "correcting": false,
+      "pose": {
+        "p": [
+          -28.895588,
+          0.2562238,
+          -21.772474
+        ],
+        "q": [
+          0.096039474,
+          0.109085254,
+          -0.54778475,
+          0.8238985
+        ]
+      },
+      "center": [
+        5.005859e-08,
+        0.1899995,
+        -7.278286e-07
+      ],
+      "v": [
+        0.31713516,
+        0.102288485,
+        2.0007524
+      ],
+      "w": [
+        19.23219,
+        21.70927,
+        0.36001587
+      ],
+      "contacts": [],
+      "contactLimit": 0,
+      "hasTarget": false,
+      "rest": false,
+      "sampled": 99.46574100000001,
+      "updated": 99.616518,
+      "target": null,
+      "tv": [
+        0.050650667,
+        0.003194808,
+        -0.05826962
+      ],
+      "tw": [
+        -0.37379098,
+        1.8610266e-06,
+        -0.32512158
+      ],
+      "detail": "ReliableBodyStates"
+    },
+    {
+      "kind": "decision-velocity-blend",
+      "time": 93740.701446502,
+      "network": 109.282343,
+      "frame": 12856,
+      "peer": 3,
+      "match": 2,
+      "id": "2010000d",
+      "owner": 2,
+      "epoch": 4,
+      "sequence": 0,
+      "last": 147,
+      "pending": false,
+      "observePending": false,
+      "state": "Venting",
+      "sleeping": false,
+      "gathering": false,
+      "correcting": true,
+      "pose": {
+        "p": [
+          -29.034273,
+          0.7375301,
+          -21.884764
+        ],
+        "q": [
+          0.20289105,
+          0.3821847,
+          -0.49345458,
+          0.75450164
+        ]
+      },
+      "center": [
+        -7.832423e-07,
+        0.18999965,
+        4.079193e-07
+      ],
+      "v": [
+        -2.7219734,
+        0.74918664,
+        2.955598
+      ],
+      "w": [
+        23.5707,
+        17.62517,
+        8.0791
+      ],
+      "contacts": [],
+      "contactLimit": 1,
+      "hasTarget": true,
+      "rest": false,
+      "sampled": 109.10743449999998,
+      "updated": 109.241329,
+      "target": {
+        "p": [
+          -28.786509,
+          0.23052895,
+          -22.108463
+        ],
+        "q": [
+          0.33852756,
+          0.89257455,
+          -0.109879695,
+          0.2768326
+        ]
+      },
+      "tv": [
+        -1.1568668,
+        0.8508003,
+        1.8553351
+      ],
+      "tw": [
+        22.375229,
+        17.752485,
+        8.035248
+      ],
+      "detail": {
+        "goalCenter": [
+          -28.97959,
+          0.6117789,
+          -21.733774
+        ],
+        "goalRotation": [
+          -0.3404259,
+          -0.5850534,
+          0.3777804,
+          -0.6317473
+        ],
+        "error": [
+          -0.11626053,
+          -0.20757961,
+          0.16448212
+        ],
+        "angle": -0.59726524,
+        "lead": 0.1748595
+      }
+    },
+    {
+      "kind": "decision-velocity-blend",
+      "time": 93740.703023269,
+      "network": 109.28392,
+      "frame": 12857,
+      "peer": 3,
+      "match": 2,
+      "id": "2010000d",
+      "owner": 2,
+      "epoch": 4,
+      "sequence": 0,
+      "last": 147,
+      "pending": false,
+      "observePending": false,
+      "state": "Venting",
+      "sleeping": false,
+      "gathering": false,
+      "correcting": true,
+      "pose": {
+        "p": [
+          -29.050173,
+          0.7307784,
+          -21.85133
+        ],
+        "q": [
+          0.2268973,
+          0.49388027,
+          -0.44051743,
+          0.71452385
+        ]
+      },
+      "center": [
+        -2.682209e-07,
+        0.1899997,
+        -1.3038516e-08
+      ],
+      "v": [
+        -2.9583902,
+        0.97385156,
+        3.1032798
+      ],
+      "w": [
+        24.44851,
+        18.525982,
+        8.111882
+      ],
+      "contacts": [],
+      "contactLimit": 1,
+      "hasTarget": true,
+      "rest": false,
+      "sampled": 109.10743449999998,
+      "updated": 109.241329,
+      "target": {
+        "p": [
+          -28.786509,
+          0.23052895,
+          -22.108463
+        ],
+        "q": [
+          0.33852756,
+          0.89257455,
+          -0.109879695,
+          0.2768326
+        ]
+      },
+      "tv": [
+        -1.1568668,
+        0.8508003,
+        1.8553351
+      ],
+      "tw": [
+        22.375229,
+        17.752485,
+        8.035248
+      ],
+      "detail": {
+        "goalCenter": [
+          -28.983551,
+          0.61477387,
+          -21.72989
+        ],
+        "goalRotation": [
+          -0.34249094,
+          -0.60262287,
+          0.36808127,
+          -0.6197273
+        ],
+        "error": [
+          -0.09556961,
+          -0.21270013,
+          0.14250565
+        ],
+        "angle": -0.39774513,
+        "lead": 0.1764425
+      }
+    },
+    {
+      "kind": "decision-velocity-blend",
+      "time": 93740.706949953,
+      "network": 108.483578,
+      "frame": 12763,
+      "peer": 5,
+      "match": 2,
+      "id": "2010000d",
+      "owner": 2,
+      "epoch": 4,
+      "sequence": 0,
+      "last": 147,
+      "pending": false,
+      "observePending": false,
+      "state": "Venting",
+      "sleeping": false,
+      "gathering": false,
+      "correcting": true,
+      "pose": {
+        "p": [
+          -28.920774,
+          0.84342426,
+          -21.855068
+        ],
+        "q": [
+          0.21455576,
+          0.5593831,
+          -0.4289342,
+          0.6760709
+        ]
+      },
+      "center": [
+        7.1525574e-07,
+        0.19000043,
+        3.259629e-08
+      ],
+      "v": [
+        -3.5111241,
+        0.51784635,
+        3.2138221
+      ],
+      "w": [
+        24.35381,
+        18.180088,
+        8.004374
+      ],
+      "contacts": [],
+      "contactLimit": 1,
+      "hasTarget": true,
+      "rest": false,
+      "sampled": 108.292509,
+      "updated": 108.453682,
+      "target": {
+        "p": [
+          -28.786509,
+          0.23052895,
+          -22.108463
+        ],
+        "q": [
+          0.33852756,
+          0.89257455,
+          -0.109879695,
+          0.2768326
+        ]
+      },
+      "tv": [
+        -1.1568668,
+        0.8508003,
+        1.8553351
+      ],
+      "tw": [
+        22.375229,
+        17.752485,
+        8.035248
+      ],
+      "detail": {
+        "goalCenter": [
+          -29.020937,
+          0.6430477,
+          -21.693754
+        ],
+        "goalRotation": [
+          -0.35252023,
+          -0.74759793,
+          0.26996386,
+          -0.49390933
+        ],
+        "error": [
+          -0.2559662,
+          -0.30296946,
+          0.19737053
+        ],
+        "angle": -0.6752548,
+        "lead": 0.191018
+      }
+    },
+    {
+      "kind": "decision-velocity-blend",
+      "time": 93740.708945866,
+      "network": 108.485574,
+      "frame": 12764,
+      "peer": 5,
+      "match": 2,
+      "id": "2010000d",
+      "owner": 2,
+      "epoch": 4,
+      "sequence": 0,
+      "last": 147,
+      "pending": false,
+      "observePending": false,
+      "state": "Venting",
+      "sleeping": false,
+      "gathering": false,
+      "correcting": true,
+      "pose": {
+        "p": [
+          -28.938011,
+          0.8317344,
+          -21.827236
+        ],
+        "q": [
+          0.23016909,
+          0.6581475,
+          -0.36218947,
+          0.6186137
+        ]
+      },
+      "center": [
+        4.8801303e-07,
+        0.1900005,
+        3.190944e-07
+      ],
+      "v": [
+        -3.6402037,
+        0.6884254,
+        3.289482
+      ],
+      "w": [
+        24.69298,
+        18.750267,
+        7.927962
+      ],
+      "contacts": [],
+      "contactLimit": 1,
+      "hasTarget": true,
+      "rest": false,
+      "sampled": 108.292509,
+      "updated": 108.453682,
+      "target": {
+        "p": [
+          -28.786509,
+          0.23052895,
+          -22.108463
+        ],
+        "q": [
+          0.33852756,
+          0.89257455,
+          -0.109879695,
+          0.2768326
+        ]
+      },
+      "tv": [
+        -1.1568668,
+        0.8508003,
+        1.8553351
+      ],
+      "tw": [
+        22.375229,
+        17.752485,
+        8.035248
+      ],
+      "detail": {
+        "goalCenter": [
+          -29.02621,
+          0.64703757,
+          -21.688725
+        ],
+        "goalRotation": [
+          -0.3526165,
+          -0.7649583,
+          0.25536492,
+          -0.4746463
+        ],
+        "error": [
+          -0.23090553,
+          -0.3047164,
+          0.1749878
+        ],
+        "angle": -0.4850893,
+        "lead": 0.193024
+      }
+    },
+    {
+      "kind": "publication",
+      "time": 93740.717358951,
+      "network": 109.701715,
+      "frame": 12877,
+      "peer": 2,
+      "match": 2,
+      "id": "2010000d",
+      "owner": 2,
+      "epoch": 4,
+      "sequence": 150,
+      "last": 4,
+      "pending": false,
+      "observePending": false,
+      "state": "Venting",
+      "sleeping": false,
+      "gathering": false,
+      "correcting": false,
+      "pose": {
+        "p": [
+          -28.83346,
+          0.21115226,
+          -21.606802
+        ],
+        "q": [
+          0.22633852,
+          0.87900114,
+          -0.2454919,
+          0.34038448
+        ]
+      },
+      "center": [
+        -2.644956e-07,
+        0.18999988,
+        -2.3469329e-07
+      ],
+      "v": [
+        -0.4735507,
+        0.7553016,
+        1.7378452
+      ],
+      "w": [
+        22.557512,
+        20.234047,
+        0.2776351
+      ],
+      "contacts": [],
+      "contactLimit": 0,
+      "hasTarget": false,
+      "rest": false,
+      "sampled": 99.46574100000001,
+      "updated": 99.616518,
+      "target": null,
+      "tv": [
+        0.050650667,
+        0.003194808,
+        -0.05826962
+      ],
+      "tw": [
+        -0.37379098,
+        1.8610266e-06,
+        -0.32512158
+      ],
+      "detail": "ReliableBodyStates2"
+    },
+    {
+      "kind": "measurement-final",
+      "time": 93740.720565037,
+      "network": 109.301462,
+      "frame": 12857,
+      "peer": 3,
+      "match": 2,
+      "id": "2010000d",
+      "owner": 2,
+      "epoch": 4,
+      "sequence": 0,
+      "last": 147,
+      "pending": false,
+      "observePending": false,
+      "state": "Venting",
+      "sleeping": false,
+      "gathering": false,
+      "correcting": true,
+      "pose": {
+        "p": [
+          -29.050173,
+          0.7307784,
+          -21.85133
+        ],
+        "q": [
+          0.2268973,
+          0.49388027,
+          -0.44051743,
+          0.71452385
+        ]
+      },
+      "center": [
+        -2.3841858e-07,
+        0.18999931,
+        -4.3353066e-07
+      ],
+      "v": [
+        -2.8914618,
+        1.0458236,
+        3.0246348
+      ],
+      "w": [
+        23.887428,
+        18.2128,
+        7.854715
+      ],
+      "contacts": [],
+      "contactLimit": 1,
+      "hasTarget": true,
+      "rest": false,
+      "sampled": 109.10743449999998,
+      "updated": 109.241329,
+      "target": {
+        "p": [
+          -28.786509,
+          0.23052895,
+          -22.108463
+        ],
+        "q": [
+          0.33852756,
+          0.89257455,
+          -0.109879695,
+          0.2768326
+        ]
+      },
+      "tv": [
+        -1.1568668,
+        0.8508003,
+        1.8553351
+      ],
+      "tw": [
+        22.375229,
+        17.752485,
+        8.035248
+      ],
+      "detail": {
+        "checkerTime": 93740.7203608,
+        "worldAlive": true,
+        "worldPaused": false,
+        "simulation": 104.59166666669597
+      }
+    },
+    {
+      "kind": "decision-velocity-blend",
+      "time": 93740.72246049,
+      "network": 108.9017,
+      "frame": 12797,
+      "peer": 4,
+      "match": 2,
+      "id": "2010000d",
+      "owner": 2,
+      "epoch": 4,
+      "sequence": 0,
+      "last": 147,
+      "pending": false,
+      "observePending": false,
+      "state": "Venting",
+      "sleeping": false,
+      "gathering": false,
+      "correcting": true,
+      "pose": {
+        "p": [
+          -29.152348,
+          0.56322014,
+          -21.59
+        ],
+        "q": [
+          0.36945516,
+          0.8473733,
+          -0.13686615,
+          0.3559902
+        ]
+      },
+      "center": [
+        3.16184e-07,
+        0.18999983,
+        1.2479722e-07
+      ],
+      "v": [
+        -2.83423,
+        1.8300772,
+        2.2087283
+      ],
+      "w": [
+        21.984156,
+        17.81223,
+        8.003307
+      ],
+      "contacts": [],
+      "contactLimit": 1,
+      "hasTarget": true,
+      "rest": false,
+      "sampled": 108.6909475,
+      "updated": 108.850938,
+      "target": {
+        "p": [
+          -28.786509,
+          0.23052895,
+          -22.108463
+        ],
+        "q": [
+          0.33852756,
+          0.89257455,
+          -0.109879695,
+          0.2768326
+        ]
+      },
+      "tv": [
+        -1.1568668,
+        0.8508003,
+        1.8553351
+      ],
+      "tw": [
+        22.375229,
+        17.752485,
+        8.035248
+      ],
+      "detail": {
+        "goalCenter": [
+          -29.073997,
+          0.6832181,
+          -21.643818
+        ],
+        "goalRotation": [
+          -0.34004533,
+          -0.8870861,
+          0.11848875,
+          -0.28880405
+        ],
+        "error": [
+          -0.059129715,
+          -0.011014819,
+          -0.059724808
+        ],
+        "angle": -0.17085695,
+        "lead": 0.2106965
+      }
+    },
+    {
+      "kind": "decision-velocity-blend",
+      "time": 93740.726481325,
+      "network": 108.905721,
+      "frame": 12798,
+      "peer": 4,
+      "match": 2,
+      "id": "2010000d",
+      "owner": 2,
+      "epoch": 4,
+      "sequence": 0,
+      "last": 147,
+      "pending": false,
+      "observePending": false,
+      "state": "Venting",
+      "sleeping": false,
+      "gathering": false,
+      "correcting": true,
+      "pose": {
+        "p": [
+          -29.16932,
+          0.57198495,
+          -21.575699
+        ],
+        "q": [
+          0.36036122,
+          0.8931541,
+          -0.072143815,
+          0.25925058
+        ]
+      },
+      "center": [
+        1.7508864e-07,
+        0.19000015,
+        6.342307e-07
+      ],
+      "v": [
+        -3.0044765,
+        1.9712783,
+        2.3291395
+      ],
+      "w": [
+        22.526283,
+        18.19284,
+        8.282528
+      ],
+      "contacts": [],
+      "contactLimit": 1,
+      "hasTarget": true,
+      "rest": false,
+      "sampled": 108.6909475,
+      "updated": 108.850938,
+      "target": {
+        "p": [
+          -28.786509,
+          0.23052895,
+          -22.108463
+        ],
+        "q": [
+          0.33852756,
+          0.89257455,
+          -0.109879695,
+          0.2768326
+        ]
+      },
+      "tv": [
+        -1.1568668,
+        0.8508003,
+        1.8553351
+      ],
+      "tw": [
+        22.375229,
+        17.752485,
+        8.035248
+      ],
+      "detail": {
+        "goalCenter": [
+          -29.085209,
+          0.69171095,
+          -21.633451
+        ],
+        "goalRotation": [
+          -0.33387434,
+          -0.9066317,
+          0.085854255,
+          -0.24326143
+        ],
+        "error": [
+          -0.045303345,
+          -0.01894933,
+          -0.06876755
+        ],
+        "angle": -0.07285452,
+        "lead": 0.2147185
+      }
+    },
+    {
+      "kind": "measurement-final",
+      "time": 93740.730891823,
+      "network": 108.50752,
+      "frame": 12764,
+      "peer": 5,
+      "match": 2,
+      "id": "2010000d",
+      "owner": 2,
+      "epoch": 4,
+      "sequence": 0,
+      "last": 147,
+      "pending": false,
+      "observePending": false,
+      "state": "Venting",
+      "sleeping": false,
+      "gathering": false,
+      "correcting": true,
+      "pose": {
+        "p": [
+          -28.938011,
+          0.8317344,
+          -21.827236
+        ],
+        "q": [
+          0.23016909,
+          0.6581475,
+          -0.36218947,
+          0.6186137
+        ]
+      },
+      "center": [
+        3.296882e-07,
+        0.18999949,
+        -4.4703484e-07
+      ],
+      "v": [
+        -3.5598917,
+        0.7760416,
+        3.2108815
+      ],
+      "w": [
+        24.13545,
+        18.49486,
+        7.695411
+      ],
+      "contacts": [],
+      "contactLimit": 1,
+      "hasTarget": true,
+      "rest": false,
+      "sampled": 108.292509,
+      "updated": 108.453682,
+      "target": {
+        "p": [
+          -28.786509,
+          0.23052895,
+          -22.108463
+        ],
+        "q": [
+          0.33852756,
+          0.89257455,
+          -0.109879695,
+          0.2768326
+        ]
+      },
+      "tv": [
+        -1.1568668,
+        0.8508003,
+        1.8553351
+      ],
+      "tw": [
+        22.375229,
+        17.752485,
+        8.035248
+      ],
+      "detail": {
+        "checkerTime": 93740.730717997,
+        "worldAlive": true,
+        "worldPaused": false,
+        "simulation": 104.64166666669601
+      }
+    },
+    {
+      "kind": "measurement-final",
+      "time": 93740.759856407,
+      "network": 108.939096,
+      "frame": 12798,
+      "peer": 4,
+      "match": 2,
+      "id": "2010000d",
+      "owner": 2,
+      "epoch": 4,
+      "sequence": 0,
+      "last": 147,
+      "pending": false,
+      "observePending": false,
+      "state": "Venting",
+      "sleeping": false,
+      "gathering": false,
+      "correcting": true,
+      "pose": {
+        "p": [
+          -29.16932,
+          0.57198495,
+          -21.575699
+        ],
+        "q": [
+          0.36036122,
+          0.8931541,
+          -0.072143815,
+          0.25925058
+        ]
+      },
+      "center": [
+        -3.1245872e-07,
+        0.19000015,
+        -6.724149e-07
+      ],
+      "v": [
+        -2.9837575,
+        2.0476992,
+        2.309544
+      ],
+      "w": [
+        22.276184,
+        17.94954,
+        8.225734
+      ],
+      "contacts": [],
+      "contactLimit": 1,
+      "hasTarget": true,
+      "rest": false,
+      "sampled": 108.6909475,
+      "updated": 108.850938,
+      "target": {
+        "p": [
+          -28.786509,
+          0.23052895,
+          -22.108463
+        ],
+        "q": [
+          0.33852756,
+          0.89257455,
+          -0.109879695,
+          0.2768326
+        ]
+      },
+      "tv": [
+        -1.1568668,
+        0.8508003,
+        1.8553351
+      ],
+      "tw": [
+        22.375229,
+        17.752485,
+        8.035248
+      ],
+      "detail": {
+        "checkerTime": 93740.759685723,
+        "worldAlive": true,
+        "worldPaused": false,
+        "simulation": 104.51666666669591
+      }
+    },
+    {
+      "kind": "measurement-final",
+      "time": 93740.765221566,
+      "network": 109.749577,
+      "frame": 12878,
+      "peer": 2,
+      "match": 2,
+      "id": "2010000d",
+      "owner": 2,
+      "epoch": 4,
+      "sequence": 150,
+      "last": 4,
+      "pending": false,
+      "observePending": false,
+      "state": "Venting",
+      "sleeping": false,
+      "gathering": false,
+      "correcting": false,
+      "pose": {
+        "p": [
+          -28.830051,
+          0.20882705,
+          -21.602133
+        ],
+        "q": [
+          0.23614943,
+          0.92355925,
+          -0.17994234,
+          0.24267796
+        ]
+      },
+      "center": [
+        1.17346644e-07,
+        0.18999997,
+        6.146729e-08
+      ],
+      "v": [
+        -0.5369363,
+        0.7857196,
+        1.9221298
+      ],
+      "w": [
+        20.900816,
+        18.632061,
+        -0.047278576
+      ],
+      "contacts": [],
+      "contactLimit": 0,
+      "hasTarget": false,
+      "rest": false,
+      "sampled": 99.46574100000001,
+      "updated": 99.616518,
+      "target": null,
+      "tv": [
+        0.050650667,
+        0.003194808,
+        -0.05826962
+      ],
+      "tw": [
+        -0.37379098,
+        1.8610266e-06,
+        -0.32512158
+      ],
+      "detail": {
+        "checkerTime": 93740.765063152,
+        "worldAlive": true,
+        "worldPaused": false,
+        "simulation": 104.34166666669577
+      }
+    }
+  ]
+}

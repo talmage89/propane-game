@@ -20,6 +20,30 @@ public static class BodyPublicationTests
 {
     public static void Register(TestRunner runner)
     {
+        runner.Run("publication/short checkpoints preserve sample cadence and survive disposable throttling", () =>
+        {
+            using var prior = new Fixture(runner, 4);
+            using var current = new Fixture(runner, 4);
+            prior.Match.World.Tuning.BodyCheckpointInterval = .25f;
+            current.Match.World.Tuning.BodyCheckpointInterval = .05f;
+            var disposable = 0;
+            var reliable = 0;
+            prior.Wire.OnSend = (traffic, _) => { if (!traffic.IsReliable()) { disposable++; } };
+            current.Wire.OnSend = (traffic, _) =>
+            {
+                TestRunner.Assert(traffic.IsReliable(), "ordinary moving publication remained disposable");
+                reliable++;
+            };
+            for (var tick = 0; tick <= 72; tick++)
+            {
+                prior.Publish(100 + tick / 120.0);
+                current.Publish(100 + tick / 120.0);
+            }
+            TestRunner.Assert(disposable > 0 && reliable > 3 && current.Entries.All(e => e.Sequence > 2),
+                "checkpoint workload omitted sustained motion or the prior disposable stream");
+            TestRunner.Assert(prior.Entries.Select(e => e.Sequence).SequenceEqual(current.Entries.Select(e => e.Sequence)),
+                "shorter checkpoints changed publication sample counts");
+        });
         runner.Run("publication/later batches sample after synchronous sends, and retirement still advances sequences", () =>
         {
             using var f = new Fixture(runner, Protocol.MaxBodyStates * 2 + 1);

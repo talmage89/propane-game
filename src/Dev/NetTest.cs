@@ -283,6 +283,15 @@ public partial class NetTest : Node, INetScenarioHost
         };
         scenario?.BeginAssembly(match);
         AddChild(match);
+        foreach (var (name, flag) in new[] { ("BodyCheckpointInterval", "expect-checkpoint"), ("CorrectionAccelerationMaxSpin", "expect-acceleration-spin"), ("CorrectionVentBlendTime", "expect-vent-blend"), ("CorrectionSpinAverageMin", "expect-spin-average") })
+        {
+            if (DevArgs.Get(flag) == null) { continue; }
+            var expected = DevArgs.GetFloat(flag, float.NaN);
+            var actual = typeof(Tuning).GetProperty(name)?.GetValue(match.World.Tuning) is float value ? value : float.NaN;
+            ScenarioAssert(float.IsFinite(expected) && Mathf.IsEqualApprox(actual, expected),
+                $"effective {name}={actual} differs from requested {expected}");
+            Log(FormattableString.Invariant($"verified effective {name}={actual}"));
+        }
         if (delay >= 70 && setup.ModeId == ModeRegistry.KingId)
         {
             ScenarioAssert(match.IsPlaying && match.ModeView is KingState { Zone: >= 1 },

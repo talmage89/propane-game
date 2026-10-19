@@ -51,11 +51,12 @@ def observe(project):
     insert(body, 'Trace?.Invoke(entry, $"stale age={age:0.000} quiet={now - entry.TargetUpdated:0.000}");',
            f'                {CALL}.Record(entry, "decision-stale");')
     decision = f'{CALL}.Decision(entry, REASON, targetCenter, targetRotation, error, angle, lead);'
+    linear_assignment = 'body.LinearVelocity = targetLinear + error / blend;' if 'var targetLinear = entry.TargetLinear;' in body.read_text() else 'body.LinearVelocity = entry.TargetLinear + error / blend;'
     for needle, reason in (
         ('var weight = Mathf.Clamp((float)body.GetPhysicsProcessDeltaTime() / blend, 0, 1);', 'gather-blend'),
         ('Snap(body, entry.Target, entry.TargetLinear, entry.TargetAngular);', 'obstructed-snap'),
         ('if (!body.Sleeping || !current.IsEqualApprox(pose))', 'rest-anchor'),
-        ('body.LinearVelocity = entry.TargetLinear + error / blend;', 'velocity-blend'),
+        (linear_assignment, 'velocity-blend'),
     ):
         insert(body, needle, decision.replace('REASON', '"' + reason + '"'), before=True)
     insert(body, 'if (now - entry.SettledMismatchSince >= blend * 3)\n                {',
@@ -99,10 +100,10 @@ def main():
     observe(project)
     changes = {name: dict(before=hashlib.sha256(raw).hexdigest(), after=hashlib.sha256((project / name).read_bytes()).hexdigest())
                for name, raw in before.items() if raw != (project / name).read_bytes()}
-    expected = {'src/Net/BodySync.cs', 'src/Net/BodyPublisher.cs', 'src/Net/Match.cs', 'src/Dev/NetTest.cs',
-                'src/Dev/NetScenarios/NetScenarioRegistry.cs', 'src/Dev/UnitTests/NetScenarioTests.cs'}
-    optional = {'src/Dev/NetScenarios/NetScenarioRegistry.cs', 'src/Dev/UnitTests/NetScenarioTests.cs'}
-    expected -= {name for name in optional if before[name] == (project / name).read_bytes()}
+    expected = {'src/Net/BodySync.cs', 'src/Net/BodyPublisher.cs', 'src/Net/Match.cs', 'src/Dev/NetTest.cs'}
+    optional = {'src/Dev/NetScenarios/NetScenarioRegistry.cs', 'src/Dev/UnitTests/NetScenarioTests.cs',
+                'src/Dev/NetScenarios/VentResidualObservation.cs', 'src/Dev/NetScenarios/BallisticScenario.cs'}
+    expected |= {name for name in optional if name in before and before[name] != (project / name).read_bytes()}
     if set(changes) != expected:
         raise ValueError(f'unexpected source delta: {set(changes)}')
     (project.parent / 'observation.json').write_text(json.dumps(dict(revision=args.revision, changes=changes, observer_sha256=hashlib.sha256((project / 'src/Dev/NetScenarios/VentResidualObservation.cs').read_bytes()).hexdigest(), tuning_sha256=hashlib.sha256((project / 'tuning.tres').read_bytes()).hexdigest(), new_sources={str(p.relative_to(project)): hashlib.sha256(p.read_bytes()).hexdigest() for p in (project / 'src').rglob('*.cs') if str(p.relative_to(project)) not in before}), indent=2) + '\n')

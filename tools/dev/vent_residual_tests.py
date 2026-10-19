@@ -15,6 +15,7 @@ from compare_tanks import compare
 from compare_tanks_tests import LIMITS, log
 from vent_residual import CALL, ROOT, observe
 from vent_residual_report import alignment, support, trace_metadata, trace_window
+from vent_correction_experiment import experiment, settling, spin_average, authored_spin
 
 
 class VentResidualTests(unittest.TestCase):
@@ -154,6 +155,126 @@ class VentResidualTests(unittest.TestCase):
             # Reapplying must fail rather than silently double-instrument a source tree.
             with self.assertRaises(ValueError):
                 observe(project)
+
+    def test_correction_experiments_reject_checkout_and_double_insertion(self):
+        original = (ROOT / 'src/Net/BodySync.cs').read_bytes()
+        with self.assertRaises(ValueError):
+            experiment(ROOT)
+        self.assertEqual(original, (ROOT / 'src/Net/BodySync.cs').read_bytes())
+        with tempfile.TemporaryDirectory(dir=ROOT / 'build', prefix='fu2b-experiment-test-') as directory:
+            project = Path(directory)
+            for name in ('src/Net/BodySync.cs', 'src/Core/Tuning.70.Match.cs', 'Propane.csproj', 'src/Dev/NetTest.cs'):
+                target = project / name
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(ROOT / name, target)
+            (project / 'src/Dev/NetScenarios').mkdir(parents=True)
+            if 'TargetAcceleration;' in (project / 'src/Net/BodySync.cs').read_text():
+                # The historical preparer must reject a corrected runtime before mutating it.
+                before = {p: p.read_bytes() for p in project.rglob('*') if p.is_file()}
+                with self.assertRaises(ValueError):
+                    experiment(project)
+                self.assertEqual(before, {p: p.read_bytes() for p in project.rglob('*') if p.is_file()})
+                return
+            experiment(project)
+            body = (project / 'src/Net/BodySync.cs').read_text()
+            self.assertIn('VentCorrectionExperiment.Accept', body)
+            self.assertIn('VentCorrectionExperiment.Predict', body)
+            self.assertIn('FU2B_EXPERIMENT', (project / 'Propane.csproj').read_text())
+            with self.assertRaises(ValueError):
+                experiment(project)
+
+    def test_promoted_runtime_rejects_historical_switches_atomically(self):
+        if 'GravityState;' not in (ROOT / 'src/Net/BodySync.cs').read_text():
+            return
+        with tempfile.TemporaryDirectory(dir=ROOT / 'build', prefix='fu2b-promoted-test-') as directory:
+            project = Path(directory)
+            for name in ('src/Net/BodySync.cs', 'src/Core/Tuning.70.Match.cs', 'Propane.csproj', 'src/Dev/NetTest.cs'):
+                target = project / name
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(ROOT / name, target)
+            before = {p: p.read_bytes() for p in project.rglob('*') if p.is_file()}
+            for prepare in (experiment, settling, spin_average):
+                with self.assertRaises(ValueError):
+                    prepare(project)
+                self.assertEqual(before, {p: p.read_bytes() for p in project.rglob('*') if p.is_file()})
+
+    @staticmethod
+    def write_experiment_shape(project):
+        # Patcher-only shape fixture: native and analytic scenes prove physics separately.
+        # Keep historical switches testable after their production anchors have changed.
+        files = {
+            'src/Net/BodySync.cs': """
+internal Vector3 TargetAcceleration;
+var blend = Mathf.Max(tuning.CorrectionBlendTime, 0.02f);
+foreach (var entry in entries.Values)
+        {
+            var contactsReady = true;
+entry.TargetAngular.LengthSquared() <= tuning.CorrectionAccelerationMaxSpin * tuning.CorrectionAccelerationMaxSpin;
+targetCenter += entry.TargetAcceleration * (lead * lead / 2);
+                targetLinear += entry.TargetAcceleration * lead;
+private static void RestoreContacts(Entry entry)
+    {
+""",
+            'src/Core/Tuning.70.Match.cs': 'class Tuning {}',
+            'src/Dev/NetTest.cs': '("CorrectionAccelerationMaxSpin", "expect-acceleration-spin") }',
+            'src/Tank/PropaneTank.cs': 'private float ventAge;',
+            'Propane.csproj': '<Project></Project>',
+        }
+        for name, code in files.items():
+            target = project / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(code)
+
+    def test_settling_switch_is_vent_only_and_refuses_reapplication(self):
+        original = (ROOT / 'src/Net/BodySync.cs').read_bytes()
+        with self.assertRaises(ValueError):
+            settling(ROOT)
+        self.assertEqual(original, (ROOT / 'src/Net/BodySync.cs').read_bytes())
+        with tempfile.TemporaryDirectory(dir=ROOT / 'build', prefix='fu2b-settling-test-') as directory:
+            project = Path(directory)
+            self.write_experiment_shape(project)
+            settling(project)
+            body = (project / 'src/Net/BodySync.cs').read_text()
+            self.assertIn('var blend = defaultBlend;', body)
+            self.assertIn('State: Tank.PropaneTank.TankState.Venting', body)
+            self.assertIn('if (!entry.TargetRest && Propane.Dev.DevArgs.Get("vent-experiment-blend")', body)
+            self.assertIn('FU2B_SETTLING', body)
+            before = {p: p.read_bytes() for p in project.rglob('*') if p.is_file()}
+            with self.assertRaises(ValueError):
+                settling(project)
+            self.assertEqual(before, {p: p.read_bytes() for p in project.rglob('*') if p.is_file()})
+
+    def test_spin_average_is_bounded_and_refuses_reapplication(self):
+        with self.assertRaises(ValueError):
+            spin_average(ROOT)
+        with tempfile.TemporaryDirectory(dir=ROOT / 'build', prefix='fu2b-spin-test-') as directory:
+            project = Path(directory)
+            self.write_experiment_shape(project)
+            spin_average(project)
+            body = (project / 'src/Net/BodySync.cs').read_text()
+            self.assertIn('(acceleration - gravity).Dot(axisOfSpin)', body)
+            self.assertIn('if (acceleration.LengthSquared() > tuning.CorrectionMaxAcceleration', body)
+            self.assertIn('FU2B_SPIN_AVERAGE', body)
+            before = {p: p.read_bytes() for p in project.rglob('*') if p.is_file()}
+            with self.assertRaises(ValueError):
+                spin_average(project)
+            self.assertEqual(before, {p: p.read_bytes() for p in project.rglob('*') if p.is_file()})
+
+    def test_authored_spin_uses_existing_force_and_refuses_reapplication(self):
+        with self.assertRaises(ValueError):
+            authored_spin(ROOT)
+        with tempfile.TemporaryDirectory(dir=ROOT / 'build', prefix='fu2b-authored-test-') as directory:
+            project = Path(directory)
+            self.write_experiment_shape(project)
+            spin_average(project)
+            authored_spin(project)
+            body = (project / 'src/Net/BodySync.cs').read_text()
+            self.assertIn('jet.Dot(axisOfSpin) * tuning.VentThrust * ramp / body.Mass', body)
+            self.assertIn('internal float PredictionVentAge => ventAge;', (project / 'src/Tank/PropaneTank.cs').read_text())
+            before = {p: p.read_bytes() for p in project.rglob('*') if p.is_file()}
+            with self.assertRaises(ValueError):
+                authored_spin(project)
+            self.assertEqual(before, {p: p.read_bytes() for p in project.rglob('*') if p.is_file()})
 
 
 if __name__ == '__main__':

@@ -2,6 +2,14 @@
 
 These fixtures freeze v0.4.0 (`629bf19`) before the architecture refactors. They compare candidates with a saved
 release, alongside the existing round trips and same-checkout determinism checks. Tests never update expected results.
+The explicitly classified FU2b minor behavior change adds five correction/checkpoint tuners at `8580fbe`.
+All existing tuner values, attributes, order and UI entries remain identical. World, segment and publication fixture
+bytes remain identical to v0.4.0. The publication workload explicitly retains its original 0.25 s checkpoint cadence,
+including disposable and reliable send-failure coverage; `BodyPublicationTests` separately asserts the new 0.05 s
+cadence without adding samples. Lab changes are tuner metadata only: every window, summary and tick count is
+identical. Complete tuner dictionaries update only StartMatch/client and MatchStart/server wire fixtures. This
+reviewed behavior refresh does not authorize reference changes for refactors;
+[FU2b evidence](evidence/moving-vent-fix.md) retains the semantic comparison and superseded refresh diagnosis.
 
 `make test` discovers the reference unit suites in `src/Dev/Equivalence`:
 

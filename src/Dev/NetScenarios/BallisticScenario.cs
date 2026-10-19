@@ -8,7 +8,7 @@ using Propane.Tank;
 namespace Propane.Dev.NetScenarios;
 
 /// <summary>
-/// Controlled native acceleration, with neither contact nor rotation. All physical overrides are fixture-only.
+/// Controlled native acceleration without contact/damping, with optional spin about the offset COM. Fixture-only overrides.
 /// Borrows one match-owned tank; retirement clears the reference. Elapsed time uses physics delta while playing.
 /// The ordinary NetTest ending and tank checker remain authoritative, including an expected diagnostic failure.
 /// </summary>
@@ -19,6 +19,7 @@ internal sealed class BallisticScenario(INetScenarioHost host) : NetScenario(hos
     private float elapsed;
     private bool gravity;
     private float initialVerticalSpeed;
+    private float initialSpin;
 
     protected override void Preparing(Match match)
     {
@@ -26,6 +27,7 @@ internal sealed class BallisticScenario(INetScenarioHost host) : NetScenario(hos
         tick = 0;
         elapsed = 0;
         initialVerticalSpeed = 0;
+        initialSpin = 0;
         DetachOnRetirement(() => tank = null);
     }
 
@@ -40,7 +42,10 @@ internal sealed class BallisticScenario(INetScenarioHost host) : NetScenario(hos
             ScenarioAssert(option is "0" or "1", "ballistic: --ballistic-gravity must be 0 or 1");
             gravity = option == "1";
             initialVerticalSpeed = DevArgs.GetFloat("ballistic-vertical-speed", 0);
+            initialSpin = DevArgs.GetFloat("ballistic-spin", 0);
             ScenarioAssert(float.IsFinite(initialVerticalSpeed), "ballistic: vertical speed must be finite");
+            ScenarioAssert(float.IsFinite(initialSpin) && initialSpin >= 0 && initialSpin <= match.World.Tuning.VentMaxSpin,
+                "ballistic: spin must be finite and within the owner spin limit");
             ScenarioAssert(match.World.Tuning.VentThrust == 0, "ballistic: requires --tune.VentThrust=0 to isolate acceleration");
             if (scenarioFailed) { return; }
             tank = match.LiveTanks.OrderBy(t => t.NetId).First();
@@ -54,8 +59,8 @@ internal sealed class BallisticScenario(INetScenarioHost host) : NetScenario(hos
             tank.ContactMonitor = true;
             // Enough height for the entire 20-second match and ordinary results interval, without a floor encounter.
             BodySync.Snap(tank, new Transform3D(Basis.Identity, Vector3.Up * 5000),
-                new Vector3(4, initialVerticalSpeed, 0), Vector3.Zero);
-            Log(FormattableString.Invariant($"ballistic: gravity={gravity} initial-vy={initialVerticalSpeed}, no collisions, damping or initial rotation; ordinary ending"));
+                new Vector3(4, initialVerticalSpeed, 0), Vector3.Right * initialSpin);
+            Log(FormattableString.Invariant($"ballistic: gravity={gravity} initial-vy={initialVerticalSpeed} initial-spin={initialSpin}, no collisions or damping; ordinary ending"));
         }
         if (tick == 60 && role == "host")
         {
@@ -72,13 +77,15 @@ internal sealed class BallisticScenario(INetScenarioHost host) : NetScenario(hos
                 "ballistic: canonical vent or stable authority missing");
             ScenarioAssert(tank.GetContactCount() == 0 && tank.CollisionMask == 0 && tank.CollisionLayer == 0,
                 "ballistic: contact contaminated free flight");
-            ScenarioAssert(tank.AngularVelocity.Length() < .01f, "ballistic: rotation contaminated acceleration isolation");
             ScenarioAssert(tank.LinearDampMode == RigidBody3D.DampMode.Replace &&
                 tank.AngularDampMode == RigidBody3D.DampMode.Replace && tank.LinearDamp == 0 && tank.AngularDamp == 0,
                 "ballistic: damping contaminated acceleration isolation");
             // Observer steering legitimately changes velocity, including in a constant-velocity control.
             // Check physical acceleration on the owner; check the selected native mode on every copy.
             var isOwner = match.Bodies.Get(tank.NetId)?.Owner == match.Net.MyId;
+            ScenarioAssert(initialSpin == 0 ? tank.AngularVelocity.Length() < .01f :
+                !isOwner || Mathf.Abs(tank.AngularVelocity.Length() - initialSpin) < .01f,
+                "ballistic: native spin selection did not take effect");
             ScenarioAssert(tank.GravityScale == (gravity ? 1 : 0) && (!isOwner || (gravity ?
                 tank.LinearVelocity.Y < initialVerticalSpeed - 5 : Mathf.Abs(tank.LinearVelocity.Y - initialVerticalSpeed) < .1f)),
                 "ballistic: native gravity selection did not take effect");

@@ -26,6 +26,33 @@ python3 -B tools/dev/vent_residual_run.py --project=build/fu2a-observed/project 
   --vent-residual-dir="$PWD/build/fu2a-floor/traces"
 ```
 
+FU2b's historical experiment preparer operates only on a fresh observed pre-FU2b parent (`3c07559`) under `build/`;
+it rejects an already corrected runtime before modifying it:
+
+```sh
+python3 -B tools/dev/vent_correction_experiment.py --project=build/fu2a-observed/project
+```
+
+It records the patch and source hashes, adds scratch-only tuners and enables `FU2B_EXPERIMENT` in that
+project. The ordinary game excludes the experimental implementation at compilation. Select candidates independently
+with `--vent-experiment-acceleration`, `--vent-experiment-floor`, `--vent-experiment-age` or
+`--vent-experiment-cadence`. Omitting all switches keeps the original equations (contact reporting remains enabled).
+Use the same observed parent for comparisons; neither observation nor these experiments establish performance.
+`--vent-experiment-probe` selects read-only native hull queries instead of contact-report observations. Jolt's
+contact-report switch also controls manifold reduction, so do not copy observation's reporting policy into production.
+
+`BodyPredictionTests --correction-proof` is an opt-in behavioral oracle, expected to fail on the parent. It aligns
+the observer with an analytic accelerating COM and checks current velocity, rejected sequence isolation and reliable
+rest anchoring. `BodyCorrectionTests` independently proves zero-motion hull queries detect a rotated floor overlap
+without changing the body's transform or contact-reporting settings. `BodyCorrectionBenchTests --correction-bench`
+measures 60,000 complete Match callbacks after 20,000 warm-up callbacks, with eight remote vents (four free-flight,
+four floor), 15 Hz publications and 150 ms sample transit. Source poses and velocities are sampled 150 ms behind
+the observer's analytic pose; assertions require displaced samples so the existing geometry queries are exercised.
+`--correction-bench-aligned` retains the earlier diagnostic with coincident source/observer poses despite the transit.
+The fixture resets poses without advancing native physics;
+its allocation/mean/p95/p99 results do not replace native convergence or rendered observations. Copy this same probe
+into the isolated parent and alternate at least three parent/candidate pairs with machine load recorded.
+
 The wrapper records the exact command, exit status, `uptime` and Godot processes before, every five seconds during,
 and after the run. It preserves failures and propagates the launcher's unchanged verdict. Omit `--project` and the
 observation flag for an uninstrumented parent run. The historical P5 workload uses `-n 4 -w 0 -l 90`, server
@@ -66,11 +93,24 @@ or deterministic replay, and fixed world/fault seeds do not fix native trajector
 and report other-worktree load. Do not change correction until the failing case separates target prediction,
 post-correction native contact response, transport age, ownership and checker alignment.
 
+`--vent-residual-preserve-contacts` leaves contact-reporting settings under their ordinary runtime/fixture owner.
+Use it when investigating the actual owner physics: Jolt changes manifold reduction when reporting is enabled.
+Schema-4 start rows record this selection, and every body row records its current reporting limit. A zero contact
+count with a zero reporting limit is **unknown contact**, not proof of free flight. The default retains FU2a's
+original eight-contact diagnostic for historical reproduction; do not pool the two observation variants.
+For tuner experiments, pass `--tune.BodyCheckpointInterval=VALUE` to the **clients**, whose creator supplies the
+match snapshot; a server-only override can be replaced by that snapshot. `--expect-checkpoint=VALUE` and
+`--expect-acceleration-spin=VALUE` fail on an ineffective setting. The ordinary host checks these after assembly;
+the scratch observer also checks them before its first configuration record when observing older host code.
+
 
 The separate `ballistic` scenario isolates acceleration: no contacts, damping, rotation or jet thrust. It uses
 native motion and the real puncture/authority path with a zero fixture impulse direction. Damping uses replace mode
 so world damping cannot contaminate the control. It does not reset poses
 or velocities after initialization, stop movement at the deadline, or change NetTest's results/completion rules.
+`--ballistic-spin=RAD_PER_SECOND` optionally adds constant initial spin about the mass center's right axis, bounded
+by `VentMaxSpin`. This deliberate control tests rotation of the offset node origin; zero remains the default.
+The native owner must retain the requested spin magnitude, and all original contact/damping/gravity assertions remain.
 A high initial altitude keeps the entire ordinary 20-second match and results interval clear of the floor.
 `--ballistic-gravity=0` is the constant-velocity control; `1` enables ordinary engine gravity. Both require
 `--tune.VentThrust=0`. Native assertions reject missing authority, accidental contacts/spin and a gravity selection
@@ -89,3 +129,19 @@ python3 -B tools/dev/vent_residual_run.py --project=build/fu2a-observed/project 
   --net-seed=2 --net-lag=120 --net-jitter=30 --net-loss=3 \
   --vent-residual-dir="$PWD/build/fu2a-ballistic-$GRAVITY/traces"
 ```
+
+For the corrected checkpoint candidate, `vent_correction_experiment.py --settling --project=build/NAME/project`
+adds a separate scratch-only `FU2B_SETTLING` switch. `--vent-experiment-blend` uses the exported
+`CorrectionVentBlendTime` (0.02–0.25 s, default 0.1 s) for vent correction; intact bodies retain ordinary blending.
+Pass a tuning override to every client and `--expect-vent-blend=VALUE` to reject ineffective experiments.
+This is independent of the historical acceleration/floor/lead/cadence switches and is never inserted into checkout
+runtime sources.
+
+For the later fast-spin experiments on an unmodified `876c22a` scratch candidate, prepare with
+`vent_correction_experiment.py --spin-average` (optionally `--settling`), then enable
+`--vent-experiment-spin-average` and assert `--expect-spin-average=20`. The separate
+`--authored-spin` preparer option adds `--vent-experiment-authored-spin`, replacing fitted axial acceleration
+with the existing authored mean jet force. The historical opt-in component/replacement oracles are retained at harness revision `8e04d17`; use that
+harness with the corresponding switches when reproducing old models. The promoted production harness runs its
+authored-force and replacement assertions in ordinary `body_correction_tests`, without a switch. Historical
+preparers refuse already promoted production source atomically. Experimental switches never affect exports.
