@@ -135,3 +135,10 @@ The separate Dev-only settling switch tests shorter vent steering (100/50 ms), l
 publication policy, acceleration bounds, lead limits and checker thresholds unchanged. Twelve preparer/diagnostic
 assertions pass before running it, including refused checkout mutation and refused duplicate insertion. Every
 client must assert the effective experimental blend value. Production is unchanged while these experiments run.
+
+The analytic blend-scope oracle (`BodyPredictionTests --vent-blend-proof`) is proved red on the unchanged
+250 ms controller: a one-meter moving-vent error commands 4 m/s instead of the proposed 10 m/s; intact and rest
+checks pass. On the first Dev prototype, moving/intact checks pass but the rest check fails: a 0.4-second-old
+rest anchors early. The experiment is narrowed to **moving** vents, preserving the original rest blend/deadline.
+Both logs remain under `build/fu2b-vent-blend-oracle-{before,prototype}.txt`. This catches the scope regression
+before any production blend change.

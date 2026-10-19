@@ -12,6 +12,31 @@ public static class BodyPredictionTests
 {
     public static void Register(TestRunner runner)
     {
+        foreach (var kind in new[] { "moving-vent", "intact", "vent-rest" })
+        {
+            runner.Run("prediction/vent blend scope " + kind, () =>
+            {
+                if (DevArgs.Get("vent-blend-proof") == null) { return; }
+                using var f = new FlightFixture(runner, venting: kind != "intact");
+                f.Tuning.CorrectionBlendTime = .25f;
+                // Reflection keeps this failing oracle runnable before the new production tuner exists.
+                typeof(Tuning).GetProperty("CorrectionVentBlendTime")?.SetValue(f.Tuning, .1f);
+                var pose = f.Pose(0);
+                f.Tank.GlobalTransform = pose.Translated(Vector3.Left);
+                var rest = kind == "vent-rest";
+                f.Sync.OnState(2, new BodyState(1, pose, Vector3.Zero, Vector3.Zero, 1, 1), rest, 10);
+                f.Sync.Correct(rest ? 10.4 : 10);
+                var expected = Vector3.Right * (kind == "moving-vent" ? 10 : 4);
+                TestRunner.Assert(!f.Tank.Sleeping && f.Tank.LinearVelocity.DistanceTo(expected) < .001f,
+                    $"{kind} commanded {f.Tank.LinearVelocity}, expected {expected}; sleeping={f.Tank.Sleeping}");
+                if (rest)
+                {
+                    f.Sync.Correct(11);
+                    TestRunner.Assert(f.Tank.Sleeping && f.Tank.GlobalTransform.IsEqualApprox(pose),
+                        "vent rest did not retain the ordinary final anchor");
+                }
+            });
+        }
         runner.Run("prediction/accelerated free flight advances pose and velocity together", () =>
         {
             var tank = PropaneTank.Create(runner.World);
@@ -129,12 +154,12 @@ public static class BodyPredictionTests
         public readonly Tuning Tuning = new() { CorrectionMaxAcceleration = 30, CorrectionAccelerationMaxSpin = 6 };
         public readonly PropaneTank Tank;
         public readonly BodySync Sync;
-        public FlightFixture(TestRunner runner)
+        public FlightFixture(TestRunner runner, bool venting = true)
         {
             Tank = PropaneTank.Create(runner.World);
             runner.World.Root.AddChild(Tank);
             Tank.CollisionLayer = Tank.CollisionMask = 0;
-            Tank.PunctureRemote(PropaneTank.LocalCenter + Vector3.Right * .15f, Vector3.Right, 1);
+            if (venting) { Tank.PunctureRemote(PropaneTank.LocalCenter + Vector3.Right * .15f, Vector3.Right, 1); }
             Sync = new BodySync(Tuning, 4, 2);
             Sync.Register(1, Tank, true, 2);
         }

@@ -198,6 +198,7 @@ class VentResidualTests(unittest.TestCase):
             body = (project / 'src/Net/BodySync.cs').read_text()
             self.assertIn('var blend = defaultBlend;', body)
             self.assertIn('State: Tank.PropaneTank.TankState.Venting', body)
+            self.assertIn('if (!entry.TargetRest && Propane.Dev.DevArgs.Get("vent-experiment-blend")', body)
             self.assertIn('FU2B_SETTLING', body)
             before = {p: p.read_bytes() for p in project.rglob('*') if p.is_file()}
             with self.assertRaises(ValueError):

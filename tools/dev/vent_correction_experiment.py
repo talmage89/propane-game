@@ -69,7 +69,7 @@ def settling(project):
         {
             var blend = defaultBlend;
 #if FU2B_SETTLING
-            if (Propane.Dev.DevArgs.Get("vent-experiment-blend") != null &&
+            if (!entry.TargetRest && Propane.Dev.DevArgs.Get("vent-experiment-blend") != null &&
                 entry.Body is Tank.PropaneTank { State: Tank.PropaneTank.TankState.Venting })
             {
                 blend = Mathf.Max(tuning.CorrectionVentBlendTime, 0.02f);
