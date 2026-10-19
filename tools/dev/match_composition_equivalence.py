@@ -9,7 +9,7 @@ import argparse
 import re
 import shutil
 import subprocess
-from server_equivalence import ROOT, prepare
+from server_equivalence import ROOT, copy_probe, prepare
 
 CALL = 'Propane.Dev.UnitTests.Fixtures.MatchCompositionObservation.Record'
 
@@ -112,8 +112,11 @@ if __name__ == '__main__':
     assert args.label and '/' not in args.label and args.label not in ('.', '..')
     prepare(args.revision, args.label, False)
     project = ROOT / 'build' / args.label / 'project'
-    # Identical whole-tick instrumentation, including optional longer native-input warm-up, on either runtime.
-    shutil.copyfile(ROOT / 'src/Dev/UnitTests/ActorTickBenchTests.cs', project / 'src/Dev/UnitTests/ActorTickBenchTests.cs')
+    # Identical workloads and boundary accessors, including parents that predate C2's assertions.
+    for name in ('MatchCompositionTests.cs', 'ActorLifetimeTests.cs', 'MatchPlayerTests.cs', 'ActorTickBenchTests.cs',
+                 'Fixtures/ActorLifetimeFixture.cs', 'Fixtures/ClientActorAccess.cs', 'Fixtures/MatchClient.cs'):
+        copy_probe(ROOT / 'src/Dev/UnitTests' / name, project / 'src/Dev/UnitTests' / name, project)
+    copy_probe(ROOT / 'src/Dev/ActorView.cs', project / 'src/Dev/ActorView.cs', project)
     if args.owned_bots_bench:
         owned_bot_benchmark(project)
     if args.observe:

@@ -49,9 +49,9 @@ internal static class ModeClientObservation
         }) + "\n");
     }
 
-    public static byte[] Encode(NetMessage message, bool fromServer)
+    public static byte[] Encode(PacketCodec codec, NetMessage message, bool fromServer)
     {
-        var bytes = MessageCodec.Encode(message, fromServer);
+        var bytes = codec.Encode(message, fromServer);
         if (message.Type == Msg.ModeEvent && DevArgs.Get("mode-client-transcript") is { } path)
             File.AppendAllText(path, JsonSerializer.Serialize(new { step = "mode-send", bytes = Convert.ToBase64String(bytes) }) + "\n");
         return bytes;
