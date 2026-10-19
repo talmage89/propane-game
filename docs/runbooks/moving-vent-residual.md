@@ -108,6 +108,9 @@ The separate `ballistic` scenario isolates acceleration: no contacts, damping, r
 native motion and the real puncture/authority path with a zero fixture impulse direction. Damping uses replace mode
 so world damping cannot contaminate the control. It does not reset poses
 or velocities after initialization, stop movement at the deadline, or change NetTest's results/completion rules.
+`--ballistic-spin=RAD_PER_SECOND` optionally adds constant initial spin about the mass center's right axis, bounded
+by `VentMaxSpin`. This deliberate control tests rotation of the offset node origin; zero remains the default.
+The native owner must retain the requested spin magnitude, and all original contact/damping/gravity assertions remain.
 A high initial altitude keeps the entire ordinary 20-second match and results interval clear of the floor.
 `--ballistic-gravity=0` is the constant-velocity control; `1` enables ordinary engine gravity. Both require
 `--tune.VentThrust=0`. Native assertions reject missing authority, accidental contacts/spin and a gravity selection
