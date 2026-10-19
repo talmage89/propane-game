@@ -69,7 +69,7 @@ public partial class BodyCorrectionTests : Node3D
             await CheckSettledContact().ConfigureAwait(true);
             CheckPoseProbe();
             await CheckReportedContact().ConfigureAwait(true);
-            if (DevArgs.Get("spin-average-proof") != null || DevArgs.Get("authored-spin-proof") != null) { await CheckSpinAverage().ConfigureAwait(true); }
+            await CheckSpinPrediction().ConfigureAwait(true);
             GD.Print($"[body correction] PASS fresh observer impulse {freshSpeed:0.000000} m/s, owner peak {ownerSpeed:0.000} m/s; stale, predicted and granted-owner jets resume");
             ShutdownGuard.Quit(GetTree());
         }
@@ -107,14 +107,14 @@ public partial class BodyCorrectionTests : Node3D
         floor.QueueFree();
     }
 
-    private async Task CheckSpinAverage()
+    private async Task CheckSpinPrediction()
     {
         foreach (var axial in new[] { false, true })
         {
             var tank = CreateVent(5, new Vector3(80, 20, 0));
             PropaneTank? replacement = null;
             using var tuning = world.Tuning.Copy();
-            typeof(Tuning).GetProperty("CorrectionSpinAverageMin")?.SetValue(tuning, 6f);
+            tuning.CorrectionSpinAverageMin = 6f;
             tuning.VentThrustRampTime = 0;
             var sync = new BodySync(tuning, 4, 2);
             sync.Register(5, tank, true, 2);
@@ -131,15 +131,11 @@ public partial class BodyCorrectionTests : Node3D
                 var gravity = PhysicsServer3D.BodyGetDirectState(current.GetRid()).TotalGravity;
                 Assert(gravityScale == 0 ? gravity == Vector3.Zero : gravity.Y < -1, "spin fixture lost native gravity selection");
                 var measured = gravity + (axial ? axis * 6 : Vector3.Forward * 10);
-                var expectedAcceleration = gravity + (axial ? axis * 6 : Vector3.Zero);
-                if (DevArgs.Get("authored-spin-proof") != null)
-                {
-                    // A source collision can change either component of the measured velocity.
-                    // The fast-spin free-flight model must retain only the authored axial force.
-                    var sourceJet = new Basis(new Quaternion(axis, spin.Length() * .1f)) * current.JetDirectionLocal;
-                    expectedAcceleration = gravity - axis * sourceJet.Dot(axis) * tuning.VentThrust / current.Mass;
-                }
+                // A source collision can change either component of the measured velocity.
+                // The fast-spin free-flight model must retain only the authored axial force.
                 var sourceRotation = new Quaternion(axis, spin.Length() * .1f);
+                var sourceJet = new Basis(sourceRotation) * current.JetDirectionLocal;
+                var expectedAcceleration = gravity - axis * sourceJet.Dot(axis) * tuning.VentThrust / current.Mass;
                 var sourceCenter = center + velocity * .1f + measured * .005f;
                 var source = new Transform3D(new Basis(sourceRotation), sourceCenter - new Basis(sourceRotation) * current.CenterOfMass);
                 var sourceVelocity = velocity + measured * .1f;
@@ -150,7 +146,7 @@ public partial class BodyCorrectionTests : Node3D
                 sync.Correct(now + .2);
                 var expected = sourceVelocity + expectedAcceleration * .1f;
                 Assert(current.LinearVelocity.DistanceTo(expected) < .001f,
-                    $"spin average axial={axial} gravity={gravityScale}: commanded {current.LinearVelocity}, expected {expected}");
+                    $"authored spin axial={axial} gravity={gravityScale}: commanded {current.LinearVelocity}, expected {expected}");
             }
             try
             {
@@ -180,7 +176,7 @@ public partial class BodyCorrectionTests : Node3D
         // Isolate contact eligibility at a known gain; prediction scope has its own response oracle.
         using var tuning = world.Tuning.Copy();
         tuning.CorrectionBlendTime = .25f;
-        typeof(Tuning).GetProperty("CorrectionVentBlendTime")?.SetValue(tuning, .25f);
+        tuning.CorrectionVentBlendTime = .25f;
         var sync = new BodySync(tuning, 4, 2);
         sync.Register(3, tank, true, 2);
         sync.OnState(2, new BodyState(3, pose, Vector3.Up, Vector3.Zero, 1, 1), false, 1);

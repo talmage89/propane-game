@@ -16,11 +16,9 @@ public static class BodyPredictionTests
         {
             runner.Run("prediction/vent blend scope " + kind, () =>
             {
-                if (DevArgs.Get("vent-blend-proof") == null) { return; }
                 using var f = new FlightFixture(runner, venting: kind != "intact");
                 f.Tuning.CorrectionBlendTime = .25f;
-                // Reflection keeps this failing oracle runnable before the new production tuner exists.
-                typeof(Tuning).GetProperty("CorrectionVentBlendTime")?.SetValue(f.Tuning, .1f);
+                f.Tuning.CorrectionVentBlendTime = .1f;
                 var pose = f.Pose(0);
                 f.Tank.GlobalTransform = pose.Translated(Vector3.Left);
                 var rest = kind == "vent-rest";
@@ -37,6 +35,18 @@ public static class BodyPredictionTests
                 }
             });
         }
+        runner.Run("prediction/new timing tuner endpoints survive shared validation", () =>
+        {
+            foreach (var value in new[] { .025f, .25f })
+            {
+                using var snapshot = new Godot.Collections.Dictionary
+                {
+                    [nameof(Tuning.BodyCheckpointInterval)] = value,
+                    [nameof(Tuning.CorrectionVentBlendTime)] = value,
+                };
+                Tuning.ValidateSnapshot(snapshot);
+            }
+        });
         runner.Run("prediction/accelerated free flight advances pose and velocity together", () =>
         {
             var tank = PropaneTank.Create(runner.World);

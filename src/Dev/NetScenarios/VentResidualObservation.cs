@@ -126,7 +126,7 @@ internal static class VentResidualObservation
         if (!configurationWritten)
         {
             var tuning = current.World.Tuning;
-            foreach (var (name, flag) in new[] { ("BodyCheckpointInterval", "expect-checkpoint"), ("CorrectionAccelerationMaxSpin", "expect-acceleration-spin"), ("CorrectionVentBlendTime", "expect-vent-blend") })
+            foreach (var (name, flag) in new[] { ("BodyCheckpointInterval", "expect-checkpoint"), ("CorrectionAccelerationMaxSpin", "expect-acceleration-spin"), ("CorrectionVentBlendTime", "expect-vent-blend"), ("CorrectionSpinAverageMin", "expect-spin-average") })
             {
                 if (DevArgs.Get(flag) == null) { continue; }
                 var expected = DevArgs.GetFloat(flag, float.NaN);
@@ -153,6 +153,7 @@ internal static class VentResidualObservation
                 maxAcceleration = typeof(Tuning).GetProperty("CorrectionMaxAcceleration")?.GetValue(tuning),
                 accelerationMaxSpin = typeof(Tuning).GetProperty("CorrectionAccelerationMaxSpin")?.GetValue(tuning),
                 ventBlend = typeof(Tuning).GetProperty("CorrectionVentBlendTime")?.GetValue(tuning),
+                spinAverageMin = typeof(Tuning).GetProperty("CorrectionSpinAverageMin")?.GetValue(tuning),
                 hull = (GameAssets.TankShape as ConvexPolygonShape3D)?.Points.Select(V).ToArray()
             });
             configurationWritten = true;
