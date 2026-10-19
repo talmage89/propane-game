@@ -50,3 +50,31 @@ New mutable state is confined to scratch entry estimates and the existing match-
 owns its fixture/native bodies for one test and retires them through `MatchClient`. Its measurements include complete
 Match callbacks, publications and fixture updates; they do not advance Jolt. No new runtime dependency or baseline
 exception is introduced. Final production choice, compatibility classification and complete verification follow here.
+
+## Production candidate and reference refresh
+
+`b953856` retains bounded low-spin free-flight acceleration in both prediction terms and shortens reliable
+checkpoints from 0.25 to 0.125 network seconds without adding samples. Acceleration, floor support and extended lead
+alone each fail 2/16 ordinary seed/fault cases; faster checkpoints pass 16/16. The floor and extended-lead changes
+are dropped. Native hull queries are also dropped from production after their measured callback cost; eligible
+observers instead temporarily report one native contact and restore their original setting at every exit boundary.
+Owner settings are preserved. The unchanged obstruction ray reuses owned query scratch to reduce allocation/cost.
+These are shared **minor-release** changes with three exported tuners; `Protocol.Version` remains 3.
+
+The task explicitly permits a legitimate frozen-reference update in its own commit. Before refresh,
+`make test-equivalence` fails three reference assertions, as expected. The complete explicit refresh command is
+`python3 -B tools/dev/check_equivalence.py --refresh --production-revision=b953856 --output="$PWD/build/fu2b-reference-refresh"`.
+The old fixtures remain under `build/fu2b-reference-parent`. Semantic comparison proves:
+
+- All existing tuner entries, values, types, attributes, relative order, shared/local classification and UI entries
+  are identical after removing `BodyCheckpointInterval`, `CorrectionMaxAcceleration`, `CorrectionAccelerationMaxSpin`.
+- World and segment fixture bytes are unchanged. All five Lab fixtures are exactly identical after removing only
+  the three new tuner metadata entries, including every window, summary and tick count.
+- Only StartMatch/client and MatchStart/server wire fixtures change, carrying complete tuner dictionaries.
+- Publication body/rest payloads, sampling timestamps and per-step identity inventory are identical. Owner, epoch,
+  sequence, pending/required state and awake state are identical. Only checkpoint lane/reliability/last-publication
+  metadata and packet batching change: 48 to 53 envelopes. The comparison decodes fixed 64-byte body rows from the
+  unchanged BodyStates layout and compares exact bytes keyed by step/body, including rests and failed sends.
+
+`build/fu2b-reference-differences.json` retains the complete decoded differences. The manifest and provenance name
+the reviewed production revision; no offline behavior change or threshold relaxation is hidden in the refresh.

@@ -2,6 +2,12 @@
 
 These fixtures freeze v0.4.0 (`629bf19`) before the architecture refactors. They compare candidates with a saved
 release, alongside the existing round trips and same-checkout determinism checks. Tests never update expected results.
+The explicitly classified FU2b minor behavior change refreshes the three correction/checkpoint tuner entries and
+checkpoint envelopes at `b953856`. All existing tuner values/attributes/order, world/segment references, publication
+body/rest payloads and sampling times, and Lab windows/summaries/tick counts remain identical. Lab changes are tuner
+metadata only; complete tuner dictionaries update the StartMatch/MatchStart wire fixtures. The publication transcript
+has 53 envelopes instead of 48 because reliable lanes split batches more often. This is an approved behavior refresh,
+not permission to regenerate references for a refactor; [FU2b evidence](evidence/moving-vent-fix.md) retains the comparison.
 
 `make test` discovers the reference unit suites in `src/Dev/Equivalence`:
 
