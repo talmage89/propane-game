@@ -148,7 +148,7 @@ public partial class NetClient : Node
 
     private void OnPacket(ConnectionHandle connection, TrafficClass traffic, ReadOnlyMemory<byte> data)
     {
-        if (connection == server && failedSend == null) { Handle(data.ToArray()); }
+        if (connection == server && failedSend is null) { Handle(data.ToArray()); }
     }
 
     public override void _ExitTree()
@@ -211,7 +211,7 @@ public partial class NetClient : Node
 
     private void PollNetwork()
     {
-        if (failedSend != null) { RetireFailedSend(); return; }
+        if (failedSend is not null) { RetireFailedSend(); return; }
         try
         {
             transport.Poll();
@@ -227,14 +227,14 @@ public partial class NetClient : Node
             }
         }
         catch (Exception error) { Fail("transport poll", error); }
-        if (failedSend != null) RetireFailedSend();
+        if (failedSend is not null) RetireFailedSend();
     }
 
     public SendResult Send(NetWriter message, TrafficClass traffic = TrafficClass.ReliableOrdered) => Send(message.ToArray(), traffic);
 
     public SendResult Send(byte[] message, TrafficClass traffic = TrafficClass.ReliableOrdered)
     {
-        if (server == null || failedSend != null) { return SendResult.Closed; }
+        if (server == null || failedSend is not null) { return SendResult.Closed; }
         try
         {
             var result = transport.Send(server, traffic, message);
@@ -258,7 +258,7 @@ public partial class NetClient : Node
 
     private void QueueSendFailure(string detail)
     {
-        if (failedSend != null) return;
+        if (failedSend is not null) return;
         GD.Print($"[net] {detail}");
         failedSend = new DisconnectReason(DisconnectKind.TransportFailure, detail);
         // Preserve immediate connection-failure observation; only the cleanup notification retires borrowed scenes.
