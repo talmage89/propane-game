@@ -41,16 +41,20 @@ public static class DispatchTransportTests
                         var retired = 0;
                         client.StatusChanged += (status, _) => { if (status == NetClient.Status.Offline) throw new InvalidOperationException("injected offline observer failure"); };
                         client.StatusChanged += (status, _) => { if (status == NetClient.Status.Offline) retired++; };
+                        var continued = 0;
                         client.NoticeReceived += _ =>
                         {
                             if (after) client.SetProfile("after", AppearanceRecord.FromPalette(1));
                             else client.Send(new NetWriter(Msg.Ping).Double(0));
-                            throw new InvalidOperationException("continued after failed send");
+                            TestRunner.Assert(client.State == NetClient.Status.Offline && retired == 0, "send notified retirement inside the dispatch callback");
+                            continued++;
                         };
                         transport.AfterAcceptance = after;
                         transport.Failure = new InvalidDataException("injected client send failure");
                         transport.CleanupFailure = true;
                         client.Handle(new NetWriter(Msg.Notice).String("probe").ToArray());
+                        TestRunner.Assert(continued == 1, "send exception escaped its origin");
+                        client._Process(0);
                         TestRunner.Assert(client.PlayerName == (after ? "after" : "before"), "send failure changed the mutation boundary");
                         TestRunner.Assert(client.State == NetClient.Status.Offline && client.ActiveMatchId == 0 && retired == 1,
                             "client failed to retire through its offline cleanup observers");
@@ -60,7 +64,6 @@ public static class DispatchTransportTests
                         TestRunner.Assert(log.Lines.Any(l => l.Contains("disconnect cleanup failure", StringComparison.Ordinal)) &&
                             log.Lines.Any(l => l.Contains("close cleanup failure", StringComparison.Ordinal)) &&
                             log.Lines.Any(l => l.Contains("offline observer failure", StringComparison.Ordinal)), "secondary cleanup cause lost");
-                        TestRunner.Assert(!log.Lines.Any(l => l.Contains("continued after failed send", StringComparison.Ordinal)), "failed handler continued");
                     }
                     finally
                     {
@@ -178,7 +181,7 @@ public static class DispatchTransportTests
     }
     private static void AssertCause(NetLogCapture log, string cause)
     {
-        TestRunner.Assert(log.Lines.Any(l => l.Contains("owner failure", StringComparison.Ordinal) && l.Contains(cause, StringComparison.Ordinal)), "real failure cause lost");
+        TestRunner.Assert(log.Lines.Any(l => (l.Contains("owner failure", StringComparison.Ordinal) || l.Contains("transport send failure", StringComparison.Ordinal)) && l.Contains(cause, StringComparison.Ordinal)), "real failure cause lost");
         TestRunner.Assert(!log.Lines.Any(l => l.Contains("bad message", StringComparison.Ordinal) || l.Contains("bad Ping", StringComparison.Ordinal) ||
             l.Contains("bad TuningSet", StringComparison.Ordinal)), "handler/send failure was blamed on the peer");
     }

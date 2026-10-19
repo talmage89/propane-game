@@ -3,15 +3,19 @@ using Propane.Net;
 
 namespace Propane.Dev.UnitTests.Fixtures;
 
-/// <summary>Throws at the real adapter call, either before acceptance or after the inner transport accepted bytes.</summary>
+/// <summary>Fails at the real adapter call; throws may occur before or after the inner transport accepts bytes.</summary>
 internal sealed class InjectedPacketTransport(IPacketTransport inner) : IPacketTransport
 {
     public Exception? Failure;
+    public SendResult? Result;
+    public int Faults;
     public bool AfterAcceptance;
     public bool Persistent;
     public ConnectionHandle? FailureConnection;
+    public Msg? FailureType = null;
     public Action? OnFailure;
     public bool CleanupFailure;
+    public bool LoadingFailure;
     public int AcceptedBeforeFailure, Disconnects, Closes;
     public event Action<ConnectionHandle>? Connected { add => inner.Connected += value; remove => inner.Connected -= value; }
     public event Action<ConnectionHandle, DisconnectReason>? Disconnected { add => inner.Disconnected += value; remove => inner.Disconnected -= value; }
@@ -22,17 +26,31 @@ internal sealed class InjectedPacketTransport(IPacketTransport inner) : IPacketT
     public void Poll() => inner.Poll();
     public SendResult Send(ConnectionHandle connection, TrafficClass traffic, ReadOnlyMemory<byte> bytes)
     {
-        if (Failure is not { } failure || FailureConnection != null && FailureConnection != connection) return inner.Send(connection, traffic, bytes);
+        if (Failure == null && Result == null || FailureConnection != null && FailureConnection != connection ||
+            FailureType != null && (bytes.IsEmpty || (Msg)bytes.Span[0] != FailureType))
+        {
+            return inner.Send(connection, traffic, bytes);
+        }
+
+        var failure = Failure;
+        var result = Result;
         if (!Persistent) Failure = null;
+        if (!Persistent) Result = null;
+        Faults++;
         if (AfterAcceptance)
         {
             TestRunner.Assert(inner.Send(connection, traffic, bytes) == SendResult.Success, "failure probe did not reach acceptance");
             AcceptedBeforeFailure++;
         }
         OnFailure?.Invoke();
-        throw failure;
+        if (failure != null) throw failure;
+        return result!.Value;
     }
-    public void SetLoading(ConnectionHandle connection, bool loading) => inner.SetLoading(connection, loading);
+    public void SetLoading(ConnectionHandle connection, bool loading)
+    {
+        inner.SetLoading(connection, loading);
+        if (LoadingFailure) throw new InvalidOperationException("injected loading send failure");
+    }
     public void Disconnect(ConnectionHandle connection, DisconnectReason reason)
     {
         Disconnects++;

@@ -132,3 +132,40 @@ least three parent/candidate pairs under the same headless/rendered workload and
 `ModeClientLifetimeTests` repeatedly creates and retires Bank, King and roaming sessions, populating King's snapshot
 and Lobby's departure/staging/panel state. It checks empty state/released collaborators, idempotent disposal and
 collection of adapters, composed owners and snapshots while the retired Match remains reachable.
+
+## Client failure retirement probes
+
+`menu_test --scenario=retirement --retirement-case=match|world` drives the real Main menus with device events,
+uses a hosted ENet server and starts a second independent lobby. It throws at the server's send of the affected
+peer's Pong, inside normal dispatch, then requires run resource release, continued independent clocks, retirement
+of the client's old world, a usable lobby and a new playable match. `--classic-lobby` also exercises the finite
+match's menu-only return. Rendered runs capture the failure and recovered lobby in `--capture-dir`.
+
+`SendRetirementTests` and `Fixtures/SendRetirementFixture` exercise gameplay, gather/publication, tuning-panel, actor/lobby requests and menu command
+origins over an injected transport with a real native session. Each failure must reach its intended send. The
+retirement witness requires continuations to finish while session state is live, followed by exactly one normal
+offline cleanup at the next network boundary. Returned disposable failure leaves the connection live; transport
+throws always retire it. Each retiring case requires the actual cause in the Godot log.
+
+```sh
+godot-mono --resolution 1280x720 --path . res://scenes/dev/menu_test.tscn -- --scenario=retirement --retirement-case=match --classic-lobby --port=24683 --capture-dir="$PWD/build/r2-match"
+godot-mono --resolution 1280x720 --path . res://scenes/dev/menu_test.tscn -- --scenario=retirement --retirement-case=world --port=24683 --capture-dir="$PWD/build/r2-world"
+godot-mono --headless --path . res://scenes/dev/unit_tests.tscn -- --suite=SendRetirementTests --match-seed=23
+```
+
+`--retirement-case=send-menu|send-game --classic-lobby` faults the real Start match button or a real mouse fire event
+at the client transport. Run each with and without `--send-throw`. Both network poll callbacks are disabled at the
+fault, proving same-frame deferred cleanup also works outside polling. Each case requires the connection menu,
+the real logged cause, a reconnect and another playable match. The native recovery cases are bounded diagnostics;
+the unit send-origin matrix runs in the ordinary fast gate.
+
+`SendRetirementBenchTests --send-bench --match-seed=23` measures 20,000 complete connected client poll, Match physics
+and Match render callbacks after 3,000 warm-up callbacks. The loopback peer drains each callback. It reports accepted
+packets/bytes, actor/body counts, allocation and mean/p95/p99. Use the same fixture on parent and candidate, alternate
+at least three pairs and retain machine load; it does not measure native scene-tree stepping or GPU frame cost.
+The send-origin fixtures borrow one immutable setup per suite rather than regenerating the suburb for every fault;
+each origin still builds and retires its own physical session. Their unit worlds need no local view.
+
+`--retirement-case=loading` fails the server's loading lobby-state send immediately after a staged match setup.
+It requires the staged loading path, cancellation of the pending scene, a recovered lobby and a fresh playable match.
+Run it with lobby worlds enabled. This covers the stage screen's loading state, where the ordinary menu is hidden.
