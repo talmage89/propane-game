@@ -1,0 +1,47 @@
+{
+  "world": {
+    "bytes_identical": true,
+    "sha256": "959a6f6bd3c249c99cd888f07347e8f43d578fb0bada51c4e7c50a2ad7ac5078"
+  },
+  "segments": {
+    "bytes_identical": true,
+    "sha256": "c72acd9d6041ee384cbe5bf79e4b57103bd4892b5de3d74bc6d63e969ce65a10"
+  },
+  "publication": {
+    "bytes_identical": true,
+    "sha256": "e9957f9cb6925ed23d0af0e4994586e7cf8a092c38e467bdb16872bd02d57cb8"
+  },
+  "lab-bank.json.gz": {
+    "all_fields_identical_after_removing_new_tuner_metadata": true
+  },
+  "lab-dissolve.json.gz": {
+    "all_fields_identical_after_removing_new_tuner_metadata": true
+  },
+  "lab-king.json.gz": {
+    "all_fields_identical_after_removing_new_tuner_metadata": true
+  },
+  "lab-shortfuse.json.gz": {
+    "all_fields_identical_after_removing_new_tuner_metadata": true
+  },
+  "lab-spill-chain.json.gz": {
+    "all_fields_identical_after_removing_new_tuner_metadata": true
+  },
+  "tuners": {
+    "new_names": [
+      "BodyCheckpointInterval",
+      "CorrectionAccelerationMaxSpin",
+      "CorrectionMaxAcceleration",
+      "CorrectionSpinAverageMin",
+      "CorrectionVentBlendTime"
+    ],
+    "existing_values_attributes_order_UI_and_membership_identical": true
+  },
+  "wire": {
+    "changed": [
+      "StartMatch/client",
+      "MatchStart/server"
+    ],
+    "other_79_fixtures_byte_and_field_identical": true,
+    "changed_fields_only_new_tuner_dictionary_entries": true
+  }
+}

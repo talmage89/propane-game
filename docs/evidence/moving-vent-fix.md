@@ -207,3 +207,14 @@ uninstrumented acceptance. Fifteen observation/preparer assertions pass, includi
 
 The complete authored-force ordinary matrix passes **16/16**, maximum final moving **0.289 m**.
 Fresh uninstrumented acceptance, paired cost and final repository gates remain separate obligations.
+
+
+## Final-model reference refresh
+
+After a warning-free rebuild, `check_equivalence.py --refresh --production-revision=8580fbe` passes the complete
+wire/schema/world/publication workload and all five Lab scenarios. Independent semantic review against the original
+parent fixtures again proves byte-identical world, segment and original 48-envelope publication fixtures.
+Removing exactly the five new tuner metadata entries recovers the complete original schema/UI/shared membership
+and every Lab field/window/summary/tick count. Only StartMatch/client and MatchStart/server differ among 81 wire
+fixtures, solely their tuner dictionaries. [Reference review](moving-vent-fix/reference-review.json) retains the
+asserted inventory. This supersedes the three-tuner intermediate metadata refresh.
