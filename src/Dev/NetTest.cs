@@ -283,7 +283,7 @@ public partial class NetTest : Node, INetScenarioHost
         };
         scenario?.BeginAssembly(match);
         AddChild(match);
-        foreach (var (name, flag) in new[] { ("BodyCheckpointInterval", "expect-checkpoint"), ("CorrectionAccelerationMaxSpin", "expect-acceleration-spin") })
+        foreach (var (name, flag) in new[] { ("BodyCheckpointInterval", "expect-checkpoint"), ("CorrectionAccelerationMaxSpin", "expect-acceleration-spin"), ("CorrectionVentBlendTime", "expect-vent-blend") })
         {
             if (DevArgs.Get(flag) == null) { continue; }
             var expected = DevArgs.GetFloat(flag, float.NaN);

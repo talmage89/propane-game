@@ -142,3 +142,18 @@ checks pass. On the first Dev prototype, moving/intact checks pass but the rest 
 rest anchors early. The experiment is narrowed to **moving** vents, preserving the original rest blend/deadline.
 Both logs remain under `build/fu2b-vent-blend-oracle-{before,prototype}.txt`. This catches the scope regression
 before any production blend change.
+
+## Fast-spin prediction experiment
+
+The 100 ms blend passes its sixteen ordinary experiments but fails the additional 240 ms case at 0.573 m
+(`fu2b-blend100-extra-age-3`). Its nearest predicted node goal is already 0.584 m from the owner; gain alone cannot
+close this residual. The last fitted acceleration is approximately `(-17.1, +0.58, -0.86)` m/s², while the delayed
+body turns from upward to downward velocity. Applying that whole vector as constant acceleration is also invalid
+for a rotating jet. The new Dev switch retains observed acceleration along the spin axis, uses native gravity
+across it, and bounds the resulting vector by the existing acceleration limit. Native contact disables it.
+
+With the original 250 ms response, six 240 ms experiments pass (final moving 0.239/0.371/0.328/0/0.248/0.291 m;
+one has no final moving body). Two spinning arcs pass at 0.099/0.028 m. Ordinary matrix and final verification are
+still open. The native component oracle fails on production at `(5, 1.2151974, 0)` versus `(5, 0.03799987, 0)`;
+it passes on the experiment, proving transverse gravity and retained axial acceleration. The cost workload now
+accepts a source spin so final measurements can exercise this path. Thirteen preparer assertions pass.

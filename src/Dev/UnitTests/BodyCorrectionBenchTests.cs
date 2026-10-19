@@ -33,6 +33,8 @@ public static class BodyCorrectionBenchTests
             var sequence = 0u;
             var displacedSamples = 0;
             var aligned = DevArgs.Get("correction-bench-aligned") != null;
+            var spin = DevArgs.GetFloat("correction-bench-spin", 0);
+            TestRunner.Assert(float.IsFinite(spin) && spin >= 0, "invalid correction benchmark spin");
             void Tick(int tick)
             {
                 server.Clock.Seconds += 1d / 120;
@@ -52,7 +54,7 @@ public static class BodyCorrectionBenchTests
                         var sampled = Pose(sampledPhase);
                         if (sampled.Origin.DistanceTo(pose.Origin) > .01f) { displacedSamples++; }
                         var velocity = i < 4 ? Vector3.Up * (2 - 10 * sampledPhase) : Vector3.Right * (10 * sampledPhase);
-                        match.Bodies.OnState(2, new BodyState(tank.NetId, sampled, velocity, Vector3.Zero, 1, ++sequence),
+                        match.Bodies.OnState(2, new BodyState(tank.NetId, sampled, velocity, Vector3.Up * spin, 1, ++sequence),
                             false, server.Clock.Seconds, .15);
                     }
                 }
@@ -87,7 +89,7 @@ public static class BodyCorrectionBenchTests
             TestRunner.Assert(displacedSamples == (aligned ? 0 : (int)sequence), "aged publication geometry coverage changed");
             match.Bodies.Clear();
             TestRunner.Assert(tanks.All(t => t.MaxContactsReported == 0 && !t.ContactMonitor), "benchmark changed native contact policy");
-            GD.Print(FormattableString.Invariant($"[correction-cost] sample_pose={(aligned ? "aligned" : "aged")} vents={tanks.Length} free=4 floor=4 warmup={warmup} ticks={ticks} publications={sequence} displaced_samples={displacedSamples} bytes={bytes} mean_us={mean:F3} p95_us={samples[(int)(ticks * .95) - 1]:F3} p99_us={samples[(int)(ticks * .99) - 1]:F3}"));
+            GD.Print(FormattableString.Invariant($"[correction-cost] sample_pose={(aligned ? "aligned" : "aged")} spin={spin} vents={tanks.Length} free=4 floor=4 warmup={warmup} ticks={ticks} publications={sequence} displaced_samples={displacedSamples} bytes={bytes} mean_us={mean:F3} p95_us={samples[(int)(ticks * .95) - 1]:F3} p99_us={samples[(int)(ticks * .99) - 1]:F3}"));
         });
     }
 }

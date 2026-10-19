@@ -84,21 +84,68 @@ def settling(project):
     [Export(PropertyHint.Range, "0.02,0.25,0.01")] public float CorrectionVentBlendTime { get; set; } = .1f;
 ''' + code[position:])
     replace(project / 'Propane.csproj', '</Project>', '<PropertyGroup><DefineConstants>$(DefineConstants);FU2B_SETTLING</DefineConstants></PropertyGroup>\n</Project>')
-    replace(project / 'src/Dev/NetTest.cs', '("CorrectionAccelerationMaxSpin", "expect-acceleration-spin") }',
-            '("CorrectionAccelerationMaxSpin", "expect-acceleration-spin"), ("CorrectionVentBlendTime", "expect-vent-blend") }')
+    host = project / 'src/Dev/NetTest.cs'
+    if '"expect-vent-blend"' not in host.read_text():
+        replace(host, '("CorrectionAccelerationMaxSpin", "expect-acceleration-spin") }',
+                '("CorrectionAccelerationMaxSpin", "expect-acceleration-spin"), ("CorrectionVentBlendTime", "expect-vent-blend") }')
+
+
+def spin_average(project):
+    """Average rotating transverse force while retaining observed axial acceleration."""
+    if not project.resolve().is_relative_to(ROOT / 'build'):
+        raise ValueError('experiments belong under build/')
+    body = project / 'src/Net/BodySync.cs'
+    if 'FU2B_SPIN_AVERAGE' in body.read_text() or 'TargetAcceleration;' not in body.read_text():
+        raise ValueError('spin averaging requires an unmodified FU2b correction candidate')
+    flag = 'Propane.Dev.DevArgs.Get("vent-experiment-spin-average") != null'
+    replace(body, 'entry.TargetAngular.LengthSquared() <= tuning.CorrectionAccelerationMaxSpin * tuning.CorrectionAccelerationMaxSpin;',
+            '(entry.TargetAngular.LengthSquared() <= tuning.CorrectionAccelerationMaxSpin * tuning.CorrectionAccelerationMaxSpin ||\n' +
+            f'                    {flag} && tuning.CorrectionSpinAverageMin > 0 && entry.TargetAngular.LengthSquared() >= tuning.CorrectionSpinAverageMin * tuning.CorrectionSpinAverageMin);')
+    replace(body, 'targetCenter += entry.TargetAcceleration * (lead * lead / 2);\n                targetLinear += entry.TargetAcceleration * lead;', f'''var acceleration = entry.TargetAcceleration;
+#if FU2B_SPIN_AVERAGE
+                if ({flag} &&
+                    entry.TargetAngular.LengthSquared() > tuning.CorrectionAccelerationMaxSpin * tuning.CorrectionAccelerationMaxSpin && body.IsInsideTree())
+                {{
+                    var gravity = PhysicsServer3D.BodyGetDirectState(body.GetRid())?.TotalGravity ?? Vector3.Zero;
+                    var axisOfSpin = entry.TargetAngular.Normalized();
+                    acceleration = gravity + axisOfSpin * (acceleration - gravity).Dot(axisOfSpin);
+                    if (acceleration.LengthSquared() > tuning.CorrectionMaxAcceleration * tuning.CorrectionMaxAcceleration) {{ acceleration = Vector3.Zero; }}
+                }}
+#endif
+                targetCenter += acceleration * (lead * lead / 2);
+                targetLinear += acceleration * lead;''')
+    tuning = project / 'src/Core/Tuning.70.Match.cs'
+    code = tuning.read_text()
+    position = code.rindex('}')
+    tuning.write_text(code[:position] + '''
+    /// <summary>FU2b experiment: minimum spin for transverse force averaging (rad/s); zero disables it.</summary>
+    [Export(PropertyHint.Range, "0,100,1")] public float CorrectionSpinAverageMin { get; set; } = 20f;
+''' + code[position:])
+    replace(project / 'Propane.csproj', '</Project>', '<PropertyGroup><DefineConstants>$(DefineConstants);FU2B_SPIN_AVERAGE</DefineConstants></PropertyGroup>\n</Project>')
+    host = project / 'src/Dev/NetTest.cs'
+    anchor = '("CorrectionAccelerationMaxSpin", "expect-acceleration-spin") }'
+    if '"expect-vent-blend"' in host.read_text():
+        anchor = '("CorrectionVentBlendTime", "expect-vent-blend") }'
+    replace(host, anchor, anchor[:-2] + ', ("CorrectionSpinAverageMin", "expect-spin-average") }')
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--project', required=True, type=Path)
     parser.add_argument('--settling', action='store_true', help='vent-only blend on an FU2b candidate')
+    parser.add_argument('--spin-average', action='store_true', help='average fast transverse force on an FU2b candidate')
     args = parser.parse_args()
     project = args.project.resolve()
     paths = [project / 'src/Net/BodySync.cs', project / 'src/Core/Tuning.70.Match.cs', project / 'Propane.csproj']
-    if args.settling:
+    if args.settling or args.spin_average:
         paths.append(project / 'src/Dev/NetTest.cs')
     before = {p: p.read_text() for p in paths}
-    (settling if args.settling else experiment)(project)
+    if args.settling:
+        settling(project)
+    if args.spin_average:
+        spin_average(project)
+    if not args.settling and not args.spin_average:
+        experiment(project)
     (project.parent / 'experiment.patch').write_text(''.join(''.join(difflib.unified_diff(code.splitlines(True),
         path.read_text().splitlines(True), fromfile='observed/' + str(path.relative_to(project)),
         tofile='experiment/' + str(path.relative_to(project)))) for path, code in before.items()))
