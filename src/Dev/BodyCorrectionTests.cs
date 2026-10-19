@@ -115,7 +115,11 @@ public partial class BodyCorrectionTests : Node3D
         tank.CollisionMask = Layers.Floor;
         tank.GravityScale = 1;
         var pose = tank.GlobalTransform;
-        var sync = new BodySync(world.Tuning, 4, 2);
+        // Isolate contact eligibility at a known gain; prediction scope has its own response oracle.
+        using var tuning = world.Tuning.Copy();
+        tuning.CorrectionBlendTime = .25f;
+        typeof(Tuning).GetProperty("CorrectionVentBlendTime")?.SetValue(tuning, .25f);
+        var sync = new BodySync(tuning, 4, 2);
         sync.Register(3, tank, true, 2);
         sync.OnState(2, new BodyState(3, pose, Vector3.Up, Vector3.Zero, 1, 1), false, 1);
         sync.Correct(1);
@@ -124,7 +128,7 @@ public partial class BodyCorrectionTests : Node3D
         {
             await ToSignal(GetTree(), SceneTree.SignalName.PhysicsFrame);
             var direct = PhysicsServer3D.BodyGetDirectState(tank.GetRid());
-            var expected = (pose * tank.CenterOfMass - tank.GlobalTransform * tank.CenterOfMass) / world.Tuning.CorrectionBlendTime;
+            var expected = (pose * tank.CenterOfMass - tank.GlobalTransform * tank.CenterOfMass) / tuning.CorrectionBlendTime;
             sync.Correct(1.2);
             if (tick > 10)
             {
