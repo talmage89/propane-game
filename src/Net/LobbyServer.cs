@@ -61,18 +61,15 @@ public partial class LobbyServer : Node
     private double nextDiagnostics;
 
     private readonly ServerModes modes;
-    private readonly Func<ServerMode, Tuning, int, SuburbSettings> supply;
-    private readonly Func<ServerMode, Tuning, ModeTuners> copyModeTuners;
+    private readonly IServerSettings settings;
     private readonly Func<SuburbSettings, int, Func<int>, SuburbPlan> generate;
 
     // Parameterless script instantiation cannot supply application-owned mode inputs.
     public LobbyServer() => throw new InvalidOperationException("LobbyServer requires compiled server mode inputs");
-    public LobbyServer(ServerModes modes, Func<ServerMode, Tuning, int, SuburbSettings> supply,
-        Func<ServerMode, Tuning, ModeTuners> copyModeTuners, Func<SuburbSettings, int, Func<int>, SuburbPlan> generate, ServerTransport services, IMonotonicClock? clock = null)
+    public LobbyServer(ServerModes modes, IServerSettings settings, Func<SuburbSettings, int, Func<int>, SuburbPlan> generate, ServerTransport services, IMonotonicClock? clock = null)
     {
         this.modes = modes ?? throw new ArgumentNullException(nameof(modes));
-        this.supply = supply ?? throw new ArgumentNullException(nameof(supply));
-        this.copyModeTuners = copyModeTuners ?? throw new ArgumentNullException(nameof(copyModeTuners));
+        this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
         this.generate = generate ?? throw new ArgumentNullException(nameof(generate));
         transport = services.Transport;
         peerIds = services.PeerIds;
@@ -301,8 +298,8 @@ public partial class LobbyServer : Node
         {
             Id = lobbyIds.Allocate(),
             CreatorId = client.Id,
-            MatchLength = Tuning.SavedTemplate.MatchLengthDefault,
-            Capacity = Math.Clamp(Tuning.SavedTemplate.MaxPlayers, 2, Protocol.TestedActorCeiling),
+            MatchLength = settings.MatchLengthDefault,
+            Capacity = Math.Clamp(settings.MaxPlayers, 2, Protocol.TestedActorCeiling),
             Roster = RosterFactory(),
             Settings = ModeSettings.Default with { ModeId = modes.ForLobby(modes.Default.Id)?.Id ?? modes.Lobby[0].Id },
             Mode = modes.Default,
@@ -543,7 +540,7 @@ public partial class LobbyServer : Node
             return;
         }
         // A lobby with a world stages the start: everyone sees the lineup count down while still roaming.
-        using var staged = Tuning.FromSnapshot(snapshot);
+        using var staged = settings.FromSnapshot(lobby.Mode, snapshot);
         if (lobby.World != null && staged.LobbyStageTime > 0)
         {
             lobby.Phase = LobbyPhase.Staging;
@@ -586,12 +583,11 @@ public partial class LobbyServer : Node
     private void BeginMatch(Lobby lobby, Client client, Godot.Collections.Dictionary snapshot)
     {
         CloseWorld(lobby);
-        var tuning = Tuning.FromSnapshot(snapshot);
+        var tuning = settings.FromSnapshot(lobby.Mode, snapshot);
         ServerRun? match = null;
         try
         {
-            tuning.KingMintSeconds = lobby.Settings.MintSeconds;
-            tuning.TankCountMultiplier = lobby.Settings.TankSupply;
+            tuning.ConfigureLobby(lobby.Settings.MintSeconds, lobby.Settings.TankSupply);
             match = NewRun(lobby, client.Debug, lobby.MatchLength, false, tuning);
             RunCreated?.Invoke(match);
             match.InitializeMatch(lobby.Roster.Present, lobby.Roster.Revision, StartScore, random.Next);
@@ -645,11 +641,11 @@ public partial class LobbyServer : Node
         BroadcastLobbyList();
     }
 
-    private ServerRun NewRun(Lobby lobby, bool debug, float length, bool world, Tuning tuning)
+    private ServerRun NewRun(Lobby lobby, bool debug, float length, bool world, IServerRunSettings tuning)
     {
         var mode = world ? modes.Roaming : lobby.Mode;
         return new ServerRun(matchIds.Allocate(), lobby.Id, lobby.CreatorId, debug, length, world, tuning, mode,
-            players => supply(mode, tuning, players), () => copyModeTuners(mode, tuning), generate, clock,
+            generate, clock,
             Send, world ? SetLoading : SetMatchLoading, phase => lobby.Phase = phase, () => ReturnToLobby(lobby), Log, TraceAuthority);
     }
 

@@ -9,14 +9,16 @@ namespace Propane.UI;
 internal sealed class ConnectScreen
 {
     private readonly NetClient net;
+    private readonly MenuProfile profile;
     private readonly MenuCommands commands;
     private readonly MenuRefreshState refresh;
     private readonly Action<string> host;
     private readonly Action back;
 
-    public ConnectScreen(NetClient net, MenuCommands commands, MenuRefreshState refresh, Action<string> host, Action back)
+    public ConnectScreen(NetClient net, MenuProfile profile, MenuCommands commands, MenuRefreshState refresh, Action<string> host, Action back)
     {
         this.net = net;
+        this.profile = profile;
         this.commands = commands;
         this.refresh = refresh;
         this.host = host;
@@ -31,12 +33,12 @@ internal sealed class ConnectScreen
         layout.AddChild(new HSeparator());
 
         layout.AddChild(UiStyle.Text("Your name", 16, UiStyle.SoftInk));
-        var name = refresh.NameField = UiStyle.Field(MenuProfile.DefaultName(), "Name");
+        var name = refresh.NameField = UiStyle.Field(profile.DefaultName(), "Name");
         name.MaxLength = Protocol.MaxNameLength;
         layout.AddChild(name);
 
         layout.AddChild(UiStyle.Text("Server", 16, UiStyle.SoftInk));
-        var server = refresh.ServerField = UiStyle.Field(PlayerSettings.Server, $"address or address:port (port {Protocol.DefaultPort} if left out)");
+        var server = refresh.ServerField = UiStyle.Field(profile.Server, $"address or address:port (port {Protocol.DefaultPort} if left out)");
         layout.AddChild(server);
         server.TextSubmitted += _ => commands.Connect(server.Text, name.Text);
 
@@ -54,7 +56,7 @@ internal sealed class ConnectScreen
         var back = UiStyle.Button("Back");
         back.Pressed += () =>
         {
-            MenuProfile.SaveName(name.Text);
+            profile.SaveName(name.Text);
             commands.Disconnect();
             this.back();
         };

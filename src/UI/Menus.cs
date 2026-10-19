@@ -31,12 +31,16 @@ public partial class Menus : CanvasLayer
     private string message = "";
     private bool connecting;
     private readonly MenuRefreshState refresh = new();
+    private MenuProfile profile = null!;
     private MenuCommands commands = null!;
     private ConnectScreen connectScreen = null!;
     private LobbyBrowserScreen browserScreen = null!;
     private LobbyScreen lobbyScreen = null!;
     private LobbyDialogs dialogs = null!;
     private MenuNavigation navigation = null!;
+
+    /// <summary>Borrowed application preferences; test callers may supply an isolated store.</summary>
+    public IPlayerSettings Settings { get; init; } = PlayerPreferences.Application;
 
     /// <summary>The connection the multiplayer screens use. Set before adding to the tree.</summary>
     public NetClient Net { get; set; } = null!;
@@ -85,8 +89,9 @@ public partial class Menus : CanvasLayer
             Adjusters = new Dictionary<string, Action<int>> { ["match_length"] = settings.AdjustMatchLength, ["mint_pace"] = settings.AdjustMintPace, ["tank_supply"] = settings.AdjustTankSupply },
         };
         AddChild(navigation);
-        commands = new MenuCommands(Net, text => { message = text; Rebuild(); }, () => message = "", port => HostRequested?.Invoke(port));
-        connectScreen = new ConnectScreen(Net, commands, refresh, name => commands.Host(HostPort, name), () => Show(Screen.Main));
+        profile = new MenuProfile(Settings);
+        commands = new MenuCommands(Net, profile, text => { message = text; Rebuild(); }, () => message = "", port => HostRequested?.Invoke(port));
+        connectScreen = new ConnectScreen(Net, profile, commands, refresh, name => commands.Host(HostPort, name), () => Show(Screen.Main));
         browserScreen = new LobbyBrowserScreen(Net, commands, () => Show(Screen.Connect));
         dialogs = new LobbyDialogs(this, Net, navigation, commands, refresh);
         lobbyScreen = new LobbyScreen(Net, commands, refresh, dialogs, settings, () => PanelClosed?.Invoke());
@@ -247,7 +252,7 @@ public partial class Menus : CanvasLayer
     }
 
     /// <summary>Connects as if typed on the connect screen.</summary>
-    public void ConnectTo(string address, string name) => commands.Connect(address, name.Length > 0 ? name : MenuProfile.DefaultName());
+    public void ConnectTo(string address, string name) => commands.Connect(address, name.Length > 0 ? name : profile.DefaultName());
 
     internal static string DefaultBotName(LobbyInfo lobby) => LobbyDialogs.DefaultBotName(lobby);
 

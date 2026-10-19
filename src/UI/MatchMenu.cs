@@ -10,6 +10,8 @@ namespace Propane.UI;
 public partial class MatchMenu : CanvasLayer
 {
     /// <summary>The lobby world's menu: it leaves the lobby, and points at the lobby panel instead of the rules.</summary>
+    public IPlayerSettings Settings { get; init; } = PlayerPreferences.Application;
+
     public bool Lobby { get; init; }
 
     public event System.Action? ResumeRequested;
@@ -70,7 +72,7 @@ public partial class MatchMenu : CanvasLayer
         var leaderboard = UiStyle.Button(LeaderboardText());
         leaderboard.Pressed += () =>
         {
-            PlayerSettings.ShowLeaderboard = !PlayerSettings.ShowLeaderboard;
+            Settings.ShowLeaderboard = !Settings.ShowLeaderboard;
             leaderboard.Text = LeaderboardText();
         };
         var options = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.Center };
@@ -79,5 +81,5 @@ public partial class MatchMenu : CanvasLayer
         AddChild(new MenuNavigation { Screen = this, Root = layout, Back = () => ResumeRequested?.Invoke() });
     }
 
-    private static string LeaderboardText() => PlayerSettings.ShowLeaderboard ? "Leaderboard: shown" : "Leaderboard: hidden";
+    private string LeaderboardText() => Settings.ShowLeaderboard ? "Leaderboard: shown" : "Leaderboard: hidden";
 }

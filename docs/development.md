@@ -298,6 +298,8 @@ $GODOT --fixed-fps 60 res://scenes/dev/bot_navigation_course.tscn -- --seeds=5 -
 
 # Plain C# assertion suites; make test runs these in a shared runner and checks saved plans in two fresh processes.
 $GODOT --headless res://scenes/dev/unit_tests.tscn
+# Isolated native engine-policy overlap/retirement witness (optional -- --a1-bench).
+$GODOT --headless res://scenes/dev/application_state_tests.tscn
 tools/dev/check_world.sh
 
 # Scoped worlds: overlapping physics/tuning, events/spawns/callbacks, pause/reveal/hitstop and leak-free teardown.

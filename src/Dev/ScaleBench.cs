@@ -18,6 +18,16 @@ namespace Propane.Dev;
 /// <summary>Fixed supply and physics-tick workload using the production offline Tank Bank runner.</summary>
 public partial class ScaleBench : Node3D
 {
+    private readonly PlayerSettings applicationSettings = new("res://build/a1-scalebench-settings.cfg");
+    private System.IDisposable? settingsBinding;
+
+    public override void _Notification(int what)
+    {
+        if (what != NotificationPredelete) return;
+        settingsBinding?.Dispose();
+        applicationSettings.Dispose();
+    }
+
     private LabSession lab = null!;
     private FrameMetrics metrics = null!;
     private CaptureDirector capture = null!;
@@ -40,6 +50,7 @@ public partial class ScaleBench : Node3D
 
     public override void _Ready()
     {
+        settingsBinding = PlayerSettings.Bind(applicationSettings);
         try
         {
             // Headless cannot draw, so Godot otherwise applies its default 6900-us idle wait even with vsync off.
@@ -254,7 +265,11 @@ public partial class ScaleBench : Node3D
 
     public override void _ExitTree()
     {
-        if (omit != "none") GetTree().NodeAdded -= OmitFeature;
-        process.Dispose();
+        try
+        {
+            if (omit != "none") GetTree().NodeAdded -= OmitFeature;
+            process.Dispose();
+        }
+        finally { settingsBinding?.Dispose(); settingsBinding = null; }
     }
 }

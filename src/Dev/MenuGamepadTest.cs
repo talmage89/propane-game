@@ -131,7 +131,7 @@ public partial class MenuGamepadTest : Node
         var before = Net.Appearance;
         await Press(JoyButton.DpadLeft).ConfigureAwait(true);
         await Press(JoyButton.B).ConfigureAwait(true);
-        Check(Net.Appearance == before && PlayerSettings.Appearance == before, "cancel leaves accepted/saved appearance alone");
+        Check(Net.Appearance == before && PlayerPreferences.Application.Appearance == before, "cancel leaves accepted/saved appearance alone");
         CheckFocus("custom_color");
         await Press(JoyButton.A).ConfigureAwait(true);
         await Navigate("preset_sky").ConfigureAwait(true);
@@ -417,8 +417,8 @@ public partial class MenuGamepadTest : Node
 
     private void CheckSaved(AppearanceRecord color, string outcome)
     {
-        PlayerSettings.UseFile("user://menu_test_settings.cfg");
-        Check(PlayerSettings.Appearance == color, outcome);
+        using var reread = new PlayerSettings("user://menu_test_settings.cfg");
+        Check(reread.Appearance == color, outcome);
     }
 
     private async Task MouseColor(string key, float value, bool drag = false)

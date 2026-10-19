@@ -8,13 +8,15 @@ namespace Propane.UI;
 internal sealed class MenuCommands
 {
     private readonly NetClient net;
+    private readonly MenuProfile profile;
     private readonly Action<string> report;
     private readonly Action clearMessage;
     private readonly Action<int> host;
 
-    public MenuCommands(NetClient net, Action<string> report, Action clearMessage, Action<int> host)
+    public MenuCommands(NetClient net, MenuProfile profile, Action<string> report, Action clearMessage, Action<int> host)
     {
         this.net = net;
+        this.profile = profile;
         this.report = report;
         this.clearMessage = clearMessage;
         this.host = host;
@@ -36,15 +38,15 @@ internal sealed class MenuCommands
             hostName = text[..colon];
             port = parsed;
         }
-        PlayerSettings.Server = text;
-        MenuProfile.SaveName(name);
+        profile.Server = text;
+        profile.SaveName(name);
         clearMessage();
-        net.Connect(hostName, port, Protocol.CleanName(name), MenuProfile.DefaultAppearance());
+        net.Connect(hostName, port, Protocol.CleanName(name), profile.DefaultAppearance());
     }
 
     public void Host(int port, string name)
     {
-        MenuProfile.SaveName(name);
+        profile.SaveName(name);
         host(port);
     }
 
@@ -56,7 +58,7 @@ internal sealed class MenuCommands
 
     public void SetProfile(string name, AppearanceRecord appearance)
     {
-        MenuProfile.Save(name, appearance);
+        profile.Save(name, appearance);
         net.SetProfile(name, appearance);
     }
 }

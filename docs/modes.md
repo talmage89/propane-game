@@ -207,7 +207,7 @@ pure model: score order with ties in roster order (as `Snapshot()` ranks the res
 `LeaderboardRows` plus the local row below a divider when outside them, and the slide, flash, "+N" and drop tint
 timed by `LeaderboardSlideTime`, `LeaderboardFlashTime` and `ScorePopupTime`. It hides while loading and on the results
 screen, with fewer than two players, at `LeaderboardRows` 0, and when the player turns it off in the match menu
-(`PlayerSettings.ShowLeaderboard`). The Lab's prototypes do not show it: the Lab overlay holds that corner.
+(`IPlayerSettings.ShowLeaderboard` on the borrowed application store). The Lab's prototypes do not show it: the Lab overlay holds that corner.
 
 ## Bots
 

@@ -202,13 +202,14 @@ internal sealed class MatchViewBinding : IDisposable
             hud = localView.Hud;
             hud.ShowTankCount(false);
         }
-        matchHud = new MatchHud { World = World, Name = "MatchHud" };
+        var settings = PlayerPreferences.Application;
+        matchHud = new MatchHud { Settings = settings, World = World, Name = "MatchHud" };
         Session.AddView(parent, matchHud);
         matchHud.Show(PresentHud(ModePhase.Loading, -1, tankGroups, false));
         BuildKingZone();
         results = new ResultsScreen { Name = "Results" };
         Session.AddView(parent, results);
-        menu = new MatchMenu { Name = "Menu", Lobby = IsLobby };
+        menu = new MatchMenu { Settings = settings, Name = "Menu", Lobby = IsLobby };
         menu.ResumeRequested += CloseMenu;
         menu.LeaveRequested += () => World.Defer(() => leave(), whilePaused: true);
         Session.AddView(parent, menu);

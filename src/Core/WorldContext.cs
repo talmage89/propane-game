@@ -42,7 +42,7 @@ public sealed class WorldContext : IDisposable
         Root.AddChild(EffectsRoot);
         Root.AddChild(ContentRoot);
         viewport.AddChild(new WorldDriver { World = this, ProcessMode = Node.ProcessModeEnum.Always });
-        WorldTimeScale.Register();
+        ProcessPhysicsPolicies.Hitstop.Register();
         if (attach) Attach(present);
     }
 
@@ -120,9 +120,9 @@ public sealed class WorldContext : IDisposable
         }
     }
 
-    public bool TryHitstop(float duration, float scale) => WorldTimeScale.TryAcquire(this, duration, scale);
-    public void ReleaseTimeScale() => WorldTimeScale.Release(this);
-    internal void PollTimeScale() => WorldTimeScale.Poll(this);
+    public bool TryHitstop(float duration, float scale) => ProcessPhysicsPolicies.Hitstop.TryAcquire(this, duration, scale);
+    public void ReleaseTimeScale() => ProcessPhysicsPolicies.Hitstop.Release(this);
+    internal void PollTimeScale() => ProcessPhysicsPolicies.Hitstop.Poll(this);
 
     public void SetContentRoot(Node3D root)
     {
@@ -207,7 +207,7 @@ public sealed class WorldContext : IDisposable
         IsAlive = false;
         if (GodotObject.IsInstanceValid(Root)) { Root.ProcessMode = Node.ProcessModeEnum.Disabled; }
         PhysicsServer3D.SpaceSetActive(Physics.Space, false);
-        WorldTimeScale.Unregister(this);
+        ProcessPhysicsPolicies.Hitstop.Unregister(this);
         Clock.Dispose();
         Reveal.Dispose();
         deferred.Clear();

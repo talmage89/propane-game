@@ -70,7 +70,7 @@ The real-device and network menu scenes remain responsible for input delivery an
 
 ## Runtime launch options and the Dev boundary
 
-`LaunchArgs` (`src/Core`) parses the user arguments after `--` once per process and caches them as `LaunchArgs.Current`.
+`LaunchArgs` (Foundation, `src/Core`) parses the user arguments after `--` once per process and caches them as `LaunchArgs.Current`.
 `--key=value` is read as written and a bare `--key` is `"true"`; leading dashes are dropped, only the first `=` splits
 (an `=` in first place is part of the key), a later argument replaces an earlier one, and numbers use the current culture
 and fall back when absent or not numbers. `Has` means the argument was given with any value, so `--classic-lobby=false`
@@ -87,7 +87,7 @@ and the rest) go through `DevArgs`; a Debug server applies `--tune.*` too, befor
 | `--connect=host[:port]`, `--name=Name` | `Main` | Open the Connect screen on that server as that name. |
 | `--windowed` | `Main` | Do not maximize a windowed game. |
 | `--release-test` | `Main` | Run the release smoke test in place of the front end ([Release smoke](#release-smoke)). |
-| `--classic-lobby` | `LobbyWorldDefault` | Lobby menu over the backdrop instead of the lobby world. |
+| `--classic-lobby` | `LobbyWorldDefault`, `NetClient` | Lobby menu over the backdrop instead of the lobby world. |
 | `--update-check`, `--update-url=URL` | `UpdateCheck` | Check for a newer release when run from the editor; ask `URL` instead of GitHub. |
 | `--fake-version=X.Y.Z`, `--fake-protocol=N` | `BuildInfo`, `NetClient` | Pretend to be another game version or protocol in the Hello and in version checks. |
 | `--net-lag`, `--net-jitter`, `--net-reliable-stall`, `--net-body-stall` (ms), `--net-loss` (%), `--net-seed=N` | `PacketTransports` | Wrap the transport in `FaultPacketTransport` when any fault is positive. |
@@ -97,6 +97,21 @@ The `LaunchArgsTests` unit suite checks the parser against the parser as it stoo
 option above that a headless unit can reach through its real consumer. The native `server_tuning_tests` and `server_seed_tests`
 scenes cover Main's server entry; the exported launches (ordinary start, `--server`, `--classic-lobby`, `--release-test`)
 cover the rest. Add a new runtime option to `LaunchArgs`'s consumers, this table and that suite together.
+
+`LaunchArgs.OverrideForTests` provides strictly nested main-thread overrides and restores the previous immutable
+snapshot after exceptions. Tuning application lives in the composition-only `LaunchTuningOverrides` extension.
+`Main` owns the persistent `PlayerSettings` store, or borrows a test root's isolated store. `IPlayerSettings` and
+`PlayerPreferences` are Foundation contracts/borrowed selection; no ConfigFile owner lives there. Standalone unit,
+Lab, network, menu and benchmark roots bind their own stores and restore bindings after child tree-exit callbacks.
+`application_state_tests.tscn` runs independently of the unit runner's world: it asserts both physics-policy
+retirement orders and controlled update completion after retirement, without HTTP. `ApplicationSettingsTests`
+checks immediate persistence, independent caches, disposal and nested settings/launch restoration. The real-device
+menu input scenario also toggles leaderboard preferences with keyboard/controller events and reloads the file
+independently, while confirming that menu and HUD borrow the same store. The existing
+appearance migration cases remain isolated and unchanged. `ApplicationServerTests` records ordered exact wire
+bytes and run retirements for Bank/King with classic/roaming lobbies; `--application-transcript=ABSOLUTE_PATH`
+writes a scratch witness for parent comparison. `--a1-negative=minimum` on the native scene and
+`--a1-server-negative` on the server suite deliberately violate expectations and must exit nonzero.
 
 ### Release smoke
 

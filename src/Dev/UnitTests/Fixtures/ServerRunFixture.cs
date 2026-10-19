@@ -58,7 +58,7 @@ internal sealed class ServerRunFixture : IDisposable
         public Release(LobbyServer server, ServerRun run)
         {
             Run = run;
-            Tuning = run.Tuning;
+            Tuning = ((ServerSettings.RunSettings)run.Configuration).Resource;
             TestRunner.Assert(GodotObject.IsInstanceValid(Tuning), "run started with a disposed resource");
             run.Retired += () =>
             {

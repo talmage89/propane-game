@@ -105,6 +105,7 @@ public partial class MenuDeviceInputTest : Node
             await Pause(match.Player, match.GetNode<MatchMenu>("Menu"), "match").ConfigureAwait(true);
             TapKey(Key.Escape);
             await Frames().ConfigureAwait(true);
+            await SettingsToggle(match).ConfigureAwait(true);
             await Activate("Leave match").ConfigureAwait(true);
             await Wait(() => !Main.HasNode("Match") && Menus.Current == Menus.Screen.Browser, "match retirement").ConfigureAwait(true);
             SystemBindings();
@@ -569,6 +570,27 @@ public partial class MenuDeviceInputTest : Node
         Check(ActorView.For(player)!.CameraRig.Yaw == yaw && player.IsOnFloor(), $"{mode} pause discards pending jump and mouse motion");
         player.MeleeStarted -= Swing;
         player.Fired -= Shot;
+    }
+
+    private async Task SettingsToggle(Match match)
+    {
+        var menu = match.GetNode<MatchMenu>("Menu");
+        var hud = match.GetNode<MatchHud>("MatchHud");
+        var before = menu.Settings.ShowLeaderboard;
+        Check(ReferenceEquals(menu.Settings, hud.Settings) && ReferenceEquals(menu.Settings, PlayerPreferences.Application),
+            "match menu and HUD borrow the same application store");
+        await Activate(before ? "Leaderboard: shown" : "Leaderboard: hidden").ConfigureAwait(true);
+        Check(menu.Settings.ShowLeaderboard != before, "real keyboard toggles the application preference");
+        using (var saved = new PlayerSettings("user://menu_test_settings.cfg"))
+            Check(saved.ShowLeaderboard != before, "keyboard preference survives an independent settings reload");
+        capture.Screenshot("match_05_leaderboard_toggled");
+        // The same focused button accepts a controller confirmation, without scripted action intent.
+        Send(new InputEventJoypadButton { ButtonIndex = JoyButton.A, Pressed = true });
+        Send(new InputEventJoypadButton { ButtonIndex = JoyButton.A, Pressed = false });
+        await Frames().ConfigureAwait(true);
+        Check(menu.Settings.ShowLeaderboard == before, "real gamepad restores the application preference");
+        using (var restored = new PlayerSettings("user://menu_test_settings.cfg"))
+            Check(restored.ShowLeaderboard == before, "gamepad preference survives an independent settings reload");
     }
 
     private void SystemBindings()

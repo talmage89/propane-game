@@ -35,12 +35,11 @@ public partial class LobbyServer
         if (!Worlds || lobby.World != null || lobby.Phase != LobbyPhase.Waiting || lobby.Members.Count == 0) return false;
         var now = clock.Seconds;
         // The server's own dials build roaming worlds; the lobby's choices apply too.
-        var tuning = Tuning.SavedTemplate.Copy();
+        var tuning = settings.CopyTemplate(modes.Roaming);
         ServerRun? world = null;
         try
         {
-            tuning.KingMintSeconds = lobby.Settings.MintSeconds;
-            tuning.TankCountMultiplier = lobby.Settings.TankSupply;
+            tuning.ConfigureLobby(lobby.Settings.MintSeconds, lobby.Settings.TankSupply);
             world = NewRun(lobby, false, Math.Clamp(lobby.MatchLength, 10, 3600), true, tuning);
             RunCreated?.Invoke(world);
             world.InitializeWorld();

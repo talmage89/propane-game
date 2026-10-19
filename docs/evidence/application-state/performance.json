@@ -1,0 +1,396 @@
+{
+  "date": "2026-10-18",
+  "production_parent": "08d20ae",
+  "parent_observer": "b3fe482",
+  "production_commit": "51371bc",
+  "runtime_head": "8098956",
+  "build": "Debug (not optimized)",
+  "machine": {
+    "cpu": "Intel i5-10400F",
+    "logical_cpus": 12,
+    "gpu": "GTX 1660",
+    "godot": "4.7.2",
+    "dotnet": "10.0.13"
+  },
+  "limits": [
+    "Rendered VSync forced on by gamescope despite --disable-vsync.",
+    "Native callback/tail statistics are per process frame containing physics, with tick/frame counts retained. Tail is an engine/bookkeeping upper bound.",
+    "Existing presentation allocation varies with process-frame counts. No claim of zero allocation for the entire native world."
+  ],
+  "uptime": {
+    "headless-1-uptime": [
+      " 11:50:33 up 16:26,  1 user,  load average: 5.50, 10.58, 9.59",
+      " 11:50:58 up 16:26,  1 user,  load average: 4.38, 9.91, 9.39"
+    ],
+    "headless-2-uptime": [
+      " 11:50:58 up 16:26,  1 user,  load average: 4.38, 9.91, 9.39",
+      " 11:51:24 up 16:27,  1 user,  load average: 3.64, 9.29, 9.20"
+    ],
+    "headless-3-uptime": [
+      " 11:51:24 up 16:27,  1 user,  load average: 3.64, 9.29, 9.20",
+      " 11:51:50 up 16:27,  1 user,  load average: 2.76, 8.54, 8.95"
+    ],
+    "rendered-1-uptime": [
+      " 11:51:50 up 16:27,  1 user,  load average: 2.76, 8.54, 8.95",
+      " 11:52:11 up 16:27,  1 user,  load average: 2.11, 8.02, 8.77"
+    ],
+    "rendered-2-uptime": [
+      " 11:52:11 up 16:27,  1 user,  load average: 2.11, 8.02, 8.77",
+      " 11:52:32 up 16:28,  1 user,  load average: 1.72, 7.55, 8.60"
+    ],
+    "rendered-3-uptime": [
+      " 11:52:32 up 16:28,  1 user,  load average: 1.72, 7.55, 8.60",
+      " 11:52:53 up 16:28,  1 user,  load average: 1.60, 7.14, 8.44"
+    ]
+  },
+  "pairs": {
+    "headless-1-candidate": {
+      "policy": "[application] cost worlds=2 tanks=2 ticks=10000 bytes=0 mean-us=1.785 p95-us=1.800 p99-us=2.300",
+      "server": [
+        "[server-bench] mode=Tank Bank ticks=30000 bodies=8 packets=60500 payload=19024500 bytes_per_tick=6868.12 mean_us=14.718 p95_us=15.000 p99_us=17.300",
+        "[server-bench] mode=King of the Cul-de-sac ticks=30000 bodies=8 packets=60518 payload=19025886 bytes_per_tick=7070.44 mean_us=15.397 p95_us=16.600 p99_us=21.700",
+        "[server-bench] mode=roaming ticks=30000 bodies=8 packets=60000 payload=19020000 bytes_per_tick=6813.65 mean_us=14.562 p95_us=15.500 p99_us=27.800"
+      ],
+      "frames": 18789,
+      "sampled_steps": 360.0,
+      "callback_ms": [
+        0.4262,
+        0.563,
+        0.94
+      ],
+      "native_tail_ms": [
+        0.2179,
+        0.302,
+        0.348
+      ],
+      "wall_ms": [
+        0.1597,
+        0.186,
+        0.74
+      ],
+      "allocated_bytes": 4991080,
+      "physics_ticks": 360,
+      "elapsed": 3.0018773,
+      "world_hash": "BE2A53F325CC76F9BB1FBDA0E8E33C504B14CC5D8E12A6EC2759CFDCCD02DCB9",
+      "tanks": 40,
+      "live_tanks": 40
+    },
+    "headless-1-parent": {
+      "policy": "[application] cost worlds=2 tanks=2 ticks=10000 bytes=0 mean-us=1.727 p95-us=1.800 p99-us=1.800",
+      "server": [
+        "[server-bench] mode=Tank Bank ticks=30000 bodies=8 packets=60500 payload=19024500 bytes_per_tick=6868.12 mean_us=15.975 p95_us=19.500 p99_us=21.500",
+        "[server-bench] mode=King of the Cul-de-sac ticks=30000 bodies=8 packets=60518 payload=19025886 bytes_per_tick=7070.44 mean_us=15.369 p95_us=16.600 p99_us=23.100",
+        "[server-bench] mode=roaming ticks=30000 bodies=8 packets=60000 payload=19020000 bytes_per_tick=6813.65 mean_us=14.607 p95_us=14.900 p99_us=18.700"
+      ],
+      "frames": 17999,
+      "sampled_steps": 360.0,
+      "callback_ms": [
+        0.4394,
+        0.594,
+        1.889
+      ],
+      "native_tail_ms": [
+        0.2135,
+        0.297,
+        0.358
+      ],
+      "wall_ms": [
+        0.1668,
+        0.206,
+        0.762
+      ],
+      "allocated_bytes": 4817464,
+      "physics_ticks": 360,
+      "elapsed": 3.0020669,
+      "world_hash": "BE2A53F325CC76F9BB1FBDA0E8E33C504B14CC5D8E12A6EC2759CFDCCD02DCB9",
+      "tanks": 40,
+      "live_tanks": 40
+    },
+    "headless-2-candidate": {
+      "policy": "[application] cost worlds=2 tanks=2 ticks=10000 bytes=0 mean-us=1.735 p95-us=1.800 p99-us=2.100",
+      "server": [
+        "[server-bench] mode=Tank Bank ticks=30000 bodies=8 packets=60500 payload=19024500 bytes_per_tick=6868.12 mean_us=16.264 p95_us=20.200 p99_us=24.500",
+        "[server-bench] mode=King of the Cul-de-sac ticks=30000 bodies=8 packets=60518 payload=19025886 bytes_per_tick=7070.44 mean_us=15.264 p95_us=16.400 p99_us=18.300",
+        "[server-bench] mode=roaming ticks=30000 bodies=8 packets=60000 payload=19020000 bytes_per_tick=6813.65 mean_us=14.667 p95_us=15.100 p99_us=19.200"
+      ],
+      "frames": 18448,
+      "sampled_steps": 360.0,
+      "callback_ms": [
+        0.4566,
+        0.595,
+        1.032
+      ],
+      "native_tail_ms": [
+        0.2143,
+        0.287,
+        0.318
+      ],
+      "wall_ms": [
+        0.1627,
+        0.201,
+        0.756
+      ],
+      "allocated_bytes": 4917920,
+      "physics_ticks": 360,
+      "elapsed": 3.0021811,
+      "world_hash": "BE2A53F325CC76F9BB1FBDA0E8E33C504B14CC5D8E12A6EC2759CFDCCD02DCB9",
+      "tanks": 40,
+      "live_tanks": 40
+    },
+    "headless-2-parent": {
+      "policy": "[application] cost worlds=2 tanks=2 ticks=10000 bytes=0 mean-us=1.755 p95-us=1.900 p99-us=2.600",
+      "server": [
+        "[server-bench] mode=Tank Bank ticks=30000 bodies=8 packets=60500 payload=19024500 bytes_per_tick=6868.12 mean_us=15.842 p95_us=19.700 p99_us=23.100",
+        "[server-bench] mode=King of the Cul-de-sac ticks=30000 bodies=8 packets=60518 payload=19025886 bytes_per_tick=7070.44 mean_us=15.086 p95_us=16.200 p99_us=28.200",
+        "[server-bench] mode=roaming ticks=30000 bodies=8 packets=60000 payload=19020000 bytes_per_tick=6813.65 mean_us=14.591 p95_us=15.400 p99_us=21.300"
+      ],
+      "frames": 18207,
+      "sampled_steps": 360.0,
+      "callback_ms": [
+        0.4357,
+        0.577,
+        1.245
+      ],
+      "native_tail_ms": [
+        0.2134,
+        0.307,
+        0.38
+      ],
+      "wall_ms": [
+        0.1648,
+        0.207,
+        0.758
+      ],
+      "allocated_bytes": 4867480,
+      "physics_ticks": 360,
+      "elapsed": 3.0019743,
+      "world_hash": "BE2A53F325CC76F9BB1FBDA0E8E33C504B14CC5D8E12A6EC2759CFDCCD02DCB9",
+      "tanks": 40,
+      "live_tanks": 40
+    },
+    "headless-3-candidate": {
+      "policy": "[application] cost worlds=2 tanks=2 ticks=10000 bytes=0 mean-us=1.710 p95-us=1.700 p99-us=1.900",
+      "server": [
+        "[server-bench] mode=Tank Bank ticks=30000 bodies=8 packets=60500 payload=19024500 bytes_per_tick=6868.12 mean_us=15.076 p95_us=15.400 p99_us=17.800",
+        "[server-bench] mode=King of the Cul-de-sac ticks=30000 bodies=8 packets=60518 payload=19025886 bytes_per_tick=7070.42 mean_us=15.813 p95_us=17.100 p99_us=29.800",
+        "[server-bench] mode=roaming ticks=30000 bodies=8 packets=60000 payload=19020000 bytes_per_tick=6813.65 mean_us=14.978 p95_us=15.300 p99_us=29.200"
+      ],
+      "frames": 18677,
+      "sampled_steps": 360.0,
+      "callback_ms": [
+        0.4199,
+        0.58,
+        0.966
+      ],
+      "native_tail_ms": [
+        0.172,
+        0.234,
+        0.277
+      ],
+      "wall_ms": [
+        0.1607,
+        0.181,
+        0.681
+      ],
+      "allocated_bytes": 4966208,
+      "physics_ticks": 360,
+      "elapsed": 3.0022039,
+      "world_hash": "BE2A53F325CC76F9BB1FBDA0E8E33C504B14CC5D8E12A6EC2759CFDCCD02DCB9",
+      "tanks": 40,
+      "live_tanks": 40
+    },
+    "headless-3-parent": {
+      "policy": "[application] cost worlds=2 tanks=2 ticks=10000 bytes=0 mean-us=1.728 p95-us=1.800 p99-us=1.800",
+      "server": [
+        "[server-bench] mode=Tank Bank ticks=30000 bodies=8 packets=60500 payload=19024500 bytes_per_tick=6868.12 mean_us=16.817 p95_us=19.500 p99_us=22.200",
+        "[server-bench] mode=King of the Cul-de-sac ticks=30000 bodies=8 packets=60518 payload=19025886 bytes_per_tick=7070.44 mean_us=15.482 p95_us=16.800 p99_us=19.400",
+        "[server-bench] mode=roaming ticks=30000 bodies=8 packets=60000 payload=19020000 bytes_per_tick=6813.65 mean_us=14.990 p95_us=15.700 p99_us=20.800"
+      ],
+      "frames": 18244,
+      "sampled_steps": 360.0,
+      "callback_ms": [
+        0.4282,
+        0.639,
+        1.791
+      ],
+      "native_tail_ms": [
+        0.1727,
+        0.228,
+        0.269
+      ],
+      "wall_ms": [
+        0.1645,
+        0.184,
+        0.69
+      ],
+      "allocated_bytes": 4875192,
+      "physics_ticks": 360,
+      "elapsed": 3.0020425,
+      "world_hash": "BE2A53F325CC76F9BB1FBDA0E8E33C504B14CC5D8E12A6EC2759CFDCCD02DCB9",
+      "tanks": 40,
+      "live_tanks": 40
+    },
+    "rendered-1-candidate": {
+      "policy": "[application] cost worlds=2 tanks=2 ticks=10000 bytes=0 mean-us=1.780 p95-us=1.800 p99-us=1.900",
+      "server": [],
+      "frames": 178,
+      "sampled_steps": 361.0,
+      "callback_ms": [
+        1.141,
+        1.353,
+        3.146
+      ],
+      "native_tail_ms": [
+        0.385,
+        0.513,
+        0.548
+      ],
+      "wall_ms": [
+        16.8514,
+        16.996,
+        18.388
+      ],
+      "allocated_bytes": 833320,
+      "physics_ticks": 361,
+      "elapsed": 3.0005819,
+      "world_hash": "BE2A53F325CC76F9BB1FBDA0E8E33C504B14CC5D8E12A6EC2759CFDCCD02DCB9",
+      "tanks": 40,
+      "live_tanks": 40
+    },
+    "rendered-1-parent": {
+      "policy": "[application] cost worlds=2 tanks=2 ticks=10000 bytes=0 mean-us=1.767 p95-us=1.800 p99-us=1.900",
+      "server": [],
+      "frames": 178,
+      "sampled_steps": 361.0,
+      "callback_ms": [
+        1.1497,
+        1.506,
+        3.161
+      ],
+      "native_tail_ms": [
+        0.3876,
+        0.523,
+        0.55
+      ],
+      "wall_ms": [
+        16.8521,
+        17.254,
+        18.383
+      ],
+      "allocated_bytes": 833064,
+      "physics_ticks": 361,
+      "elapsed": 3.0007066,
+      "world_hash": "BE2A53F325CC76F9BB1FBDA0E8E33C504B14CC5D8E12A6EC2759CFDCCD02DCB9",
+      "tanks": 40,
+      "live_tanks": 40
+    },
+    "rendered-2-candidate": {
+      "policy": "[application] cost worlds=2 tanks=2 ticks=10000 bytes=0 mean-us=1.792 p95-us=1.900 p99-us=1.900",
+      "server": [],
+      "frames": 178,
+      "sampled_steps": 360.0,
+      "callback_ms": [
+        1.1465,
+        1.359,
+        3.19
+      ],
+      "native_tail_ms": [
+        0.3832,
+        0.502,
+        0.534
+      ],
+      "wall_ms": [
+        16.8612,
+        17.258,
+        18.819
+      ],
+      "allocated_bytes": 824856,
+      "physics_ticks": 360,
+      "elapsed": 3.0022552,
+      "world_hash": "BE2A53F325CC76F9BB1FBDA0E8E33C504B14CC5D8E12A6EC2759CFDCCD02DCB9",
+      "tanks": 40,
+      "live_tanks": 40
+    },
+    "rendered-2-parent": {
+      "policy": "[application] cost worlds=2 tanks=2 ticks=10000 bytes=0 mean-us=1.797 p95-us=1.800 p99-us=2.000",
+      "server": [],
+      "frames": 178,
+      "sampled_steps": 361.0,
+      "callback_ms": [
+        1.1486,
+        1.473,
+        3.15
+      ],
+      "native_tail_ms": [
+        0.3893,
+        0.542,
+        0.582
+      ],
+      "wall_ms": [
+        16.8609,
+        17.251,
+        18.379
+      ],
+      "allocated_bytes": 833064,
+      "physics_ticks": 361,
+      "elapsed": 3.0023129,
+      "world_hash": "BE2A53F325CC76F9BB1FBDA0E8E33C504B14CC5D8E12A6EC2759CFDCCD02DCB9",
+      "tanks": 40,
+      "live_tanks": 40
+    },
+    "rendered-3-candidate": {
+      "policy": "[application] cost worlds=2 tanks=2 ticks=10000 bytes=0 mean-us=1.748 p95-us=1.800 p99-us=1.900",
+      "server": [],
+      "frames": 178,
+      "sampled_steps": 361.0,
+      "callback_ms": [
+        1.1656,
+        1.369,
+        3.184
+      ],
+      "native_tail_ms": [
+        0.4105,
+        0.546,
+        0.59
+      ],
+      "wall_ms": [
+        16.863,
+        17.219,
+        18.707
+      ],
+      "allocated_bytes": 824864,
+      "physics_ticks": 361,
+      "elapsed": 3.0024886,
+      "world_hash": "BE2A53F325CC76F9BB1FBDA0E8E33C504B14CC5D8E12A6EC2759CFDCCD02DCB9",
+      "tanks": 40,
+      "live_tanks": 40
+    },
+    "rendered-3-parent": {
+      "policy": "[application] cost worlds=2 tanks=2 ticks=10000 bytes=0 mean-us=1.754 p95-us=1.800 p99-us=1.900",
+      "server": [],
+      "frames": 178,
+      "sampled_steps": 361.0,
+      "callback_ms": [
+        1.1451,
+        1.414,
+        3.169
+      ],
+      "native_tail_ms": [
+        0.3875,
+        0.524,
+        0.568
+      ],
+      "wall_ms": [
+        16.8571,
+        17.193,
+        18.348
+      ],
+      "allocated_bytes": 824840,
+      "physics_ticks": 361,
+      "elapsed": 3.0014905,
+      "world_hash": "BE2A53F325CC76F9BB1FBDA0E8E33C504B14CC5D8E12A6EC2759CFDCCD02DCB9",
+      "tanks": 40,
+      "live_tanks": 40
+    }
+  }
+}
