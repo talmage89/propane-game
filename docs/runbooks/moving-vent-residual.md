@@ -46,7 +46,10 @@ the observer with an analytic accelerating COM and checks current velocity, reje
 rest anchoring. `BodyCorrectionTests` independently proves zero-motion hull queries detect a rotated floor overlap
 without changing the body's transform or contact-reporting settings. `BodyCorrectionBenchTests --correction-bench`
 measures 60,000 complete Match callbacks after 20,000 warm-up callbacks, with eight remote vents (four free-flight,
-four floor), 15 Hz publications and 150 ms sample transit. The fixture resets poses without advancing native physics;
+four floor), 15 Hz publications and 150 ms sample transit. Source poses and velocities are sampled 150 ms behind
+the observer's analytic pose; assertions require displaced samples so the existing geometry queries are exercised.
+`--correction-bench-aligned` retains the earlier diagnostic with coincident source/observer poses despite the transit.
+The fixture resets poses without advancing native physics;
 its allocation/mean/p95/p99 results do not replace native convergence or rendered observations. Copy this same probe
 into the isolated parent and alternate at least three parent/candidate pairs with machine load recorded.
 

@@ -31,6 +31,8 @@ public static class BodyCorrectionBenchTests
                 tank.CollisionMask = Layers.Floor;
             }
             var sequence = 0u;
+            var displacedSamples = 0;
+            var aligned = DevArgs.Get("correction-bench-aligned") != null;
             void Tick(int tick)
             {
                 server.Clock.Seconds += 1d / 120;
@@ -40,13 +42,17 @@ public static class BodyCorrectionBenchTests
                 for (var i = 0; i < tanks.Length; i++)
                 {
                     var tank = tanks[i];
-                    var height = i < 4 ? 10 + 2 * phase - 5 * phase * phase : 0;
-                    var pose = new Transform3D(Basis.Identity, new Vector3(80 + i * 2, height, 0));
+                    Transform3D Pose(float time) => new(Basis.Identity, new Vector3(
+                        80 + i * 2 + (i < 4 ? 0 : 5 * time * time), i < 4 ? 10 + 2 * time - 5 * time * time : 0, 0));
+                    var pose = Pose(phase);
                     tank.GlobalTransform = pose;
                     if (tick % 8 == 0)
                     {
-                        var velocity = i < 4 ? Vector3.Up * (2 - 10 * phase) : Vector3.Right * (10 * phase);
-                        match.Bodies.OnState(2, new BodyState(tank.NetId, pose, velocity, Vector3.Zero, 1, ++sequence),
+                        var sampledPhase = aligned ? phase : phase - .15f;
+                        var sampled = Pose(sampledPhase);
+                        if (sampled.Origin.DistanceTo(pose.Origin) > .01f) { displacedSamples++; }
+                        var velocity = i < 4 ? Vector3.Up * (2 - 10 * sampledPhase) : Vector3.Right * (10 * sampledPhase);
+                        match.Bodies.OnState(2, new BodyState(tank.NetId, sampled, velocity, Vector3.Zero, 1, ++sequence),
                             false, server.Clock.Seconds, .15);
                     }
                 }
@@ -78,9 +84,10 @@ public static class BodyCorrectionBenchTests
             Array.Sort(samples);
             TestRunner.Assert(match.IsPlaying && tanks.All(t => match.Bodies.Get(t.NetId) is { HasTarget: true, Owner: 2, ClaimPending: false }),
                 "correction workload stopped observing its owner");
+            TestRunner.Assert(displacedSamples == (aligned ? 0 : (int)sequence), "aged publication geometry coverage changed");
             match.Bodies.Clear();
             TestRunner.Assert(tanks.All(t => t.MaxContactsReported == 0 && !t.ContactMonitor), "benchmark changed native contact policy");
-            GD.Print(FormattableString.Invariant($"[correction-cost] vents={tanks.Length} free=4 floor=4 warmup={warmup} ticks={ticks} publications={sequence} bytes={bytes} mean_us={mean:F3} p95_us={samples[(int)(ticks * .95) - 1]:F3} p99_us={samples[(int)(ticks * .99) - 1]:F3}"));
+            GD.Print(FormattableString.Invariant($"[correction-cost] sample_pose={(aligned ? "aligned" : "aged")} vents={tanks.Length} free=4 floor=4 warmup={warmup} ticks={ticks} publications={sequence} displaced_samples={displacedSamples} bytes={bytes} mean_us={mean:F3} p95_us={samples[(int)(ticks * .95) - 1]:F3} p99_us={samples[(int)(ticks * .99) - 1]:F3}"));
         });
     }
 }
