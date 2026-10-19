@@ -209,6 +209,9 @@ public static class ParticipantServerTests
                         transport.BlockSends = true;
                         client.StatusChanged += (status, _) => { if (status == NetClient.Status.Offline) match.Session.Dispose(); };
                         match._Process(0);
+                        Assert(match.World.IsAlive && client.State == NetClient.Status.Offline,
+                            "failed readiness retired inside its render callback");
+                        client._Process(0);
                         Assert(!match.World.IsAlive && client.State == NetClient.Status.Offline && loaded == 0,
                             "failed readiness did not retire the match");
                         return;

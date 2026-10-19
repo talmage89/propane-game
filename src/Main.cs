@@ -349,7 +349,7 @@ public partial class Main : Node
 
     /// <summary>
     /// The lobby as the server describes it: a start staging (the stage counts down over the world) or taken back,
-    /// or this player out of it (the world goes, back to the lobby list).
+    /// or this player out of it (the world goes, back to the lobby list). A retired run also cancels pending scenes.
     /// </summary>
     private void OnLobbyChanged()
     {
@@ -364,6 +364,20 @@ public partial class Main : Node
             }
             return;
         }
+        if (lobby is { Phase: LobbyPhase.Waiting, WorldId: 0 } &&
+            (match is { IsOver: false } || menus.Current == Menus.Screen.Loading ||
+             match == null && net.ActiveMatchId != 0))
+        {
+            net.RetireMatchInbox(net.ActiveMatchId);
+            // As with Finished, navigate after the current notification returns: its delegate snapshot still
+            // contains the roaming world's lobby card. A newer setup must keep its own navigation.
+            var generation = matchGeneration;
+            Callable.From(() =>
+            {
+                if (generation == matchGeneration && net.Lobby is { Phase: LobbyPhase.Waiting, WorldId: 0 }) ReturnToLobby(null);
+            }).CallDeferred();
+            return;
+        }
         if (lobby.Phase == LobbyPhase.Staging && match is { IsLobby: true })
         {
             ClosePanel();
@@ -373,11 +387,6 @@ public partial class Main : Node
         {
             // The creator took the start back (or left): back to roaming.
             stage.Close();
-        }
-        if (lobby is { Phase: LobbyPhase.Waiting, WorldId: 0 } && match == null && menus.Current == Menus.Screen.Loading)
-        {
-            // This server runs no lobby worlds: the lobby menu, as before.
-            ShowMenus(Menus.Screen.Lobby);
         }
     }
 

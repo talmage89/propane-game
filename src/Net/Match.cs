@@ -132,7 +132,6 @@ public partial class Match : Node3D, IClientAuthorityReplica, IClientModeReplica
         if (loadingFrames > 0 && --loadingFrames == 0)
         {
             Send(new NetWriter(Msg.Loaded, Setup.Id));
-            if (!World.IsAlive) return; // A required-send failure can synchronously retire the session.
         }
         var dt = (float)delta;
         viewBinding.Reveal(dt);

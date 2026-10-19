@@ -33,6 +33,11 @@ public partial class MenuTest : Node
         main = new Main { Name = "Main" };
         AddChild(main);
         main.GetNode<UI.Menus>("Menus").HostPort = (int)DevArgs.GetFloat("port", Net.Protocol.DefaultPort);
+        if (DevArgs.Get("scenario") == "retirement")
+        {
+            AddChild(new MenuRetirementTest { Main = main });
+            return;
+        }
         if (DevArgs.Get("scenario") == "input")
         {
             AddChild(new MenuDeviceInputTest { Main = main });
