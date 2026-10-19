@@ -1,0 +1,13 @@
+pair,revision,sample_pose,spin,vents,free,floor,warmup,ticks,publications,displaced_samples,bytes,mean_us,p95_us,p99_us,load_before,load_after,log
+1,candidate,aged,0,8,4,4,20000,60000,80008,80008,39962016,27.701,53.000,56.600,2.02,2.02,build/fu2b-v3-cost-spin0-1-candidate.txt
+1,parent,aged,0,8,4,4,20000,60000,80008,80008,72605472,33.056,95.100,102.400,2.02,2.02,build/fu2b-v3-cost-spin0-1-parent.txt
+2,candidate,aged,0,8,4,4,20000,60000,80008,80008,39962016,28.032,53.300,56.300,2.02,1.94,build/fu2b-v3-cost-spin0-2-candidate.txt
+2,parent,aged,0,8,4,4,20000,60000,80008,80008,72605472,33.483,96.700,104.700,1.94,1.86,build/fu2b-v3-cost-spin0-2-parent.txt
+3,candidate,aged,0,8,4,4,20000,60000,80008,80008,39962016,27.598,52.000,55.600,1.79,1.81,build/fu2b-v3-cost-spin0-3-candidate.txt
+3,parent,aged,0,8,4,4,20000,60000,80008,80008,72605472,32.702,92.900,98.700,1.86,1.79,build/fu2b-v3-cost-spin0-3-parent.txt
+1,candidate,aged,28,8,4,4,20000,60000,80008,80008,39962016,30.664,55.600,59.700,1.82,1.76,build/fu2b-v3-cost-spin28-1-candidate.txt
+1,parent,aged,28,8,4,4,20000,60000,80008,80008,72605472,34.581,97.700,105.400,1.81,1.82,build/fu2b-v3-cost-spin28-1-parent.txt
+2,candidate,aged,28,8,4,4,20000,60000,80008,80008,39962016,31.205,57.100,61.500,1.76,1.70,build/fu2b-v3-cost-spin28-2-candidate.txt
+2,parent,aged,28,8,4,4,20000,60000,80008,80008,72605472,34.325,97.000,106.300,1.70,1.64,build/fu2b-v3-cost-spin28-2-parent.txt
+3,candidate,aged,28,8,4,4,20000,60000,80008,80008,39962016,31.015,57.300,61.200,1.59,1.54,build/fu2b-v3-cost-spin28-3-candidate.txt
+3,parent,aged,28,8,4,4,20000,60000,80008,80008,72605472,34.981,99.000,108.200,1.64,1.59,build/fu2b-v3-cost-spin28-3-parent.txt

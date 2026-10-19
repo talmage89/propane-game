@@ -1,0 +1,42 @@
+{
+  "parent": {
+    "n": 10,
+    "failures": 0,
+    "exact_95_clopper_pearson": [
+      0.0,
+      0.3084971078187607
+    ],
+    "runs": [
+      "fu2b-v3-rifle-01-parent",
+      "fu2b-v3-rifle-02-parent",
+      "fu2b-v3-rifle-03-parent",
+      "fu2b-v3-rifle-04-parent",
+      "fu2b-v3-rifle-05-parent",
+      "fu2b-v3-rifle-06-parent",
+      "fu2b-v3-rifle-07-parent",
+      "fu2b-v3-rifle-08-parent",
+      "fu2b-v3-rifle-09-parent",
+      "fu2b-v3-rifle-10-parent"
+    ]
+  },
+  "candidate": {
+    "n": 10,
+    "failures": 0,
+    "exact_95_clopper_pearson": [
+      0.0,
+      0.3084971078187607
+    ],
+    "runs": [
+      "fu2b-v3-rifle-01-candidate",
+      "fu2b-v3-rifle-02-candidate",
+      "fu2b-v3-rifle-03-candidate",
+      "fu2b-v3-rifle-04-candidate",
+      "fu2b-v3-rifle-05-candidate",
+      "fu2b-v3-rifle-06-candidate",
+      "fu2b-v3-rifle-07-candidate",
+      "fu2b-v3-rifle-08-candidate",
+      "fu2b-v3-rifle-09-candidate",
+      "fu2b-v3-rifle-10-candidate"
+    ]
+  }
+}

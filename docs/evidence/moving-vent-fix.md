@@ -1,7 +1,7 @@
 # Moving-vent correction experiments (FU2b)
 
-**Status:** Candidate verification. Rejected variants are retained below. The authored mean-force experiment
-passes all controlled cases and its ordinary matrix; uninstrumented final-head acceptance remains open.
+**Status:** FU2b candidate verification complete: controlled/native cohorts and the final full sweep pass.
+Two earlier deep-sweep failures are retained below with unresolved causes and clean paired diagnostic runs.
 
 2026-10-19, Linux x86-64, Godot 4.7.2 .NET/Jolt. Immediate parent: `3c07559` (C2).
 The [FU2a investigation](moving-vent-residual.md) and [observation runbook](../runbooks/moving-vent-residual.md)
@@ -218,3 +218,169 @@ Removing exactly the five new tuner metadata entries recovers the complete origi
 and every Lab field/window/summary/tick count. Only StartMatch/client and MatchStart/server differ among 81 wire
 fixtures, solely their tuner dictionaries. [Reference review](moving-vent-fix/reference-review.json) retains the
 asserted inventory. This supersedes the three-tuner intermediate metadata refresh.
+
+
+## Final-code controlled comparisons and cost
+
+Fresh schema-4 observations preserve owner contact policy. Three parent terminal arcs fail at
+0.715 / 0.760 / 0.796 m, while the candidate passes at 0.051 / 0.071 / 0.094 m.
+Candidate clean arcs pass at 0.003 / 0.086 / 0.015 m, within FU2a's 0.117254 m maximum.
+Two additional 28 rad/s parent arcs fail at 0.673 / 0.725 m; the candidate passes at 0.013 / 0.108 m.
+All six candidate faulted/clean floor controls pass. Both candidate 240 ms controls pass (0.214 m and an empty
+final-moving set); the parent fails the first at 0.833 m. Both builds pass canonical refusal, future-epoch and
+body-stream scenarios. All three 300 m/s straight-line timing diagnostics still fail on each build; these are
+retained inherited failures, rather than evidence for low-speed correction. Selected final/rejected commands and results are in the
+[run table](moving-vent-fix/runs.csv); the [complete native inventory](moving-vent-fix/all-runs.csv) retains all 453 attempts, including checker failures and the excluded interrupted invocation.
+
+The uninstrumented repeat cohort has **0/10 candidate and 0/10 parent failures**. Five complete alternating pairs
+per shard use opposite within-pair order across the two shards. Each run records machine-wide uptime before,
+every five seconds and afterward. The exact two-sided Clopper–Pearson 95% interval is **[0, 0.308497107819]**
+for each build (`1 - 0.025^(1/10)` at the upper bound). These seeded native runs are conditional counts, not an
+IID population estimate or statistical proof of a reduced failure rate. [Intervals and run names](moving-vent-fix/rifle-intervals.json).
+
+[Source hashes](moving-vent-fix/source-hashes.json) assert all 249 non-Dev C# files in each uninstrumented build
+against `3c07559` and `8580fbe`, with no observation hooks. The identical benchmark's SHA-256 is
+`5308912065265c85c413714864de451dc7ddab75b049b8a315a66e2784b999e7`.
+Six alternating cost pairs (three each at 0/28 rad/s, reverse pair order on the second pair) use eight vents,
+four free and four geometrically overlapping the floor, 20,000 warm-up and 60,000 measured whole Match callbacks,
+and 80,008 publications including warm-up. All publications exercise displaced-sample geometry. Native physics
+does not advance inside the controlled timed loop; the native runs separately exercise integration and contact.
+
+[Cost rows](moving-vent-fix/cost.csv) retain allocation, mean/p95/p99 and load before/after each run:
+managed allocation is **72,605,472 → 39,962,016 bytes**, equal across all pairs of each build. At zero spin,
+parent/candidate mean ranges are 32.702–33.483 / 27.598–28.032 µs; at 28 rad/s,
+34.325–34.981 / 30.664–31.205 µs. All six candidate p95/p99 values improve. No owned compilation or deep
+sweep overlaps these pairs. Earlier aligned-source diagnostics and observed-build allocation measurements are
+not substituted for this final aged-source workload; their limitations remain recorded above.
+
+
+## Uninstrumented matrix and native crowd checks
+
+The final uninstrumented matrix passes **16/16**, maximum final moving 0.414 m, with the original seeds
+24–27 crossed with fault seeds 1–4 at 120/30/3. Three original runs complete before an external 143 termination;
+the interrupted fourth is excluded, and thirteen fresh-directory retakes complete the predeclared matrix.
+The independent observed authored-force matrix above remains a separate 16/16 cohort.
+
+All sixteen clean/faulted, 4/8-bot Bank/King parent/candidate runs pass, with complete matching audits, zero
+engine/protocol errors and no unobserved grids. Each uses the existing launcher, one rendered client,
+960×540 and disabled vsync; each retains uptime snapshots. Native trajectories and workload counts can differ
+between builds. These are integration/convergence checks, not a controlled frame-time differential.
+
+| Bots/mode/profile | Parent rest/moving peak (m) | Candidate rest/moving peak (m) |
+| --- | --- | --- |
+| 4/bank/clean | 0.130/2.969 | 0.148/0.818 |
+| 4/bank/faults | 0.160/4.304 | 0.125/4.691 |
+| 4/king/clean | 0.113/1.170 | 0.201/0.804 |
+| 4/king/faults | 0.025/4.456 | 0.155/5.687 |
+| 8/bank/clean | 0.174/2.292 | 0.169/1.666 |
+| 8/bank/faults | 0.162/4.607 | 0.189/7.366 |
+| 8/king/clean | 0.157/2.323 | 0.190/2.482 |
+| 8/king/faults | 0.241/9.041 | 0.162/4.550 |
+
+
+## Trajectory comparison and rendered review
+
+The four final `puncture-race` runs pass their native assertions, common checker and score audits.
+`python3 -B tools/dev/compare_vents.py build/CASE/bot*.log` uses the unchanged default tolerance:
+
+| Profile/build | Pairs | Median / p95 / max (m) |
+| --- | --- | --- |
+| clean parent | 279 | 0.053 / 0.092 / 0.119 |
+| clean candidate | 279 | 0.058 / 0.107 / 0.139 |
+| faulted parent | 280 | 0.092 / 0.177 / 0.239 |
+| faulted candidate | 280 | 0.100 / 0.182 / 0.253 |
+
+The candidate numbers are slightly higher in this pair; no trajectory improvement is claimed. This measures
+within-run client divergence, not equality of physical paths between builds. Faulted canonical winners differ
+(parent owner 2, candidate owner 3), with opposite hole sides; clean parameters also have small native float
+rounding differences. Every client within each run agrees on its complete canonical parameters.
+
+Reviewed final images: `build/fu2b-v3-network-4-bank-clean-candidate/shots/Bot1_060.0.png` shows the rendered
+suburb, player/HUD and explosion smoke. Both
+`build/fu2b-v3-trajectories-race-{clean,faults}-candidate/shots/Bot1_race_600.png` show an airborne rotating vent
+with its jet/flame plume and intact scene/HUD. The faulted image is the remote owner's tank on Bot1.
+Stills verify rendering; numerical trajectories and native assertions provide the motion proof.
+
+`make check` completes successfully on the final production/harness code: warning-free Debug and ExportRelease,
+681 unit assertions, all behavior/real-device input, bounded generator and separate-process world/segment checks,
+and gate self-tests including 51 compiled / 16 source architecture negatives. Deliberately malformed-packet and
+failed-capture unit fixtures retain their expected diagnostics. An earlier gate and matrix scheduler received
+external exit 143 without a code diagnostic; the gate retake passes, and the interrupted matrix run is excluded.
+`make test-equivalence` also passes all five Lab scenarios and the wire/schema/world/publication checks after the
+reviewed metadata refresh. The final deep sweep is recorded separately after completion.
+
+Completed diagnostic traces were losslessly compressed: 882 files, 82,031,455,632 original bytes to
+17,209,517,968 gzip bytes. No native verdict, record or command was dropped. There are no large recordings.
+
+
+## First deep-sweep failure and diagnosis
+
+The first `make -j4 test-full` exits **2**, because lifetime shard 3 logs
+`System.InvalidOperationException: Handle is not initialized` in Godot's
+`ScriptManagerBridge.SwapGCHandleForType`, reached through `ResourceLoader.Load<Shader>` at
+`ExplosionEffect._Ready:137` while loading `fx_shockwave.gdshader`. The lifecycle assertions still finish stable
+and print PASS; the unchanged clean-engine-log gate correctly rejects the error. The failed invocation is retained
+in `build/fu2b-v3-full-failure/`. It is not a passing full sweep.
+
+ExplosionEffect, Warmup, LabSession, SessionFactory and lifetime scenario source are identical to the parent.
+Three valid alternating optimized-Debug parent/candidate pairs of lifetime shard 3 (ten cycles each) are all clean,
+with their optimized-build guards and lifecycle/resource assertions passing. An initial parent probe was rejected
+by that guard because an incremental build retained ordinary Debug; it is excluded, and an explicit
+`--no-incremental -p:Optimize=true` rebuild precedes all valid parent samples. One extra candidate probe also passes.
+[Diagnosis rows](moving-vent-fix/lifetime-retakes.json) record the six valid samples. The original GC-handle exception
+has **not** been reproduced on the parent, so its cause remains unresolved; it is not declared inherited.
+No FX, engine, lifetime, rule or checker change is made to hide it. The complete unchanged deep gate is retried.
+
+
+## Second deep-sweep failure and diagnosis
+
+The second complete attempt also exits **2**, this time in Dissolve seed 12:
+`a caught runner falls (y=1.1, ragdolled=False)`. The first full attempt passed that shard. This failure is
+preserved in `build/fu2b-v3-full-failure-2/`; no lifetime or Dissolve assertion is weakened. The H2 deadline fix
+and final fall assertion are unchanged on this branch. Three alternating optimized-Debug parent/candidate pairs
+of the exact 300-second seed-12/tracking case all pass with clean engine logs and all fall/score/stream/resource
+assertions. [Dissolve diagnosis rows](moving-vent-fix/dissolve-retakes.json) retain commands, loads and outcomes.
+The first failure has not been reproduced on the parent; its cause is also unresolved, rather than declared
+inherited. No gameplay, FX, engine or other package's harness is changed. A third complete unchanged full sweep
+is run to finish the still-open all-shard acceptance obligation; both earlier failures remain in this record.
+
+## Scope, ownership and compatibility
+
+Production changes are limited to `BodySync`, five tuners in `Tuning.70.Match`, and the read-only simulation-age
+accessor in `PropaneTank`. No mutable owner is extracted, no runtime type/file is added, and no dependency is
+removed or added across a forbidden edge. The architecture baseline remains empty. The two new source-site
+approvals are Dev-only Stopwatch measurement sites, with no gameplay clock.
+
+Per-entry acceleration history resets across authority, rest, prediction, stale-history and replacement
+boundaries. The borrowed native gravity view is dropped before authority/rebind/retirement; the native body
+owns and destroys it. Registry query scratch is disposed on clearing or final body removal. Temporary observer
+contact reporting restores its original limit. Owners retain their contact policy, jet, flutter, spin limit,
+physics clock and ordinary gameplay. Network sampling/publication deadlines retain the monotonic clock;
+the vent-age accessor reads the existing physics clock. No RNG call, traversal order, callback boundary or scene
+processing order is added. Reliable grouping and numerical correction behavior deliberately change as classified.
+
+Other owners' files touched: `PropaneTank` supplies the accessor only; `AuthorityTests` retains explicit 0.25 s
+mixed-disposable coverage; `PublicationReferenceTests` pins the original interval and strengthens assertions that
+both disposable and required-send failures occur. The separate default-policy test covers the new interval.
+The FX, Dissolve and lifetime sources involved in the two full-gate failures remain untouched.
+
+This is a **minor release**: shared correction, publication reliability and five tuner entries change.
+No message changes shape. `Protocol.Version` remains **3**. Linux runtime/rendering is verified; Windows and
+Apple Silicon macOS runtime execution is not performed by this worktree.
+
+
+## Final deep-sweep completion
+
+The third unchanged `make -j4 test-full` exits **0** (`build/fu2b-v3-test-full-third.txt`) at production/harness
+head `3764ba5`, after the two failed attempts documented above. No production, harness, rule or checker code
+changes between these attempts. All four generator and lifetime shards, navigation **700/700**, deep piles,
+menu/range probes and all Lab shards pass. Coverage checks report **550 cases**, including **514 dial fixtures**,
+exactly once across 25 Lab shards. The final ordinary-Debug bot gates pass: rifle final moving **0.155 m**,
+two-match duel **0.164 m**, and loading-readiness **0 m**; every score audit completes with no unobserved grids.
+The rifle gate is one extra successful candidate run, separate from the predeclared ten-repeat cohort.
+
+The two earlier full failures remain material verification history: neither the GC-handle exception nor the
+standing caught runner has been reproduced in the three valid paired standalone checks. Their causes are
+unresolved. A successful full retry does not establish that those other-package cases are free of intermittent
+failures. This branch makes no change to conceal them. Final changes after this tested code head are evidence,
+runbook and index text only. `check_links.py` and staged whitespace checks cover those final records.

@@ -137,10 +137,11 @@ Pass a tuning override to every client and `--expect-vent-blend=VALUE` to reject
 This is independent of the historical acceleration/floor/lead/cadence switches and is never inserted into checkout
 runtime sources.
 
-For the later fast-spin experiments on an FU2b scratch candidate, prepare with
+For the later fast-spin experiments on an unmodified `876c22a` scratch candidate, prepare with
 `vent_correction_experiment.py --spin-average` (optionally `--settling`), then enable
 `--vent-experiment-spin-average` and assert `--expect-spin-average=20`. The separate
 `--authored-spin` preparer option adds `--vent-experiment-authored-spin`, replacing fitted axial acceleration
-with the existing authored mean jet force. Run `body_correction_tests --spin-average-proof` or
-`--authored-spin-proof` with the corresponding switches to exercise the native component and replacement
-oracles. These switches never affect ordinary exported production builds.
+with the existing authored mean jet force. The historical opt-in component/replacement oracles are retained at harness revision `8e04d17`; use that
+harness with the corresponding switches when reproducing old models. The promoted production harness runs its
+authored-force and replacement assertions in ordinary `body_correction_tests`, without a switch. Historical
+preparers refuse already promoted production source atomically. Experimental switches never affect exports.

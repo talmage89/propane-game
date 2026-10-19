@@ -1,0 +1,31 @@
+{
+  "tested_code_head": "3764ba5",
+  "source_revision": "8580fbe",
+  "attempts": [
+    {
+      "command": "make -j4 test-full",
+      "log": "build/fu2b-v3-full-failure/full.log",
+      "exit": 2,
+      "failure": "lifetime shard 3 ResourceLoader/GCHandle exception"
+    },
+    {
+      "command": "make -j4 test-full",
+      "log": "build/fu2b-v3-full-failure-2/full.log",
+      "exit": 2,
+      "failure": "Dissolve seed 12 caught runner standing"
+    },
+    {
+      "command": "make -j4 test-full",
+      "log": "build/fu2b-v3-test-full-third.txt",
+      "exit": 0,
+      "lab_cases": 550,
+      "dial_fixtures": 514,
+      "navigation": "700/700",
+      "rifle_final_moving_m": 0.155,
+      "duel_final_moving_m": 0.164,
+      "readiness_final_moving_m": 0
+    }
+  ],
+  "code_changes_between_attempts": false,
+  "earlier_failure_causes": "unresolved; retained; three valid paired standalone runs per case were clean"
+}
