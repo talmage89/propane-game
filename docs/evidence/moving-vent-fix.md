@@ -105,3 +105,16 @@ disposable and required send failures actually occur. Against `build/fu2b-refere
 publication reference passes unchanged (one test, zero failures). A separate production publication test compares
 0.25/0.05 s policies, requires sustained reliable motion at 0.05 s and proves identical per-body sample counts.
 The eventual reference refresh will restore the original publication bytes rather than dropping failure coverage.
+
+## Superseding reference review (876c22a)
+
+The final reference workload pins its original 0.25 s cadence and asserts both disposable and reliable send
+failures. The explicit refresh after rebuilding `876c22a` is retained in
+`build/fu2b-reference-refresh-v2-verified.txt`; all five Lab scenarios and the wire/schema/world/publication pass.
+`build/fu2b-reference-review.py` independently asserts byte-identical original world, segment and 48-envelope
+publication fixtures. Removing exactly the three new tuner metadata entries makes the complete schema/UI/shared
+snapshot and all five Lab documents identical to the original, including every window, summary and tick count.
+Only StartMatch/client and MatchStart/server change among the 81 wire fixtures, solely their tuner dictionaries.
+This supersedes the interim 53-envelope publication refresh, which did not preserve all negative-path coverage.
+The earlier `fu2b-reference-refresh-v2` attempt was stopped after detecting an assembly built with the rejected
+100 rad/s spin bound; its partial files and results are excluded. A warning-free rebuild precedes the verified refresh.

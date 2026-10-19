@@ -1,8 +1,8 @@
 {
   "format": 1,
-  "production_revision": "b95385603e4d8a8681b9170b1869d2bda2733c65",
-  "instrumentation_revision": "b95385603e4d8a8681b9170b1869d2bda2733c65",
-  "instrumentation_sources_sha256": "4841d8cfca25c37f4c4b2e51c837f3dd381e1eccffc591d4d7490229d81b3499",
+  "production_revision": "876c22a72f9bac216b2adb8abca58231cdd99b2f",
+  "instrumentation_revision": "876c22a72f9bac216b2adb8abca58231cdd99b2f",
+  "instrumentation_sources_sha256": "ac611e305128d437cb88a30ed5ca38c230ffb61482fce4dcfef037fee28d3eaa",
   "engine": "4.7.2.stable.mono.arch_linux.ed1daf0bf",
   "dotnet": "10.0.113",
   "configuration": "Debug, Linux x86_64, headless, physics 120 Hz, process fixed 60 FPS",
@@ -74,7 +74,7 @@
       "--max-idle-worst=0.3",
       "--replay-random",
       "--tune.HitstopDuration=0",
-      "--equivalence-trace=$CHECKOUT/build/fu2b-reference-refresh/run-1/bank.json"
+      "--equivalence-trace=$CHECKOUT/build/fu2b-reference-refresh-v2-verified/run-1/bank.json"
     ],
     [
       "godot-mono",
@@ -97,7 +97,7 @@
       "--max-idle-worst=0.4",
       "--replay-random",
       "--tune.HitstopDuration=0",
-      "--equivalence-trace=$CHECKOUT/build/fu2b-reference-refresh/run-1/king.json"
+      "--equivalence-trace=$CHECKOUT/build/fu2b-reference-refresh-v2-verified/run-1/king.json"
     ],
     [
       "godot-mono",
@@ -111,7 +111,7 @@
       "--scenario=rules",
       "--replay-random",
       "--tune.HitstopDuration=0",
-      "--equivalence-trace=$CHECKOUT/build/fu2b-reference-refresh/run-1/spill-chain.json"
+      "--equivalence-trace=$CHECKOUT/build/fu2b-reference-refresh-v2-verified/run-1/spill-chain.json"
     ],
     [
       "godot-mono",
@@ -125,7 +125,7 @@
       "--scenario=shortfuse-combo",
       "--replay-random",
       "--tune.HitstopDuration=0",
-      "--equivalence-trace=$CHECKOUT/build/fu2b-reference-refresh/run-1/shortfuse.json"
+      "--equivalence-trace=$CHECKOUT/build/fu2b-reference-refresh-v2-verified/run-1/shortfuse.json"
     ],
     [
       "godot-mono",
@@ -139,7 +139,7 @@
       "--scenario=reference-retirement",
       "--replay-random",
       "--tune.HitstopDuration=0",
-      "--equivalence-trace=$CHECKOUT/build/fu2b-reference-refresh/run-1/dissolve.json"
+      "--equivalence-trace=$CHECKOUT/build/fu2b-reference-refresh-v2-verified/run-1/dissolve.json"
     ]
   ]
 }
