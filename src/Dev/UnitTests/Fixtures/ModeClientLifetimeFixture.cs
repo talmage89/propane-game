@@ -96,7 +96,7 @@ internal static class ModeClientLifetimeFixture
     [MethodImpl(MethodImplOptions.NoInlining)]
     public static WeakReference[] FailedAssembly(TestRunner runner, MatchSetup setup, IMonotonicClock clock)
     {
-        var net = new NetClient(PacketTransports.CreateClient(), clock);
+        var net = new NetClient(PacketTransports.CreateClient(), ModeRegistry.Codec, clock);
         Handshake.Welcome(net, 2);
         var match = new Match { Net = net, Setup = setup, Clock = clock, CreateLocalView = false };
         try

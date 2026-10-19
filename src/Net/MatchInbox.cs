@@ -40,17 +40,24 @@ public sealed class MatchInbox
 
     public void Receive(NetMessage message, int wireBytes)
     {
-        if (MatchId == 0 || message.MatchId != MatchId) { return; }
+        if (!TryReceive(message, wireBytes)) throw new OverflowException();
+    }
+
+    /// <summary>False only for queue admission overflow; receiver exceptions always propagate as dispatch failures.</summary>
+    internal bool TryReceive(NetMessage message, int wireBytes)
+    {
+        if (MatchId == 0 || message.MatchId != MatchId) { return true; }
         if (receiver != null)
         {
             receiver(message);
-            return;
+            return true;
         }
-        if (wireBytes < 0 || pending.Count >= MaxPackets || wireBytes > MaxBytes - pendingBytes) { Overflows++; throw new OverflowException(); }
+        if (wireBytes < 0 || pending.Count >= MaxPackets || wireBytes > MaxBytes - pendingBytes) { Overflows++; return false; }
         pending.Enqueue((message, wireBytes));
         pendingBytes += wireBytes;
         PeakPackets = Math.Max(PeakPackets, pending.Count);
         PeakBytes = Math.Max(PeakBytes, pendingBytes);
+        return true;
     }
 
     /// <summary>Called only after the scene has all bodies, UI and callbacks. Replays each queued event once.</summary>

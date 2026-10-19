@@ -202,7 +202,7 @@ public partial class MenuGamepadTest : Node
         var extraLobbies = new List<NetClient>();
         for (var i = 0; i < 4; i++)
         {
-            var extra = new NetClient();
+            var extra = new NetClient(PacketTransports.CreateClient(), ModeRegistry.Codec);
             AddChild(extra);
             extra.Connect("127.0.0.1", Menus.HostPort, $"Fixture {i + 1}", 0);
             await Wait(() => extra.State == NetClient.Status.Connected, "extra browser fixture connected").ConfigureAwait(true);
@@ -210,7 +210,7 @@ public partial class MenuGamepadTest : Node
             await Wait(() => extra.Lobby != null, "extra browser lobby created").ConfigureAwait(true);
             extraLobbies.Add(extra);
         }
-        var fixture = new NetClient { Name = "BrowserFixture" };
+        var fixture = new NetClient(PacketTransports.CreateClient(), ModeRegistry.Codec) { Name = "BrowserFixture" };
         AddChild(fixture);
         fixture.Connect("127.0.0.1", Menus.HostPort, "Menu fixture", (Net.Appearance.LegacyIndex + 1) % AppearancePalette.PlayerColors.Length);
         await Wait(() => fixture.State == NetClient.Status.Connected, "fixture connected").ConfigureAwait(true);

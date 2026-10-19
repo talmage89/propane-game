@@ -17,7 +17,7 @@ public static class LifecycleTests
         runner.Run("lifecycle/body sampling converts to server time only after a ping", () =>
         {
             var clock = new ManualClock();
-            var client = new NetClient(PacketTransports.CreateClient(), clock);
+            var client = new NetClient(PacketTransports.CreateClient(), ModeRegistry.Codec, clock);
             try
             {
                 TestRunner.Assert(client.BodySampleTime(4) == 0, "unsynchronized sample invented a server clock");
@@ -229,7 +229,7 @@ public static class LifecycleTests
 
     private static NetClient Client()
     {
-        var client = new NetClient();
+        var client = new NetClient(PacketTransports.CreateClient(), ModeRegistry.Codec);
         foreach (var type in new[] { Msg.Welcome, Msg.LobbyState })
         {
             client.Handle(MessageCodec.Encode(ProtocolTests.Fixtures().Single(f => f.Type == type), true));

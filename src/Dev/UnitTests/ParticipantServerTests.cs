@@ -188,7 +188,7 @@ public static class ParticipantServerTests
                 var transport = network.Create();
                 var endpoint = new PacketEndpoint("", 1);
                 server.Listen(endpoint, 1);
-                var client = new NetClient(transport, f.Clock);
+                var client = new NetClient(transport, ModeRegistry.Codec, f.Clock);
                 Match? match = null;
                 try
                 {
@@ -225,7 +225,7 @@ public static class ParticipantServerTests
         runner.Run("participants/same-peer shot and melee use one event path and dedupe echoes", () =>
         {
             using var f = new ServerFixture(bots: 1);
-            var client = new NetClient();
+            var client = new NetClient(PacketTransports.CreateClient(), ModeRegistry.Codec);
             client.Handle(MessageCodec.Encode(new NetMessage(Msg.Welcome, 0, 0, new WelcomeMessage(2, null)), true));
             var match = new Match { Net = client, Setup = f.Setup, CreateLocalView = false };
             runner.AddChild(match);
@@ -282,7 +282,7 @@ public static class ParticipantServerTests
         runner.Run("participants/delayed view stages its actor before buffered blast delivery", () =>
         {
             using var fixture = new ServerFixture();
-            var client = new NetClient();
+            var client = new NetClient(PacketTransports.CreateClient(), ModeRegistry.Codec);
             client.Handle(MessageCodec.Encode(new NetMessage(Msg.Welcome, 0, 0, new WelcomeMessage(2, null)), true));
             client.Handle(MessageCodec.Encode(new NetMessage(Msg.LobbyState, 0, 0, new LobbyInfo(1, 2, 10,
                 LobbyPhase.Loading, fixture.Setup.Players.Select(p => p.Player).ToArray())), true));
@@ -343,7 +343,7 @@ public static class ParticipantServerTests
         });
         runner.Run("participants/client ignores stale roster revisions and foreign lobbies", () =>
         {
-            var client = new NetClient();
+            var client = new NetClient(PacketTransports.CreateClient(), ModeRegistry.Codec);
             try
             {
                 foreach (var type in new[] { Msg.Welcome, Msg.LobbyState })

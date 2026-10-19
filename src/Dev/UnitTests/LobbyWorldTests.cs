@@ -324,7 +324,7 @@ public static class LobbyWorldTests
             using var f = new LobbyWorldFixture(3);
             var start = f.World(2);
             using var template = new Tuning();
-            var client = new NetClient { Template = template, LobbyWorlds = true };
+            var client = new NetClient(PacketTransports.CreateClient(), ModeRegistry.Codec) { Template = template, LobbyWorlds = true };
             Match? world = null;
             try
             {

@@ -23,13 +23,16 @@ public partial class NetClient : Node
     private const double ConnectTimeout = 8.0;
 
     private readonly IPacketTransport transport;
+    private readonly PacketCodec codec;
     private readonly IMonotonicClock clock;
     private ConnectionHandle? server;
 
-    public NetClient() : this(PacketTransports.CreateClient()) { }
-    public NetClient(IPacketTransport transport, IMonotonicClock? clock = null)
+    // Godot script instantiation cannot select application-owned transport or codec inputs.
+    public NetClient() => throw new InvalidOperationException("NetClient requires transport and codec inputs");
+    public NetClient(IPacketTransport transport, PacketCodec codec, IMonotonicClock? clock = null)
     {
-        this.transport = transport;
+        this.transport = transport ?? throw new ArgumentNullException(nameof(transport));
+        this.codec = codec ?? throw new ArgumentNullException(nameof(codec));
         this.clock = clock ?? MonotonicClock.Instance;
     }
     private double connectStarted;
@@ -103,7 +106,11 @@ public partial class NetClient : Node
     public (int Packets, int Bytes, int Overflows) InboxPressure => (inbox.PeakPackets, inbox.PeakBytes, inbox.Overflows);
 
     /// <summary>Hands queued and subsequent messages to a fully initialized match.</summary>
-    public bool AttachMatch(int id, Action<NetMessage> receiver) => inbox.Attach(id, receiver);
+    public bool AttachMatch(int id, Action<NetMessage> receiver)
+    {
+        try { return inbox.Attach(id, receiver); }
+        catch (Exception error) { Fail("inbox replay", error); return false; }
+    }
 
     public void DetachMatch(int id, Action<NetMessage> receiver) => inbox.Detach(id, receiver);
 
@@ -192,17 +199,21 @@ public partial class NetClient : Node
 
     private void PollNetwork()
     {
-        transport.Poll();
-        var now = clock.Seconds;
-        if (State == Status.Connecting && now - connectStarted > ConnectTimeout)
+        try
         {
-            Drop(new DisconnectReason(DisconnectKind.Timeout, "The server did not answer. Check the address, the port and that the server is running."));
+            transport.Poll();
+            var now = clock.Seconds;
+            if (State == Status.Connecting && now - connectStarted > ConnectTimeout)
+            {
+                Drop(new DisconnectReason(DisconnectKind.Timeout, "The server did not answer. Check the address, the port and that the server is running."));
+            }
+            if (State == Status.Connected && now >= nextPing)
+            {
+                nextPing = now + PingInterval;
+                Send(new NetWriter(Msg.Ping).Double(now), TrafficClass.UnreliablePlayerPoses);
+            }
         }
-        if (State == Status.Connected && now >= nextPing)
-        {
-            nextPing = now + PingInterval;
-            Send(new NetWriter(Msg.Ping).Double(now), TrafficClass.UnreliablePlayerPoses);
-        }
+        catch (Exception error) { Fail("transport poll", error); }
     }
 
     public SendResult Send(NetWriter message, TrafficClass traffic = TrafficClass.ReliableOrdered) => Send(message.ToArray(), traffic);
@@ -252,26 +263,26 @@ public partial class NetClient : Node
     public uint AddActor(ActorKind kind, string name, AppearanceRecord appearance, ControllerConfig config)
     {
         var request = checked(++nextActorRequest);
-        Send(MessageCodec.Encode(new NetMessage(Msg.AddActor, 0, 0, new AddActorMessage(request, kind, name, appearance, config, RosterRevision)), false));
+        Send(codec.Encode(new NetMessage(Msg.AddActor, 0, 0, new AddActorMessage(request, kind, name, appearance, config, RosterRevision)), false));
         return request;
     }
     public uint UpdateActor(int actorId, string name, AppearanceRecord appearance, ControllerConfig config)
     {
         var request = checked(++nextActorRequest);
-        Send(MessageCodec.Encode(new NetMessage(Msg.UpdateActor, 0, 0, new UpdateActorMessage(request, actorId, name, appearance, config, RosterRevision)), false));
+        Send(codec.Encode(new NetMessage(Msg.UpdateActor, 0, 0, new UpdateActorMessage(request, actorId, name, appearance, config, RosterRevision)), false));
         return request;
     }
     public uint RemoveActor(int actorId)
     {
         var request = checked(++nextActorRequest);
-        Send(MessageCodec.Encode(new NetMessage(Msg.RemoveActor, 0, 0, new RemoveActorMessage(request, actorId, RosterRevision)), false));
+        Send(codec.Encode(new NetMessage(Msg.RemoveActor, 0, 0, new RemoveActorMessage(request, actorId, RosterRevision)), false));
         return request;
     }
 
     public void SetMatchLength(float seconds) => Send(new NetWriter(Msg.SetMatchLength).Float(seconds));
 
     /// <summary>Asks the server to set the lobby's mode and its settings (creator only, while waiting).</summary>
-    public void SetMode(ModeSettings settings) => Send(MessageCodec.Encode(new NetMessage(Msg.SetMode, 0, 0, settings), false));
+    public void SetMode(ModeSettings settings) => Send(codec.Encode(new NetMessage(Msg.SetMode, 0, 0, settings), false));
 
     /// <summary>
     /// Asks the server to start the lobby's match (creator only), on this player's tuning: the values baked into a
@@ -297,9 +308,16 @@ public partial class NetClient : Node
 
     internal void Handle(byte[] data)
     {
+        NetMessage message;
+        try { message = codec.Decode(data, fromServer: true); }
+        catch (Exception error) when (PacketCodec.IsDecodeFailure(error))
+        {
+            GD.PushWarning($"[net] bad message: {error.Message}");
+            return;
+        }
+        catch (Exception error) { Fail("decode", error); return; }
         try
         {
-            var message = MessageCodec.Decode(data, fromServer: true);
             switch (message.Payload)
             {
                 case WelcomeMessage welcome:
@@ -358,18 +376,18 @@ public partial class NetClient : Node
                     ServerClockOffset = pong.ServerTime - (pong.Sent + now) / 2;
                     break;
                 default:
-                    inbox.Receive(message, data.Length);
+                    if (!inbox.TryReceive(message, data.Length))
+                        Drop(new DisconnectReason(DisconnectKind.TransportFailure, new MatchInbox.OverflowException().Message));
                     break;
             }
         }
-        catch (MatchInbox.OverflowException e)
-        {
-            Drop(new DisconnectReason(DisconnectKind.TransportFailure, e.Message));
-        }
-        catch (Exception e)
-        {
-            GD.PushWarning($"[net] bad message: {e.Message}");
-        }
+        catch (Exception error) { Fail($"dispatch {message.Type}", error); }
+    }
+
+    private void Fail(string operation, Exception error)
+    {
+        GD.Print($"[net] owner failure during {operation}: {error}");
+        Drop(new DisconnectReason(DisconnectKind.TransportFailure, "The local network session failed. Please reconnect."));
     }
 
     private void Drop(DisconnectReason reason)
@@ -378,16 +396,26 @@ public partial class NetClient : Node
         PingMs = 0;
         ServerClockOffset = 0;
         nextPing = 0;
-        if (server != null) { transport.Disconnect(server, reason); }
+        if (server != null)
+        {
+            try { transport.Disconnect(server, reason); }
+            catch (Exception error) { GD.Print($"[net] disconnect cleanup failure: {error}"); }
+        }
         server = null;
-        transport.Close();
+        try { transport.Close(); }
+        catch (Exception error) { GD.Print($"[net] transport cleanup failure: {error}"); }
         inbox.Clear();
         Lobby = null;
         Roster = Array.Empty<PlayerProfile>();
         RosterRevision = 0;
         MyId = 0;
         State = Status.Offline;
-        StatusChanged?.Invoke(Status.Offline, reason.Detail);
+        // One broken observer must not suppress the application's normal session retirement callback.
+        foreach (var callback in StatusChanged?.GetInvocationList() ?? Array.Empty<Delegate>())
+        {
+            try { ((Action<Status, string?>)callback)(Status.Offline, reason.Detail); }
+            catch (Exception error) { GD.Print($"[net] offline notification failure: {error}"); }
+        }
     }
 
     private void SetState(Status status, string? reason)

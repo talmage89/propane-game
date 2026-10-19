@@ -18,6 +18,10 @@ def copy_probe(source, target, project):
     code = source.read_text()
     if not (project / 'src/Core/BodyIds.cs').exists():
         code = code.replace('BodyIds.', 'BodySync.').replace('BodyState.State', 'TankLedger.State')
+    # N1 requires explicit composition inputs; the parent still selects its codec internally.
+    if not (project / 'src/Net/PacketCodec.cs').exists():
+        code = code.replace('new NetClient(new LoopbackNetwork().Create(), ModeRegistry.Codec, clock)',
+                            'new NetClient(new LoopbackNetwork().Create(), clock)')
     target.write_text(code)
 
 
@@ -32,7 +36,8 @@ def prepare(revision, label, observe):
         with tarfile.open(fileobj=io.BytesIO(archive)) as entries:
             entries.extractall(project, filter='data')
     # The same harness on both revisions, without changes to production in the checkout.
-    for name in ('Fixtures/ServerObservation.cs', 'ServerRunBenchTests.cs'):
+    for name in ('Fixtures/ServerObservation.cs', 'Fixtures/NetLogCapture.cs', 'ServerRunBenchTests.cs',
+                 'ClientReceiveBenchTests.cs', 'DecodeTranscriptTests.cs', 'TransitionBoundaryTests.cs'):
         source = ROOT / 'src/Dev/UnitTests' / name
         if source.exists():
             target = project / 'src/Dev/UnitTests' / name

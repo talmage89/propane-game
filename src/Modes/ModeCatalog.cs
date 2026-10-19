@@ -51,6 +51,7 @@ public sealed class ModeCatalog
     private readonly ModeBundle[] entries;
     public IReadOnlyList<ModeBundle> Bundles { get; }
     public IReadOnlyList<ModeDefinition> Definitions { get; }
+    public PacketCodec Codec { get; }
 
     public ModeCatalog(IEnumerable<ModeBundle> bundles)
     {
@@ -62,6 +63,11 @@ public sealed class ModeCatalog
         }
         if (entries.GroupBy(b => (b.Definition!.Id, b.Definition.SchemaVersion)).Any(group => group.Count() != 1))
             throw new InvalidOperationException("mode catalog: duplicate mode identity");
+        // Capture only schemas and fixed eligibility, never this catalog's HUD/bot/definition factories.
+        var schemas = entries.ToDictionary(b => (b.Schema!.ModeId, b.Schema.Version), b => b.Schema!);
+        Codec = new PacketCodec((id, version) => schemas.TryGetValue((id, version), out var schema) ? schema
+            : throw new System.IO.InvalidDataException($"unknown mode schema {id}/{version}"),
+            id => id is Core.ModeIds.TankBank or Core.ModeIds.King, Core.Tuning.ValidateSnapshot);
         Bundles = Array.AsReadOnly(entries);
         Definitions = Array.AsReadOnly(entries.Select(bundle => bundle.Definition!).ToArray());
     }

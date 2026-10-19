@@ -52,6 +52,8 @@ current and binding, and no one else edits it. Start with [VISION.md](../design/
 
 ## Evidence
 
+- [N1 decode/failure and transport boundaries](evidence/n1-dispatch-boundaries.md): rejection order, owner retirement, exact traffic comparisons and verification.
+
 Point-in-time reports: commits, branches, machines and measurements as of their date. Keep them for provenance and for
 the negative results; do not read their numbers or "unreleased" labels as the present state. The date is when the
 work was recorded (the repository's commit dates). "Superseded" says whether a later change or document replaced what

@@ -1,6 +1,7 @@
 using System;
 using Godot;
 using Propane.Core;
+using Propane.Modes;
 using Propane.Net;
 using static Propane.Dev.UnitTests.TestRunner;
 
@@ -15,7 +16,7 @@ public partial class TransportPhysicsTests : Node
         try
         {
             AddChild(new Main { Name = "Main" });
-            var client = new NetClient { Name = "Client" };
+            var client = new NetClient(PacketTransports.CreateClient(), ModeRegistry.Codec) { Name = "Client" };
             AddChild(client);
             client.SetProcess(false);
             client.SetPhysicsProcess(true);

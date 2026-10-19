@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Propane.Modes;
 using Propane.Net;
 
 namespace Propane.Dev.UnitTests;
@@ -338,7 +339,7 @@ public static class TransportTests
             var server = Propane.Modes.ModeRegistry.CreateServer(new ServerTransport(rawServer, rawServer.PeerIds), clock);
             server.Port = Endpoint.Port;
             server.Worlds = false;
-            var client = new NetClient(rawClient, clock);
+            var client = new NetClient(rawClient, ModeRegistry.Codec, clock);
             try
             {
                 server.Start(); client._Ready(); client.Connect("", Endpoint.Port, "Physics", 0);
@@ -365,7 +366,7 @@ public static class TransportTests
             var server = Propane.Modes.ModeRegistry.CreateServer(new ServerTransport(serverTransport, rawServer.PeerIds), clock);
             server.Port = Endpoint.Port;
             server.Worlds = false;
-            var client = new NetClient(clientTransport, clock);
+            var client = new NetClient(clientTransport, ModeRegistry.Codec, clock);
             try
             {
                 server.Start(); client._Ready(); client.Connect("", Endpoint.Port, "Builder", 0);
@@ -433,7 +434,7 @@ public static class TransportTests
             var server = Propane.Modes.ModeRegistry.CreateServer(new ServerTransport(rawServer, rawServer.PeerIds), clock);
             server.Port = Endpoint.Port;
             server.Worlds = false;
-            var client = new NetClient(rawClient, clock);
+            var client = new NetClient(rawClient, ModeRegistry.Codec, clock);
             try
             {
                 Assert(server.Start().Success, "server could not start");
@@ -478,7 +479,7 @@ public static class TransportTests
         runner.Run("transport/client shows application rejection and retains server version", () =>
         {
             using var p = new Pair();
-            var client = new NetClient(p.Client, p.Clock);
+            var client = new NetClient(p.Client, ModeRegistry.Codec, p.Clock);
             try
             {
                 client._Ready();
@@ -496,7 +497,7 @@ public static class TransportTests
         runner.Run("transport/client teardown detaches polling callbacks", () =>
         {
             using var p = new Pair();
-            var client = new NetClient(p.Client, p.Clock);
+            var client = new NetClient(p.Client, ModeRegistry.Codec, p.Clock);
             try
             {
                 client._Ready(); client.Connect("", Endpoint.Port, "Tester", 0);
@@ -519,7 +520,7 @@ public static class TransportTests
             var server = Propane.Modes.ModeRegistry.CreateServer(new ServerTransport(rawServer, rawServer.PeerIds), clock);
             server.Port = Endpoint.Port;
             server.Worlds = false;
-            var client = new NetClient(transport, clock);
+            var client = new NetClient(transport, ModeRegistry.Codec, clock);
             try
             {
                 server.Start(); client._Ready(); client.Connect("", Endpoint.Port, "Tester", 0);

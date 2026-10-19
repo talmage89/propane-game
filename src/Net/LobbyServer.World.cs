@@ -46,11 +46,15 @@ public partial class LobbyServer
             lobby.World = world;
             world.StartWorld(now);
         }
-        catch
+        catch (Exception failure)
         {
             if (lobby.World == world) lobby.World = null;
-            if (world != null) world.Dispose();
-            else tuning.Dispose();
+            try
+            {
+                if (world != null) world.Dispose();
+                else tuning.Dispose();
+            }
+            catch (Exception cleanup) { throw new AggregateException("Run construction and retirement failed", failure, cleanup); }
             throw;
         }
         SendLobbyState(lobby);

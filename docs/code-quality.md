@@ -400,3 +400,33 @@ The prepared project's `ActorLifetimeCycleProbe` transplants the exact gate cycl
 the same human/remote/bot inputs in roaming, Bank and King. Pass `--actor-lifetime-parent` only on the parent
 to characterize its known retention and attached handlers; the candidate requires flat counts, detached handlers
 at native free and collection. Native signal observations are asserted after `Free` returns so failures exit 1.
+
+## Decode and dispatch probes
+
+`DispatchBoundaryTests` and `DispatchTransportTests` exercise the production receive, tick, departure and inbox
+replay boundaries, native run-resource retirement and continued service in another lobby. `Fixtures/NetLogCapture`
+observes the actual Godot diagnostics; `Fixtures/InjectedPacketTransport` throws before or after the real inner
+adapter accepts bytes, on clean loopback and delayed/jittered transports. Cleanup-observer and persistent-send
+failures must retain their own causes without suppressing normal retirement. The ordinary discovered gate runs
+these assertions. `TransitionBoundaryTests` also exercises completed source departures followed by construction
+or destination admission failure, including a synchronous roster change before client membership attachment.
+The initial harness commit's `--dispatch-parent` run explicitly characterized the old defect;
+on the corrected checkout that flag is a deliberate negative expectation, not an acceptance mode.
+
+`DecodeContextTests` checks injected schema/eligibility/tuner inputs, scoped catalog restoration and sequence
+consumption before expected run admission rejection. `DecodeTranscriptTests` enumerates every prefix of every
+protocol fixture plus doubly invalid inputs, and writes first-rejection type/text when given
+`--decode-transcript=ABSOLUTE_PATH`. `server_equivalence.py` copies this same source into either revision for an
+exact immediate-parent comparison. No frozen reference changes.
+
+The same helper copies `ClientReceiveBenchTests`. Pass `--suite=ClientReceiveBenchTests --client-receive-bench`
+to measure 20,000 warm-up and 30,000 whole client network ticks: decode/dispatch one actor pose, eight body states
+and one lobby list, then both existing poll callbacks. It asserts 90,000 decoded packets and 60,000 deliveries to
+the attached receiver, and reports thread allocations and mean/p95/p99 microseconds. Preparation is excluded;
+physical Match handling and GPU frame time are outside this connection-boundary workload. Both network benchmarks
+accept `--network-bench-long` for 300,000 measured ticks, keeping the same 20,000 warm-up ticks. `cpu_us` is
+process CPU time per tick (including runtime/GC threads), observed outside the allocation/sample loop; it helps
+separate CPU work from wall-time preemption. Stopwatch measures monotonic diagnostic elapsed time; the fixture's
+manual clock alone drives network behavior. The two client benchmark sites are explicit in the source-site policy.
+Pair with the server
+workload above, alternate at least three parent/candidate pairs, and retain machine-load observations.

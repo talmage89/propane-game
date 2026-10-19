@@ -8,6 +8,7 @@ using System.Text.Json;
 using Godot;
 using Propane.Core;
 using Propane.Dev.UnitTests.Fixtures;
+using Propane.Modes;
 using Propane.Net;
 using Propane.World;
 
@@ -111,7 +112,7 @@ public static class BodyPublicationTests
             var network = new LoopbackNetwork();
             listener = network.Create();
             Wire = new SinkTransport(network.Create());
-            client = new NetClient(Wire, server.Clock) { Template = server.Tuning };
+            client = new NetClient(Wire, ModeRegistry.Codec, server.Clock) { Template = server.Tuning };
             TestRunner.Assert(listener.Listen(new PacketEndpoint("", 1234), 4).Success, "publication fixture listen");
             client._Ready();
             client.Connect("", 1234, "Publication", 0);
