@@ -129,3 +129,10 @@ python3 -B tools/dev/vent_residual_run.py --project=build/fu2a-observed/project 
   --net-seed=2 --net-lag=120 --net-jitter=30 --net-loss=3 \
   --vent-residual-dir="$PWD/build/fu2a-ballistic-$GRAVITY/traces"
 ```
+
+For the corrected checkpoint candidate, `vent_correction_experiment.py --settling --project=build/NAME/project`
+adds a separate scratch-only `FU2B_SETTLING` switch. `--vent-experiment-blend` uses the exported
+`CorrectionVentBlendTime` (0.02–0.25 s, default 0.1 s) for vent correction; intact bodies retain ordinary blending.
+Pass a tuning override to every client and `--expect-vent-blend=VALUE` to reject ineffective experiments.
+This is independent of the historical acceleration/floor/lead/cadence switches and is never inserted into checkout
+runtime sources.

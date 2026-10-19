@@ -15,7 +15,7 @@ from compare_tanks import compare
 from compare_tanks_tests import LIMITS, log
 from vent_residual import CALL, ROOT, observe
 from vent_residual_report import alignment, support, trace_metadata, trace_window
-from vent_correction_experiment import experiment
+from vent_correction_experiment import experiment, settling
 
 
 class VentResidualTests(unittest.TestCase):
@@ -163,7 +163,7 @@ class VentResidualTests(unittest.TestCase):
         self.assertEqual(original, (ROOT / 'src/Net/BodySync.cs').read_bytes())
         with tempfile.TemporaryDirectory(dir=ROOT / 'build', prefix='fu2b-experiment-test-') as directory:
             project = Path(directory)
-            for name in ('src/Net/BodySync.cs', 'src/Core/Tuning.70.Match.cs', 'Propane.csproj'):
+            for name in ('src/Net/BodySync.cs', 'src/Core/Tuning.70.Match.cs', 'Propane.csproj', 'src/Dev/NetTest.cs'):
                 target = project / name
                 target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copyfile(ROOT / name, target)
@@ -182,6 +182,27 @@ class VentResidualTests(unittest.TestCase):
             self.assertIn('FU2B_EXPERIMENT', (project / 'Propane.csproj').read_text())
             with self.assertRaises(ValueError):
                 experiment(project)
+
+    def test_settling_switch_is_vent_only_and_refuses_reapplication(self):
+        original = (ROOT / 'src/Net/BodySync.cs').read_bytes()
+        with self.assertRaises(ValueError):
+            settling(ROOT)
+        self.assertEqual(original, (ROOT / 'src/Net/BodySync.cs').read_bytes())
+        with tempfile.TemporaryDirectory(dir=ROOT / 'build', prefix='fu2b-settling-test-') as directory:
+            project = Path(directory)
+            for name in ('src/Net/BodySync.cs', 'src/Core/Tuning.70.Match.cs', 'Propane.csproj', 'src/Dev/NetTest.cs'):
+                target = project / name
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(ROOT / name, target)
+            settling(project)
+            body = (project / 'src/Net/BodySync.cs').read_text()
+            self.assertIn('var blend = defaultBlend;', body)
+            self.assertIn('State: Tank.PropaneTank.TankState.Venting', body)
+            self.assertIn('FU2B_SETTLING', body)
+            before = {p: p.read_bytes() for p in project.rglob('*') if p.is_file()}
+            with self.assertRaises(ValueError):
+                settling(project)
+            self.assertEqual(before, {p: p.read_bytes() for p in project.rglob('*') if p.is_file()})
 
 
 if __name__ == '__main__':

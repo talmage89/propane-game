@@ -56,14 +56,49 @@ def experiment(project):
     replace(project_file, '</Project>', '<PropertyGroup><DefineConstants>$(DefineConstants);FU2B_EXPERIMENT</DefineConstants></PropertyGroup>\n</Project>')
 
 
+def settling(project):
+    """A separate Dev switch for vent-only steering on the corrected checkpoint candidate."""
+    if not project.resolve().is_relative_to(ROOT / 'build'):
+        raise ValueError('experiments belong under build/')
+    body = project / 'src/Net/BodySync.cs'
+    if 'FU2B_SETTLING' in body.read_text() or 'TargetAcceleration;' not in body.read_text():
+        raise ValueError('settling requires an unmodified FU2b correction candidate')
+    replace(body, 'var blend = Mathf.Max(tuning.CorrectionBlendTime, 0.02f);',
+            'var defaultBlend = Mathf.Max(tuning.CorrectionBlendTime, 0.02f);')
+    replace(body, 'foreach (var entry in entries.Values)\n        {\n            var contactsReady = true;', '''foreach (var entry in entries.Values)
+        {
+            var blend = defaultBlend;
+#if FU2B_SETTLING
+            if (Propane.Dev.DevArgs.Get("vent-experiment-blend") != null &&
+                entry.Body is Tank.PropaneTank { State: Tank.PropaneTank.TankState.Venting })
+            {
+                blend = Mathf.Max(tuning.CorrectionVentBlendTime, 0.02f);
+            }
+#endif
+            var contactsReady = true;''')
+    tuning = project / 'src/Core/Tuning.70.Match.cs'
+    code = tuning.read_text()
+    position = code.rindex('}')
+    tuning.write_text(code[:position] + '''
+    /// <summary>FU2b experiment: vent-only correction blend time (seconds).</summary>
+    [Export(PropertyHint.Range, "0.02,0.25,0.01")] public float CorrectionVentBlendTime { get; set; } = .1f;
+''' + code[position:])
+    replace(project / 'Propane.csproj', '</Project>', '<PropertyGroup><DefineConstants>$(DefineConstants);FU2B_SETTLING</DefineConstants></PropertyGroup>\n</Project>')
+    replace(project / 'src/Dev/NetTest.cs', '("CorrectionAccelerationMaxSpin", "expect-acceleration-spin") }',
+            '("CorrectionAccelerationMaxSpin", "expect-acceleration-spin"), ("CorrectionVentBlendTime", "expect-vent-blend") }')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--project', required=True, type=Path)
+    parser.add_argument('--settling', action='store_true', help='vent-only blend on an FU2b candidate')
     args = parser.parse_args()
     project = args.project.resolve()
     paths = [project / 'src/Net/BodySync.cs', project / 'src/Core/Tuning.70.Match.cs', project / 'Propane.csproj']
+    if args.settling:
+        paths.append(project / 'src/Dev/NetTest.cs')
     before = {p: p.read_text() for p in paths}
-    experiment(project)
+    (settling if args.settling else experiment)(project)
     (project.parent / 'experiment.patch').write_text(''.join(''.join(difflib.unified_diff(code.splitlines(True),
         path.read_text().splitlines(True), fromfile='observed/' + str(path.relative_to(project)),
         tofile='experiment/' + str(path.relative_to(project)))) for path, code in before.items()))

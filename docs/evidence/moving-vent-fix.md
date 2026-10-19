@@ -118,3 +118,20 @@ Only StartMatch/client and MatchStart/server change among the 81 wire fixtures, 
 This supersedes the interim 53-envelope publication refresh, which did not preserve all negative-path coverage.
 The earlier `fu2b-reference-refresh-v2` attempt was stopped after detecting an assembly built with the rejected
 100 rad/s spin bound; its partial files and results are excluded. A warning-free rebuild precedes the verified refresh.
+
+## Rejected 50 ms checkpoint-only candidate and settling experiment
+
+`876c22a` retains the conservative acceleration spin bound and reserves every normal moving publication.
+Its ordinary matrix/repeat results were healthy before scheduling was stopped, but the second early 240 ms
+control fails at **0.566 m** (`fu2b-v2-age-early-2`), with native exits zero, complete matching audit and no
+unobserved grid. The first passes at 0.214 m. The first report of the second result was sent before checking the
+completed log and incorrectly stated a pass; it is withdrawn. Neither partial native cohort is final acceptance.
+At the nearest final physical samples, the predicted node goal is 0.336 m from the owner while the observer is
+farther away. This separates an additional correction residual from prediction error; it does not prove an
+exact decomposition at the checker's interpolated grid. The lead is capped at 0.3 s, the sample is roughly
+0.4 s old and its receipt remains fresh. Native high spin excludes acceleration on this body.
+
+The separate Dev-only settling switch tests shorter vent steering (100/50 ms), leaving intact-body blending,
+publication policy, acceleration bounds, lead limits and checker thresholds unchanged. Twelve preparer/diagnostic
+assertions pass before running it, including refused checkout mutation and refused duplicate insertion. Every
+client must assert the effective experimental blend value. Production is unchanged while these experiments run.
