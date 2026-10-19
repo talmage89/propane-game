@@ -26,7 +26,8 @@ python3 -B tools/dev/vent_residual_run.py --project=build/fu2a-observed/project 
   --vent-residual-dir="$PWD/build/fu2a-floor/traces"
 ```
 
-FU2b's optional experiment preparer operates only on a fresh observed project under `build/`:
+FU2b's historical experiment preparer operates only on a fresh observed pre-FU2b parent (`3c07559`) under `build/`;
+it rejects an already corrected runtime before modifying it:
 
 ```sh
 python3 -B tools/dev/vent_correction_experiment.py --project=build/fu2a-observed/project

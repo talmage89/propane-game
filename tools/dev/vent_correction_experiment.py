@@ -24,6 +24,8 @@ def experiment(project):
     if not project.resolve().is_relative_to(ROOT / 'build'):
         raise ValueError('experiments belong under build/')
     body = project / 'src/Net/BodySync.cs'
+    if 'TargetAcceleration;' in body.read_text():
+        raise ValueError('use a pre-FU2b parent (3c07559) for isolated historical experiments')
     replace(body, 'public required uint Id;', f'public required uint Id;\n        internal readonly {CALL}.Estimate VentEstimate = new();')
     replace(body, 'private static void SetTarget(', 'private void SetTarget(')
     replace(body, 'entry.HasTarget = true;', f'{CALL}.Accept(entry, state, rest, sampled, settings);\n        entry.HasTarget = true;')

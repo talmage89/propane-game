@@ -168,6 +168,13 @@ class VentResidualTests(unittest.TestCase):
                 target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copyfile(ROOT / name, target)
             (project / 'src/Dev/NetScenarios').mkdir(parents=True)
+            if 'TargetAcceleration;' in (project / 'src/Net/BodySync.cs').read_text():
+                # The historical preparer must reject a corrected runtime before mutating it.
+                before = {p: p.read_bytes() for p in project.rglob('*') if p.is_file()}
+                with self.assertRaises(ValueError):
+                    experiment(project)
+                self.assertEqual(before, {p: p.read_bytes() for p in project.rglob('*') if p.is_file()})
+                return
             experiment(project)
             body = (project / 'src/Net/BodySync.cs').read_text()
             self.assertIn('VentCorrectionExperiment.Accept', body)

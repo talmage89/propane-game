@@ -51,11 +51,12 @@ def observe(project):
     insert(body, 'Trace?.Invoke(entry, $"stale age={age:0.000} quiet={now - entry.TargetUpdated:0.000}");',
            f'                {CALL}.Record(entry, "decision-stale");')
     decision = f'{CALL}.Decision(entry, REASON, targetCenter, targetRotation, error, angle, lead);'
+    linear_assignment = 'body.LinearVelocity = targetLinear + error / blend;' if 'var targetLinear = entry.TargetLinear;' in body.read_text() else 'body.LinearVelocity = entry.TargetLinear + error / blend;'
     for needle, reason in (
         ('var weight = Mathf.Clamp((float)body.GetPhysicsProcessDeltaTime() / blend, 0, 1);', 'gather-blend'),
         ('Snap(body, entry.Target, entry.TargetLinear, entry.TargetAngular);', 'obstructed-snap'),
         ('if (!body.Sleeping || !current.IsEqualApprox(pose))', 'rest-anchor'),
-        ('body.LinearVelocity = entry.TargetLinear + error / blend;', 'velocity-blend'),
+        (linear_assignment, 'velocity-blend'),
     ):
         insert(body, needle, decision.replace('REASON', '"' + reason + '"'), before=True)
     insert(body, 'if (now - entry.SettledMismatchSince >= blend * 3)\n                {',
