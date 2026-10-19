@@ -286,6 +286,12 @@ not reconnect/resume or arbitrary mid-match join.
 [SnapshotBuffer](../src/Net/SnapshotBuffer.cs) owns bounded actor history and offset/interpolation/extrapolation;
 [BodySync](../src/Net/BodySync.cs) separates sample age from receipt freshness, preserves rest anchors, suppresses
 fresh remote vent thrust/spin and applies geometry/contact-aware correction.
+It retains one bounded acceleration estimate per body, reset at authority/rest/prediction boundaries, and applies
+it to eligible free-flight vents in both COM prediction and velocity feed-forward. Its temporary observer contact
+reporting limit is restored before local authority/prediction and on retirement. Its reusable ray query and single-RID
+exclusion array have registry lifetime and are disposed by clearing/final removal. Network sample intervals and
+publication deadlines remain monotonic; contact evidence is the latest native physics synchronization. The owner
+selects reliable checkpoints at the shared 0.125 s interval without adding publications or changing traversal/order.
 [BodyPublisher](../src/Net/BodyPublisher.cs) preserves grouping, encounter/batch order, sequence advancement and
 rotating checkpoints. Later batches sample after earlier synchronous sends; pre-capturing all batches changes
 behavior. The C2 integration retains the publication and retirement boundaries pinned by

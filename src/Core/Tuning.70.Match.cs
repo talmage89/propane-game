@@ -104,4 +104,11 @@ public partial class Tuning
     [Export(PropertyHint.Range, "0.02,2,0.01")] public float CorrectionBlendTime { get; set; } = 0.25f;
     /// <summary>Drift (meters) past which an object snaps to its owner's position instead of easing.</summary>
     [Export(PropertyHint.Range, "0.1,20,0.1")] public float SnapDistance { get; set; } = 3f;
+
+    /// <summary>Maximum interval between reliable body checkpoints (network seconds), plus one normal send interval. Moving publication cadence is unchanged.</summary>
+    [Export(PropertyHint.Range, "0.02,0.25,0.005")] public float BodyCheckpointInterval { get; set; } = .125f;
+    /// <summary>Maximum acceleration estimated from consecutive body publications (m/s²); larger changes use constant velocity. Zero disables acceleration prediction.</summary>
+    [Export(PropertyHint.Range, "0,100,1")] public float CorrectionMaxAcceleration { get; set; } = 30f;
+    /// <summary>Maximum source spin for linear acceleration prediction (rad/s); faster tumbling uses constant velocity.</summary>
+    [Export(PropertyHint.Range, "0,100,1")] public float CorrectionAccelerationMaxSpin { get; set; } = 6f;
 }
