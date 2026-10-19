@@ -26,6 +26,9 @@ public partial class NetClient : Node
     private readonly PacketCodec codec;
     private readonly IMonotonicClock clock;
     private ConnectionHandle? server;
+    // A send origin may still be iterating session state. Retire only after that stack has returned, at the next
+    // poll boundary or deferred call in this frame. Disconnect/exit cancel this connection-scoped pending failure.
+    private DisconnectReason? failedSend;
 
     // Godot script instantiation cannot select application-owned transport or codec inputs.
     public NetClient() => throw new InvalidOperationException("NetClient requires transport and codec inputs");
@@ -115,6 +118,12 @@ public partial class NetClient : Node
 
     public void DetachMatch(int id, Action<NetMessage> receiver) => inbox.Detach(id, receiver);
 
+    /// <summary>Composition abandons an active or still-building failed run; an old owner cannot clear a newer inbox.</summary>
+    internal void RetireMatchInbox(int id)
+    {
+        if (inbox.MatchId == id) inbox.Clear();
+    }
+
     private int lastMatchId;
 
     public override void _Ready()
@@ -139,7 +148,7 @@ public partial class NetClient : Node
 
     private void OnPacket(ConnectionHandle connection, TrafficClass traffic, ReadOnlyMemory<byte> data)
     {
-        if (connection == server) { Handle(data.ToArray()); }
+        if (connection == server && failedSend == null) { Handle(data.ToArray()); }
     }
 
     public override void _ExitTree()
@@ -148,6 +157,7 @@ public partial class NetClient : Node
         transport.Disconnected -= OnTransportDisconnected;
         transport.Packet -= OnPacket;
         server = null;
+        failedSend = null;
         inbox.Clear();
         transport.Close();
     }
@@ -174,10 +184,11 @@ public partial class NetClient : Node
 
     public void Disconnect()
     {
+        failedSend = null;
         PingMs = 0;
         ServerClockOffset = 0;
         nextPing = 0;
-        if (State == Status.Offline)
+        if (State == Status.Offline && server == null)
         {
             return;
         }
@@ -200,6 +211,7 @@ public partial class NetClient : Node
 
     private void PollNetwork()
     {
+        if (failedSend != null) { RetireFailedSend(); return; }
         try
         {
             transport.Poll();
@@ -215,23 +227,51 @@ public partial class NetClient : Node
             }
         }
         catch (Exception error) { Fail("transport poll", error); }
+        if (failedSend != null) RetireFailedSend();
     }
 
     public SendResult Send(NetWriter message, TrafficClass traffic = TrafficClass.ReliableOrdered) => Send(message.ToArray(), traffic);
 
     public SendResult Send(byte[] message, TrafficClass traffic = TrafficClass.ReliableOrdered)
     {
-        if (server == null) { return SendResult.Closed; }
-        var result = transport.Send(server, traffic, message);
-        if (result == SendResult.Success && message.Length > 0 && (Msg)message[0] is Msg.Loaded or Msg.LeaveLobby)
+        if (server == null || failedSend != null) { return SendResult.Closed; }
+        try
         {
-            transport.SetLoading(server, false);
+            var result = transport.Send(server, traffic, message);
+            if (result == SendResult.Success && message.Length > 0 && (Msg)message[0] is Msg.Loaded or Msg.LeaveLobby)
+            {
+                transport.SetLoading(server, false);
+            }
+            if (traffic.IsReliable() && result != SendResult.Success)
+            {
+                QueueSendFailure($"Could not send a required message ({result}). Please reconnect.");
+            }
+            return result;
         }
-        if (traffic.IsReliable() && result != SendResult.Success)
+        catch (Exception error)
         {
-            Drop(new DisconnectReason(DisconnectKind.TransportFailure, $"Could not send a required message ({result}). Please reconnect."));
+            GD.Print($"[net] transport send failure ({traffic}): {error}");
+            QueueSendFailure("The connection could not send a message. Please reconnect.");
+            return SendResult.Closed;
         }
-        return result;
+    }
+
+    private void QueueSendFailure(string detail)
+    {
+        if (failedSend != null) return;
+        GD.Print($"[net] {detail}");
+        failedSend = new DisconnectReason(DisconnectKind.TransportFailure, detail);
+        // Preserve immediate connection-failure observation; only the cleanup notification retires borrowed scenes.
+        LastDisconnect = failedSend;
+        State = Status.Offline;
+        Callable.From(RetireFailedSend).CallDeferred();
+    }
+
+    private void RetireFailedSend()
+    {
+        if (failedSend is not { } reason) return;
+        failedSend = null;
+        Drop(reason);
     }
 
     // ------------------------------------------------------------------ Lobby requests
@@ -393,6 +433,7 @@ public partial class NetClient : Node
 
     private void Drop(DisconnectReason reason)
     {
+        failedSend = null;
         LastDisconnect = reason;
         PingMs = 0;
         ServerClockOffset = 0;

@@ -180,8 +180,24 @@ callback failures and reports them afterwards. Call disposal before freeing the 
 On the server, `LobbyServer.Retire(ref routing)` clears the route before `ServerRun.Dispose` releases Tuning.
 Terminal MatchEnd delivery precedes a later Rejected message if returning to the lobby exhausts participant identity.
 
-Callbacks and sends can synchronously retire the run. Do not defer transactions into a batch or continue using
-retired state. Presentation bindings restore the newest surviving world in either disposal order. Node free alone
+Callbacks can synchronously retire the run; callers must stop before using retired state. Client transport sends
+never retire the session on their caller's stack: a required returned failure or any thrown transport send records
+the first failure, marks the connection Offline with its disconnect reason immediately, suppresses subsequent
+sends/inbound delivery, and schedules normal offline cleanup/StatusChanged notification at the next NetClient poll
+boundary (before polling or after poll/dispatch returns) or Godot deferred-call drain in the same frame. Gameplay,
+UI, mode and construction send origins may finish their synchronous work while borrowed state is still live. This
+does not defer successful sends, transactions, publication or callbacks, and adds no processing node. Disconnect,
+drop and tree exit cancel pending failure, so it cannot retire a replacement connection. The transport contract
+delivers callbacks only inside Poll, never reentrantly from Send. Other synchronous retirement callbacks retain
+their existing liveness obligations; this guarantee concerns send-triggered retirement, not arbitrary callbacks.
+
+A server Waiting lobby state with no WorldId lets Main invalidate an active or still-building run's inbox and
+pending construction. Main returns an active finite match or roaming world through its normal finished-match
+navigation to the lobby menu, deferred until the lobby notification's delegate snapshot returns and guarded against a newer setup. A match
+already showing ordinary results retains its inbox and countdown until normal disposal. No replacement server run
+is constructed on the failure path; the surviving connection/lobby can start another match using the existing messages.
+
+Presentation bindings restore the newest surviving world in either disposal order. Node free alone
 is not disposal of managed subscriptions, timers, cancellation or owned native resources.
 
 Each Match actor has one idempotent `ActorRegistration`, indexed by its session. Early removal removes its
