@@ -13,12 +13,12 @@ public static class ModeClientLifetimeTests
 {
     public static void Register(TestRunner runner)
     {
-        runner.Run("mode client/lifetime repeated Bank, King and roaming sessions release every adapter", () =>
+        runner.Run("mode client/lifetime repeated Bank, King, Sandbox and roaming sessions release every adapter", () =>
         {
             using var bank = new ServerFixture();
             using var king = new ServerFixture(mode: ModeRegistry.King);
             using var lobby = new LobbyWorldFixture(3);
-            foreach (var setup in new[] { bank.Setup, king.Setup, lobby.World() })
+            foreach (var setup in new[] { bank.Setup, king.Setup, bank.Setup with { ModeId = ModeRegistry.SandboxId }, lobby.World() })
             {
                 for (var cycle = 0; cycle < 3; cycle++)
                 {
@@ -39,7 +39,7 @@ public static class ModeClientLifetimeTests
             using var bank = new ServerFixture();
             using var king = new ServerFixture(mode: ModeRegistry.King);
             using var lobby = new LobbyWorldFixture(3);
-            foreach (var setup in new[] { bank.Setup, king.Setup, lobby.World() })
+            foreach (var setup in new[] { bank.Setup, king.Setup, bank.Setup with { ModeId = ModeRegistry.SandboxId }, lobby.World() })
             {
                 var references = ModeClientLifetimeFixture.FailedAssembly(runner, setup, bank.Clock);
                 GC.Collect();

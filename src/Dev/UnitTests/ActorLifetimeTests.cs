@@ -58,10 +58,11 @@ public static class ActorLifetimeTests
             var calls = 0;
             Action<ShotReport> remove = _ => { calls++; f.Remove(actor); };
             fired.SetValue(actor, remove + prior);
-            var sequence = actor.Runtime.ActionSequence;
+            var state = ClientActorAccess.For(actor);
+            var sequence = state.ActionSequence;
             ((Action<ShotReport>)fired.GetValue(actor)!)(new ShotReport(Vector3.Zero, Vector3.One, Vector3.Up, Vector3.Forward, null, false));
             Assert(calls == 1 && !GodotObject.IsInstanceValid(actor), "snapshot listener did not retire its emitter");
-            Assert(actor.Runtime.ActionSequence == sequence, "detached listener sent an action from the retired actor");
+            Assert(state.ActionSequence == sequence, "detached listener sent an action from the retired actor");
             f.Match.Session.RemoveActor(actor.Runtime);
         });
         runner.Run("actor lifetime/removal in the actor's real damage/death callback", () =>

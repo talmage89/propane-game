@@ -236,7 +236,7 @@ public static class BotTests
                 Assert(human.InputOverride is not IBotGoalPolicy && match.BotBrain(human.ActorId) == null, "the human was given a brain");
                 Assert(match.BotBrain(bot.ActorId) is BankingBot brain && ReferenceEquals(bot.InputOverride, brain) &&
                     brain.Skill == BotProfile.For(BotDifficulty.Normal, match.World.Tuning).Skill, "the bot has no Normal Tank Bank brain");
-                Assert(!bot.IsRemote && bot.Ammo != null && bot.View == null && match.Session.LocalViews.Count == 0 &&
+                Assert(!bot.IsRemote && bot.Ammo != null && ActorView.For(bot) == null && match.Session.LocalViews.Count == 0 &&
                     match.FindChildren("*", "Camera3D", owned: false).Count == 0 && match.FindChildren("*", "AudioListener3D", owned: false).Count == 0,
                     "the bot is not an owned, camera-free actor");
                 var remote = match.Session.Actors.Single(a => a.Character.IsRemote).Character;

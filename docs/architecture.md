@@ -59,18 +59,17 @@ stable top-level owner so compiler-generated numbering does not cause churn.
 | `Modes/` | Rules by default; `ModeDefinition`/`ModeBundle`/`ModeCatalog`/registry/supply are Composition; HUD input/presenters are Presentation; HUD values/`IModeView` remain plain rules observations. |
 | `Player/`, `Tank/`, `Fx/` | Simulation by default; input values and resolved state values are Foundation; cameras/views/device input and mode geometry are Presentation; `ReplicatedIntent` is Client. The separate `PlayerNetState.cs` is a Foundation value; shared profiling lives in `Diagnostics/`. |
 | `Navigation/`, `Bots/` | Navigation and Bots. |
-| `Net/` | Wire by default; `LobbyServer`/`ServerRun`, ledger, roster, contact admission, ServerMode/ServerModes inputs, plain ModeWireTuners, KingPlacement and mode wires/runner are Server; body/actor snapshot helpers, prediction, authority transactions, mode client adapters and inbox are Client; Match/backend factory/update/diagnostics are Composition; NetClient is Client; MessageCodec is the composition convenience facade over Wire PacketCodec; TransportMetrics accepts plain Wire observations. Lobby/profile/setup contracts and phases are Wire; shared identity/appearance/body values live in `Core/`, standings in Rules, and `World/AmmoPickup` in Simulation. |
+| `Net/` | Wire by default; `LobbyServer`/`ServerRun`, ledger, roster, contact admission, ServerMode/ServerModes inputs, plain ModeWireTuners, KingPlacement and mode wires/runner are Server; body/actor snapshot helpers, prediction, authority transactions, mode client adapters and inbox are Client; Match/backend factory/update/diagnostics are Composition; NetClient is Client; MessageCodec is the Dev convenience facade in Composition over Wire PacketCodec; TransportMetrics accepts plain Wire observations. Lobby/profile/setup contracts and phases are Wire; shared identity/appearance/body values live in `Core/`, standings in Rules, and `World/AmmoPickup` in Simulation. |
 | `UI/` | Presentation by default; front-end screens, their transactions and lobby/stage composition are Composition. |
 | `ReleaseSmoke/`, `Dev/` | Smoke and Dev respectively; no game dependency on the checker project under `tools/architecture/`. |
 
-Current cycles remain. [baseline.tsv](../tools/architecture/baseline.tsv) records **each existing prohibited type edge**
-with a reason and removing package; an absent entry or a stale entry fails lint. This is not permission for another
+[baseline.tsv](../tools/architecture/baseline.tsv) records **each reviewed prohibited type edge** with a reason and
+removing package; it is currently empty. An absent entry or a stale entry fails lint. This is not permission for another
 source type to acquire that dependency. Do not broaden the map or silently regenerate the baseline to pass a gate.
 
 | Temporary boundary | Owner package and exit condition |
 | --- | --- |
-| Match still owns world/actor replication, bots and view binding | B2 owns transactions and B3b1 owns mode client policy. C2 finishes independent replication/bot/view owners, preserving synchronous ordering. |
-| Physical actor holds replication attachments and view/device conveniences | C1 has moved identity/body contracts; C2 moves client state and narrow view binding beside actor lifetime. |
+| C2 Match composition (complete) | Match coordinates callbacks, assembly and retirement; ClientWorldReplica, ClientActorSet/ClientActorReplication, OwnedBotSet and MatchViewBinding own the remaining state. No baseline entry names C2. |
 | C1 contract placement (complete) | Shared identity/appearance/body values and ID formulas are Foundation; lobby contracts/phases are Wire; standings are Rules; metadata/coordinates/snapshots/segment values are Plans. Native capture and tuner conversion stay outside Plans. No baseline entry names C1. |
 | Lobby/run native tuning and codec catalog resolution | B3a supplies presentation-free ServerMode/ServerModes inputs. Application ServerSettings supplies template/snapshot sampling and run-owned IServerRunSettings, preserving live reads and exactly-once retirement. C1 made melee admission consume sampled plain values. N1 injects owner-scoped codec schema/eligibility/tuner validation with unchanged rejection order. No baseline entry remains assigned to B3a. |
 | N1 transport/dispatch boundaries | Wire owns independent ordered lanes, PacketCodec and plain TransportMetrics. Connection/run owners inject codec inputs; Main selects and injects the client transport and codec; parameterless script construction rejects missing inputs. |
@@ -106,12 +105,25 @@ assembles both roaming lobby worlds and network matches. [LabSession](../src/Lab
 and adapters; [LabMatch](../src/Lab/LabMatch.cs) can retain logical rules across replacement sessions. Most scene-tree
 composition is C#, not `.tscn` structure. `ShutdownGuard` is the autoload exit owner ([shutdown](shutdown.md)).
 
-**Target Match:** retain its Godot callbacks, run identity and lifetime coordination. Ordinary components separately
-own authority queues/reservations/epochs/causes/gather bookkeeping (B2), physical world replica, per-actor replication,
-mode client policy (B3b1 implemented), owned bots and view binding (C2). Each extraction owns its own mutable state, inputs,
-synchronous operations and retirement; a partial file or a new container for all Match fields is not an extraction.
-Action sequences and drop predictions retire with a client actor attachment, rather than becoming session-global.
-`ReplicatedIntent` belongs on the client side of the physical actor's input-source seam.
+**Current C2:** [Match](../src/Net/Match.cs) keeps Godot callbacks, run phase/envelope order, roster/profile
+coordination, assembly and synchronous owner calls. It owns no body registries, actor network caches, brains or HUD
+state. The owners are ordinary classes with no processing nodes:
+
+| Match owner | Mutable state and bounded operations | Retirement |
+| --- | --- | --- |
+| [ClientAuthorityTransactions](../src/Net/ClientAuthorityTransactions.cs) | Authority queues, reservations, epochs, causal roots and gather requests; synchronous resolve/flush/notify. | Replication stop, after body replica stop; pending listeners detach from the same Match event. |
+| [ClientWorldReplica](../src/Net/ClientWorldReplica.cs) | Tank/explosion/loose-body/pickup registries, BodySync/BodyPublisher and gather binding; reconstruct, correct, claim, publish and apply body relays. | Idempotent replication stop detaches tank handlers and clears physical lookup/correction state before native content free. |
+| [ClientActorSet](../src/Net/ClientActorSet.cs) | Actor attachment index and pending-creation publication scratch; route actor actions, apply snapshots, publish actors and check pickups in session order. | Each index entry is removed by its ActorRegistration; the empty index and scalar-ID scratch have the Match lifetime. |
+| [ClientActorReplication](../src/Net/ClientActorReplication.cs) | One actor's snapshots/ReplicatedIntent, send timer, pose/action sequences, action/melee caches, drop allocation/predictions and ammo-notice state. Reads no physical input. | Unsubscribe at the original session position; idempotent actor retirement clears caches before native actor free. |
+| [OwnedBotSet](../src/Net/OwnedBotSet.cs) | Brains, shared BotServices, peer lists, rotating think index and cost/activity samples; initial/arrival attachment, refresh and think. | Session stop before replication; a mode without a bot factory releases its empty binding inside replication stop. Early actor removal retires its brain and surviving peer/target/collider references. |
+| [MatchViewBinding](../src/Net/MatchViewBinding.cs) | M0 selection, primary view binding, HUD/menu/results/tuning/lobby/zone attachments, reveal/notices/objective refresh and leaderboard presentation. | Selection refresh stays synchronous; stop releases the mode/selection binding, SessionContext frees views before actors. |
+| Mode client adapter (B3b1) | Bank/King/Lobby policy, decoded mode state and consequences. | Replication stop, after authority disposal. |
+
+The physics callback order remains remote snapshots → body correction → mode tick → bot thinking → owned actor
+publication → body publication → pickup checks. Actor and body publication use monotonic network timestamps;
+actor send cadence consumes physics delta. Reveal/notices/objective refresh consume render delta. BodyPublisher
+still samples later batches after earlier synchronous sends. No source reads intent on Match's behalf.
+[C2 evidence](evidence/match-composition.md) records the parent/candidate witnesses, lifetime proof and paired costs.
 
 **Current M0:** Match refreshes its selected owned character synchronously on `SessionContext.ActorsChanged` and
 lobby profile Kind changes. It prefers the first owned Human, otherwise the first owned actor, in session order;
@@ -122,7 +134,9 @@ still requires an actor. This cache neither retargets an existing local view nor
 [ModeRegistry](../src/Modes/ModeRegistry.cs) compiles the network integrations into one validated
 [ModeCatalog](../src/Modes/ModeCatalog.cs). Bundles pair existing definitions with schemas and explicit server wire/client adapter
 factories; bounded parsing/encoding remains in Wire's PacketCodec. Composition's MessageCodec convenience facade
-selects the current catalog for callers without a connection owner. Connection/server owners capture immutable
+selects the current catalog only for Dev fixtures and release-reference probes without a connection owner. Match
+uses its connection's captured codec for authority/mode sends and lends it to ClientWorldReplica and ClientActorSet
+for gather, pose and action sends. Connection/server owners capture immutable
 PacketCodec inputs at construction (schema resolver, lobby eligibility and native tuner validator); those inputs
 retain schemas, never catalog definitions/HUD/bot factories. The envelope reader receives that resolver, and
 composition constructs LobbyServer through `ModeRegistry.CreateServer`, selecting immutable ServerModes/ServerMode
@@ -140,8 +154,8 @@ generation at the original synchronous read points; rule initialization still pr
 | Physical session | SessionContext: world attachment, actor registry, views, cancellation and registrations; synchronous session disposal. |
 | World | WorldContext: World3D/offscreen viewport, roots, tuning copy, RNG, clock, effects, registries and presentation selection; invalidation then disposal. |
 | Content | Suburb/segment root plus originating effects/registrations; content retirement inside a surviving world. |
-| Actor | ActorRuntime, character and client `ActorRegistration`; roster removal or session retirement. Subscriptions and actor caches detach before native free. |
-| View | LocalView camera/HUD/device attachment; detach/reassign independently of actor survival. |
+| Actor | ActorRuntime/character plus ClientActorReplication through `ActorRegistration`; roster removal or session retirement. Subscriptions and actor caches detach before native free. |
+| View | LocalView camera/HUD/device attachment and its composition binding; detach/reassign independently of actor survival. |
 
 There is no universal application → session → match → world nesting: Game keeps its world while replacing suburbs;
 Dissolve Run keeps a world while retiring segments; Short Fuse keeps LabMatch rules while replacing sessions/worlds.
@@ -175,7 +189,6 @@ unsubscription entry (including the closure), detaches owned action handlers, re
 BotServices collider entries, surviving bot peer/target/sight references and actor action/melee caches, then frees
 the character. M0 selection still refreshes at the original roster notification, and views close before character
 free. In-flight delegate snapshots suppress detached action handlers. King rival/watch references retire here too; physical callback continuations stop when the emitter retired.
-King rival/watch references retire here too; physical callback continuations stop when the emitter retired.
 Bot invalid-target flags retain the old
 retarget/selection decisions without keeping a freed character alive. No decision clocks or random draws move.
 Whole-session unsubscription retains each actor's original position among other subscriptions, bot stopping stays
@@ -256,11 +269,13 @@ those lane indices to channels, and FaultPacketTransport never calls an ENet hel
 
 ## Replication transactions
 
-Current authority ownership remains primarily [Match](../src/Net/Match.cs). The resolution order is binding:
+Authority transactions belong to [ClientAuthorityTransactions](../src/Net/ClientAuthorityTransactions.cs);
+[ClientWorldReplica](../src/Net/ClientWorldReplica.cs) supplies physical lookup/reconstruction through Match's
+narrow synchronous forwarding operations. The resolution order is binding:
 finish pending request/release reservations → update dependent epochs → reconcile/reconstruct/adopt canonical bodies
 → flush newly eligible requests → notify `AuthorityResolved` → remove gather bookkeeping. Preserve causal
-root-before-child sending, proposal capture time, explicit dependent refusals and winning-vent adoption. B2 extracts
-this transaction with explicit synchronous physical collaborators; it does not reorder it.
+root-before-child sending, proposal capture time, explicit dependent refusals and winning-vent adoption. The B2/C2
+owners preserve this transaction through explicit synchronous physical collaborators.
 
 Gather leases do not immediately predict ownership: grants revalidate geometry/disturbance before pushing. Bank
 reservation/score confirmation and dropped-body creation confirmation are different boundaries. Actor-owned action
@@ -273,7 +288,7 @@ not reconnect/resume or arbitrary mid-match join.
 fresh remote vent thrust/spin and applies geometry/contact-aware correction.
 [BodyPublisher](../src/Net/BodyPublisher.cs) preserves grouping, encounter/batch order, sequence advancement and
 rotating checkpoints. Later batches sample after earlier synchronous sends; pre-capturing all batches changes
-behavior. B2/C2 extraction must retain the publication and retirement boundaries pinned by
+behavior. The C2 integration retains the publication and retirement boundaries pinned by
 [release references](release-reference.md).
 
 ## Modes and capabilities
@@ -365,8 +380,12 @@ health/lives and online segment streaming still require end-to-end work.
 
 Keep movement, logical aim, weapon pose, animation, ragdoll and recovery together where native order requires it.
 [LocalView](../src/Player/LocalView.cs) attaches camera/HUD/device input independently of actor lifetime. A physical
-actor must work without a camera/HUD. Current character view conveniences and actor-held client state are temporary
-C2 exceptions; production Game also uses its `CameraRig` accessor. D0 removed the unused instance
+actor runs without a camera/HUD and holds no concrete camera, view, device or replication type. LocalView owns
+primary-view feedback: `PlayerCharacter.Recoiled` fires synchronously at the original post-aim/rig recoil point;
+`IResettablePlayerInputSource` preserves the actor's existing device reset notifications without a concrete device
+reference. ActorRuntime's plain primary-view flag preserves full native pose sampling and secondary-view semantics.
+Game, Lab and Match retain their own presentation binding; `LocalView.Find` supports explicit lookup without an
+actor-held view or process-wide registry. D0 removed the unused instance
 `Rifle.AlignBarrel` wrapper; the static transform helper remains. Do not move render-domain LogicalAim into a
 camera-only owner or split RifleRig/recovery merely because of size.
 
@@ -426,7 +445,7 @@ See [world services](world-services.md#streamed-content-history), [the Lab](lab.
 | Process state | Current owner; target/constraint |
 | --- | --- |
 | Launch arguments | LaunchArgs.Current is a lazy immutable Foundation snapshot. Main-thread test overrides nest strictly and restore the exact previous snapshot on disposal; only composition applies tuning overrides. |
-| Player preferences | Main owns/binds one disposable PlayerSettings store. Menus/MenuProfile and match UI borrow a store; isolated tests own stores and strictly nested bindings. Lazy load, format, migration and immediate save timing are unchanged. |
+| Player preferences | Main owns/binds one disposable PlayerSettings store. Menus/MenuProfile borrow a store; MatchViewBinding passes the same borrowed store to its HUD and menu; isolated tests own stores and strictly nested bindings. Lazy load, format, migration and immediate save timing are unchanged. |
 | Saved tuning | Tuning.SavedTemplate application preference; each WorldContext copies it. UI edits explicit world target. The template is borrowed for composition/UI; never dispose it or use it as a mutable world target. Explicit launch overrides and successful Save update it for future worlds. |
 | Asset/catalog caches | Main-thread process caches above; borrowed immutable resources, no per-world mutation. |
 | Instance materials/effects | Instance/world/content owners; retire at their real lifetime. |

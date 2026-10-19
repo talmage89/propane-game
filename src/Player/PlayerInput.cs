@@ -30,6 +30,12 @@ public interface IPlayerInputSource
     PlayerIntent Read();
 }
 
+/// <summary>Optional device reset at the actor's existing native focus/pause notifications.</summary>
+public interface IResettablePlayerInputSource : IPlayerInputSource
+{
+    void Reset();
+}
+
 /// <summary>Primary preserves the shipped single-view device switching; explicit assignments isolate couch views.</summary>
 public readonly record struct InputDeviceAssignment(int GamepadId, bool KeyboardMouse)
 {
@@ -47,7 +53,7 @@ public readonly record struct InputDeviceAssignment(int GamepadId, bool Keyboard
 }
 
 /// <summary>Gameplay actions from any device. Mouse motion accumulates between reads.</summary>
-public sealed class DeviceInput : IPlayerInputSource
+public sealed class DeviceInput : IResettablePlayerInputSource
 {
     private readonly Func<bool> gameplayEnabled;
     private readonly Tuning tuning;

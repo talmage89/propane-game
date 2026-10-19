@@ -155,3 +155,27 @@ enum values, catalog capture order and detached house values, segment-setting cl
 registration and appearance fallback/count diagnostics. It runs in `make test`. Before and after a structural move,
 run it with `--suite=ContractPlacementTests --contracts-transcript=ABSOLUTE_PATH` and compare the two JSON files
 with `cmp`. These are scratch witnesses under `build/`, never replacements for the immutable release fixtures.
+
+## Match composition differentials
+
+`MatchCompositionTests` exercises Bank and King callback delivery, one input read per physical callback,
+remote snapshots, bot animation, ragdoll/get-up and results retirement without a local camera. It runs in
+`make test`. `tools/dev/match_composition_equivalence.py --revision=working --label=NAME --observe` prepares an
+isolated source build with opt-in callback, packet and lifecycle observation. Run `MatchCompositionTests`,
+`ActorLifetimeTests` and `MatchPlayerTests` on parent and candidate builds with `--match-seed=23` and distinct
+`--composition-transcript=ABSOLUTE_PATH` files, then compare corresponding JSONL files exactly with `cmp`.
+Instrumentation and controlled entropy exist only in the scratch builds. These witnesses supplement the
+immutable publication references and native input/recovery/network probes; they do not replace them.
+
+Omit `--observe` for cost builds. Both receive the same `ActorTickBenchTests` probe; invoke it with
+`--suite=ActorTickBenchTests --actor-tick-bench --actor-tick-warmup=100000 --match-seed=23` to measure 60,000 complete
+Match-plus-owned-character callbacks after the longer native-input warm-up. The default remains 20,000 warm-up
+ticks. Record workload, allocations and mean/p95/p99, and alternate at least three parent/candidate pairs. Device
+interop allocation can still be warming in the shorter window; preserve those results and diagnose them before
+calling a difference steady state. The separate real-device scenes remain necessary input proof.
+
+For owned-brain cost, prepare both revisions with `--owned-bots-bench` and omit `--observe`, then run
+`--suite=AuthorityBenchTests --authority-bench --match-seed=23`. The scratch-only variant asserts four actors and
+two owned brains, leaves native actors/bodies stationary, and measures the whole playing Match callback with and
+without one authority transaction per tick. Both brains must think on every measured tick; output includes their
+think/query/ray counts. The normal benchmark and production sources stay unchanged.

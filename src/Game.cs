@@ -36,6 +36,7 @@ public partial class Game : Node3D
 
     private VoidEnvironment environment = null!;
     private PlayerCharacter player = null!;
+    private LocalView? localView;
     private Hud hud = null!;
     private TuningPanel tuningPanel = null!;
     private PauseMenu pauseMenu = null!;
@@ -186,7 +187,8 @@ public partial class Game : Node3D
 
     private void UpdateHud()
     {
-        var camera = player.CameraRig.Camera;
+        if (localView == null) return;
+        var camera = localView.CameraRig.Camera;
         var viewportHeight = GetViewport().GetVisibleRect().Size.Y;
         var radius = Mathf.Tan(Mathf.DegToRad(player.SpreadDegrees)) / Mathf.Tan(Mathf.DegToRad(camera.Fov / 2f)) * viewportHeight / 2f;
         hud.SetCrosshair(radius, !player.IsRagdolled && Input.MouseMode == Input.MouseModeEnum.Captured, player.AimAmount);

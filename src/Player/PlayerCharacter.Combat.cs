@@ -70,7 +70,7 @@ public partial class PlayerCharacter
         rig.Kick();
         var recoilScale = Mathf.Lerp(1f, tuning.AimRecoilScale, aim);
         Aim.Kick(tuning.RecoilKickDegrees * recoilScale);
-        View?.CameraRig.KickPresentation(recoilScale);
+        Recoiled?.Invoke(recoilScale);
     }
 
     private void Fire(float spreadDegrees)

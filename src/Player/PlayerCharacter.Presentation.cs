@@ -15,7 +15,7 @@ public partial class PlayerCharacter
     private bool PoseSample(float dt, out float sampleDelta)
     {
         var camera = World.Viewport.GetCamera3D();
-        var forceFull = View != null || state != State.Active || camera == null ||
+        var forceFull = Runtime.HasLocalView || state != State.Active || camera == null ||
             camera.GetWorld3D() != World.Physics || animator.HitPlaying;
         var center = GlobalPosition + Vector3.Up;
         var interval = poseCadence.Interval(World.Tuning,

@@ -237,24 +237,24 @@ public static class ParticipantServerTests
                 match.OnMessage(ModeWireFixtures.Score(f.Id, bot.ActorId, 4, 0));
                 var shot = new NetMessage(Msg.Shot, f.Id, 2, new ShotMessage(Vector3.Zero, Vector3.Up, Vector3.Forward, 0, bot.ActorId, -1), human.ActorId, 1, 1);
                 match.OnMessage(shot);
-                Assert(bot.Runtime.DropPredictions.UnconfirmedCount == 1 && human.Runtime.DropPredictions.UnconfirmedCount == 0, "same-peer shot did not spill the victim's bank");
+                Assert(ClientActorAccess.For(bot).DropPredictions.UnconfirmedCount == 1 && ClientActorAccess.For(human).DropPredictions.UnconfirmedCount == 0, "same-peer shot did not spill the victim's bank");
                 var time = bot.Runtime.LastHitTime;
                 match.OnMessage(shot);
-                Assert(bot.Runtime.DropPredictions.UnconfirmedCount == 1 && bot.Runtime.LastHitTime == time, "echo repeated prediction");
+                Assert(ClientActorAccess.For(bot).DropPredictions.UnconfirmedCount == 1 && bot.Runtime.LastHitTime == time, "echo repeated prediction");
                 var stale = shot with { ActionId = 2, Payload = ((ShotMessage)shot.Payload) with { VictimLifeId = 2 } };
                 match.OnMessage(stale);
-                Assert(bot.Runtime.DropPredictions.UnconfirmedCount == 1, "old-life hit spilled a new life");
+                Assert(ClientActorAccess.For(bot).DropPredictions.UnconfirmedCount == 1, "old-life hit spilled a new life");
                 var swing = new NetMessage(Msg.MeleeStart, f.Id, 2, new MeleeStartMessage(1, Vector3.Forward), human.ActorId, 1, 3);
                 match.OnMessage(swing);
                 var contact = new NetMessage(Msg.MeleeContact, f.Id, 2, new MeleeContactMessage(1, bot.ActorId, -1), human.ActorId, 1, 4);
                 match.OnMessage(contact); match.OnMessage(contact);
-                Assert(bot.IsRagdolled && bot.Runtime.DropPredictions.UnconfirmedCount == 4, "same-peer melee failed or spilled twice");
-                var id = BodyIds.DropTankId(human.Runtime.AllocationSlot, 899999);
-                human.Runtime.DropPredictions.Add(id);
+                Assert(bot.IsRagdolled && ClientActorAccess.For(bot).DropPredictions.UnconfirmedCount == 4, "same-peer melee failed or spilled twice");
+                var id = BodyIds.DropTankId(ClientActorAccess.For(human).AllocationSlot, 899999);
+                ClientActorAccess.For(human).DropPredictions.Add(id);
                 match.OnMessage(ModeWireFixtures.Score(f.Id, human.ActorId, 3, -1));
                 var dropped = new BodyState(id, Transform3D.Identity, Vector3.Zero, Vector3.Zero);
                 match.OnMessage(ModeWireFixtures.Accepted(f.Id, human.ActorId, 1, Modes.SpillReason.Hit, new[] { dropped }));
-                Assert(human.Runtime.DropPredictions.Refused(new[] { id }).Count == 0,
+                Assert(ClientActorAccess.For(human).DropPredictions.Refused(new[] { id }).Count == 0,
                     "newer contact prediction suppressed an earlier drop confirmation");
                 var reserve = human.Ammo!.Reserve;
                 bot.Ammo!.Reserve = 0;

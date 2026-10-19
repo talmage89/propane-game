@@ -49,17 +49,19 @@ internal static class ModeClientObservation
         }) + "\n");
     }
 
-    public static byte[] Encode(NetMessage message, bool fromServer)
+    public static byte[] Encode(PacketCodec codec, NetMessage message, bool fromServer)
     {
-        var bytes = MessageCodec.Encode(message, fromServer);
+        var bytes = codec.Encode(message, fromServer);
         if (message.Type == Msg.ModeEvent && DevArgs.Get("mode-client-transcript") is { } path)
             File.AppendAllText(path, JsonSerializer.Serialize(new { step = "mode-send", bytes = Convert.ToBase64String(bytes) }) + "\n");
         return bytes;
     }
 
-    public static ModeHud Hud(Match match, ModeHud hud)
+    public static ModeHud Hud(object owner, ModeHud hud)
     {
         if (DevArgs.Get("mode-client-transcript") is not { } path) return hud;
+        var match = owner as Match ?? (Match)owner.GetType().GetField("parent",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(owner)!;
         File.AppendAllText(path, JsonSerializer.Serialize(new
         {
             step = "hud",

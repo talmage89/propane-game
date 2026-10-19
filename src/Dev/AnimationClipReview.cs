@@ -101,7 +101,7 @@ public partial class AnimationClipReview : Node3D
         {
             if (character != null)
             {
-                character.CameraRig.Camera.Current = true;
+                ActorView.For(character)!.CameraRig.Camera.Current = true;
             }
             else
             {

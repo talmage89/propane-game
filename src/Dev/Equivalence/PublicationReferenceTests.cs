@@ -86,10 +86,10 @@ public static class PublicationReferenceTests
                 }
                 var entries = sync.Entries.ToArray();
                 var drop = entries[^1];
-                match.Player.Runtime.DropPredictions.Add(drop.Id);
+                ClientActorAccess.For(match.Player).DropPredictions.Add(drop.Id);
                 var bot = match.Session.OwnedActors.Single(a => a.Character != match.Player).Character;
                 var botDrop = entries[^2];
-                bot.Runtime.DropPredictions.Add(botDrop.Id);
+                ClientActorAccess.For(bot).DropPredictions.Add(botDrop.Id);
                 var publish = typeof(Match).GetMethod("SendBodies", BindingFlags.Instance | BindingFlags.NonPublic)!;
                 var steps = new List<object>();
                 void Step(string name, double time)
@@ -127,11 +127,11 @@ public static class PublicationReferenceTests
                 Step("gather-while-sleeping-and-final-rests", 100.2);
                 tank.EndGather(); tank.Sleeping = true;
                 Step("gather-final-rest", 100.21);
-                match.Player.Runtime.DropPredictions.Accepted(new[] { drop.Id });
+                ClientActorAccess.For(match.Player).DropPredictions.Accepted(new[] { drop.Id });
                 drop.Body.Sleeping = true;
                 Step("confirmed-drop-first-rest", 100.22);
                 TestRunner.Assert(botDrop.Sequence == 0 && drop.Sequence == 1, "confirmation released another actor's pending drop");
-                bot.Runtime.DropPredictions.Accepted(new[] { botDrop.Id });
+                ClientActorAccess.For(bot).DropPredictions.Accepted(new[] { botDrop.Id });
                 Step("confirmed-bot-drop-first-motion", 100.23);
                 foreach (var entry in entries) entry.Body.Sleeping = false;
                 Step("wake-and-reliable-checkpoints", 100.6);

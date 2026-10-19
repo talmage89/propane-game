@@ -28,11 +28,11 @@ public sealed class BankClientAdapter : SilentClientAdapter
                 // The committed spill reaches everyone, its owner included: confirmation clears pending ids without
                 // spawning them twice.
                 if (replica.Actor(envelope.ActorId) is not { } source || source.LifeId != envelope.LifeId) break;
-                if (!source.IsRemote) source.Runtime.DropPredictions.Accepted(spill.Tanks.Select(t => t.Id));
+                if (!source.IsRemote) replica.Replication(source.Runtime).DropPredictions.Accepted(spill.Tanks.Select(t => t.Id));
                 foreach (var body in spill.Tanks) { SpawnDroppedTank(body.Id, envelope.ActorId, body.Transform, body.Linear, body.Angular); }
                 break;
             case TankBankRefused refusedSpill:
-                foreach (var id in replica.OwnedActors.SelectMany(a => a.DropPredictions.Refused(refusedSpill.Ids)))
+                foreach (var id in replica.OwnedActors.SelectMany(a => replica.Replication(a).DropPredictions.Refused(refusedSpill.Ids)))
                 {
                     replica.RemovePredictedTank(id);
                 }
@@ -51,7 +51,7 @@ public sealed class BankClientAdapter : SilentClientAdapter
             replica.ScoreChanged(delta);
         }
         if (delta < 0 && replica.Actor(actorId) is { IsRemote: false } scored)
-            scored.Runtime.DropPredictions.ScoreConfirmed(delta);
+            replica.Replication(scored.Runtime).DropPredictions.ScoreConfirmed(delta);
     }
 
     public override void HitByShot(PlayerCharacter victim)
@@ -80,14 +80,14 @@ public sealed class BankClientAdapter : SilentClientAdapter
         {
             return;
         }
-        var count = TankBankRules.SpillCount(wanted, scores.GetValueOrDefault(actor.ActorId), actor.Runtime.DropPredictions.UnconfirmedCount);
+        var count = TankBankRules.SpillCount(wanted, scores.GetValueOrDefault(actor.ActorId), replica.Replication(actor.Runtime).DropPredictions.UnconfirmedCount);
         if (count <= 0)
         {
             return;
         }
         var tuning = replica.World.Tuning;
         var rng = new RandomNumberGenerator();
-        var ticket = checked(++actor.Runtime.ActionSequence);
+        var ticket = checked(++replica.Replication(actor.Runtime).ActionSequence);
         var placements = new List<BodyState>(count);
         var start = rng.RandfRange(0, Mathf.Tau);
         var safeFrom = actor.IsRagdolled ? actor.PelvisPosition + Vector3.Up * 0.2f : actor.GlobalPosition + Vector3.Up * 0.9f;
@@ -103,8 +103,8 @@ public sealed class BankClientAdapter : SilentClientAdapter
             var velocity = outward * tuning.DropToss + Vector3.Up * tuning.DropToss * 0.6f;
             var spin = new Vector3(rng.RandfRange(-1, 1), rng.RandfRange(-1, 1), rng.RandfRange(-1, 1)) * 2f;
             var transform = new Transform3D(new Basis(Vector3.Up, rng.RandfRange(0, Mathf.Tau)), position);
-            var id = actor.Runtime.AllocateDropId();
-            actor.Runtime.DropPredictions.Add(id);
+            var id = replica.Replication(actor.Runtime).AllocateDropId();
+            replica.Replication(actor.Runtime).DropPredictions.Add(id);
             SpawnDroppedTank(id, actor.ActorId, transform, velocity, spin);
             placements.Add(new BodyState(id, transform, velocity, spin, 1, 0));
         }

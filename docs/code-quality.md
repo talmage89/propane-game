@@ -413,6 +413,10 @@ or destination admission failure, including a synchronous roster change before c
 The initial harness commit's `--dispatch-parent` run explicitly characterized the old defect;
 on the corrected checkout that flag is a deliberate negative expectation, not an acceptance mode.
 
+`MatchCodecTests` asserts Match mode publication uses the connection's injected schema resolver. The composition
+and mode differential helpers copy the same C2 workloads/accessors into both revisions, including Sandbox lifetime
+cases; the opt-in mode encoder observer delegates to the codec actually selected at the send site.
+
 `DecodeContextTests` checks injected schema/eligibility/tuner inputs, scoped catalog restoration and sequence
 consumption before expected run admission rejection. `DecodeTranscriptTests` enumerates every prefix of every
 protocol fixture plus doubly invalid inputs, and writes first-rejection type/text when given

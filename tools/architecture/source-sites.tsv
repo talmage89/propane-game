@@ -78,10 +78,10 @@ wall-clock	src/Net/FaultPacketTransport.cs	Stopwatch.GetTimestamp	1	FaultPacketT
 wall-clock	src/Net/IPacketTransport.cs	Time.GetTicksUsec	1	IPacketTransport	Approved monotonic network clock; unscaled authority, publication and transport domain.
 wall-clock	src/Net/LobbyServer.cs	Stopwatch.GetTimestamp	1	LobbyServer	Diagnostic measurement only; never use this clock for gameplay deadlines.
 wall-clock	src/Net/LobbyServer.cs	Time.GetDatetimeStringFromSystem	1	LobbyServer	Diagnostic measurement only; never use this clock for gameplay deadlines.
-wall-clock	src/Net/Match.Bots.cs	Stopwatch.GetElapsedTime	1	Match.Bots	Diagnostic measurement only; never use this clock for gameplay deadlines.
-wall-clock	src/Net/Match.Bots.cs	Stopwatch.GetTimestamp	1	Match.Bots	Diagnostic measurement only; never use this clock for gameplay deadlines.
 wall-clock	src/Net/NetTransport.cs	Stopwatch.GetElapsedTime	1	NetTransport	Diagnostic measurement only; never use this clock for gameplay deadlines.
 wall-clock	src/Net/NetTransport.cs	Stopwatch.GetTimestamp	2	NetTransport	Diagnostic measurement only; never use this clock for gameplay deadlines.
+wall-clock	src/Net/OwnedBotSet.cs	Stopwatch.GetElapsedTime	1	OwnedBotSet	Diagnostic measurement only; never use this clock for gameplay deadlines.
+wall-clock	src/Net/OwnedBotSet.cs	Stopwatch.GetTimestamp	1	OwnedBotSet	Diagnostic measurement only; never use this clock for gameplay deadlines.
 wall-clock	src/Net/ServerRun.cs	Time.GetTicksMsec	2	ServerRun	B1 moved the existing generation-duration diagnostic; never a gameplay deadline.
 wall-clock	src/Player/ActorProfile.cs	Stopwatch.GetElapsedTime	1	ActorProfile	Diagnostic measurement only; never use this clock for gameplay deadlines.
 wall-clock	src/Player/ActorProfile.cs	Stopwatch.GetTimestamp	1	ActorProfile	Diagnostic measurement only; never use this clock for gameplay deadlines.

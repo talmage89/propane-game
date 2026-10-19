@@ -83,6 +83,7 @@ public partial class NetClient : Node
     /// <summary>Sampling time on the estimated server clock; zero until a ping establishes the offset.</summary>
     internal double BodySampleTime(double now) => PingMs > 0 ? now + ServerClockOffset : 0;
 
+    public PacketCodec Codec => codec;
     public IPacketTransport Transport => transport;
     public TransportDiagnostics Diagnostics => server != null ? transport.Diagnostics(server) : default;
 

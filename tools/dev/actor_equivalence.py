@@ -16,8 +16,9 @@ def insert(path, needle, addition):
 
 def observe(project):
     # These fixtures use only parent-compatible APIs; do not copy candidate-only registration tests.
-    for name in ('ActorRetirementObservation.cs', 'ActorLifetimeFixture.cs'):
+    for name in ('ActorRetirementObservation.cs', 'ActorLifetimeFixture.cs', 'ClientActorAccess.cs'):
         copy_probe(ROOT / 'src/Dev/UnitTests/Fixtures' / name, project / 'src/Dev/UnitTests/Fixtures' / name, project)
+    copy_probe(ROOT / 'src/Dev/ActorView.cs', project / 'src/Dev/ActorView.cs', project)
     for name in ('ActorTacticsTests.cs', 'ActorTickBenchTests.cs', 'BotTacticsTests.cs', 'Fixtures/TacticalWorld.cs'):
         copy_probe(ROOT / 'src/Dev/UnitTests' / name, project / 'src/Dev/UnitTests' / name, project)
     cycles(project)
@@ -27,7 +28,8 @@ def observe(project):
            f'        if (World.ViewRoot is Propane.Net.Match match) {call}(match, "removed", actor.Character.ActorId);')
     match = project / 'src/Net/Match.cs'
     insert(match, 'var left = (PlayerLeftMessage)message.Payload;', f'                {call}(this, "departure");')
-    insert(match, 'bodies.Host = left.Host;', f'                {call}(this, "transfer");')
+    host = 'worldReplica.Bodies.Host = left.Host;' if 'worldReplica.Bodies.Host' in match.read_text() else 'bodies.Host = left.Host;'
+    insert(match, host, f'                {call}(this, "transfer");')
     insert(match, 'private void StopReplication()\n    {', f'        {call}(this, "stop-replication");')
     assembly = project / 'src/Net/Match.Assembly.cs'
     insert(assembly, 'World.Events.LocalBlast += OnLocalBlast;', f'        {call}(this, "attached");')

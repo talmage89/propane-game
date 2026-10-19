@@ -99,9 +99,6 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
     public ActorRuntime Runtime => runtime ??= new ActorRuntime(this);
     internal bool Initialized { get; private set; }
     public LogicalAim Aim => Runtime.Aim;
-    public LocalView? View { get; internal set; }
-    // Compatibility for dev capture callers; simulation never uses a view.
-    public CameraRig CameraRig => View?.CameraRig!;
 
     /// <summary>Current shot spread (full cone half-angle in degrees), for the crosshair.</summary>
     public float SpreadDegrees { get; private set; }
@@ -158,6 +155,9 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
 
     /// <summary>The player fired (this game's player only).</summary>
     public event Action<ShotReport>? Fired;
+
+    /// <summary>Presentation recoil at the original post-shot boundary, after logical aim and rig recoil.</summary>
+    public event Action<float>? Recoiled;
 
     /// <summary>Local adapters attribute contact before its tank lifecycle and child blasts run.</summary>
     public event Action<ShotReport>? ShotImpacting;
@@ -276,7 +276,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         if (what == NotificationPaused || what == NotificationUnpaused || what == NotificationDisabled || what == NotificationEnabled ||
             what == NotificationApplicationFocusOut || what == NotificationApplicationFocusIn)
         {
-            (InputOverride as DeviceInput)?.Reset();
+            (InputOverride as IResettablePlayerInputSource)?.Reset();
         }
     }
 

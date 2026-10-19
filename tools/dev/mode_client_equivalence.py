@@ -68,14 +68,18 @@ def observe(project):
         wrap(lobby, signature, 'replica' if candidate else 'this', label)
     for path in (match, project / 'src/Net/Match.King.cs', project / 'src/Net/Match.ModeBinding.cs'):
         if path.exists():
-            path.write_text(path.read_text().replace('MessageCodec.Encode(', CALL + '.Encode('))
-    code = match.read_text()
+            code = path.read_text().replace('MessageCodec.Encode(', CALL + '.Encode(Propane.Modes.ModeRegistry.Codec, ')
+            path.write_text(code.replace('Net.Codec.Encode(', CALL + '.Encode(Net.Codec, '))
+    presenter = project / 'src/Net/MatchViewBinding.cs'
+    if not presenter.exists():
+        presenter = match
+    code = presenter.read_text()
     needle = 'hudPresenter.Present(new ModeHudInput('
     assert code.count(needle) == 1
     code = code.replace(needle, CALL + '.Hud(this, ' + needle)
-    needle = 'View: ModeView));'
+    needle = 'View: modeView()));' if presenter != match else 'View: ModeView));'
     assert code.count(needle) == 1
-    match.write_text(code.replace(needle, 'View: ModeView)));'))
+    presenter.write_text(code.replace(needle, needle[:-1] + ');'))
 
 
 def compare(parent, candidate):
@@ -109,7 +113,7 @@ if __name__ == '__main__':
     assert Path(args.label).name == args.label and args.label not in ('.', '..')
     prepare(args.revision, args.label, False)
     project = ROOT / 'build' / args.label / 'project'
-    for name in ('ModeClientBenchTests.cs', 'ModeClientTests.cs'):
+    for name in ('ModeClientBenchTests.cs', 'ModeClientTests.cs', 'ModeClientLifetimeTests.cs', 'Fixtures/ClientActorAccess.cs'):
         source = ROOT / 'src/Dev/UnitTests' / name
         if source.exists():
             copy_probe(source, project / 'src/Dev/UnitTests' / name, project)

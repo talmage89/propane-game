@@ -186,7 +186,7 @@ internal sealed partial class MeasureScenario(ILabScenarioHost host, bool play =
             Name = "Lab"
         };
         AddLab(lab);
-        Assert(lab.Initialized && lab.Session.Actors.Count == 5 && lab.Player.View != null, "play fixture needs four bots and the primary view");
+        Assert(lab.Initialized && lab.Session.Actors.Count == 5 && ActorView.For(lab.Player) != null, "play fixture needs four bots and the primary view");
         var count = lab.LiveTanks.Count();
         AddChild(new FrameMetrics { ProcessPriority = int.MaxValue, WarmupFrames = 0 });
         // Equal simulation age keeps the bot/pile workload comparable when a tested cap slows the world.

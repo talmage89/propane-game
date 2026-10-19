@@ -25,6 +25,6 @@ internal static class AuthorityTransactions
         }
     }
     public static void Gather(Match match, PropaneTank tank, Action<Func<PropaneTank, bool>?> done) =>
-        typeof(Match).GetMethod("GrantGather", Private)!.Invoke(match, new object[] { new[] { tank }, done });
+        ActorLifetimeFixture.Call(match, "GrantGather", new[] { tank }, done);
     public static int Listeners(Match match) => ((Delegate?)typeof(Match).GetField("AuthorityResolved", Private)!.GetValue(match))?.GetInvocationList().Length ?? 0;
 }

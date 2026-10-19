@@ -37,6 +37,8 @@ public partial class Game
         public void CreateViews(SessionContext session)
         {
             var view = session.AddLocalView(game.player.Runtime, game, new DeviceInput(session.World.Tuning));
+            game.localView = view;
+            view.TreeExiting += () => game.localView = null;
             game.environment.Follow = view.CameraRig.Camera;
             game.hud = view.Hud;
             game.hud.SetTanks(game.current!.TanksRemaining, animate: false);

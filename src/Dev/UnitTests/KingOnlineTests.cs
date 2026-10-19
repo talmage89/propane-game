@@ -219,7 +219,7 @@ public static class KingOnlineTests
             {
                 var bot = match.Session.OwnedActors.Single(a => a.Character != match.Player).Character;
                 var brain = match.BotBrain(bot.ActorId);
-                TestRunner.Assert(brain is KingBot && ReferenceEquals(bot.InputOverride, brain) && bot.Ammo == null && bot.View == null,
+                TestRunner.Assert(brain is KingBot && ReferenceEquals(bot.InputOverride, brain) && bot.Ammo == null && ActorView.For(bot) == null,
                     "King bot did not receive its unlimited-ammo camera-free policy");
                 match.OnMessage(new NetMessage(Msg.MatchGo, f.Id, 0, new FloatMessage(10)));
                 match._PhysicsProcess(1 / 60.0);

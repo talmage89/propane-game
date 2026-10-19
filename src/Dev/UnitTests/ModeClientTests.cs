@@ -15,8 +15,14 @@ namespace Propane.Dev.UnitTests;
 [UnitSuite]
 public static class ModeClientTests
 {
-    private static ModeHud Hud(Match match) => (ModeHud)typeof(Match).GetMethod("PresentHud", BindingFlags.Instance | BindingFlags.NonPublic)!
-        .Invoke(match, new object[] { new[] { new Vector3(2, 3, 4) }, true })!;
+    private static ModeHud Hud(Match match)
+    {
+        var objectives = new[] { new Vector3(2, 3, 4) };
+        if (typeof(Match).GetMethod("PresentHud", BindingFlags.Instance | BindingFlags.NonPublic) is { } original)
+            return (ModeHud)original.Invoke(match, new object[] { objectives, true })!;
+        var binding = ActorLifetimeFixture.Field(match, "viewBinding");
+        return (ModeHud)ActorLifetimeFixture.Call(binding, "PresentHud", ActorLifetimeFixture.Field(match, "ModePhase"), match.TimeLeft, objectives, true)!;
+    }
 
     public static void Register(TestRunner runner)
     {
@@ -99,13 +105,12 @@ public static class ModeClientTests
             match.OnMessage(new NetMessage(Msg.MatchGo, server.Id, 0, new FloatMessage(10)));
             match.OnMessage(ModeWireFixtures.Score(server.Id, actor.ActorId, 4, 0));
             var before = match.LiveTanks.Count();
-            typeof(Match).GetMethod("OnRagdolled", BindingFlags.Instance | BindingFlags.NonPublic)!
-                .Invoke(match, new object[] { actor, new Vector3(0, 3, 0), Vector3.Zero, Vector3.Zero });
-            var drops = match.LiveTanks.Where(t => actor.Runtime.DropPredictions.PendingIds.Contains(t.NetId)).ToArray();
+            ActorLifetimeFixture.Call(match, "OnRagdolled", actor, new Vector3(0, 3, 0), Vector3.Zero, Vector3.Zero);
+            var drops = match.LiveTanks.Where(t => ClientActorAccess.For(actor).DropPredictions.PendingIds.Contains(t.NetId)).ToArray();
             Assert(drops.Length == 4 && match.LiveTanks.Count() == before + 4, "prediction did not spill the available bank");
             var accepted = drops.Take(2).Select(t => new BodyState(t.NetId, t.GlobalTransform, t.LinearVelocity, t.AngularVelocity, 1, 0)).ToArray();
             match.OnMessage(ModeWireFixtures.Accepted(server.Id, actor.ActorId, actor.LifeId, SpillReason.Thrown, accepted));
-            Assert(accepted.All(body => !actor.Runtime.DropPredictions.PendingIds.Contains(body.Id)) && match.LiveTanks.Count() == before + 4,
+            Assert(accepted.All(body => !ClientActorAccess.For(actor).DropPredictions.PendingIds.Contains(body.Id)) && match.LiveTanks.Count() == before + 4,
                 "committed spill respawned its prediction");
             match.OnMessage(new NetMessage(Msg.ModeCommand, server.Id, 0, new ModeEnvelope(1, 1, match.Setup.ModeId, 1, actor.ActorId, 1, uint.MaxValue,
                 ModeSchemas.TankBankKinds.SpillRefused, new TankBankRefused(drops.Skip(2).Select(t => t.NetId).ToArray()))));
