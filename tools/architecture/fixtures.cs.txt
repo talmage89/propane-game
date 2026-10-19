@@ -13,7 +13,7 @@ namespace Godot
     public static class GD { public static T Load<T>(string path) where T : new() => new(); }
     public static class Time { public static long GetTicksMsec() => 0; }
 }
-namespace Propane.Dev { public class Harness { } }
+namespace Propane.Dev { public class Harness { } public static class MessageCodec { public static int Read() => 0; } }
 namespace Propane.ReleaseSmoke { public class ReleaseTest { } public class Other { } }
 namespace Propane.Net
 {
@@ -21,26 +21,30 @@ namespace Propane.Net
     public class Match { }
     public class NetTransport { public static int Channel() => 0; }
     public static class Varargs { public static int Write(__arglist) => 0; }
-    public class MessageCodec { public static int Read() => 0; }
+    public class PacketCodec { public static int Read() => 0; }
     public class FaultPacketTransport { public int Run() => NetTransport.Channel(); }
     public class LobbyServer { public object Run() => new Propane.Player.ActorRuntime(); }
     public class BackendLeak { public object Run() => new Godot.ENetMultiplayerPeer(); }
     public class ServerRun
     {
         public object Run() => new Godot.Camera3D();
+        public object Tune() => new Propane.Core.Tuning();
     }
+    public class WireCatalog { public object Run() => new Propane.Modes.ModeCatalog(); }
     public class WireGameplay { public object Run() => new Propane.Player.ActorRuntime(); }
 }
 namespace Propane.Player
 {
     public class ActorRuntime { }
+    public class LocalView { }
+    public class BadView { public object Run() => new LocalView(); }
     public class BlockingDelay { public void Run() => Godot.OS.DelayMsec(1); }
     public class BadClock
     {
         private readonly System.Diagnostics.Stopwatch clock = new();
         public object Run() => clock;
     }
-    public class BadCodec { public int Run() => Propane.Net.MessageCodec.Read(); }
+    public class BadCodec { public int Run() => Propane.Net.PacketCodec.Read(); }
     public class BadClient { public object Run() => new Propane.Net.NetClient(); }
     public class BadHud { public object Run() => new Propane.UI.Hud(); }
 }
@@ -57,6 +61,7 @@ namespace Propane.Bots
 namespace Propane.Modes
 {
     using Alias = global::Propane.Net.NetClient;
+    public class ModeCatalog { }
     public interface IModeRules { }
     public class LiveRules : IModeRules { }
     public class DerivedRules : LiveRules { }
@@ -93,6 +98,7 @@ namespace Propane.World.Plan
 }
 namespace Propane.Session
 {
+    public class BadFacade { public int Run() => Propane.Dev.MessageCodec.Read(); }
     public class BypassQuit { public void Run() => System.Environment.Exit(1); }
     public class GlobalWrite { public void Run() => Godot.Engine.TimeScale = 2; }
     public class PauseInitializer { public object Run() => new Godot.SceneTree { Paused = true }; }
@@ -126,3 +132,5 @@ namespace Propane.ReleaseSmoke
 {
     public class BadDev { public object Run() => new Propane.Dev.Harness(); }
 }
+
+namespace Propane.Core { public class Tuning { } }

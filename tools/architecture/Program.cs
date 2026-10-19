@@ -7,9 +7,9 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 
 // Read metadata without loading Godot or executing any code from the inspected assembly.
-if (!(args.Length == 3 && args[0] is "check" or "candidate") && !(args.Length == 4 && args[0] == "inventory"))
+if (!(args.Length == 3 && args[0] is "check" or "candidate" or "state-candidate") && !(args.Length == 4 && args[0] == "inventory"))
 {
-    Console.Error.WriteLine("usage: Architecture check|candidate assembly.dll policy-directory | inventory assembly.dll game.pck policy-directory");
+    Console.Error.WriteLine("usage: Architecture check|candidate|state-candidate assembly.dll policy-directory | inventory assembly.dll game.pck policy-directory");
     return 2;
 }
 try
@@ -27,6 +27,11 @@ try
     using var pdb = MetadataReaderProvider.FromPortablePdbStream(symbols);
     var scanner = new Scanner(pe, pdb.GetMetadataReader(), policy, Path.GetDirectoryName(Path.GetFullPath(args[1]))!);
     var violations = scanner.Scan();
+    if (args[0] == "state-candidate")
+    {
+        scanner.StateCandidate();
+        return 0;
+    }
     if (args[0] == "candidate")
     {
         // Deliberately stdout only: the checker never rewrites the reviewed baseline.
@@ -43,7 +48,7 @@ try
             throw new InvalidDataException("baseline needs rule, source, target, removing package and reason: " + line);
         baseline.Add(string.Join('\t', fields.Take(3)), line);
     }
-    var failures = 0;
+    var failures = scanner.CheckState(Path.Combine(policyDirectory, "process-state.tsv"));
     foreach (var (edge, location) in violations.OrderBy(e => e.Key, StringComparer.Ordinal))
         if (!baseline.ContainsKey(edge)) { Console.Error.WriteLine($"NEW {location}: {edge.Replace('\t', ' ')}"); failures++; }
     foreach (var edge in baseline.Keys.Order(StringComparer.Ordinal))
@@ -51,7 +56,7 @@ try
     Console.WriteLine($"Architecture: {scanner.TypeCount} types, {violations.Count} reviewed exceptions, {failures} failures");
     return failures == 0 ? 0 : 1;
 }
-catch (Exception error) when (error is IOException or BadImageFormatException or ArgumentException or JsonException or InvalidOperationException)
+catch (Exception error) when (error is IOException or InvalidDataException or BadImageFormatException or ArgumentException or JsonException or InvalidOperationException)
 {
     Console.Error.WriteLine("Architecture: " + error);
     return 2;
@@ -75,6 +80,7 @@ internal sealed partial class Scanner
     private string source = "";
     private string location = "";
     private string module = "";
+    private bool stateOnly;
     private MethodDefinitionHandle currentMethod;
     private readonly Dictionary<MethodDefinitionHandle, HashSet<MethodDefinitionHandle>> calls = new();
     private readonly Dictionary<MethodDefinitionHandle, HashSet<MethodDefinitionHandle>> delegates = new();
@@ -229,11 +235,15 @@ internal sealed partial class Scanner
         foreach (var handle in reader.TypeDefinitions)
         {
             source = Name(handle);
-            if (source == "<Module>" || !source.StartsWith("Propane.", StringComparison.Ordinal)) continue;
-            TypeCount++;
-            module = ModuleOf(source);
+            if (source == "<Module>") continue;
+            // Dependencies use the Propane module map; process-state inventories also cover authored
+            // types outside that namespace, so a new namespace cannot hide a static or ambient read.
+            stateOnly = !source.StartsWith("Propane.", StringComparison.Ordinal);
+            if (!stateOnly) TypeCount++;
+            module = stateOnly ? (FileOf(handle).StartsWith("src/Dev/", StringComparison.Ordinal) ? "Dev" : "Unmapped") : ModuleOf(source);
             location = FileOf(handle) + " [" + source + "]";
             var type = reader.GetTypeDefinition(handle);
+            StateDeclarations(handle);
             Visit(type.BaseType);
             Attributes(type.GetCustomAttributes());
             Generics(type.GetGenericParameters());
@@ -289,6 +299,7 @@ internal sealed partial class Scanner
 
     private void Add(IEnumerable<string> types)
     {
+        if (stateOnly) return;
         foreach (var target in types.Distinct(StringComparer.Ordinal))
         {
             if (!currentMethod.IsNil && NativeObject(target))
@@ -476,6 +487,9 @@ internal sealed partial class Scanner
     private void Member(string owner, string name)
     {
         var member = owner + "." + name;
+        if (module != "Dev" && member == "Propane.Core.LaunchArgs.get_Current")
+            StateSite("launch-read", Owner(source), "LaunchArgs.Current");
+        if (stateOnly) return;
         if (policy.TimerOwners.TryGetValue(member, out var timerOwners) && !timerOwners.Contains(Owner(source))) Fail("timer-owner", member);
         if (policy.GlobalOwners.TryGetValue(member, out var owners) && !owners.Contains(Owner(source))) Fail("global-owner", member);
         if (!currentMethod.IsNil && (owner == "System.Threading.Tasks.Task" && name == "Run" ||
