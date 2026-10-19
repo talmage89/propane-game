@@ -229,7 +229,8 @@ public partial class MenuRetirementTest : Node
 
     private async Task Shot(string name)
     {
-        await Frames(3).ConfigureAwait(true);
+        // Recreated labels may need several draws to repopulate the font cache after scene retirement.
+        await Frames(30).ConfigureAwait(true);
         capture.Screenshot(name);
         await Frames(3).ConfigureAwait(true);
     }
