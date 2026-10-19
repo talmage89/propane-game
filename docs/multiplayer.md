@@ -367,7 +367,8 @@ The server is the game itself started with `-- --server` (and `--headless`). It 
 | `src/Net/ModeRunner.cs`, `ModeEnvelope.cs`, `src/Modes` | The mode runner, the fixed mode envelope and pure mode rules ([modes.md](modes.md)). |
 | `src/Net/NetClient.cs`, `NetTransport.cs`, `Protocol.cs` | The client connection, the ENet adapter, the message types. |
 | `src/Net/IPacketTransport.cs`, `ProtocolPeerMap.cs`, `PacketTransports.cs`, `FaultPacketTransport.cs` | Message transport contract, Protocol 2 identity bridge/backend selection, deterministic network faults. |
-| `src/Net/MessageCodec.cs`, `TankLedger.cs` | Complete, typed wire decoding and the server's tank existence/lifecycle ledger. |
+| `src/Net/MessageCodec.cs`, `PacketCodec.cs`, `TankLedger.cs` | Typed message values, owner-scoped wire decoding/encoding, and the server's tank existence/lifecycle ledger. |
+| `src/Dev/MessageCodec.cs` | Dev-only facade over the current catalog codec for fixtures without a connection; excluded from release exports. |
 | `src/Net/MatchInbox.cs` | Per-match buffering until scene initialization, with generation-safe cleanup. |
 | `src/Net/BuildInfo.cs`, `UpdateCheck.cs` | Versions and who plays together; the launch check for a newer release. |
 | `src/Net/Match.cs` | Callback, inbox and lifetime coordination for one peer; the [ownership table](architecture.md#composition-roots) names its replica, actor, bot, mode and view owners. |

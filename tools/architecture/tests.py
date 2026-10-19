@@ -9,6 +9,7 @@ import tempfile
 import time
 
 from source_check import ROOT, check, sites
+from process_state_tests import exercise_state
 
 POLICY = ROOT / 'tools/architecture'
 TOOL = ROOT / 'build/architecture/bin/Debug/net10.0/Architecture.dll'
@@ -41,6 +42,8 @@ def main():
         shutil.copyfile(POLICY / 'modules.json', scratch / 'modules.json')
         baseline = scratch / 'baseline.tsv'
         baseline.write_text('')
+        state_policy = scratch / 'process-state.tsv'
+        state_policy.write_text('')
         assembly = scratch / 'bin/Debug/net10.0/Fixture.dll'
         def compile_source(text):
             source.write_text(text)
@@ -118,11 +121,16 @@ def main():
         require(code == 1 and 'STALE baseline' in output, 'stale baseline must fail', output)
         print(output.strip())
         baseline.write_text('')
+        state_policy.write_text('static-property\tGodot.Engine\tTimeScale\t1\tFixture\tStub engine property storage\n')
         compile_source((POLICY / 'fixtures.cs.txt').read_text())
         code, candidate = inspect('candidate')
         require(code == 0, 'candidate generation', candidate)
         edges = {tuple(line.split('\t')[:3]) for line in candidate.splitlines()}
         expected = [
+            ('direction', 'Propane.Player.BadView', 'Propane.Player.LocalView'),
+            ('direction', 'Propane.Net.ServerRun', 'Propane.Core.Tuning'),
+            ('direction', 'Propane.Net.WireCatalog', 'Propane.Modes.ModeCatalog'),
+            ('runtime-dev', 'Propane.Session.BadFacade', 'Propane.Dev.MessageCodec'),
             ('direction', 'Propane.Modes.AliasReference', 'Propane.Net.NetClient'),
             ('direction', 'Propane.Modes.InheritsBot', 'Propane.Bots.Brain'),
             ('direction', 'Propane.Modes.IExtendsBot', 'Propane.Bots.IObservation'),
@@ -155,7 +163,7 @@ def main():
             ('timer-owner', 'Propane.Player.BlockingDelay', 'Godot.OS.DelayMsec'),
             ('timer-owner', 'Propane.Player.BadClock', 'System.Diagnostics.Stopwatch..ctor'),
             ('simulation-boundary', 'Propane.Player.BadClient', 'Propane.Net.NetClient'),
-            ('simulation-boundary', 'Propane.Player.BadCodec', 'Propane.Net.MessageCodec'),
+            ('simulation-boundary', 'Propane.Player.BadCodec', 'Propane.Net.PacketCodec'),
             ('simulation-boundary', 'Propane.Player.BadHud', 'Propane.UI.Hud'),
             ('bot-live-owner', 'Propane.Bots.BadMatch', 'Propane.Net.Match'),
             ('bot-live-owner', 'Propane.Bots.BadLiveRule', 'Propane.Modes.LiveRules'),
@@ -196,6 +204,9 @@ def main():
         code, output = inspect()
         require(code != 0 and '.pdb' in output, 'missing PDB accepted', output)
         print('PASS architecture: exact baseline, read-only candidate and missing-symbol rejection')
+        baseline.write_text('')
+        state_policy.write_text('')
+        exercise_state(compile_source, inspect, state_policy, require)
     for rule, text in [
         ('engine-scale', 'Godot.Engine.TimeScale = 2;'),
         ('engine-catchup', 'using E = Godot.Engine; E.MaxPhysicsStepsPerFrame = 1;'),
@@ -212,6 +223,7 @@ def main():
         ('wall-clock', 'var x = $"now {Time.GetTicksMsec()}";'),
         ('worker-entry', 'new System.Threading.Thread(Work);'),
         ('runtime-dev-source', 'using Alias = global::Propane.Dev.Harness;'),
+        ('runtime-dev-source', 'global::Propane.Dev.MessageCodec.Decode(packet, true);'),
         ('runtime-dev-source', 'using Propane.Dev;'),
     ]:
         source = {'src/Fixture.cs': 'namespace Propane.Session; ' + text}
@@ -225,7 +237,7 @@ def main():
     require(not check(approved, counts), 'approved source site rejected')
     require(check({}, counts) and check({'src/Fixture.cs': approved['src/Fixture.cs'] * 2}, counts),
             'stale or increased source count passed')
-    print(f'PASS architecture: {len(expected)} compiled negatives, 16 source negatives, stale/increased site counts ({time.monotonic() - started:.2f}s)')
+    print(f'PASS architecture: {len(expected)} compiled negatives, 17 source negatives, stale/increased site counts ({time.monotonic() - started:.2f}s)')
 
 
 if __name__ == '__main__':

@@ -1,0 +1,115 @@
+# rule	type	member	count	owner	reason/lifetime
+launch-read	Propane.Main	LaunchArgs.Current	8	Propane.Main	Application startup, server construction, explicit debug tuning and initial connection/window options; process snapshot is immutable.
+launch-read	Propane.Net.BuildInfo	LaunchArgs.Current	1	Propane.Net.BuildInfo	Version handshake/display override sampled from the immutable process snapshot on each GameVersion read.
+launch-read	Propane.Net.LobbyServer	LaunchArgs.Current	3	Propane.Net.LobbyServer	Live diagnostic opt-ins for throttle/capacity/authority logging; immutable process arguments.
+launch-read	Propane.Net.LobbyWorldDefault	LaunchArgs.Current	1	Propane.Net.LobbyWorldDefault	Classic-lobby default policy shared by construction callers; immutable process arguments.
+launch-read	Propane.Net.NetClient	LaunchArgs.Current	3	Propane.Net.NetClient	Connection lobby default and fake-protocol handshake option; constructor initializer is emitted twice across overloads.
+launch-read	Propane.Net.PacketTransports	LaunchArgs.Current	1	Propane.Net.PacketTransports	Composition selects deterministic transport faults and seed at transport construction.
+launch-read	Propane.Net.ServerRun	LaunchArgs.Current	1	Propane.Net.ServerRun	Debug match-seed override sampled when generating a run plan; no read timing changed.
+launch-read	Propane.Net.UpdateCheck	LaunchArgs.Current	2	Propane.Net.UpdateCheck	Application update opt-in and request URL; includes the async continuation under this owner.
+launch-read	Propane.ReleaseSmoke.CaptureDirector	LaunchArgs.Current	6	Propane.ReleaseSmoke.CaptureDirector	Exported diagnostic recording/capture options; capture owner borrows the immutable process snapshot.
+launch-read	Propane.ReleaseSmoke.FrameMetrics	LaunchArgs.Current	1	Propane.ReleaseSmoke.FrameMetrics	Exported diagnostic metrics destination selected on metrics owner construction.
+launch-read	Propane.ReleaseSmoke.ReleaseTest	LaunchArgs.Current	4	Propane.ReleaseSmoke.ReleaseTest	Exported smoke scenario, peer count and bounded match/timeout options; immutable process arguments.
+static-collection	Propane.Bots.BotProfile	All	1	Propane.Bots.BotProfile	Process-lifetime ordered difficulty table, immutable by convention; preserve selection order.
+static-collection	Propane.Core.AppearancePalette	ColorNames	1	Propane.Core.AppearancePalette	Process-lifetime appearance palette/name tables, immutable by convention; preserve index meaning.
+static-collection	Propane.Core.AppearancePalette	PlayerColors	1	Propane.Core.AppearancePalette	Process-lifetime appearance palette/name tables, immutable by convention; preserve index meaning.
+static-collection	Propane.Core.GameAssets	HullDirections	1	Propane.Core.GameAssets	Main-thread process asset/geometry cache, borrowed shared resources or immutable hull directions; released by engine shutdown.
+static-collection	Propane.Core.GameAssets	Scenes	1	Propane.Core.GameAssets	Main-thread process asset/geometry cache, borrowed shared resources or immutable hull directions; released by engine shutdown.
+static-collection	Propane.Core.ProcessPhysicsPolicies	catchup	1	Propane.Core.ProcessPhysicsPolicies	Live catch-up registrations and saved engine budget; lease disposal unregisters and restores the prior budget.
+static-collection	Propane.Core.Tuning	LocalTuners	1	Propane.Core.Tuning	Application saved template or lazy process reflection/schema cache; worlds copy the borrowed template, never dispose it.
+static-collection	Propane.Diagnostics.EffectProfile	allocations	1	Propane.Diagnostics.EffectProfile	Opt-in process diagnostic counters/switch; callers drain counters, never use them as gameplay state.
+static-collection	Propane.Diagnostics.EffectProfile	calls	1	Propane.Diagnostics.EffectProfile	Opt-in process diagnostic counters/switch; callers drain counters, never use them as gameplay state.
+static-collection	Propane.Diagnostics.EffectProfile	milliseconds	1	Propane.Diagnostics.EffectProfile	Opt-in process diagnostic counters/switch; callers drain counters, never use them as gameplay state.
+static-collection	Propane.Fx.ExplosionEffect	budgets	1	Propane.Fx.ExplosionEffect	Weak world-keyed explosion-budget index; world collection releases entries and active effects remain world-owned.
+static-collection	Propane.Fx.ExplosionEffect	sharedProcesses	1	Propane.Fx.ExplosionEffect	Main-thread shared effect resources and scale cache for process lifetime; borrowed by instances, engine shutdown retires resources.
+static-collection	Propane.Fx.FxLibrary	growCurves	1	Propane.Fx.FxLibrary	Main-thread process effect resource cache; immutable by convention, borrowed by instances and retired by engine shutdown.
+static-collection	Propane.Fx.FxLibrary	particleQuads	1	Propane.Fx.FxLibrary	Main-thread process effect resource cache; immutable by convention, borrowed by instances and retired by engine shutdown.
+static-collection	Propane.Fx.FxLibrary	shrinkCurves	1	Propane.Fx.FxLibrary	Main-thread process effect resource cache; immutable by convention, borrowed by instances and retired by engine shutdown.
+static-collection	Propane.Fx.VentLightBudget	worlds	1	Propane.Fx.VentLightBudget	Weak world-keyed light-budget index; world collection releases entries, lights remain world-owned.
+static-collection	Propane.Lab.LabScenarios	All	1	Propane.Lab.LabScenarios	Process-lifetime ordered shipped Lab scenario definitions; immutable by convention.
+static-collection	Propane.Lab.LabSession	BotColors	1	Propane.Lab.LabSession	Process-lifetime bot palette table, immutable by convention; session actors borrow colors.
+static-collection	Propane.Modes.DissolveRunHud	Columns	1	Propane.Modes.DissolveRunHud	Process-lifetime ordered HUD column labels, immutable by convention; no per-match mutable state.
+static-collection	Propane.Modes.DissolveRunRules	Tuners	1	Propane.Modes.DissolveRunRules	Process-lifetime ordered mode tuner-name table, immutable by convention; preserve validation and sampling order.
+static-collection	Propane.Modes.KingHud	Columns	1	Propane.Modes.KingHud	Process-lifetime ordered HUD column labels, immutable by convention; no per-match mutable state.
+static-collection	Propane.Modes.KingRules	Tuners	1	Propane.Modes.KingRules	Process-lifetime ordered mode tuner-name table, immutable by convention; preserve validation and sampling order.
+static-collection	Propane.Modes.LobbyRules	Tuners	1	Propane.Modes.LobbyRules	Process-lifetime ordered mode tuner-name table, immutable by convention; preserve validation and sampling order.
+static-collection	Propane.Modes.ModeRegistry	Lobby	1	Propane.Modes.ModeRegistry	Process shipped catalog selection or ordered exposure tables; tables immutable by convention, scoped overlays restore the exact previous catalog.
+static-collection	Propane.Modes.ModeRegistry	Prototypes	1	Propane.Modes.ModeRegistry	Process shipped catalog selection or ordered exposure tables; tables immutable by convention, scoped overlays restore the exact previous catalog.
+static-collection	Propane.Modes.RingOutHud	Columns	1	Propane.Modes.RingOutHud	Process-lifetime ordered HUD column labels, immutable by convention; no per-match mutable state.
+static-collection	Propane.Modes.RingOutRules	Tuners	1	Propane.Modes.RingOutRules	Process-lifetime ordered mode tuner-name table, immutable by convention; preserve validation and sampling order.
+static-collection	Propane.Modes.ShortFuseHud	Columns	1	Propane.Modes.ShortFuseHud	Process-lifetime ordered HUD column labels, immutable by convention; no per-match mutable state.
+static-collection	Propane.Modes.ShortFuseRules	Tuners	1	Propane.Modes.ShortFuseRules	Process-lifetime ordered mode tuner-name table, immutable by convention; preserve validation and sampling order.
+static-collection	Propane.Modes.TankBankHud	Columns	1	Propane.Modes.TankBankHud	Process-lifetime ordered HUD column labels, immutable by convention; no per-match mutable state.
+static-collection	Propane.Modes.TankBankRules	Tuners	1	Propane.Modes.TankBankRules	Process-lifetime ordered mode tuner-name table, immutable by convention; preserve validation and sampling order.
+static-collection	Propane.Navigation.BotNavigator+RouteSearch	Ring	1	Propane.Navigation.BotNavigator+RouteSearch	Process-lifetime ordered route-search neighbor offsets, immutable by convention; preserve traversal/tie order.
+static-collection	Propane.Navigation.NavigationGrid	Steps	1	Propane.Navigation.NavigationGrid	Process-lifetime ordered grid neighbor offsets, immutable by convention; preserve traversal/tie order.
+static-collection	Propane.Net.Match	NoScores	1	Propane.Net.Match	Process-lifetime empty fallback score dictionary exposed read-only; immutable by convention.
+static-collection	Propane.Net.MatchViewBinding	EmptyScores	1	Propane.Net.MatchViewBinding	Process-lifetime empty fallback score dictionary exposed read-only; immutable by convention.
+static-collection	Propane.Net.OwnedBotSet	EmptyScores	1	Propane.Net.OwnedBotSet	Process-lifetime empty fallback score dictionary exposed read-only; immutable by convention.
+static-collection	Propane.Player.ActorProfile	bytes	1	Propane.Player.ActorProfile	Opt-in process actor diagnostic counters/switch; callers drain counters, never use them as gameplay state.
+static-collection	Propane.Player.ActorProfile	calls	1	Propane.Player.ActorProfile	Opt-in process actor diagnostic counters/switch; callers drain counters, never use them as gameplay state.
+static-collection	Propane.Player.ActorProfile	milliseconds	1	Propane.Player.ActorProfile	Opt-in process actor diagnostic counters/switch; callers drain counters, never use them as gameplay state.
+static-collection	Propane.Player.CharacterAnimator	UpperBodyBones	1	Propane.Player.CharacterAnimator	Process-lifetime upper-body bone-name table, immutable by convention; asset binding is unchanged.
+static-collection	Propane.Player.DeviceInput	actions	1	Propane.Player.DeviceInput	Process-lifetime action-name lookup table, immutable by convention; device sampling remains view-owned.
+static-collection	Propane.Player.MeleeStrike	Keys	1	Propane.Player.MeleeStrike	Process-lifetime authored animation key table, immutable by convention; interpolation order is unchanged.
+static-collection	Propane.Player.Ragdoll	Specs	1	Propane.Player.Ragdoll	Process-lifetime body/bone specifications, immutable by convention; instantiated bodies remain actor-owned.
+static-collection	Propane.ReleaseSmoke.FrameMetrics	actorSystems	1	Propane.ReleaseSmoke.FrameMetrics	Process-lifetime diagnostic system-name tables, immutable by convention; metrics owner bounds recording.
+static-collection	Propane.ReleaseSmoke.FrameMetrics	systems	1	Propane.ReleaseSmoke.FrameMetrics	Process-lifetime diagnostic system-name tables, immutable by convention; metrics owner bounds recording.
+static-collection	Propane.Tank.DebrisQueue	worlds	1	Propane.Tank.DebrisQueue	Weak world-keyed debris scheduler index; world collection releases entries and world retirement stops owned work.
+static-collection	Propane.Tank.TankSimulation	worlds	1	Propane.Tank.TankSimulation	Weak world-keyed simulation index; world collection releases entries, simulation retirement unregisters process leases.
+static-collection	Propane.World.Catalog	Models	1	Propane.World.Catalog	Process-lifetime model metadata and lazy house/palette tables, immutable by convention; native resources remain shared.
+static-collection	Propane.World.Plan.PlanCatalogSnapshot	Keys	1	Propane.World.Plan.PlanCatalogSnapshot	Process-lifetime ordered catalog-key table, immutable by convention; preserve generated plan inputs.
+static-collection	Propane.World.Plan.PlanModels	BushModels	1	Propane.World.Plan.PlanModels	Process-lifetime ordered model-name tables, immutable by convention; preserve RNG indexing and world generation.
+static-collection	Propane.World.Plan.PlanModels	CarModels	1	Propane.World.Plan.PlanModels	Process-lifetime ordered model-name tables, immutable by convention; preserve RNG indexing and world generation.
+static-collection	Propane.World.Plan.PlanModels	FlowerModels	1	Propane.World.Plan.PlanModels	Process-lifetime ordered model-name tables, immutable by convention; preserve RNG indexing and world generation.
+static-collection	Propane.World.Plan.PlanModels	TreeModels	1	Propane.World.Plan.PlanModels	Process-lifetime ordered model-name tables, immutable by convention; preserve RNG indexing and world generation.
+static-collection	Propane.World.Suburb	HullCache	1	Propane.World.Suburb	Main-thread process geometry caches or ordered tint tables; resources shared until engine shutdown, tables immutable by convention.
+static-collection	Propane.World.Suburb	PicketTints	1	Propane.World.Suburb	Main-thread process geometry caches or ordered tint tables; resources shared until engine shutdown, tables immutable by convention.
+static-collection	Propane.World.Suburb	PrivacyTints	1	Propane.World.Suburb	Main-thread process geometry caches or ordered tint tables; resources shared until engine shutdown, tables immutable by convention.
+static-collection	Propane.World.Suburb	TrimeshCache	1	Propane.World.Suburb	Main-thread process geometry caches or ordered tint tables; resources shared until engine shutdown, tables immutable by convention.
+static-collection	Propane.World.WorldMaterials	Converted	1	Propane.World.WorldMaterials	Main-thread process converted-material/shader cache; borrowed by world instances and retired by engine shutdown.
+static-field	Propane.Core.GameAssets	debrisPieces	1	Propane.Core.GameAssets	Main-thread process asset/geometry cache, borrowed shared resources or immutable hull directions; released by engine shutdown.
+static-field	Propane.Core.GameAssets	tankInterior	1	Propane.Core.GameAssets	Main-thread process asset/geometry cache, borrowed shared resources or immutable hull directions; released by engine shutdown.
+static-field	Propane.Core.GameAssets	tankMesh	1	Propane.Core.GameAssets	Main-thread process asset/geometry cache, borrowed shared resources or immutable hull directions; released by engine shutdown.
+static-field	Propane.Core.GameAssets	tankOuter	1	Propane.Core.GameAssets	Main-thread process asset/geometry cache, borrowed shared resources or immutable hull directions; released by engine shutdown.
+static-field	Propane.Core.GameAssets	tankShape	1	Propane.Core.GameAssets	Main-thread process asset/geometry cache, borrowed shared resources or immutable hull directions; released by engine shutdown.
+static-field	Propane.Core.LaunchArgs	activeOverride	1	Propane.Core.LaunchArgs	Lazy immutable process snapshot and strictly nested test override stack; scope disposal restores the exact predecessor.
+static-field	Propane.Core.LaunchArgs	current	1	Propane.Core.LaunchArgs	Lazy immutable process snapshot and strictly nested test override stack; scope disposal restores the exact predecessor.
+static-field	Propane.Core.PlayerPreferences	binding	1	Propane.Core.PlayerPreferences	Main-owned borrowed store selection; nested binding disposal restores the predecessor after scene consumers retire.
+static-field	Propane.Core.ProcessPhysicsPolicies	ordinaryCatchup	1	Propane.Core.ProcessPhysicsPolicies	Live catch-up registrations and saved engine budget; lease disposal unregisters and restores the prior budget.
+static-field	Propane.Core.ProcessPhysicsPolicies+Hitstop	owner	1	Propane.Core.ProcessPhysicsPolicies+Hitstop	Process-wide offline-world hitstop arbitration and real-time expiry; pause/overlap/retirement release ownership and restore scale.
+static-field	Propane.Core.ProcessPhysicsPolicies+Hitstop	releaseAt	1	Propane.Core.ProcessPhysicsPolicies+Hitstop	Process-wide offline-world hitstop arbitration and real-time expiry; pause/overlap/retirement release ownership and restore scale.
+static-field	Propane.Core.ProcessPhysicsPolicies+Hitstop	worlds	1	Propane.Core.ProcessPhysicsPolicies+Hitstop	Process-wide offline-world hitstop arbitration and real-time expiry; pause/overlap/retirement release ownership and restore scale.
+static-field	Propane.Core.Tuning	savedTemplate	1	Propane.Core.Tuning	Application saved template or lazy process reflection/schema cache; worlds copy the borrowed template, never dispose it.
+static-field	Propane.Core.Tuning	schema	1	Propane.Core.Tuning	Application saved template or lazy process reflection/schema cache; worlds copy the borrowed template, never dispose it.
+static-field	Propane.Fx.ExplosionEffect	flipbookTexture	1	Propane.Fx.ExplosionEffect	Main-thread shared effect resources and scale cache for process lifetime; borrowed by instances, engine shutdown retires resources.
+static-field	Propane.Fx.ExplosionEffect	processScale	1	Propane.Fx.ExplosionEffect	Main-thread shared effect resources and scale cache for process lifetime; borrowed by instances, engine shutdown retires resources.
+static-field	Propane.Fx.FxLibrary	bulletHoleTexture	1	Propane.Fx.FxLibrary	Main-thread process effect resource cache; immutable by convention, borrowed by instances and retired by engine shutdown.
+static-field	Propane.Fx.FxLibrary	dustMaterial	1	Propane.Fx.FxLibrary	Main-thread process effect resource cache; immutable by convention, borrowed by instances and retired by engine shutdown.
+static-field	Propane.Fx.FxLibrary	fireMaterial	1	Propane.Fx.FxLibrary	Main-thread process effect resource cache; immutable by convention, borrowed by instances and retired by engine shutdown.
+static-field	Propane.Fx.FxLibrary	noise	1	Propane.Fx.FxLibrary	Main-thread process effect resource cache; immutable by convention, borrowed by instances and retired by engine shutdown.
+static-field	Propane.Fx.FxLibrary	quad	1	Propane.Fx.FxLibrary	Main-thread process effect resource cache; immutable by convention, borrowed by instances and retired by engine shutdown.
+static-field	Propane.Fx.FxLibrary	scorchTexture	1	Propane.Fx.FxLibrary	Main-thread process effect resource cache; immutable by convention, borrowed by instances and retired by engine shutdown.
+static-field	Propane.Fx.FxLibrary	smokeMaterial	1	Propane.Fx.FxLibrary	Main-thread process effect resource cache; immutable by convention, borrowed by instances and retired by engine shutdown.
+static-field	Propane.Fx.FxLibrary	softDotTexture	1	Propane.Fx.FxLibrary	Main-thread process effect resource cache; immutable by convention, borrowed by instances and retired by engine shutdown.
+static-field	Propane.Fx.FxLibrary	sparkMaterial	1	Propane.Fx.FxLibrary	Main-thread process effect resource cache; immutable by convention, borrowed by instances and retired by engine shutdown.
+static-field	Propane.Fx.FxLibrary	ventFireMaterial	1	Propane.Fx.FxLibrary	Main-thread process effect resource cache; immutable by convention, borrowed by instances and retired by engine shutdown.
+static-field	Propane.Fx.FxLibrary	ventSmokeMaterial	1	Propane.Fx.FxLibrary	Main-thread process effect resource cache; immutable by convention, borrowed by instances and retired by engine shutdown.
+static-field	Propane.Fx.Tracer	material	1	Propane.Fx.Tracer	Main-thread process material cache; borrowed immutable shared resource retired by engine shutdown.
+static-field	Propane.Modes.ModeRegistry	current	1	Propane.Modes.ModeRegistry	Process shipped catalog selection or ordered exposure tables; tables immutable by convention, scoped overlays restore the exact previous catalog.
+static-field	Propane.Net.BuildInfo	build	1	Propane.Net.BuildInfo	Lazy process build-label cache from application metadata; no run-owned state.
+static-field	Propane.Player.DroppedMagazine	mesh	1	Propane.Player.DroppedMagazine	Main-thread process mesh/shape cache; borrowed by instances and retired by engine shutdown.
+static-field	Propane.Player.DroppedMagazine	shape	1	Propane.Player.DroppedMagazine	Main-thread process mesh/shape cache; borrowed by instances and retired by engine shutdown.
+static-field	Propane.Player.Rifle	bodyMaterial	1	Propane.Player.Rifle	Main-thread process shared rifle material; borrowed by instances and retired by engine shutdown.
+static-field	Propane.Tank.VentJet	processScale	1	Propane.Tank.VentJet	Main-thread process particle-material/scale cache; borrowed by jets, engine shutdown retires shared resources.
+static-field	Propane.Tank.VentJet	sharedFlameProcess	1	Propane.Tank.VentJet	Main-thread process particle-material/scale cache; borrowed by jets, engine shutdown retires shared resources.
+static-field	Propane.Tank.VentJet	sharedSmokeProcess	1	Propane.Tank.VentJet	Main-thread process particle-material/scale cache; borrowed by jets, engine shutdown retires shared resources.
+static-field	Propane.UI.UiStyle	boldFont	1	Propane.UI.UiStyle	Main-thread process bold-font cache; borrowed by controls and retired by engine shutdown.
+static-field	Propane.World.AmmoPickup	shader	1	Propane.World.AmmoPickup	Main-thread process shader cache; borrowed by pickup materials and retired by engine shutdown.
+static-field	Propane.World.Catalog	housePalettes	1	Propane.World.Catalog	Process-lifetime model metadata and lazy house/palette tables, immutable by convention; native resources remain shared.
+static-field	Propane.World.Catalog	houses	1	Propane.World.Catalog	Process-lifetime model metadata and lazy house/palette tables, immutable by convention; native resources remain shared.
+static-field	Propane.World.WorldMaterials	worldShader	1	Propane.World.WorldMaterials	Main-thread process converted-material/shader cache; borrowed by world instances and retired by engine shutdown.
+static-property	Propane.Core.DevLog	Enabled	1	Propane.Core.DevLog	Explicit diagnostic logging switch for the process; no hidden gameplay state.
+static-property	Propane.Diagnostics.EffectProfile	Enabled	1	Propane.Diagnostics.EffectProfile	Opt-in process diagnostic counters/switch; callers drain counters, never use them as gameplay state.
+static-property	Propane.Player.ActorProfile	Enabled	1	Propane.Player.ActorProfile	Opt-in process actor diagnostic counters/switch; callers drain counters, never use them as gameplay state.
+static-property	Propane.UI.MenuNavigation	Gamepad	1	Propane.UI.MenuNavigation	Application device/glyph preference; input owner updates it synchronously, per-view routing remains future work.

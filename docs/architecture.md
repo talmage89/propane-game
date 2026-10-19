@@ -59,7 +59,7 @@ stable top-level owner so compiler-generated numbering does not cause churn.
 | `Modes/` | Rules by default; `ModeDefinition`/`ModeBundle`/`ModeCatalog`/registry/supply are Composition; HUD input/presenters are Presentation; HUD values/`IModeView` remain plain rules observations. |
 | `Player/`, `Tank/`, `Fx/` | Simulation by default; input values and resolved state values are Foundation; cameras/views/device input and mode geometry are Presentation; `ReplicatedIntent` is Client. The separate `PlayerNetState.cs` is a Foundation value; shared profiling lives in `Diagnostics/`. |
 | `Navigation/`, `Bots/` | Navigation and Bots. |
-| `Net/` | Wire by default; `LobbyServer`/`ServerRun`, ledger, roster, contact admission, ServerMode/ServerModes inputs, plain ModeWireTuners, KingPlacement and mode wires/runner are Server; body/actor snapshot helpers, prediction, authority transactions, mode client adapters and inbox are Client; Match/backend factory/update/diagnostics are Composition; NetClient is Client; MessageCodec is the Dev convenience facade in Composition over Wire PacketCodec; TransportMetrics accepts plain Wire observations. Lobby/profile/setup contracts and phases are Wire; shared identity/appearance/body values live in `Core/`, standings in Rules, and `World/AmmoPickup` in Simulation. |
+| `Net/` | Wire by default; `LobbyServer`/`ServerRun`, ledger, roster, contact admission, ServerMode/ServerModes inputs, plain ModeWireTuners, KingPlacement and mode wires/runner are Server; body/actor snapshot helpers, prediction, authority transactions, mode client adapters and inbox are Client; Match/backend factory/update/diagnostics are Composition; NetClient is Client; the Dev-only MessageCodec facade is excluded from release exports; TransportMetrics accepts plain Wire observations. Lobby/profile/setup contracts and phases are Wire; shared identity/appearance/body values live in `Core/`, standings in Rules, and `World/AmmoPickup` in Simulation. |
 | `UI/` | Presentation by default; front-end screens, their transactions and lobby/stage composition are Composition. |
 | `ReleaseSmoke/`, `Dev/` | Smoke and Dev respectively; no game dependency on the checker project under `tools/architecture/`. |
 
@@ -133,8 +133,9 @@ still requires an actor. This cache neither retargets an existing local view nor
 
 [ModeRegistry](../src/Modes/ModeRegistry.cs) compiles the network integrations into one validated
 [ModeCatalog](../src/Modes/ModeCatalog.cs). Bundles pair existing definitions with schemas and explicit server wire/client adapter
-factories; bounded parsing/encoding remains in Wire's PacketCodec. Composition's MessageCodec convenience facade
-selects the current catalog only for Dev fixtures and release-reference probes without a connection owner. Match
+factories; bounded parsing/encoding remains in Wire's PacketCodec. The [Dev-only MessageCodec facade](../src/Dev/MessageCodec.cs)
+selects the current catalog for fixtures and release-reference probes without a connection owner; ExportRelease
+excludes it and the runtime-to-Dev gate rejects production callers. Match
 uses its connection's captured codec for authority/mode sends and lends it to ClientWorldReplica and ClientActorSet
 for gather, pose and action sends. Connection/server owners capture immutable
 PacketCodec inputs at construction (schema resolver, lobby eligibility and native tuner validator); those inputs
@@ -444,7 +445,7 @@ See [world services](world-services.md#streamed-content-history), [the Lab](lab.
 
 | Process state | Current owner; target/constraint |
 | --- | --- |
-| Launch arguments | LaunchArgs.Current is a lazy immutable Foundation snapshot. Main-thread test overrides nest strictly and restore the exact previous snapshot on disposal; only composition applies tuning overrides. |
+| Launch arguments | LaunchArgs.Current is a lazy immutable Foundation snapshot. Production ambient reads are inventoried by compiled owner/count; new reads require review. Main-thread test overrides nest strictly and restore the exact previous snapshot on disposal; only composition applies tuning overrides. |
 | Player preferences | Main owns/binds one disposable PlayerSettings store. Menus/MenuProfile borrow a store; MatchViewBinding passes the same borrowed store to its HUD and menu; isolated tests own stores and strictly nested bindings. Lazy load, format, migration and immediate save timing are unchanged. |
 | Saved tuning | Tuning.SavedTemplate application preference; each WorldContext copies it. UI edits explicit world target. The template is borrowed for composition/UI; never dispose it or use it as a mutable world target. Explicit launch overrides and successful Save update it for future worlds. |
 | Asset/catalog caches | Main-thread process caches above; borrowed immutable resources, no per-world mutation. |
@@ -465,14 +466,25 @@ W1 bounds ordinary incidental stream diagnostics/forgotten prefixes, not those h
 remain in [multiplayer](multiplayer.md), [bot-navigation](bot-navigation.md) and the owning types.
 
 [Source approvals](../tools/architecture/source-sites.tsv) name today's global writes, timers, wall-clock reads and
-worker entries with their owners/domains. New sites, increased counts and stale approvals fail lint. An approved
+worker entries with their owners/domains. [Process-state approvals](../tools/architecture/process-state.tsv) separately
+pin production `LaunchArgs.Current` getter references (11 owner groups, 31 compiled reads) and 103 mutable statics
+(41 fields, 4 settable properties, 58 readonly collections/tables). Each names its owner and reason/lifetime; Dev is
+excluded, exported Smoke is included. New sites, changed counts and stale approvals fail lint. An approved
 diagnostic clock is not an approved gameplay timer. Do not use Task.Delay, SceneTree timers or wall time for new
 simulation timers outside a reviewed clock domain.
 
 ## Verification and evidence
 
 [Code quality](code-quality.md) owns the gate. `make lint` checks links/formatting/UID pairs, rebuilds Debug and
-ExportRelease with warnings as errors, then checks compiled dependencies and source sites. `make test` covers core,
+ExportRelease with warnings as errors, then checks compiled dependencies, process-state inventories and source sites.
+The process-state check covers every non-readonly static field, static setter (any visibility), and readonly array,
+BCL/Godot collection or weak table, including authored collection subclasses and auto-property storage. Read-only
+collection interfaces/wrappers are conservatively inventoried. Compiler-generated closure/delegate caches are excluded.
+This checks compiled declarations/getter references, not deep object mutability, reflection/dynamic access, inactive
+source branches, or changed semantics inside an approved read; immutable/frozen containers and arbitrary readonly
+object graphs are outside the collection check. [Checker coverage](../tools/architecture/README.md#scope-and-limits)
+states the limits. Independent fixtures reject restored A1/N1/C2 dependency edges and new/count-changed process state.
+`make test` covers core,
 behavior (including real device delivery), bounded generator sweeps and separate-process world/segment hashes.
 `make test-infra` tests the checkers, including compiled architecture negatives; `make check` runs these in order.
 Deep sweeps stay in `make test-full`; real-time bot jobs do not share its heavy offline jobs.
