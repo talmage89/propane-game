@@ -23,7 +23,7 @@ public partial class Match
     void IClientModeReplica.TrackTank(PropaneTank tank, int owner) => worldReplica.TrackTank(tank, owner);
     void IClientModeReplica.RemovePredictedTank(uint id) => worldReplica.RemovePredictedTank(id);
     void IClientModeReplica.SendMode(PlayerCharacter actor, uint action, ushort kind, object payload) =>
-        Net.Send(MessageCodec.Encode(new NetMessage(Msg.ModeEvent, Setup.Id, 0, new ModeEnvelope(round, worldRevision, mode.Id,
+        Net.Send(Net.Codec.Encode(new NetMessage(Msg.ModeEvent, Setup.Id, 0, new ModeEnvelope(round, worldRevision, mode.Id,
             mode.SchemaVersion, actor.ActorId, actor.LifeId, action, kind, payload)), fromServer: false));
     void IClientModeReplica.ScoreChanged(int delta) => viewBinding.ScoreChanged(delta, ModePhase, timeLeft);
     void IClientModeReplica.MaterializePile(ClientPileView view, IReadOnlyList<PropaneTank> built, IReadOnlyList<BodyState> placements) =>

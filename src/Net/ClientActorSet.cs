@@ -11,7 +11,7 @@ using Propane.World;
 namespace Propane.Net;
 
 /// <summary>Client actor attachments for one physical session. Entries retire synchronously through ActorRegistration.
-/// Reads no input; Match invokes snapshot application and publication at the original physics boundaries.</summary>
+/// Borrows the connection codec and reads no input; Match invokes snapshot application and publication at the original physics boundaries.</summary>
 internal sealed class ClientActorSet
 {
     [Flags]
@@ -20,6 +20,7 @@ internal sealed class ClientActorSet
     private readonly HashSet<uint> unconfirmedDrops = new();
     private readonly WorldContext World;
     private readonly IMonotonicClock Clock;
+    private readonly PacketCodec codec;
     private readonly IReadOnlyList<ActorRuntime> actors;
     private readonly Func<int, PlayerCharacter?> Actor;
     private readonly Func<PlayerCharacter?> selected;
@@ -39,7 +40,7 @@ internal sealed class ClientActorSet
         Func<int, PlayerCharacter?> actor, Func<PlayerCharacter?> selected, Func<bool> playing, Func<IModeClient> clientMode,
         ClientWorldReplica worldReplica, int matchId, int peer, Action<byte[], TrafficClass> sendBytes,
         Action<NetWriter, TrafficClass> send, Action<PlayerCharacter> hitMarker, Action<PlayerCharacter, Vector3> hitDirection,
-        Action<PlayerCharacter, int> ammoPopup, Action<PlayerCharacter?, string> tuningChanged, Func<double, double, double> transitAge)
+        Action<PlayerCharacter, int> ammoPopup, Action<PlayerCharacter?, string> tuningChanged, Func<double, double, double> transitAge, PacketCodec codec)
     {
         World = world;
         Clock = clock;
@@ -58,6 +59,7 @@ internal sealed class ClientActorSet
         this.ammoPopup = ammoPopup;
         this.tuningChanged = tuningChanged;
         this.transitAge = transitAge;
+        this.codec = codec;
     }
 
     public ClientActorReplication Add(PlayerCharacter actor)
@@ -236,14 +238,14 @@ internal sealed class ClientActorSet
     {
         var sequence = checked(++Get(actor.Runtime).ReplicationSequence);
         var message = new NetMessage(Msg.PlayerState, matchId, 0, new PlayerStateMessage(now, actor.CaptureNetState()), actor.ActorId, actor.LifeId, sequence);
-        sendBytes(MessageCodec.Encode(message, fromServer: false), TrafficClass.UnreliablePlayerPoses);
+        sendBytes(codec.Encode(message, fromServer: false), TrafficClass.UnreliablePlayerPoses);
     }
 
     private void SendActor(PlayerCharacter actor, Msg type, object payload, bool predict = false)
     {
         var message = new NetMessage(type, matchId, me, payload, actor.ActorId, actor.LifeId, checked(++Get(actor.Runtime).ActionSequence));
         if (predict) OnRelay(message);
-        sendBytes(MessageCodec.Encode(message, false), TrafficClass.ReliableOrdered);
+        sendBytes(codec.Encode(message, false), TrafficClass.ReliableOrdered);
     }
 
     public void OnRelay(NetMessage message)

@@ -207,7 +207,7 @@ public partial class Match : Node3D, IClientAuthorityReplica, IClientModeReplica
     {
         var actor = Actor(actorId);
         var action = actor != null ? checked(++actorReplication.Get(actor.Runtime).ActionSequence) : 0;
-        var bytes = MessageCodec.Encode(new NetMessage(type, Setup.Id, 0, payload, actorId, lifeId, action), fromServer: false);
+        var bytes = Net.Codec.Encode(new NetMessage(type, Setup.Id, 0, payload, actorId, lifeId, action), fromServer: false);
         if (AuthoritySendOverride != null) { AuthoritySendOverride(bytes); }
         else { Net.Send(bytes); }
     }

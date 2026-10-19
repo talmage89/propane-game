@@ -44,8 +44,9 @@ public sealed record GetUpMessage(Vector3 Position, float Yaw);
 public sealed record TuningMessage(string Name, Variant Value);
 
 /// <summary>
-/// Composition convenience for callers without a connection owner. Runtime receive loops borrow an owner-scoped
-/// PacketCodec instead; schema selection and native tuner validation never run implicitly inside Wire.
+/// Composition convenience for Dev fixtures and release-reference probes without a connection owner. Production
+/// send/receive paths borrow an owner-scoped PacketCodec; schema selection and native tuner validation never run
+/// implicitly inside Wire.
 /// </summary>
 public static class MessageCodec
 {

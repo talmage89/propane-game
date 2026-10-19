@@ -13,13 +13,14 @@ namespace Propane.Net;
 
 /// <summary>
 /// Physical-session replica: body identity, reconstruction, correction, gather and publication integration.
-/// Borrows the world and authority transactions; Match stops it before views/actors/native content retire.
+/// Borrows the world, connection codec and authority transactions; Match stops it before views/actors/native content retire.
 /// Network timestamps use the injected monotonic clock. No processing node or independent scheduling.
 /// </summary>
 internal sealed class ClientWorldReplica : IDisposable
 {
     private readonly WorldContext World;
     private readonly IMonotonicClock Clock;
+    private readonly PacketCodec codec;
     private readonly int me, matchId;
     private readonly Func<bool> playing;
     private readonly Func<int, uint> actorLife;
@@ -37,7 +38,7 @@ internal sealed class ClientWorldReplica : IDisposable
 
     public ClientWorldReplica(WorldContext world, IMonotonicClock clock, int peer, MatchSetup setup,
         Func<bool> playing, Func<int, uint> actorLife, Func<double, double> sampleTime, Action<NetWriter, TrafficClass> send,
-        Action<byte[]> sendBytes)
+        Action<byte[]> sendBytes, PacketCodec codec)
     {
         World = world;
         Clock = clock;
@@ -46,6 +47,7 @@ internal sealed class ClientWorldReplica : IDisposable
         this.playing = playing;
         this.actorLife = actorLife;
         this.sendBytes = sendBytes;
+        this.codec = codec;
         bodies = new BodySync(world.Tuning, peer, setup.HostId);
         bodyPublisher = new BodyPublisher(bodies, setup.Id, sampleTime, send);
     }
@@ -186,7 +188,7 @@ internal sealed class ClientWorldReplica : IDisposable
         if (!playing() || bodies.Host != me || bodies.Get(tank.NetId) is not { } entry || entry.Owner != me || entry.ClaimPending ||
             tank.State != PropaneTank.TankState.Intact) { return; }
         var state = BodySync.Capture(entry) with { Sequence = checked(++entry.Sequence) };
-        sendBytes(MessageCodec.Encode(new NetMessage(Msg.Gather, matchId, 0, new GatherMessage(phase, new[] { state })), fromServer: false));
+        sendBytes(codec.Encode(new NetMessage(Msg.Gather, matchId, 0, new GatherMessage(phase, new[] { state })), fromServer: false));
     }
 
     public void ReceiveGather(int sender, GatherMessage message)

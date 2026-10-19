@@ -35,14 +35,14 @@ public partial class Match
             match.viewBinding.BindMode(match.ClientMode);
             match.worldReplica = new ClientWorldReplica(session.World, match.Clock, match.me, match.Setup,
                 () => match.IsPlaying, id => match.Actor(id)?.LifeId ?? 0, match.Net.BodySampleTime, match.Send,
-                bytes => match.Net.Send(bytes));
+                bytes => match.Net.Send(bytes), match.Net.Codec);
             match.authority = new ClientAuthorityTransactions(match.me, match);
             match.worldReplica.BindAuthority(match.authority);
             match.actorReplication = new ClientActorSet(session.World, match.Clock, session.Actors, match.Actor,
                 () => match.player, () => match.IsPlaying, () => match.ClientMode, match.worldReplica, match.Setup.Id, match.me,
                 (bytes, traffic) => match.Net.Send(bytes, traffic), match.Send, match.viewBinding.HitMarker,
                 match.viewBinding.HitDirection, match.viewBinding.AmmoPopup, match.viewBinding.TuningChanged,
-                (now, time) => match.Net.PingMs > 0 ? now + match.Net.ServerClockOffset - time : 0);
+                (now, time) => match.Net.PingMs > 0 ? now + match.Net.ServerClockOffset - time : 0, match.Net.Codec);
         }
         public void CreateActors(SessionContext session) => match.BuildActors();
         public void CreateViews(SessionContext session)

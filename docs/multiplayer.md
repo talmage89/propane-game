@@ -413,8 +413,9 @@ order, health finalization, round replacement, protocol and mode eligibility are
 
 Connection owners borrow immutable `PacketCodec` inputs captured by composition: schema resolution, fixed lobby
 eligibility and tuner validation. Wire parsing never reads the composition catalog or native Tuning schema itself.
-`MessageCodec` is a composition convenience for session/harness callers; it delegates to the current catalog's
-codec. Captured connection codecs survive later scoped catalog restoration without changing their schemas.
+`MessageCodec` remains a composition convenience used by Dev fixtures and release-reference probes; it delegates
+to the current catalog's codec. Production Match authority/mode sends and replica gather/pose/action sends use `NetClient.Codec`,
+the same captured instance as that connection's receive path. Captured connection codecs survive later scoped catalog restoration without changing their schemas.
 
 Expected malformed/truncated/out-of-bounds/unknown-schema failures are logged and discarded before dispatch.
 Expected run admission rejections stay at their original checks, preserving earlier sequence consumption and
