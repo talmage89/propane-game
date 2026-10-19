@@ -19,6 +19,25 @@ public enum TrafficClass
 
 public static class TrafficReliability
 {
+    public const int OrderedLaneCount = 4;
+
+    /// <summary>Backend-independent independent-ordering lane; disposable classes share control's lane index.</summary>
+    public static int OrderedLane(this TrafficClass traffic) => traffic switch
+    {
+        TrafficClass.ReliableBodyStates => 1,
+        TrafficClass.ReliableBodyStates2 => 2,
+        TrafficClass.ReliableBodyStates3 => 3,
+        _ => 0,
+    };
+
+    internal static TrafficClass ReliableTraffic(int lane) => lane switch
+    {
+        1 => TrafficClass.ReliableBodyStates,
+        2 => TrafficClass.ReliableBodyStates2,
+        3 => TrafficClass.ReliableBodyStates3,
+        _ => TrafficClass.ReliableOrdered,
+    };
+
     public static bool IsReliable(this TrafficClass traffic) =>
         traffic is TrafficClass.ReliableOrdered or TrafficClass.ReliableBodyStates or
             TrafficClass.ReliableBodyStates2 or TrafficClass.ReliableBodyStates3;

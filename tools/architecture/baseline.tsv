@@ -1,7 +1,0 @@
-direction	Propane.Net.LobbyServer	Propane.Net.CapacityMetrics	N1	Server diagnostics utility accepts concrete client state; split server-neutral observation sampling.
-direction	Propane.Net.MessageCodec	Propane.Core.Tuning	N1	Single-tuner decoding still invokes the native Tuning schema; N1 must inject owner-scoped validation with the same bounds and rejection order.
-direction	Propane.Net.MessageCodec	Propane.Modes.ModeDefinition	N1	Inject owner-scoped schema and eligibility resolution while separating decode/admission from dispatch failure; remove composition catalog lookup without changing malformed-packet rejection order.
-direction	Propane.Net.MessageCodec	Propane.Modes.ModeRegistry	N1	Inject owner-scoped schema and eligibility resolution while separating decode/admission from dispatch failure; remove composition catalog lookup without changing malformed-packet rejection order.
-direction	Propane.Net.NetClient	Propane.Net.PacketTransports	N1	Connection owner constructs application backend factory; inject backend-independent transport.
-direction	Propane.Net.NetReader	Propane.Core.Tuning	N1	Complete snapshot decoding still invokes the native Tuning schema; N1 must inject owner-scoped validation preserving complete-schema checks and rejection order.
-transport-backend	Propane.Net.FaultPacketTransport	Propane.Net.NetTransport	N1	Fault transport uses ENet channel helper; move lane semantics to backend-independent traffic contract.

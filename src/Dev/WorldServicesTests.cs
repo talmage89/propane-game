@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Godot;
 using Propane.Core;
 using Propane.Dev.UnitTests;
+using Propane.Modes;
 using Propane.Net;
 using Propane.Tank;
 using Propane.World;
@@ -307,7 +308,7 @@ public partial class WorldServicesTests : Node
         var rawServer = network.Create();
         var server = Propane.Modes.ModeRegistry.CreateServer(new ServerTransport(rawServer, rawServer.PeerIds));
         server.Port = 1;
-        var client = new NetClient(network.Create());
+        var client = new NetClient(network.Create(), ModeRegistry.Codec);
         AddChild(server); AddChild(client);
         try
         {

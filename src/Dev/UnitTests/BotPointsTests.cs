@@ -2,6 +2,7 @@ using System.Linq;
 using Propane.Bots;
 using Propane.Core;
 using Propane.Dev.UnitTests.Fixtures;
+using Propane.Modes;
 using Propane.Net;
 
 namespace Propane.Dev.UnitTests;
@@ -51,7 +52,7 @@ public static class BotPointsTests
                 var players = fixture.Setup.Players.Select((p, i) => p.Player.Kind == ActorKind.Bot
                     ? p with { Player = p.Player with { ControllerConfig = ControllerConfig.ForBot((byte)(i - 2)) } } : p).ToArray();
                 // The fixture's two humans precede its bots.
-                var client = new NetClient();
+                var client = new NetClient(PacketTransports.CreateClient(), ModeRegistry.Codec);
                 client.Handle(MessageCodec.Encode(new NetMessage(Msg.Welcome, 0, 0, new WelcomeMessage(2, null)), true));
                 var match = new Match { Net = client, Setup = fixture.Setup with { Players = players }, CreateLocalView = false };
                 runner.AddChild(match);

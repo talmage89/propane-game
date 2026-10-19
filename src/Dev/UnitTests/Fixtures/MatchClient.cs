@@ -1,6 +1,7 @@
 using System;
 using Godot;
 using Propane.Core;
+using Propane.Modes;
 using Propane.Net;
 
 namespace Propane.Dev.UnitTests.Fixtures;
@@ -20,7 +21,7 @@ internal sealed class MatchClient : IDisposable
     public MatchClient(Node runner, MatchSetup setup, IMonotonicClock clock, int peerId, Tuning? template = null, Action<byte[]>? authoritySend = null,
         bool createLocalView = true)
     {
-        Client = new NetClient(PacketTransports.CreateClient(), clock) { Template = template ?? Tuning.SavedTemplate };
+        Client = new NetClient(PacketTransports.CreateClient(), ModeRegistry.Codec, clock) { Template = template ?? Tuning.SavedTemplate };
         Handshake.Welcome(Client, peerId);
         Match = new Match { Net = Client, Setup = setup, Clock = clock, AuthoritySendOverride = authoritySend, CreateLocalView = createLocalView };
         runner.AddChild(Match);

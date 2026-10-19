@@ -93,6 +93,8 @@ public static class ModeRegistry
 
     private static ModeCatalog current = Shipped;
     public static IReadOnlyList<ModeDefinition> All => current.Definitions;
+    /// <summary>Borrowed immutable wire bindings for the current compiled catalog; owners capture once.</summary>
+    public static PacketCodec Codec => current.Codec;
 
     public static ModeDefinition? Find(byte id, ushort schemaVersion) => current.Find(id, schemaVersion)?.Definition;
 
@@ -146,7 +148,7 @@ public static class ModeRegistry
             return mode;
         }
         var modes = new ServerModes(Compile(initialMode ?? TankBank), Compile(LobbyWorld), Lobby.Select(Compile));
-        return new LobbyServer(modes, new ServerSettings(supplies), SuburbPlans.Generate, transport ?? PacketTransports.CreateServer(), clock);
+        return new LobbyServer(modes, new ServerSettings(supplies), SuburbPlans.Generate, transport ?? PacketTransports.CreateServer(), catalog.Codec, clock);
     }
 
     /// <summary>

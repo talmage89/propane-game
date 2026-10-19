@@ -31,7 +31,8 @@ public static class ServerRunBenchTests
 
     private static void Measure(string label, LobbyServer server, ManualClock clock, int run, int actor)
     {
-        const int warmup = 20000, ticks = 30000;
+        const int warmup = 20000;
+        var ticks = DevArgs.Get("network-bench-long") != null ? 300000 : 30000;
         var poses = new byte[warmup + ticks][];
         var bodies = new byte[poses.Length][];
         for (var i = 0; i < poses.Length; i++)
@@ -57,6 +58,8 @@ public static class ServerRunBenchTests
         packets = 0;
         payload = 0;
         var times = new double[ticks];
+        using var process = Process.GetCurrentProcess();
+        var cpuStart = process.TotalProcessorTime;
         var allocated = GC.GetAllocatedBytesForCurrentThread();
         for (var i = 0; i < ticks; i++)
         {
@@ -65,8 +68,9 @@ public static class ServerRunBenchTests
             times[i] = Stopwatch.GetElapsedTime(start).TotalMicroseconds;
         }
         var bytesPerTick = (GC.GetAllocatedBytesForCurrentThread() - allocated) / (double)ticks;
+        var cpuUs = (process.TotalProcessorTime - cpuStart).TotalMicroseconds / ticks;
         TestRunner.Assert(packets >= ticks * 2 && payload > 0, "server workload did no relay work");
         Array.Sort(times);
-        GD.Print(FormattableString.Invariant($"[server-bench] mode={label} ticks={ticks} bodies=8 packets={packets} payload={payload} bytes_per_tick={bytesPerTick:F2} mean_us={times.Average():F3} p95_us={times[(int)((ticks - 1) * .95)]:F3} p99_us={times[(int)((ticks - 1) * .99)]:F3}"));
+        GD.Print(FormattableString.Invariant($"[server-bench] mode={label} ticks={ticks} bodies=8 packets={packets} payload={payload} bytes_per_tick={bytesPerTick:F2} cpu_us={cpuUs:F3} mean_us={times.Average():F3} p95_us={times[(int)((ticks - 1) * .95)]:F3} p99_us={times[(int)((ticks - 1) * .99)]:F3}"));
     }
 }

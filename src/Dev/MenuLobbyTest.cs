@@ -3,6 +3,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Godot;
 using Propane.Core;
+using Propane.Modes;
 using Propane.Net;
 using Propane.UI;
 
@@ -74,7 +75,7 @@ public partial class MenuGamepadTest
         CheckMouse(Input.MouseModeEnum.Captured);
 
         // A second player joins the world (a guest that builds nothing: its character stands where it arrives).
-        var guest = new NetClient { Name = "LobbyGuest", LobbyWorlds = false };
+        var guest = new NetClient(PacketTransports.CreateClient(), ModeRegistry.Codec) { Name = "LobbyGuest", LobbyWorlds = false };
         AddChild(guest);
         guest.Connect("127.0.0.1", Menus.HostPort, "Guest", AppearanceRecord.FromPalette(5));
         await Wait(() => guest.State == NetClient.Status.Connected && guest.Lobbies.Count == 1, "guest sees the lobby").ConfigureAwait(true);

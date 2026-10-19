@@ -211,7 +211,7 @@ public static class KingOnlineTests
         runner.Run("king online/peer HUD and lobby bot consume snapshots and ignore stale zone state", () =>
         {
             using var f = new ServerFixture(mode: ModeRegistry.King, bots: 1);
-            var client = new NetClient();
+            var client = new NetClient(PacketTransports.CreateClient(), ModeRegistry.Codec);
             client.Handle(MessageCodec.Encode(new NetMessage(Msg.Welcome, 0, 0, new WelcomeMessage(2, null)), true));
             var match = new Match { Net = client, Setup = f.Setup, CreateLocalView = false };
             runner.AddChild(match);

@@ -190,7 +190,7 @@ public static class ModeSchemas
         var reason = (SpillReason)Range(r.Byte(), 0, (int)SpillReason.Thrown);
         var count = Range(r.Byte(), 1, MaxSpill);
         var tanks = new BodyState[count];
-        for (var i = 0; i < count; i++) tanks[i] = MessageCodec.ReadBody(r);
+        for (var i = 0; i < count; i++) tanks[i] = PacketCodec.ReadBody(r);
         if (tanks.Select(t => t.Id).Distinct().Count() != count) throw new InvalidDataException("duplicate ids");
         return new TankBankSpill(reason, tanks);
     }
@@ -199,7 +199,7 @@ public static class ModeSchemas
     {
         var spill = (TankBankSpill)payload;
         w.Byte((byte)spill.Reason).Byte((byte)Range(spill.Tanks.Count, 1, MaxSpill));
-        foreach (var tank in spill.Tanks) MessageCodec.WriteBody(w, tank);
+        foreach (var tank in spill.Tanks) PacketCodec.WriteBody(w, tank);
     }
 
     private static TankBankRefused ReadRefused(NetReader r)
@@ -232,7 +232,7 @@ public static class ModeSchemas
         foreach (var (actor, bank, present) in banks.Banks) w.Int(actor).Int(bank).Bool(present);
     }
 
-    private static KingPileWanted ReadPileWanted(NetReader r) => new(r.UShort(), MessageCodec.ReadVector(r), Range(r.Byte(), 1, MaxSpill),
+    private static KingPileWanted ReadPileWanted(NetReader r) => new(r.UShort(), PacketCodec.ReadVector(r), Range(r.Byte(), 1, MaxSpill),
         Range(r.Float(), 0, MaxZoneRadius), Range(r.Float(), 0, MaxZoneRadius));
 
     private static void WritePileWanted(NetWriter w, object payload)
@@ -245,7 +245,7 @@ public static class ModeSchemas
     {
         var zone = (int)r.UShort();
         var tanks = new Transform3D[Range(r.Byte(), 0, MaxSpill)];
-        for (var i = 0; i < tanks.Length; i++) tanks[i] = MessageCodec.ReadTransform(r);
+        for (var i = 0; i < tanks.Length; i++) tanks[i] = PacketCodec.ReadTransform(r);
         return new KingPilePlaced(zone, tanks);
     }
 
@@ -261,7 +261,7 @@ public static class ModeSchemas
         var zone = (int)r.UShort();
         var owner = Range(r.Int(), 1, int.MaxValue);
         var tanks = new BodyState[Range(r.Byte(), 1, MaxSpill)];
-        for (var i = 0; i < tanks.Length; i++) tanks[i] = MessageCodec.ReadBody(r);
+        for (var i = 0; i < tanks.Length; i++) tanks[i] = PacketCodec.ReadBody(r);
         if (tanks.Select(t => t.Id).Distinct().Count() != tanks.Length) throw new InvalidDataException("duplicate ids");
         if (tanks.Any(t => t.Id < BodyIds.MapTankBase || t.Id >= BodyIds.DropTankBase)) throw new InvalidDataException("pile tank outside the world's ids");
         return new KingPileSpawned(zone, owner, tanks);
@@ -271,7 +271,7 @@ public static class ModeSchemas
     {
         var spawned = (KingPileSpawned)payload;
         w.UShort((ushort)Range(spawned.Zone, 0, MaxZone)).Int(spawned.Owner).Byte((byte)Range(spawned.Tanks.Count, 1, MaxSpill));
-        foreach (var tank in spawned.Tanks) MessageCodec.WriteBody(w, tank);
+        foreach (var tank in spawned.Tanks) PacketCodec.WriteBody(w, tank);
     }
 
     /// <summary>
@@ -281,8 +281,8 @@ public static class ModeSchemas
     private static KingState ReadZone(NetReader r)
     {
         var zone = (int)r.UShort();
-        var spot = Spot(MessageCodec.ReadVector(r));
-        var next = Spot(MessageCodec.ReadVector(r));
+        var spot = Spot(PacketCodec.ReadVector(r));
+        var next = Spot(PacketCodec.ReadVector(r));
         var radius = Range(r.Float(), float.Epsilon, MaxZoneRadius);
         var holder = Nonnegative(r.Int());
         var occupants = new int[Range(r.Byte(), 0, Protocol.MaxWireActors)];

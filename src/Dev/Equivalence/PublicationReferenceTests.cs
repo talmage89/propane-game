@@ -6,6 +6,7 @@ using Godot;
 using Propane.Core;
 using Propane.Dev.UnitTests;
 using Propane.Dev.UnitTests.Fixtures;
+using Propane.Modes;
 using Propane.Net;
 using Propane.Tank;
 using Propane.World;
@@ -50,7 +51,7 @@ public static class PublicationReferenceTests
             var network = new LoopbackNetwork();
             var rawServer = network.Create(); var rawClient = network.Create();
             var wire = new RecordingTransport(rawClient);
-            var client = new NetClient(wire, fixture.Clock) { Template = fixture.Tuning };
+            var client = new NetClient(wire, ModeRegistry.Codec, fixture.Clock) { Template = fixture.Tuning };
             var endpoint = new PacketEndpoint("", 1234);
             TestRunner.Assert(rawServer.Listen(endpoint, 4).Success, "publication listen");
             client._Ready(); client.Connect("", endpoint.Port, "Reference", 0);

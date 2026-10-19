@@ -409,10 +409,38 @@ The existing replication stop callback disposes the adapter after inbox detachme
 state and borrowed physical/view collaborators. Actor action sequences/drop predictions, clock domains, command
 order, health finalization, round replacement, protocol and mode eligibility are unchanged.
 
+### Decode and failure boundaries
+
+Connection owners borrow immutable `PacketCodec` inputs captured by composition: schema resolution, fixed lobby
+eligibility and tuner validation. Wire parsing never reads the composition catalog or native Tuning schema itself.
+`MessageCodec` is a composition convenience for session/harness callers; it delegates to the current catalog's
+codec. Captured connection codecs survive later scoped catalog restoration without changing their schemas.
+
+Expected malformed/truncated/out-of-bounds/unknown-schema failures are logged and discarded before dispatch.
+Expected run admission rejections stay at their original checks, preserving earlier sequence consumption and
+rejection order. An exception from a handler, including `InvalidDataException`, is an internal owner failure;
+diagnostics include its type and stack, never a malformed-packet accusation. NetClient retires its connection and
+inbox through its ordinary drop path, including a failure during delayed replay. Cleanup continues past transport
+or offline-observer failures and reports those causes separately.
+
+LobbyServer contains receive, tick and departure failures to their affected lobby: routes detach before normal
+run disposal, staging clears and the lobby phase returns to Waiting. It attempts a notice and state update, keeps
+peers connected and does not automatically create another run or retry a partial transaction. The creator can
+start again. Notification failure is logged without interrupting unrelated lobbies. A transport's ordinary returned
+send failures retain their existing policy; unexpected thrown send failures inside dispatch follow owner retirement.
+Create/join explicitly track the affected lobby through departure and admission, so a later construction or
+destination failure cannot retire the previous lobby after a successful departure. This does not provide rollback,
+reconnect/resume or automatic recovery of a client scene after a server run failure.
+
 ### Transport contract
 
-`NetClient` and `LobbyServer` accept an `IPacketTransport` before entering the tree. `PacketTransports` selects
-ENet for production; the unit suites inject an in-memory loopback with a manual monotonic clock. Gameplay sends
+`TrafficReliability` defines independent ordering lane indices/count and reliability. ENet maps these indices to
+channels; simulated faults use the same neutral contract, with no dependency on the ENet adapter. Server metrics
+format plain transport/inbox samples through `TransportMetrics`; composition samples client state separately.
+
+`NetClient` requires an `IPacketTransport` and `PacketCodec` before entering the tree; Main selects both production
+inputs. Its parameterless Godot constructor rejects missing inputs, as LobbyServer's does. `LobbyServer` borrows its
+transport, codec and application settings through composition. `PacketTransports` selects ENet for production; the unit suites inject an in-memory loopback with a manual monotonic clock. Gameplay sends
 `ReliableOrdered`, three `ReliableBodyStates` lanes, `UnreliablePlayerPoses` or `UnreliableBodyStates`, never backend
 channel numbers. ENet keeps control and disposable traffic on channel zero; reliable body checkpoints rotate per
 body through channels one to three, so a checkpoint retry cannot block control. Ordering is per connection and

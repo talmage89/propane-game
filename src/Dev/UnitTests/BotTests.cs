@@ -225,7 +225,7 @@ public static class BotTests
         runner.Run("bots/the owner simulates its bots with the mode's brain and no view", () =>
         {
             using var f = new ServerFixture(bots: 1);
-            var client = new NetClient();
+            var client = new NetClient(PacketTransports.CreateClient(), ModeRegistry.Codec);
             client.Handle(MessageCodec.Encode(new NetMessage(Msg.Welcome, 0, 0, new WelcomeMessage(2, null)), true));
             var match = new Match { Net = client, Setup = f.Setup, CreateLocalView = false };
             runner.AddChild(match);

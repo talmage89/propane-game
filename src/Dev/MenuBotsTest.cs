@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Godot;
 using Propane.Bots;
 using Propane.Core;
+using Propane.Modes;
 using Propane.Net;
 using Propane.UI;
 
@@ -30,7 +31,7 @@ public partial class MenuGamepadTest
         await Wait(() => Menus.Current == Menus.Screen.Browser, "host browser opened").ConfigureAwait(true);
         await Press(JoyButton.A).ConfigureAwait(true);
         await Wait(() => Menus.Current == Menus.Screen.Lobby, "created lobby").ConfigureAwait(true);
-        var watcher = new NetClient { Name = "BotWatcher" };
+        var watcher = new NetClient(PacketTransports.CreateClient(), ModeRegistry.Codec) { Name = "BotWatcher" };
         AddChild(watcher);
         watcher.Connect("127.0.0.1", Menus.HostPort, "Watcher", AppearanceRecord.FromPalette(6));
         await Wait(() => watcher.State == NetClient.Status.Connected && watcher.Lobbies.Count == 1, "watcher sees the lobby").ConfigureAwait(true);
@@ -151,7 +152,7 @@ public partial class MenuGamepadTest
         await Type("Late bot", erase: 20).ConfigureAwait(true);
         Net.SetCapacity(3);
         await Wait(() => Net.Lobby!.Capacity == 3, "capacity lowered").ConfigureAwait(true);
-        var crowd = new NetClient { Name = "BotCrowd" };
+        var crowd = new NetClient(PacketTransports.CreateClient(), ModeRegistry.Codec) { Name = "BotCrowd" };
         AddChild(crowd);
         crowd.Connect("127.0.0.1", Menus.HostPort, "Crowd", AppearanceRecord.FromPalette(2));
         await Wait(() => crowd.State == NetClient.Status.Connected && crowd.Lobbies.Count == 1, "crowd sees the lobby").ConfigureAwait(true);

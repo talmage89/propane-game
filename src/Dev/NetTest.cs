@@ -113,7 +113,7 @@ public partial class NetTest : Node, INetScenarioHost
         roam = DevArgs.Get("lobby-roam") != null;
         roamSeconds = DevArgs.GetFloat("lobby-roam", 10);
         if (!roam) Tuning.SavedTemplate.LobbyStageTime = 0;
-        net = new NetClient { Name = "Net", LobbyWorlds = roam };
+        net = new NetClient(PacketTransports.CreateClient(), ModeRegistry.Codec) { Name = "Net", LobbyWorlds = roam };
         AddChild(net);
         director = new CaptureDirector { Name = "Director", QuitAfter = DevArgs.GetFloat("quit", 400f) };
         AddChild(director);

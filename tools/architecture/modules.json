@@ -256,7 +256,10 @@
     "Propane.World.Plan.SegmentPlan": "Plans",
     "Propane.World.Plan.SegmentPlans": "Plans",
     "Propane.World.Plan.SegmentSettings": "Plans",
-    "Propane.World.SuburbPlans": "Composition"
+    "Propane.World.SuburbPlans": "Composition",
+    "Propane.Net.MessageCodec": "Composition",
+    "Propane.Net.PacketCodec": "Wire",
+    "Propane.Net.TransportMetrics": "Wire"
   },
   "Files": {
     "src/Core/AppearanceRecord.cs": "Foundation",
@@ -346,7 +349,10 @@
     "src/UI/StageScreen.cs": "Composition",
     "src/World/AmmoPickup.cs": "Simulation",
     "src/World/Plan/SegmentPlans.cs": "Plans",
-    "src/World/SuburbPlans.cs": "Composition"
+    "src/World/SuburbPlans.cs": "Composition",
+    "src/Net/MessageCodec.cs": "Wire",
+    "src/Net/PacketCodec.cs": "Wire",
+    "src/Net/CapacityMetrics.cs": "Wire"
   },
   "WorkerProbes": [
     "Propane.Dev.UnitTests.TestRunner._Ready"

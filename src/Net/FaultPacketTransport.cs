@@ -20,7 +20,7 @@ public sealed class FaultPacketTransport : IPacketTransport
     {
         public readonly List<Pending> Incoming = new();
         public readonly List<Pending> Outgoing = new();
-        public readonly double[] LastReliableIn = new double[4], LastReliableOut = new double[4];
+        public readonly double[] LastReliableIn = new double[TrafficReliability.OrderedLaneCount], LastReliableOut = new double[TrafficReliability.OrderedLaneCount];
         public readonly PacketCounters Counters = new();
         public bool Active = true;
         public bool Ready;
@@ -116,7 +116,7 @@ public sealed class FaultPacketTransport : IPacketTransport
         return SendResult.Success;
     }
 
-    private static int ReliableLane(TrafficClass traffic) => NetTransport.Channel(traffic);
+    private static int ReliableLane(TrafficClass traffic) => traffic.OrderedLane();
 
     private bool Fits(List<Pending> queue, int bytes) => queue.Count < maxPackets && bytes <= maxBytes - queue.Sum(p => p.Bytes.Length);
     private double Delayed(TrafficClass traffic, ref double lastReliable)
