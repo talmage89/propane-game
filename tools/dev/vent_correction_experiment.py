@@ -61,7 +61,8 @@ def settling(project):
     if not project.resolve().is_relative_to(ROOT / 'build'):
         raise ValueError('experiments belong under build/')
     body = project / 'src/Net/BodySync.cs'
-    if 'FU2B_SETTLING' in body.read_text() or 'TargetAcceleration;' not in body.read_text():
+    if ('FU2B_SETTLING' in body.read_text() or 'CorrectionVentBlendTime' in body.read_text() or
+            'TargetAcceleration;' not in body.read_text()):
         raise ValueError('settling requires an unmodified FU2b correction candidate')
     replace(body, 'var blend = Mathf.Max(tuning.CorrectionBlendTime, 0.02f);',
             'var defaultBlend = Mathf.Max(tuning.CorrectionBlendTime, 0.02f);')
@@ -95,7 +96,8 @@ def spin_average(project):
     if not project.resolve().is_relative_to(ROOT / 'build'):
         raise ValueError('experiments belong under build/')
     body = project / 'src/Net/BodySync.cs'
-    if 'FU2B_SPIN_AVERAGE' in body.read_text() or 'TargetAcceleration;' not in body.read_text():
+    if ('FU2B_SPIN_AVERAGE' in body.read_text() or 'GravityState;' in body.read_text() or
+            'TargetAcceleration;' not in body.read_text()):
         raise ValueError('spin averaging requires an unmodified FU2b correction candidate')
     replace(body, 'internal Vector3 TargetAcceleration;', '''internal Vector3 TargetAcceleration;
         // Borrowed from the native body; release on every contact/authority retirement boundary.
