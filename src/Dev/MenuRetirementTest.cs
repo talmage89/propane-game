@@ -113,7 +113,7 @@ public partial class MenuRetirementTest : Node
             await Wait(() => !world.IsAlive && Menus.Current == Menus.Screen.Lobby, "client recovered usable lobby").ConfigureAwait(true);
             Check(Net.State == NetClient.Status.Connected && Net.ActiveMatchId == 0, "connection survives and retired inbox clears");
             await Frames(4).ConfigureAwait(true);
-            capture.Screenshot(worldFailure ? "world_recovered_lobby" : "match_recovered_lobby");
+            await Shot(worldFailure ? "world_recovered_lobby" : "match_recovered_lobby").ConfigureAwait(true);
             await Activate("Start match").ConfigureAwait(true);
             await Wait(() => Main.HasNode("Match") && Main.GetNode<Match>("Match").IsPlaying, "replacement match playing").ConfigureAwait(true);
             Check(Main.GetNode<Match>("Match").Setup.Id > failed.Run.Id, "recovered menu starts a fresh match");
@@ -161,7 +161,7 @@ public partial class MenuRetirementTest : Node
         await Wait(() => Menus.Current == Menus.Screen.Lobby && Net.ActiveMatchId == 0, "loading failure returned to lobby").ConfigureAwait(true);
         await Frames(5).ConfigureAwait(true);
         Check(!Main.HasNode("Match") && !Main.HasNode("LobbyWorld"), "abandoned construction cannot resurrect its scene");
-        capture.Screenshot("loading_recovered_lobby");
+        await Shot("loading_recovered_lobby").ConfigureAwait(true);
         Net.MatchStarting -= Starting;
         await Activate("Start match").ConfigureAwait(true);
         await Wait(() => Main.HasNode("Match") && Main.GetNode<Match>("Match").IsPlaying, "match after loading failure").ConfigureAwait(true);
@@ -214,7 +214,7 @@ public partial class MenuRetirementTest : Node
         Check(injected.Faults == 1 && (world == null || !world.IsAlive), "native send retires once after its origin returns");
         Check(log.Lines.Any(line => line.Contains(DevArgs.Get("send-throw") != null ? "injected native client send" : "Backpressure", StringComparison.Ordinal)),
             "real native send failure cause logged");
-        capture.Screenshot(gameplay ? "send_game_recovered_menu" : "send_ui_recovered_menu");
+        await Shot(gameplay ? "send_game_recovered_menu" : "send_ui_recovered_menu").ConfigureAwait(true);
         Net.SetProcess(true);
         Net.SetPhysicsProcess(true);
         Menus.ConnectTo("127.0.0.1:" + Menus.HostPort, "Recovered");
@@ -225,6 +225,13 @@ public partial class MenuRetirementTest : Node
         await Wait(() => Main.HasNode("Match") && Main.GetNode<Match>("Match").IsPlaying, "reconnected match").ConfigureAwait(true);
         Check(true, "native send recovery starts a fresh match");
         ShutdownGuard.Quit(GetTree());
+    }
+
+    private async Task Shot(string name)
+    {
+        await Frames(3).ConfigureAwait(true);
+        capture.Screenshot(name);
+        await Frames(3).ConfigureAwait(true);
     }
 
     private async Task Activate(string text)
