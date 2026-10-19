@@ -136,3 +136,11 @@ adds a separate scratch-only `FU2B_SETTLING` switch. `--vent-experiment-blend` u
 Pass a tuning override to every client and `--expect-vent-blend=VALUE` to reject ineffective experiments.
 This is independent of the historical acceleration/floor/lead/cadence switches and is never inserted into checkout
 runtime sources.
+
+For the later fast-spin experiments on an FU2b scratch candidate, prepare with
+`vent_correction_experiment.py --spin-average` (optionally `--settling`), then enable
+`--vent-experiment-spin-average` and assert `--expect-spin-average=20`. The separate
+`--authored-spin` preparer option adds `--vent-experiment-authored-spin`, replacing fitted axial acceleration
+with the existing authored mean jet force. Run `body_correction_tests --spin-average-proof` or
+`--authored-spin-proof` with the corresponding switches to exercise the native component and replacement
+oracles. These switches never affect ordinary exported production builds.

@@ -15,7 +15,7 @@ from compare_tanks import compare
 from compare_tanks_tests import LIMITS, log
 from vent_residual import CALL, ROOT, observe
 from vent_residual_report import alignment, support, trace_metadata, trace_window
-from vent_correction_experiment import experiment, settling, spin_average
+from vent_correction_experiment import experiment, settling, spin_average, authored_spin
 
 
 class VentResidualTests(unittest.TestCase):
@@ -222,6 +222,25 @@ class VentResidualTests(unittest.TestCase):
             before = {p: p.read_bytes() for p in project.rglob('*') if p.is_file()}
             with self.assertRaises(ValueError):
                 spin_average(project)
+            self.assertEqual(before, {p: p.read_bytes() for p in project.rglob('*') if p.is_file()})
+
+    def test_authored_spin_uses_existing_force_and_refuses_reapplication(self):
+        with self.assertRaises(ValueError):
+            authored_spin(ROOT)
+        with tempfile.TemporaryDirectory(dir=ROOT / 'build', prefix='fu2b-authored-test-') as directory:
+            project = Path(directory)
+            for name in ('src/Net/BodySync.cs', 'src/Core/Tuning.70.Match.cs', 'Propane.csproj', 'src/Dev/NetTest.cs', 'src/Tank/PropaneTank.cs'):
+                target = project / name
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(ROOT / name, target)
+            spin_average(project)
+            authored_spin(project)
+            body = (project / 'src/Net/BodySync.cs').read_text()
+            self.assertIn('jet.Dot(axisOfSpin) * tuning.VentThrust * ramp / body.Mass', body)
+            self.assertIn('internal float PredictionVentAge => ventAge;', (project / 'src/Tank/PropaneTank.cs').read_text())
+            before = {p: p.read_bytes() for p in project.rglob('*') if p.is_file()}
+            with self.assertRaises(ValueError):
+                authored_spin(project)
             self.assertEqual(before, {p: p.read_bytes() for p in project.rglob('*') if p.is_file()})
 
 

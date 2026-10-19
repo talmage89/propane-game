@@ -157,3 +157,31 @@ one has no final moving body). Two spinning arcs pass at 0.099/0.028 m. Ordinary
 still open. The native component oracle fails on production at `(5, 1.2151974, 0)` versus `(5, 0.03799987, 0)`;
 it passes on the experiment, proving transverse gravity and retained axial acceleration. The cost workload now
 accepts a source spin so final measurements can exercise this path. Thirteen preparer assertions pass.
+
+## Spin-component limits and authored-force follow-up
+
+The complete spin-average matrix rejects that isolated model: **1/16 fails**, seed 27 / fault seed 3,
+final 0.612 m. Its source spin is below the experimental 20 rad/s threshold; the predicted goal is about
+0.22 m from the owner, while the observer is about 0.61 m away. The combined 100 ms response and spin average
+still fails **1/6** 240 ms runs (0.512 m). There the predicted goal is already 0.535 m away. The source's fitted
+axial component includes a recent contact impulse. All completed failures retain the original checker verdict.
+
+Increasing normal tank publications to 30 Hz, with reliable checkpoints at 25 ms, does not solve this:
+the original response fails 1/3 age controls (0.945 m), and the combined response/model fails 1/3 (0.586 m).
+These overrides were verified on every client. Two earlier rate experiments requested 20 ms, which the shared
+float range validator rejects at that endpoint; they never started and are excluded. No tank send-rate change
+has entered production. Raw-clock publication/receipt matching in three failing bodies finds transit errors
+of approximately -13 to +11 ms, rather than evidence of a large clock-estimation fault. No clock filter changed.
+
+The next Dev-only switch replaces the fitted fast-spin axial component with the **existing** authored mean jet
+force, retaining native gravity, the magnitude bound, contact exclusion and the separate moving-only response.
+The scratch tank exposes its existing simulation vent age read-only for the authored thrust ramp; owner physics,
+flutter and force application are unchanged. The native oracle uses a deliberately different measured axial
+acceleration, checks the authored axial force independently, and replaces the native body with a zero-gravity
+body while the old one remains alive. It fails on production and passes on the scratch model. Fourteen Python
+preparer/observer assertions pass. Native acceptance is still open.
+
+Cost caution: observed scratch projects retain observer hooks even when no trace is requested. Their extra
+allocation is instrumentation overhead and is excluded from production cost comparisons. The clean combined
+prototype measures 39,962,016 bytes versus 72,605,472 parent bytes across 60,000 whole client callbacks; three
+alternating pairs retain their load records. This is a rejected prototype's cost, not final-head acceptance.

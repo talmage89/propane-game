@@ -97,6 +97,12 @@ def spin_average(project):
     body = project / 'src/Net/BodySync.cs'
     if 'FU2B_SPIN_AVERAGE' in body.read_text() or 'TargetAcceleration;' not in body.read_text():
         raise ValueError('spin averaging requires an unmodified FU2b correction candidate')
+    replace(body, 'internal Vector3 TargetAcceleration;', '''internal Vector3 TargetAcceleration;
+        // Borrowed from the native body; release on every contact/authority retirement boundary.
+        internal PhysicsDirectBodyState3D? GravityState;''')
+    replace(body, 'private static void RestoreContacts(Entry entry)\n    {', '''private static void RestoreContacts(Entry entry)
+    {
+        entry.GravityState = null;''')
     flag = 'Propane.Dev.DevArgs.Get("vent-experiment-spin-average") != null'
     replace(body, 'entry.TargetAngular.LengthSquared() <= tuning.CorrectionAccelerationMaxSpin * tuning.CorrectionAccelerationMaxSpin;',
             '(entry.TargetAngular.LengthSquared() <= tuning.CorrectionAccelerationMaxSpin * tuning.CorrectionAccelerationMaxSpin ||\n' +
@@ -106,7 +112,8 @@ def spin_average(project):
                 if ({flag} &&
                     entry.TargetAngular.LengthSquared() > tuning.CorrectionAccelerationMaxSpin * tuning.CorrectionAccelerationMaxSpin && body.IsInsideTree())
                 {{
-                    var gravity = PhysicsServer3D.BodyGetDirectState(body.GetRid())?.TotalGravity ?? Vector3.Zero;
+                    var nativeState = entry.GravityState ??= PhysicsServer3D.BodyGetDirectState(body.GetRid());
+                    var gravity = nativeState?.TotalGravity ?? Vector3.Zero;
                     var axisOfSpin = entry.TargetAngular.Normalized();
                     acceleration = gravity + axisOfSpin * (acceleration - gravity).Dot(axisOfSpin);
                     if (acceleration.LengthSquared() > tuning.CorrectionMaxAcceleration * tuning.CorrectionMaxAcceleration) {{ acceleration = Vector3.Zero; }}
@@ -129,21 +136,46 @@ def spin_average(project):
     replace(host, anchor, anchor[:-2] + ', ("CorrectionSpinAverageMin", "expect-spin-average") }')
 
 
+def authored_spin(project):
+    """Use the existing jet force rather than a contact-contaminated axial estimate."""
+    if not project.resolve().is_relative_to(ROOT / 'build'):
+        raise ValueError('experiments belong under build/')
+    body = project / 'src/Net/BodySync.cs'
+    tank = project / 'src/Tank/PropaneTank.cs'
+    if 'FU2B_SPIN_AVERAGE' not in body.read_text() or 'PredictionVentAge' in tank.read_text():
+        raise ValueError('authored spin requires a fresh spin-average experiment')
+    replace(body, 'acceleration = gravity + axisOfSpin * (acceleration - gravity).Dot(axisOfSpin);', '''acceleration = gravity + axisOfSpin * (acceleration - gravity).Dot(axisOfSpin);
+                if (Propane.Dev.DevArgs.Get("vent-experiment-authored-spin") != null && body is Tank.PropaneTank sourceTank)
+                {
+                    var ramp = tuning.VentThrustRampTime > 0 ? Mathf.Clamp(sourceTank.PredictionVentAge / tuning.VentThrustRampTime, 0, 1) : 1f;
+                    var jet = entry.Target.Basis * sourceTank.JetDirectionLocal;
+                    acceleration = gravity - axisOfSpin * (jet.Dot(axisOfSpin) * tuning.VentThrust * ramp / body.Mass);
+                }''')
+    replace(project / 'src/Tank/PropaneTank.cs', 'private float ventAge;', 'private float ventAge;\n    internal float PredictionVentAge => ventAge;')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--project', required=True, type=Path)
     parser.add_argument('--settling', action='store_true', help='vent-only blend on an FU2b candidate')
     parser.add_argument('--spin-average', action='store_true', help='average fast transverse force on an FU2b candidate')
+    parser.add_argument('--authored-spin', action='store_true', help='use authored axial jet force instead of its velocity estimate')
     args = parser.parse_args()
     project = args.project.resolve()
     paths = [project / 'src/Net/BodySync.cs', project / 'src/Core/Tuning.70.Match.cs', project / 'Propane.csproj']
     if args.settling or args.spin_average:
         paths.append(project / 'src/Dev/NetTest.cs')
+    if args.authored_spin:
+        if not args.spin_average:
+            parser.error('--authored-spin requires --spin-average')
+        paths.append(project / 'src/Tank/PropaneTank.cs')
     before = {p: p.read_text() for p in paths}
     if args.settling:
         settling(project)
     if args.spin_average:
         spin_average(project)
+    if args.authored_spin:
+        authored_spin(project)
     if not args.settling and not args.spin_average:
         experiment(project)
     (project.parent / 'experiment.patch').write_text(''.join(''.join(difflib.unified_diff(code.splitlines(True),

@@ -69,7 +69,7 @@ public partial class BodyCorrectionTests : Node3D
             await CheckSettledContact().ConfigureAwait(true);
             CheckPoseProbe();
             await CheckReportedContact().ConfigureAwait(true);
-            if (DevArgs.Get("spin-average-proof") != null) { await CheckSpinAverage().ConfigureAwait(true); }
+            if (DevArgs.Get("spin-average-proof") != null || DevArgs.Get("authored-spin-proof") != null) { await CheckSpinAverage().ConfigureAwait(true); }
             GD.Print($"[body correction] PASS fresh observer impulse {freshSpeed:0.000000} m/s, owner peak {ownerSpeed:0.000} m/s; stale, predicted and granted-owner jets resume");
             ShutdownGuard.Quit(GetTree());
         }
@@ -112,39 +112,60 @@ public partial class BodyCorrectionTests : Node3D
         foreach (var axial in new[] { false, true })
         {
             var tank = CreateVent(5, new Vector3(80, 20, 0));
-            tank.GravityScale = 1;
+            PropaneTank? replacement = null;
             using var tuning = world.Tuning.Copy();
             typeof(Tuning).GetProperty("CorrectionSpinAverageMin")?.SetValue(tuning, 6f);
+            tuning.VentThrustRampTime = 0;
             var sync = new BodySync(tuning, 4, 2);
             sync.Register(5, tank, true, 2);
+            async Task Check(PropaneTank current, uint sequence, double now, float gravityScale)
+            {
+                current.GravityScale = gravityScale;
+                var axis = axial ? Vector3.Up : Vector3.Right;
+                var spin = axis * world.Tuning.VentMaxSpin;
+                var velocity = new Vector3(4, 2, 0);
+                var center = current.GlobalTransform * current.CenterOfMass;
+                sync.OnState(2, new BodyState(5, current.GlobalTransform, velocity, spin, 1, sequence), false, now);
+                sync.Correct(now);
+                for (var warmup = 0; warmup < 2; warmup++) { await ToSignal(GetTree(), SceneTree.SignalName.PhysicsFrame); }
+                var gravity = PhysicsServer3D.BodyGetDirectState(current.GetRid()).TotalGravity;
+                Assert(gravityScale == 0 ? gravity == Vector3.Zero : gravity.Y < -1, "spin fixture lost native gravity selection");
+                var measured = gravity + (axial ? axis * 6 : Vector3.Forward * 10);
+                var expectedAcceleration = gravity + (axial ? axis * 6 : Vector3.Zero);
+                if (DevArgs.Get("authored-spin-proof") != null)
+                {
+                    // A source collision can change either component of the measured velocity.
+                    // The fast-spin free-flight model must retain only the authored axial force.
+                    var sourceJet = new Basis(new Quaternion(axis, spin.Length() * .1f)) * current.JetDirectionLocal;
+                    expectedAcceleration = gravity - axis * sourceJet.Dot(axis) * tuning.VentThrust / current.Mass;
+                }
+                var sourceRotation = new Quaternion(axis, spin.Length() * .1f);
+                var sourceCenter = center + velocity * .1f + measured * .005f;
+                var source = new Transform3D(new Basis(sourceRotation), sourceCenter - new Basis(sourceRotation) * current.CenterOfMass);
+                var sourceVelocity = velocity + measured * .1f;
+                sync.OnState(2, new BodyState(5, source, sourceVelocity, spin, 1, sequence + 1), false, now + .1);
+                var currentRotation = new Quaternion(axis, spin.Length() * .1f) * sourceRotation;
+                var predictedCenter = sourceCenter + sourceVelocity * .1f + expectedAcceleration * .005f;
+                current.GlobalTransform = new Transform3D(new Basis(currentRotation), predictedCenter - new Basis(currentRotation) * current.CenterOfMass);
+                sync.Correct(now + .2);
+                var expected = sourceVelocity + expectedAcceleration * .1f;
+                Assert(current.LinearVelocity.DistanceTo(expected) < .001f,
+                    $"spin average axial={axial} gravity={gravityScale}: commanded {current.LinearVelocity}, expected {expected}");
+            }
             try
             {
-                var spin = Vector3.Up * world.Tuning.VentMaxSpin;
-                var velocity = new Vector3(4, 2, 0);
-                var center = tank.GlobalTransform * tank.CenterOfMass;
-                sync.OnState(2, new BodyState(5, tank.GlobalTransform, velocity, spin, 1, 1), false, 1);
-                sync.Correct(1);
-                for (var warmup = 0; warmup < 2; warmup++) { await ToSignal(GetTree(), SceneTree.SignalName.PhysicsFrame); }
-                var gravity = PhysicsServer3D.BodyGetDirectState(tank.GetRid()).TotalGravity;
-                Assert(gravity.Y < -1, "spin fixture lost native gravity");
-                var measured = gravity + (axial ? Vector3.Up * 6 : Vector3.Right * 10);
-                var expectedAcceleration = gravity + (axial ? Vector3.Up * 6 : Vector3.Zero);
-                var sourceRotation = new Quaternion(Vector3.Up, spin.Length() * .1f);
-                var sourceCenter = center + velocity * .1f + measured * .005f;
-                var source = new Transform3D(new Basis(sourceRotation), sourceCenter - new Basis(sourceRotation) * tank.CenterOfMass);
-                var sourceVelocity = velocity + measured * .1f;
-                sync.OnState(2, new BodyState(5, source, sourceVelocity, spin, 1, 2), false, 1.1);
-                var currentRotation = new Quaternion(Vector3.Up, spin.Length() * .1f) * sourceRotation;
-                var predictedCenter = sourceCenter + sourceVelocity * .1f + expectedAcceleration * .005f;
-                tank.GlobalTransform = new Transform3D(new Basis(currentRotation), predictedCenter - new Basis(currentRotation) * tank.CenterOfMass);
-                sync.Correct(1.2);
-                var expected = sourceVelocity + expectedAcceleration * .1f;
-                Assert(tank.LinearVelocity.DistanceTo(expected) < .001f,
-                    $"spin average axial={axial}: commanded {tank.LinearVelocity}, expected {expected}");
+                await Check(tank, 1, 1, 1).ConfigureAwait(true);
+                if (!axial)
+                {
+                    // Keep the first native body alive: a retained view would still report its nonzero gravity.
+                    replacement = CreateVent(6, new Vector3(82, 20, 0));
+                    sync.ReplaceBody(5, replacement);
+                    await Check(replacement, 3, 2, 0).ConfigureAwait(true);
+                }
             }
-            finally { sync.Clear(); tank.QueueFree(); }
+            finally { sync.Clear(); tank.QueueFree(); replacement?.QueueFree(); }
         }
-        GD.Print("[body correction] PASS spin averaging retains axial acceleration and native transverse gravity");
+        GD.Print("[body correction] PASS spin prediction and native gravity oracle; replacement drops the old native view");
     }
 
     private async Task CheckReportedContact()
