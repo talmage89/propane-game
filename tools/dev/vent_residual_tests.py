@@ -15,6 +15,7 @@ from compare_tanks import compare
 from compare_tanks_tests import LIMITS, log
 from vent_residual import CALL, ROOT, observe
 from vent_residual_report import alignment, support, trace_metadata, trace_window
+from vent_correction_experiment import experiment
 
 
 class VentResidualTests(unittest.TestCase):
@@ -154,6 +155,26 @@ class VentResidualTests(unittest.TestCase):
             # Reapplying must fail rather than silently double-instrument a source tree.
             with self.assertRaises(ValueError):
                 observe(project)
+
+    def test_correction_experiments_reject_checkout_and_double_insertion(self):
+        original = (ROOT / 'src/Net/BodySync.cs').read_bytes()
+        with self.assertRaises(ValueError):
+            experiment(ROOT)
+        self.assertEqual(original, (ROOT / 'src/Net/BodySync.cs').read_bytes())
+        with tempfile.TemporaryDirectory(dir=ROOT / 'build', prefix='fu2b-experiment-test-') as directory:
+            project = Path(directory)
+            for name in ('src/Net/BodySync.cs', 'src/Core/Tuning.70.Match.cs', 'Propane.csproj'):
+                target = project / name
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(ROOT / name, target)
+            (project / 'src/Dev/NetScenarios').mkdir(parents=True)
+            experiment(project)
+            body = (project / 'src/Net/BodySync.cs').read_text()
+            self.assertIn('VentCorrectionExperiment.Accept', body)
+            self.assertIn('VentCorrectionExperiment.Predict', body)
+            self.assertIn('FU2B_EXPERIMENT', (project / 'Propane.csproj').read_text())
+            with self.assertRaises(ValueError):
+                experiment(project)
 
 
 if __name__ == '__main__':

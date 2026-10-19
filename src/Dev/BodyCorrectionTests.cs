@@ -67,6 +67,8 @@ public partial class BodyCorrectionTests : Node3D
             Assert(observer.LinearVelocity.Length() > .01f, "confirmed ownership retained observer force suppression");
             await CheckSpinningCenters().ConfigureAwait(true);
             await CheckSettledContact().ConfigureAwait(true);
+            CheckPoseProbe();
+            if (DevArgs.Get("correction-proof") != null) { await CheckReportedContact().ConfigureAwait(true); }
             GD.Print($"[body correction] PASS fresh observer impulse {freshSpeed:0.000000} m/s, owner peak {ownerSpeed:0.000} m/s; stale, predicted and granted-owner jets resume");
             ShutdownGuard.Quit(GetTree());
         }
@@ -75,6 +77,80 @@ public partial class BodyCorrectionTests : Node3D
             GD.PushError($"[body correction] FAIL {error}");
             ShutdownGuard.Quit(GetTree(), 1);
         }
+    }
+
+    private void CheckPoseProbe()
+    {
+        var floor = new StaticBody3D { CollisionLayer = Layers.Floor, Position = new Vector3(40, -.5f, 0) };
+        floor.AddChild(new CollisionShape3D { Shape = new BoxShape3D { Size = new Vector3(10, 1, 10) } });
+        world.Root.AddChild(floor);
+        var body = PropaneTank.Create(world);
+        world.Root.AddChild(body);
+        body.CollisionLayer = 0;
+        body.CollisionMask = Layers.Floor;
+        body.GlobalPosition = new Vector3(40, 5, 0);
+        var actual = body.GlobalTransform;
+        using var parameters = new PhysicsTestMotionParameters3D { RecoveryAsCollision = true };
+        using var result = new PhysicsTestMotionResult3D();
+        parameters.From = actual;
+        Assert(!PhysicsServer3D.BodyTestMotion(body.GetRid(), parameters, result), "free hull reported contact");
+        parameters.From = new Transform3D(new Basis(Vector3.Forward, Mathf.Pi / 2), new Vector3(40, 0, 0));
+        Assert(PhysicsServer3D.BodyTestMotion(body.GetRid(), parameters, result), "penetrating rotated hull missed floor");
+        Assert(result.GetCollisionCount() > 0 && result.GetCollisionNormal().Dot(Vector3.Up) > .99f,
+            "pose probe did not return world-space floor support");
+        Assert(result.GetTravel().Y > .1f, "pose probe did not report hull recovery");
+        Assert(body.GlobalTransform == actual && body.MaxContactsReported == 0 && !body.ContactMonitor,
+            "pose probe changed the native body or contact-reporting policy");
+        GD.Print($"[body correction] pose probe recovery {result.GetTravel()}; native body and contact policy unchanged");
+        body.QueueFree();
+        floor.QueueFree();
+    }
+
+    private async Task CheckReportedContact()
+    {
+        var floor = new StaticBody3D { CollisionLayer = Layers.Floor, Position = new Vector3(60, -.5f, 0) };
+        floor.AddChild(new CollisionShape3D { Shape = new BoxShape3D { Size = new Vector3(10, 1, 10) } });
+        world.Root.AddChild(floor);
+        var tank = CreateVent(3, new Vector3(60, 0, 0));
+        tank.CollisionMask = Layers.Floor;
+        tank.GravityScale = 1;
+        var pose = tank.GlobalTransform;
+        var sync = new BodySync(world.Tuning, 4, 2);
+        sync.Register(3, tank, true, 2);
+        sync.OnState(2, new BodyState(3, pose, Vector3.Up, Vector3.Zero, 1, 1), false, 1);
+        sync.Correct(1);
+        sync.OnState(2, new BodyState(3, pose, Vector3.Zero, Vector3.Zero, 1, 2), false, 1.1);
+        for (var tick = 0; tick < 30; tick++)
+        {
+            await ToSignal(GetTree(), SceneTree.SignalName.PhysicsFrame);
+            var direct = PhysicsServer3D.BodyGetDirectState(tank.GetRid());
+            var expected = (pose * tank.CenterOfMass - tank.GlobalTransform * tank.CenterOfMass) / world.Tuning.CorrectionBlendTime;
+            sync.Correct(1.2);
+            if (tick > 10)
+            {
+                Assert(direct.GetContactCount() > 0, "native floor fixture lost contact reporting");
+                Assert(tank.LinearVelocity.DistanceTo(expected) < .001f, "contact used free-flight acceleration");
+            }
+        }
+        sync.OnAuthority(new BodyAuthority(new BodyState(3, pose, Vector3.Zero, Vector3.Zero, 2, 0),
+            4, BodyState.State.Venting, false, new VentParameters(tank.HoleLocal, tank.HoleNormalLocal, tank.SwirlSign), Vector3.Zero), 2);
+        Assert(tank.MaxContactsReported == 0 && !tank.ContactMonitor && !tank.CorrectingMotion,
+            "grant retained an observer's native contact policy");
+        sync.OnAuthority(new BodyAuthority(new BodyState(3, pose, Vector3.Zero, Vector3.Zero, 3, 0),
+            2, BodyState.State.Venting, false, new VentParameters(tank.HoleLocal, tank.HoleNormalLocal, tank.SwirlSign), Vector3.Zero), 3);
+        sync.Correct(3);
+        sync.Claim(new[] { tank });
+        Assert(tank.MaxContactsReported == 0, "local prediction retained observer contact reporting");
+        sync.Clear();
+        tank.MaxContactsReported = 8;
+        sync.Register(3, tank, true, 2);
+        sync.OnState(2, new BodyState(3, pose, Vector3.Zero, Vector3.Zero, 1, 1), false, 4);
+        sync.Correct(4);
+        sync.Clear();
+        Assert(tank.MaxContactsReported == 8, "retirement overwrote preexisting contact reporting");
+        GD.Print("[body correction] PASS native contact disables acceleration; grants, prediction and retirement restore contact policy");
+        tank.QueueFree();
+        floor.QueueFree();
     }
 
     private async Task CheckShieldOverride()

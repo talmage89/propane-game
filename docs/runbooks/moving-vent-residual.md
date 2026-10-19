@@ -26,6 +26,29 @@ python3 -B tools/dev/vent_residual_run.py --project=build/fu2a-observed/project 
   --vent-residual-dir="$PWD/build/fu2a-floor/traces"
 ```
 
+FU2b's optional experiment preparer operates only on a fresh observed project under `build/`:
+
+```sh
+python3 -B tools/dev/vent_correction_experiment.py --project=build/fu2a-observed/project
+```
+
+It records the patch and source hashes, adds scratch-only tuners and enables `FU2B_EXPERIMENT` in that
+project. The ordinary game excludes the experimental implementation at compilation. Select candidates independently
+with `--vent-experiment-acceleration`, `--vent-experiment-floor`, `--vent-experiment-age` or
+`--vent-experiment-cadence`. Omitting all switches keeps the original equations (contact reporting remains enabled).
+Use the same observed parent for comparisons; neither observation nor these experiments establish performance.
+`--vent-experiment-probe` selects read-only native hull queries instead of contact-report observations. Jolt's
+contact-report switch also controls manifold reduction, so do not copy observation's reporting policy into production.
+
+`BodyPredictionTests --correction-proof` is an opt-in behavioral oracle, expected to fail on the parent. It aligns
+the observer with an analytic accelerating COM and checks current velocity, rejected sequence isolation and reliable
+rest anchoring. `BodyCorrectionTests` independently proves zero-motion hull queries detect a rotated floor overlap
+without changing the body's transform or contact-reporting settings. `BodyCorrectionBenchTests --correction-bench`
+measures 60,000 complete Match callbacks after 20,000 warm-up callbacks, with eight remote vents (four free-flight,
+four floor), 15 Hz publications and 150 ms sample transit. The fixture resets poses without advancing native physics;
+its allocation/mean/p95/p99 results do not replace native convergence or rendered observations. Copy this same probe
+into the isolated parent and alternate at least three parent/candidate pairs with machine load recorded.
+
 The wrapper records the exact command, exit status, `uptime` and Godot processes before, every five seconds during,
 and after the run. It preserves failures and propagates the launcher's unchanged verdict. Omit `--project` and the
 observation flag for an uninstrumented parent run. The historical P5 workload uses `-n 4 -w 0 -l 90`, server
