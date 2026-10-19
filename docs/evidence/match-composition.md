@@ -315,3 +315,123 @@ Linux proof only. Native Windows/macOS, broad ordinary capacity, continuous anim
 ledger items were not established. Recoil feedback remains synchronous; it is a narrow actor fact, not an event bus.
 The cached view flag preserves primary-view presence semantics, not a shipped multi-user routing feature. Network
 bytes, `Protocol.Version` (3), tuner schema/order/values, world construction and tank rules are unchanged: patch-safe.
+
+## Landed application/dispatch integration
+
+**Status:** Fresh parent comparisons, paired costs, normal/frozen gates, native matrix and rendered review pass.
+The final deep gate runs after this evidence commit; its result is reported in the handoff.
+
+2026-10-18. Merged A1 in `101d439`, then landed N1 (`dev` at `97773dc`) in `cdb2749`.
+The integration production change is `f171fa6`, harness update `de837a2`. The fresh comparison parent is `97773dc`.
+No other checkout, frozen reference, design file or shared gameplay rule changed.
+
+Merge resolutions (conflict and relevant automatic combinations):
+
+- `docs/README.md`: retain the C2, A1 and N1 evidence entries.
+- `docs/architecture.md`: retain the C2 ownership/lifetimes and N1 transport/dispatch contract; document connection-codec borrowing.
+- `docs/multiplayer.md`: retain scoped Match owners and N1 failure containment; clarify the facade's Dev-only callers.
+- `tools/architecture/baseline.tsv`: combine both packages' removals; the file is empty, with no relabel or added exception.
+- `tools/architecture/modules.json`: retain all C2 owner mappings and N1 Wire/Composition mappings.
+- `tools/architecture/source-sites.tsv`: retain the moved C2 bot clocks and both N1 diagnostic clocks.
+- `src/Dev/Equivalence/PublicationReferenceTests.cs`: retain the C2 state accessor and explicit N1 connection inputs; stimuli/references unchanged.
+- `src/Dev/UnitTests/BotTests.cs`: retain C2 actor access and explicit connection construction.
+- `src/Dev/UnitTests/Fixtures/MatchClient.cs`: retain `createLocalView`, inject transport/codec/clock; allow a borrowed codec for the focused assertion.
+- `src/Dev/UnitTests/KingOnlineTests.cs`: retain C2 state access and explicit connection construction.
+- `src/Dev/UnitTests/ParticipantServerTests.cs`: retain C2 actor-state access and explicit connection construction.
+
+`NetClient.Codec` exposes its readonly captured codec. Match authority/mode sends and the extracted world gather
+and actor pose/action sends use that same instance, selected by Main as before. The two client owners borrow it;
+it owns no native resource and adds no retirement operation. `MessageCodec` stays in Composition, with only its
+own declaration outside Dev and 38 calling files under `src/Dev/` (unit/fixture/scenario and frozen-reference probes).
+Its comment and the contracts now say so. No encoding layout, publication capture point, callback or sequence
+advancement moved. `awk -F'\t' '$4=="C2"' tools/architecture/baseline.tsv` prints nothing.
+
+Match remains 629 lines across 293/167/17/97/55-line partials. World replica is 337 lines, actor set 326,
+actor attachment 71, bot set 254 and view binding 370. Moved state, scopes and retirement remain as documented
+above; codec borrowing is immutable connection input, not another mutable owner.
+
+### Fresh parent preservation and cost
+
+All fresh artifacts are `build/c2-n1-*`, using absolute scratch/capture paths and worktree-local TMPDIR.
+`match_composition_equivalence.py --revision=97773dc|working --observe` prepares identical current composition,
+lifetime and selection workloads. Both pass 7/10/3 tests; all 655/739/307 rows compare byte for byte.
+`authority_equivalence.py` on the same revisions passes 58 authority, 13 gather and 2 publication tests on each.
+Authority/gather have 391/21 identical rows; the publication packet/sequence JSON is identical.
+`mode_client_equivalence.py --observe` passes 8 tests each and its comparator validates all 177 rows and required
+operation/Bank/King/lobby coverage. All seven transcript hashes remain exactly those recorded earlier in this file.
+The mode observer encodes through the actual selected codec; it does not substitute the static encoder.
+
+`MatchCodecTests` passes the real Match mode send using an instrumented connection resolver. A private scratch build
+restoring the static encoder fails that assertion with exit 1 (`c2-n1-codec-negative.log`); the normal source passes.
+Seven mode comparator self-tests pass. The initial focused probe used an invalid empty spill and failed validation;
+it now supplies a valid one-body spill. The first parent mode scratch compile lacked the C2 accessor; after copying
+it, comparison exposed the parent's smaller pre-C2 Sandbox inventory. The helper now copies the exact same current
+lifetime cases to both sides; no record is removed or normalized. Failed preparation/comparison artifacts remain.
+
+[Paired integration data](match-composition-n1-costs.csv) records three alternating parent/candidate pairs, with
+uptime before/between/after. No own compile/native workload overlaps measurement. Prepare unobserved projects
+with `match_composition_equivalence.py --owned-bots-bench`; increase only the private benchmark's warm-up to 100,000
+on both, then run `AuthorityBenchTests --authority-bench --match-seed=23`. Each case measures 100,000 complete Match
+callbacks, four actors, 76 bodies, two real brains, 200,000 thinks and 200,000 rays. The claim case also asserts
+100,000 requests/notifications and 7,900,000 payload bytes.
+
+| Whole callback | Bytes/tick, both | Median mean / p95 / p99 microseconds, parent → candidate |
+| --- | ---: | --- |
+| Ordinary playing | 2677.32 | 76.105/110.900/145.300 → 75.701/110.500/145.300 |
+| Controlled claims | 9683.50 | 103.798/138.700/173.600 → 104.952/140.100/174.500 |
+
+Allocations/counts agree in all six runs; pairwise timing changes have both signs. This establishes no added
+steady-state allocation or consistent slowdown in these samples, not a portable speedup or GPU/frame budget.
+
+### Integrated gates and native review
+
+`make setup` and `make check` pass (`build/c2-n1-setup.log`, `build/c2-n1-check.log`): zero Debug/ExportRelease
+warning-as-error warnings, 666 unit tests, 170 real-device input assertions, all bounded/native behavioral checks
+and gate self-tests. Architecture reports 2,439 Debug / 1,096 shipping types, zero exceptions; source checks approve
+97 sites. The animation data audit retains its existing 12 visual redo items, not a new failure.
+
+`make test-equivalence` passes (`build/c2-n1-equivalence.log`, `build/rfp0-equivalence-15`): frozen
+wire/schema/world/publication and controlled Bank, King, spill-chain, Short Fuse and Dissolve traces. No reference
+was regenerated.
+
+Six fresh native runs pass, each with two clients and one owned bot per client, with one rendered client:
+`tools/dev/net_bots.sh -o "$PWD/build/c2-n1-net-CASE-PROFILE" -p 24683 -n 2 -w 1 -l LENGTH -t PROFILE
+-s '--match-seed=23' -- --lobby-bots=1 --shot-every=10 --capture-dir=ABSOLUTE_PATH`.
+Bank/King use LENGTH=25; King adds `--mode=king --mint-seconds=0.5`. Roaming uses LENGTH=15 and
+`--lobby-roam=2 --matches=2`. Faults add `--net-seed=2 --net-lag=120 --net-jitter=30 --net-loss=3`.
+All 18 server/client logs have zero engine/internal-owner errors; all runs have zero disagreements/unobserved grids
+and complete conservation audits. Peaks/episodes retain the ordinary checker thresholds; this is no convergence fix.
+
+| Case/profile | Body pairs | Final rest/moving (m) | Longest episode (s) | Complete audits |
+| --- | ---: | ---: | ---: | ---: |
+| bank/clean | 9670 | 0.001/0.067 | 0.10 | 1 |
+| bank/faults | 10425 | 0.006/0.163 | 0.55 | 1 |
+| king/clean | 26081 | 0.001/0.000 | 0.05 | 1 |
+| king/faults | 24075 | 0.000/0.287 | 0.45 | 1 |
+| roam/clean | 13415 | 0.000/0.000 | 0.10 | 2 |
+| roam/faults | 12517 | 0.000/0.124 | 0.40 | 2 |
+
+Reviewed native `bank-clean/shots/Bot1_020.0.png` and `king-clean/shots/Bot1_020.0.png` under the case roots above:
+Bank jump/weapon/ammo/standings and King zone/holding/mint/score presentation are present.
+
+Rendered runs use `godot-mono --path . --resolution 1280x720 --fixed-fps 60`, the scene paths below and absolute
+`--capture-dir="$PWD/build/c2-n1-NAME"`. All five exit 0, with zero engine/test errors:
+
+| Scene / arguments | Captures / assertion result |
+| --- | --- |
+| `menu_test.tscn --scenario=input --classic-lobby --port=24683` | input: 20, 170 assertions pass |
+| `session_actors_tests.tscn` | actors: 2; independent views/devices, survivor and camera-free bot combat/get-up pass |
+| `player_range.tscn --scenario=grip --grip-sweep --assert-grip --assert-motion --view=side` | grip: 29; both probes pass |
+| `player_range.tscn --scenario=ragdoll --assert-grip --assert-motion --view=side` | recovery: 20; both probes pass |
+| `player_range.tscn --scenario=feet --assert-feet --assert-motion --view=side` | remote: 600; all 24 episodes/probes pass |
+
+Reviewed the input, actor, grip and recovery contact sheets plus remote frame 12 from each of the 24 episodes.
+Full-resolution review includes `input/match_05_leaderboard_toggled.png` (focused hidden preference) and
+`grip/aim_up_fire.png` (both hand contacts). Delivered turns/jumps/pause, camera survivor, local/remote gait and
+weapon holds, reload/firing extremes, ragdoll launch and get-up are visible. This is sampled visual review, not
+continuous animation/feel acceptance. Gamescope's expected shutdown diagnostics remain in the raw logs.
+
+The final `make -j4 test-full` runs once after this evidence-only commit; the handoff records its exit and tail.
+Runtime/Dev source is unchanged after `de837a2`. Windows/macOS runtime, continuous feel and the inherited acceptance
+ledger remain outside this Linux integration proof. Wire bytes, Protocol.Version (3), tuner schema/order/values,
+world generation/RNG, tank/scoring rules and synchronous retirement remain unchanged; patch-safe.
