@@ -106,9 +106,13 @@ public partial class Tuning
     [Export(PropertyHint.Range, "0.1,20,0.1")] public float SnapDistance { get; set; } = 3f;
 
     /// <summary>Maximum interval between reliable body checkpoints (network seconds), plus one normal send interval. Moving publication cadence is unchanged.</summary>
-    [Export(PropertyHint.Range, "0.02,0.25,0.005")] public float BodyCheckpointInterval { get; set; } = 0.05f;
+    [Export(PropertyHint.Range, "0.025,0.25,0.005")] public float BodyCheckpointInterval { get; set; } = 0.05f;
     /// <summary>Maximum acceleration estimated from consecutive body publications (m/s²); larger changes use constant velocity. Zero disables acceleration prediction.</summary>
     [Export(PropertyHint.Range, "0,100,1")] public float CorrectionMaxAcceleration { get; set; } = 30f;
-    /// <summary>Maximum source spin for linear acceleration prediction (rad/s); faster tumbling uses constant velocity.</summary>
+    /// <summary>Maximum source spin for full-vector acceleration prediction (rad/s); faster spin uses the averaging threshold.</summary>
     [Export(PropertyHint.Range, "0,100,1")] public float CorrectionAccelerationMaxSpin { get; set; } = 6f;
+    /// <summary>How quickly moving vent observers correct drift (physics seconds); intact bodies, gathers and rests use CorrectionBlendTime.</summary>
+    [Export(PropertyHint.Range, "0.025,0.25,0.005")] public float CorrectionVentBlendTime { get; set; } = .1f;
+    /// <summary>Minimum spin for transverse force averaging (rad/s); zero disables it. Faster vents use authored axial jet force and native gravity.</summary>
+    [Export(PropertyHint.Range, "0,100,1")] public float CorrectionSpinAverageMin { get; set; } = 20f;
 }

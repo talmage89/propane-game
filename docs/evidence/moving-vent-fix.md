@@ -1,7 +1,7 @@
 # Moving-vent correction experiments (FU2b)
 
-**Status:** In progress. The initial 0.125 s production candidate failed the final native matrix; it is not accepted.
-Further effective-value experiments and final verification remain open.
+**Status:** Candidate verification. Rejected variants are retained below. The authored mean-force experiment
+passes all controlled cases and its ordinary matrix; uninstrumented final-head acceptance remains open.
 
 2026-10-19, Linux x86-64, Godot 4.7.2 .NET/Jolt. Immediate parent: `3c07559` (C2).
 The [FU2a investigation](moving-vent-residual.md) and [observation runbook](../runbooks/moving-vent-residual.md)
@@ -185,3 +185,25 @@ Cost caution: observed scratch projects retain observer hooks even when no trace
 allocation is instrumentation overhead and is excluded from production cost comparisons. The clean combined
 prototype measures 39,962,016 bytes versus 72,605,472 parent bytes across 60,000 whole client callbacks; three
 alternating pairs retain their load records. This is a rejected prototype's cost, not final-head acceptance.
+
+## Authored mean-force candidate
+
+The authored-force switch plus moving-only 100 ms response passes all six 240/30/3 controls:
+final moving 0.117 / 0 / 0.230 / 0.244 / 0.314 / 0.365 m. The empty final-moving case is retained as such.
+Three faulted terminal arcs pass at 0.024 / 0.123 / 0.029 m; clean arcs pass at 0.049 / 0.040 / 0.001 m.
+Two 28 rad/s arcs pass at 0.018 / 0.016 m. Faulted/clean floor fixtures pass at 0.273 / 0.053 m.
+All native fixture assertions and score audits pass, with zero engine errors or unobserved grids.
+These observed runs preserve the original owner contact policy. The ordinary sixteen-case experiment matrix
+is recorded separately from the eventual uninstrumented acceptance matrix.
+
+The production form retains the five bounded tuners, existing 0.3 s lead and 0.5 s silence limits, and existing
+rest/gather/intact response timing. No floor clamp, longer lead, higher send rate, full-vector high-spin estimate,
+measured-axial estimate or clock filter is retained. A read-only `PropaneTank` vent-age accessor supports the
+existing thrust ramp; this is the only production edit outside body correction and tuning. The temporary contact
+limit and borrowed native gravity view share authority/rebind/retirement boundaries; the native body owns the view.
+The new timing tuners start at 0.025 s: unlike the rejected 0.02 endpoint, that float value passes shared range
+validation. Thirteen always-on prediction assertions and the native component/replacement oracle pass before
+uninstrumented acceptance. Fifteen observation/preparer assertions pass, including atomic refusal on promoted source.
+
+The complete authored-force ordinary matrix passes **16/16**, maximum final moving **0.289 m**.
+Fresh uninstrumented acceptance, paired cost and final repository gates remain separate obligations.

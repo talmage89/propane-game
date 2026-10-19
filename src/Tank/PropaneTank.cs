@@ -45,6 +45,8 @@ public partial class PropaneTank : RigidBody3D
     private Vector3 jetDirectionLocal;
     private float swirlSign = 1f;
     private float ventAge;
+    // Read-only simulation age (physics seconds) for remote body prediction; Tick remains its only clock.
+    internal float PredictionVentAge => ventAge;
     private bool fuseLit;
     internal bool ChainFusePending => fuseLit && State == TankState.Venting;
     private float flutterPhase;

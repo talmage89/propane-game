@@ -287,8 +287,11 @@ not reconnect/resume or arbitrary mid-match join.
 [BodySync](../src/Net/BodySync.cs) separates sample age from receipt freshness, preserves rest anchors, suppresses
 fresh remote vent thrust/spin and applies geometry/contact-aware correction.
 It retains one bounded acceleration estimate per body, reset at authority/rest/prediction boundaries, and applies
-it to eligible free-flight vents in both COM prediction and velocity feed-forward. Its temporary observer contact
-reporting limit is restored before local authority/prediction and on retirement. Its reusable ray query and single-RID
+it to eligible free-flight vents in both COM prediction and velocity feed-forward. Fast spin uses native gravity
+and the existing authored axial jet force rather than extending measured collision impulses. Its borrowed native
+gravity view is dropped before rebind/authority/retirement and never disposed here; the native body owns it.
+Moving vents use their own 0.1 s blend; intact bodies, gathers and rests retain the original 0.25 s timing.
+Its temporary observer contact reporting limit is restored before local authority/prediction and on retirement. Its reusable ray query and single-RID
 exclusion array have registry lifetime and are disposed by clearing/final removal. Network sample intervals and
 publication deadlines remain monotonic; contact evidence is the latest native physics synchronization. The owner
 selects reliable checkpoints at the shared 0.05 s interval without adding publications or changing traversal/order.

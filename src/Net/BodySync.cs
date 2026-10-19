@@ -37,6 +37,8 @@ public sealed class BodySync
         // Two accepted moving samples in one epoch; never retain a model across an authority boundary.
         internal bool HasMotionSample;
         internal Vector3 TargetAcceleration;
+        // Borrowed body-owned physics view; RestoreContacts drops it before rebind or retirement.
+        internal PhysicsDirectBodyState3D? GravityState;
         internal int? ContactLimitBeforeCorrection;
         public Transform3D Target;
         public Vector3 TargetLinear;
@@ -302,7 +304,12 @@ public sealed class BodySync
     public void Correct(double now)
     {
         var tuning = settings;
-        var blend = Mathf.Max(tuning.CorrectionBlendTime, 0.02f);
+        var defaultBlend = Mathf.Max(tuning.CorrectionBlendTime, 0.02f);
+        var ventBlend = Mathf.Max(tuning.CorrectionVentBlendTime, 0.02f);
+        var fullSpinSquared = tuning.CorrectionAccelerationMaxSpin * tuning.CorrectionAccelerationMaxSpin;
+        var averageSpin = tuning.CorrectionSpinAverageMin;
+        var averageSpinSquared = averageSpin * averageSpin;
+        var maxAccelerationSquared = tuning.CorrectionMaxAcceleration * tuning.CorrectionMaxAcceleration;
         foreach (var entry in entries.Values)
         {
             var contactsReady = true;
@@ -315,7 +322,8 @@ public sealed class BodySync
                     (entry.TargetRest || now - entry.TargetUpdated <= StaleAfter);
                 accelerationEligible = tank.CorrectingMotion && !entry.TargetRest &&
                     tank.State == Tank.PropaneTank.TankState.Venting && tuning.CorrectionMaxAcceleration > 0 &&
-                    entry.TargetAngular.LengthSquared() <= tuning.CorrectionAccelerationMaxSpin * tuning.CorrectionAccelerationMaxSpin;
+                    (entry.TargetAngular.LengthSquared() <= fullSpinSquared ||
+                        averageSpin > 0 && entry.TargetAngular.LengthSquared() >= averageSpinSquared);
                 contactsReady = PrepareContacts(entry, accelerationEligible);
             }
             if (!entry.HasTarget || !observes || !valid)
@@ -333,6 +341,8 @@ public sealed class BodySync
                 entry.SettledMismatchSince = null;
                 continue;
             }
+            var blend = !entry.TargetRest && body is Tank.PropaneTank { State: Tank.PropaneTank.TankState.Venting, Gathering: false }
+                ? ventBlend : defaultBlend;
             var lead = entry.TargetRest ? 0f : (float)System.Math.Min(age, BodyState.MaxExtrapolation);
             var center = body.CenterOfMassMode == RigidBody3D.CenterOfMassModeEnum.Custom
                 ? body.CenterOfMass
@@ -353,8 +363,31 @@ public sealed class BodySync
             if (lead > 0 && entry.TargetAcceleration.LengthSquared() > 0 &&
                 accelerationEligible && contactsReady && body.GetContactCount() == 0)
             {
-                targetCenter += entry.TargetAcceleration * (lead * lead / 2);
-                targetLinear += entry.TargetAcceleration * lead;
+                var acceleration = entry.TargetAcceleration;
+                if (entry.TargetAngular.LengthSquared() > fullSpinSquared)
+                {
+                    // Over rapid spin, transverse jet force averages toward zero. Use the authored axial
+                    // force and native gravity; measured axial acceleration may include a contact impulse.
+                    var nativeState = entry.GravityState;
+                    if (nativeState == null && body.IsInsideTree())
+                    {
+                        nativeState = entry.GravityState = PhysicsServer3D.BodyGetDirectState(body.GetRid());
+                    }
+                    if (nativeState == null) { acceleration = Vector3.Zero; }
+                    else
+                    {
+                        var gravity = nativeState.TotalGravity;
+                        var axisOfSpin = entry.TargetAngular.Normalized();
+                        var sourceTank = (Tank.PropaneTank)body;
+                        var ramp = tuning.VentThrustRampTime > 0
+                            ? Mathf.Clamp(sourceTank.PredictionVentAge / tuning.VentThrustRampTime, 0, 1) : 1f;
+                        var jet = entry.Target.Basis * sourceTank.JetDirectionLocal;
+                        acceleration = gravity - axisOfSpin * (jet.Dot(axisOfSpin) * tuning.VentThrust * ramp / body.Mass);
+                        if (acceleration.LengthSquared() > maxAccelerationSquared) { acceleration = Vector3.Zero; }
+                    }
+                }
+                targetCenter += acceleration * (lead * lead / 2);
+                targetLinear += acceleration * lead;
             }
             var targetPosition = targetCenter - new Basis(targetRotation) * center;
             var currentCenter = current * center;
@@ -469,6 +502,7 @@ public sealed class BodySync
 
     private static void RestoreContacts(Entry entry)
     {
+        entry.GravityState = null;
         if (entry.ContactLimitBeforeCorrection is not { } original) { return; }
         if (GodotObject.IsInstanceValid(entry.Body)) { entry.Body.MaxContactsReported = original; }
         entry.ContactLimitBeforeCorrection = null;
