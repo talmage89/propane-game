@@ -199,11 +199,15 @@ public static class AuthorityTests
             }
             finally { wall.Free(); }
         });
-        runner.Run("authority/moving owners periodically checkpoint through disposable loss", () =>
+        runner.Run("authority/tuned moving owners periodically checkpoint through disposable loss", () =>
         {
             using var body = new BodyFixture(runner);
             body.Body.Sleeping = false;
-            var sync = new BodySync(Tuning.SavedTemplate, 2, 2);
+            // Preserve mixed disposable/checkpoint coverage at the supported legacy interval.
+            // BodyPublicationTests asserts that the new default reserves every normal sample.
+            using var tuning = Tuning.SavedTemplate.Copy();
+            tuning.BodyCheckpointInterval = .25f;
+            var sync = new BodySync(tuning, 2, 2);
             sync.Register(Id, body.Body, true, 2);
             var moving = new List<BodySync.Entry>();
             var rested = new List<BodySync.Entry>();
