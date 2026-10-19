@@ -100,10 +100,10 @@ def main():
     observe(project)
     changes = {name: dict(before=hashlib.sha256(raw).hexdigest(), after=hashlib.sha256((project / name).read_bytes()).hexdigest())
                for name, raw in before.items() if raw != (project / name).read_bytes()}
-    expected = {'src/Net/BodySync.cs', 'src/Net/BodyPublisher.cs', 'src/Net/Match.cs', 'src/Dev/NetTest.cs',
-                'src/Dev/NetScenarios/NetScenarioRegistry.cs', 'src/Dev/UnitTests/NetScenarioTests.cs'}
-    optional = {'src/Dev/NetScenarios/NetScenarioRegistry.cs', 'src/Dev/UnitTests/NetScenarioTests.cs'}
-    expected -= {name for name in optional if before[name] == (project / name).read_bytes()}
+    expected = {'src/Net/BodySync.cs', 'src/Net/BodyPublisher.cs', 'src/Net/Match.cs', 'src/Dev/NetTest.cs'}
+    optional = {'src/Dev/NetScenarios/NetScenarioRegistry.cs', 'src/Dev/UnitTests/NetScenarioTests.cs',
+                'src/Dev/NetScenarios/VentResidualObservation.cs', 'src/Dev/NetScenarios/BallisticScenario.cs'}
+    expected |= {name for name in optional if name in before and before[name] != (project / name).read_bytes()}
     if set(changes) != expected:
         raise ValueError(f'unexpected source delta: {set(changes)}')
     (project.parent / 'observation.json').write_text(json.dumps(dict(revision=args.revision, changes=changes, observer_sha256=hashlib.sha256((project / 'src/Dev/NetScenarios/VentResidualObservation.cs').read_bytes()).hexdigest(), tuning_sha256=hashlib.sha256((project / 'tuning.tres').read_bytes()).hexdigest(), new_sources={str(p.relative_to(project)): hashlib.sha256(p.read_bytes()).hexdigest() for p in (project / 'src').rglob('*.cs') if str(p.relative_to(project)) not in before}), indent=2) + '\n')

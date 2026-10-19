@@ -1,6 +1,7 @@
 # Moving-vent correction experiments (FU2b)
 
-**Status:** In progress. Harness assertions are established on the parent; no production correction is accepted yet.
+**Status:** In progress. The initial 0.125 s production candidate failed the final native matrix; it is not accepted.
+Further effective-value experiments and final verification remain open.
 
 2026-10-19, Linux x86-64, Godot 4.7.2 .NET/Jolt. Immediate parent: `3c07559` (C2).
 The [FU2a investigation](moving-vent-residual.md) and [observation runbook](../runbooks/moving-vent-residual.md)
@@ -71,10 +72,36 @@ The old fixtures remain under `build/fu2b-reference-parent`. Semantic comparison
 - World and segment fixture bytes are unchanged. All five Lab fixtures are exactly identical after removing only
   the three new tuner metadata entries, including every window, summary and tick count.
 - Only StartMatch/client and MatchStart/server wire fixtures change, carrying complete tuner dictionaries.
-- Publication body/rest payloads, sampling timestamps and per-step identity inventory are identical. Owner, epoch,
-  sequence, pending/required state and awake state are identical. Only checkpoint lane/reliability/last-publication
-  metadata and packet batching change: 48 to 53 envelopes. The comparison decodes fixed 64-byte body rows from the
-  unchanged BodyStates layout and compares exact bytes keyed by step/body, including rests and failed sends.
+- Owner, epoch, sequence, pending/required state and awake state are identical at every publication step. Checkpoint
+  lane/reliability/last-publication metadata and packet batching change: 48 to 53 envelopes. Common attempted body/rest
+  rows and their sampling timestamps are identical, but the required-send-failure step attempts 19 fewer body rows:
+  the new grouping reaches a reliable failure sooner and the existing disconnected-client guard suppresses later
+  transport calls. The initial comparison incorrectly claimed identical complete attempted-row inventory before its
+  assertion completed; that claim is withdrawn. The reference harness must retain explicit disposable-failure coverage.
 
 `build/fu2b-reference-differences.json` retains the complete decoded differences. The manifest and provenance name
 the reviewed production revision; no offline behavior change or threshold relaxation is hidden in the refresh.
+
+## Retained rejected candidate and harness corrections
+
+The unobserved `fu2b-final-matrix-26-1` rejects `b953856`: final moving drift **1.175 m**, complete audit, zero
+engine errors or unobserved grids. The remaining v1 schedulers were stopped after their current native run so they
+cannot be mistaken for completed acceptance cohorts. All completed and partial outputs remain under `build/`.
+
+The first `fu2b-cadence05-*`, `fu2b-highspin-*` and `fu2b-preserved-short-*` experiments passed tuner overrides
+only to the server. The creator's template replaced those values in StartMatch: recorded effective checkpoint
+intervals remain **0.125 s**, and spin limits remain **6 rad/s**. Their names are misleading; they are explicitly
+excluded from evidence for 0.05 s or 100 rad/s. This was caught by reading the new schema-4 configuration records.
+Corrected experiments pass overrides to the clients and assert effective values before classification.
+
+`--vent-residual-preserve-contacts` leaves ordinary owner physics unchanged. Validation of three completed runs
+checks 149,353 / 162,050 / 90,595 owner rows, every reporting limit exactly zero; observer limits are zero or the
+production correction's one-contact limit. The ordinary floor fixture still explicitly requests its eight contacts.
+The first preserved prior run fails an inherited resting episode (2.35 s, peak 0.106 m), with final moving 0.182 m;
+it is not a moving failure. No contact count with a zero reporting limit proves absence of native contact.
+
+The publication reference harness now pins its historical 0.25 s checkpoint interval and asserts that both
+disposable and required send failures actually occur. Against `build/fu2b-reference-parent`, the complete original
+publication reference passes unchanged (one test, zero failures). A separate production publication test compares
+0.25/0.05 s policies, requires sustained reliable motion at 0.05 s and proves identical per-body sample counts.
+The eventual reference refresh will restore the original publication bytes rather than dropping failure coverage.

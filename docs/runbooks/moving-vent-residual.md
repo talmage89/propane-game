@@ -93,6 +93,16 @@ or deterministic replay, and fixed world/fault seeds do not fix native trajector
 and report other-worktree load. Do not change correction until the failing case separates target prediction,
 post-correction native contact response, transport age, ownership and checker alignment.
 
+`--vent-residual-preserve-contacts` leaves contact-reporting settings under their ordinary runtime/fixture owner.
+Use it when investigating the actual owner physics: Jolt changes manifold reduction when reporting is enabled.
+Schema-4 start rows record this selection, and every body row records its current reporting limit. A zero contact
+count with a zero reporting limit is **unknown contact**, not proof of free flight. The default retains FU2a's
+original eight-contact diagnostic for historical reproduction; do not pool the two observation variants.
+For tuner experiments, pass `--tune.BodyCheckpointInterval=VALUE` to the **clients**, whose creator supplies the
+match snapshot; a server-only override can be replaced by that snapshot. `--expect-checkpoint=VALUE` and
+`--expect-acceleration-spin=VALUE` fail on an ineffective setting. The ordinary host checks these after assembly;
+the scratch observer also checks them before its first configuration record when observing older host code.
+
 
 The separate `ballistic` scenario isolates acceleration: no contacts, damping, rotation or jet thrust. It uses
 native motion and the real puncture/authority path with a zero fixture impulse direction. Damping uses replace mode
