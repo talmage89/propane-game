@@ -15,6 +15,12 @@ public static class WireReferenceTests
 {
     private sealed record WireCase(string Id, bool Server, byte[] Bytes);
 
+    // Hello and Welcome carry this version. Their decoders read extension fields only from a compatible build, so
+    // the reference runs as this series: a minor release must not change codec expectations. BuildInfo policy has
+    // its own protocol tests.
+    private const string FrozenVersion = "0.4.0";
+    private const string VersionSetting = "application/config/version";
+
     private static IEnumerable<WireCase> Cases()
     {
         foreach (var fixture in ProtocolTests.Fixtures())
@@ -24,8 +30,8 @@ public static class WireReferenceTests
             {
                 Payload = fixture.Payload switch
                 {
-                    HelloMessage hello => hello with { Version = "0.4.0" },
-                    WelcomeMessage welcome => welcome with { Version = "0.4.0" },
+                    HelloMessage hello => hello with { Version = FrozenVersion },
+                    WelcomeMessage welcome => welcome with { Version = FrozenVersion },
                     _ => fixture.Payload,
                 }
             };
@@ -86,25 +92,33 @@ public static class WireReferenceTests
         }
     }
 
+    private static void CheckWire()
+    {
+        var cases = Cases().ToArray();
+        TestRunner.Assert(cases.Select(c => c.Id).Distinct().Count() == cases.Length, "duplicate wire fixture id");
+        var observations = cases.Select(c => new { c.Id, c.Server, bytes = Convert.ToBase64String(c.Bytes), fields = ReferenceFile.Value(MessageCodec.Decode(c.Bytes, c.Server)) }).ToArray();
+        if (DevArgs.Get("write-reference") != null) { ReferenceFile.Check("wire", observations); return; }
+        var expected = ReferenceFile.Read("wire");
+        ReferenceFile.Compare(ReferenceFile.Element(expected.EnumerateArray().Select(c => c.GetProperty("Id").GetString()).ToArray()),
+            ReferenceFile.Element(cases.Select(c => c.Id).ToArray()), "wire.inventory");
+        for (var i = 0; i < cases.Length; i++)
+        {
+            var fixture = cases[i]; var saved = expected[i];
+            TestRunner.Assert(saved.GetProperty("Server").GetBoolean() == fixture.Server, $"wire.{fixture.Id}.direction changed");
+            var bytes = Convert.FromBase64String(saved.GetProperty("bytes").GetString()!);
+            ReferenceFile.Bytes(bytes, fixture.Bytes, "wire." + fixture.Id);
+            ReferenceFile.Compare(saved.GetProperty("fields"), ReferenceFile.Element(ReferenceFile.Value(MessageCodec.Decode(bytes, fixture.Server))), $"wire.{fixture.Id}.decode");
+        }
+    }
+
     public static void Register(TestRunner runner)
     {
         runner.Run("reference/wire inventory, frozen encode bytes and independent decoded fields", () =>
         {
-            var cases = Cases().ToArray();
-            TestRunner.Assert(cases.Select(c => c.Id).Distinct().Count() == cases.Length, "duplicate wire fixture id");
-            var observations = cases.Select(c => new { c.Id, c.Server, bytes = Convert.ToBase64String(c.Bytes), fields = ReferenceFile.Value(MessageCodec.Decode(c.Bytes, c.Server)) }).ToArray();
-            if (DevArgs.Get("write-reference") != null) { ReferenceFile.Check("wire", observations); return; }
-            var expected = ReferenceFile.Read("wire");
-            ReferenceFile.Compare(ReferenceFile.Element(expected.EnumerateArray().Select(c => c.GetProperty("Id").GetString()).ToArray()),
-                ReferenceFile.Element(cases.Select(c => c.Id).ToArray()), "wire.inventory");
-            for (var i = 0; i < cases.Length; i++)
-            {
-                var fixture = cases[i]; var saved = expected[i];
-                TestRunner.Assert(saved.GetProperty("Server").GetBoolean() == fixture.Server, $"wire.{fixture.Id}.direction changed");
-                var bytes = Convert.FromBase64String(saved.GetProperty("bytes").GetString()!);
-                ReferenceFile.Bytes(bytes, fixture.Bytes, "wire." + fixture.Id);
-                ReferenceFile.Compare(saved.GetProperty("fields"), ReferenceFile.Element(ReferenceFile.Value(MessageCodec.Decode(bytes, fixture.Server))), $"wire.{fixture.Id}.decode");
-            }
+            var running = ProjectSettings.GetSetting(VersionSetting);
+            ProjectSettings.SetSetting(VersionSetting, FrozenVersion);
+            try { CheckWire(); }
+            finally { ProjectSettings.SetSetting(VersionSetting, running); }
         });
         runner.Run("reference/tuner defaults, attributes, declaration and UI order, shared classification", () =>
         {

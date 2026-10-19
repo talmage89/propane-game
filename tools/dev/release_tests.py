@@ -143,9 +143,10 @@ exit "$(cat "{self.state}/godot" 2>/dev/null || echo 0)"
         result, log = self.cut("patch", "-y")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         lines = log.splitlines()
-        # make check first, seeing the old version, the old head and an untouched main; then the deeper generator sweep.
+        # make check first, seeing the released version (uncommitted), the old head and an untouched main; then the
+        # deeper generator sweep.
         self.assertEqual(lines[0], f"make check GODOT={self.bin / 'godot'}")
-        self.assertEqual(lines[1], "  version 1.2.0")
+        self.assertEqual(lines[1], "  version 1.2.1")
         self.assertEqual(lines[2], f"  head {before['dev']}")
         self.assertEqual(lines[3], f"  remote-main {before['remote main']}")
         self.assertEqual(lines[4:], ["godot --headless --path . res://scenes/dev/generator_tests.tscn -- --seeds=100"])
@@ -172,6 +173,20 @@ exit "$(cat "{self.state}/godot" 2>/dev/null || echo 0)"
                     self.assertNotIn("godot --headless", log, "the sweep must not run after a failed gate")
                 self.assertEqual(self.snapshot(), before)
                 self.assertEqual(self.git(self.work, "status", "--porcelain"), "")
+
+    def test_a_dev_already_at_the_version_is_gated_and_pushed_without_a_new_bump(self):
+        # A release whose workflow failed before publishing: dev carries the bump, no tag exists, a fix follows it.
+        self.commit(self.work, "project.godot", '[application]\nconfig/version="1.2.1"\n', message="Release v1.2.1")
+        self.commit(self.work, "src/Dev/Probe.cs", message="Fix the release gate")
+        self.git(self.work, "push", "--quiet", "origin", "dev")
+        before = self.snapshot()
+        result, log = self.cut("patch", "-y")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(log.splitlines()[1], "  version 1.2.1")
+        after = self.snapshot()
+        self.assertEqual(after["dev"], before["dev"], "no second bump commit")
+        self.assertEqual({after["main"], after["remote dev"], after["remote main"]}, {before["dev"]})
+        self.assertEqual(self.git(self.work, "status", "--porcelain"), "")
 
     def test_a_failing_gate_stops_every_kind_of_release(self):
         before = self.snapshot()

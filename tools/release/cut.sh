@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Cuts a release from dev: picks the next version, checks it may be released, runs the whole gate (make check, then a
-# deeper generator sweep), commits the version bump on dev, then pushes dev and fast-forwards main to it in one push.
+# deeper generator sweep) with that version applied, commits the version bump on dev, then pushes dev and
+# fast-forwards main to it in one push. If dev already carries the version (its release workflow failed before
+# publishing), it gates and pushes that without a new bump.
 # The push to main starts the release workflow, which builds both games and publishes the GitHub release.
 # Nothing changes until the gate has passed: a refusal, a declined confirmation or a failing gate leaves the version,
 # the branches and the remote as they were.
@@ -81,6 +83,11 @@ if [[ -z "$godot" ]]; then
   done
 fi
 [[ -n "$godot" ]] || die "set GODOT to the Godot .NET editor binary"
+# Test the version that ships: version-dependent behavior (compatibility gates) must see it. A dev already at this
+# version (a release whose workflow failed before publishing) keeps it and needs no new bump commit.
+current="$(sed -n 's/^config\/version="\(.*\)"$/\1/p' project.godot)"
+[[ "$current" == "$version" ]] || perl -pi -e "s/^config\\/version=\".*\"\$/config\\/version=\"$version\"/" project.godot
+trap 'git checkout --quiet -- project.godot; exit 130' INT TERM
 # The established gate: lint, every test partition and the gate self-tests, exactly what CI runs. The generator sweep
 # is deeper than the gate's. make check built the assembly it uses.
 mkdir -p build
@@ -89,14 +96,15 @@ echo "Testing (make check, then 100 generator seeds; the log is $log)..."
 if ! { GODOT="$godot" make check &&
   "$godot" --headless --path . res://scenes/dev/generator_tests.tscn -- --seeds=100; } >"$log" 2>&1; then
   tail -40 "$log" >&2
+  git checkout --quiet -- project.godot
   die "the tests failed (full log: $log); nothing was changed or pushed"
 fi
 
-perl -pi -e "s/^config\\/version=\".*\"\$/config\\/version=\"$version\"/" project.godot
-if ! git commit --quiet -m "Release v$version" project.godot; then
+if [[ "$current" != "$version" ]] && ! git commit --quiet -m "Release v$version" project.godot; then
   git checkout --quiet -- project.godot
   die "could not commit the version bump; project.godot is restored and nothing was pushed"
 fi
+trap - INT TERM
 if ! git push --quiet --atomic origin dev dev:main; then
   die "the push failed; the version bump is committed on dev. Push again with: git push --atomic origin dev dev:main"
 fi

@@ -512,10 +512,12 @@ make release-patch   # or release-minor, release-major; tools/release/cut.sh X.Y
 `tools/release/check_version.sh`: newer than every release, and a patch only when the protocol is unchanged. For a
 patch, it lists any changed files that players in a match share (`src/Net`, `src/World`, `src/Tank`, the tuners and
 `src/Modes`) and asks before going on; the list is a review prompt, not a proof of compatibility. Then it shows the
-changes and runs the whole gate, `make check` (lint, every test partition and the gate self-tests) followed by a
-100-seed generator sweep, writing the output to `build/release-gate.log`. Only after that passes does it change anything:
-it commits the new version on `dev`, and pushes `dev` and fast-forwards `main` to it in one push. A refusal, a declined
-confirmation or a failing gate leaves the version, the branches and the remote as they were.
+changes and runs the whole gate with the new version applied (version-dependent checks see what ships): `make check`
+(lint, every test partition and the gate self-tests) followed by a 100-seed generator sweep, writing the output to
+`build/release-gate.log`. Only after that passes does it commit the new version on `dev`, then push `dev` and
+fast-forward `main` to it in one push. A refusal, a declined confirmation or a failing gate leaves the version, the
+branches and the remote as they were. If the release workflow fails before publishing, fix `dev` and run the same
+`make release-*` again: `dev` already carries the untagged version, so it is gated and pushed without a second bump.
 `python3 -B tools/dev/release_tests.py` proves this against a scratch repository with a local remote and fake tools.
 
 That push runs `.github/workflows/release.yml` on a Linux runner: the same version check, the headless tests, all three
