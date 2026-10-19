@@ -6,7 +6,7 @@ using Propane.Tank;
 
 namespace Propane.Dev.UnitTests;
 
-/// <summary>Opt-in FU2b behavioral assertions: run on the parent first to establish a failing oracle.</summary>
+/// <summary>FU2b prediction assertions; the acceleration oracle was proved failing on the parent before production changed.</summary>
 [UnitSuite]
 public static class BodyPredictionTests
 {
