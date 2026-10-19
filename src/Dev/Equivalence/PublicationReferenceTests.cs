@@ -22,6 +22,8 @@ public static class PublicationReferenceTests
         public readonly List<object> Sent = new();
         public readonly List<int> BatchSizes = new();
         public string Step = "setup";
+        public int DisposableFailures;
+        public int ReliableFailures;
         public int MaxPayloadSize => inner.MaxPayloadSize;
         public event Action<ConnectionHandle>? Connected { add => inner.Connected += value; remove => inner.Connected -= value; }
         public event Action<ConnectionHandle, DisconnectReason>? Disconnected { add => inner.Disconnected += value; remove => inner.Disconnected -= value; }
@@ -32,6 +34,11 @@ public static class PublicationReferenceTests
         public SendResult Send(ConnectionHandle connection, TrafficClass traffic, ReadOnlyMemory<byte> bytes)
         {
             var result = inner.Send(connection, traffic, bytes);
+            if (result != SendResult.Success)
+            {
+                if (TrafficReliability.IsReliable(traffic)) { ReliableFailures++; }
+                else { DisposableFailures++; }
+            }
             if (bytes.Length > 0 && (Msg)bytes.Span[0] == Msg.BodyStates)
                 BatchSizes.Add(((BodyStatesMessage)MessageCodec.Decode(bytes.ToArray(), false).Payload).Bodies.Count);
             if (bytes.Length > 0 && (Msg)bytes.Span[0] is Msg.BodyStates or Msg.BodyRest)
@@ -61,6 +68,9 @@ public static class PublicationReferenceTests
             runner.AddChild(match);
             try
             {
+                // Freeze the v0.4.0 publication workload, including disposable failure coverage.
+                // FU2b's default checkpoint cadence is asserted separately by BodyPublicationTests.
+                match.World.Tuning.BodyCheckpointInterval = .25f;
                 var tank = match.LiveTanks.First();
                 var sync = match.Bodies;
                 sync.Clear();
@@ -150,6 +160,8 @@ public static class PublicationReferenceTests
                 TestRunner.Assert(wire.BatchSizes.Contains(Protocol.MaxBodyStates) && wire.BatchSizes.Any(n => n < Protocol.MaxBodyStates),
                     "publication fixture did not cross full and partial batch boundaries");
                 TestRunner.Assert(wire.Sent.Count > 10 && steps.Count == 12, "publication transcript did not exercise its steps");
+                TestRunner.Assert(wire.DisposableFailures > 0 && wire.ReliableFailures > 0,
+                    "publication fixture omitted disposable or required send failure");
                 ReferenceFile.Check("publication", new { packets = wire.Sent, steps });
             }
             finally { match.World.Dispose(); match.Free(); client._ExitTree(); client.Free(); rawServer.Close(); }

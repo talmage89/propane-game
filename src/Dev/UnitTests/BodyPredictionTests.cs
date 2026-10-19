@@ -14,7 +14,6 @@ public static class BodyPredictionTests
     {
         runner.Run("prediction/accelerated free flight advances pose and velocity together", () =>
         {
-            if (DevArgs.Get("correction-proof") == null) { return; }
             var tank = PropaneTank.Create(runner.World);
             runner.World.Root.AddChild(tank);
             try
@@ -52,5 +51,101 @@ public static class BodyPredictionTests
             }
             finally { tank.Free(); }
         });
+        foreach (var kind in new[] { "zero-interval", "reversed-interval", "long-interval", "large-acceleration", "epoch", "silence" })
+        {
+            runner.Run("prediction/history does not cross " + kind, () =>
+            {
+                using var f = new FlightFixture(runner);
+                f.Seed();
+                var velocity = Vector3.Right * (kind == "large-acceleration" ? 100 : 7);
+                var pose = new Transform3D(Basis.Identity, Vector3.Up * 10 - f.Tank.CenterOfMass);
+                var now = kind == "long-interval" ? 10.6 : kind == "silence" ? 11.1 : 10.2;
+                if (kind == "epoch")
+                {
+                    f.Sync.OnAuthority(new BodyAuthority(new BodyState(1, pose, velocity, Vector3.Zero, 2, 0),
+                        2, BodyState.State.Venting, false, null, Vector3.Zero), now);
+                }
+                else
+                {
+                    if (kind == "silence") { f.Sync.Correct(11); }
+                    var transit = kind == "zero-interval" ? .1 : kind == "reversed-interval" ? .15 : 0;
+                    f.Sync.OnState(2, new BodyState(1, pose, velocity, Vector3.Zero, 1, 3), false, now, transit);
+                }
+                var entry = f.Sync.Get(1)!;
+                var correctionTime = now + .05;
+                var lead = (float)(correctionTime - entry.TargetReceived);
+                var center = pose * f.Tank.CenterOfMass + velocity * lead;
+                f.Tank.GlobalTransform = new Transform3D(Basis.Identity, center - f.Tank.CenterOfMass);
+                f.Sync.Correct(correctionTime);
+                f.Sync.Correct(correctionTime); // A cold native reporting step must not hide retained history.
+                TestRunner.Assert(f.Tank.LinearVelocity.DistanceTo(velocity) < .001f,
+                    kind + " retained acceleration from an invalid interval or authority");
+            });
+        }
+        runner.Run("prediction/high spin and a disabled tuner retain constant velocity", () =>
+        {
+            foreach (var disabled in new[] { false, true })
+            {
+                using var f = new FlightFixture(runner);
+                f.Seed();
+                if (disabled) { f.Tuning.CorrectionMaxAcceleration = 0; }
+                else
+                {
+                    f.Sync.OnState(2, new BodyState(1, f.Pose(.2f), new Vector3(4, 0, 0), Vector3.Up * 10, 1, 3), false, 10.2);
+                }
+                var entry = f.Sync.Get(1)!;
+                var time = disabled ? 10.2 : 10.3;
+                var lead = (float)(time - entry.TargetReceived);
+                var center = entry.Target * f.Tank.CenterOfMass + entry.TargetLinear * lead;
+                f.Tank.GlobalPosition = center - f.Tank.GlobalBasis * f.Tank.CenterOfMass;
+                f.Sync.Correct(time);
+                TestRunner.Assert(f.Tank.LinearVelocity.DistanceTo(entry.TargetLinear) < .001f && f.Tank.MaxContactsReported == 0,
+                    "ineligible motion retained acceleration or native contact reporting");
+            }
+        });
+        runner.Run("prediction/replayed future motion starts a new estimator history", () =>
+        {
+            using var f = new FlightFixture(runner);
+            f.Seed();
+            var pose = new Transform3D(Basis.Identity, Vector3.Up * 10 - f.Tank.CenterOfMass);
+            f.Sync.OnState(3, new BodyState(1, pose, Vector3.Right * 7, Vector3.Zero, 2, 7), false, 10.25, .15);
+            f.Sync.OnAuthority(new BodyAuthority(new BodyState(1, pose, Vector3.Zero, Vector3.Zero, 2, 0),
+                3, BodyState.State.Venting, false, null, Vector3.Zero), 10.25);
+            f.Tank.GlobalPosition = pose.Origin + Vector3.Right * 7 * .15f;
+            f.Sync.Correct(10.25);
+            f.Sync.Correct(10.25);
+            TestRunner.Assert(f.Tank.LinearVelocity.DistanceTo(Vector3.Right * 7) < .001f, "future motion inherited old-epoch acceleration");
+            f.Sync.OnState(3, new BodyState(1, pose.Translated(Vector3.Right * .65f), Vector3.Right * 6, Vector3.Zero, 2, 8), false, 10.35, .15);
+            f.Tank.GlobalPosition = pose.Origin + Vector3.Right * 1.4375f;
+            f.Sync.Correct(10.35);
+            TestRunner.Assert(f.Tank.LinearVelocity.DistanceTo(Vector3.Right * 4.5f) < .001f,
+                "second future-epoch sample lost its sampling interval or feed-forward");
+        });
+    }
+
+    /// <summary>One test owns tuning, synchronization state and native tank; the runner's world is borrowed.</summary>
+    private sealed class FlightFixture : IDisposable
+    {
+        public readonly Tuning Tuning = new() { CorrectionMaxAcceleration = 30, CorrectionAccelerationMaxSpin = 6 };
+        public readonly PropaneTank Tank;
+        public readonly BodySync Sync;
+        public FlightFixture(TestRunner runner)
+        {
+            Tank = PropaneTank.Create(runner.World);
+            runner.World.Root.AddChild(Tank);
+            Tank.CollisionLayer = Tank.CollisionMask = 0;
+            Tank.PunctureRemote(PropaneTank.LocalCenter + Vector3.Right * .15f, Vector3.Right, 1);
+            Sync = new BodySync(Tuning, 4, 2);
+            Sync.Register(1, Tank, true, 2);
+        }
+        public Transform3D Pose(float time) => new(Basis.Identity,
+            Vector3.Up * 10 + new Vector3(4, 2, 0) * time + Vector3.Down * (5 * time * time) - Tank.CenterOfMass);
+        public void Seed()
+        {
+            Sync.OnState(2, new BodyState(1, Pose(0), new Vector3(4, 2, 0), Vector3.Zero, 1, 1), false, 10);
+            Sync.Correct(10);
+            Sync.OnState(2, new BodyState(1, Pose(.1f), new Vector3(4, 1, 0), Vector3.Zero, 1, 2), false, 10.1);
+        }
+        public void Dispose() { Sync.Clear(); Tank.Free(); Tuning.Dispose(); }
     }
 }

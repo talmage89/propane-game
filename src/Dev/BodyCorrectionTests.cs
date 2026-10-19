@@ -68,7 +68,7 @@ public partial class BodyCorrectionTests : Node3D
             await CheckSpinningCenters().ConfigureAwait(true);
             await CheckSettledContact().ConfigureAwait(true);
             CheckPoseProbe();
-            if (DevArgs.Get("correction-proof") != null) { await CheckReportedContact().ConfigureAwait(true); }
+            await CheckReportedContact().ConfigureAwait(true);
             GD.Print($"[body correction] PASS fresh observer impulse {freshSpeed:0.000000} m/s, owner peak {ownerSpeed:0.000} m/s; stale, predicted and granted-owner jets resume");
             ShutdownGuard.Quit(GetTree());
         }
