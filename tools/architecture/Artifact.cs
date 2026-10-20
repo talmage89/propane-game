@@ -2,7 +2,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
-internal sealed record ArtifactPolicy(string[] SmokeTypes, Dictionary<string, string[]> EntryMethods, string[] Resources);
+internal sealed record ArtifactPolicy(string[] SmokeTypes, Dictionary<string, string[]> EntryMethods, string[] Resources, string[]? AssetRoots = null);
 
 internal sealed partial class Scanner
 {
@@ -34,6 +34,24 @@ internal sealed partial class Scanner
         }
         foreach (var path in expected.Resources)
             if (!pack.Paths.Contains(path)) errors.Add("Missing artifact resource: " + path);
+        foreach (var root in expected.AssetRoots ?? [])
+        {
+            var metadata = pack.Paths.Contains(root + ".remap") ? root + ".remap" :
+                pack.Paths.Contains(root + ".import") ? root + ".import" : null;
+            if (metadata == null)
+            {
+                if (!pack.Paths.Contains(root)) errors.Add("Missing asset root: " + root);
+                continue;
+            }
+            var remap = Encoding.UTF8.GetString(pack.Read(metadata));
+            var targets = Regex.Matches(remap, "(?m)^path(?:\\.[a-z0-9_]+)?=\"res://([^\"]+)\"");
+            if (targets.Count == 0 || !targets.Any(target => pack.Paths.Contains(target.Groups[1].Value)))
+                errors.Add("Missing asset remap target: " + root);
+        }
+        foreach (var path in pack.Paths)
+            if (path.StartsWith("assets/character/", StringComparison.Ordinal) || path.StartsWith("assets/kenney/", StringComparison.Ordinal) ||
+                path.StartsWith("assets/tank/", StringComparison.Ordinal) || path.StartsWith("assets/rifle/", StringComparison.Ordinal) || path.StartsWith("assets/props/", StringComparison.Ordinal))
+                errors.Add("Obsolete asset path: " + path);
         // The main scene is converted to .scn. Require both its remap and its actual packed target.
         if (pack.Paths.Contains("scenes/main.tscn.remap"))
         {

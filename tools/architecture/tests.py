@@ -57,13 +57,16 @@ def main():
         (scratch / 'artifact.json').write_text(json.dumps({
             'SmokeTypes': ['Propane.ReleaseSmoke.ReleaseTest'],
             'EntryMethods': {'Propane.Main': ['_Ready']},
-            'Resources': ['project.binary', 'scenes/main.tscn.remap', 'src/Main.cs']}))
+            'Resources': ['project.binary', 'scenes/main.tscn.remap', 'src/Main.cs'],
+            'AssetRoots': ['assets/library.tres', 'assets/authored/props/fixture.glb']}))
         def string_setting(key, value):
             encoded = value.encode()
             variant = struct.pack('<II', 4, len(encoded)) + encoded + bytes((-len(encoded)) % 4)
             return struct.pack('<I', len(key)) + key.encode() + struct.pack('<I', len(variant)) + variant
         config = b'ECFG' + struct.pack('<I', 2) + string_setting('application/run/main_scene', 'res://scenes/main.tscn') + string_setting('autoload/ShutdownGuard', '*res://src/Core/ShutdownGuard.cs')
         resources = {'src/Main.cs': b' ', 'main.scn': b'RSRC',
+                     'assets/library.tres': b'[resource]',
+                     'assets/authored/props/fixture.glb.import': b'[remap]\npath="res://fixture.scn"\n', 'fixture.scn': b'RSRC',
                      'scenes/main.tscn.remap': b'[remap]\npath="res://main.scn"\n',
                      'project.binary': config}
         def write_pack(items):
@@ -96,6 +99,9 @@ def main():
             print(output.strip())
         compile_source(good_source)
         for items, message in [
+            ({k: v for k, v in resources.items() if k != 'assets/library.tres'}, 'Missing asset root: assets/library.tres'),
+            ({k: v for k, v in resources.items() if k != 'fixture.scn'}, 'Missing asset remap target: assets/authored/props/fixture.glb'),
+            ({**resources, 'assets/character/obsolete.glb': b' '}, 'Obsolete asset path: assets/character/obsolete.glb'),
             ({**resources, 'scenes/dev/hidden.tscn': b' '}, 'Dev resource in artifact: scenes/dev/hidden.tscn'),
             ({**resources, 'src/Dev/hidden.cs': b' '}, 'Dev resource in artifact: src/Dev/hidden.cs'),
             ({k: v for k, v in resources.items() if k != 'src/Main.cs'}, 'Missing artifact resource: src/Main.cs'),
@@ -108,7 +114,7 @@ def main():
         pack.write_bytes(b'GDPC\x04')
         code, output = inventory()
         require(code != 0, 'inventory accepted truncated PCK', output)
-        print('PASS architecture: artifact Dev/missing smoke/entry/resource/remap/truncation negatives')
+        print('PASS architecture: artifact Dev/missing smoke/entry/resource/asset root/remap/obsolete path/truncation negatives')
         compile_source('namespace Godot { public struct Vector3 { public float X; } }\n'
                        'namespace Propane.World.Plan { public class ValueOnly { public Godot.Vector3 Run(Godot.Vector3 v) => v; } }\n'
                        'namespace Propane.ReleaseSmoke { public class ReleaseTest { } }\n'

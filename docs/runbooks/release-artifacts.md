@@ -16,7 +16,15 @@ executable from outside the source project: ordinary menu startup, `--classic-lo
 `--release-test`. It rejects engine errors, nonzero exits, timeouts and a missing smoke success marker. Its inventory
 requires the reviewed smoke types, normal/server/smoke entry methods, packed main scene and autoload resources and
 their entry settings; Dev types and `src/Dev`/`scenes/dev` resources fail.
-All three archives must also contain their expected nonempty native executable.
+All three archives must also contain their expected nonempty native executable. The source asset validator supplies
+expected hat IDs and item/GLB/texture roots; the artifact inventory requires these plus the explicit library,
+default mannequin and directional library, resolving native .remap/.import targets. Obsolete pre-migration asset
+paths fail. The packaged smoke loads HatCatalog through ResourceLoader, instantiates/validates its scenes, checks
+default rig bindings and null/unknown fallback, traverses packed dependencies and asserts the expected IDs.
+`[assets export] PASS` is required in addition to the menu/single-player marker. An empty catalog is valid; it does
+not prove the serialized closure of a future populated item. Run this same gate when the first owner hat arrives.
+Packaging validates source assets before import/export and bundles the four Kenney license notices beside CREDITS
+and the verified Godot notices.
 Child processes are terminated and reaped on timeout, Ctrl+C or SIGTERM; earlier evidence is retained.
 
 The release workflow runs this script after packaging and before publication, only in the release job. Its default is

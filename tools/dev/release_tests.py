@@ -309,6 +309,17 @@ class PackageScript(unittest.TestCase):
             "".join(f"4.7.2 {name}.txt sha512 {notice_hash}\n" for name in ("LICENSE", "COPYRIGHT")))
         (self.project / "project.godot").write_text('[application]\nconfig/version="1.2.3"\n')
         (self.project / "CREDITS.md").write_text("credits\n")
+        (self.project / "tools/assets").mkdir()
+        (self.project / "tools/assets/check.py").write_text(
+            'import pathlib, sys\n'
+            f'fault = pathlib.Path({str(self.root / "fault")!r})\n'
+            'if fault.exists() and fault.read_text() == "assets": raise SystemExit("invalid assets")\n'
+            'pathlib.Path(sys.argv[sys.argv.index("--report") + 1]).write_text("{}")\n')
+        for kit in ('cars', 'furniture', 'nature', 'suburban'):
+            notice = self.project / f'assets/third_party/kenney/{kit}/License.txt'
+            notice.parent.mkdir(parents=True)
+            notice.write_text(f'{kit} CC0 notice\n')
+
         self.bin = self.root / "bin"
         self.bin.mkdir()
         # Fake Godot: report a version, and "export" by writing a file (macOS: a zip holding the app).
@@ -368,7 +379,7 @@ elif "--export-release" in args:
         self.assertEqual(sorted(path.name for path in build.iterdir()), ["dist", "keep", "net", "package", "rifle-soak-gate", "sentinel.txt", "shots", "tmp"])
         self.assertEqual(sorted(path.name for path in (build / "package").glob("*.log")),
                          ["import.log", "linux.log", "macos.log", "sign.log", "windows.log"])
-        notices = {"CREDITS.md", "GODOT_LICENSE.txt", "GODOT_COPYRIGHT.txt"}
+        notices = {"CREDITS.md", "GODOT_LICENSE.txt", "GODOT_COPYRIGHT.txt"} | {f"KENNEY_{kit}_LICENSE.txt" for kit in ("cars", "furniture", "nature", "suburban")}
         with tarfile.open(build / "dist" / "Propane-1.2.3-linux-x86_64.tar.gz") as archive:
             self.assertEqual({n for n in archive.getnames() if n.count("/") == 1 and not n.endswith("/")},
                              {f"Propane-1.2.3-linux-x86_64/{n}" for n in notices | {"Propane.x86_64"}})
@@ -378,6 +389,14 @@ elif "--export-release" in args:
             self.assertEqual(set(archive.namelist()), notices | {"Propane.app/", "Propane.app/Contents/", "Propane.app/Contents/MacOS/",
                                                                   "Propane.app/Contents/MacOS/Propane", "Propane.app/signed.txt"})
         self.assertFalse((self.project / "build_id.txt").exists(), "the build id file is removed again")
+
+    def test_invalid_assets_stop_before_export(self):
+        result = self.package(fault='assets')
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        self.assertIn('invalid assets', result.stdout)
+        self.assertFalse((self.project / 'build/package/import.log').exists())
+        self.assertEqual(list((self.project / 'build/dist').iterdir()), [])
+        self.assert_sentinels()
 
     def test_unverified_notices_never_reach_a_package(self):
         pins = self.project / "tools/downloads/pins.txt"

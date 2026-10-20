@@ -496,7 +496,7 @@ remain in [multiplayer](multiplayer.md), [bot-navigation](bot-navigation.md) and
 
 [Source approvals](../tools/architecture/source-sites.tsv) name today's global writes, timers, wall-clock reads and
 worker entries with their owners/domains. [Process-state approvals](../tools/architecture/process-state.tsv) separately
-pin production `LaunchArgs.Current` getter references (11 owner groups, 31 compiled reads) and 105 mutable statics
+pin production `LaunchArgs.Current` getter references (11 owner groups, 32 compiled reads) and 105 mutable statics
 (43 fields, 4 settable properties, 58 readonly collections/tables). Each names its owner and reason/lifetime; Dev is
 excluded, exported Smoke is included. New sites, changed counts and stale approvals fail lint. An approved
 diagnostic clock is not an approved gameplay timer. Do not use Task.Delay, SceneTree timers or wall time for new

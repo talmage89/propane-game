@@ -9,7 +9,7 @@ launch-read	Propane.Net.ServerRun	LaunchArgs.Current	1	Propane.Net.ServerRun	Deb
 launch-read	Propane.Net.UpdateCheck	LaunchArgs.Current	2	Propane.Net.UpdateCheck	Application update opt-in and request URL; includes the async continuation under this owner.
 launch-read	Propane.ReleaseSmoke.CaptureDirector	LaunchArgs.Current	6	Propane.ReleaseSmoke.CaptureDirector	Exported diagnostic recording/capture options; capture owner borrows the immutable process snapshot.
 launch-read	Propane.ReleaseSmoke.FrameMetrics	LaunchArgs.Current	1	Propane.ReleaseSmoke.FrameMetrics	Exported diagnostic metrics destination selected on metrics owner construction.
-launch-read	Propane.ReleaseSmoke.ReleaseTest	LaunchArgs.Current	4	Propane.ReleaseSmoke.ReleaseTest	Exported smoke scenario, peer count and bounded match/timeout options; immutable process arguments.
+launch-read	Propane.ReleaseSmoke.ReleaseTest	LaunchArgs.Current	5	Propane.ReleaseSmoke.ReleaseTest	Exported smoke catalog expectation, scenario, peer count and bounded match/timeout options; immutable process arguments.
 static-collection	Propane.Bots.BotProfile	All	1	Propane.Bots.BotProfile	Process-lifetime ordered difficulty table, immutable by convention; preserve selection order.
 static-collection	Propane.Core.AppearancePalette	ColorNames	1	Propane.Core.AppearancePalette	Process-lifetime appearance palette/name tables, immutable by convention; preserve index meaning.
 static-collection	Propane.Core.AppearancePalette	PlayerColors	1	Propane.Core.AppearancePalette	Process-lifetime appearance palette/name tables, immutable by convention; preserve index meaning.

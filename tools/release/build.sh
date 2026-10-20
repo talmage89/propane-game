@@ -44,6 +44,7 @@ run() {
   fi
 }
 
+python3 -B tools/assets/check.py --report "$stage/asset-inventory.json"
 run import --import
 run macos --export-release macOS "$stage/macos/Propane.zip"
 run linux --export-release Linux "$stage/linux/Propane.x86_64"
@@ -51,6 +52,10 @@ run windows --export-release Windows "$stage/windows/Propane.exe"
 
 # Godot is MIT licensed and asks games to ship its notices.
 cp CREDITS.md "$stage/notices/CREDITS.md"
+# Preserve upstream notices beside the game; non-resource text is not implicitly exported in the PCK.
+for kit in cars furniture nature suburban; do
+  cp "assets/third_party/kenney/$kit/License.txt" "$stage/notices/KENNEY_${kit}_LICENSE.txt"
+done
 for notice in LICENSE COPYRIGHT; do
   python3 tools/downloads/verify.py "$godot_version" "$notice.txt" "$stage/notices/GODOT_$notice.txt" \
     "https://raw.githubusercontent.com/godotengine/godot/$godot_version-stable/$notice.txt"

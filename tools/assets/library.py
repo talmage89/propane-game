@@ -75,11 +75,25 @@ def references(value):
     return [] if not body else [reference(part.strip()) for part in body.split(',') if part.strip()]
 
 
+def check_reference_uid(path, external):
+    if 'uid' not in external: return
+    if path.suffix == '.cs':
+        uid = path.with_name(path.name + '.uid').read_text().strip()
+    else:
+        metadata = path.with_name(path.name + '.import') if path.suffix != '.tres' else path
+        text = metadata.read_text()
+        match = re.search(r'^uid="([^"]+)"', text, re.M) if path.suffix != '.tres' else re.search(r'\buid="([^"]+)"', text.partition('\n')[0])
+        uid = match[1] if match else None
+    if uid != external['uid']: raise ValueError(f'{path}: reference UID does not match its path')
+
+
 def dependency(root, declaring, external):
     path = external['path']
     if not path.startswith('res://assets/'):
         raise ValueError(f'{declaring}: dependency outside assets: {path}')
-    return contained(root, path.removeprefix('res://assets/'))
+    target = contained(root, path.removeprefix('res://assets/'))
+    check_reference_uid(target, external)
+    return target
 
 
 def glb(path):
@@ -215,6 +229,7 @@ def validate(root, inventory, budgets):
                     if entry['type'] != 'Resource': raise ValueError('library: entries must be Resources')
                 elif entry['type'] != 'Script' or entry['path'] not in ('res://src/Assets/HatLibrary.cs', 'res://src/Assets/HatDefinition.cs'):
                     raise ValueError('library: unexpected external resource')
+                if entry['type'] == 'Script': check_reference_uid(ROOT / entry['path'].removeprefix('res://'), entry)
             registered = [dependency(root, library, ext[key]) for key in registered_keys]
             if len(registered) != len(set(registered)): raise ValueError('library: duplicate item references')
     except (ValueError, KeyError, OSError, TypeError) as error: errors.append(str(error))
@@ -226,7 +241,9 @@ def validate(root, inventory, budgets):
             if not relative.startswith(('authored/hats/', 'third_party/')): raise ValueError(f'{relative}: invalid item location')
             ext, props = resource(path)
             if set(props) - {'script', 'Id', 'DisplayName', 'Author', 'License', 'Source', 'Scene'}: raise ValueError(f'{relative}: unknown item properties')
-            if ext[reference(props['script'])]['path'] != 'res://src/Assets/HatDefinition.cs': raise ValueError(f'{relative}: wrong item script')
+            script = ext[reference(props['script'])]
+            if script['path'] != 'res://src/Assets/HatDefinition.cs' or script['type'] != 'Script': raise ValueError(f'{relative}: wrong item script')
+            check_reference_uid(ROOT / 'src/Assets/HatDefinition.cs', script)
             identity, name = string(props, 'Id'), string(props, 'DisplayName')
             if not ID.fullmatch(identity) or identity != path.parent.name: raise ValueError(f'{relative}: invalid/missing id or folder mismatch')
             if identity.lower() in ids: raise ValueError(f'{relative}: duplicate id {identity}')

@@ -10,7 +10,7 @@ import shutil
 import tempfile
 import unittest
 from hat import library_text, scaffold
-from library import ROOT, validate, import_hint
+from library import ROOT, validate, import_hint, dependency
 
 
 class AssetTests(unittest.TestCase):
@@ -123,6 +123,29 @@ class AssetTests(unittest.TestCase):
         first, rest = path.read_text().split('\n', 1)
         path.write_text(first[:-1] + f' uid="{uid}"]\n' + rest)
         self.error('duplicate UID')
+
+    def test_reference_uids_must_match_declared_paths(self):
+        self.item()
+        item = self.root / 'authored/hats/probe/item.tres'
+        first, rest = item.read_text().split('\n', 1)
+        item.write_text(first[:-1] + ' uid="uid://fixtureitem"]\n' + rest)
+        library = self.root / 'library.tres'
+        original = library.read_text()
+        library.write_text(original.replace('type="Resource" path=', 'type="Resource" uid="uid://fixtureitem" path='))
+        self.clean()
+        library.write_text(library.read_text().replace('uid://fixtureitem', 'uid://wrong'))
+        self.error('reference UID does not match its path')
+        library.write_text(original)
+        uid = (ROOT / 'src/Assets/HatDefinition.cs.uid').read_text().strip()
+        item.write_text(item.read_text().replace('type="Script" path=', f'type="Script" uid="{uid}" path='))
+        self.clean()
+        item.write_text(item.read_text().replace(uid, 'uid://wrong'))
+        self.error('reference UID does not match its path')
+        uid = re.search(r'^uid="([^"]+)"', self.model.with_name(self.model.name + '.import').read_text(), re.M)[1]
+        external = {'path': 'res://assets/generated/props/cooler.glb', 'uid': uid}
+        self.assertEqual(dependency(self.root, library, external), self.model)
+        with self.assertRaisesRegex(ValueError, 'reference UID'):
+            dependency(self.root, library, {**external, 'uid': 'uid://wrong'})
 
     def test_cli_treats_display_name_as_data(self):
         name = 'Name "quoted"; $(not_a_command) `literal`'
