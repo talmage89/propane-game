@@ -37,8 +37,9 @@ public sealed class HeadAttachment : IDisposable
                 var next = item.Scene.Instantiate<Node3D>();
                 try
                 {
-                    // Preserve an imported root transform; authored roots are validated in the source gate.
-                    next.Transform = socket * next.Transform;
+                    // Convert untouched reference-model space once, then bind to this actor's socket.
+                    // Preserve the imported root transform; never bake a second conversion in the scaffold.
+                    next.Transform = socket * DefaultCharacter.HatAuthoringReference.AffineInverse() * next.Transform;
                     attachment.AddChild(next);
                     instance = next;
                     foreach (var mesh in GameAssets.MeshInstances(next))

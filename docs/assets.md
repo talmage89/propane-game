@@ -40,8 +40,13 @@ add another turn. Full export settings and file names are in the owner guide. No
 sRGB. No skin, animations, cameras, lights, collision, scripts or custom extensions in a hat.
 
 The `head` socket is Head's global rest origin with model-aligned axes at rest. The bone-to-socket transform is
-`HeadRest.Inverse × Transform(identity basis, HeadRest.origin)`. Runtime uses final Head pose × that frame. It is
-rig geometry, not a per-hat fit/effect tuner. A `BoneAttachment3D` with pose override disabled follows final animation,
+`HeadRest.Inverse × Transform(identity basis, HeadRest.origin)`. Hats are authored in the untouched reference
+mannequin's model space, fitted on its head. The fixed authoring frame is identity axes at `(0, 1.568700552, 0.0050996924)` meters in imported Godot model space. It stays frozen
+when adding a character; it is not measured from each actor. Attachment applies
+`final Head pose × target bone-to-socket × inverse(fixed authoring frame) × imported root transform`.
+The scaffold/import never rebakes this conversion. Attach-time conversion keeps the owner's GLB intact and gives
+registered and raw-file previews one path; a future rig changes only the target socket. These frames are
+rig geometry, not per-hat fit/effect tuners. A `BoneAttachment3D` with pose override disabled follows final animation,
 physical bones, capture and get-up without another scheduler, animation modifier or simulation timer.
 
 Each actor owns its attachment, hat subtree and `Tint_Player` material copies, releasing them on replacement/exit.

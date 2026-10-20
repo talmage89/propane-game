@@ -19,6 +19,8 @@ public partial class AssetTests : Node3D
     private HatCatalog catalog = null!;
     private PackedScene scene = null!;
     private readonly ScriptedInput input = new();
+    private Skeleton3D alternate = null!;
+    private HeadAttachment? alternateHat;
     private Camera3D camera = null!;
     private CaptureDirector capture = null!;
     private int frames, activeFrames, downFrames, upFrames;
@@ -64,11 +66,20 @@ public partial class AssetTests : Node3D
             {
                 var skeleton = Skeleton(character);
                 var rest = skeleton.GetBoneGlobalRest(skeleton.FindBone("Head"));
+                Require(rest.Origin.DistanceTo(new Vector3(0, 1.568700552f, .0050996924f)) < .000001f, "reference mannequin head frame changed; review the frozen authoring contract");
                 var final = skeleton.GetNode<RifleHandFollow>("RifleHandFollow");
                 // Godot restores modifier poses after update. Observe them inside the last modifier signal.
                 final.ModificationProcessed += () => finalSockets[skeleton] = skeleton.GetBoneGlobalPose(skeleton.FindBone("Head")) *
                     rest.AffineInverse() * new Transform3D(Basis.Identity, rest.Origin);
             }
+            // Native alternate target: different height and bone axes, same frozen authoring space.
+            alternate = new Skeleton3D { Name = "AlternateHeadTarget", Visible = false };
+            alternate.AddBone("Head");
+            alternate.SetBoneRest(0, new Transform3D(Basis.FromEuler(new Vector3(.2f, -.3f, .1f)), new Vector3(.1f, 2.1f, -.2f)));
+            alternate.ResetBonePoses();
+            AddChild(alternate);
+            alternateHat = new HeadAttachment(alternate);
+            alternateHat.Apply(catalog.Resolve("dev_probe"), Colors.White, 1);
             var orange = actor.BodyColor;
             actor.SetHat("dev_probe");
             Require(actor.BodyColor == orange, "offline hat quantized the existing float color");
@@ -142,6 +153,12 @@ public partial class AssetTests : Node3D
         {
             if (completed) return;
             Verify(actor); Verify(remote);
+            var rest = alternate.GetBoneGlobalRest(0);
+            var target = alternate.GlobalTransform * alternate.GetBoneGlobalPose(0) * rest.AffineInverse() * new Transform3D(Basis.Identity, rest.Origin);
+            var alternateMesh = GameAssets.MeshInstances(alternateHat!.Instance!).Single();
+            Require(alternateMesh.GlobalPosition.DistanceTo(target * new Vector3(0, .22f, 0)) < .0001f &&
+                alternateMesh.GlobalBasis.X.DistanceTo(target.Basis.X) < .0001f && alternateMesh.GlobalBasis.Y.DistanceTo(target.Basis.Y) < .0001f && alternateMesh.GlobalBasis.Z.DistanceTo(target.Basis.Z) < .0001f,
+                $"alternate native head target differs: shown={alternateMesh.GlobalTransform} socket={target}");
             if (frames == 90)
             {
                 sawFar = actor.FindChildren("*", "AnimationTree", owned: false).OfType<AnimationTree>().Single().CallbackModeProcess == AnimationMixer.AnimationCallbackModeProcess.Manual;
@@ -162,7 +179,7 @@ public partial class AssetTests : Node3D
             remote.SetHat(null);
             Require(!IsInstanceValid(old), "replaced hat remains alive");
             remote.Free();
-            GD.Print($"[assets] PASS final-head transforms frames={frames} active={activeFrames} ragdoll={downFrames} getup={upFrames}; local/remote, replace/fallback, tint, RNG and collision invariance");
+            GD.Print($"[assets] PASS final-head transforms frames={frames} active={activeFrames} ragdoll={downFrames} getup={upFrames}; local/remote/alternate native socket, replace/fallback, tint, RNG and collision invariance");
             ShutdownGuard.Quit(GetTree());
         }
         catch (Exception error) { Fail(error); }
@@ -174,13 +191,19 @@ public partial class AssetTests : Node3D
     {
         var skeleton = Skeleton(actor);
         Require(finalSockets.ContainsKey(skeleton), "no final modifier pose was observed");
-        var expected = skeleton.GlobalTransform * finalSockets[skeleton];
+        var socket = skeleton.GlobalTransform * finalSockets[skeleton];
+        // Independent frozen authoring frame: do not use the production conversion as its own oracle.
+        var reference = new Transform3D(Basis.Identity, new Vector3(0, 1.568700552f, .0050996924f));
+        var expected = socket * reference.AffineInverse();
         var shown = Hat(actor) ?? throw new InvalidOperationException("missing fixture hat");
         Require(shown.GlobalPosition.DistanceTo(expected.Origin) < .0001f &&
             shown.GlobalBasis.X.DistanceTo(expected.Basis.X) < .0001f && shown.GlobalBasis.Y.DistanceTo(expected.Basis.Y) < .0001f && shown.GlobalBasis.Z.DistanceTo(expected.Basis.Z) < .0001f,
             $"hat differs actor={actor.ActorId} shown={shown.GlobalTransform} expected={expected} bone={skeleton.GetNode<BoneAttachment3D>("HeadAttachment").GlobalTransform}");
+        var mesh = GameAssets.MeshInstances(shown).Single();
+        Require(mesh.GlobalPosition.DistanceTo(socket * new Vector3(0, .22f, 0)) < .0001f,
+            "model-space hat geometry does not sit above the final head socket");
     }
     private static void Require(bool condition, string message) { if (!condition) throw new InvalidOperationException(message); }
     private void Fail(Exception error) { completed = true; GD.PushError($"[assets] FAIL {error}"); ShutdownGuard.Quit(GetTree(), 1); }
-    public override void _ExitTree() { world?.Dispose(); scene?.Dispose(); }
+    public override void _ExitTree() { alternateHat?.Dispose(); world?.Dispose(); scene?.Dispose(); }
 }

@@ -17,13 +17,12 @@ project or asset-source store outside `res://`. A checkout builds and plays with
 
 1. Choose a permanent lowercase ID: 1–64 letters/digits/underscores/hyphens, starting with a letter or digit.
    Never rename or reuse an ID after release. Make `assets/authored/hats/<id>/`.
-2. In Blender 5.1, use Metric units, **1 unit = 1 meter**. Reference the existing mannequin at unit scale; do not
-   export it. Align the hat to the head socket: origin at the Head bone's rest origin (not the crown), with axes
-   aligned to the mannequin's model axes in rest. Blender Z is up and -Y is forward. The preview prints the socket
-   frame; the imported reference is approximately (0, 1.569, 0.005) meters at that origin. After fitting, clear parenting (Keep Transform), then move the
-   whole hat so that socket origin is at world (0, 0, 0); set object origins there. Export only the hat, with
-   zero object location/rotation and unit scale. Keeping the reference head height in the exported transform
-   would apply that offset twice.
+2. In Blender 5.1, set **Scene → Units → Metric**, **Unit Scale = 1.0** (meters). Use **File → Import →
+   glTF 2.0** to import `assets/third_party/quaternius/ual/mannequin.glb` with default settings. Select its
+   armature and choose **Armature Data Properties → Skeleton → Rest Position**; leave the reference transforms
+   unchanged. Model the hat sitting on its head. If parented, select the hat and **Alt+P → Clear Parent (Keep
+   Transform)**. Keep its fitted position and origin. Hide the reference, then select only the hat for export.
+   Runtime converts the fixed reference head frame once; future characters use their own target head socket.
 3. Apply rotation/scale and mesh modifiers. Select only the hat, then export **glTF 2.0 → GLB**, **Selected Objects**,
    **+Y Up**, **Normals**, **Tangents**, **Materials → Export**, with **Animations**, **Cameras** and **Lights** off.
    Turn off Draco/mesh compression and material extensions. Use PNG source images (Automatic image export);

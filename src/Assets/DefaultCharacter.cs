@@ -11,6 +11,10 @@ public static class DefaultCharacter
     public const string ScenePath = "res://assets/third_party/quaternius/ual/mannequin.glb";
     public const string DirectionalPath = "res://assets/third_party/100style/neutral/directional.tres";
     public const string HeadBone = "Head";
+    // Frozen model-space frame of the original authoring reference, independent of the actor's rig.
+    // Measured from the shipped mannequin Head global rest; axes align with the imported model.
+    // This is an art coordinate contract, not a gameplay/effect adjustment. Never refit it per character.
+    public static Transform3D HatAuthoringReference => new(Basis.Identity, new Vector3(0, 1.568700552f, .0050996924f));
     private static bool validated;
 
     /// <summary>Validate borrowed immutable art once per process, before the first actor binds its rig.</summary>

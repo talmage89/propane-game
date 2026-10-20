@@ -13,7 +13,8 @@ internal static class AssetFixture
         var mesh = new MeshInstance3D
         {
             Mesh = new BoxMesh { Size = new Vector3(.24f, .15f, .24f), Material = new StandardMaterial3D { ResourceName = "Tint_Player", AlbedoColor = Colors.White } },
-            Position = new Vector3(0, .22f, 0),
+            // Model space: fitted on the untouched reference mannequin, not translated to the socket.
+            Position = new Vector3(0, 1.788700552f, .0050996924f),
         };
         root.AddChild(mesh);
         mesh.Owner = root;
