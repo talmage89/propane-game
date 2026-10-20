@@ -162,8 +162,7 @@ public partial class LabSession : Node3D
         if (Session is not { IsAlive: true } || !CreateLocalView) return;
         if (e.IsActionPressed(InputSetup.ToggleFullscreen))
         {
-            var full = DisplayServer.WindowGetMode() == DisplayServer.WindowMode.Fullscreen;
-            DisplayServer.WindowSetMode(full ? DisplayServer.WindowMode.Windowed : DisplayServer.WindowMode.Fullscreen);
+            DisplayPreferences.ToggleFullscreen();
         }
         else if (e.IsActionPressed(InputSetup.Pause))
         {
@@ -522,7 +521,7 @@ public partial class LabSession : Node3D
         public void CreateViews(SessionContext session)
         {
             if (!lab.CreateLocalView) return;
-            var view = session.AddLocalView(lab.Player.Runtime, lab, new DeviceInput(session.World.Tuning));
+            var view = session.AddLocalView(lab.Player.Runtime, lab, new DeviceInput(session.World.Tuning, preferences: PlayerPreferences.Current));
             lab.localView = view;
             view.TreeExiting += () => lab.localView = null;
             // A prototype's counters are the mode's, on the match HUD, as in a match.

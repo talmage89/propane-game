@@ -239,6 +239,7 @@ public partial class Menus : CanvasLayer
         var lab = UiStyle.Button("Lab");
         lab.Pressed += () => LabRequested?.Invoke();
         layout.AddChild(lab);
+        SettingsMenu.AddLauncher(this, layout, Settings);
         var quit = UiStyle.Button("Quit");
         quit.Pressed += () => ShutdownGuard.Quit(GetTree());
         layout.AddChild(quit);

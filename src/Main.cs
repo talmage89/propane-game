@@ -53,6 +53,7 @@ public partial class Main : Node
             RunServer();
             return;
         }
+        AddChild(new DisplayPreferences { Settings = settings, Name = "DisplayPreferences" });
         InputSetup.Register();
         net = new NetClient(PacketTransports.CreateClient(), ModeRegistry.Codec) { Name = "Net", Template = SavedTuning };
         AddChild(net);
@@ -93,8 +94,7 @@ public partial class Main : Node
     {
         if (game == null && match == null && lab == null && @event.IsActionPressed(InputSetup.ToggleFullscreen))
         {
-            var fullscreen = DisplayServer.WindowGetMode() == DisplayServer.WindowMode.Fullscreen;
-            DisplayServer.WindowSetMode(fullscreen ? DisplayServer.WindowMode.Windowed : DisplayServer.WindowMode.Fullscreen);
+            DisplayPreferences.ToggleFullscreen();
         }
     }
 

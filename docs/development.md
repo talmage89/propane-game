@@ -51,7 +51,7 @@ Requires Godot 4.7.2 (.NET edition) and the .NET 10 SDK.
 [code-quality.md](code-quality.md) describes the formatting and analyzer baseline and its regression
 checks. The gate follows the existing code's style and checks correctness without API design or naming churn.
 
-The game opens maximized on the main menu: Single player, Multiplayer, Lab or Quit. In play it captures the mouse; click
+The game opens on the main menu: Single player, Multiplayer, Lab, Settings or Quit. Windowed startup is maximized. In play it captures the mouse; click
 the window to recapture it after switching away.
 
 ## Measuring scale
@@ -152,6 +152,46 @@ player pulls against the retained recoil. Short rifle and camera springs supply 
 [recoil](recoil.md) for the climb and the logical muzzle, and the [recoil report](evidence/recoil.md) for
 R19's measurements.
 A throw immediately clears weapon poses and cancels reload, so get-up cannot restore a pose from before the throw.
+
+### Personal preferences
+
+**Settings** is available on the main menu and the single-player, match, lobby-world and Lab pause menus. Tab or
+up/down moves focus, left/right adjusts values, and Enter or A selects buttons. D-pad and left stick navigate the
+whole menu; B, Start or Escape returns to its caller, keeping the caller's pause state. A second Escape resumes.
+The match keeps running while its menu is open. The mouse wheel scrolls without changing the slider under it.
+
+Camera and controls include mouse sensitivity, relative aiming sensitivity (mouse and stick), separate mouse and
+gamepad Y inversion, gamepad look sensitivity, FOV and camera shake strength. Display includes windowed/fullscreen/
+exclusive, VSync, eight frame-cap choices (unlimited, 30/60/90/120/144/165/240 FPS), and 50–100% 3D render scale.
+The interface category includes the existing leaderboard preference; its match-menu shortcut edits the same value.
+F11 and Alt+Enter persist window mode too. Exclusive mode support and VSync behavior depend on the native platform; the menu explains detected fallbacks.
+The engine's `--disable-vsync` launch option overrides initial VSync application for developer measurements;
+subsequent menu edits still apply. Dedicated servers never apply display preferences.
+
+[`PreferenceCatalog`](../src/Core/PreferenceCatalog.cs) is the single declaration of each setting's id, label,
+category, type, bounds/choices, default, target and help. Add a public static readonly declaration and an apply
+hook at the target; persistence, validation, UI and category reset follow automatically. No audio controls exist yet.
+Key rebinding is follow-up work: allow roughly 3–5 engineering days for device bindings, conflict handling, glyphs,
+persistence and real-event regression tests, plus native platform validation.
+
+`Main` owns the existing `PlayerSettings` ConfigFile in `user://settings.cfg`; menus, device input, cameras and the
+Main-owned display binding borrow its Foundation contract. The existing identity/server fields and
+`hud/leaderboard` storage remain compatible. Preferences use the same file's `preferences` section. Missing,
+wrong-type or nonfinite values use their declaration's defaults; finite numbers clamp and snap to steps. Unknown
+keys are ignored. Each edit saves synchronously before its apply notification, matching the existing store and
+avoiding a pending-save lifetime/clock across menus and session replacement. A write failure keeps the live choice
+and displays an error in the editor; it cannot promise persistence. Reset saves each setting and fires its hook.
+
+The existing shared `MouseSensitivity`, `StickLookDegreesPerSecond`, `FieldOfView` and shake tuners remain unchanged
+base values. `DeviceInput` scales only physical mouse displacement; aiming adds its relative multiplier and inversion
+changes only Y. Stick gain applies **after** the existing radial response curve and deadzone, and non-unit gain produces
+`PlayerIntent.LookAngularVelocity` in degrees/second. Logical aim integrates that velocity once with physics delta and combines it with mouse displacement before its
+single pitch clamp.
+Scripted `Look` pixels and `LookStick` rates, bot input, logical recoil and replicated aim keep their existing units.
+Only production local-view device construction opts into preferences; standalone scripted/device fixtures are neutral.
+`CameraRig` scales base FOV by preference/72 (clamped to the existing 30–110° camera range), and scales only rendered
+shake rotation/translation by 0–100%; logical aim, targeting and recoil stay unchanged. Its change subscription
+updates FOV and shake even while its world is paused and detaches on tree exit. Shared tuner snapshots are unchanged.
 
 ## Tuning
 

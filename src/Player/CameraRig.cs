@@ -8,6 +8,7 @@ public partial class CameraRig : Node3D
 {
     public required WorldContext World { get; init; }
     public LogicalAim? Aim { get; init; }
+    public IPlayerSettings? Preferences { get; init; }
     private LogicalAim aim = null!;
     private readonly RecoilSpring recoil = new();
     public Camera3D Camera { get; private set; } = null!;
@@ -23,10 +24,13 @@ public partial class CameraRig : Node3D
         Camera = new Camera3D { Name = "Camera", Current = true, Near = 0.05f, Far = 2000f };
         AddChild(Camera);
         if (Aim == null) World.Events.Explosion += aim.OnExplosion;
+        if (Preferences != null) Preferences.PreferenceChanged += OnPreferenceChanged;
+        ApplyCameraPreferences();
     }
 
     public override void _ExitTree()
     {
+        if (Preferences != null) Preferences.PreferenceChanged -= OnPreferenceChanged;
         if (Aim != null) return;
         World.Events.Explosion -= aim.OnExplosion;
         aim.Dispose();
@@ -46,7 +50,21 @@ public partial class CameraRig : Node3D
         if (Aim == null) aim.Advance(delta);
         GlobalTransform = aim.Transform;
         recoil.Update((float)delta, World.Tuning.RifleRecoilFrequency, World.Tuning.RifleRecoilDamping);
-        Camera.Transform = aim.EyeOffset * new Transform3D(new Basis(Vector3.Right, Mathf.DegToRad(recoil.Position)), Vector3.Zero);
-        Camera.Fov = World.Tuning.FieldOfView;
+        ApplyCameraPreferences();
+    }
+
+    private void OnPreferenceChanged(PreferenceDefinition preference)
+    {
+        if (preference.Target == PreferenceTarget.Camera) ApplyCameraPreferences();
+    }
+
+    private void ApplyCameraPreferences()
+    {
+        var eye = aim.EyeOffset;
+        var strength = Preferences == null ? 1 : (float)Preferences.GetPreference(PreferenceCatalog.CameraShake);
+        if (strength < 1) eye = new Transform3D(Basis.Identity.Slerp(eye.Basis, strength), eye.Origin * strength);
+        Camera.Transform = eye * new Transform3D(new Basis(Vector3.Right, Mathf.DegToRad(recoil.Position)), Vector3.Zero);
+        var fovScale = Preferences == null ? 1 : (float)(Preferences.GetPreference(PreferenceCatalog.FieldOfView) / PreferenceCatalog.FieldOfView.Default);
+        Camera.Fov = Preferences == null ? World.Tuning.FieldOfView : Mathf.Clamp(World.Tuning.FieldOfView * fovScale, 30, 110);
     }
 }

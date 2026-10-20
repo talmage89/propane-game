@@ -61,6 +61,7 @@ public partial class PauseMenu : CanvasLayer
         }
         buttons.AddChild(quit);
         layout.AddChild(buttons);
+        SettingsMenu.AddLauncher(this, layout);
         AddChild(new MenuNavigation { Screen = this, Root = layout, Back = () => ResumeRequested?.Invoke() });
     }
 }

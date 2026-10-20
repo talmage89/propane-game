@@ -23,6 +23,8 @@ public struct PlayerIntent
     public Vector2 Look;
     /// <summary>Stick direction after deadzone, before response curve; a rate, not displacement.</summary>
     public Vector2 LookStick;
+    /// <summary>Device-normalized angular velocity in degrees per second, after personal stick preferences.</summary>
+    public Vector2 LookAngularVelocity;
 }
 
 public interface IPlayerInputSource
@@ -57,11 +59,13 @@ public sealed class DeviceInput : IResettablePlayerInputSource
 {
     private readonly Func<bool> gameplayEnabled;
     private readonly Tuning tuning;
+    private readonly IPlayerSettings? preferences;
 
     /// <summary>The facade supplies UI focus; tests can enable actions without a rendered mouse capture.</summary>
-    public DeviceInput(Tuning tuning, Func<bool>? gameplayEnabled = null, InputDeviceAssignment? assignment = null)
+    public DeviceInput(Tuning tuning, Func<bool>? gameplayEnabled = null, InputDeviceAssignment? assignment = null, IPlayerSettings? preferences = null)
     {
         this.tuning = tuning;
+        this.preferences = preferences;
         Assignment = assignment ?? InputDeviceAssignment.Primary;
         this.gameplayEnabled = gameplayEnabled ?? (() => Input.MouseMode == Input.MouseModeEnum.Captured);
     }
@@ -222,6 +226,22 @@ public sealed class DeviceInput : IResettablePlayerInputSource
             LookStick = captured ? Vector(InputSetup.LookLeft, InputSetup.LookRight,
                 InputSetup.LookUp, InputSetup.LookDown, tuning.StickDeadzone) : Vector2.Zero,
         };
+        if (preferences != null)
+        {
+            var aiming = intent.Aim ? (float)preferences.GetPreference(PreferenceCatalog.AimSensitivity) : 1f;
+            intent.Look *= (float)preferences.GetPreference(PreferenceCatalog.MouseSensitivity) * aiming;
+            if (preferences.GetPreference(PreferenceCatalog.InvertMouseY) != 0) intent.Look.Y = -intent.Look.Y;
+            var stick = intent.LookStick;
+            if (preferences.GetPreference(PreferenceCatalog.InvertGamepadY) != 0) stick.Y = -stick.Y;
+            var gain = (float)preferences.GetPreference(PreferenceCatalog.GamepadSensitivity) * aiming;
+            intent.LookStick = stick;
+            if (gain != 1)
+            {
+                // Apply gain after the radial curve, so full deflection can exceed the base rate without clipping.
+                intent.LookAngularVelocity = LogicalAim.StickLookDelta(stick, 1, tuning.StickLookDegreesPerSecond, tuning.StickLookCurve) * gain;
+                intent.LookStick = Vector2.Zero;
+            }
+        }
         look = Vector2.Zero;
         jump = false;
         fire = false;
