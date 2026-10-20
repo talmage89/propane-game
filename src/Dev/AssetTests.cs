@@ -33,6 +33,16 @@ public partial class AssetTests : Node3D
         try
         {
             DevArgs.MarkReady();
+            if (DevArgs.Get("scenario") == "invalid-log")
+            {
+                using var invalid = AssetFixture.Scene(alphaBlend: true);
+                var skipped = AssetFixture.Catalog(invalid);
+                Require(skipped.Items.IsEmpty && skipped.Resolve("dev_probe") == null, "runtime did not skip the invalid hat");
+                GD.Print("[assets] PASS invalid item skipped with default diagnostic");
+                completed = true;
+                ShutdownGuard.Quit(GetTree());
+                return;
+            }
             InputSetup.Register();
             using var defaults = new Tuning();
             world = new WorldContext(this, defaults, present: true);
@@ -41,13 +51,14 @@ public partial class AssetTests : Node3D
             world.Spawn.InWorld(new VoidEnvironment());
             scene = AssetFixture.Scene();
             catalog = AssetFixture.Catalog(scene);
+            CheckInvalidItems();
             Require(!HatCatalog.ValidId("UPPER") && !HatCatalog.ValidId("../path") && !HatCatalog.ValidId("") && HatCatalog.ValidId("owner_01"), "native catalog id grammar");
             using (var duplicate = new HatLibrary())
             {
                 duplicate.Hats.Add(new HatDefinition { Id = "same", DisplayName = "One", Scene = scene });
                 duplicate.Hats.Add(new HatDefinition { Id = "same", DisplayName = "Two", Scene = scene });
                 var rejected = false;
-                try { _ = new HatCatalog(duplicate); }
+                try { _ = HatCatalog.Validate(duplicate); }
                 catch (InvalidOperationException) { rejected = true; }
                 Require(rejected, "native catalog accepted duplicate identities");
             }
@@ -114,6 +125,33 @@ public partial class AssetTests : Node3D
             checkFrame = Callable.From(CheckFrame);
         }
         catch (Exception error) { Fail(error); }
+    }
+
+    private void CheckInvalidItems()
+    {
+        using var invalid = AssetFixture.Scene(alphaBlend: true);
+        using var library = new HatLibrary();
+        library.Hats.Add(new HatDefinition { Id = "dev_invalid", DisplayName = "Invalid Dev primitive", Scene = invalid });
+        library.Hats.Add(new HatDefinition { Id = "dev_probe", DisplayName = "Valid Dev primitive", Scene = scene });
+        var errors = new List<string>();
+        var recovered = new HatCatalog(library, errors.Add);
+        Require(errors.Count == 1 && errors[0] == "Skipping hat 'dev_invalid': Hat requires opaque/cutout standard materials",
+            "runtime must report exactly one diagnostic naming the rejected hat and reason");
+        Require(recovered.Items.Length == 1 && recovered.Resolve("dev_probe") != null && recovered.Resolve("dev_invalid") == null,
+            "invalid item poisoned the catalog or survived in picker choices");
+        var rejected = false;
+        try { _ = HatCatalog.Validate(library); }
+        catch (InvalidOperationException error) { rejected = error.Message == errors[0]; }
+        Require(rejected, "strict native authoring gate accepted the invalid material");
+        var bare = world.Spawn.InWorld(new PlayerCharacter { World = world, CosmeticCatalog = recovered, IsRemote = true });
+        try
+        {
+            bare.SetHat("dev_invalid");
+            Require(Hat(bare) == null && bare.Appearance.Hat == "dev_invalid", "bad hat broke actor construction/fallback or erased its id");
+            bare.SetHat("dev_probe");
+            Require(Hat(bare) != null, "bad hat prevented the actor from wearing a valid hat");
+        }
+        finally { bare.Free(); }
     }
 
     public override void _PhysicsProcess(double delta)

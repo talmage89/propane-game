@@ -50,7 +50,9 @@ public partial class AssetValidation : Node
                 finally { root.Free(); }
                 GD.Print("[assets] PASS scaffold hats=1");
             }
-            GD.Print($"[assets] PASS native resources={count} hats={HatCatalog.Shipped.Items.Length}");
+            var shipped = ResourceLoader.Load<HatLibrary>(HatCatalog.LibraryPath) ?? throw new InvalidOperationException("Missing shipped hat library");
+            var catalog = HatCatalog.Validate(shipped);
+            GD.Print($"[assets] PASS native resources={count} hats={catalog.Items.Length}");
             ShutdownGuard.Quit(GetTree());
         }
         catch (Exception error)

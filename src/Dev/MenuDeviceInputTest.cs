@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Godot;
@@ -163,15 +164,22 @@ public partial class MenuDeviceInputTest : Node
         await Frames().ConfigureAwait(true);
         await Activate("Cancel").ConfigureAwait(true);
         Check(!IsInstanceValid(picker) && settings.Appearance == expected, "cancel preserves accepted appearance and retires preview");
+        using var invalidScene = AssetFixture.Scene(alphaBlend: true);
+        var diagnostics = new List<string>();
+        var invalidCatalog = AssetFixture.Catalog(invalidScene, diagnostics.Add);
+        Check(invalidCatalog.Items.IsEmpty && diagnostics.Count == 1, "invalid-only catalog recovers empty with one diagnostic");
         using var empty = new HatLibrary();
-        picker = new AppearancePicker { Initial = initial, CosmeticCatalog = new HatCatalog(empty) };
-        AppearanceRecord? applied = null;
-        picker.Applied += value => applied = value;
-        AddChild(picker);
-        await Frames().ConfigureAwait(true);
-        Check(!picker.FindChildren("*", "Button", owned: false).OfType<Button>().Any(b => MenuNavigation.Key(b) == "appearance_hat"), "empty catalog hides the hat control");
-        await Activate("Use color").ConfigureAwait(true);
-        Check(applied == initial, "empty catalog preserves unsupported saved IDs");
+        foreach (var emptyCatalog in new[] { new HatCatalog(empty), invalidCatalog })
+        {
+            picker = new AppearancePicker { Initial = initial, CosmeticCatalog = emptyCatalog };
+            AppearanceRecord? applied = null;
+            picker.Applied += value => applied = value;
+            AddChild(picker);
+            await Frames().ConfigureAwait(true);
+            Check(!picker.FindChildren("*", "Button", owned: false).OfType<Button>().Any(b => MenuNavigation.Key(b) == "appearance_hat"), "empty/recovered catalog hides the hat control");
+            await Activate("Use color").ConfigureAwait(true);
+            Check(applied == initial, "empty/recovered catalog preserves unsupported saved IDs");
+        }
     }
 
     private async Task LabInput()

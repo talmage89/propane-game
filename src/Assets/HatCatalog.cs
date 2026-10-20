@@ -18,7 +18,11 @@ public sealed class HatCatalog
     public sealed record Item(string Id, string DisplayName, string Author, string License, string Source, PackedScene Scene);
     public ImmutableArray<Item> Items { get; }
 
-    public HatCatalog(HatLibrary library)
+    /// <summary>Strict authoring gate; runtime instead reports and skips each bad item.</summary>
+    public static HatCatalog Validate(HatLibrary library) => new(library, message => throw new InvalidOperationException(message));
+
+    /// <param name="reportInvalid">Synchronous borrowed diagnostic sink; defaults to one engine error per skipped item.</param>
+    public HatCatalog(HatLibrary library, Action<string>? reportInvalid = null)
     {
         ArgumentNullException.ThrowIfNull(library);
         var ids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -27,19 +31,33 @@ public sealed class HatCatalog
             throw new InvalidOperationException("Hat library needs authored defaults");
         foreach (var definition in library.Hats)
         {
-            if (definition == null || !ValidId(definition.Id) || !ids.Add(definition.Id) || string.IsNullOrWhiteSpace(definition.DisplayName))
-                throw new InvalidOperationException("Invalid or duplicate hat identity/name");
-            if (definition.Scene == null) throw new InvalidOperationException($"Missing hat scene: {definition.Id}");
-            var authored = definition.ResourcePath.Length == 0 || definition.ResourcePath.StartsWith("res://assets/authored/", StringComparison.Ordinal);
-            var author = definition.Author.Length == 0 && authored ? library.DefaultAuthor : definition.Author;
-            var license = definition.License.Length == 0 && authored ? library.DefaultLicense : definition.License;
-            var source = definition.Source.Length == 0 && authored ? "owner export" : definition.Source;
-            if (string.IsNullOrWhiteSpace(author) || string.IsNullOrWhiteSpace(license) || string.IsNullOrWhiteSpace(source))
-                throw new InvalidOperationException($"Missing hat provenance: {definition.Id}");
-            var root = definition.Scene.Instantiate<Node3D>();
-            try { ValidateScene(root); }
-            finally { root.Free(); }
-            items.Add(new Item(definition.Id, definition.DisplayName, author, license, source, definition.Scene));
+            try
+            {
+                if (definition == null) throw new InvalidOperationException("Missing definition");
+                if (!ValidId(definition.Id)) throw new InvalidOperationException("Invalid catalog id");
+                if (ids.Contains(definition.Id)) throw new InvalidOperationException("Duplicate catalog id");
+                if (string.IsNullOrWhiteSpace(definition.DisplayName)) throw new InvalidOperationException("Missing display name");
+                if (definition.Scene == null) throw new InvalidOperationException("Missing scene");
+                var authored = definition.ResourcePath.Length == 0 || definition.ResourcePath.StartsWith("res://assets/authored/", StringComparison.Ordinal);
+                var author = definition.Author.Length == 0 && authored ? library.DefaultAuthor : definition.Author;
+                var license = definition.License.Length == 0 && authored ? library.DefaultLicense : definition.License;
+                var source = definition.Source.Length == 0 && authored ? "owner export" : definition.Source;
+                if (string.IsNullOrWhiteSpace(author) || string.IsNullOrWhiteSpace(license) || string.IsNullOrWhiteSpace(source))
+                    throw new InvalidOperationException("Missing provenance");
+                var root = definition.Scene.Instantiate();
+                try { ValidateScene(root); }
+                finally { root.Free(); }
+                ids.Add(definition.Id);
+                items.Add(new Item(definition.Id, definition.DisplayName, author, license, source, definition.Scene));
+            }
+            catch (Exception error)
+            {
+                var identity = string.IsNullOrEmpty(definition?.Id) ? "<empty>" : definition.Id;
+                var message = $"Skipping hat '{identity}': {error.Message}";
+                // Report outside validation's try: a strict sink must propagate, never be swallowed/reported twice.
+                if (reportInvalid != null) reportInvalid(message);
+                else GD.PushError(message);
+            }
         }
         Items = items.OrderBy(item => item.Id, StringComparer.Ordinal).ToImmutableArray();
     }

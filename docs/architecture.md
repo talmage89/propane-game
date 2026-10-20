@@ -449,7 +449,9 @@ seed and reroll callback. No RNG, coordinate arithmetic, model selection, classi
 thread. `MeshKit` owns temporary per-build geometry scratch. Shared resources remain immutable by convention; per-instance mutable effects/material state stays owned.
 Do not duplicate immutable assets per world to eliminate statics. AL validates the fixed default character bones/clips before first binding and derives its head socket from rest.
 HatCatalog snapshots the explicit shipped Resource list on the main thread for process lifetime; actors own/free
-HeadAttachment instances and tint copies before skeleton retirement. Catalog scenes/materials remain borrowed and
+HeadAttachment instances and tint copies before skeleton retirement. Attachment converts the fixed reference
+mannequin authoring frame once into the target head socket; catalog loading skips/reports invalid items at runtime
+while the authoring gates remain strict. Catalog scenes/materials remain borrowed and
 immutable. Hats add no simulation timer, RNG draw or collider. Full character/rifle calibration still requires V1
 before a second character family is introduced
 ([animation sources](animation-sources.md), [motion](motion.md)).
@@ -496,7 +498,7 @@ remain in [multiplayer](multiplayer.md), [bot-navigation](bot-navigation.md) and
 
 [Source approvals](../tools/architecture/source-sites.tsv) name today's global writes, timers, wall-clock reads and
 worker entries with their owners/domains. [Process-state approvals](../tools/architecture/process-state.tsv) separately
-pin production `LaunchArgs.Current` getter references (11 owner groups, 32 compiled reads) and 105 mutable statics
+pin production `LaunchArgs.Current` getter references (11 owner groups, 32 compiled reads) and 106 mutable statics
 (43 fields, 4 settable properties, 58 readonly collections/tables). Each names its owner and reason/lifetime; Dev is
 excluded, exported Smoke is included. New sites, changed counts and stale approvals fail lint. An approved
 diagnostic clock is not an approved gameplay timer. Do not use Task.Delay, SceneTree timers or wall time for new

@@ -30,7 +30,11 @@ It never authors a model. No sample hat/character or character manifest is suppl
 `ResourceLoader` loads the explicit `HatLibrary` in `assets/library.tres`; production never scans directories.
 `HatCatalog` snapshots definitions into immutable ordered items. The shared catalog and scene resources are borrowed
 on Godot's main thread for process lifetime; actors never dispose or mutate them. Tests inject catalogs of unsaved
-Dev primitives without a process-global registration override.
+Dev primitives without a process-global registration override. Runtime skips invalid items, reporting one engine
+error per item with its ID and reason; skipped IDs resolve to no hat and never enter the picker. Other valid items
+remain available. The cached shipped snapshot reports once when first loaded, not for every actor. A missing
+`library.tres` or missing library-level authored defaults is a hard setup error. Authoring gates (`make hat`,
+`make assets-check` and release preflight) remain strict: native validation fails on the first invalid definition.
 
 ## Hat geometry and attachment
 
