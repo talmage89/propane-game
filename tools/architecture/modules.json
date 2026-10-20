@@ -101,7 +101,8 @@
     "Propane.UI": "Presentation",
     "Propane.ReleaseSmoke": "Smoke",
     "Propane.Dev": "Dev",
-    "Propane.Diagnostics": "Foundation"
+    "Propane.Diagnostics": "Foundation",
+    "Propane.Assets": "Simulation"
   },
   "Types": {
     "Propane.Bots.KingBotView": "Rules",

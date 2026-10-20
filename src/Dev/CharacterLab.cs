@@ -20,7 +20,7 @@ public partial class CharacterLab : Node3D
         DevArgs.Setup();
         var env = new VoidEnvironment();
         AddChild(env);
-        model = GD.Load<PackedScene>("res://assets/character/mannequin.glb").Instantiate<Node3D>();
+        model = GD.Load<PackedScene>("res://assets/third_party/quaternius/ual/mannequin.glb").Instantiate<Node3D>();
         AddChild(model);
         skeleton = model.FindChildren("*", "Skeleton3D").OfType<Skeleton3D>().First();
         player = model.FindChildren("*", "AnimationPlayer").OfType<AnimationPlayer>().First();

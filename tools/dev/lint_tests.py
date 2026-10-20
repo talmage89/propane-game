@@ -69,7 +69,7 @@ fi
               "gather_range.tscn -- --scenario=appearance",
               "game_test.tscn -- --scenario=gather --tune.FixedSeed=23",
               "game_test.tscn -- --scenario=clear --quit=32 --tune.FixedSeed=23",
-              "world_services_tests.tscn", "actor_detail_tests.tscn", "ragdoll_pose_tests.tscn", "body_correction_tests.tscn", "server_tuning_tests.tscn -- --server --tune.MaxPlayers=6",
+              "world_services_tests.tscn", "actor_detail_tests.tscn", "asset_tests.tscn", "ragdoll_pose_tests.tscn", "body_correction_tests.tscn", "server_tuning_tests.tscn -- --server --tune.MaxPlayers=6",
               "transport_physics_tests.tscn -- --server",
               "server_seed_tests.tscn -- --server --match-seed=23",
               "session_actors_tests.tscn", "upright_pile_tests.tscn", "melee_range.tscn", "rifle_reach_tests.tscn",
@@ -94,7 +94,8 @@ fi
               "player_range.tscn -- --scenario=recoil --stance=hip --burst-start=0 --assert-grip --assert-motion",
               "player_range.tscn -- --scenario=bot-recoil --magazines=2",
               "generator_tests.tscn -- --seeds=20 --large-seeds=3 --formation-seeds=2"]
-    probes = checkers + scenes + ["--write-world-plans=", "--hash-world-plans=", "--hash-segments=", "world-diff", "world-missing", "world-partial",
+    asset_checkers = ["tools/assets/check.py", "tools/assets/tests.py", "tools/assets/native.py"]
+    probes = asset_checkers + checkers + scenes + ["--write-world-plans=", "--hash-world-plans=", "--hash-segments=", "world-diff", "world-missing", "world-partial",
                                   "world-second"]
     architecture = ["Architecture.csproj", "Architecture.dll", "source_check.py"]
     for failure in ["none", "check_links.py", "format", "build", "ExportRelease", *architecture, *probes]:
@@ -108,7 +109,7 @@ fi
         require(bool(commands) and commands[:2] == first[:len(commands[:2])],
                 "the Markdown link check and format must run first", result.stdout)
         if failure == "none":
-            require(result.returncode == 0 and len(commands) == 8 + len(checkers) + len(scenes) + 5,
+            require(result.returncode == 0 and len(commands) == 8 + len(checkers) + len(scenes) + len(asset_checkers) + 5,
                     "check did not run every expected tool call", result.stdout)
             require("-warnaserror" in commands[2] and "--no-incremental" in commands[2], "lint must rebuild with warnings as errors")
             require(commands[3].startswith("dotnet build Propane.csproj -c ExportRelease ") and
@@ -118,6 +119,8 @@ fi
                     commands[6] == "python3 -B tools/architecture/source_check.py", "lint lost the architecture checks")
             require(commands[7].startswith("dotnet build "), "tests ran before lint")
             require(commands[-1] == "python3 -B tools/dev/lint_tests.py", "the gate self-tests must run last, after every suite")
+            for checker in asset_checkers:
+                require(commands.count(f"python3 -B {checker}") == 1, f"check skipped/duplicated {checker}")
             for checker in checkers:
                 require(commands.count(f"python3 -B tools/dev/{checker}") == 1, f"check skipped/duplicated {checker}")
             for scene in scenes:

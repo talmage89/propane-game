@@ -16,6 +16,7 @@ namespace Propane.Lab;
 /// <summary>A shipped offline session. Reset replaces all scoped services through ordered session retirement.</summary>
 public partial class LabSession : Node3D
 {
+    public string? HatId { get; init; }
     public required LabScenario Scenario { get; init; }
     public LabEnvironment EnvironmentKind { get; init; }
     public Tuning Template { get; init; } = Tuning.SavedTemplate;
@@ -480,6 +481,7 @@ public partial class LabSession : Node3D
                 OwnerPeerId = 1,
                 Ammo = lab.Scenario.Definition.Supply.LimitedAmmo ? AmmoState.Starting(session.World.Tuning) : null
             };
+            lab.Player.SetHat(lab.HatId);
             session.AddActor(lab.Player);
             lab.Player.Teleport(lab.start, lab.startYaw);
             lab.environment.Follow = lab.Player;

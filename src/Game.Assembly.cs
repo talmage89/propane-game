@@ -30,6 +30,7 @@ public partial class Game
         public void CreateActors(SessionContext session)
         {
             game.player = new PlayerCharacter { World = session.World, Name = "Player" };
+            game.player.SetHat(game.HatId);
             session.AddActor(game.player);
             var plan = game.current!.Plan;
             game.player.Teleport(PlanCoordinates.ToWorld(plan.Spawn, .05f), plan.SpawnYaw + Mathf.Pi);

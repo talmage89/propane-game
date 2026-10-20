@@ -22,29 +22,29 @@ public partial class WorldLab : Node3D
         var scale = DevArgs.GetFloat("scale", 7.5f);
         var models = set switch
         {
-            "houses" => "abcdefghijklmnopqrstu".Select(c => $"res://assets/kenney/suburban/building-type-{c}.glb").ToArray(),
-            "yard" => new[] { "fence", "fence-1x3", "fence-low", "tree-large", "tree-small", "planter", "driveway-long", "path-long" }.Select(n => $"res://assets/kenney/suburban/{n}.glb").ToArray(),
-            "cars" => new[] { "sedan", "sedan-sports", "suv", "suv-luxury", "hatchback-sports", "van", "truck", "truck-flat", "delivery", "taxi", "police" }.Select(n => $"res://assets/kenney/cars/{n}.glb").ToArray(),
-            "nature" => new[] { "tree_default", "tree_oak", "tree_detailed", "tree_fat", "tree_simple", "tree_small", "tree_tall", "tree_cone", "plant_bush", "plant_bushLarge", "plant_bushDetailed", "flower_redA", "rock_smallA" }.Select(n => $"res://assets/kenney/nature/{n}.glb").ToArray(),
-            "props" => new[] { "gas_grill", "wheelie_bin", "mailbox", "street_lamp", "fire_hydrant", "patio_heater", "cooler", "kiddie_pool", "patio_umbrella", "shed", "stop_sign" }.Select(n => $"res://assets/props/{n}.glb").ToArray(),
-            "furniture" => new[] { "bench", "chair", "chairCushion", "table", "tableRound", "loungeChair", "loungeChairRelax", "trashcan", "cardboardBoxClosed", "pottedPlant", "sideTable" }.Select(n => $"res://assets/kenney/furniture/{n}.glb").ToArray(),
+            "houses" => "abcdefghijklmnopqrstu".Select(c => $"res://assets/third_party/kenney/suburban/building-type-{c}.glb").ToArray(),
+            "yard" => new[] { "fence", "fence-1x3", "fence-low", "tree-large", "tree-small", "planter", "driveway-long", "path-long" }.Select(n => $"res://assets/third_party/kenney/suburban/{n}.glb").ToArray(),
+            "cars" => new[] { "sedan", "sedan-sports", "suv", "suv-luxury", "hatchback-sports", "van", "truck", "truck-flat", "delivery", "taxi", "police" }.Select(n => $"res://assets/third_party/kenney/cars/{n}.glb").ToArray(),
+            "nature" => new[] { "tree_default", "tree_oak", "tree_detailed", "tree_fat", "tree_simple", "tree_small", "tree_tall", "tree_cone", "plant_bush", "plant_bushLarge", "plant_bushDetailed", "flower_redA", "rock_smallA" }.Select(n => $"res://assets/third_party/kenney/nature/{n}.glb").ToArray(),
+            "props" => new[] { "gas_grill", "wheelie_bin", "mailbox", "street_lamp", "fire_hydrant", "patio_heater", "cooler", "kiddie_pool", "patio_umbrella", "shed", "stop_sign" }.Select(n => $"res://assets/generated/props/{n}.glb").ToArray(),
+            "furniture" => new[] { "bench", "chair", "chairCushion", "table", "tableRound", "loungeChair", "loungeChairRelax", "trashcan", "cardboardBoxClosed", "pottedPlant", "sideTable" }.Select(n => $"res://assets/third_party/kenney/furniture/{n}.glb").ToArray(),
             _ => System.Array.Empty<string>(),
         };
         if (set == "composite")
         {
-            Place("res://assets/kenney/suburban/building-type-b.glb", new Vector3(0, 0, -6), 7.5f);
-            Place("res://assets/kenney/suburban/building-type-e.glb", new Vector3(16, 0, -6), 7.5f);
-            Place("res://assets/kenney/cars/sedan.glb", new Vector3(6, 0, 3), DevArgs.GetFloat("car", 1.85f), 90);
-            Place("res://assets/kenney/cars/truck.glb", new Vector3(11, 0, 3), DevArgs.GetFloat("car", 1.85f), 0);
+            Place("res://assets/third_party/kenney/suburban/building-type-b.glb", new Vector3(0, 0, -6), 7.5f);
+            Place("res://assets/third_party/kenney/suburban/building-type-e.glb", new Vector3(16, 0, -6), 7.5f);
+            Place("res://assets/third_party/kenney/cars/sedan.glb", new Vector3(6, 0, 3), DevArgs.GetFloat("car", 1.85f), 90);
+            Place("res://assets/third_party/kenney/cars/truck.glb", new Vector3(11, 0, 3), DevArgs.GetFloat("car", 1.85f), 0);
             for (var i = 0; i < 4; i++)
             {
-                Place("res://assets/kenney/suburban/fence.glb", new Vector3(-8 + i * 0.475f * DevArgs.GetFloat("fence", 6.5f), 0, 1), DevArgs.GetFloat("fence", 6.5f));
+                Place("res://assets/third_party/kenney/suburban/fence.glb", new Vector3(-8 + i * 0.475f * DevArgs.GetFloat("fence", 6.5f), 0, 1), DevArgs.GetFloat("fence", 6.5f));
             }
-            Place("res://assets/kenney/nature/tree_oak.glb", new Vector3(20, 0, 2), DevArgs.GetFloat("tree", 4f));
-            Place("res://assets/kenney/nature/tree_default.glb", new Vector3(23, 0, 3), DevArgs.GetFloat("tree", 4f));
-            Place("res://assets/kenney/furniture/chair.glb", new Vector3(2, 0, 3), DevArgs.GetFloat("furn", 1.6f));
-            Place("res://assets/kenney/furniture/table.glb", new Vector3(3, 0, 3), DevArgs.GetFloat("furn", 1.6f));
-            Place("res://assets/kenney/furniture/trashcan.glb", new Vector3(4, 0, 3.5f), DevArgs.GetFloat("furn", 1.6f));
+            Place("res://assets/third_party/kenney/nature/tree_oak.glb", new Vector3(20, 0, 2), DevArgs.GetFloat("tree", 4f));
+            Place("res://assets/third_party/kenney/nature/tree_default.glb", new Vector3(23, 0, 3), DevArgs.GetFloat("tree", 4f));
+            Place("res://assets/third_party/kenney/furniture/chair.glb", new Vector3(2, 0, 3), DevArgs.GetFloat("furn", 1.6f));
+            Place("res://assets/third_party/kenney/furniture/table.glb", new Vector3(3, 0, 3), DevArgs.GetFloat("furn", 1.6f));
+            Place("res://assets/third_party/kenney/furniture/trashcan.glb", new Vector3(4, 0, 3.5f), DevArgs.GetFloat("furn", 1.6f));
             models = System.Array.Empty<string>();
         }
         var x = 0f;
@@ -59,7 +59,7 @@ public partial class WorldLab : Node3D
             x += aabb.Size.X + 1.5f;
         }
 
-        var dummy = GameAssets.Instantiate("res://assets/character/mannequin.glb");
+        var dummy = GameAssets.Instantiate("res://assets/third_party/quaternius/ual/mannequin.glb");
         AddChild(dummy);
         dummy.Position = new Vector3(-1.5f, 0, 1f);
         var tank = Tank.PropaneTank.Create(world);

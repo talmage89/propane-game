@@ -1,7 +1,7 @@
 """Convert the Unreal export of the propane tank into glTF for Godot.
 
 Run from the project root:
-  blender -b --factory-startup --python tools/blender/export_tank.py -- <propane-tank repo>/unreal assets/tank
+  blender -b --factory-startup --python tools/blender/export_tank.py -- <propane-tank repo>/unreal assets/authored/tank
 
 Writes:
   tank.glb    mesh "Tank" plus convex collision mesh "TankCollision"

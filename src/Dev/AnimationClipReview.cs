@@ -54,7 +54,7 @@ public partial class AnimationClipReview : Node3D
         }
         else
         {
-            model = GD.Load<PackedScene>("res://assets/character/mannequin.glb").Instantiate<Node3D>();
+            model = GD.Load<PackedScene>("res://assets/third_party/quaternius/ual/mannequin.glb").Instantiate<Node3D>();
             model.RotationDegrees = new Vector3(0, 180, 0);
             AddChild(model);
         }

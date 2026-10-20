@@ -11,6 +11,9 @@ Three kinds of document live here, in three places:
 - **Evidence** ([evidence/](evidence/)): dated verification reports and investigations, with their datasets. Records of
   what was measured then, on that commit and machine. Not binding.
 
+The [asset library contract](assets.md) and [owner guide](../assets/README.md) cover runtime art, adding hats and
+the default character binding. [AL verification](evidence/asset-library.md) records the migration and tests.
+
 ## Binding design
 
 [`design/`](../design/) is the owner's: what Propane is and must stay (feel, look, personality, direction). It is

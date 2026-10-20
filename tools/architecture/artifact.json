@@ -9,10 +9,22 @@
     "Propane.ReleaseSmoke.ReleaseTest"
   ],
   "EntryMethods": {
-    "Propane.Main": ["_Ready", "RunServer"],
-    "Propane.Core.ShutdownGuard": ["_Ready"],
-    "Propane.Net.LobbyServer": ["Start", "_Process"],
-    "Propane.ReleaseSmoke.ReleaseTest": ["_Ready", "_Process", "_PhysicsProcess"]
+    "Propane.Main": [
+      "_Ready",
+      "RunServer"
+    ],
+    "Propane.Core.ShutdownGuard": [
+      "_Ready"
+    ],
+    "Propane.Net.LobbyServer": [
+      "Start",
+      "_Process"
+    ],
+    "Propane.ReleaseSmoke.ReleaseTest": [
+      "_Ready",
+      "_Process",
+      "_PhysicsProcess"
+    ]
   },
   "Resources": [
     "project.binary",
@@ -23,5 +35,10 @@
     "src/ReleaseSmoke/CaptureDirector.cs",
     "src/ReleaseSmoke/FrameMetrics.cs",
     "src/ReleaseSmoke/ReleaseTest.cs"
+  ],
+  "AssetRoots": [
+    "assets/library.tres",
+    "assets/third_party/quaternius/ual/mannequin.glb",
+    "assets/third_party/100style/neutral/directional.tres"
   ]
 }

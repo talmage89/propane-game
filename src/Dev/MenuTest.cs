@@ -39,6 +39,7 @@ public partial class MenuTest : Node
             return;
         }
         settings.Name = "Player";
+        if (DevArgs.Get("scenario") == "input") settings.Appearance = new AppearanceRecord(12, 34, 56, Hat: "missing_hat");
         DisplayServer.WindowSetVsyncMode(DisplayServer.VSyncMode.Disabled);
         main = new Main { Name = "Main" };
         AddChild(main);

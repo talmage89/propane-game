@@ -57,7 +57,7 @@ public partial class ExplosionEffect : Node3D
     /// <summary>Loads the textures an explosion uses, so the first one does not stall on disk.</summary>
     public static void Preload()
     {
-        flipbookTexture ??= GD.Load<Texture2D>("res://assets/tank/T_Fireball_SubUV_8x8.png");
+        flipbookTexture ??= GD.Load<Texture2D>("res://assets/authored/tank/T_Fireball_SubUV_8x8.png");
         FxLibrary.Preload();
     }
 
@@ -112,7 +112,7 @@ public partial class ExplosionEffect : Node3D
 
         if (full)
         {
-            flipbookTexture ??= GD.Load<Texture2D>("res://assets/tank/T_Fireball_SubUV_8x8.png");
+            flipbookTexture ??= GD.Load<Texture2D>("res://assets/authored/tank/T_Fireball_SubUV_8x8.png");
             flipbookMaterial = new ShaderMaterial { Shader = GD.Load<Shader>("res://shaders/fx_flipbook.gdshader") };
             flipbookMaterial.SetShaderParameter("flipbook", flipbookTexture);
             flipbookMaterial.SetShaderParameter(emissionParameter, 2.2f);

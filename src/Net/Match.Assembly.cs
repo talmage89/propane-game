@@ -117,7 +117,7 @@ public partial class Match
             ActorId = profile.Id,
             OwnerPeerId = profile.OwnerPeerId,
             LifeId = profile.LifeId,
-            BodyColor = profile.Appearance.Color,
+            Appearance = profile.Appearance,
             Ammo = owned && LimitedAmmo ? AmmoState.Starting(World.Tuning) : null,
             InputLocked = owned && phase != Phase.Playing,
         };

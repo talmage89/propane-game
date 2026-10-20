@@ -72,7 +72,7 @@ test: test-core test-behavior test-generator test-world ## Run the fast headless
 test-infra: ## Check the gate: analyzer/architecture negatives, make ordering, deep-shard and CI wiring
 	python3 -B tools/dev/lint_tests.py
 
-test-core: build ## Run checker, platform, movement, unit and scripted mode-rule assertions
+test-core: assets-check ## Run checker, platform, movement, unit and scripted mode-rule assertions
 	GODOT="$(GODOT)" python3 -B tools/dev/check_test_threads.py
 	GODOT="$(GODOT)" python3 -B tools/dev/bench_tests.py
 	python3 -B tools/dev/check_world_tests.py
@@ -107,6 +107,7 @@ test-behavior: build ## Run isolated physics, navigation, menu, grip and feet pr
 	python3 -B tools/dev/animation_metrics.py build/animation-review-gate/metrics.csv --output build/animation-review-gate/results.json
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/world_services_tests.tscn
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/actor_detail_tests.tscn
+	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/asset_tests.tscn
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/ragdoll_pose_tests.tscn
 	"$(GODOT)" --headless --path . --fixed-fps 60 res://scenes/dev/blast_query_tests.tscn
 	"$(GODOT)" --headless --fixed-fps 60 --path . res://scenes/dev/upright_pile_tests.tscn
@@ -267,3 +268,26 @@ release-minor: ## Release a minor version: anything players in a match share cha
 
 release-major: ## Release a major version
 	tools/release/cut.sh major
+
+.PHONY: assets-check
+assets-check: build ## Validate asset inventory, catalog and owner-tool negative fixtures
+	python3 -B tools/assets/check.py
+	python3 -B tools/assets/tests.py
+	python3 -B tools/assets/native.py
+
+.PHONY: hat assets-preview
+hat: export AL_HAT_ID := $(value ID)
+hat: export AL_HAT_NAME := $(value NAME)
+hat: export AL_HAT_MODEL := $(value MODEL)
+hat: export AL_HAT_AUTHOR := $(value AUTHOR)
+hat: export AL_HAT_LICENSE := $(value LICENSE)
+hat: export AL_HAT_SOURCE := $(value SOURCE)
+hat: export AL_HAT_ROOT := $(value ASSET_ROOT)
+hat: ## Register an existing owner GLB: ID=... NAME="..." [MODEL=...]
+	python3 -B tools/assets/hat.py
+
+CAPTURE_DIR ?= $(CURDIR)/build/assets-preview
+assets-preview: export AL_PREVIEW_ASSET = $(ASSET)
+assets-preview: export AL_PREVIEW_DIR = $(CAPTURE_DIR)
+assets-preview: setup ## Render every hat, or ASSET=...; screenshots/report in CAPTURE_DIR=...
+	python3 -B tools/assets/preview.py

@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using Godot;
+using Propane.Assets;
 using Propane.Core;
 using Propane.Fx;
 using Propane.Tank;
@@ -140,6 +141,8 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         set
         {
             bodyColor = value;
+            if (appearance != null) appearance = appearance.WithColor(value);
+            UpdateHat();
             if (bodyMaterial != null)
             {
                 bodyMaterial.AlbedoColor = value;
@@ -206,7 +209,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
 
         visual = new Node3D { Name = "Visual" };
         AddChild(visual);
-        model = GameAssets.Instantiate("res://assets/character/mannequin.glb");
+        model = GameAssets.Instantiate(DefaultCharacter.ScenePath);
         model.Name = "Model";
         // The mannequin faces +Z; turn it so the visual's -Z (Godot forward) is the character's front.
         model.RotationDegrees = new Vector3(0, 180, 0);
@@ -229,6 +232,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         skeleton.AddChild(ragdoll);
         ragdoll.Build(skeleton);
         var player = model.FindChildren("*", "AnimationPlayer", owned: false).OfType<AnimationPlayer>().First();
+        DefaultCharacter.Validate(skeleton, player);
         animator = new CharacterAnimator(World.Tuning, player, model, model.GetPathTo(skeleton));
         animator.Initialize();
         poseBlend = new PoseBlend { Name = "PoseBlend" };
@@ -259,6 +263,8 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         visual.Rotation = new Vector3(0, facingYaw, 0);
         poseCadence = new ActorPoseCadence(ActorId > 0 ? (ulong)ActorId : GetInstanceId());
         skeleton.SkeletonUpdated += RememberRiflePose;
+        headAttachment = new HeadAttachment(skeleton);
+        UpdateHat();
         Initialized = true;
     }
 
@@ -267,6 +273,8 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         World.Unregister(this);
         World.Events.Explosion -= Aim.OnExplosion;
         if (IsInstanceValid(skeleton)) skeleton.SkeletonUpdated -= RememberRiflePose;
+        headAttachment?.Dispose();
+        headAttachment = null;
         Runtime.Dispose();
         aimQuery.Dispose();
     }

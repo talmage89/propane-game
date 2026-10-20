@@ -1,7 +1,7 @@
 """Build the procedural suburb props that the Kenney kits do not cover.
 
 Run from the project root:
-  blender -b --factory-startup --python tools/blender/build_props.py -- assets/props
+  blender -b --factory-startup --python tools/blender/build_props.py -- assets/generated/props
 
 Each prop is exported to its own GLB with the origin at the center of its base. Blender -Y is the prop's front, so
 after glTF export the front faces Godot +Z, like the Kenney models. Materials carry their color as the base color

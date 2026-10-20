@@ -108,7 +108,7 @@ public static class AppearanceTests
                 TestRunner.Assert(settings.Appearance == AppearanceRecord.FromPalette(4), "palette did not migrate");
                 using var reread = new ConfigFile();
                 TestRunner.Assert(reread.Load(path) == Error.Ok && reread.HasSectionKey("player", "appearance"), "migration was not saved");
-                var custom = new AppearanceRecord(12, 34, 56);
+                var custom = new AppearanceRecord(12, 34, 56, Hat: "missing_hat");
                 settings.Appearance = custom;
                 using var reloaded = new PlayerSettings(path);
                 TestRunner.Assert(reloaded.Appearance == custom, "old index overwrote custom record");
@@ -125,7 +125,7 @@ public static class AppearanceTests
         });
         runner.Run("appearance/server accepts duplicate colors through roster match and standings", () =>
         {
-            var appearance = new AppearanceRecord(12, 34, 56);
+            var appearance = new AppearanceRecord(12, 34, 56, Hat: "missing_hat");
             var clock = new ManualClock();
             var server = Propane.Modes.ModeRegistry.CreateServer(PacketTransports.CreateServer(), clock);
             server.Worlds = false;

@@ -6,6 +6,7 @@ with PROPANE_REAL_GODOT pointed at the exported executable, so invisible local G
 Never publishes. Output must be new so failed evidence cannot be overwritten accidentally.
 """
 import argparse
+import json
 import os
 from pathlib import Path
 import re
@@ -83,6 +84,16 @@ def main():
     env = {**os.environ, 'TMPDIR': str(output)}
     run(['dotnet', 'build', str(ROOT / 'tools/architecture/Architecture.csproj'), '-nologo', '-v', 'quiet'],
         output / 'checker-build.log', ROOT, env)
+    run(['python3', '-B', str(ROOT / 'tools/assets/check.py'), '--report', str(output / 'asset-inventory.json')],
+        output / 'asset-source.log', ROOT, env)
+    source_assets = json.loads((output / 'asset-inventory.json').read_text())
+    expected_hats = ','.join(item['id'] for item in source_assets['items'])
+    policy = output / 'policy'
+    policy.mkdir()
+    shutil.copyfile(ROOT / 'tools/architecture/modules.json', policy / 'modules.json')
+    artifact_policy = json.loads((ROOT / 'tools/architecture/artifact.json').read_text())
+    artifact_policy['AssetRoots'] += [path for item in source_assets['items'] for path in ['assets/' + item['item'], *('assets/' + p for p in item['dependencies'])]]
+    (policy / 'artifact.json').write_text(json.dumps(artifact_policy, indent=2) + '\n')
     linux = None
     for platform, suffix in [('linux', 'linux-x86_64.tar.gz'), ('windows', 'windows-x86_64.zip'), ('macos', 'macos-arm64.zip')]:
         archives = list(args.dist.glob('Propane-*-' + suffix))
@@ -90,7 +101,7 @@ def main():
             raise ValueError(f'Expected one {platform} archive, found {len(archives)}')
         assembly, pack = unpack(archives[0], output / platform)
         entry = native_entry(platform, pack)
-        run(['dotnet', str(TOOL), 'inventory', str(assembly), str(pack), str(ROOT / 'tools/architecture')],
+        run(['dotnet', str(TOOL), 'inventory', str(assembly), str(pack), str(policy)],
             output / f'{platform}-inventory.log', output, env)
         if platform == 'linux':
             linux = entry
@@ -115,8 +126,11 @@ def main():
     run([str(linux), '--headless', '--quit-after', '120', '--', '--server', '--port=0'],
         output / 'server.log', output, env, marker='listening on UDP')
     capture = ['--capture-dir=' + str(output / 'screenshots')] if args.rendered else []
-    run([*command, '--', '--windowed', '--release-test', *capture], output / 'release-test.log', output, env,
+    run([*command, '--', '--windowed', '--release-test', '--expected-hats=' + expected_hats, *capture], output / 'release-test.log', output, env,
         marker='[releasetest] PASS main menu and single player')
+    smoke_output = (output / 'release-test.log').read_text()
+    if '[assets export] PASS ids=' + expected_hats + ' roots=' not in smoke_output:
+        raise RuntimeError('Missing packaged catalog/default dependency proof')
     print(f'PASS three inventories; Linux ordinary, classic, server and release-test ({output})')
 
 

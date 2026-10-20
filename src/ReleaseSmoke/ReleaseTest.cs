@@ -1,5 +1,8 @@
+using System;
+using System.Collections.Generic;
 using System.Linq;
 using Godot;
+using Propane.Assets;
 using Propane.Core;
 using Propane.Net;
 using Propane.UI;
@@ -32,6 +35,8 @@ public partial class ReleaseTest : Node
 
     public override void _Ready()
     {
+        try { CheckAssets(); }
+        catch (Exception error) { Fail("asset load: " + error); return; }
         ProcessMode = ProcessModeEnum.Always;
         DisplayServer.WindowSetVsyncMode(DisplayServer.VSyncMode.Disabled);
         Engine.MaxFps = 60;
@@ -41,6 +46,32 @@ public partial class ReleaseTest : Node
         AddChild(main);
         director = new CaptureDirector();
         AddChild(director);
+    }
+
+    private static void CheckAssets()
+    {
+        var catalog = HatCatalog.Shipped;
+        var ids = string.Join(",", catalog.Items.Select(item => item.Id));
+        var expected = LaunchArgs.Current.Get("expected-hats");
+        if (expected != null && ids != expected) throw new InvalidOperationException($"Catalog ids {ids} differ from expected {expected}");
+        if (catalog.Resolve(null) != null || catalog.Resolve("missing_export_probe") != null)
+            throw new InvalidOperationException("Missing cosmetic did not use the base fallback");
+        var pending = new Stack<string>(new[] { HatCatalog.LibraryPath, DefaultCharacter.ScenePath, DefaultCharacter.DirectionalPath });
+        var visited = new HashSet<string>(StringComparer.Ordinal);
+        while (pending.TryPop(out var path))
+        {
+            if (!visited.Add(path)) continue;
+            if (!ResourceLoader.Exists(path)) throw new InvalidOperationException("Missing packed dependency " + path);
+            foreach (var dependency in ResourceLoader.GetDependencies(path)) pending.Push(dependency.Split("::")[^1]);
+        }
+        var model = GameAssets.Instantiate(DefaultCharacter.ScenePath);
+        try
+        {
+            DefaultCharacter.Check(model.FindChildren("*", "Skeleton3D", owned: false).OfType<Skeleton3D>().Single(),
+                model.FindChildren("*", "AnimationPlayer", owned: false).OfType<AnimationPlayer>().Single());
+        }
+        finally { model.Free(); }
+        GD.Print($"[assets export] PASS ids={ids} roots={visited.Count}");
     }
 
     public override void _Process(double delta)
