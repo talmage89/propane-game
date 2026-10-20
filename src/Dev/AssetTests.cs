@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using Godot;
 using Propane.Assets;
 using Propane.Core;
@@ -82,6 +83,8 @@ public partial class AssetTests : Node3D
             actor.SetHat("dev_probe");
             Require(actor.FindChildren("*", "CollisionShape3D", owned: false).Count == physical && world.Random.State == seed, "hat altered collisions or consumed RNG");
             Require(Hat(actor) != Hat(remote), "actors share a mutable hat instance");
+            var tracked = ((MeshInstance3D Mesh, float Bias)[])typeof(PlayerCharacter).GetField("detailMeshes", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(actor)!;
+            Require(tracked.Select(entry => entry.Mesh.GetInstanceId()).Distinct().Count() == tracked.Length, "mesh detail bookkeeping duplicates the hat");
             var original = GameAssets.MeshInstances(Hat(actor)!).Single().Mesh.SurfaceGetMaterial(0) as BaseMaterial3D;
             Require(original!.AlbedoColor == Colors.White, "tint mutated the shared material");
             camera = world.AddView(this, new Camera3D { Current = true, Fov = 45 });
@@ -178,6 +181,6 @@ public partial class AssetTests : Node3D
             $"hat differs actor={actor.ActorId} shown={shown.GlobalTransform} expected={expected} bone={skeleton.GetNode<BoneAttachment3D>("HeadAttachment").GlobalTransform}");
     }
     private static void Require(bool condition, string message) { if (!condition) throw new InvalidOperationException(message); }
-    private void Fail(Exception error) { GD.PushError($"[assets] FAIL {error}"); ShutdownGuard.Quit(GetTree(), 1); }
+    private void Fail(Exception error) { completed = true; GD.PushError($"[assets] FAIL {error}"); ShutdownGuard.Quit(GetTree(), 1); }
     public override void _ExitTree() { world?.Dispose(); scene?.Dispose(); }
 }

@@ -40,9 +40,9 @@ public partial class PlayerCharacter
         shownHat = next;
         if (changed)
         {
-            // Remove freed meshes before any subsequent detail change; recover each imported original bias.
+            // Model traversal includes the head attachment. Remove freed meshes before any subsequent detail
+            // change and recover each imported original bias.
             detailMeshes = GameAssets.MeshInstances(model).Concat(GameAssets.MeshInstances(rifle))
-                .Concat(headAttachment.Instance is { } hat ? GameAssets.MeshInstances(hat) : [])
                 .Where(mesh => (mesh.Layers & RenderLayers.Actors) != 0)
                 .Select(mesh => (mesh, mesh.LodBias / meshDetail)).ToArray();
         }
