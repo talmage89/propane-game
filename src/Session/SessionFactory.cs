@@ -27,7 +27,7 @@ public static class SessionFactory
     public static SessionContext Build(Node owner, Tuning template, ISessionWorldSource source, ISessionMode mode,
         Action<SessionContext> bind, bool networked = false, bool present = true)
     {
-        InputSetup.Register();
+        InputSetup.Register(PlayerPreferences.Current);
         _ = GameAssets.Debris;
         ExplosionEffect.Preload();
         var session = new SessionContext(owner, template, source, mode, networked, present);

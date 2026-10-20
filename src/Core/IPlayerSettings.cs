@@ -12,6 +12,10 @@ public interface IPlayerSettings
     double GetPreference(PreferenceDefinition preference);
     bool SetPreference(PreferenceDefinition preference, double value);
     bool ResetPreferences(string category);
+    ControlBinding GetBinding(string slot);
+    bool SetBinding(string slot, ControlBinding binding);
+    bool ResetBindings(string? action = null);
+    event Action? BindingsChanged;
     event Action<PreferenceDefinition>? PreferenceChanged;
 }
 

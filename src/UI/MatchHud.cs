@@ -49,6 +49,10 @@ public partial class MatchHud : CanvasLayer
     private float countdownAge = 99f;
     private string countdownText = "";
     private float reloadProgress;
+    // View-lived derived prompt, refreshed only when the map or displayed device changes.
+    private int bindingRevision = -1;
+    private bool bindingGamepad;
+    private string reloadHint = "";
 
     public override void _Ready()
     {
@@ -235,9 +239,15 @@ public partial class MatchHud : CanvasLayer
         magazine.Text = ammo.Magazine.ToString();
         reserve.Text = $"/ {ammo.Reserve}";
         reloadProgress = ammo.Reloading ? ammo.ReloadProgress : 0f;
+        if (bindingRevision != InputSetup.Revision || bindingGamepad != MenuNavigation.Gamepad)
+        {
+            bindingRevision = InputSetup.Revision;
+            bindingGamepad = MenuNavigation.Gamepad;
+            reloadHint = InputSetup.Describe(InputSetup.Reload, bindingGamepad).ToUpperInvariant() + " TO RELOAD";
+        }
         var empty = ammo.Magazine == 0;
         magazine.AddThemeColorOverride("font_color", empty ? Warn : Dark);
-        ammoNote.Text = ammo.Reloading ? "RELOADING" : empty && ammo.Reserve == 0 ? "NO AMMO" : empty ? (MenuNavigation.Gamepad ? "X / SQUARE TO RELOAD" : "R TO RELOAD") : "";
+        ammoNote.Text = ammo.Reloading ? "RELOADING" : empty && ammo.Reserve == 0 ? "NO AMMO" : empty ? reloadHint : "";
         ammoNote.AddThemeColorOverride("font_color", ammo.Reloading ? Dark : Warn);
     }
 

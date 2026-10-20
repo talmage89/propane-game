@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using Godot;
+using Propane.Core;
 using Propane.UI;
 
 namespace Propane.Lab;
@@ -14,8 +15,13 @@ public partial class LabOverlay : CanvasLayer
     private Label title = null!;
     private Label result = null!;
     private Label ammo = null!;
+    private Label resetHint = null!;
     private Button resume = null!;
     private string fixtureSummary = "";
+    // Overlay-lived derived prompts; changes apply even while the Lab world is paused.
+    private int bindingRevision = -1;
+    private bool bindingGamepad;
+    private string reloadHint = "";
     private MenuNavigation navigation = null!;
     private CanvasLayer menuLayer = null!;
     public CanvasLayer MenuLayer => menuLayer;
@@ -68,9 +74,8 @@ public partial class LabOverlay : CanvasLayer
         layout.AddChild(result);
         layout.AddChild(new HSeparator());
         layout.AddChild(new ControlsReference { Compact = true, ResetAction = Lab.Scenario.Reloads ? "Reload" : "Reset scenario" });
-        layout.AddChild(UiStyle.Text(Lab.Scenario.Banking ? "R / X reloads · Backspace resets the duel" :
-            Lab.Scenario.Reloads ? "R / X reloads · Backspace starts a new run" :
-            "R / X or Backspace resets this scenario", 16, UiStyle.SoftInk, HorizontalAlignment.Center));
+        resetHint = UiStyle.Text("", 16, UiStyle.SoftInk, HorizontalAlignment.Center);
+        layout.AddChild(resetHint);
         resume = AddButton(layout, "Resume Lab", () => Lab.SetMenu(false));
         AddButton(layout, Lab.Scenario.Id == "range" ? "Respawn targets" : "Reset scenario", Lab.RequestReset);
         SettingsMenu.AddLauncher(menuLayer, layout);
@@ -154,10 +159,25 @@ public partial class LabOverlay : CanvasLayer
 
     public void UpdateStatus()
     {
+        if (bindingRevision != InputSetup.Revision || bindingGamepad != MenuNavigation.Gamepad)
+        {
+            bindingRevision = InputSetup.Revision;
+            bindingGamepad = MenuNavigation.Gamepad;
+            var reloadKey = InputSetup.Describe(InputSetup.Reload, MenuNavigation.Gamepad);
+            resetHint.Text = Lab.Scenario.Banking ? $"{reloadKey} reloads · Backspace resets the duel" :
+                Lab.Scenario.Reloads ? $"{reloadKey} reloads · Backspace starts a new run" :
+                $"{reloadKey} or Backspace resets this scenario";
+            hint.Text = MenuNavigation.Gamepad ? (Lab.Scenario.Reloads ? $"Start: Lab controls / reset / tuning   ·   {reloadKey}: reload" :
+                $"{reloadKey}: reset   ·   Start: Lab controls / tuning") : (Lab.Scenario.Reloads ?
+                $"Esc: Lab controls   ·   Backspace: reset   ·   {reloadKey}: reload   ·   F1: tuning" :
+                $"{reloadKey} / Backspace: reset   ·   Esc: Lab controls   ·   F1: tuning");
+            reloadHint = reloadKey + ": reload";
+        }
+
         if (Lab.Player.Ammo is { } rounds)
         {
             ammo.Text = $"{rounds.Magazine} / {rounds.Reserve}  ·  " + (rounds.Reloading ? "Reloading" :
-                MenuNavigation.Gamepad ? "X: reload" : "R: reload");
+                reloadHint);
         }
 
         if (Lab.Bank is { } bank)
@@ -188,10 +208,5 @@ public partial class LabOverlay : CanvasLayer
         {
             status.Text = Lab.Scenario.Id == "range" ? $"{Lab.LiveTanks.Count()} targets · {fixtureSummary}" : fixtureSummary;
         }
-
-        hint.Text = MenuNavigation.Gamepad ? (Lab.Scenario.Reloads ? "Start: Lab controls / reset / tuning   ·   X: reload" :
-            "X: reset   ·   Start: Lab controls / tuning") : (Lab.Scenario.Reloads ?
-            "Esc: Lab controls   ·   Backspace: reset   ·   R: reload   ·   F1: tuning" :
-            "R / Backspace: reset   ·   Esc: Lab controls   ·   F1: tuning");
     }
 }
