@@ -471,7 +471,7 @@ See [world services](world-services.md#streamed-content-history), [the Lab](lab.
 | Process state | Current owner; target/constraint |
 | --- | --- |
 | Launch arguments | LaunchArgs.Current is a lazy immutable Foundation snapshot. Production ambient reads are inventoried by compiled owner/count; new reads require review. Main-thread test overrides nest strictly and restore the exact previous snapshot on disposal; only composition applies tuning overrides. |
-| Player preferences | Main owns/binds one disposable PlayerSettings store. Menus/MenuProfile borrow a store; MatchViewBinding passes the same borrowed store to its HUD and menu; isolated tests own stores and strictly nested bindings. Lazy load, format, migration and immediate save timing are unchanged. |
+| Player preferences | Main owns/binds one disposable PlayerSettings store. Menus/MenuProfile borrow a store; MatchViewBinding passes the same borrowed store to its HUD and menu; isolated tests own stores and strictly nested bindings. PreferenceCatalog is an immutable Foundation declaration table driving normalization, immediate saves and category reset in the same ConfigFile. Existing identity/HUD keys remain compatible; UI borrows IPlayerSettings. |
 | Saved tuning | Tuning.SavedTemplate application preference; each WorldContext copies it. UI edits explicit world target. The template is borrowed for composition/UI; never dispose it or use it as a mutable world target. Explicit launch overrides and successful Save update it for future worlds. |
 | Asset/catalog caches | Main-thread process caches above; borrowed immutable resources, no per-world mutation. |
 | Instance materials/effects | Instance/world/content owners; retire at their real lifetime. |
