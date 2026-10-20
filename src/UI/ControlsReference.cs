@@ -1,4 +1,6 @@
+using System.Linq;
 using Godot;
+using Propane.Core;
 
 namespace Propane.UI;
 
@@ -6,6 +8,7 @@ namespace Propane.UI;
 public partial class ControlsReference : VBoxContainer
 {
     private bool gamepad;
+    private int bindingRevision;
     public bool Match { get; init; }
     /// <summary>In the lobby world: adds the lobby panel's key.</summary>
     public bool Lobby { get; init; }
@@ -16,7 +19,7 @@ public partial class ControlsReference : VBoxContainer
 
     public override void _Process(double delta)
     {
-        if (gamepad != MenuNavigation.Gamepad)
+        if (gamepad != MenuNavigation.Gamepad || bindingRevision != InputSetup.Revision)
         {
             Rebuild();
         }
@@ -25,26 +28,27 @@ public partial class ControlsReference : VBoxContainer
     private void Rebuild()
     {
         gamepad = MenuNavigation.Gamepad;
+        bindingRevision = InputSetup.Revision;
         foreach (var child in GetChildren())
         {
             RemoveChild(child);
             child.QueueFree();
         }
-        foreach (var (keyboard, pad, action) in new[]
+        AddRow(gamepad ? "Left stick" : string.Join(" ", new[] { InputSetup.MoveForward, InputSetup.MoveLeft, InputSetup.MoveBack, InputSetup.MoveRight }.Select(a => InputSetup.Describe(a, false))), "Move");
+        foreach (var (id, action) in new[]
                  {
-                     ("W A S D", "Left stick", "Move"), ("Shift", "Left stick click", "Sprint"),
-                     ("Space", "A / Cross", "Jump"), ("Mouse", "Right stick", "Look"),
-                     ("Left click", "Right trigger", "Fire"), ("Right click", "Left trigger", "Aim (tighter spread)"),
-                     ("F / mouse thumb", "Right stick click", "Rifle-butt strike"),
-                     ("R", "X / Square", ResetAction ?? (Match ? "Reload" : "New suburb")), ("Esc", "Start / Options", "Resume / pause"),
+                     (InputSetup.Sprint, "Sprint"), (InputSetup.Jump, "Jump"),
+                     (InputSetup.Fire, "Fire"), (InputSetup.Aim, "Aim (tighter spread)"),
+                     (InputSetup.Melee, "Rifle-butt strike"),
+                     (InputSetup.Reload, ResetAction ?? (Match ? "Reload" : "New suburb")),
                  })
         {
-            AddRow(gamepad ? pad : keyboard, action);
+            AddRow(InputSetup.Describe(id, gamepad), action);
         }
-        if (Lobby)
-        {
-            AddRow(gamepad ? "View / Create" : "Tab", "Lobby panel: names, colors, bots, settings");
-        }
+
+        AddRow(gamepad ? "Right stick" : "Mouse", "Look");
+        AddRow(gamepad ? "Start / Options" : "Esc", "Resume / pause");
+        if (Lobby) AddRow(InputSetup.Describe(InputSetup.LobbyPanel, gamepad), "Lobby panel: names, colors, bots, settings");
         if (!gamepad)
         {
             AddRow("F11  or  Alt+Enter", "Fullscreen");
@@ -65,7 +69,8 @@ public partial class ControlsReference : VBoxContainer
         var row = new HBoxContainer();
         var key = UiStyle.Text(keys, Compact ? 16 : 19);
         key.AddThemeFontOverride("font", UiStyle.BoldFont);
-        key.CustomMinimumSize = new Vector2(Compact ? 205 : 230, 0);
+        key.CustomMinimumSize = new Vector2(Compact ? 245 : 300, 0);
+        key.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         row.AddChild(key);
         row.AddChild(UiStyle.Text(action, Compact ? 16 : 19, UiStyle.SoftInk));
         AddChild(row);

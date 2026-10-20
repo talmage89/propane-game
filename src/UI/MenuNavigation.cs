@@ -49,7 +49,9 @@ public partial class MenuNavigation : Node
         }
     }
 
-    private bool Active => Screen.Visible &&
+    public bool Suspended { get; set; }
+
+    private bool Active => !Suspended && Screen.Visible &&
         !GetTree().GetNodesInGroup("menu_navigation").OfType<MenuNavigation>()
             .Any(n => n != this && n.Screen.Visible && n.Screen.Layer > Screen.Layer);
 

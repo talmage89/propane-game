@@ -171,12 +171,29 @@ subsequent menu edits still apply. Dedicated servers never apply display prefere
 [`PreferenceCatalog`](../src/Core/PreferenceCatalog.cs) is the single declaration of each setting's id, label,
 category, type, bounds/choices, default, target and help. Add a public static readonly declaration and an apply
 hook at the target; persistence, validation, UI and category reset follow automatically. No audio controls exist yet.
-Key rebinding is follow-up work: allow roughly 3–5 engineering days for device bindings, conflict handling, glyphs,
-persistence and real-event regression tests, plus native platform validation.
+**Controls** lists every player action, with fixed look, movement sticks, pause and fullscreen shortcuts identified.
+Select a keyboard/mouse or gamepad slot and press its replacement within ten unscaled render seconds. Esc, B,
+Start or Cancel binding cancels without changing anything. Keyboard capture uses physical positions even when the
+logical key differs. Mouse left/right/middle/thumb buttons and gamepad buttons/triggers are supported; wheels
+continue to scroll. Analog sticks stay fixed. Esc, B, Start and tuning/fullscreen keys are reserved; menu navigation
+always uses its original inputs independently of gameplay bindings. Modified key chords are not separate slots.
+Melee keeps its three shipped keyboard/mouse alternatives; other actions have one per device. Reload and new
+suburb share one contextual row. No developer actions are editable.
+
+Conflicts immediately leave only the matching slot of the other action unbound and name it in a warning. Reset
+per action follows that same rule; Reset category restores all defaults. An unbound slot is labeled explicitly.
+The controls reference, ammo prompts and lobby/Lab hints follow the applied map and current input device.
+[`ControlBindings`](../src/Core/ControlBindings.cs) owns immutable defaults; `InputSetup` converts them to native
+physical events. Main registers the saved map before attaching input consumers, reapplies synchronously after
+edits, and detaches its hook on exit. SessionFactory uses that same borrowed settings selection when rebuilding
+its map. Standalone harnesses without an application store use defaults.
 
 `Main` owns the existing `PlayerSettings` ConfigFile in `user://settings.cfg`; menus, device input, cameras and the
 Main-owned display binding borrow its Foundation contract. The existing identity/server fields and
-`hud/leaderboard` storage remain compatible. Preferences use the same file's `preferences` section. Missing,
+`hud/leaderboard` storage remain compatible. Preferences use the same file's `preferences` section. Bindings use `bindings`, storing only slots different
+from current defaults (including explicit unbound conflict victims). Untouched actions therefore inherit future
+default changes. Wrong types, unknown slots, invalid or reserved controls and wrong-device entries use defaults;
+corrupt duplicate claims fall back to defaults as a group. Old files require no migration. Missing,
 wrong-type or nonfinite values use their declaration's defaults; finite numbers clamp and snap to steps. Unknown
 keys are ignored. Each edit saves synchronously before its apply notification, matching the existing store and
 avoiding a pending-save lifetime/clock across menus and session replacement. A write failure keeps the live choice
@@ -429,6 +446,10 @@ $GODOT --headless --fixed-fps 60 res://scenes/dev/player_range.tscn -- --scenari
 $GODOT --fixed-fps 60 --resolution 1600x900 res://scenes/dev/menu_test.tscn -- --scenario=settings --classic-lobby --capture-dir="$PWD/build/st-menu"
 $GODOT --headless res://scenes/dev/menu_test.tscn -- --scenario=settings-read
 # Run these sequentially: both use an isolated menu_settings_test.cfg, not the player's settings.cfg.
+# Rebinding: real capture, conflict/reset/cancel/timeout and old/new input in a match, then another process.
+$GODOT --fixed-fps 60 --resolution 1600x900 res://scenes/dev/menu_test.tscn -- --scenario=bindings --classic-lobby --match-seed=23 --capture-dir="$PWD/build/kb-controls"
+$GODOT --headless --fixed-fps 60 res://scenes/dev/menu_test.tscn -- --scenario=bindings-read --classic-lobby --match-seed=23
+# Sequential; isolated menu_bindings_test.cfg. Both also run in make test.
 # Real device delivery: held mouse burst, retained climb and mouse pull-down in single and network views.
 $GODOT --headless --fixed-fps 60 res://scenes/dev/menu_test.tscn -- --scenario=input --classic-lobby
 # Player scenarios: stances (default), reload, ragdoll, creep (two measured strides), movement (labeled gait/jump transitions),

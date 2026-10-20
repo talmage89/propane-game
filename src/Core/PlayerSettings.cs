@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using Godot;
 
 namespace Propane.Core;
@@ -27,6 +28,8 @@ public sealed class PlayerSettings : IPlayerSettings, IDisposable
         if (disposed) return;
         disposed = true;
         PreferenceChanged = null;
+        BindingsChanged = null;
+        bindings?.Clear();
         values.Clear();
         file?.Dispose();
         file = null;
@@ -126,6 +129,86 @@ public sealed class PlayerSettings : IPlayerSettings, IDisposable
         var saved = true;
         foreach (var preference in PreferenceCatalog.All)
             if (preference.Category == category) saved &= SetPreference(preference, preference.Default);
+        return saved;
+    }
+
+    // Store-lived values, loaded once. Invalid/unknown entries cannot replace a default or claim its input.
+    private Dictionary<string, ControlBinding>? bindings;
+    public event Action? BindingsChanged;
+    private Dictionary<string, ControlBinding> Bindings
+    {
+        get
+        {
+            ObjectDisposedException.ThrowIf(disposed, this);
+            if (bindings != null) return bindings;
+            bindings = ControlBindings.Slots.ToDictionary(s => s.Slot, s => s.Default);
+            foreach (var (slot, fallback) in ControlBindings.Slots)
+            {
+                if (!File.HasSectionKey("bindings", slot)) continue;
+                var saved = File.GetValue("bindings", slot);
+                if (saved.VariantType == Variant.Type.String && ControlBinding.TryParse(saved.AsString(), out var value) &&
+                    (value.Kind == BindingKind.None || value.Gamepad == fallback.Gamepad))
+                {
+                    bindings[slot] = value;
+                }
+            }
+            // Corrupt duplicate assignments fall back as a group, never silently steal a default. Iterate because
+            // restoring one default can expose another collision. Valid files include explicit unbound victims.
+            while (true)
+            {
+                var duplicates = bindings.Where(p => p.Value.Kind != BindingKind.None).GroupBy(p => p.Value)
+                    .Where(g => g.Count() > 1).SelectMany(g => g.Select(p => p.Key)).ToArray();
+                var changed = false;
+                foreach (var slot in duplicates)
+                {
+                    var fallback = ControlBindings.Slots.Single(s => s.Slot == slot).Default;
+                    if (bindings[slot] != fallback) { bindings[slot] = fallback; changed = true; }
+                }
+                if (!changed) break;
+            }
+            return bindings;
+        }
+    }
+
+    public ControlBinding GetBinding(string slot) => Bindings.TryGetValue(slot, out var value)
+        ? value : throw new ArgumentException("Unknown control slot", nameof(slot));
+
+    public bool SetBinding(string slot, ControlBinding binding)
+    {
+        var fallback = ControlBindings.Slots.Single(s => s.Slot == slot).Default;
+        if (!binding.Valid || binding.Kind != BindingKind.None && binding.Gamepad != fallback.Gamepad)
+            throw new ArgumentException("Invalid control binding", nameof(binding));
+        AssignBinding(slot, binding);
+        return SaveBindings();
+    }
+
+    private void AssignBinding(string slot, ControlBinding binding)
+    {
+        var current = Bindings;
+        if (binding.Kind != BindingKind.None)
+        {
+            foreach (var other in current.Keys.ToArray())
+                if (other != slot && current[other] == binding) current[other] = default;
+        }
+
+        current[slot] = binding;
+    }
+
+    public bool ResetBindings(string? action = null)
+    {
+        if (action != null) _ = ControlBindings.Action(action);
+        foreach (var (slot, fallback) in ControlBindings.Slots)
+            if (action == null || slot.StartsWith(action + ".", StringComparison.Ordinal)) AssignBinding(slot, fallback);
+        return SaveBindings();
+    }
+
+    private bool SaveBindings()
+    {
+        if (File.HasSection("bindings")) File.EraseSection("bindings");
+        foreach (var (slot, fallback) in ControlBindings.Slots)
+            if (Bindings[slot] != fallback) File.SetValue("bindings", slot, Bindings[slot].ToString());
+        var saved = File.Save(path) == Error.Ok;
+        BindingsChanged?.Invoke();
         return saved;
     }
 

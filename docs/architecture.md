@@ -471,7 +471,7 @@ See [world services](world-services.md#streamed-content-history), [the Lab](lab.
 | Process state | Current owner; target/constraint |
 | --- | --- |
 | Launch arguments | LaunchArgs.Current is a lazy immutable Foundation snapshot. Production ambient reads are inventoried by compiled owner/count; new reads require review. Main-thread test overrides nest strictly and restore the exact previous snapshot on disposal; only composition applies tuning overrides. |
-| Player preferences | Main owns/binds one disposable PlayerSettings store. Menus/MenuProfile borrow a store; MatchViewBinding passes the same borrowed store to its HUD and menu; isolated tests own stores and strictly nested bindings. PreferenceCatalog is an immutable Foundation declaration table driving validation, persistence, editing and reset in the same ConfigFile; existing identity/HUD keys and immediate save timing remain compatible. SettingsMenu lives with its calling menu and owns only editor controls/focus; display binding lives under Main, camera subscriptions live with the view, and both detach on tree exit. DeviceInput applies preferences before intent; CameraRig applies local FOV/shake without changing logical aim or shared tuning. |
+| Player preferences | Main owns/binds one disposable PlayerSettings store. Menus/MenuProfile borrow a store; MatchViewBinding passes the same borrowed store to its HUD and menu; isolated tests own stores and strictly nested bindings. PreferenceCatalog is an immutable Foundation declaration table driving validation, persistence, editing and reset in the same ConfigFile; existing identity/HUD keys and immediate save timing remain compatible. SettingsMenu lives with its calling menu and owns only editor controls/focus; display binding lives under Main, camera subscriptions live with the view, and both detach on tree exit. ControlBindings adds immutable defaults and PlayerSettings owns binding overrides in the same file. DeviceInput applies preferences before intent; CameraRig applies local FOV/shake without changing logical aim or shared tuning. |
 | Saved tuning | Tuning.SavedTemplate application preference; each WorldContext copies it. UI edits explicit world target. The template is borrowed for composition/UI; never dispose it or use it as a mutable world target. Explicit launch overrides and successful Save update it for future worlds. |
 | Asset/catalog caches | Main-thread process caches above; borrowed immutable resources, no per-world mutation. |
 | Instance materials/effects | Instance/world/content owners; retire at their real lifetime. |
@@ -483,6 +483,12 @@ See [world services](world-services.md#streamed-content-history), [the Lab](lab.
 | Device/glyph preference | Application-level InputSetup/UiStyle today; per-view routing before multiple local users become a shipped feature. |
 | Diagnostics | Explicit launch/profiling switches (EffectProfile, ActorProfile, capacity/capture instrumentation); never hidden gameplay state. `Diagnostics.EffectProfile` owns the unchanged process-lifetime counters/scopes, with the same opt-in clock reads and drain operations. |
 
+Main applies saved InputMap bindings before scene attachment and synchronously after save notifications; its hook
+retires on exit. SessionFactory registers that same borrowed selection before each session. SettingsMenu capture
+uses unscaled render time, suspends menu navigation, consumes device events and retires with its caller. InputSetup
+owns the derived application map revision and managed label cache, replaced on each apply. No mutable state moves
+out of an existing owner, no runtime dependency retires, and polling/intent ordering stays unchanged.
+
 [Protocol](../src/Net/Protocol.cs) distinguishes the tested 16-actor ceiling from wire safety bounds of 64 actors/peers;
 wire bounds are not a capacity promise. Packet size is bounded to 1 MiB and body batches to 20. Inbox, snapshot,
 causal-wait and worker queues have their own bounds; preserve overflow/refusal behavior rather than dropping checks.
@@ -492,8 +498,8 @@ remain in [multiplayer](multiplayer.md), [bot-navigation](bot-navigation.md) and
 
 [Source approvals](../tools/architecture/source-sites.tsv) name today's global writes, timers, wall-clock reads and
 worker entries with their owners/domains. [Process-state approvals](../tools/architecture/process-state.tsv) separately
-pin production `LaunchArgs.Current` getter references (11 owner groups, 31 compiled reads) and 103 mutable statics
-(41 fields, 4 settable properties, 58 readonly collections/tables). Each names its owner and reason/lifetime; Dev is
+pin production `LaunchArgs.Current` getter references (11 owner groups, 31 compiled reads) and 107 mutable statics
+(41 fields, 5 settable properties, 61 readonly collections/tables). Each names its owner and reason/lifetime; Dev is
 excluded, exported Smoke is included. New sites, changed counts and stale approvals fail lint. An approved
 diagnostic clock is not an approved gameplay timer. Do not use Task.Delay, SceneTree timers or wall time for new
 simulation timers outside a reviewed clock domain.
