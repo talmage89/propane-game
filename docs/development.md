@@ -563,10 +563,10 @@ rebuild them with Blender 5.1 (`import_rifle.py` needs only Python):
 
 | Script | Builds |
 | --- | --- |
-| `export_tank.py` | `assets/tank/tank.glb` and `debris.glb` (with convex hulls) from the tank project's Unreal export |
-| `build_character.py` | `assets/character/mannequin.glb`: the Quaternius mannequin with animations from both libraries |
-| `import_rifle.py` | `assets/rifle`: the rifle (one skinned mesh, its clips and sockets), a lone magazine for dropped magazines, and the textures both share, from the rifle project's export |
-| `build_props.py` | `assets/props/*.glb`: fences, grill, bins, mailbox, lamp, hydrant, patio heater and more |
+| `export_tank.py` | `assets/authored/tank/tank.glb` and `debris.glb` (with convex hulls) from the tank project's Unreal export |
+| `build_character.py` | `assets/third_party/quaternius/ual/mannequin.glb`: the Quaternius mannequin with animations from both libraries |
+| `import_rifle.py` | `assets/authored/rifle`: the rifle (one skinned mesh, its clips and sockets), a lone magazine for dropped magazines, and the textures both share, from the rifle project's export |
+| `build_props.py` | `assets/generated/props/*.glb`: fences, grill, bins, mailbox, lamp, hydrant, patio heater and more |
 
 Each script's header gives its exact command line.
 

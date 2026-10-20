@@ -8,7 +8,7 @@ twist and pitch, and the hands over them; nothing generates or overrides steps.
 The mannequin and its 22 packaged clips come from the free **Standard** editions of
 [Quaternius UAL1](https://quaternius.com/packs/universalanimationlibrary.html) and
 [UAL2](https://quaternius.com/packs/universalanimationlibrary2.html), dedicated to the public domain under
-[CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/). `assets/character/mannequin.glb` is unchanged; the source
+[CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/). `assets/third_party/quaternius/ual/mannequin.glb` is unchanged; the source
 archives are not needed to build or play.
 
 | Archive | SHA-256 |
@@ -42,7 +42,7 @@ is used. The source is `100STYLE.zip` (1,468,515,354 bytes); the BVHs are read f
 | `Neutral/Neutral_BW.bvh` (backward walk) | 6,072,424 | `cfa225ff3a29a38d11ecd1b72fa0d917ca6c3dc3b24b3d09a4cb5c28ee9dc5b9` |
 | `Neutral/Neutral_SW.bvh` (sideways walk) | 4,373,576 | `07225ded6df11c4eb97a7b42e6121a9e985ae7e8d0f56f9ca971429f9c507ad9` |
 
-`tools/animation/retarget_100style.py` (Python 3 and numpy) writes `assets/character/directional.tres`, a Godot
+`tools/animation/retarget_100style.py` (Python 3 and numpy) writes `assets/third_party/100style/neutral/directional.tres`, a Godot
 `AnimationLibrary` the character adds beside the packaged clips:
 
 ```sh

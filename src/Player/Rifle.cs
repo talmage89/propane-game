@@ -15,7 +15,7 @@ public partial class Rifle : Node3D
 {
     public required WorldContext World { get; init; }
 
-    private const string ScenePath = "res://assets/rifle/rifle.glb";
+    private const string ScenePath = "res://assets/authored/rifle/rifle.glb";
     private const float FlashDuration = 0.06f;
 
     // The semi-automatic clip pulls the trigger first; a shot starts it where the hammer falls.
@@ -358,13 +358,13 @@ public partial class Rifle : Node3D
 
     private static StandardMaterial3D CreateBodyMaterial()
     {
-        var orm = GD.Load<Texture2D>("res://assets/rifle/T_Rifle_ORM.png");
+        var orm = GD.Load<Texture2D>("res://assets/authored/rifle/T_Rifle_ORM.png");
         return new StandardMaterial3D
         {
             ResourceName = "Rifle",
-            AlbedoTexture = GD.Load<Texture2D>("res://assets/rifle/T_Rifle_BaseColor.png"),
+            AlbedoTexture = GD.Load<Texture2D>("res://assets/authored/rifle/T_Rifle_BaseColor.png"),
             NormalEnabled = true,
-            NormalTexture = GD.Load<Texture2D>("res://assets/rifle/T_Rifle_Normal.png"),
+            NormalTexture = GD.Load<Texture2D>("res://assets/authored/rifle/T_Rifle_Normal.png"),
             AOEnabled = true,
             AOTexture = orm,
             AOTextureChannel = BaseMaterial3D.TextureChannel.Red,

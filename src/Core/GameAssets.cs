@@ -13,8 +13,8 @@ public sealed record DebrisPiece(string Name, Mesh Mesh, Shape3D Shape, Vector3 
 /// </summary>
 public static class GameAssets
 {
-    private const string TankScenePath = "res://assets/tank/tank.glb";
-    private const string DebrisScenePath = "res://assets/tank/debris.glb";
+    private const string TankScenePath = "res://assets/authored/tank/tank.glb";
+    private const string DebrisScenePath = "res://assets/authored/tank/debris.glb";
     private const float SteelShellDensity = 900f;
 
     private static Mesh? tankMesh;
@@ -194,9 +194,9 @@ public static class GameAssets
     private static ShaderMaterial CreateTankOuter()
     {
         var material = new ShaderMaterial { Shader = GD.Load<Shader>("res://shaders/tank.gdshader") };
-        material.SetShaderParameter("albedo_texture", GD.Load<Texture2D>("res://assets/tank/T_PropaneTank_BaseColor.png"));
-        material.SetShaderParameter("normal_texture", GD.Load<Texture2D>("res://assets/tank/T_PropaneTank_Normal.png"));
-        material.SetShaderParameter("orm_texture", GD.Load<Texture2D>("res://assets/tank/T_PropaneTank_ORM.png"));
+        material.SetShaderParameter("albedo_texture", GD.Load<Texture2D>("res://assets/authored/tank/T_PropaneTank_BaseColor.png"));
+        material.SetShaderParameter("normal_texture", GD.Load<Texture2D>("res://assets/authored/tank/T_PropaneTank_Normal.png"));
+        material.SetShaderParameter("orm_texture", GD.Load<Texture2D>("res://assets/authored/tank/T_PropaneTank_ORM.png"));
         return material;
     }
 

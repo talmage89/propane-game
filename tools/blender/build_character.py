@@ -1,7 +1,7 @@
 """Merge the Quaternius Universal Animation Libraries 1 and 2 onto one mannequin for Godot.
 
 Run from the project root:
-  blender -b --factory-startup --python tools/blender/build_character.py -- <UAL2 .glb> <UAL1 Unreal .fbx> assets/character/mannequin.glb
+  blender -b --factory-startup --python tools/blender/build_character.py -- <UAL2 .glb> <UAL1 Unreal .fbx> assets/third_party/quaternius/ual/mannequin.glb
 
 Both libraries share the same Unreal-style skeleton and rest pose, so UAL1 actions bind to the UAL2
 rig by bone name with no retargeting.

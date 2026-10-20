@@ -1,6 +1,6 @@
 """Retarget 100STYLE Neutral locomotion onto the packaged mannequin as a Godot AnimationLibrary.
 
-    python3 -B tools/animation/retarget_100style.py <dir with Neutral_*.bvh> [--output assets/character/directional.tres]
+    python3 -B tools/animation/retarget_100style.py <dir with Neutral_*.bvh> [--output assets/third_party/100style/neutral/directional.tres]
 
 The source is The 100STYLE Dataset - Ian Mason (CC BY 4.0), Zenodo record 8127870; docs/animation-sources.md lists
 the files and checksums. Needs Python 3 and numpy only.
@@ -335,8 +335,8 @@ def track_lines(track, kind, path, keys):
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("source", help="directory holding the Neutral_*.bvh files")
-    parser.add_argument("--output", default=str(ROOT / "assets/character/directional.tres"))
-    parser.add_argument("--mannequin", default=str(ROOT / "assets/character/mannequin.glb"))
+    parser.add_argument("--output", default=str(ROOT / "assets/third_party/100style/neutral/directional.tres"))
+    parser.add_argument("--mannequin", default=str(ROOT / "assets/third_party/quaternius/ual/mannequin.glb"))
     args = parser.parse_args()
     skeleton = Skeleton(args.mannequin)
     clips = {}

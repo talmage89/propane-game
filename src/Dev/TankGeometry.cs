@@ -15,7 +15,7 @@ internal sealed class TankGeometry
 
     public TankGeometry()
     {
-        var root = GameAssets.Instantiate("res://assets/tank/tank.glb");
+        var root = GameAssets.Instantiate("res://assets/authored/tank/tank.glb");
         var mesh = GameAssets.MeshInstances(root).Single(m => m.Name == "TankCollision").Mesh;
         var faces = mesh.GetFaces();
         points = faces.Distinct().ToArray();

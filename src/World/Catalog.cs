@@ -35,11 +35,11 @@ public static class Catalog
     public const float FenceThicknessScale = 3f;
     public const float FurnitureScale = 2f;
 
-    private const string Suburban = "res://assets/kenney/suburban/";
-    private const string Cars = "res://assets/kenney/cars/";
-    private const string Nature = "res://assets/kenney/nature/";
-    private const string Furniture = "res://assets/kenney/furniture/";
-    private const string Props = "res://assets/props/";
+    private const string Suburban = "res://assets/third_party/kenney/suburban/";
+    private const string Cars = "res://assets/third_party/kenney/cars/";
+    private const string Nature = "res://assets/third_party/kenney/nature/";
+    private const string Furniture = "res://assets/third_party/kenney/furniture/";
+    private const string Props = "res://assets/generated/props/";
 
     private static readonly Dictionary<string, ModelInfo> Models = new();
     private static List<ModelInfo>? houses;

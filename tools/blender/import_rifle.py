@@ -1,7 +1,7 @@
 """Bring the rifle project's export into the game. Plain Python 3, no Blender needed.
 
 Run from the project root:
-  python3 tools/blender/import_rifle.py <rifle repo> assets/rifle
+  python3 tools/blender/import_rifle.py <rifle repo> assets/authored/rifle
 
 Reads <rifle repo>/export/rifle.glb and magazine.glb and writes them without their embedded textures, plus the 2K
 texture set once, beside them:

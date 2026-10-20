@@ -206,7 +206,7 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
 
         visual = new Node3D { Name = "Visual" };
         AddChild(visual);
-        model = GameAssets.Instantiate("res://assets/character/mannequin.glb");
+        model = GameAssets.Instantiate("res://assets/third_party/quaternius/ual/mannequin.glb");
         model.Name = "Model";
         // The mannequin faces +Z; turn it so the visual's -Z (Godot forward) is the character's front.
         model.RotationDegrees = new Vector3(0, 180, 0);

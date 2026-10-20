@@ -25,7 +25,7 @@ public partial class DroppedMagazine : RigidBody3D
         {
             return;
         }
-        var root = GameAssets.Instantiate("res://assets/rifle/magazine.glb");
+        var root = GameAssets.Instantiate("res://assets/authored/rifle/magazine.glb");
         mesh = GameAssets.MeshInstances(root).First().Mesh;
         shape = new ConvexPolygonShape3D { Points = GameAssets.FarthestPoints(mesh.GetFaces(), HullPoints).ToArray() };
         root.Free();
