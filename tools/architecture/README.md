@@ -39,8 +39,8 @@ archives; runtime smoke complements inventory because metadata presence cannot p
   It inventories production (including exported Smoke) `LaunchArgs.Current` getter references by top-level owner and
   exact compiled count: 11 groups, 31 reads. Compiler duplication of a constructor initializer counts twice; async/
   lambda bodies belong to the same authored owner. New owners, added/removed reads and stale groups fail.
-  It also inventories 103 mutable static declarations: 41 non-readonly fields (including event storage), 4 static
-  properties with any setter visibility, and 58 readonly collection/table fields (including get-only auto-property
+  It also inventories 104 inventoried static declarations: 41 non-readonly fields (including event storage), 4 static
+  properties with any setter visibility, and 59 readonly collection/table fields (including get-only auto-property
   storage). Constants are excluded; fields behind settable auto-properties count once under the property name.
   Arrays of any rank (including System.Array), array segments/memory, BCL/Godot collections, read-only collection
   interfaces/wrappers, ConditionalWeakTable and authored collection subclasses require approval. Compiler-generated closure/delegate cache types and Dev declarations are

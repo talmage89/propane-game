@@ -336,9 +336,9 @@ public partial class PlayerCharacter : CharacterBody3D, IBlastReceiver
         intent = Runtime.IntentSource?.Read() ?? default;
         if (InputLocked)
         {
-            intent = new PlayerIntent { Look = intent.Look, LookStick = intent.LookStick };
+            intent = new PlayerIntent { Look = intent.Look, LookStick = intent.LookStick, LookAngularVelocity = intent.LookAngularVelocity };
         }
-        Aim.Look(intent.Look, intent.LookStick, dt);
+        Aim.Look(intent.Look, intent.LookStick, dt, intent.LookAngularVelocity);
         if (Ammo != null)
         {
             Ammo.Update(dt);

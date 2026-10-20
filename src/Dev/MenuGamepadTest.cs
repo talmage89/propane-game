@@ -220,14 +220,14 @@ public partial class MenuGamepadTest : Node
         await Wait(() => Menus.Current == Menus.Screen.Browser && Net.Lobbies.Any(l => l.Id == fixture.Lobby!.Id), "B leaves lobby for populated browser").ConfigureAwait(true);
         var joinKey = $"lobby_{fixture.Lobby!.Id}";
         await Navigate(joinKey).ConfigureAwait(true);
-        var scroll = Menus.FindChildren("*", "ScrollContainer", owned: false).OfType<ScrollContainer>().Single();
+        var scroll = Menus.FindChildren("*", "ScrollContainer", owned: false).OfType<ScrollContainer>().Single(s => s.IsVisibleInTree());
         Check(scroll.ScrollVertical > 0 && scroll.GetGlobalRect().Encloses(Focus.GetGlobalRect().Grow(3)), "last lobby scrolls fully into view");
         await Shot("09_browser_join").ConfigureAwait(true);
         // A server list refresh must retain this exact lobby, not another row with the same Join label.
         fixture.SetProfile("Updated fixture", fixture.Appearance);
         await Wait(() => Net.Lobbies.Any(l => l.Id == fixture.Lobby!.Id && l.CreatorName == "Updated fixture"), "browser list refresh acknowledged").ConfigureAwait(true);
         CheckFocus(joinKey);
-        scroll = Menus.FindChildren("*", "ScrollContainer", owned: false).OfType<ScrollContainer>().Single();
+        scroll = Menus.FindChildren("*", "ScrollContainer", owned: false).OfType<ScrollContainer>().Single(s => s.IsVisibleInTree());
         Check(scroll.GetGlobalRect().Encloses(Focus.GetGlobalRect().Grow(3)), "list rebuild reveals restored Join focus");
         await Press(JoyButton.A).ConfigureAwait(true);
         await Wait(() => Menus.Current == Menus.Screen.Lobby && Net.Lobby!.CreatorId == fixture.MyId, "A joins selected lobby").ConfigureAwait(true);
@@ -329,6 +329,8 @@ public partial class MenuGamepadTest : Node
         CheckFocus("Multiplayer");
         await ToSignal(GetTree().CreateTimer(0.46), SceneTreeTimer.SignalName.Timeout);
         CheckFocus("Lab");
+        await ToSignal(GetTree().CreateTimer(0.14), SceneTreeTimer.SignalName.Timeout);
+        CheckFocus("Settings");
         await ToSignal(GetTree().CreateTimer(0.14), SceneTreeTimer.SignalName.Timeout);
         CheckFocus("Quit");
         await Axis(JoyAxis.LeftY, 0).ConfigureAwait(true);

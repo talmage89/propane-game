@@ -13,6 +13,7 @@ public partial class MatchMenu : CanvasLayer
     public IPlayerSettings Settings { get; init; } = PlayerPreferences.Application;
 
     public bool Lobby { get; init; }
+    private Button leaderboard = null!;
 
     public event System.Action? ResumeRequested;
 
@@ -69,7 +70,8 @@ public partial class MatchMenu : CanvasLayer
         buttons.AddChild(quit);
         layout.AddChild(buttons);
         // The player's own choice, kept in their settings for every match.
-        var leaderboard = UiStyle.Button(LeaderboardText());
+        leaderboard = UiStyle.Button(LeaderboardText());
+        Settings.PreferenceChanged += OnPreferenceChanged;
         leaderboard.Pressed += () =>
         {
             Settings.ShowLeaderboard = !Settings.ShowLeaderboard;
@@ -78,7 +80,15 @@ public partial class MatchMenu : CanvasLayer
         var options = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.Center };
         options.AddChild(leaderboard);
         layout.AddChild(options);
+        SettingsMenu.AddLauncher(this, layout, Settings);
         AddChild(new MenuNavigation { Screen = this, Root = layout, Back = () => ResumeRequested?.Invoke() });
+    }
+
+    public override void _ExitTree() => Settings.PreferenceChanged -= OnPreferenceChanged;
+
+    private void OnPreferenceChanged(PreferenceDefinition preference)
+    {
+        if (preference == PreferenceCatalog.ShowLeaderboard) leaderboard.Text = LeaderboardText();
     }
 
     private string LeaderboardText() => Settings.ShowLeaderboard ? "Leaderboard: shown" : "Leaderboard: hidden";

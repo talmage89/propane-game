@@ -20,7 +20,7 @@ public partial class LocalView : Node
 
     public override void _Ready()
     {
-        CameraRig = new CameraRig { World = Actor.World, Aim = Actor.Aim, Name = "CameraRig" };
+        CameraRig = new CameraRig { World = Actor.World, Aim = Actor.Aim, Preferences = PlayerPreferences.Current, Name = "CameraRig" };
         Actor.World.AddView(this, CameraRig, followsPause: true);
         Hud = new Hud { Name = "Hud" };
         AddChild(Hud);
@@ -103,7 +103,7 @@ public partial class LocalView : Node
 
     public static LocalView Attach(PlayerCharacter actor, Node parent, bool devices = false)
     {
-        var view = new LocalView { Actor = actor, Input = devices ? new DeviceInput(actor.World.Tuning) : null, Name = "LocalView" };
+        var view = new LocalView { Actor = actor, Input = devices ? new DeviceInput(actor.World.Tuning, preferences: PlayerPreferences.Current) : null, Name = "LocalView" };
         actor.World.AddView(parent, view);
         return view;
     }

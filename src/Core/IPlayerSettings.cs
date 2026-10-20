@@ -9,6 +9,10 @@ public interface IPlayerSettings
     AppearanceRecord? Appearance { get; set; }
     string Server { get; set; }
     bool ShowLeaderboard { get; set; }
+    double GetPreference(PreferenceDefinition preference);
+    bool SetPreference(PreferenceDefinition preference, double value);
+    bool ResetPreferences(string category);
+    event Action<PreferenceDefinition>? PreferenceChanged;
 }
 
 /// <summary>Main-thread selection of a borrowed application contract. Owns no resource or persistence.</summary>
