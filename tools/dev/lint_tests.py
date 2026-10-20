@@ -120,8 +120,9 @@ fi
             for checker in checkers:
                 require(commands.count(f"python3 -B tools/dev/{checker}") == 1, f"check skipped/duplicated {checker}")
             for scene in scenes:
+                # Match an argument boundary: settings must not also match settings-read.
                 # The default gather probe has no scenario, so distinguish it from grant-races.
-                matches = [command for command in commands if scene in command and
+                matches = [command for command in commands if re.search(re.escape(scene) + r"(?:\s|$)", command) and
                            (scene not in ("gather_range.tscn", "shutdown_tests.tscn") or " -- " not in command)]
                 require(len(matches) == 1, f"check skipped/duplicated {scene}", result.stdout)
             require(sum("--write-world-plans=" in c for c in commands) == 1 and
