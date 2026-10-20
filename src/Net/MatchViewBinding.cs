@@ -196,7 +196,7 @@ internal sealed class MatchViewBinding : IDisposable
     {
         if (CreateLocalView && player != null)
         {
-            localView = Session.AddLocalView(player.Runtime, parent, new DeviceInput(World.Tuning));
+            localView = Session.AddLocalView(player.Runtime, parent, new DeviceInput(World.Tuning, preferences: PlayerPreferences.Current));
             environment.Follow = localView.CameraRig.Camera;
             localView.TreeExiting += OnLocalViewExiting;
             hud = localView.Hud;
@@ -320,8 +320,7 @@ internal sealed class MatchViewBinding : IDisposable
         }
         else if (@event.IsActionPressed(InputSetup.ToggleFullscreen))
         {
-            var fullscreen = DisplayServer.WindowGetMode() == DisplayServer.WindowMode.Fullscreen;
-            DisplayServer.WindowSetMode(fullscreen ? DisplayServer.WindowMode.Windowed : DisplayServer.WindowMode.Fullscreen);
+            DisplayPreferences.ToggleFullscreen();
         }
         else if (@event is InputEventMouseButton { Pressed: true } && Input.MouseMode != Input.MouseModeEnum.Captured &&
                  !menu.Visible && tuningPanel?.Visible != true)

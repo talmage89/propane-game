@@ -11,6 +11,7 @@ using Godot;
 using Propane.Core;
 using Propane.Lab;
 using Propane.Modes;
+using Propane.Player;
 using Propane.Tank;
 
 namespace Propane.Dev.Equivalence;
@@ -108,7 +109,13 @@ public sealed partial class LabTrace : Node
         foreach (var actor in Lab.Session.Actors.Select(a => a.Character))
         {
             var id = $"actors/{actor.ActorId}";
-            Add(id + "/intent", ReferenceFile.Value(actor.Runtime.Intent));
+            // Only device input sets LookAngularVelocity (personal gamepad gain); Lab actors must leave it zero. Assert
+            // that, and keep the frozen intent observation without the device-only field.
+            var intent = actor.Runtime.Intent;
+            if (intent.LookAngularVelocity != Vector2.Zero) throw new InvalidDataException($"{id} has device look velocity");
+            var observed = (Dictionary<string, object?>)ReferenceFile.Value(intent)!;
+            observed.Remove(nameof(PlayerIntent.LookAngularVelocity));
+            Add(id + "/intent", observed);
             Add(id + "/resolved", ReferenceFile.Value(actor.Runtime.ResolvedState));
             Add(id + "/pose", ReferenceFile.Value(new { actor.GlobalTransform, actor.Velocity, actor.Aim.Yaw, actor.Aim.Pitch }));
             Add(id + "/ammo-life", ReferenceFile.Value(new

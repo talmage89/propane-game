@@ -46,7 +46,7 @@ nothing else needs installing.
   `gh release download --repo talmage89/propane-game` skips the prompt.
 - **Linux:** extract the archive and run `./Propane.x86_64`. Needs a GPU with Vulkan drivers.
 
-The game opens on the main menu: Single player, Multiplayer, Lab or Quit. A downloaded game checks GitHub for a newer
+The game opens on the main menu: Single player, Multiplayer, Lab, Settings or Quit. A downloaded game checks GitHub for a newer
 release at launch and, if there is one, offers this platform's archive on the main menu; updating is up to you.
 
 ## Controls
@@ -69,6 +69,10 @@ In play the game captures the mouse; click the window to recapture it after swit
 keyboard, or a gamepad's D-pad or left stick with A / Cross to confirm and B / Circle to go back. The
 [developer guide](docs/development.md#controls-and-input) has every binding with its speeds and the rules for how
 sprint, aim, reload and melee interact.
+
+Choose **Settings** from the main menu or any pause menu, including the Lab, for personal camera, control,
+display and leaderboard preferences. Changes apply immediately and are saved between runs. Each category has a
+reset button. Settings returns to the menu that opened it; multiplayer keeps running behind the menu.
 
 ## Playing together
 

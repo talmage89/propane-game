@@ -109,8 +109,7 @@ public partial class Game : Node3D
         }
         else if (@event.IsActionPressed(InputSetup.ToggleFullscreen))
         {
-            var fullscreen = DisplayServer.WindowGetMode() == DisplayServer.WindowMode.Fullscreen;
-            DisplayServer.WindowSetMode(fullscreen ? DisplayServer.WindowMode.Windowed : DisplayServer.WindowMode.Fullscreen);
+            DisplayPreferences.ToggleFullscreen();
         }
         else if (@event.IsActionPressed(InputSetup.NewSuburb) && !World.Paused && phase is Phase.Playing or Phase.Celebrating)
         {

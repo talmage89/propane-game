@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using Godot;
 
@@ -25,6 +26,8 @@ public sealed class PlayerSettings : IPlayerSettings, IDisposable
     {
         if (disposed) return;
         disposed = true;
+        PreferenceChanged = null;
+        values.Clear();
         file?.Dispose();
         file = null;
     }
@@ -83,22 +86,47 @@ public sealed class PlayerSettings : IPlayerSettings, IDisposable
         set => Set("net", "server", value);
     }
 
-    private bool? showLeaderboard;
+    private readonly Dictionary<string, double> values = new();
+    public event Action<PreferenceDefinition>? PreferenceChanged;
 
-    /// <summary>Whether the match HUD shows the leaderboard; the match menu toggles it. Read every frame, so cached.</summary>
     public bool ShowLeaderboard
     {
-        get
-        {
-            ObjectDisposedException.ThrowIf(disposed, this);
-            return showLeaderboard ??= File.GetValue("hud", "leaderboard", true).AsBool();
-        }
-        set
-        {
-            ObjectDisposedException.ThrowIf(disposed, this);
-            showLeaderboard = value;
-            Set("hud", "leaderboard", value);
-        }
+        get => GetPreference(PreferenceCatalog.ShowLeaderboard) != 0;
+        set => SetPreference(PreferenceCatalog.ShowLeaderboard, value ? 1 : 0);
+    }
+
+    public double GetPreference(PreferenceDefinition preference)
+    {
+        ObjectDisposedException.ThrowIf(disposed, this);
+        if (values.TryGetValue(preference.Id, out var cached)) return cached;
+        var saved = File.GetValue(preference.Section, preference.Id, Variant.From(preference.Default));
+        var numeric = saved.VariantType is Variant.Type.Int or Variant.Type.Float;
+        var value = preference.Kind == PreferenceKind.Toggle
+            ? saved.VariantType == Variant.Type.Bool ? (saved.AsBool() ? 1 : 0) : preference.Default
+            : numeric ? saved.AsDouble() : preference.Default;
+        return values[preference.Id] = preference.Normalize(value);
+    }
+
+    public bool SetPreference(PreferenceDefinition preference, double value)
+    {
+        ObjectDisposedException.ThrowIf(disposed, this);
+        var normalized = preference.Normalize(value);
+        values[preference.Id] = normalized;
+        File.SetValue(preference.Section, preference.Id, preference.Kind == PreferenceKind.Toggle
+            ? Variant.From(normalized != 0) : Variant.From(normalized));
+        // Commit before synchronous apply hooks. No debounce clock or pending write survives a menu/session.
+        var saved = File.Save(path) == Error.Ok;
+        PreferenceChanged?.Invoke(preference);
+        return saved;
+    }
+
+    public bool ResetPreferences(string category)
+    {
+        ObjectDisposedException.ThrowIf(disposed, this);
+        var saved = true;
+        foreach (var preference in PreferenceCatalog.All)
+            if (preference.Category == category) saved &= SetPreference(preference, preference.Default);
+        return saved;
     }
 
     private void Set(string section, string key, Variant value)

@@ -37,7 +37,7 @@ public partial class Game
         }
         public void CreateViews(SessionContext session)
         {
-            var view = session.AddLocalView(game.player.Runtime, game, new DeviceInput(session.World.Tuning));
+            var view = session.AddLocalView(game.player.Runtime, game, new DeviceInput(session.World.Tuning, preferences: PlayerPreferences.Current));
             game.localView = view;
             view.TreeExiting += () => game.localView = null;
             game.environment.Follow = view.CameraRig.Camera;

@@ -74,11 +74,13 @@ public sealed class LogicalAim : System.IDisposable
         RefreshOrientation();
     }
 
-    public void Look(Vector2 mouseDelta, Vector2 stick = default, float dt = 0)
+    public void Look(Vector2 mouseDelta, Vector2 stick = default, float dt = 0, Vector2 angularVelocity = default)
     {
         var sensitivity = Mathf.RadToDeg(World.Tuning.MouseSensitivity);
         var displacement = mouseDelta * sensitivity + StickLookDelta(stick, dt,
             World.Tuning.StickLookDegreesPerSecond, World.Tuning.StickLookCurve);
+        // Device-normalized velocity joins the existing displacement before the one pitch clamp.
+        if (angularVelocity != Vector2.Zero) displacement += angularVelocity * dt;
         Rotate(-displacement);
     }
 

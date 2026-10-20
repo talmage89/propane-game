@@ -15,6 +15,7 @@ static-collection	Propane.Core.AppearancePalette	ColorNames	1	Propane.Core.Appea
 static-collection	Propane.Core.AppearancePalette	PlayerColors	1	Propane.Core.AppearancePalette	Process-lifetime appearance palette/name tables, immutable by convention; preserve index meaning.
 static-collection	Propane.Core.GameAssets	HullDirections	1	Propane.Core.GameAssets	Main-thread process asset/geometry cache, borrowed shared resources or immutable hull directions; released by engine shutdown.
 static-collection	Propane.Core.GameAssets	Scenes	1	Propane.Core.GameAssets	Main-thread process asset/geometry cache, borrowed shared resources or immutable hull directions; released by engine shutdown.
+static-collection	Propane.Core.PreferenceCatalog	All	1	Propane.Core.PreferenceCatalog	Process-lifetime read-only ordered immutable preference declarations; no native resource or mutable application values.
 static-collection	Propane.Core.ProcessPhysicsPolicies	catchup	1	Propane.Core.ProcessPhysicsPolicies	Live catch-up registrations and saved engine budget; lease disposal unregisters and restores the prior budget.
 static-collection	Propane.Core.Tuning	LocalTuners	1	Propane.Core.Tuning	Application saved template or lazy process reflection/schema cache; worlds copy the borrowed template, never dispose it.
 static-collection	Propane.Diagnostics.EffectProfile	allocations	1	Propane.Diagnostics.EffectProfile	Opt-in process diagnostic counters/switch; callers drain counters, never use them as gameplay state.

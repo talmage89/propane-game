@@ -73,6 +73,7 @@ public partial class LabOverlay : CanvasLayer
             "R / X or Backspace resets this scenario", 16, UiStyle.SoftInk, HorizontalAlignment.Center));
         resume = AddButton(layout, "Resume Lab", () => Lab.SetMenu(false));
         AddButton(layout, Lab.Scenario.Id == "range" ? "Respawn targets" : "Reset scenario", Lab.RequestReset);
+        SettingsMenu.AddLauncher(menuLayer, layout);
         AddButton(layout, "Free tuning", Lab.OpenTuning);
         AddButton(layout, "Lab menu", Lab.RequestExit);
         navigation = new MenuNavigation { Screen = menuLayer, Root = layout, Back = () => Lab.SetMenu(false) };
