@@ -18,7 +18,9 @@ public partial class MenuTest : Node
 {
     private Main main = null!;
 
-    private readonly PlayerSettings settings = new("user://menu_test_settings.cfg");
+    internal static string SettingsPath => DevArgs.Get("scenario") is "settings" or "settings-read"
+        ? "user://menu_settings_test.cfg" : "user://menu_test_settings.cfg";
+    private readonly PlayerSettings settings = new(SettingsPath);
     private System.IDisposable? settingsBinding;
 
     public override void _Ready()
@@ -26,13 +28,25 @@ public partial class MenuTest : Node
         DevArgs.MarkReady();
         DevArgs.Setup();
         // A fresh settings file, so the run neither reads nor changes the player's name, color and server.
-        DirAccess.RemoveAbsolute(ProjectSettings.GlobalizePath("user://menu_test_settings.cfg"));
+        if (DevArgs.Get("scenario") != "settings-read")
+            DirAccess.RemoveAbsolute(ProjectSettings.GlobalizePath(SettingsPath));
         settingsBinding = PlayerSettings.Bind(settings);
+        if (DevArgs.Get("scenario") == "settings-read")
+        {
+            try { MenuSettingsTest.CheckSaved(settings); CoreTests.Complete(this); }
+            catch (System.Exception error) { GD.Print("[settings menu] FAIL separate-process read: " + error); CoreTests.Complete(this, 1); }
+            return;
+        }
         settings.Name = "Player";
         DisplayServer.WindowSetVsyncMode(DisplayServer.VSyncMode.Disabled);
         main = new Main { Name = "Main" };
         AddChild(main);
         main.GetNode<UI.Menus>("Menus").HostPort = (int)DevArgs.GetFloat("port", Net.Protocol.DefaultPort);
+        if (DevArgs.Get("scenario") == "settings")
+        {
+            AddChild(new MenuSettingsTest { Main = main });
+            return;
+        }
         if (DevArgs.Get("scenario") == "retirement")
         {
             AddChild(new MenuRetirementTest { Main = main });

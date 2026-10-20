@@ -425,6 +425,10 @@ $GODOT --headless --fixed-fps 60 res://scenes/dev/rifle_reach_tests.tscn
 $GODOT --fixed-fps 60 --resolution 1280x720 res://scenes/dev/player_range.tscn -- --scenario=recoil --stance=aim --view=player --assert-grip --assert-motion --capture-dir="$PWD/build/rcl-player"
 # Ten magazines against a player capsule with the production bot aim controller.
 $GODOT --headless --fixed-fps 60 res://scenes/dev/player_range.tscn -- --scenario=bot-recoil --skill=1 --distance=20
+# Settings: every category, real device edits/navigation, live camera/input, blocking and a separate-process reload.
+$GODOT --fixed-fps 60 --resolution 1600x900 res://scenes/dev/menu_test.tscn -- --scenario=settings --classic-lobby --capture-dir="$PWD/build/st-menu"
+$GODOT --headless res://scenes/dev/menu_test.tscn -- --scenario=settings-read
+# Run these sequentially: both use an isolated menu_settings_test.cfg, not the player's settings.cfg.
 # Real device delivery: held mouse burst, retained climb and mouse pull-down in single and network views.
 $GODOT --headless --fixed-fps 60 res://scenes/dev/menu_test.tscn -- --scenario=input --classic-lobby
 # Player scenarios: stances (default), reload, ragdoll, creep (two measured strides), movement (labeled gait/jump transitions),
