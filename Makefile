@@ -72,7 +72,7 @@ test: test-core test-behavior test-generator test-world ## Run the fast headless
 test-infra: ## Check the gate: analyzer/architecture negatives, make ordering, deep-shard and CI wiring
 	python3 -B tools/dev/lint_tests.py
 
-test-core: build ## Run checker, platform, movement, unit and scripted mode-rule assertions
+test-core: assets-check ## Run checker, platform, movement, unit and scripted mode-rule assertions
 	GODOT="$(GODOT)" python3 -B tools/dev/check_test_threads.py
 	GODOT="$(GODOT)" python3 -B tools/dev/bench_tests.py
 	python3 -B tools/dev/check_world_tests.py
@@ -263,3 +263,8 @@ release-minor: ## Release a minor version: anything players in a match share cha
 
 release-major: ## Release a major version
 	tools/release/cut.sh major
+
+.PHONY: assets-check
+assets-check: build ## Validate asset inventory, catalog and owner-tool negative fixtures
+	python3 -B tools/assets/check.py
+	python3 -B tools/assets/tests.py

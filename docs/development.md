@@ -551,6 +551,12 @@ Validate the workflow and run `make test-infra` after changing it.
 
 ## Assets
 
+`make assets-check` validates the checked-in file/provenance allowlist and runs the scaffold/validator negative
+fixtures. It also runs through the core test partition and therefore `make check` and CI. Source validation uses
+Python standard library only; recommended budgets in `tools/assets/budgets.json` warn without rejecting art.
+The allowlist in `tools/assets/inventory.json` records existing source/provenance gaps rather than inventing them.
+
+
 The tank, its debris and the fireball flipbook come from the propane-tank Blender project, and the rifle from the
 rifle Blender project; the other models are CC0 kits (see [CREDITS.md](../CREDITS.md)). The scripts in `tools/blender`
 rebuild them with Blender 5.1 (`import_rifle.py` needs only Python):
