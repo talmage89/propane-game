@@ -13,8 +13,10 @@ launch-read	Propane.ReleaseSmoke.ReleaseTest	LaunchArgs.Current	5	Propane.Releas
 static-collection	Propane.Bots.BotProfile	All	1	Propane.Bots.BotProfile	Process-lifetime ordered difficulty table, immutable by convention; preserve selection order.
 static-collection	Propane.Core.AppearancePalette	ColorNames	1	Propane.Core.AppearancePalette	Process-lifetime appearance palette/name tables, immutable by convention; preserve index meaning.
 static-collection	Propane.Core.AppearancePalette	PlayerColors	1	Propane.Core.AppearancePalette	Process-lifetime appearance palette/name tables, immutable by convention; preserve index meaning.
+static-collection	Propane.Core.ControlBindings	All	1	Propane.Core.ControlBindings	Process-lifetime read-only immutable physical binding defaults; no native resources or player overrides.
 static-collection	Propane.Core.GameAssets	HullDirections	1	Propane.Core.GameAssets	Main-thread process asset/geometry cache, borrowed shared resources or immutable hull directions; released by engine shutdown.
 static-collection	Propane.Core.GameAssets	Scenes	1	Propane.Core.GameAssets	Main-thread process asset/geometry cache, borrowed shared resources or immutable hull directions; released by engine shutdown.
+static-collection	Propane.Core.InputSetup	descriptions	1	Propane.Core.InputSetup	Application-derived managed display strings, replaced synchronously with InputMap by Main before scenes and on settings edits.
 static-collection	Propane.Core.PreferenceCatalog	All	1	Propane.Core.PreferenceCatalog	Process-lifetime read-only ordered immutable preference declarations; no native resource or mutable application values.
 static-collection	Propane.Core.ProcessPhysicsPolicies	catchup	1	Propane.Core.ProcessPhysicsPolicies	Live catch-up registrations and saved engine budget; lease disposal unregisters and restores the prior budget.
 static-collection	Propane.Core.Tuning	LocalTuners	1	Propane.Core.Tuning	Application saved template or lazy process reflection/schema cache; worlds copy the borrowed template, never dispose it.
@@ -113,6 +115,7 @@ static-field	Propane.World.Catalog	housePalettes	1	Propane.World.Catalog	Process
 static-field	Propane.World.Catalog	houses	1	Propane.World.Catalog	Process-lifetime model metadata and lazy house/palette tables, immutable by convention; native resources remain shared.
 static-field	Propane.World.WorldMaterials	worldShader	1	Propane.World.WorldMaterials	Main-thread process converted-material/shader cache; borrowed by world instances and retired by engine shutdown.
 static-property	Propane.Core.DevLog	Enabled	1	Propane.Core.DevLog	Explicit diagnostic logging switch for the process; no hidden gameplay state.
+static-property	Propane.Core.InputSetup	Revision	1	Propane.Core.InputSetup	Application InputMap revision; Main synchronously advances on apply, presentation polls only to refresh binding labels.
 static-property	Propane.Diagnostics.EffectProfile	Enabled	1	Propane.Diagnostics.EffectProfile	Opt-in process diagnostic counters/switch; callers drain counters, never use them as gameplay state.
 static-property	Propane.Player.ActorProfile	Enabled	1	Propane.Player.ActorProfile	Opt-in process actor diagnostic counters/switch; callers drain counters, never use them as gameplay state.
 static-property	Propane.UI.MenuNavigation	Gamepad	1	Propane.UI.MenuNavigation	Application device/glyph preference; input owner updates it synchronously, per-view routing remains future work.

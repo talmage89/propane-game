@@ -54,7 +54,8 @@ public partial class Main : Node
             return;
         }
         AddChild(new DisplayPreferences { Settings = settings, Name = "DisplayPreferences" });
-        InputSetup.Register();
+        InputSetup.Register(settings);
+        settings.BindingsChanged += ApplyBindings;
         net = new NetClient(PacketTransports.CreateClient(), ModeRegistry.Codec) { Name = "Net", Template = SavedTuning };
         AddChild(net);
         net.MatchStarting += OnMatchStarting;
@@ -86,9 +87,12 @@ public partial class Main : Node
 
     public override void _ExitTree()
     {
+        settings.BindingsChanged -= ApplyBindings;
         settingsBinding?.Dispose();
         ownedSettings?.Dispose();
     }
+
+    private void ApplyBindings() => InputSetup.ApplyBindings(settings);
 
     public override void _UnhandledInput(InputEvent @event)
     {

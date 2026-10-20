@@ -57,6 +57,7 @@ public partial class LobbyCard : CanvasLayer
     private Label bannerTitle = null!;
     private float bannerAge;
     private bool gamepad;
+    private int bindingRevision;
 
     public override void _Ready()
     {
@@ -116,13 +117,14 @@ public partial class LobbyCard : CanvasLayer
         var fade = Mathf.Clamp((bannerAge - (BannerSeconds - 1.2f)) / 1.2f, 0, 1);
         banner.Visible = bannerAge < BannerSeconds;
         banner.Modulate = new Color(1, 1, 1, Mathf.SmoothStep(0, 1, Mathf.Clamp(bannerAge / 0.4f, 0, 1)) * (1 - fade));
-        if (gamepad != MenuNavigation.Gamepad) Refresh();
+        if (gamepad != MenuNavigation.Gamepad || bindingRevision != InputSetup.Revision) Refresh();
     }
 
     private void Refresh()
     {
         if (Net.Lobby is not { } lobby) return;
         gamepad = MenuNavigation.Gamepad;
+        bindingRevision = InputSetup.Revision;
         title.Text = LobbyText.Title(lobby);
         bannerTitle.Text = title.Text;
         settings.Text = LobbyText.Settings(lobby);
@@ -144,7 +146,7 @@ public partial class LobbyCard : CanvasLayer
         }
         if (lobby.Members.Count > RowsShown)
             roster.AddChild(UiStyle.Text($"and {lobby.Members.Count - RowsShown + 1} more", 15, UiStyle.SoftInk));
-        key.Text = gamepad ? "View" : "Tab";
+        key.Text = InputSetup.Describe(InputSetup.LobbyPanel, gamepad);
         hint.Text = Net.IsCreator ? "Lobby and match settings" : "Lobby: name, color, bots";
     }
 

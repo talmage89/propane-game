@@ -18,7 +18,8 @@ public partial class MenuTest : Node
 {
     private Main main = null!;
 
-    internal static string SettingsPath => DevArgs.Get("scenario") is "settings" or "settings-read"
+    internal static string SettingsPath => DevArgs.Get("scenario") is "bindings" or "bindings-read"
+        ? "user://menu_bindings_test.cfg" : DevArgs.Get("scenario") is "settings" or "settings-read"
         ? "user://menu_settings_test.cfg" : "user://menu_test_settings.cfg";
     private readonly PlayerSettings settings = new(SettingsPath);
     private System.IDisposable? settingsBinding;
@@ -28,7 +29,7 @@ public partial class MenuTest : Node
         DevArgs.MarkReady();
         DevArgs.Setup();
         // A fresh settings file, so the run neither reads nor changes the player's name, color and server.
-        if (DevArgs.Get("scenario") != "settings-read")
+        if (DevArgs.Get("scenario") is not ("settings-read" or "bindings-read"))
             DirAccess.RemoveAbsolute(ProjectSettings.GlobalizePath(SettingsPath));
         settingsBinding = PlayerSettings.Bind(settings);
         if (DevArgs.Get("scenario") == "settings-read")
@@ -43,6 +44,11 @@ public partial class MenuTest : Node
         main = new Main { Name = "Main" };
         AddChild(main);
         main.GetNode<UI.Menus>("Menus").HostPort = (int)DevArgs.GetFloat("port", Net.Protocol.DefaultPort);
+        if (DevArgs.Get("scenario") is "bindings" or "bindings-read")
+        {
+            AddChild(new MenuBindingsTest { Main = main });
+            return;
+        }
         if (DevArgs.Get("scenario") == "settings")
         {
             AddChild(new MenuSettingsTest { Main = main });

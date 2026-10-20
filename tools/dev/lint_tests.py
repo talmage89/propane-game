@@ -79,6 +79,7 @@ fi
               "bot_navigation_course.tscn -- --seeds=5",
               "menu_test.tscn -- --scenario=gamepad", "menu_test.tscn -- --scenario=devices", "menu_test.tscn -- --scenario=input", "menu_test.tscn -- --scenario=mouse",
               "menu_test.tscn -- --scenario=settings", "menu_test.tscn -- --scenario=settings-read",
+              "menu_test.tscn -- --scenario=bindings", "menu_test.tscn -- --scenario=bindings-read",
               "menu_test.tscn -- --scenario=bots", "menu_test.tscn -- --scenario=king", "menu_test.tscn -- --scenario=lobby",
               "player_range.tscn -- --scenario=grip --grip-sweep --assert-grip --assert-motion",
               "player_range.tscn -- --scenario=ragdoll --assert-grip --assert-motion",

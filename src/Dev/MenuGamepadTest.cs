@@ -480,12 +480,12 @@ public partial class MenuGamepadTest : Node
         await Wait(() => Main.HasNode("Game"), "single player opened").ConfigureAwait(true);
         await Press(JoyButton.Start).ConfigureAwait(true);
         Check(Main.HasNode("Game") && Main.GetNode<Game>("Game").World.Paused && Labels().Contains("Left stick"), "gamepad pause reference");
-        Check(Labels().Contains("Right stick click") && !Labels().Contains("F / mouse thumb"), "gamepad melee reference");
+        Check(Labels().Contains("Right stick click") && !Labels().Contains("F / Mouse thumb 1 / Mouse thumb 2"), "gamepad melee reference");
         Input.ParseInputEvent(new InputEventKey { Keycode = Key.Tab, PhysicalKeycode = Key.Tab, Pressed = true });
         Input.ParseInputEvent(new InputEventKey { Keycode = Key.Tab, PhysicalKeycode = Key.Tab, Pressed = false });
         await Frames().ConfigureAwait(true);
         Check(Labels().Contains("W A S D") && !Labels().Contains("Left stick"), "keyboard replaces gamepad reference while paused");
-        Check(Labels().Contains("F / mouse thumb") && !Labels().Contains("Right stick click"), "keyboard melee reference");
+        Check(Labels().Contains("F / Mouse thumb 1 / Mouse thumb 2") && !Labels().Contains("Right stick click"), "keyboard melee reference");
         await Shot("01_keyboard_pause").ConfigureAwait(true);
         await Press(JoyButton.DpadLeft).ConfigureAwait(true);
         Check(Labels().Contains("Left stick") && !Labels().Contains("W A S D"), "gamepad replaces keyboard reference while paused");

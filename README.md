@@ -51,6 +51,9 @@ release at launch and, if there is one, offers this platform's archive on the ma
 
 ## Controls
 
+These are the defaults. Use **Settings → Controls** to rebind keyboard/mouse and gamepad buttons or triggers.
+Sticks and menu shortcuts stay fixed. Reset one action or the whole Controls category to restore defaults.
+
 | Keyboard / mouse | Gamepad (Xbox / PlayStation) | Action |
 | --- | --- | --- |
 | W A S D | Left stick | Move |
