@@ -197,7 +197,7 @@ public partial class Main : Node
     {
         menus.Show(Menus.Screen.None);
         HideBackdrop();
-        game = new Game { Name = "Game", Template = SavedTuning };
+        game = new Game { Name = "Game", Template = SavedTuning, HatId = settings.Appearance?.Hat };
         game.ExitRequested += ExitSinglePlayer;
         AddChild(game);
     }
@@ -232,7 +232,7 @@ public partial class Main : Node
     {
         labMenu!.Visible = false;
         HideBackdrop();
-        lab = new LabSession { Name = "Lab", Scenario = scenario, EnvironmentKind = environment, Template = tuning };
+        lab = new LabSession { Name = "Lab", Scenario = scenario, EnvironmentKind = environment, Template = tuning, HatId = settings.Appearance?.Hat };
         lab.ExitRequested += () =>
         {
             lab.Session.Dispose();

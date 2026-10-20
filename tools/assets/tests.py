@@ -10,7 +10,7 @@ import shutil
 import tempfile
 import unittest
 from hat import library_text, scaffold
-from library import ROOT, validate
+from library import ROOT, validate, import_hint
 
 
 class AssetTests(unittest.TestCase):
@@ -39,6 +39,12 @@ class AssetTests(unittest.TestCase):
         path = self.root / f'authored/hats/{identity}/item.tres'
         self.assertIn(old, path.read_text())
         path.write_text(path.read_text().replace(old, new))
+
+    def test_native_import_hints_without_rejecting_ordinary_names(self):
+        for name in ['mesh-col', 'mesh_CONVCOLONLY_001', 'mesh-col.001', 'mesh$col', 'mesh-vehicle', 'mesh_colonly', 'mesh-occ', 'mesh-noimp']:
+            self.assertTrue(import_hint(name), name)
+        for name in ['mesh-color', 'mesh-colors_001', 'cold_mesh', 'ordinary_001']:
+            self.assertFalse(import_hint(name), name)
 
     def test_inventory_and_empty_catalog(self):
         self.clean()
@@ -80,6 +86,20 @@ class AssetTests(unittest.TestCase):
         self.assertEqual([x['id'] for x in self.result()['items']], ['a_probe', 'z_probe'])
         self.clean()
 
+    def test_registration_orders_ids_across_provenance(self):
+        self.item('a_upstream')
+        target = self.root / 'third_party/vendor/a_upstream'
+        target.parent.mkdir(parents=True)
+        shutil.move(str(self.root / 'authored/hats/a_upstream'), target)
+        item = target / 'item.tres'
+        item.write_text(item.read_text().replace('authored/hats/a_upstream', 'third_party/vendor/a_upstream').replace(
+            'Scene = ExtResource("2")', 'Author = "Upstream"\nLicense = "CC0-1.0"\nSource = "Upstream source"\nScene = ExtResource("2")'))
+        (self.root / 'library.tres').write_text(library_text(['third_party/vendor/a_upstream/item.tres']))
+        self.item('z_owner')
+        self.clean()
+        text = (self.root / 'library.tres').read_text()
+        self.assertLess(text.index('third_party/vendor/a_upstream/item.tres'), text.index('authored/hats/z_owner/item.tres'))
+
     def test_scaffold_rejects_invalid_ids_without_mutation(self):
         for identity in ['', 'UPPER', '../escape', 'a.b', 'a b', '帽子', 'x' * 65]:
             with self.subTest(identity=identity), self.assertRaises(ValueError): self.item(identity)
@@ -87,12 +107,22 @@ class AssetTests(unittest.TestCase):
 
     def test_resource_uids_survive_scaffold(self):
         self.item()
-        for path in [self.root / 'library.tres', self.root / 'authored/hats/probe/item.tres']:
+        paths = [self.root / 'library.tres', self.root / 'authored/hats/probe/item.tres']
+        for index, path in enumerate(paths):
             text = path.read_text(); first, rest = text.split('\n', 1)
-            path.write_text(first[:-1] + ' uid="uid://bu1hvjdvlx37j"]\n' + rest)
+            path.write_text(first[:-1] + f' uid="uid://fixture{index}"]\n' + rest)
         scaffold(self.root, 'probe', 'New display name', None, self.inventory)
-        for path in [self.root / 'library.tres', self.root / 'authored/hats/probe/item.tres']:
-            self.assertIn('uid="uid://bu1hvjdvlx37j"', path.read_text().splitlines()[0])
+        for index, path in enumerate(paths):
+            self.assertIn(f'uid="uid://fixture{index}"', path.read_text().splitlines()[0])
+        self.clean()
+
+    def test_resource_uids_cannot_collide_with_imports(self):
+        self.item()
+        uid = re.search(r'^uid="([^"]+)"', self.model.with_name(self.model.name + '.import').read_text(), re.M)[1]
+        path = self.root / 'authored/hats/probe/item.tres'
+        first, rest = path.read_text().split('\n', 1)
+        path.write_text(first[:-1] + f' uid="{uid}"]\n' + rest)
+        self.error('duplicate UID')
 
     def test_cli_treats_display_name_as_data(self):
         name = 'Name "quoted"; $(not_a_command) `literal`'
@@ -103,7 +133,7 @@ class AssetTests(unittest.TestCase):
 
     def test_native_wrapper_rejects_engine_errors_and_missing_marker(self):
         stub = Path(self.scratch.name) / 'godot'
-        for body, expected in [('echo "[assets] PASS native"', 0), ('echo "ERROR: fixture"; echo "[assets] PASS native"', 1), ('echo no-marker', 1)]:
+        for body, expected in [('echo "[assets] PASS native"; echo "[assets] PASS scaffold hats=1"', 0), ('echo "[assets] PASS native"', 1), ('echo "ERROR: fixture"; echo "[assets] PASS native"', 1), ('echo no-marker', 1)]:
             stub.write_text('#!/bin/sh\n' + body + '\n'); stub.chmod(0o755)
             result = subprocess.run([sys.executable, '-B', str(ROOT / 'tools/assets/native.py')], env={**os.environ, 'GODOT': str(stub)}, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
             self.assertEqual(bool(result.returncode), bool(expected), result.stdout)

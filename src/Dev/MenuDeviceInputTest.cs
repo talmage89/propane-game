@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Godot;
+using Propane.Assets;
 using Propane.Core;
 using Propane.Lab;
 using Propane.Net;
@@ -29,8 +30,11 @@ public partial class MenuDeviceInputTest : Node
         {
             Main.SavedTuning.FixedSeed = 23;
             await Frames().ConfigureAwait(true);
+            await HatPickerInput().ConfigureAwait(true);
             await Activate("Single player").ConfigureAwait(true);
             var game = Main.GetNode<Game>("Game");
+            Check(game.Player.Appearance.Hat == "missing_hat" && game.Player.BodyColor == new Color(0.92f, 0.44f, 0.16f),
+                "single player uses the saved hat while preserving its existing float body color");
             game.PauseOnFocusLoss = false;
             EnableHeadlessInput(game.Player, game.GetNode<PauseMenu>("Pause"));
             await Wait(() => !game.InTransition && game.Player.IsOnFloor(), "single player ready").ConfigureAwait(true);
@@ -119,12 +123,65 @@ public partial class MenuDeviceInputTest : Node
         }
     }
 
+    private async Task HatPickerInput()
+    {
+        using var scene = AssetFixture.Scene();
+        var catalog = AssetFixture.Catalog(scene);
+        var initial = new AppearanceRecord(12, 34, 56, "unknown_model", "unknown_outfit", "unknown_hat", "unknown_gun", "unknown_bullet");
+        using var settings = new PlayerSettings("res://build/al-picker-settings.cfg");
+        settings.Appearance = initial;
+        var profile = new MenuProfile(settings);
+        var picker = new AppearancePicker { Initial = initial, CosmeticCatalog = catalog };
+        picker.Applied += value => profile.Save("Hat test", value);
+        AddChild(picker);
+        await Frames().ConfigureAwait(true);
+        await FocusButton("appearance_hat").ConfigureAwait(true);
+        TapKey(Key.Right);
+        await Frames().ConfigureAwait(true);
+        Check(picker.Selected.Hat == "dev_probe", "keyboard selects an in-memory hat through real device delivery");
+        Send(new InputEventJoypadButton { ButtonIndex = JoyButton.DpadLeft, Pressed = true });
+        Send(new InputEventJoypadButton { ButtonIndex = JoyButton.DpadLeft, Pressed = false });
+        await Frames().ConfigureAwait(true);
+        Check(picker.Selected.Hat == null, "gamepad selects None through real device delivery");
+        var button = picker.FindChildren("*", "Button", owned: false).OfType<Button>().Single(b => MenuNavigation.Key(b) == "appearance_hat");
+        await ClickAt(button.GetGlobalRect().GetCenter()).ConfigureAwait(true);
+        Check(picker.Selected.Hat == "dev_probe", "mouse selects a hat through real device delivery");
+        await Activate("preset_coral", focusKey: true).ConfigureAwait(true);
+        Check(picker.Selected.Hat == "dev_probe" && picker.Selected.ModelOrSkin == initial.ModelOrSkin && picker.Selected.Outfit == initial.Outfit &&
+            picker.Selected.GunSkin == initial.GunSkin && picker.Selected.BulletSkin == initial.BulletSkin, "color edits preserve every cosmetic slot");
+        capture.Screenshot("hat-picker-selected");
+        var expected = picker.Selected;
+        await Activate("Use appearance").ConfigureAwait(true);
+        using (var reloaded = new PlayerSettings("res://build/al-picker-settings.cfg"))
+            Check(reloaded.Appearance == expected, "applied hat persists through the production profile/settings path");
+        picker = new AppearancePicker { Initial = expected, CosmeticCatalog = catalog };
+        picker.Applied += value => profile.Save("Hat test", value);
+        AddChild(picker);
+        await Frames().ConfigureAwait(true);
+        await FocusButton("appearance_hat").ConfigureAwait(true);
+        TapKey(Key.Left);
+        await Frames().ConfigureAwait(true);
+        await Activate("Cancel").ConfigureAwait(true);
+        Check(!IsInstanceValid(picker) && settings.Appearance == expected, "cancel preserves accepted appearance and retires preview");
+        using var empty = new HatLibrary();
+        picker = new AppearancePicker { Initial = initial, CosmeticCatalog = new HatCatalog(empty) };
+        AppearanceRecord? applied = null;
+        picker.Applied += value => applied = value;
+        AddChild(picker);
+        await Frames().ConfigureAwait(true);
+        Check(!picker.FindChildren("*", "Button", owned: false).OfType<Button>().Any(b => MenuNavigation.Key(b) == "appearance_hat"), "empty catalog hides the hat control");
+        await Activate("Use color").ConfigureAwait(true);
+        Check(applied == initial, "empty catalog preserves unsupported saved IDs");
+    }
+
     private async Task LabInput()
     {
         await Activate("Lab").ConfigureAwait(true);
         await Activate("Range").ConfigureAwait(true);
         await Activate("Enter Lab").ConfigureAwait(true);
         var lab = Main.GetNode<LabSession>("Lab");
+        Check(lab.Player.Appearance.Hat == "missing_hat" && lab.Player.BodyColor == new Color(0.92f, 0.44f, 0.16f),
+            "Lab human uses the saved hat while preserving its existing float body color");
         lab.PauseOnFocusLoss = false;
         EnableHeadlessInput(lab.Player, lab.Overlay.MenuLayer);
         await Wait(() => lab.Player.IsOnFloor(), "Lab player ready").ConfigureAwait(true);

@@ -12,7 +12,7 @@ from library import ROOT, ID, contained, dependency, references, resource, valid
 def library_text(paths, author='Propane project', license='LicenseRef-Project-All-Rights-Reserved', uid=None):
     lines = ['[gd_resource type="Resource" script_class="HatLibrary" load_steps=' + str(2 + len(paths)) + ' format=3' + (f' uid="{uid}"' if uid else '') + ']', '',
              '[ext_resource type="Script" path="res://src/Assets/HatLibrary.cs" id="1"]']
-    for index, path in enumerate(sorted(paths), 2):
+    for index, path in enumerate(sorted(paths, key=lambda path: (Path(path).parent.name, path)), 2):
         lines.append(f'[ext_resource type="Resource" path={json.dumps("res://assets/" + path)} id="{index}"]')
     lines += ['', '[resource]', 'script = ExtResource("1")', 'DefaultAuthor = ' + json.dumps(author),
               'DefaultLicense = ' + json.dumps(license), 'Hats = [' + ', '.join(f'ExtResource("{i}")' for i in range(2, len(paths) + 2)) + ']', '']

@@ -29,6 +29,7 @@ public partial class MenuTest : Node
         DirAccess.RemoveAbsolute(ProjectSettings.GlobalizePath("user://menu_test_settings.cfg"));
         settingsBinding = PlayerSettings.Bind(settings);
         settings.Name = "Player";
+        if (DevArgs.Get("scenario") == "input") settings.Appearance = new AppearanceRecord(12, 34, 56, Hat: "missing_hat");
         DisplayServer.WindowSetVsyncMode(DisplayServer.VSyncMode.Disabled);
         main = new Main { Name = "Main" };
         AddChild(main);

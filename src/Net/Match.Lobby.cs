@@ -76,7 +76,7 @@ public partial class Match
         var prior = profiles[member.Id];
         profiles[member.Id] = member;
         if (prior.Kind != member.Kind) viewBinding.RefreshPlayer();
-        if (prior.Appearance.Color != member.Appearance.Color) character.BodyColor = member.Appearance.Color;
+        if (prior.Appearance != member.Appearance) character.Appearance = member.Appearance;
         if (prior.ControllerConfig.Difficulty != member.ControllerConfig.Difficulty && ownedBots.BotBrain(member.Id) is { } brain)
             brain.Skill = BotProfile.For(member.ControllerConfig.Difficulty, World.Tuning).Skill;
     }

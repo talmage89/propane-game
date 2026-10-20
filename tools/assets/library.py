@@ -92,6 +92,14 @@ def glb(path):
     return doc, data
 
 
+def import_hint(name):
+    # Match the pinned importer's node/mesh suffix conventions, including Blender duplicate numbering.
+    # https://github.com/godotengine/godot/blob/4.7.2-stable/editor/import/3d/resource_importer_scene.cpp
+    name = re.sub(r'[\x00-\x20_0-9]+$', '', name.lower().replace('.', '_'))
+    hints = ('noimp', 'col', 'convcol', 'colonly', 'convcolonly', 'rigid', 'navmesh', 'occ', 'occonly', 'vehicle', 'wheel')
+    return any('$' + hint in name or name.endswith(('-' + hint, '_' + hint)) for hint in hints)
+
+
 def hat_metrics(path):
     doc, data = glb(path)
     if doc.get('skins') or doc.get('animations') or doc.get('extensionsRequired') or doc.get('extensionsUsed'):
@@ -120,9 +128,10 @@ def hat_metrics(path):
         if accessor.get('byteOffset', 0) < 0 or end > view['byteLength']: raise ValueError(f'{path}: accessor out of bounds')
     triangles = surfaces = 0
     meshes = doc.get('meshes', [])
+    if any(import_hint(mesh.get('name', '')) for mesh in meshes): raise ValueError(f'{path}: unsupported mesh import hint')
     # Count instances, not only distinct mesh definitions.
     for node in doc.get('nodes', []):
-        if any(key in node for key in ('camera', 'skin', 'extensions')) or any(suffix in node.get('name', '').lower() for suffix in ('-col', '-convcol', '-rigid', '-navmesh')):
+        if any(key in node for key in ('camera', 'skin', 'extensions')) or import_hint(node.get('name', '')):
             raise ValueError(f'{path}: unsupported scene node')
         for values in [node.get('translation', []), node.get('rotation', []), node.get('scale', []), node.get('matrix', [])]:
             if any(not isinstance(x, (int, float)) or not math.isfinite(x) for x in values): raise ValueError(f'{path}: non-finite transform')
@@ -249,12 +258,14 @@ def validate(root, inventory, budgets):
         relative = path.relative_to(root).as_posix()
         if path.is_symlink(): errors.append(f'{relative}: symlinks are not allowed')
         if relative not in accounted: errors.append(f'{relative}: unregistered item or orphan asset')
-        if path.suffix == '.import':
-            match = re.search(r'^uid="([^"]+)"', path.read_text(), re.M)
+        if path.suffix in ('.import', '.tres'):
+            text = path.read_text()
+            match = re.search(r'^uid="([^"]+)"', text, re.M) if path.suffix == '.import' else re.search(r'\buid="([^"]+)"', text.partition('\n')[0])
             if match:
                 if match[1] in uids: errors.append(f'{relative}: duplicate UID with {uids[match[1]]}')
                 uids[match[1]] = relative
-            elif relative in accounted: errors.append(f'{relative}: missing import UID')
+            elif path.suffix == '.import' and relative in accounted: errors.append(f'{relative}: missing import UID')
+        if path.suffix == '.import':
             if not re.search(r'^source_file="' + re.escape('res://assets/' + relative.removesuffix('.import')) + r'"$', path.read_text(), re.M):
                 errors.append(f'{relative}: stale import source')
     return {'errors': errors, 'warnings': warnings, 'items': sorted(items, key=lambda item:item['id'])}

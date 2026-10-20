@@ -86,7 +86,8 @@ There are at most 16 slots, each at most 64 bytes. Tags 1–5 reserve model/skin
 they hold nonempty ASCII catalog ids using letters, digits, underscores and hyphens, never asset paths. Known
 slots round trip; unknown optional tags are skipped, leaving the base presentation. Duplicate/zero tags, invalid
 ids, unsupported record versions, excess lengths/counts and truncated/trailing records are rejected. Cosmetic
-catalog resolution, ownership checks and assets are future work; all optional cosmetics render the base today.
+hat resolution uses the explicit [asset library](assets.md); missing/unknown hats render bare heads. Other cosmetic
+slots remain stored and render the default character. No asset transfer or ownership entitlement system is added.
 Adding an optional slot within these bounds does not change a containing message's shape.
 
 Hello retains its existing protocol/version/build/name/palette-index/debug prefix and appends the record. A
@@ -589,7 +590,8 @@ Details settled while building, within the decisions above:
 | `godot res://scenes/dev/menu_test.tscn -- --capture-dir=DIR` | Clicks through every menu, a solo match, leaving it, and single player and back. |
 | `menu_test.tscn -- --scenario=gamepad --capture-dir=DIR` | Joypad-only navigation, name/address defaults, hosting, browsing and joining, color and match length, single-player pause/resume, a solo debug match, overlays and results. Asserts focus and outcomes; also runs headlessly in `make test`, using the checkout's hosting port. |
 | `menu_test.tscn -- --scenario=mouse --capture-dir=DIR` | Actual mouse/keyboard color entry, exact preview/accepted/saved bytes, lobby sample, solo debug character and real server results. Runs headlessly in `make test`. |
-| `net_bots.sh -n 3 -w 3 -l 10 -o OUT -s "--start-score=8" -c 12ABEF,12ABEF,F6F6F6 -- --scenario=appearance --capture-dir=DIR` | Duplicate custom colors plus near-white through lobby, MatchStart, local/remote bodies, accepted drop glow and real results; every client asserts consistency. Screenshots use bot-name prefixes. Repeat with `000000,0000FF,FFFFFF` for dark/saturated/white contrast. |
+| `net_bots.sh -n 3 -w 3 -l 10 -o OUT -s "--start-score=8" -c 12ABEF,12ABEF,F6F6F6 -- --scenario=appearance --capture-dir=DIR` | Duplicate custom colors plus near-white through lobby, MatchStart, local/remote bodies, accepted drop glow and real results; every client asserts consistency. Add `--hat=missing_hat` to prove full-record forwarding and local/remote fallback
+with the empty catalog. Screenshots use bot-name prefixes. Repeat with `000000,0000FF,FFFFFF` for dark/saturated/white contrast. |
 | `menu_test.tscn -- --scenario=devices --capture-dir=DIR` | Live device-aware controls and reload hints, keyboard pause, mouse Resume, disconnect repeat cancellation and focus recovery. Also runs headlessly in `make test`. |
 | `menu_test.tscn -- --scenario=update --update-check --fake-version=0.0.9 --capture-dir=DIR` | The offer of a newer release, and a newer server (`-- --server --port=24993 --fake-version=9.9.0`) asking for an update. |
 | `menu_test.tscn -- --scenario=rejection --server-address=127.0.0.1:24993 --capture-dir=DIR` | Run against `-- --server --port=24993 --fake-version=9.9.0`. Asserts the typed application rejection, exact version-mismatch message and download button in the real connection UI; exits nonzero on failure. |

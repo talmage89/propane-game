@@ -52,7 +52,7 @@ internal sealed class AppearanceScenario(INetScenarioHost host) : NetScenario(ho
         foreach (var profile in profiles)
         {
             var index = int.Parse(profile.Name.AsSpan(3), CultureInfo.InvariantCulture) - 1;
-            ScenarioAssert(index >= 0 && index < expected.Length && profile.Appearance == NetScenarioTools.ParseAppearance(expected[index]),
+            ScenarioAssert(index >= 0 && index < expected.Length && profile.Appearance == (NetScenarioTools.ParseAppearance(expected[index]) with { Hat = DevArgs.Get("hat") }),
                 $"appearance: accepted profile differs for {profile.Name}");
         }
     }
@@ -103,11 +103,11 @@ internal sealed class AppearanceScenario(INetScenarioHost host) : NetScenario(ho
         }
         appearanceTime += dt;
         var own = match.Setup.Players.Single(p => p.Player.OwnerPeerId == net.MyId);
-        ScenarioAssert(match.Player.BodyColor == own.Player.Appearance.Color, "appearance: local body differs");
+        ScenarioAssert(match.Player.Appearance == own.Player.Appearance, "appearance: local record differs");
         foreach (var remote in match.RemoteBodies)
         {
             var profile = match.Setup.Players.Single(p => p.Player.Id == remote.ActorId).Player;
-            ScenarioAssert(remote.BodyColor == profile.Appearance.Color, $"appearance: remote body differs for {profile.Name}");
+            ScenarioAssert(remote.Appearance == profile.Appearance, $"appearance: remote record differs for {profile.Name}");
         }
         if (!appearanceDropped && appearanceTime >= 2)
         {

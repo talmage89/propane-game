@@ -37,6 +37,19 @@ public partial class AssetValidation : Node
                     model.FindChildren("*", "AnimationPlayer", owned: false).OfType<AnimationPlayer>().Single());
             }
             finally { model.Free(); }
+            if (DevArgs.Get("fixture-library") is { } fixturePath)
+            {
+                var library = ResourceLoader.Load<HatLibrary>(fixturePath) ?? throw new InvalidOperationException("Missing scaffold library");
+                if (library.Hats.Count != 1 || library.Hats[0].Id != "dev_probe" || library.Hats[0].DisplayName != "Temporary existing prop" ||
+                    library.DefaultAuthor != "Propane project" || library.Hats[0].Author != "" || library.Hats[0].Scene == null)
+                {
+                    throw new InvalidOperationException("Scaffold resource properties differ after native loading");
+                }
+                var root = library.Hats[0].Scene!.Instantiate();
+                try { HatCatalog.ValidateScene(root); }
+                finally { root.Free(); }
+                GD.Print("[assets] PASS scaffold hats=1");
+            }
             GD.Print($"[assets] PASS native resources={count} hats={HatCatalog.Shipped.Items.Length}");
             ShutdownGuard.Quit(GetTree());
         }

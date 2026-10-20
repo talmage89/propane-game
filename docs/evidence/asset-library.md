@@ -50,3 +50,57 @@ recovered heads. These are in-memory primitives in src/Dev, not assets or item m
 `make assets-preview CAPTURE_DIR=.../build/al-preview-empty` passes with zero hats, None from five angles and ten
 motion/recovery samples, plus preview.json. No owner art is supplied or generated. All original source payloads and
 import identities remain unchanged.
+
+
+## Picker and composition
+
+Before this step `git merge dev` reported already up to date at `4a468ce`, followed by `make setup`. No settings,
+main-menu or pause-menu implementation was changed. Main only supplies the saved hat when composing offline worlds;
+Match assembly/lobby refresh supplies the full accepted record. New mutable state is actor-owned appearance/attachment
+state and picker state; replacement and tree exit retire instances/tint copies before the skeleton. The immutable
+catalog and default-rig validation cache live for the process. No gameplay state moved; no simulation timer, RNG
+consumer or authority path was added. Old asset path dependencies were retired in the pure migration.
+
+`make assets-check` now includes 26 Python cases and a native syntax/property load of actual scaffold output in a
+temporary copied tree. The fixture relocates item addresses and reuses the already-imported original cooler prop;
+it is not evidence of a populated exported catalog. It is deleted even on failure. Source tests include ID ordering
+across authored/third-party items, mandatory third-party provenance, warnings with measured numbers, native import
+hints (without rejecting ordinary names like mesh-color), resource/import UID collisions, rollback, orphan/escape/duplicate failures and literal
+shell metacharacters passed through the real Make target. No scaffold was run against the shipped asset tree.
+
+The headless `menu_test --scenario=input --classic-lobby --port=24682` and the rendered version (`--fixed-fps 60
+--resolution 1280x720 --capture-dir=$PWD/build/al-menu-input`) pass 180 assertions. Tests inject actual keyboard,
+mouse and gamepad events; check selection, None, apply/persistence/cancel, color preserving all other slots, empty
+catalog hiding the control, unsupported-ID preservation, and offline human hat/float-color composition. Existing
+look/jump/reload/melee, viewport, menu and focus checks still run. The earlier fixture used untransformed mouse
+coordinates and assumed an Escape close path that the picker never had; those assertions failed. The corrected
+fixture uses the existing window-coordinate click helper and real input to Cancel. No production input workaround
+was added. Reviewed hat-picker-selected.png shows the tinted in-memory box in the live preview.
+
+Network commands (each with a fresh absolute `-o` under build/, `TMPDIR=$PWD/build/al-tmp`):
+
+```sh
+tools/dev/net_bots.sh -n 2 -l 12 -p 24782 -t clean -s '--start-score=8' -c 12ABEF,F6F6F6 \
+  -o "$PWD/build/al-net-appearance-score" -- --scenario=appearance --hat=missing_hat
+tools/dev/net_bots.sh -n 2 -w 1 -l 12 -p 24782 -t clean -s '--start-score=8' -c 12ABEF,F6F6F6 \
+  -o "$PWD/build/al-net-appearance-rendered" -- --scenario=appearance --hat=missing_hat \
+  --capture-dir="$PWD/build/al-net-appearance-rendered/shots"
+tools/dev/net_bots.sh -n 4 -l 90 -p 24782 -o "$PWD/build/al-net-fault4" -- --hat=missing_hat \
+  --melee-start --net-lag=120 --net-jitter=30 --net-loss=3 --net-seed=2
+```
+
+Both clean runs pass record/body/drop/results assertions and score audits (16 initial - 2 spills = 14 banked).
+Headless: 441 grids / 13,148 pairs; rendered: 440 grids / 13,118 pairs, both zero disagreements. Reviewed
+Bot1_appearance_tags_glow.png shows cyan/white bare-head fallback bodies and corresponding dropped-tank glow.
+An earlier run omitted the fixture's required starting bank and failed its missing-drop assertion; that log is
+retained as al-net-appearance. The correct fixture precondition was restored, without changing gameplay rules.
+
+The 90-second faulted soak passes: 1,999 grids / 178,222 body pairs, zero disagreements, 0.005/0.139 m final
+rest/moving peaks. Transient fault episodes peak at 5.837 m and last at most 0.50 s; no zero-correction claim.
+Audit: 36 map + 49 drops - 62 spills = 23 banked; all four clients agree. All five logs contain zero engine,
+script or unhandled-exception diagnostics. This is functional/network evidence, not a performance measurement.
+
+The picker/composition checkpoint independently passes `make lint` (Debug and ExportRelease, zero warnings/errors;
+105 process statics, 31 launch reads, no architecture failures) and the full `make test` (753 unit tests / 81 suites,
+behavior scenes, generator and separate-process hashes). The final validator refinements additionally pass
+`make assets-check` with 26 cases. World hashes remain exactly the four baseline hashes; all 60 segment plans agree.

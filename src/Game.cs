@@ -18,6 +18,7 @@ namespace Propane;
 /// </summary>
 public partial class Game : Node3D
 {
+    public string? HatId { get; init; }
     public SessionContext Session { get; private set; } = null!;
     public WorldContext World => Session.World;
     public Tuning Template { get; init; } = Tuning.SavedTemplate;

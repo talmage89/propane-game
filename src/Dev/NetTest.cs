@@ -169,6 +169,7 @@ public partial class NetTest : Node, INetScenarioHost
         var name = DevArgs.Get("name") ?? (role == "host" ? "HostBot" : $"Bot{OS.GetProcessId() % 1000}");
         var color = (int)DevArgs.GetFloat("color", role == "host" ? 0 : 1);
         var appearance = DevArgs.Get("appearance") is { } hex ? NetScenarioTools.ParseAppearance(hex) : AppearanceRecord.FromPalette(color);
+        appearance = appearance with { Hat = DevArgs.Get("hat") };
         // Give a hosted server a moment to open its port.
         GetTree().CreateTimer(DevArgs.Get("host-server") != null ? 0.3 : 0.05).Timeout += () => net.Connect(address, port, name, appearance);
     }

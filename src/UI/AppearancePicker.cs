@@ -1,14 +1,18 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using Godot;
+using Propane.Assets;
 using Propane.Core;
 using Propane.Net;
 using Propane.Player;
 
 namespace Propane.UI;
 
-/// <summary>A local HSV editor; only the accepted sRGB bytes leave the picker.</summary>
+/// <summary>Local color and catalog editor; only the accepted full appearance record leaves the picker.</summary>
 public partial class AppearancePicker : CanvasLayer
 {
+    public HatCatalog CosmeticCatalog { get; init; } = HatCatalog.Shipped;
     public required AppearanceRecord Initial { get; init; }
     /// <summary>Whose color this is: the player's own, or a bot's.</summary>
     public string Title { get; init; } = "YOUR COLOR";
@@ -26,6 +30,7 @@ public partial class AppearancePicker : CanvasLayer
     private readonly Button[] presets = new Button[12];
     private ColorRect sample = null!;
     private bool refreshing;
+    private Button? hatChoice;
 
     public override void _Ready()
     {
@@ -43,7 +48,7 @@ public partial class AppearancePicker : CanvasLayer
         var layout = new VBoxContainer { CustomMinimumSize = new Vector2(540, 0) };
         layout.AddThemeConstantOverride("separation", 10);
         panel.AddChild(layout);
-        layout.AddChild(UiStyle.Title(Title, 34));
+        layout.AddChild(UiStyle.Title(CosmeticCatalog.Items.IsEmpty ? Title : Title.Replace("COLOR", "APPEARANCE", StringComparison.Ordinal), 34));
         layout.AddChild(UiStyle.Text("Pick a preset or adjust · Hold left / right for larger moves", 16, UiStyle.SoftInk, HorizontalAlignment.Center));
         var viewportContainer = new SubViewportContainer
         {
@@ -68,12 +73,28 @@ public partial class AppearancePicker : CanvasLayer
             },
         });
         previewWorld.Root.AddChild(new DirectionalLight3D { RotationDegrees = new Vector3(-35, -25, 0), LightEnergy = previewWorld.Tuning.AppearancePreviewLight });
-        preview = new PlayerCharacter { World = previewWorld, Name = "Preview", IsRemote = true, BodyColor = Selected.Color };
+        preview = new PlayerCharacter { World = previewWorld, Name = "Preview", IsRemote = true, CosmeticCatalog = CosmeticCatalog, Appearance = Selected };
         previewWorld.Root.AddChild(preview);
         preview.SetPhysicsProcess(false);
         var camera = new Camera3D { Position = new Vector3(2, 1.5f, -4), Projection = Camera3D.ProjectionType.Orthogonal, Size = 2.4f };
         previewWorld.AddView(viewport, camera, followsPause: true);
         camera.LookAt(new Vector3(0, 1, 0));
+        if (!CosmeticCatalog.Items.IsEmpty)
+        {
+            hatChoice = UiStyle.Button("");
+            hatChoice.SetMeta("focus_key", "appearance_hat");
+            hatChoice.TooltipText = "Left / right to choose a hat; click to choose the next";
+            hatChoice.Pressed += () => AdjustHat(1);
+            hatChoice.GuiInput += input =>
+            {
+                if (input is InputEventKey && (input.IsActionPressed("ui_left") || input.IsActionPressed("ui_right")))
+                {
+                    AdjustHat(input.IsActionPressed("ui_left") ? -1 : 1);
+                    hatChoice.AcceptEvent();
+                }
+            };
+            layout.AddChild(hatChoice);
+        }
         var current = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.Center };
         current.AddThemeConstantOverride("separation", 12);
         var framedSample = UiStyle.ColorSample(Selected.Color, 32);
@@ -132,14 +153,14 @@ public partial class AppearancePicker : CanvasLayer
         layout.AddChild(hex);
         var buttons = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.Center };
         buttons.AddThemeConstantOverride("separation", 12);
-        var apply = UiStyle.Button("Use color");
+        var apply = UiStyle.Button(CosmeticCatalog.Items.IsEmpty ? "Use color" : "Use appearance");
         apply.Pressed += () => { if (AcceptHex()) { Applied?.Invoke(Selected); Close(); } };
         buttons.AddChild(apply);
         var cancel = UiStyle.Button("Cancel");
         cancel.Pressed += Close;
         buttons.AddChild(cancel);
         layout.AddChild(buttons);
-        AddChild(new MenuNavigation { Screen = this, Root = layout, Back = Close });
+        AddChild(new MenuNavigation { Screen = this, Root = layout, Back = Close, Adjusters = new Dictionary<string, Action<int>> { ["appearance_hat"] = AdjustHat } });
         SetColor(Initial.Color);
     }
 
@@ -182,7 +203,12 @@ public partial class AppearancePicker : CanvasLayer
 
     private void Refresh()
     {
-        preview.BodyColor = Selected.Color;
+        preview.Appearance = Selected;
+        if (hatChoice != null)
+        {
+            var selected = CosmeticCatalog.Resolve(Selected.Hat);
+            hatChoice.Text = "Hat · " + (selected?.DisplayName ?? (Selected.Hat == null ? "None" : "Unavailable (showing None)"));
+        }
         sample.Color = Selected.Color;
         channels[0].ColorAt = t => Color.FromHsv(t, 1, 1);
         channels[1].ColorAt = t => Color.FromHsv(channels[0].Value, t, channels[2].Value);
@@ -215,6 +241,15 @@ public partial class AppearancePicker : CanvasLayer
         }
         hex.Text = Selected.Color.ToHtml(false).ToUpperInvariant();
         colorText.Text = $"{Title} · #{hex.Text}";
+    }
+
+    private void AdjustHat(int direction)
+    {
+        var choices = new string?[] { null }.Concat(CosmeticCatalog.Items.Select(item => (string?)item.Id)).ToArray();
+        var current = Array.IndexOf(choices, Selected.Hat);
+        if (current < 0) current = 0;
+        Selected = Selected with { Hat = choices[(current + direction + choices.Length) % choices.Length] };
+        Refresh();
     }
 
     public void Close()

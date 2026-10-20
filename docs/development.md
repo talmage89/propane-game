@@ -551,14 +551,20 @@ Validate the workflow and run `make test-infra` after changing it.
 
 ## Assets
 
+The [owner guide](../assets/README.md) maps the library and gives the Blender/export and `make hat` workflow;
+[the contract](assets.md) defines IDs, attachment, future rigs and packaged discovery. `make assets-preview` renders
+None/all hats, or `ASSET=path/to/file.glb`, into `CAPTURE_DIR` (default `build/assets-preview`).
+
 `make assets-check` validates the checked-in file/provenance allowlist and runs the scaffold/validator negative
-fixtures. It also runs through the core test partition and therefore `make check` and CI. Source validation uses
+fixtures, loads native resources, and checks scaffold resource syntax in a deleted temporary asset-tree copy.
+It also runs through the core test partition and therefore `make check` and CI. Source validation uses
 Python standard library only; recommended budgets in `tools/assets/budgets.json` warn without rejecting art.
 The allowlist in `tools/assets/inventory.json` records existing source/provenance gaps rather than inventing them.
 
 
 The tank, its debris and the fireball flipbook come from the propane-tank Blender project, and the rifle from the
-rifle Blender project; the other models are CC0 kits (see [CREDITS.md](../CREDITS.md)). The scripts in `tools/blender`
+rifle Blender project. Kenney and Quaternius art is CC0; the directional retargets carry 100STYLE CC BY 4.0
+(see [CREDITS.md](../CREDITS.md)). The scripts in `tools/blender`
 rebuild them with Blender 5.1 (`import_rifle.py` needs only Python):
 
 | Script | Builds |

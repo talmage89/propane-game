@@ -20,10 +20,16 @@ project or asset-source store outside `res://`. A checkout builds and plays with
 2. In Blender 5.1, use Metric units, **1 unit = 1 meter**. Reference the existing mannequin at unit scale; do not
    export it. Align the hat to the head socket: origin at the Head bone's rest origin (not the crown), with axes
    aligned to the mannequin's model axes in rest. Blender Z is up and -Y is forward. The preview prints the socket
-   frame; the imported reference is approximately (0, 1.569, 0.005) meters at that origin.
+   frame; the imported reference is approximately (0, 1.569, 0.005) meters at that origin. After fitting, move the
+   whole hat so that socket origin is at world (0, 0, 0); set object origins there. Export only the hat, with
+   zero object location/rotation and unit scale. Keeping the reference head height in the exported transform
+   would apply that offset twice.
 3. Apply rotation/scale and mesh modifiers. Select only the hat, then export **glTF 2.0 → GLB**, **Selected Objects**,
    **+Y Up**, **Normals**, **Tangents**, **Materials → Export**, with **Animations**, **Cameras** and **Lights** off.
-   Do not export an armature, skin, collision or special glTF extensions. Use standard metallic/roughness PBR,
+   Turn off Draco/mesh compression and material extensions. Use PNG source images (Automatic image export);
+   JPEG/WebP images are outside the initial contract.
+   Do not export an armature, skin, collision or special glTF extensions. Avoid Godot import hints such as `-col`, `_rigid`,
+   `$col`, `-vehicle` or `-noimp` on objects/meshes. Use standard metallic/roughness PBR,
    opaque or alpha-cutout. Prefer embedded PNG textures; external PNGs must remain inside the item's folder.
    Base color is sRGB; normal/ORM are data. Name a material `Tint_Player` only if it should multiply by player color.
    Write `model.glb` in the item folder.
