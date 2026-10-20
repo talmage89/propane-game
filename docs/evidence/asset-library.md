@@ -179,3 +179,100 @@ and the gate's compiled/source/artifact failure-propagation tests. No deep sweep
 The final review archives are rebuilt from the committed runtime code and rechecked in fresh al-artifacts-final
 and al-artifacts-final-rendered directories; extracted duplicate payloads and the prior cache are then removed,
 retaining archive digests, logs and screenshots.
+
+
+## Review fixes after personal settings merge
+
+Starting point `2d0e4d1`; `make setup` passed before edits. The author now imports the reference mannequin into
+Blender, fits the hat in place and exports only the hat without repositioning it. Its frozen model-space head frame
+has identity axes and origin `(0, 1.568700552, 0.0050996924)` meters. HeadAttachment applies the inverse once between
+the actor's target socket and the untouched imported root transform. Neither scaffold nor import rebakes art.
+This keeps one registered/raw-file preview path and lets a future target socket differ without changing the
+original authoring reference. No new art, item manifest or shipped catalog entry was created.
+
+The Dev box is now authored at model height `(0, 1.788700552, 0.0050996924)`, independently of production's reference
+property. The new oracle fails against the original attachment (`al-review-authoring-red.log`, exit 1); its root
+position contains the missing reference offset. The final rendered `asset_tests` passes 660 frames: 471 active,
+123 ragdoll, 66 get-up. Root position/basis and visible mesh position retain the 0.0001 tolerance. A separate native
+Skeleton3D has a Head at `(0.1, 2.1, -0.2)` with different rest axes and binds the same model-space primitive through
+HeadAttachment. Its mesh position/basis must match its own final socket every frame. Temporarily replacing the fixed
+reference with each actor's rest origin fails this assertion (`al-review-alternate-red.log`, exit 1); restoring the
+fixed frame passes. The earlier algebraic projection was replaced because it did not exercise a second native
+binding. This proves the attachment target contract, not a complete future character rig/IK/ragdoll. Reviewed
+`al-review-attachment-native/attachment_030.png`, `_320.png` and `_600.png` show two
+independently tinted primitives fitted standing, thrown and recovered. Collision, RNG, replacement, detail and
+retirement assertions still pass.
+
+Runtime HatCatalog now validates each item independently, reports its ID/reason once, and keeps only valid entries.
+The shipped snapshot is still cached, so actors do not repeat diagnostics. The strict native validation factory
+throws instead; assets-check uses it. Missing library/defaults remain hard setup errors. An in-memory alpha-blend
+fixture asserts one exact diagnostic, mixed-catalog survival, bare actor fallback without erasing the ID, subsequent
+valid attachment and strict rejection. The default diagnostic run (`asset_tests --scenario=invalid-log`) exits zero
+and a Python assertion finds exactly one expected ERROR line naming `dev_probe` and the material rule. That is a
+deliberate negative-test diagnostic, not an unexpected engine error.
+
+`python3 -B tools/assets/tests.py` passes 28 cases. The new temporary alpha-blend mutation of existing prop data
+fails both source validation and the real `make hat ASSET_ROOT=...` command, preserving library bytes and rolling
+back the attempted item. No fixture remains. Menu device tests exercise both an actually empty catalog and one
+recovered from an invalid-only item, hiding the choice and preserving unsupported saved IDs.
+
+
+Review verification commands (captures are rendered, invisible; all subsequent commands set
+`TMPDIR=$PWD/build/al-tmp`):
+
+```sh
+make build
+python3 -B tools/assets/tests.py
+make test-equivalence
+godot-mono --fixed-fps 60 --resolution 1280x720 --path . res://scenes/dev/asset_tests.tscn -- --capture-dir="$PWD/build/al-review-attachment-native"
+godot-mono --headless --path . res://scenes/dev/asset_tests.tscn -- --scenario=invalid-log
+godot-mono --fixed-fps 60 --resolution 1280x720 --path . res://scenes/dev/menu_test.tscn -- --scenario=input --classic-lobby --port=24682 --capture-dir="$PWD/build/al-review-menu-input"
+godot-mono --fixed-fps 60 --resolution 1280x720 --path . res://scenes/dev/menu_test.tscn -- --scenario=settings --classic-lobby --port=24682 --capture-dir="$PWD/build/al-review-menu-settings-classic"
+make assets-preview CAPTURE_DIR="$PWD/build/al-review-preview"
+make assets-check
+tools/dev/net_bots.sh -n 4 -l 90 -p 24782 -o "$PWD/build/al-review-net4" -- --hat=missing_hat --melee-start --net-lag=120 --net-jitter=30 --net-loss=3 --net-seed=2
+make check
+```
+
+`make test-equivalence` passes its six self-tests, frozen release wire/schema/world/publication checks and all five
+Lab traces (bank, king, spill-chain, shortfuse, dissolve). SHA-256 comparisons before/after confirm all 12 reference
+files remain byte-identical; no refresh command was run. Evidence is in `al-review-equivalence.log` and
+`rfp0-equivalence-12/`.
+
+Rendered input passes 183 assertions, zero failures; rendered settings passes 119 checks, including the native
+window/display checks omitted headlessly. The first rendered settings command accidentally omitted the documented
+`--classic-lobby` flag and timed out after 96 checks waiting for a classic lobby screen while the game entered the
+lobby world. That failed log/captures remain in `al-review-menu-settings`; the documented command above passes.
+No production or fixture workaround was made. Reviewed input `hat-picker-selected.png` shows the primitive fitted
+in the appearance preview, and `single_02_after_turn.png` shows the bare-head offline fallback after real mouse
+look. Reviewed settings `single_camera.png` / classic `match_camera.png` show readable controls over the paused
+single-player/match context.
+
+The empty catalog preview passes with exactly 15 None-only PNGs/report entries (five angles plus ten motion
+samples). Reviewed `al-review-preview/none_view_0.png` and `none_motion_9.0.png` show the base mannequin standing
+and thrown, without a hat. `make assets-check` passes 28 source/tool cases, 129 native resources, zero hats and the
+temporary scaffold resource-load proof.
+
+The 90-second four-bot lag/jitter/loss soak passes all checks: 1,999 tank grids, 180,801 body pairs, no unobserved
+pair grids or disagreements; final rest/moving peaks 0.010/0.205 m. Transient rest/moving peaks are 0.154/8.182 m,
+971 above-tolerance episodes, longest 0.95 s; this is not a zero-correction or performance claim. Score audit:
+35 map + 43 drops - 57 spills = 21 banked; all four clients agree. An explicit scan of all five logs finds zero
+engine/script/unhandled-exception diagnostics.
+
+
+The final `TMPDIR=$PWD/build/al-tmp make check` after the stronger native target test passes
+(`al-review-check.log`): warning-free Debug/ExportRelease builds; 106 approved mutable statics / 32 launch reads,
+zero architecture failures; 28 asset cases / 129 native resources / empty shipped library; 758 tests / 82 suites;
+660 headless native attachment frames (476 active / 118 ragdoll / 66 get-up); 183 real-device input assertions and
+112 headless settings checks; all behavior/generator scenes, four unchanged world hashes and 60 agreeing segment
+plans; all gate self-tests, including 55 compiled and 17 source architecture negatives. The earlier complete gate
+also passed (`al-review-check-initial.log`), before the extra native-target assertion replaced the projection.
+A final Git comparison against `2d0e4d1` confirms every asset payload/import file is unchanged (only the owner README
+changed under assets/); frozen-reference SHA-256 hashes remain identical. No import churn or new UID files exist.
+
+Production retains the same cached catalog owner and actor-owned attachment retirement; no state moved, no existing
+callback/clock order changed, and no simulation dependency was removed or added. No shared message, construction,
+tank, tuner or protocol change; Protocol.Version remains 3. The accepted owner defaults remain unchanged.
+This review did not rebuild release archives or execute Windows/macOS natively; prior empty-catalog artifact
+verification remains above. A real owner's first hat/populated export and the first character's V1 binding review
+remain future acceptance work. No blocking issue remains, and no performance claim is made.
