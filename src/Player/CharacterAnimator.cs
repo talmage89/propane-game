@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using Godot;
+using Propane.Assets;
 using Propane.Core;
 
 namespace Propane.Player;
@@ -16,7 +17,7 @@ namespace Propane.Player;
 public sealed class CharacterAnimator
 {
     /// <summary>Directional cycles retargeted from 100STYLE by tools/animation/retarget_100style.py.</summary>
-    public const string DirectionalLibrary = "res://assets/third_party/100style/neutral/directional.tres";
+    public const string DirectionalLibrary = DefaultCharacter.DirectionalPath;
 
     // Where each packaged cycle's left foot touches down, as a fraction of the clip (measured from the clips).
     // The directional cycles start there by construction.

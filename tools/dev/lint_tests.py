@@ -69,7 +69,7 @@ fi
               "gather_range.tscn -- --scenario=appearance",
               "game_test.tscn -- --scenario=gather --tune.FixedSeed=23",
               "game_test.tscn -- --scenario=clear --quit=32 --tune.FixedSeed=23",
-              "world_services_tests.tscn", "actor_detail_tests.tscn", "ragdoll_pose_tests.tscn", "body_correction_tests.tscn", "server_tuning_tests.tscn -- --server --tune.MaxPlayers=6",
+              "world_services_tests.tscn", "actor_detail_tests.tscn", "asset_tests.tscn", "ragdoll_pose_tests.tscn", "body_correction_tests.tscn", "server_tuning_tests.tscn -- --server --tune.MaxPlayers=6",
               "transport_physics_tests.tscn -- --server",
               "server_seed_tests.tscn -- --server --match-seed=23",
               "session_actors_tests.tscn", "upright_pile_tests.tscn", "melee_range.tscn", "rifle_reach_tests.tscn",
@@ -92,7 +92,7 @@ fi
               "player_range.tscn -- --scenario=recoil --stance=hip --burst-start=0 --assert-grip --assert-motion",
               "player_range.tscn -- --scenario=bot-recoil --magazines=2",
               "generator_tests.tscn -- --seeds=20 --large-seeds=3 --formation-seeds=2"]
-    asset_checkers = ["tools/assets/check.py", "tools/assets/tests.py"]
+    asset_checkers = ["tools/assets/check.py", "tools/assets/tests.py", "tools/assets/native.py"]
     probes = asset_checkers + checkers + scenes + ["--write-world-plans=", "--hash-world-plans=", "--hash-segments=", "world-diff", "world-missing", "world-partial",
                                   "world-second"]
     architecture = ["Architecture.csproj", "Architecture.dll", "source_check.py"]

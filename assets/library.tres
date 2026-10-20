@@ -1,0 +1,9 @@
+[gd_resource type="Resource" script_class="HatLibrary" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://src/Assets/HatLibrary.cs" id="1"]
+
+[resource]
+script = ExtResource("1")
+DefaultAuthor = "Propane project"
+DefaultLicense = "LicenseRef-Project-All-Rights-Reserved"
+Hats = []

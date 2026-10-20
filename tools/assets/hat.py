@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
 """Register an owner's existing GLB. Idempotent; rollback files if validation fails. Never creates art."""
 import argparse
+import os
 import json
+import re
 from pathlib import Path
 import shutil
 from library import ROOT, ID, contained, dependency, references, resource, validate
 
 
-def library_text(paths, author='Propane project', license='LicenseRef-Project-All-Rights-Reserved'):
-    lines = ['[gd_resource type="Resource" script_class="HatLibrary" load_steps=' + str(2 + len(paths)) + ' format=3]', '',
+def library_text(paths, author='Propane project', license='LicenseRef-Project-All-Rights-Reserved', uid=None):
+    lines = ['[gd_resource type="Resource" script_class="HatLibrary" load_steps=' + str(2 + len(paths)) + ' format=3' + (f' uid="{uid}"' if uid else '') + ']', '',
              '[ext_resource type="Script" path="res://src/Assets/HatLibrary.cs" id="1"]']
     for index, path in enumerate(sorted(paths), 2):
         lines.append(f'[ext_resource type="Resource" path={json.dumps("res://assets/" + path)} id="{index}"]')
@@ -28,8 +30,11 @@ def scaffold(root, identity, name, model, inventory, author=None, license=None, 
     if destination.exists() and model != destination.resolve(): raise ValueError('model.glb exists; refusing to replace art')
     library = root / 'library.tres'
     paths = set()
+    library_uid = None
     default_author, default_license = 'Propane project', 'LicenseRef-Project-All-Rights-Reserved'
     if library.exists():
+        match = re.search(r'uid="(uid://[a-z0-9]+)"', library.read_text().splitlines()[0])
+        library_uid = match[1] if match else None
         from library import string
         ext, props = resource(library)
         paths = {dependency(root, library, ext[key]).relative_to(root).as_posix() for key in references(props.get('Hats', '[]'))}
@@ -46,6 +51,8 @@ def scaffold(root, identity, name, model, inventory, author=None, license=None, 
     item = folder / 'item.tres'
     # Existing overrides survive repeated registration unless explicitly replaced. Do not silently erase metadata.
     if item.exists():
+        match = re.search(r'uid="(uid://[a-z0-9]+)"', item.read_text().splitlines()[0])
+        if match: lines[0] = lines[0][:-1] + f' uid="{match[1]}"]'
         from library import string
         _, previous = resource(item)
         for key, value in [('Author', author), ('License', license), ('Source', source)]:
@@ -56,7 +63,7 @@ def scaffold(root, identity, name, model, inventory, author=None, license=None, 
     try:
         if model != destination.resolve(): shutil.copyfile(model, destination)
         item.write_text('\n'.join(lines))
-        library.write_text(library_text(paths, default_author, default_license))
+        library.write_text(library_text(paths, default_author, default_license, library_uid))
         result = validate(root, inventory, json.loads((ROOT / 'tools/assets/budgets.json').read_text()))
         if result['errors']: raise ValueError('\n'.join(result['errors']))
         return result
@@ -70,13 +77,13 @@ def scaffold(root, identity, name, model, inventory, author=None, license=None, 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--id', required=True)
-    parser.add_argument('--name', required=True)
-    parser.add_argument('--model', type=Path)
-    parser.add_argument('--author')
-    parser.add_argument('--license')
-    parser.add_argument('--source')
-    parser.add_argument('--root', type=Path, default=ROOT / 'assets')
+    parser.add_argument('--id', default=os.environ.get('AL_HAT_ID', ''))
+    parser.add_argument('--name', default=os.environ.get('AL_HAT_NAME', ''))
+    parser.add_argument('--model', type=Path, default=Path(os.environ['AL_HAT_MODEL']) if os.environ.get('AL_HAT_MODEL') else None)
+    parser.add_argument('--author', default=os.environ.get('AL_HAT_AUTHOR') or None)
+    parser.add_argument('--license', default=os.environ.get('AL_HAT_LICENSE') or None)
+    parser.add_argument('--source', default=os.environ.get('AL_HAT_SOURCE') or None)
+    parser.add_argument('--root', type=Path, default=Path(os.environ.get('AL_HAT_ROOT') or ROOT / 'assets'))
     parser.add_argument('--inventory', type=Path, default=ROOT / 'tools/assets/inventory.json')
     args = parser.parse_args()
     try:

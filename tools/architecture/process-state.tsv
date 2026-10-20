@@ -68,6 +68,8 @@ static-collection	Propane.World.Suburb	PicketTints	1	Propane.World.Suburb	Main-t
 static-collection	Propane.World.Suburb	PrivacyTints	1	Propane.World.Suburb	Main-thread process geometry caches or ordered tint tables; resources shared until engine shutdown, tables immutable by convention.
 static-collection	Propane.World.Suburb	TrimeshCache	1	Propane.World.Suburb	Main-thread process geometry caches or ordered tint tables; resources shared until engine shutdown, tables immutable by convention.
 static-collection	Propane.World.WorldMaterials	Converted	1	Propane.World.WorldMaterials	Main-thread process converted-material/shader cache; borrowed by world instances and retired by engine shutdown.
+static-field	Propane.Assets.DefaultCharacter	validated	1	Propane.Assets.DefaultCharacter	Main-thread process-lifetime validation flag for the fixed immutable default rig.
+static-field	Propane.Assets.HatCatalog	shipped	1	Propane.Assets.HatCatalog	Main-thread process-lifetime immutable shipped catalog snapshot; scenes are borrowed until engine shutdown.
 static-field	Propane.Core.GameAssets	debrisPieces	1	Propane.Core.GameAssets	Main-thread process asset/geometry cache, borrowed shared resources or immutable hull directions; released by engine shutdown.
 static-field	Propane.Core.GameAssets	tankInterior	1	Propane.Core.GameAssets	Main-thread process asset/geometry cache, borrowed shared resources or immutable hull directions; released by engine shutdown.
 static-field	Propane.Core.GameAssets	tankMesh	1	Propane.Core.GameAssets	Main-thread process asset/geometry cache, borrowed shared resources or immutable hull directions; released by engine shutdown.

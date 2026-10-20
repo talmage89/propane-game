@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 """Negative proofs for source validation and scaffold rollback; no fixture art is retained."""
 import json
+import re
+import os
+import subprocess
+import sys
 from pathlib import Path
 import shutil
 import tempfile
@@ -80,6 +84,29 @@ class AssetTests(unittest.TestCase):
         for identity in ['', 'UPPER', '../escape', 'a.b', 'a b', '帽子', 'x' * 65]:
             with self.subTest(identity=identity), self.assertRaises(ValueError): self.item(identity)
         self.assertEqual(self.result()['items'], []); self.clean()
+
+    def test_resource_uids_survive_scaffold(self):
+        self.item()
+        for path in [self.root / 'library.tres', self.root / 'authored/hats/probe/item.tres']:
+            text = path.read_text(); first, rest = text.split('\n', 1)
+            path.write_text(first[:-1] + ' uid="uid://bu1hvjdvlx37j"]\n' + rest)
+        scaffold(self.root, 'probe', 'New display name', None, self.inventory)
+        for path in [self.root / 'library.tres', self.root / 'authored/hats/probe/item.tres']:
+            self.assertIn('uid="uid://bu1hvjdvlx37j"', path.read_text().splitlines()[0])
+
+    def test_cli_treats_display_name_as_data(self):
+        name = 'Name "quoted"; $(not_a_command) `literal`'
+        command = ['make', '--no-print-directory', '-C', str(ROOT), 'hat', 'ASSET_ROOT=' + str(self.root), 'ID=cli_probe', 'NAME=' + name, 'MODEL=' + str(self.model)]
+        result = subprocess.run(command, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn(json.dumps(name), (self.root / 'authored/hats/cli_probe/item.tres').read_text())
+
+    def test_native_wrapper_rejects_engine_errors_and_missing_marker(self):
+        stub = Path(self.scratch.name) / 'godot'
+        for body, expected in [('echo "[assets] PASS native"', 0), ('echo "ERROR: fixture"; echo "[assets] PASS native"', 1), ('echo no-marker', 1)]:
+            stub.write_text('#!/bin/sh\n' + body + '\n'); stub.chmod(0o755)
+            result = subprocess.run([sys.executable, '-B', str(ROOT / 'tools/assets/native.py')], env={**os.environ, 'GODOT': str(stub)}, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+            self.assertEqual(bool(result.returncode), bool(expected), result.stdout)
 
     def test_scaffold_rollback(self):
         self.item()

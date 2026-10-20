@@ -49,6 +49,11 @@
       "author": "Kenney",
       "license": "CC0-1.0",
       "source": "https://kenney.nl/assets; City Kit Suburban 2.0; subset/version from bundled License.txt; acquisition hash unrecorded"
+    },
+    "metadata": {
+      "author": "Propane project",
+      "license": "LicenseRef-Project-All-Rights-Reserved",
+      "source": "Checked-in library configuration/documentation"
     }
   },
   "files": {
@@ -310,7 +315,9 @@
     "authored/tank/debris.glb": "tank",
     "authored/tank/debris.glb.import": "tank",
     "authored/tank/tank.glb": "tank",
-    "authored/tank/tank.glb.import": "tank"
+    "authored/tank/tank.glb.import": "tank",
+    "library.tres": "metadata",
+    "README.md": "metadata"
   },
   "retired_ids": [],
   "licenses": {

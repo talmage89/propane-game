@@ -57,6 +57,7 @@ stable top-level owner so compiler-generated numbering does not cause churn.
 | `Core/` | Foundation by default; world services, spawn, assets and `Tuning` are Simulation; the immutable launch snapshot and preference contract are Foundation, while persistence and launch tuning application are Composition; device setup is Presentation. |
 | `World/Plan/` | Plans: ordered generation, model metadata, coordinate frame, catalog snapshot and segment values. `SuburbPlans` converts live tuning in Composition; native `GameCatalog.Capture`, catalog/builder/materials remain Simulation. |
 | `Modes/` | Rules by default; `ModeDefinition`/`ModeBundle`/`ModeCatalog`/registry/supply are Composition; HUD input/presenters are Presentation; HUD values/`IModeView` remain plain rules observations. |
+| `Assets/` | Simulation: immutable hat catalog snapshots and actor-owned native attachments; Foundation retains only appearance IDs/codec. |
 | `Player/`, `Tank/`, `Fx/` | Simulation by default; input values and resolved state values are Foundation; cameras/views/device input and mode geometry are Presentation; `ReplicatedIntent` is Client. The separate `PlayerNetState.cs` is a Foundation value; shared profiling lives in `Diagnostics/`. |
 | `Navigation/`, `Bots/` | Navigation and Bots. |
 | `Net/` | Wire by default; `LobbyServer`/`ServerRun`, ledger, roster, contact admission, ServerMode/ServerModes inputs, plain ModeWireTuners, KingPlacement and mode wires/runner are Server; body/actor snapshot helpers, prediction, authority transactions, mode client adapters and inbox are Client; Match/backend factory/update/diagnostics are Composition; NetClient is Client; the Dev-only MessageCodec facade is excluded from release exports; TransportMetrics accepts plain Wire observations. Lobby/profile/setup contracts and phases are Wire; shared identity/appearance/body values live in `Core/`, standings in Rules, and `World/AmmoPickup` in Simulation. |
@@ -446,8 +447,11 @@ seed and reroll callback. No RNG, coordinate arithmetic, model selection, classi
 
 `GameAssets`, `FxLibrary`, `Catalog` and `WorldMaterials` cache borrowed meshes/models/materials on the main
 thread. `MeshKit` owns temporary per-build geometry scratch. Shared resources remain immutable by convention; per-instance mutable effects/material state stays owned.
-Do not duplicate immutable assets per world to eliminate statics. Character bones/sockets/clips and rifle calibration
-are implicit asset bindings today; V1 validates them once before another asset family is introduced
+Do not duplicate immutable assets per world to eliminate statics. AL validates the fixed default character bones/clips before first binding and derives its head socket from rest.
+HatCatalog snapshots the explicit shipped Resource list on the main thread for process lifetime; actors own/free
+HeadAttachment instances and tint copies before skeleton retirement. Catalog scenes/materials remain borrowed and
+immutable. Hats add no simulation timer, RNG draw or collider. Full character/rifle calibration still requires V1
+before a second character family is introduced
 ([animation sources](animation-sources.md), [motion](motion.md)).
 
 **Current W1:** `DissolveArena.CollectRawTimings` is false for ordinary play. Diagnostic callers opt in before
@@ -492,8 +496,8 @@ remain in [multiplayer](multiplayer.md), [bot-navigation](bot-navigation.md) and
 
 [Source approvals](../tools/architecture/source-sites.tsv) name today's global writes, timers, wall-clock reads and
 worker entries with their owners/domains. [Process-state approvals](../tools/architecture/process-state.tsv) separately
-pin production `LaunchArgs.Current` getter references (11 owner groups, 31 compiled reads) and 103 mutable statics
-(41 fields, 4 settable properties, 58 readonly collections/tables). Each names its owner and reason/lifetime; Dev is
+pin production `LaunchArgs.Current` getter references (11 owner groups, 31 compiled reads) and 105 mutable statics
+(43 fields, 4 settable properties, 58 readonly collections/tables). Each names its owner and reason/lifetime; Dev is
 excluded, exported Smoke is included. New sites, changed counts and stale approvals fail lint. An approved
 diagnostic clock is not an approved gameplay timer. Do not use Task.Delay, SceneTree timers or wall time for new
 simulation timers outside a reviewed clock domain.

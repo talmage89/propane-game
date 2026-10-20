@@ -181,7 +181,7 @@ def validate(root, inventory, budgets):
             metadata = inventory['families'][family]
             if not all(metadata.get(key) for key in ('author', 'license', 'source')):
                 raise ValueError(f'{relative}: missing provenance/license')
-            if metadata['license'] not in inventory['licenses']: raise ValueError(f'{relative}: unknown license identifier')
+            if not inventory['licenses'].get(metadata['license']): raise ValueError(f'{relative}: unknown license identifier')
             if path.suffix == '.import':
                 text = path.read_text(); match = re.search(r'^uid="(uid://[a-z0-9]+)"', text, re.M)
                 if not match: raise ValueError(f'{relative}: missing import UID')
@@ -199,7 +199,7 @@ def validate(root, inventory, budgets):
             if script['path'] != 'res://src/Assets/HatLibrary.cs' or script['type'] != 'Script': raise ValueError('library: wrong script')
             author, license = string(props, 'DefaultAuthor', author), string(props, 'DefaultLicense', license)
             if not author or not license: raise ValueError('library: empty authored defaults')
-            if license not in inventory['licenses']: raise ValueError('library: unknown default license')
+            if not inventory['licenses'].get(license): raise ValueError('library: unknown default license')
             registered_keys = references(props.get('Hats', '[]'))
             for key, entry in ext.items():
                 if key in registered_keys:
@@ -226,9 +226,9 @@ def validate(root, inventory, budgets):
             if not name.strip(): raise ValueError(f'{relative}: missing display name')
             authored = relative.startswith('authored/')
             for key, default in [('Author', author if authored else ''), ('License', license if authored else ''), ('Source', 'owner export' if authored else '')]:
-                if not string(props, key, default).strip(): raise ValueError(f'{relative}: missing {key}')
+                if not (string(props, key) or default).strip(): raise ValueError(f'{relative}: missing {key}')
             if set(ext) != {reference(props['script']), reference(props['Scene'])}: raise ValueError(f'{relative}: unexpected external resource')
-            if string(props, 'License', license if authored else '') not in inventory['licenses']: raise ValueError(f'{relative}: unknown license identifier')
+            if not inventory['licenses'].get(string(props, 'License') or (license if authored else '')): raise ValueError(f'{relative}: unknown license identifier')
             scene_entry = ext[reference(props['Scene'])]
             if scene_entry['type'] != 'PackedScene': raise ValueError(f'{relative}: Scene must be a PackedScene')
             scene = dependency(root, path, scene_entry)
@@ -241,7 +241,7 @@ def validate(root, inventory, budgets):
             for key in ['triangles', 'surfaces', 'textures', 'decoded_bytes']:
                 if metrics[key] > budgets[key]: warnings.append(f'{identity}: {key}={metrics[key]} exceeds recommended {budgets[key]}')
             if any(max(d) > budgets['texture_edge'] for d in metrics['dimensions']): warnings.append(f'{identity}: texture dimensions={metrics["dimensions"]} exceed recommended {budgets["texture_edge"]}')
-            items.append({'id':identity,'item':relative,'scene':scene.relative_to(root).as_posix(),**metrics})
+            items.append({'id':identity,'item':relative,'scene':scene.relative_to(root).as_posix(),'dependencies':[p.relative_to(root).as_posix() for p in [scene,*dependencies]],**metrics})
         except (ValueError, KeyError, IndexError, OSError, TypeError, struct.error) as error: errors.append(f'{path}: {error}')
     uids = {}
     for path in root.rglob('*'):
