@@ -7,10 +7,11 @@ import subprocess
 import sys
 from pathlib import Path
 import shutil
+import struct
 import tempfile
 import unittest
 from hat import library_text, scaffold
-from library import ROOT, validate, import_hint, dependency
+from library import ROOT, validate, import_hint, dependency, glb
 
 
 class AssetTests(unittest.TestCase):
@@ -220,6 +221,29 @@ class AssetTests(unittest.TestCase):
         p.write_bytes(b'bad'); self.error('GLB header')
         # A same-size mutation of the JSON proves static-content rejection without generating new art.
         p.write_bytes(original.replace(b'"meshes":', b'"skins": ', 1)); self.error('static glTF')
+
+    def test_blend_material_fails_validation_and_real_scaffold_command(self):
+        # Mutate a temporary copy of existing prop data, never author or retain a cosmetic fixture.
+        doc, original = glb(self.model)
+        doc['materials'][0]['alphaMode'] = 'BLEND'
+        encoded = json.dumps(doc).encode()
+        encoded += b' ' * (-len(encoded) % 4)
+        binary = original[20 + struct.unpack_from('<I', original, 12)[0]:]
+        invalid = struct.pack('<4sII', b'glTF', 2, 20 + len(encoded) + len(binary)) + struct.pack('<I4s', len(encoded), b'JSON') + encoded + binary
+        model = Path(self.scratch.name) / 'invalid.glb'
+        model.write_bytes(invalid)
+        library = self.root / 'library.tres'
+        before = library.read_bytes()
+        command = ['make', '--no-print-directory', '-C', str(ROOT), 'hat', 'ASSET_ROOT=' + str(self.root),
+                   'ID=invalid', 'NAME=Invalid material', 'MODEL=' + str(model)]
+        result = subprocess.run(command, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        self.assertIn('only opaque/cutout standard PBR', result.stdout)
+        self.assertEqual(library.read_bytes(), before)
+        self.assertFalse((self.root / 'authored/hats/invalid').exists())
+        self.item()
+        (self.root / 'authored/hats/probe/model.glb').write_bytes(invalid)
+        self.error('only opaque/cutout standard PBR')
 
     def test_duplicate_and_unknown_properties(self):
         self.item(); self.change('Id = "probe"', 'Id = "probe"\nId = "probe"'); self.error('duplicate Id')
