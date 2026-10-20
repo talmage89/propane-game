@@ -334,9 +334,31 @@ public partial class SettingsMenu : CanvasLayer
 
     private void BuildControls()
     {
-        var help = UiStyle.Text("Keyboard / mouse · Gamepad · Reset action\nSelect a binding, then press its replacement. Conflicts leave the other slot unbound.\nMelee keeps three keyboard/mouse slots; other actions have one. Sticks and menu shortcuts stay fixed.", 15, UiStyle.SoftInk);
+        var help = UiStyle.Text("Select a binding, then press its replacement. Conflicts leave the other slot unbound.\nMelee keeps three keyboard/mouse slots; other actions have one. Sticks and menu shortcuts stay fixed.", 15, UiStyle.SoftInk);
         help.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         rows.AddChild(help);
+        // Column headings sized like the rows below, so each sits over its column.
+        var header = new HBoxContainer();
+        header.AddThemeConstantOverride("separation", 10);
+        rows.AddChild(header);
+        var actionHeading = UiStyle.Text("Action", 15, UiStyle.SoftInk);
+        actionHeading.CustomMinimumSize = new Vector2(200, 0);
+        actionHeading.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+        header.AddChild(actionHeading);
+        foreach (var (heading, width) in new[] { ("Keyboard / mouse", 420f), ("Gamepad", 230f) })
+        {
+            var column = UiStyle.Text(heading, 15, UiStyle.SoftInk);
+            column.CustomMinimumSize = new Vector2(width, 0);
+            column.HorizontalAlignment = HorizontalAlignment.Center;
+            header.AddChild(column);
+        }
+        // An invisible copy of the row's Reset button keeps the last column's width.
+        var resetSpacer = UiStyle.Button("Reset");
+        resetSpacer.AddThemeFontSizeOverride("font_size", 16);
+        resetSpacer.Modulate = Colors.Transparent;
+        resetSpacer.FocusMode = Control.FocusModeEnum.None;
+        resetSpacer.MouseFilter = Control.MouseFilterEnum.Ignore;
+        header.AddChild(resetSpacer);
         foreach (var action in ControlBindings.All)
         {
             var line = new HBoxContainer();
